@@ -14,7 +14,8 @@ from .exercise_pipeline import ExerciseStage
 
 def _notes(stage: ExerciseStage) -> tuple:
     return tuple(sorted(
-        (n.source_id, n.pitch, round(n.start, 8), round(n.end, 8))
+        (n.source_id, n.pitch, round(n.start, 8), round(n.end, 8),
+         n.velocity, n.track, n.channel, n.hand)
         for n in stage.variant.notes))
 
 
@@ -40,10 +41,14 @@ class StageDifference:
     tempo_changed: bool
     source_count: int
     active_count: int
+    pitch_changed: int = 0
+    velocity_changed: int = 0
 
     @property
     def meaningful(self) -> bool:
-        return self.removed > 0 or self.retimed > 0 or self.tempo_changed
+        return (self.removed > 0 or self.retimed > 0 or
+                self.tempo_changed or self.pitch_changed > 0 or
+                self.velocity_changed > 0)
 
 
 def difference(stage: ExerciseStage, original: ExerciseStage) -> StageDifference:
@@ -60,7 +65,11 @@ def difference(stage: ExerciseStage, original: ExerciseStage) -> StageDifference
     return StageDifference(
         removed=len(source)-len(chosen), retimed=retimed,
         tempo_changed=_tempo(stage) != _tempo(original),
-        source_count=len(source), active_count=len(chosen))
+        source_count=len(source), active_count=len(chosen),
+        pitch_changed=sum(note.pitch != source[sid].pitch
+                          for sid, note in chosen.items()),
+        velocity_changed=sum(note.velocity != source[sid].velocity
+                             for sid, note in chosen.items()))
 
 
 def _attacks(stage: ExerciseStage) -> int:
@@ -183,11 +192,15 @@ def describe(stage: ExerciseStage, original: ExerciseStage) -> dict:
     change = (
         f"{delta.active_count}/{delta.source_count} source notes" if delta.removed else
         f"{delta.retimed} retimed notes" if delta.retimed else
+        f"{delta.pitch_changed} changed pitches" if delta.pitch_changed else
+        f"{delta.velocity_changed} changed dynamics" if delta.velocity_changed else
         "tempo adjustment" if delta.tempo_changed else
         "unchanged source")
     return {"family": family, "label": label, "change": change,
             "level": level, "origin": stage.origin,
             "technique": stage.technique,
             "removed": delta.removed, "retimed": delta.retimed,
+            "pitch_changed": delta.pitch_changed,
+            "velocity_changed": delta.velocity_changed,
             "tempo_changed": delta.tempo_changed,
             "meaningful": delta.meaningful}
