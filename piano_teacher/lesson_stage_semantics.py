@@ -113,26 +113,39 @@ def teaching_sequence(candidates: tuple[ExerciseStage, ...], *,
     pitch = bool(statuses & {"wrong", "missed", "pitch"})
     rhythm = bool(statuses & {"early", "late", "timing"})
     duration = bool(statuses & {"short", "long", "duration"})
-    # Author adapters annotate stages explicitly. Stage keys remain opaque
-    # and may use arbitrary names for independently registered generators.
-    fukuda = [s for s in unique if s.origin == "fukuda-midi"]
-    coda = [s for s in unique if s.origin == "coda-midi"]
-    dotted = [s for s in coda if s.technique.startswith("dotted-")]
-    chord = [s for s in coda if s.technique == "chordified"]
-    slow = [s for s in coda if s.technique == "slowdown"]
-
-    # A full 4-note chord reduced to 2 outer notes is more useful than a
-    # 16th-note thinning which changes a single already-easy attack.
-    ranked_fukuda = sorted(fukuda, key=lambda s: (
-        -difference(s, original).removed, _attacks(s),
-        s.variant.level))
-    candidates_by_priority = (
-        [*fukuda, *slow, *dotted] if pitch else
-        [*dotted, *slow, *ranked_fukuda] if rhythm else
-        [*slow, *ranked_fukuda, *dotted] if duration else
-        [*ranked_fukuda[:1], *(chord[:1] or dotted[:1]),
-         *slow[:1], *ranked_fukuda[1:], *dotted, *slow[1:]]
-    )
+    # Selection is based on real musical effects, not generator names:
+    # a new MIDI algorithm can contribute a reduction or altered rhythm
+    # without changing any shared curriculum code. Candidate ordering
+    # supplied by the caller is significant for source-localized repairs.
+    reductions = [stage for stage in unique
+                  if difference(stage, original).removed > 0]
+    rhythms = [stage for stage in unique
+               if difference(stage, original).retimed > 0]
+    slows = [stage for stage in unique
+             if difference(stage, original).tempo_changed]
+    ranked_reductions = sorted(reductions, key=lambda stage: (
+        -difference(stage, original).removed, _attacks(stage),
+        unique.index(stage)))
+    # During graded pitch repair the caller supplies reductions ordered by
+    # note-ID relevance. Preserve that ordering rather than globally
+    # favouring a large, unrelated simplification.
+    ordered_reductions = reductions if pitch else ranked_reductions
+    if pitch:
+        candidates_by_priority = [
+            *ordered_reductions, *slows, *rhythms, *unique]
+    elif rhythm:
+        candidates_by_priority = [
+            *rhythms, *slows, *ordered_reductions, *unique]
+    elif duration:
+        candidates_by_priority = [
+            *slows, *ordered_reductions, *rhythms, *unique]
+    else:
+        # Offer one genuine reduction, one authored rhythmic transformation
+        # and one independent tempo change when the source supports them.
+        # This works for any number of registered generator families.
+        candidates_by_priority = [
+            *ordered_reductions[:1], *rhythms[:1], *slows[:1],
+            *ordered_reductions[1:], *rhythms[1:], *slows[1:], *unique]
     chosen = []
     signatures = set()
     for stage in candidates_by_priority:
