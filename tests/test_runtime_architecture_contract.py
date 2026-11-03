@@ -31,6 +31,14 @@ def test_production_bridge_exposes_no_old_network_or_page_endpoints():
         ROOT / "godot/score_asset_session.gd").read_text()
 
 
+def test_adaptive_catalog_does_not_import_author_specific_builders():
+    source = (ROOT / "piano_teacher/adaptive_hybrid_curriculum.py").read_text()
+    assert "from .application.coda_midi_curriculum import midi_coda_stages" not in source
+    assert "from .fukuda_midi import fukuda_midi_variants" not in source
+    assert "component.passage_stages(" in source
+    assert "name: str = \"coda-fukuda-midi\"" in source
+
+
 def test_shared_teaching_selection_is_independent_of_built_in_stage_names():
     for path in ("piano_teacher/lesson_stage_semantics.py",):
         text = (ROOT / path).read_text()
