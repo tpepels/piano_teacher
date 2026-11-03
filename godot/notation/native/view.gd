@@ -24,6 +24,9 @@ signal retained_ink_compiled
 # Annotation cells live on the same immutable score axis as the note ink.
 # Cache once per score/vertical size; scrolling only translates their X.
 var transport_overlay_enabled := true
+var runway_overlay := false
+var runway_origin_beat := 0.0
+var runway_cutoff_beat := INF
 var fingering_pass_clocks: Array = []
 
 func set_transport_overlay_enabled(enabled: bool) -> void:
@@ -686,6 +689,8 @@ func _place_retained_score(playhead_x: float, camera_clock: float,
     var rest_slot := 0
     for pass_index in range(first_pass,last_pass+1):
         var pass_start: float = pass_index*stride
+        if pass_start >= runway_cutoff_beat - .0001:
+            continue
         if pass_start>virtual_right+.7 or pass_start+stride<virtual_left-.7:
             continue
         var source_clock: float = scroll_beat-pass_start-play_from_beat
@@ -752,7 +757,8 @@ func _draw() -> void:
     fingering_pass_clocks.clear()
     if size.x < 100.0 or size.y < 100.0:
         return
-    draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
+    if not runway_overlay:
+        draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
     var font: Font = ThemeDB.fallback_font
     if not native_ready or not timeline.has_score():
         draw_string(font,Vector2(20.0,size.y*.5),
@@ -772,12 +778,12 @@ func _draw() -> void:
     var top: float = layout.staff_center("right")-gap*3.8
     var bottom: float = layout.staff_center("left")+gap*3.7
     var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
-    if transport_overlay_enabled:
+    if transport_overlay_enabled and not runway_overlay:
         for radius in [20.0, 10.0, 4.0]:
             draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
                 Color(PREVIEW_LIGHT, .012+breath*.004))
     # Always draw ten native rules; no copied or stitched raster systems.
-    for staff in ["right","left"]:
+    for staff in (["right","left"] if not runway_overlay else []):
         var center: float = layout.staff_center(staff)
         var selected: bool = active_hand == "both" or active_hand == staff
         var ink: Color = NOTE_INK if selected else Color(DIM_INK,.46)
@@ -789,7 +795,7 @@ func _draw() -> void:
     # onset a foreground cursor previously covered small eighth-rest dots,
     # flagged stems and noteheads, preventing independent contour recovery.
     # Engraving is always painted later; the transport clock is unchanged.
-    if transport_overlay_enabled:
+    if transport_overlay_enabled and not runway_overlay:
         draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
             Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
             PREVIEW_LIGHT,2.0,true)

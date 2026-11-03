@@ -22,6 +22,7 @@ var fingering_status_label: Label
 var score_margin_box: MarginContainer
 var score_frame: Control
 var renderer: Control
+var runway_steps: Control
 var feedback: Control
 var effects: Control
 var phase_cue: Control
@@ -93,6 +94,7 @@ func _ready() -> void:
     fingering_status_label.max_lines_visible = 1
     steps = PracticeStepSelector.new()
     score_header.add_child(steps)
+    steps.visible = false
     steps.step_requested.connect(func(number: int):
         command_requested.emit({"action":"select_step","number":number}))
     var score_area := Control.new()
@@ -108,6 +110,17 @@ func _ready() -> void:
     renderer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     renderer.visible = false
     score_frame.add_child(renderer)
+
+    runway_steps = preload("res://score_step_timeline.gd").new()
+    runway_steps.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    runway_steps.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    runway_steps.custom_minimum_size.y = 30
+    runway_steps.offset_left = 0
+    runway_steps.offset_right = 0
+    runway_steps.offset_top = 2
+    runway_steps.offset_bottom = 32
+    runway_steps.z_index = 8
+    score_frame.add_child(runway_steps)
     effects.surface_visible = false
     effects.z_index = 1
     feedback = preload("res://native_score_feedback.gd").new()
@@ -195,6 +208,14 @@ func _ready() -> void:
     keyboard = HintKeyboard.new()
     score_region.add_child(keyboard)
 
+
+func present_runway_steps(state: Dictionary, global_visual: float,
+        next_start: float = INF, next_label: String = "") -> void:
+    if runway_steps == null or renderer == null:
+        return
+    runway_steps.set_density(renderer.timeline.pixels_per_beat)
+    runway_steps.present(state,global_visual,
+        float(renderer.runway_origin_beat),next_start,next_label)
 
 func present(state: Dictionary, busy: bool) -> void:
     _state = state.duplicate(true)

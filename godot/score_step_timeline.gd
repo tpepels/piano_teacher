@@ -1,0 +1,56 @@
+extends Control
+## Small music-axis markers. Lesson steps advance along the score rather than
+## being presented as replacement pages or interrupting score movement.
+const INK := Color("#B6E7D8")
+const FUTURE := Color("#78C6B4")
+var _loaded := false
+var _step := 0
+var _label := ""
+var _next_label := ""
+var _current_start := 0.0
+var _next_start := INF
+var _beat := 0.0
+var _density := 96.0
+
+func present(state: Dictionary, visual_beat: float,
+        current_origin: float, next_origin: float = INF,
+        next_label: String = "") -> void:
+    var changed: bool = (_loaded != bool(state.get("loaded",false)) or \
+            _step != int(state.get("lesson_step",0)) or \
+            _label != str(state.get("stage_label","")) or \
+            _next_label != next_label or \
+            absf(_current_start-current_origin) > .001 or \
+            _next_start != next_origin or \
+            absf(_beat-visual_beat) > .0001)
+    _loaded = bool(state.get("loaded",false))
+    _step = int(state.get("lesson_step",0))
+    _label = str(state.get("stage_label",""))
+    _next_label = next_label
+    _current_start = current_origin
+    _next_start = next_origin
+    _beat = visual_beat
+    if changed:
+        queue_redraw()
+
+func set_density(pixels: float) -> void:
+    if pixels > 0 and absf(_density-pixels) > .001:
+        _density = pixels
+        queue_redraw()
+
+func _marker(at: float, label: String, tint: Color) -> void:
+    if not is_finite(at):
+        return
+    var x: float = size.x*.42 + (at-_beat)*_density
+    if x < -10.0 or x > size.x+10.0:
+        return
+    var font: Font = ThemeDB.fallback_font
+    draw_line(Vector2(x,5),Vector2(x,29),tint,2.0,true)
+    draw_rect(Rect2(x,4,4,5),tint)
+    draw_string(font,Vector2(x+9,19),label,
+        HORIZONTAL_ALIGNMENT_LEFT,mini(240,int(size.x-x-12)),13,tint)
+
+func _draw() -> void:
+    if not _loaded or _step <= 0:
+        return
+    _marker(_current_start,"STEP %d · %s" % [_step,_label],INK)
+    _marker(_next_start,"STEP %d · %s" % [_step+1,_next_label],FUTURE)

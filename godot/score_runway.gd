@@ -1,0 +1,186 @@
+extends Node
+## Prepare the exact next Coda/Fukuda score while the current one scrolls.
+## Only a fully retained and engine-acknowledged score can be promoted. Manual
+## navigation and unsuccessful attempts preserve their existing behavior.
+const Request := preload("res://inprocess_request.gd")
+const NativeView := preload("res://notation/native/view.gd")
+const NativeAssets := preload("res://native_score_assets.gd")
+
+var stage
+var score_session
+var _fetch: Node
+var _ack: Node
+var _future
+var _bundle: Dictionary = {}
+var _layout: Dictionary = {}
+var _source_fingerprint := ""
+var _source_revision := -1
+var _source_step := -1
+var _next_poll_ms := 0
+var _acknowledged := false
+var _ack_waiting := false
+var _failure := ""
+var _visual_beat := 0.0
+
+func configure(host: Node, practice_stage, session, bus: Node) -> void:
+    stage = practice_stage
+    score_session = session
+    _fetch = Request.new()
+    _fetch.timeout = 90.0
+    host.add_child(_fetch)
+    _fetch.configure(bus)
+    _fetch.request_completed.connect(_on_future_reply)
+    _ack = Request.new()
+    _ack.timeout = 15.0
+    host.add_child(_ack)
+    _ack.configure(bus)
+    _ack.request_completed.connect(_on_ack_reply)
+
+func _discard() -> void:
+    _fetch.cancel_request()
+    _ack.cancel_request()
+    if _future != null and is_instance_valid(_future):
+        _future.queue_free()
+    _future = null
+    _bundle.clear()
+    _layout.clear()
+    _acknowledged = false
+    _ack_waiting = false
+    _next_poll_ms = 0
+    _failure = ""
+
+func _on_future_reply(code: int, body: PackedByteArray) -> void:
+    if code != 0:
+        _failure = "Next lesson preloading failed (status %d)" % code
+        _next_poll_ms = Time.get_ticks_msec() + 1200
+        return
+    var value: Variant = JSON.parse_string(body.get_string_from_utf8())
+    if not value is Dictionary:
+        _failure = "Invalid future score response"
+        return
+    if str(value.get("status","")) == "preparing":
+        _next_poll_ms = Time.get_ticks_msec() + 600
+        return
+    if str(value.get("status","")) == "none":
+        _next_poll_ms = Time.get_ticks_msec() + 3000
+        return
+    if str(value.get("status","")) != "ready":
+        _failure = str(value.get("error","Next score cannot be engraved"))
+        _next_poll_ms = Time.get_ticks_msec() + 3000
+        return
+    if int(value.get("revision",-1)) != _source_revision + 1 or \
+            int(value.get("step_number",-1)) != _source_step + 1 or \
+            str(value.get("fingerprint","")) != _source_fingerprint:
+        return
+    var layout_data: Variant = value.get("layout")
+    var model_data: Variant = value.get("model")
+    if not layout_data is Dictionary or not model_data is Dictionary:
+        _failure = "Future score lacks authentic layout or semantic model"
+        return
+    _future = NativeView.new()
+    _future.runway_overlay = true
+    _future.set_transport_overlay_enabled(false)
+    _future.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    stage.score_frame.add_child(_future)
+    _future.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    _future.modulate.a = 0.001
+    _future.visible = true
+    var installed: Dictionary = NativeAssets.install(_future,layout_data)
+    if not bool(installed.get("ok",false)) or not _future.load_score(model_data):
+        _failure = str(installed.get("error",_future.failure_reason))
+        _future.queue_free()
+        _future = null
+        return
+    _bundle = value
+    _layout = installed["layout"]
+    _next_poll_ms = 0
+
+func _on_ack_reply(code: int, body: PackedByteArray) -> void:
+    _ack_waiting = false
+    var value: Variant = JSON.parse_string(body.get_string_from_utf8())
+    _acknowledged = code == 0 and value is Dictionary and \
+            bool(value.get("accepted",false))
+    if not _acknowledged:
+        _failure = "Future score acknowledgement rejected"
+
+func _request_if_needed(state: Dictionary, now_ms: int) -> void:
+    if _future != null or _ack_waiting or now_ms < _next_poll_ms or \
+            _fetch._pending_id >= 0:
+        return
+    if str(state.get("mode","")) != "practice" or \
+            not score_session.is_ready() or \
+            int(state.get("lesson_step",0)) >= int(state.get("lesson_step_count",0)):
+        return
+    if _fetch.request("score.next_stage") != OK:
+        _next_poll_ms = now_ms + 1000
+
+func update_state(state: Dictionary, now_ms: int) -> void:
+    var fingerprint: String = str(state.get("piece_fingerprint",""))
+    var revision: int = int(state.get("revision",-1))
+    var step: int = int(state.get("lesson_step",0))
+    if fingerprint != _source_fingerprint or revision != _source_revision or \
+            step != _source_step:
+        _discard()
+        _source_fingerprint = fingerprint
+        _source_revision = revision
+        _source_step = step
+    if not bool(state.get("loaded",false)):
+        return
+    _request_if_needed(state,now_ms)
+
+func present_frame(state: Dictionary, global_beat: float) -> void:
+    _visual_beat = global_beat
+    if _future == null or not is_instance_valid(_future) or _bundle.is_empty():
+        return
+    var stride: float = float(state.get("practice_timeline",{}).get("stride_beats",0.0))
+    if stride <= 0.0:
+        return
+    var next_start: float = float(state.get("visual_offset_beats",0.0)) + stride
+    var local_beat: float = global_beat - next_start
+    _future.present_clock(local_beat,local_beat)
+    if _future.retained_ready() and not _acknowledged and not _ack_waiting:
+        _ack_waiting = _ack.request("score.stage_ready",{
+            "stage_key":_bundle["stage_key"],
+            "revision":_bundle["revision"]}) == OK
+    var last_clean: bool = int(state.get("streak",0)) >= \
+            int(state.get("clean_runs_required",3)) - 1 and \
+            float(state.get("bpm",0)) >= float(state.get("target_bpm",INF))
+    var display: bool = _acknowledged and last_clean and \
+            str(state.get("phase","")) in ["playing","count_in","feedback","preview_gap"]
+    _future.modulate.a = 1.0 if display else 0.001
+    if is_instance_valid(stage.renderer):
+        stage.renderer.runway_cutoff_beat = (next_start - \
+            float(stage.renderer.runway_origin_beat)) if display else INF
+    if stage.has_method("present_runway_steps"):
+        stage.present_runway_steps(state,global_beat,
+            next_start if _acknowledged else INF,
+            str(_bundle.get("stage_label",_bundle.get("level","Next step"))))
+
+func promote_if_ready(state: Dictionary) -> bool:
+    if _future == null or not is_instance_valid(_future) or \
+            not _acknowledged or not _future.retained_ready():
+        return false
+    if str(state.get("piece_fingerprint","")) != _source_fingerprint or \
+            int(state.get("revision",-1)) != int(_bundle.get("revision",-2)) or \
+            int(state.get("lesson_step",0)) != int(_bundle.get("step_number",-1)):
+        return false
+    var old = stage.renderer
+    var new_renderer = _future
+    _future = null
+    new_renderer.modulate.a = 1.0
+    new_renderer.runway_overlay = false
+    new_renderer.runway_origin_beat = float(state.get("visual_offset_beats",0.0))
+    new_renderer.runway_cutoff_beat = INF
+    new_renderer.set_transport_overlay_enabled(true)
+    stage.renderer = new_renderer
+    score_session.adopt_prepared(state,new_renderer,_layout)
+    if old != null and is_instance_valid(old):
+        old.queue_free()
+    _bundle.clear()
+    _layout.clear()
+    _acknowledged = false
+    _source_revision = int(state.get("revision",-1))
+    _source_step = int(state.get("lesson_step",0))
+    _source_fingerprint = str(state.get("piece_fingerprint",""))
+    _next_poll_ms = Time.get_ticks_msec() + 500
+    return true

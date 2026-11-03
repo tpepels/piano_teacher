@@ -70,6 +70,8 @@ class FutureScore:
                 model = assets.semantic_score(selection)
                 result = {"step_number": number,
                           "stage_key": selection.stage_key,
+                          "hand": selection.hand,
+                          "stage_label": selection.stage_key.rsplit(":", 2)[-2],
                           "revision": selection.revision,
                           "fingerprint": selection.fingerprint,
                           "layout": layout, "model": model}

@@ -76,6 +76,36 @@ func update_context(state: Dictionary, now_ms: int) -> void:
         # repeats it, just as Main's current _on_state path does.
         action_requested.emit({"action":"score_ready","revision":revision})
 
+func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dictionary) -> void:
+    # The exact future score was compiled before the current take ended.
+    # Reuse it without clearing the viewport or requesting the same ink.
+    _generation += 1
+    _requests.clear()
+    _renderer = prepared_renderer
+    _loaded = bool(state.get("loaded",false))
+    _fingerprint = str(state.get("piece_fingerprint",""))
+    _state = state.duplicate(true)
+    revision = int(state.get("revision",-1))
+    _layout = prepared_layout.duplicate(true)
+    layout_revision = revision
+    requested_layout_revision = revision
+    timeline_model_revision = revision
+    rendered_revision = revision
+    native_score_piece_fingerprint = _fingerprint
+    _model_failures = 0
+    _retained_started_ms = -1
+    _preparing_since_ms = -1
+    score_error = ""
+    _renderer.visible = true
+    _renderer.connect("retained_ink_compiled",_finish_native_score)
+    if is_instance_valid(_feedback):
+        _feedback.bind_score(_renderer,revision)
+        _feedback.present(_state)
+    layout_published.emit(revision,layout_snapshot())
+    score_published.emit(revision)
+    _publish_status()
+
+
 func layout_snapshot() -> Dictionary:
     return _layout.duplicate(true)
 
