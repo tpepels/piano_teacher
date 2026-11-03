@@ -181,6 +181,7 @@ class PracticeEngine:
         self.score_artifacts = ScoreArtifacts(self.preprocessing)
         self.future_score = FutureScore(data_dir / "preprocessed")
         self._future_stage_ready: tuple[str, int] | None = None
+        self._prepared_stage_published = False
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
@@ -607,6 +608,7 @@ class PracticeEngine:
 
     def _stop(self):
         self._future_stage_ready = None
+        self._prepared_stage_published = False
         self.guided_session.stop()
         self.visual_transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
@@ -977,7 +979,6 @@ class PracticeEngine:
         result = self.pending_result
         previous_phrase_start, previous_phrase_end = (
             p.active_phrase.start, p.active_phrase.end)
-        previous_gap = self.visual_transport.visual_gap_beats
         # Snapshots contain only the mutating LearningPlan collections.
         # Source Piece, exercises and immutable stage definitions are shared.
         plan_before = {key: (value.copy() if isinstance(value, (dict, list, set))
@@ -987,10 +988,12 @@ class PracticeEngine:
             "_remediation_pending", "recovery_notice", "score_revision",
             "awaiting_score_revision", "open_from_beat",
             "performance_summary", "review_stage_identity",
+            "_prepared_stage_published",
         )
         engine_before = {key: getattr(self, key) for key in engine_fields}
         visual_offset_before = self.visual_transport.visual_offset_beats
         score_artifacts_before = self.score_artifacts
+        self._prepared_stage_published = False
         try:
             with sqlite_atomic(self.db):
                 # Source-specific mistakes are learned from authentic original
@@ -1061,6 +1064,7 @@ class PracticeEngine:
                         prebuilt = self.future_score.adopt(next_selected)
                         if prebuilt is not None:
                             self.score_artifacts = prebuilt
+                            self._prepared_stage_published = True
                             self.visual_transport.visual_offset_beats += stage_advance_beats
                         else:
                             self.visual_transport.visual_offset_beats = 0.0
@@ -1461,14 +1465,19 @@ class PracticeEngine:
             if route == "guided_stage":
                 self._begin_course_stage()
                 return
+            # A score is considered ready only if its *exact* post-feedback
+            # artifacts were adopted during the successful SQLite settlement.
+            # A stale UI acknowledgement cannot bypass the loading handshake.
+            if (route in ("await_score", "guided_stage") and
+                    self._prepared_stage_published and
+                    self._future_stage_ready ==
+                    (self.plan.identity, self.score_revision)):
+                self._future_stage_ready = None
+                self._prepared_stage_published = False
+                self._continue_at(deadline)
+                return
+            self._prepared_stage_published = False
             if route == "await_score":
-                if self._future_stage_ready == (self.plan.identity, self.score_revision):
-                    # Godot has already compiled the exact future notation.
-                    # Continue at the old absolute deadline without a loading
-                    # screen or a second count-in. Any failure still rewinds.
-                    self._future_stage_ready = None
-                    self._continue_at(deadline)
-                    return
                 self.awaiting_score_revision = self.score_revision
                 self.auto = False
                 self.feedback = "Preparing next passage"
