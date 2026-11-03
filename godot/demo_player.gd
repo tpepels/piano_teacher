@@ -59,10 +59,9 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
         token = next_token
         revision = int(state.get("revision", -1))
         audio_path = "user://listen-%s.wav" % token
-    if not loaded and not downloading and not audio_error and not str(demo.get("url", "")).is_empty():
-        request.download_file = audio_path
+    if not loaded and not downloading and not audio_error and bool(demo.get("audio_available", false)):
         downloading = true
-        var error: int = request.request(str(demo.get("url", "")))
+        var error: int = request.request("listen.audio", {"token": token})
         if error != OK:
             failed.emit("Cannot prepare Listen audio. Try Listen again.")
         return
@@ -119,14 +118,23 @@ func sync_report() -> Dictionary:
     return sync_monitor.report()
 
 
-func _downloaded(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+func _downloaded(code: int, body: PackedByteArray) -> void:
     downloading = false
     if token.is_empty():
         return
-    if result != OK or code != 200:
+    if code != 0 or body.is_empty():
         audio_error = true
         failed.emit("Listen audio could not load. Try Listen again.")
         return
+    # Listen owns its private audio file, rather than asking a generic
+    # command adapter to emulate HTTP downloads.
+    var output := FileAccess.open(audio_path, FileAccess.WRITE)
+    if output == null:
+        audio_error = true
+        failed.emit("Cannot save prepared Listen audio.")
+        return
+    output.store_buffer(body)
+    output.close()
     var stream := AudioStreamWAV.load_from_file(audio_path)
     if stream == null or stream.data.is_empty():
         audio_error = true
