@@ -15,7 +15,8 @@ import sys
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.lesson_validation import require_lesson_alignment
 from piano_teacher.music import Phrase
-from piano_teacher.score import import_piece, render_layout
+from piano_teacher.importing.pieces import import_piece
+from piano_teacher.engraving.engraving import render_layout
 
 
 ROOT = Path(__file__).resolve().parents[1]
