@@ -97,7 +97,9 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     _preparing_since_ms = -1
     score_error = ""
     _renderer.visible = true
-    _renderer.connect("retained_ink_compiled",_finish_native_score)
+    if _renderer.has_signal("retained_ink_compiled") and not \
+            _renderer.is_connected("retained_ink_compiled",_finish_native_score):
+        _renderer.connect("retained_ink_compiled",_finish_native_score)
     if is_instance_valid(_feedback):
         _feedback.bind_score(_renderer,revision)
         _feedback.present(_state)
