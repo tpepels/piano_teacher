@@ -38,10 +38,10 @@ func _ready() -> void:
 func is_ready() -> bool:
     return native != null and bool(native.call("is_ready"))
 
-func submit(requester: Node, method: String, path: String, body: String) -> int:
+func submit(requester: Node, operation: String, payload: String) -> int:
     if native == null or not is_ready():
         return -1
-    var identifier := int(native.call("submit", method, path, body))
+    var identifier := int(native.call("submit", operation, payload))
     if identifier >= 0:
         pending[identifier] = weakref(requester)
     return identifier
@@ -53,8 +53,8 @@ func poll_midi(after_sequence: int) -> Array:
     var completed: Array = midi_ready_events
     midi_ready_events = []
     if midi_request_id < 0 and is_ready():
-        midi_request_id = int(native.call("submit", "GET",
-            "/midi/live?since=%d" % maxi(0, after_sequence), ""))
+        midi_request_id = int(native.call("submit", "midi.events",
+            JSON.stringify({"since": maxi(0, after_sequence)})))
     return completed
 
 func _process(_delta: float) -> void:
@@ -72,7 +72,7 @@ func _process(_delta: float) -> void:
         var identifier := int(reply.get("id", -1))
         if identifier == midi_request_id:
             midi_request_id = -1
-            if int(reply.get("status", 500)) == 200:
+            if int(reply.get("status", 3)) == 0:
                 var bytes: PackedByteArray = reply.get("body", PackedByteArray())
                 var parsed: Variant = JSON.parse_string(bytes.get_string_from_utf8())
                 midi_ready_events = parsed if parsed is Array else []
@@ -82,5 +82,5 @@ func _process(_delta: float) -> void:
         var requester: Variant = handle.get_ref() if handle != null else null
         if requester != null and is_instance_valid(requester):
             requester.complete(identifier,
-                int(reply.get("status", 500)),
+                int(reply.get("status", 3)),
                 reply.get("body", PackedByteArray()))
