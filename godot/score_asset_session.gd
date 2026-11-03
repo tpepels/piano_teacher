@@ -11,6 +11,9 @@ signal status_changed(values: Dictionary)
 signal action_requested(command: Dictionary)
 
 const MODEL_RETRY_MS := 2000
+const MODEL_MAX_ATTEMPTS := 3
+const MODEL_TIMEOUT_SECONDS := 30.0
+const RETAINED_INK_TIMEOUT_MS := 45000
 const NativeScoreAssets := preload("res://native_score_assets.gd")
 const ASSET_KEYS := ["native_glyphs","native_note_templates","native_tie_templates",
     "native_chord_templates","native_beam_fragments","native_tuplet_fragments",
@@ -39,6 +42,8 @@ var _fingerprint := ""
 var _state: Dictionary = {}
 var _layout: Dictionary = {}
 var _generation := 0
+var _model_failures := 0
+var _retained_started_ms := -1
 var _next_request_id := 0
 # Exactly two in-process command slots: native layout and semantic model.
 var _requests: Dictionary = {}
@@ -83,7 +88,12 @@ func status() -> Dictionary:
     if not score_error.is_empty():
         text = "Unable to display sheet music:\n"+score_error
     elif _loaded:
-        text = "Preparing sheet music…"
+        if layout_pending or layout_revision != revision:
+            text = "Preparing notation geometry…"
+        elif timeline_model_pending or timeline_model_revision != revision:
+            text = "Preparing note timing and positions…"
+        else:
+            text = "Compiling sheet music…"
     else:
         text = "Choose a piece to begin"
     return {"ready":ready,"visible":not ready,"text":text,
@@ -91,9 +101,15 @@ func status() -> Dictionary:
         "browse_visible":not ready and score_error.is_empty() and not _loaded}
 
 func poll(now_ms: int) -> void:
-    if _loaded and score_error.is_empty() and timeline_model_revision != revision and \
-            not timeline_model_pending and now_ms >= timeline_model_retry_after_ms:
+    if not _loaded or not score_error.is_empty():
+        return
+    if timeline_model_revision != revision and not timeline_model_pending and \
+            now_ms >= timeline_model_retry_after_ms:
         request_model()
+    elif timeline_model_revision == revision and rendered_revision != revision and \
+            _retained_started_ms >= 0 and \
+            now_ms - _retained_started_ms >= RETAINED_INK_TIMEOUT_MS:
+        _fail("Retained notation did not finish compiling. Retry the score.")
 
 func pending_id(kind: String) -> int:
     return int(_requests.get(kind,{}).get("id",-1))
@@ -117,7 +133,7 @@ func request_model() -> bool:
             layout_revision != revision or not is_instance_valid(_renderer) or \
             not _renderer.glyphs.ready():
         return false
-    _begin_request("model","score.semantic",5.0)
+    _begin_request("model","score.semantic",MODEL_TIMEOUT_SECONDS)
     return true
 
 func retry(_now_ms: int) -> bool:
@@ -206,22 +222,32 @@ func _complete_layout(code: int, body: PackedByteArray) -> void:
 func _complete_model(code: int, body: PackedByteArray, now_ms: int) -> void:
     if not is_instance_valid(_renderer) or layout_revision != revision or not score_error.is_empty():
         return
-    var candidate: Variant = _decode_json(body)
-    if code == 0 and candidate is Dictionary:
-        if int(candidate.get("revision",-1)) != revision:
-            return
-        if not _renderer.load_score(candidate):
-            _fail(str(_renderer.failure_reason))
-            return
-        native_score_piece_fingerprint = _fingerprint
-        timeline_model_revision = revision
-        _renderer.visible = true
-        if is_instance_valid(_feedback):
-            _feedback.bind_score(_renderer,revision)
-            _feedback.present(_state.duplicate(true))
-        _finish_native_score()
+    if code != 0:
+        var message: String = _command_failure(code,body)
+        if code == 3 and message.contains("deadline"):
+            _retry_model(now_ms,message)
+        else:
+            _fail(message)
         return
-    _retry_model(now_ms,"Score model unavailable; retrying")
+    var candidate: Variant = _decode_json(body)
+    if not candidate is Dictionary:
+        _fail("Practice engine returned an invalid semantic score")
+        return
+    if int(candidate.get("revision",-1)) != revision:
+        _retry_model(now_ms,"Semantic score revision changed during loading")
+        return
+    if not _renderer.load_score(candidate):
+        _fail(str(_renderer.failure_reason))
+        return
+    native_score_piece_fingerprint = _fingerprint
+    timeline_model_revision = revision
+    _model_failures = 0
+    _retained_started_ms = now_ms
+    _renderer.visible = true
+    if is_instance_valid(_feedback):
+        _feedback.bind_score(_renderer,revision)
+        _feedback.present(_state.duplicate(true))
+    _finish_native_score()
 
 func _finish_native_score() -> void:
     if layout_revision != revision or timeline_model_revision != revision or \
@@ -235,6 +261,7 @@ func _finish_native_score() -> void:
     if rendered_revision == revision:
         return
     rendered_revision = revision
+    _retained_started_ms = -1
     score_error = ""
     _publish_status()
     score_published.emit(revision)
@@ -243,13 +270,22 @@ func _finish_native_score() -> void:
         action_requested.emit({"action":"score_ready","revision":revision})
 
 func _retry_model(now_ms: int, notice: String) -> void:
-    timeline_model_retry_after_ms = now_ms+MODEL_RETRY_MS
+    _model_failures += 1
+    if _model_failures >= MODEL_MAX_ATTEMPTS:
+        _fail("Semantic score failed after %d attempts: %s" % [MODEL_MAX_ATTEMPTS, notice])
+        return
+    timeline_model_retry_after_ms = now_ms + MODEL_RETRY_MS * _model_failures
     if is_instance_valid(_renderer):
-        _renderer.notice = notice
+        _renderer.notice = "%s (attempt %d/%d)" % [notice, _model_failures + 1, MODEL_MAX_ATTEMPTS]
         _renderer.queue_redraw()
     _publish_status()
 
 func _reset_assets() -> void:
+    # Supersede both in-flight operations immediately on score change or Retry.
+    # The queue cancels the old adapter when its replacement is dispatched.
+    _requests.clear()
+    _model_failures = 0
+    _retained_started_ms = -1
     _layout.clear()
     layout_revision = -1
     timeline_model_revision = -1
@@ -271,6 +307,7 @@ func _hide_renderer() -> void:
 func _fail(message: String) -> void:
     push_error("SCORE_ASSET_FAILURE: " + message)
     score_error = message
+    _retained_started_ms = -1
     rendered_revision = -1
     timeline_model_revision = -1
     _hide_renderer()
