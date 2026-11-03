@@ -24,6 +24,12 @@ class ExerciseStage:
     variant: ExerciseVariant
     transformed_rhythm: bool = False
     tempo_policy: TempoStrategy | None = None
+    # Generator-owned, declarative teaching metadata. The application never
+    # parses variant.level strings to decide who produced an exercise or
+    # how to present it. Custom generators can publish their own categories.
+    origin: str = ""
+    technique: str = ""
+    display_name: str = ""
 
     @property
     def shaped_tempo(self) -> bool:
