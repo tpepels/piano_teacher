@@ -34,7 +34,7 @@ mastery from visual previews; three clean full-target performances required.
 | **2 — Notation fidelity** | Source IDs, hands, ties, rests, tuplets, native ink and geometry | Broad test/evidence coverage; real-score visual gaps remain possible | Independent framebuffer/original-note parity on required corpus |
 | **3 — Original Coda, MIDI-domain** | Four algorithms; pinned author-differential reproduction and source-safe desktop lesson path | **Algorithm scope completed 2026-11-02**; post-refactor retest pending | Existing 1,273-request differential and whole-piece/17-piece corpus, then current refactor regression |
 | **4 — Fukuda + composed strategies** | MIDI-domain reductions, source-local feedback, recorded-MIDI alignment, generic whole-piece/adaptive composition | **Code integrated**; live combined-path acceptance and paper figure parity not established | Focused + corpus tests, source-effect comparison, physical original-to-remediation loop |
-| **5 — One architecture, no compatibility layers** | Canonical engraving, native-only score assets, typed IPC, pluggable generator ownership; delete obsolete Qt/HTTP/facades | **Code migrated on main; verification pending** | Full bounded checks, native extension rebuild, import graph/packaging audit, no fallback |
+| **5 — One architecture, no compatibility layers** | Canonical engraving, native-only score assets, typed IPC, pluggable generator ownership; delete obsolete Qt/HTTP/facades | **Fast CI and Godot syntax green; still open** | Full focused/corpus gates, native extension smoke, import graph/packaging audit, removal of remaining fallback generator contracts |
 | **6 — Real instrument + UX performance** | Beethoven opening, READY ink, scrolling vs BPM, Listen, error/retry, rests, reconnect, latency, longer pieces | **Open** | Signed real Godot + USB/Bluetooth MIDI evidence across full checklist |
 | **7 — Teaching study + release** | Independent pedagogical effectiveness, clean-machine distribution, long-session reliability | **Not complete** | Prespecified learner comparison, reproducible package and unattended long-session acceptance |
 
@@ -45,7 +45,8 @@ reproduction remain research claims until independently checked.
 
 ## Immediate order of work
 
-**P5 — Stabilize the migration first.** Do not begin more feature extraction
+**P5 — Stabilize the migration first.** The bounded Python and Godot syntax
+checks passed on 2026-11-03 (`e47ec35`); this does **not** close P5. Do not begin more feature extraction
 until the new typed bridge, source engraver and native renderer load the same
 selected score. Run bounded Python/compilation tests, Godot parse tests,
 the native GDExtension bridge check, the focused Coda/Fukuda workflow and
@@ -90,7 +91,7 @@ functioning.
 
 | Blocker | Unblock |
 |---|---|
-| **Post-migration gate is red** | CI reported 5 fast-contract failures (obsolete typed-op tests/default assertions) and a native smoke success-code mismatch; source tests/smoke were repaired on 2026-11-03, but the new commit must be rerun before acceptance |
+| **Native extension and full teaching session still require current acceptance** | Fast Python [398 passed / 6 skipped](https://github.com/tpepels/piano_teacher/actions/runs/41631177338) and [Godot syntax](https://github.com/tpepels/piano_teacher/actions/runs/41631177422) were green at `e47ec35`. Native embedded bridge, focused hybrid and corpus must pass after the typed refactor |
 | **Native C++/Godot typed-op protocol changed** | Rebuild `scripts/build-inprocess.sh`; run `scripts/verify-native-bridge.sh` and Godot syntax/smoke |
 | **Real Beethoven and physical instrument behavior unobserved** | Reopen Beethoven in combined strategy; capture diagnostic log, framebuffer and keyboard assessment trace |
 | **Research comparison and release evidence missing** | P7 pilot and clean-machine packaging gate, after P6 |
