@@ -67,7 +67,7 @@ class ListenSession:
                 max((note.end for note in variant.notes), default=variant.phrase.end))
             token = uuid.uuid4().hex
             self._info = {
-                "token": token, "url": "", "audio_available": False,
+                "token": token, "audio_available": False,
                 "instrument": "Preparing piano audio",
                 "duration_seconds": (selected.tempo_map.duration_seconds
                                      if selected.tempo_map is not None
@@ -107,7 +107,7 @@ class ListenSession:
         with self._lock:
             if self._info is not None and self._info["token"] == token:
                 self._audio = audio
-                self._info.update(url=f"/demo.wav?token={token}", audio_available=True,
+                self._info.update(audio_available=True,
                     duration_seconds=audio.duration_seconds, instrument=audio.instrument,
                     sampled=audio.instrument != "Basic synthesized piano")
 
