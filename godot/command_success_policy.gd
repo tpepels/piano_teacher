@@ -8,20 +8,20 @@ static func decide(path: String, action: String,
         resume_saved: bool, opened: Variant = null) -> Dictionary:
     var kind := "other"
     var open_mode := "none"
-    if path == "/fingering":
+    if path == "fingering.correct":
         kind = "fingering"
-    elif path == "/control":
+    elif path == "practice.command":
         kind = "control"
-    elif path == "/library/health":
+    elif path == "library.health.start":
         kind = "library_health"
-    elif path == "/library/open":
+    elif path == "library.open":
         kind = "library_open"
         if opened is Dictionary:
             open_mode = ("practice" if bool(opened.get("warmup",false))
                 or resume_saved else "picker")
-    elif path == "/settings":
+    elif path == "settings.update":
         kind = "settings"
-    elif path == "/device":
+    elif path == "midi.device.select":
         kind = "device"
     return {
         "kind": kind,
