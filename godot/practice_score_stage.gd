@@ -11,7 +11,6 @@ const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameImpactCallout := preload("res://game_impact_callout.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
-const PracticeStepSelector := preload("res://practice_step_selector.gd")
 signal navigation_requested(destination: String)
 signal score_retry_requested
 signal command_requested(command: Dictionary)
@@ -29,7 +28,6 @@ var phase_cue: Control
 var impact_callout: Control
 var count_in: Control
 var keyboard: Control
-var steps: PracticeStepSelector
 var score_status_panel: CenterContainer
 var score_status_label: Label
 var score_browse_button: Button
@@ -92,11 +90,6 @@ func _ready() -> void:
     fingering_status_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     fingering_status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     fingering_status_label.max_lines_visible = 1
-    steps = PracticeStepSelector.new()
-    score_header.add_child(steps)
-    steps.visible = false
-    steps.step_requested.connect(func(number: int):
-        command_requested.emit({"action":"select_step","number":number}))
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 210)
@@ -222,7 +215,6 @@ func present(state: Dictionary, busy: bool) -> void:
     effects.present(state)
     feedback.present(state)
     phase_cue.present(state)
-    steps.present_context(state,busy)
     _update_hand_stages(state)
     # Mapped feedback belongs on actual native noteheads; never overlay it.
     practice_note_feedback_panel.visible = false
@@ -238,7 +230,6 @@ func pulse_hand_unlock() -> void:
 
 func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     _view_size = view_size
-    steps.apply_viewport(view_size,scale)
     keyboard.set_ui_scale(scale)
     fingering_status_label.get_parent().custom_minimum_size.y = ceilf(
         fingering_status_label.get_theme_font("font").get_height(fingering_status_label.get_theme_font_size("font_size")))

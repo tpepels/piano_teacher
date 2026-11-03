@@ -646,7 +646,6 @@ func _build_lesson_screen() -> void:
     lesson_view.advanced_requested.connect(practice_view.open_advanced_pause)
     lesson_session.request_requested.connect(_request_lesson)
     lesson_session.overview_changed.connect(lesson_view.present_overview)
-    lesson_session.overview_changed.connect(practice_view.stage.steps.present_overview)
     lesson_session.request_failed.connect(lesson_view.present_error)
 
 func _request_lesson() -> void:

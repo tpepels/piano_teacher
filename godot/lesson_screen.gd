@@ -1,6 +1,7 @@
 extends ScrollContainer
 # Lesson owns path presentation, choices and reset confirmation state.
 const UI := preload("res://ui_factory.gd")
+const PracticeStepSelector := preload("res://practice_step_selector.gd")
 const Design := preload("res://practice_theme.gd")
 const INK := Design.STONE
 const MUTED := Design.SECONDARY_INK
@@ -12,6 +13,7 @@ signal advanced_requested
 var stage_labels: Dictionary = {}
 var piece_title: Label
 var summary: Label
+var steps: PracticeStepSelector
 var description: Label
 var columns: BoxContainer
 var rows: VBoxContainer
@@ -84,6 +86,13 @@ func _ready() -> void:
     var path_options := UI.stack(14)
     UI.card_body(options_panel, 18).add_child(path_options)
     path_options.add_child(UI.label("Practice choices", 17, INK, true))
+    # Manual jumps remain available in Lesson Path, away from the
+    # continually scrolling score. A jump never grants mastery.
+    steps = PracticeStepSelector.new()
+    steps.step_requested.connect(func(number: int):
+        command_requested.emit({"action":"select_step","number":number})
+        practice_requested.emit())
+    path_options.add_child(steps)
     # FlowContainer inside an expanding, vertically scrolling VBox can
     # calculate a near-zero width for its Label during a resize. The label
     # then wraps to one letter per line and forces the entire activity
@@ -188,6 +197,7 @@ func _confirm_path_reset() -> void:
 
 func present_context(state: Dictionary, busy: bool) -> void:
     _context = state.duplicate(true)
+    steps.present_context(state,busy)
     present_busy(busy)
     if not bool(state.get("loaded",false)):
         mode_choice.disabled = true
@@ -223,6 +233,7 @@ func present_error(message: String) -> void:
     summary.text = message
 
 func present_overview(values: Dictionary) -> void:
+    steps.present_overview(values)
     var parsed: Dictionary = values.duplicate(true)
     if parsed.is_empty():
         for child in rows.get_children():
@@ -316,6 +327,7 @@ func present_overview(values: Dictionary) -> void:
         rows.add_child(chapter)
 
 func apply_viewport(view_size: Vector2, scale: float) -> void:
+    steps.apply_viewport(view_size,scale)
     columns.vertical = view_size.x < 1280.0
     columns.move_child(options,0 if columns.vertical else 1)
     for control in find_children("*","Control",true,false):
