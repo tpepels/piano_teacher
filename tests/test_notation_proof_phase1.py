@@ -12,7 +12,7 @@ from piano_teacher.notation.model import build_score_model
 from piano_teacher.notation.proof import (
     read_written_score, verify_generated_engraving, verify_original_musicxml,
 )
-from piano_teacher.score import import_piece
+from piano_teacher.importing.pieces import import_piece
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "musical_fidelity"
