@@ -40,7 +40,7 @@ func _process(_delta: float) -> bool:
     if not bool(engine.call("is_ready")):
         return false
     if request_id < 0:
-        request_id = int(engine.call("submit", "GET", "/library", ""))
+        request_id = int(engine.call("submit", "library.catalog", "{}"))
         if request_id < 0:
             _fail("Python engine ready but library request rejected")
         return false
@@ -51,7 +51,7 @@ func _process(_delta: float) -> bool:
         var data: PackedByteArray = response.get("body", PackedByteArray())
         var parsed: Variant = JSON.parse_string(data.get_string_from_utf8())
         if status != 200 or not parsed is Dictionary or not parsed.has("pieces"):
-            _fail("In-process /library failed (%d): %s" % [
+            _fail("In-process library.catalog failed (%d): %s" % [
                 status, data.get_string_from_utf8().left(500)])
             return true
         print("PIANO_NATIVE_LIBRARY_OK pieces=", (parsed["pieces"] as Array).size())
