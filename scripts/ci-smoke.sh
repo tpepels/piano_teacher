@@ -46,6 +46,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_score_ack.py \
   tests/test_transport_commands.py \
   tests/test_visual_transport.py \
+  tests/test_transport_field_ownership.py \
   tests/test_course_navigation.py \
   tests/test_coordination_boundaries.py::test_success_effects_keep_ordering_without_main_access \
   tests/test_stage_change.py \

@@ -33,6 +33,11 @@ if __name__ == "__main__":
             if hits:
                 files.append((file.relative_to(ROOT).as_posix(), len(hits),
                               ",".join(sorted(set(hits)))))
-    print("TRANSPORT_ALIAS_CALLERS:", len(files))
-    for path, n, fields in files:
+    unexpected = [entry for entry in files
+                  if entry[0] != "piano_teacher/visual_transport.py"]
+    print("TRANSPORT_ALIAS_CALLERS:", len(unexpected))
+    for path, n, fields in unexpected:
         print(f"TRANSPORT_ALIAS_REF: {path} | {n} | {fields}")
+    if unexpected:
+        raise SystemExit(1)
+    print("TRANSPORT_OWNER_ONLY_OK")

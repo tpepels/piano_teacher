@@ -191,22 +191,3 @@ class VisualTransport:
             gap_beats=self.visual_gap_beats,
             paused=self.paused,
         ), now, tempo_map=tempo_map)
-
-
-class TransportField:
-    """Compatibility alias while engine callers move to VisualTransport.
-
-    Existing tests, HTTP handlers, and integrations can still inspect or
-    assign engine.run_at, engine.pending_rewind, etc. No duplicated storage.
-    """
-
-    def __init__(self, name: str):
-        self.name = name
-
-    def __get__(self, instance, owner):
-        if instance is None:
-            return self
-        return getattr(instance.visual_transport, self.name)
-
-    def __set__(self, instance, value) -> None:
-        setattr(instance.visual_transport, self.name, value)
