@@ -337,7 +337,7 @@ class FukudaMidiLessonGenerator:
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if piece.source_format!="midi" or piece.source_musicxml:
             raise ValueError("Fukuda MIDI requires an imported MIDI piece")
-        from .fukuda_midi import fukuda_midi_variants
+        from .fukuda_midi import fukuda_midi_variants, as_fukuda_stage
         # Whole-score assessment first gives Fukuda's three rule families
         # access to any musical pattern across the original piece, not only
         # whichever two-bar focus window another strategy selected.
@@ -370,7 +370,7 @@ class FukudaMidiLessonGenerator:
                         original,bpm=piece.bpm,mistakes=self.mistakes)
                 else:
                     variants=(original,)
-                result[(exercise.key,hand)]=tuple(ExerciseStage(v) for v in variants)
+                result[(exercise.key,hand)]=tuple(as_fukuda_stage(v) for v in variants)
         return LessonPlanDefinition(exercises,result,self.name,
                                     requires_unique_source_ids=True)
 
