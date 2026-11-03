@@ -6,9 +6,9 @@ from test_phase1_camera import native_camera_run
 
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase
-from piano_teacher.rendering.legacy import spacing as reading_spacing
-from piano_teacher.rendering.legacy.spacing import NOTE_SPACING, RHYTHM_SPACING, space_for_continuous_reading
-from piano_teacher.score import render_layout
+from piano_teacher.engraving import spacing as reading_spacing
+from piano_teacher.engraving.spacing import NOTE_SPACING, RHYTHM_SPACING, space_for_continuous_reading
+from piano_teacher.engraving.engraving import render_layout
 
 
 def _exercise(bars=8):
