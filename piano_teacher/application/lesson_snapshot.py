@@ -12,7 +12,8 @@ from ..lesson_stage_semantics import describe
 
 
 def build_lesson_snapshot(plan, exercise, variant, *, fingerprint: str,
-                          warmup: bool, lesson_steps: tuple) -> LessonSnapshot:
+                          warmup: bool, lesson_steps: tuple,
+                          lesson_step_count: int = 0) -> LessonSnapshot:
     p = plan
     ex = exercise
     if p.generator_registration is not None and p.generator_registration.midi_only and not warmup:
@@ -38,7 +39,8 @@ def build_lesson_snapshot(plan, exercise, variant, *, fingerprint: str,
         level_count=len(p.variants), required_notes=len(variant.notes),
         warmup=warmup, piece_last_bar=len(p.piece.bar_boundaries)-1,
         import_warnings=p.piece.import_warnings, hand=p.hand, hands=p.hands,
-        lesson_steps=lesson_steps, lesson_step=p.lesson_step_number,
+        lesson_steps=lesson_steps, lesson_step_count=lesson_step_count,
+        lesson_step=p.lesson_step_number,
         lesson_steps_mastered=p.lesson_steps_mastered, mastered=tuple(p.mastered),
         fingerprint=fingerprint,
         tempo=TempoSnapshot(bpm=p.bpm, original_bpm=p.piece.bpm,

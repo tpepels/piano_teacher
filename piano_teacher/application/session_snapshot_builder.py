@@ -151,7 +151,15 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     gap_beats = practice_timeline["gap"]["duration_beats"]
     reads.set_visual_gap_beats(gap_beats)
     ex, variant = p.exercise, p.active_variant
-    lesson_steps = tuple((step.exercise_index, step.hand, step.key) for step in p.lesson_steps)
+    # Only the current exercise's hand rows are used by the HUD.
+    # Capturing/freezing the full sequence of thousands of lesson stages
+    # every 20 ms makes a large source freeze the in-process control queue.
+    # Keep the total as one count; retain the complete source course in
+    # LearningPlan for Lesson Path navigation and mastery.
+    all_steps = p.lesson_steps
+    lesson_steps = tuple(
+        (step.exercise_index, step.hand, step.key)
+        for step in all_steps if step.exercise_index == p.index)
     sampled_at = time.monotonic()
     now = state.paused_at if state.paused else sampled_at
     elapsed = now-state.run_at
@@ -160,7 +168,8 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     visual_motion = reads.visual_motion(now)
     lesson = build_lesson_snapshot(
         p, ex, variant, fingerprint=state.fingerprint,
-        warmup=state.is_builtin_warmup, lesson_steps=lesson_steps)
+        warmup=state.is_builtin_warmup, lesson_steps=lesson_steps,
+        lesson_step_count=len(all_steps))
     tempo_map = reads.active_tempo_map()
     # Local-zero source timing followed by the explicit practice-BPM
     # silence. These exact segments are sent to Godot and retained

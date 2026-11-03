@@ -267,3 +267,43 @@ def test_guided_retry_more_units_and_wrong_note_hints():
           teaching={"expected_notes":[{"label":"F"}],"hint_reason":"wrong_note"},
           has_more_units=False,returning=False)
     assert wait["feedback"] == "Find F on the keyboard below, then try again."
+
+
+def test_snapshot_sends_only_visible_hand_rows_but_preserves_full_step_count(tmp_path):
+    from piano_teacher.server import PracticeEngine
+    from piano_teacher.music import Note, Phrase, Piece
+    from piano_teacher.learning import LearningPlan
+    from piano_teacher.state_projection import project_session_state
+
+    notes = tuple(Note(float(i), float(i)+.5, 60+i%8, 0, 0, "right",
+                       "source-"+str(i)) for i in range(24))
+    source = Piece("Long lesson", 92, notes,
+        (Phrase(1,1,6,0,24,notes),),
+        bar_boundaries=(0,4,8,12,16,20,24))
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.plan = LearningPlan(source)
+        all_steps = engine.plan.lesson_steps
+        assert len(all_steps) > 3
+        captured = engine._capture_session_snapshot()
+        assert captured.lesson.lesson_step_count == len(all_steps)
+        assert all(entry[0] == engine.plan.index
+                   for entry in captured.lesson.lesson_steps)
+        assert len(captured.lesson.lesson_steps) < len(all_steps)
+        response = project_session_state(captured)
+        assert response["lesson_steps"] == len(all_steps)
+        assert response["hand_stages"] == hand_stage_rows(
+            kind=engine.plan.exercise.kind,
+            exercise_index=engine.plan.index,
+            current_hand=engine.plan.hand,
+            available_hands=engine.plan.hands,
+            mastered=tuple(engine.plan.mastered),
+            lesson_steps=tuple((step.exercise_index,step.hand,step.key)
+                               for step in all_steps),
+            builtin_warmup=False)
+        engine.plan.select_step(len(all_steps))
+        last = project_session_state(engine._capture_session_snapshot())
+        assert last["lesson_steps"] == len(all_steps)
+        assert last["lesson_step"] == len(all_steps)
+    finally:
+        engine.db.close()

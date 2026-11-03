@@ -141,6 +141,7 @@ class LessonSnapshot(_Snapshot):
     hand: str = "both"
     hands: tuple[str, ...] = ("both",)
     lesson_steps: tuple[tuple[int, str, str], ...] = ()
+    lesson_step_count: int = 0
     lesson_step: int = 1
     lesson_steps_mastered: int = 0
     mastered: tuple[str, ...] = ()
@@ -290,7 +291,8 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
             lesson_steps=lesson.lesson_steps, builtin_warmup=lesson.warmup),
         "measure_boundaries": list(lesson.measure_boundaries),
         "import_warnings": list(lesson.import_warnings),
-        "lesson_step": lesson.lesson_step, "lesson_steps": len(lesson.lesson_steps),
+        "lesson_step": lesson.lesson_step,
+        "lesson_steps": lesson.lesson_step_count or len(lesson.lesson_steps),
         "lesson_steps_mastered": lesson.lesson_steps_mastered,
         "hand": lesson.hand, "hands": list(lesson.hands),
         "bpm": tempo.bpm, "original_bpm": tempo.original_bpm, "target_bpm": tempo.target_bpm,

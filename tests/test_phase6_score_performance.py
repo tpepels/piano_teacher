@@ -102,6 +102,10 @@ def test_real_score_cold_and_cached_native_pipeline(
             "p95_ms":round(_percentile(samples,.95),3),
             "max_ms":round(max(samples),3)}
         report["backend_timings"] = engine.performance_diagnostics()
+        captured = engine._capture_session_snapshot()
+        assert captured.lesson.lesson_step_count == len(engine.plan.lesson_steps)
+        assert len(captured.lesson.lesson_steps) < len(engine.plan.lesson_steps), (
+            "A live state response must not copy a full large-score lesson path")
         # ru_maxrss is KiB on Linux, covering interpreter+music21/Verovio.
         report["rss_peak_mb"] = round(resource.getrusage(
             resource.RUSAGE_SELF).ru_maxrss / 1024.0,1)

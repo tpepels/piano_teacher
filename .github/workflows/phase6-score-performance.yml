@@ -14,6 +14,9 @@ on:
       - 'piano_teacher/learning.py'
       - 'piano_teacher/lesson_generators.py'
       - 'piano_teacher/adaptive_hybrid_curriculum.py'
+      - 'piano_teacher/application/session_snapshot_builder.py'
+      - 'piano_teacher/application/lesson_snapshot.py'
+      - 'piano_teacher/state_projection.py'
 
 permissions:
   contents: read
