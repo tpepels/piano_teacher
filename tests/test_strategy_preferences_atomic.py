@@ -100,12 +100,20 @@ def test_failed_settings_write_keeps_active_session_even_after_preflight(
         revision = engine.score_revision
         before = dict(engine.library.settings)
 
+        preflight = []
+        def prepare_replacement(*_args, **kwargs):
+            preflight.append(kwargs["settings"]["exercise_strategy"])
+            return object()  # Only test failure after successful preparation.
+
         def cannot_save(**_kwargs):
             raise OSError("simulated settings write failure")
 
+        monkeypatch.setattr("piano_teacher.server.restored_strategy_plan",
+                            prepare_replacement)
         monkeypatch.setattr(engine.library, "save", cannot_save)
         with pytest.raises(OSError, match="settings write"):
             engine.set_preferences(exercise_strategy="coda-midi")
+        assert preflight == ["coda-midi"]
         assert engine.library.settings == before
         assert engine.plan is plan
         assert engine.running
