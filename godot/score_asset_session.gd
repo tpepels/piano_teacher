@@ -208,9 +208,12 @@ func _complete_layout(code: int, body: PackedByteArray) -> void:
     if not parsed is Dictionary or not parsed.has("anchors"):
         _fail("The engraving engine returned invalid note positions")
         return
-    if parsed.has("revision") and int(parsed["revision"]) != revision:
-        # The server advanced before its state response arrived. Its normal
-        # revision poll will invalidate this request and request that layout.
+    if not parsed.has("revision") or int(parsed["revision"]) != revision:
+        # A failed revision match must terminate this request. The next
+        # authoritative state snapshot selects the actual server revision,
+        # at which point update_context restarts the layout lifecycle.
+        # Silently returning here leaves a permanent "Preparing..." panel.
+        _fail("Engraving response revision differs from selected score. Retry the score.")
         return
     if not is_instance_valid(_renderer):
         return

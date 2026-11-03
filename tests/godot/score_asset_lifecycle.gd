@@ -131,6 +131,21 @@ func run() -> void:
         "{\"error\":\"stale\"}".to_utf8_buffer(),Time.get_ticks_msec())
     check(hanging.score_error.is_empty() and hanging.layout_pending,
         "old layout completion must not override a manual Retry")
+    # A worker that has advanced to another score revision must never
+    # silently leave the selected piece loading without a retry control.
+    var mismatched := Session.new(FakeRenderer.new())
+    mismatched.update_context({"loaded":true,"revision":30,
+        "piece_fingerprint":"old","phase":"loading"},Time.get_ticks_msec())
+    mismatched.complete_response("layout",mismatched.pending_id("layout"),0,
+        JSON.stringify({"revision":31,"anchors":[{"id":"new"}]}).to_utf8_buffer(),
+        Time.get_ticks_msec())
+    check(not mismatched.score_error.is_empty() and
+        bool(mismatched.status()["retry_visible"]),
+        "revision-mismatched Verovio layout must fail visibly, not spin forever")
+    mismatched.update_context({"loaded":true,"revision":31,
+        "piece_fingerprint":"new","phase":"loading"},Time.get_ticks_msec())
+    check(mismatched.layout_pending and mismatched.score_error.is_empty(),
+        "fresh authoritative score revision must automatically retry layout")
     var second_renderer := FakeRenderer.new()
     var second := Session.new(second_renderer)
     second.update_context({"loaded":true,"revision":9,
