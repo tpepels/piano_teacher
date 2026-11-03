@@ -153,8 +153,8 @@ def test_two_consecutive_prepared_stage_transitions_keep_global_beat(tmp_path):
         engine.future_score = prepared
         first_offset = engine.visual_transport.visual_offset_beats
         for advancement in (2, 3):
-            engine.plan.streak = 2
             engine.plan.set_bpm(engine.plan.target_bpm)
+            engine.plan.streak = 2
             selection, target_number = engine._next_stage_selection()
             assert target_number == advancement
             current_bpm = engine.plan.bpm
