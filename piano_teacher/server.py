@@ -976,9 +976,9 @@ class PracticeEngine:
             "_remediation_pending", "recovery_notice", "score_revision",
             "awaiting_score_revision", "open_from_beat",
             "performance_summary", "review_stage_identity",
-            "visual_offset_beats",
         )
         engine_before = {key: getattr(self, key) for key in engine_fields}
+        visual_offset_before = self.visual_transport.visual_offset_beats
         try:
             with sqlite_atomic(self.db):
                 # Source-specific mistakes are learned from authentic original
@@ -1044,6 +1044,7 @@ class PracticeEngine:
             vars(p).update(plan_before)
             for key, value in engine_before.items():
                 setattr(self, key, value)
+            self.visual_transport.visual_offset_beats = visual_offset_before
             raise
         self.pending_result = None
         return outcome.message
