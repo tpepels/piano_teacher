@@ -128,6 +128,9 @@ func _init() -> void:
     tooltip_text = "Right-click a note or tap a finger number to change its fingering"
 
 func clear_score() -> void:
+    runway_origin_beat = 0.0
+    runway_cutoff_beat = INF
+    runway_overlay = false
     annotations.clear()
     super.clear_score()
     layout.timeline = timeline

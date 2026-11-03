@@ -47,7 +47,8 @@ def test_main_callbacks_keep_reply_handling_and_presentation_separate():
     assert "state_presenter.present(" in state
     assert "visual_transport_clock.accept(parsed,last_state_tick,received_ms)" in state
     assert "score_session.update_context(parsed,received_ms)" in state
-    assert "renderer.present_clock(beat,visual_beat)" in frame
+    assert "renderer.present_clock(beat,visual_beat -" in frame
+    assert "float(stage.renderer.runway_origin_beat)" in frame
     assert "renderer.present(" not in frame
     assert "stage.renderer.present(" in state
     assert "app." not in frame
