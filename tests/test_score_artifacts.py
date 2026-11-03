@@ -148,25 +148,14 @@ def test_engraving_cache_invalidates_when_generated_musicxml_changes(
     assert len(rendering) == 2
 
 
-def test_persisted_engraving_and_png_reuse_survive_owner_replacement(
-        artifacts_api, selected, rendering, tmp_path, monkeypatch):
-    raster_calls = []
-
-    def raster(svg, *, width=2000):
-        raster_calls.append((svg, width))
-        return b"\x89PNG\r\n\x1a\n"+str(width).encode()
-
-    monkeypatch.setattr(artifacts_api, "rasterize_score", raster)
+def test_persisted_source_engraving_reuse_survives_owner_replacement(
+        artifacts_api, selected, rendering, tmp_path):
     owner = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
     first = owner.engraving(selected)
-    png = owner.engraved_png(selected)
-    assert owner.engraved_png(selected) == png
-    assert owner.engraved_png(selected, width=3000) != png
-    assert owner.engraved_png(selected) == png
     again = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
     assert again.engraving(selected) == first
-    assert again.engraved_png(selected) == png
-    assert len(rendering) == 1 and len(raster_calls) == 2
+    assert len(rendering) == 1
+    assert first.layout["mapping_schema"] == "source-note-v1"
 
 
 def test_corrupt_cached_source_binding_is_rejected_and_rebuilt(
@@ -201,19 +190,19 @@ def test_invalidation_clears_memory_and_reuses_durable_source_ink(
     assert owner.engraving_cache_key == key and len(rendering) == 1
 
 
-def test_image_bounds_and_reference_layout_keep_the_existing_contract(
+def test_only_native_semantic_geometry_is_published(
         artifacts_api, selected, rendering, tmp_path, monkeypatch):
     from piano_teacher.application import score_preparation
     owner = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
-    monkeypatch.setattr(score_preparation, "assemble_layout",
-        lambda score, **kwargs: {"revision": kwargs["revision"], "native": kwargs["native_notes"]})
-    assert owner.geometry(selected, native_notes=False) == {"revision": 7, "native": False}
-    assert owner.engraved(selected) == "<svg>selected source</svg>"
-    with pytest.raises(ValueError, match="Invalid score page"):
-        owner.engraved(selected, 1)
-    with pytest.raises(ValueError, match="width"):
-        owner.engraved_png(selected, width=599)
-    with pytest.raises(ValueError, match="width"):
-        owner.engraved_png(selected, width=12001)
-    with pytest.raises(ValueError, match="Invalid score page"):
-        owner.engraved_png(selected, 1)
+    calls = []
+    def native(score, **kwargs):
+        calls.append(kwargs)
+        return {"revision": kwargs["revision"],
+                "note_ids": [n["id"] for n in kwargs["native_model"]["notes"]],
+                "source_xml": kwargs["notation_xml"]}
+    monkeypatch.setattr(score_preparation, "assemble_layout", native)
+    result = owner.geometry(selected)
+    assert result["revision"] == selected.revision
+    assert set(result["note_ids"]) == {"source-r", "source-l"}
+    assert "<score-partwise" in result["source_xml"]
+    assert len(calls) == 1 and "native_notes" not in calls[0]
