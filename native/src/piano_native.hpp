@@ -23,7 +23,7 @@ class PianoNative : public RefCounted {
 
     struct Command {
         int64_t id;
-        std::string method, path, body;
+        std::string operation, body;
     };
     struct Reply {
         int64_t id;
@@ -56,7 +56,7 @@ public:
 
     bool is_ready() const { return ready_.load(); }
     String failure_message();
-    int64_t submit(const String &method, const String &path, const String &body);
+    int64_t submit(const String &operation, const String &body);
     Array take_responses();
 };
 
