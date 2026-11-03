@@ -45,9 +45,14 @@ def test_only_one_godot_command_adapter_and_score_queue():
     assert "inprocess_bus.poll_midi(" in main
     cpp = (SRC / "piano_native.cpp").read_text()
     bridge = (GODOT / "inprocess_bus.gd").read_text()
-    assert '"/midi/live?since=%d"' in bridge
+    assert '"midi.events"' in bridge
     assert 'native.call("live_events_json"' not in bridge
     assert "live_events_json" not in cpp
+    assert 'D_METHOD("submit", "operation", "payload")' in cpp
+    assert 'command.method' not in cpp and 'command.path' not in cpp
+    assert '"GET"' not in request and '"POST"' not in request
+    assert "download_file" not in request
+    assert "headers: PackedStringArray" not in request
     assert 'res://score_asset_queue.gd' in main
     assert "use_inprocess" not in main
     for script in (main, queue, demo, request):
@@ -55,7 +60,7 @@ def test_only_one_godot_command_adapter_and_score_queue():
         assert "127.0.0.1" not in script
     assert not (GODOT / "score_asset_http.gd").exists()
     for name in ("request_completed", "func request(", "func cancel_request(",
-                 "func complete(", "download_file"):
+                 "func complete("):
         assert name in request
 
 
