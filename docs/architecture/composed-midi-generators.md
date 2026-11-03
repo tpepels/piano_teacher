@@ -95,8 +95,14 @@ to choose a pedagogically superior default.
 ## Extending without adding application branches
 
 The generalized `ComposedLessonGenerator` accepts an ordered collection
-of independent `LessonGenerator` instances. The named Coda/Fukuda strategy is a specialized subclass which supplies
-its own progressive passage and error-selection policy. Its feedback hook provides any
+of independent `LessonGenerator` instances. For adaptive passage curricula,
+`AdaptiveComposedLessonGenerator` uses each participant's
+`passage_stages(piece, original, kind=...)` interface. The composer owns the
+source-preserving segmentation and selects stages by measurable musical effect.
+A new generator can contribute its own stages, provenance, and technique
+without adding Coda/Fukuda branches. `CodaFukudaMidiLessonGenerator` is
+a configured preset of this adaptive composer, not a separate hard-coded
+compiler. Its feedback hook provides any
 participant that implements `with_mistakes` with source-identified MIDI
 mistakes; the combined strategy chooses source-specific existing passage stages
 from the cached catalog, without rebuilding the original-score candidates. The generic `register_composed_lesson_generator` entrypoint
@@ -169,3 +175,25 @@ framebuffer correctness and independent learner-outcome effectiveness still
 require separate acceptance. Historical Heuristic/Legacy research
 strategies and offline Verovio proof utilities do not run as an alternate
 network backend.
+
+
+### Adaptive registration example
+
+`register_composed_lesson_generator("my-adaptive", ("coda-midi",
+"my-new-midi-algorithm"), label="My adaptive practice", version=1,
+adaptive=True)` creates an ordinary selectable course and exposes its
+MIDI/tempo ownership through Settings. The contributed algorithm must be
+registered as a MIDI generator, implement `generate(piece)` for its
+full-score research definition and `passage_stages(piece, original,
+kind=...)` for bounded teaching. The passage method must end in an exact
+original stage. The immutable course validator checks IDs, notes, hands,
+timing boundaries and the unchanged final performance.
+
+The named Coda+Fukuda preset now uses those same contributor methods:
+nothing in `adaptive_hybrid_curriculum.compile_hybrid_catalog` imports
+or calls an algorithm-specific stage builder. Its local Fukuda
+source-ID relevance filter remains a specialized option; the general
+stage selector works on actual removed notes, written timing differences
+and tempo policies, irrespective of author name. Generic composers
+forward the full source-ID/error-family mapping when a participant
+implements `with_feedback`.
