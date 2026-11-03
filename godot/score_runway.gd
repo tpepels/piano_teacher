@@ -11,6 +11,11 @@ var score_session
 var _fetch: Node
 var _ack: Node
 var _future
+# Last lesson's authentic ink remains visible behind the playhead until its
+# final bar has left the viewport; no score-page flash at promotion.
+var _tail
+var _tail_origin := 0.0
+var _tail_end := 0.0
 var _bundle: Dictionary = {}
 var _layout: Dictionary = {}
 var _source_fingerprint := ""
@@ -39,6 +44,7 @@ func configure(host: Node, practice_stage, session, bus: Node) -> void:
 func _discard() -> void:
     if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
         stage.renderer.runway_cutoff_beat = INF
+    _clear_tail()
     _fetch.cancel_request()
     _ack.cancel_request()
     if _future != null and is_instance_valid(_future):
@@ -50,6 +56,25 @@ func _discard() -> void:
     _ack_waiting = false
     _next_poll_ms = 0
     _failure = ""
+
+func _clear_tail() -> void:
+    if _tail != null and is_instance_valid(_tail):
+        _tail.queue_free()
+    _tail = null
+    _tail_origin = 0.0
+    _tail_end = 0.0
+
+func _advance_tail(global_beat: float) -> void:
+    if _tail == null:
+        return
+    if not is_instance_valid(_tail):
+        _tail = null
+        return
+    _tail.present_clock(global_beat-_tail_origin,global_beat-_tail_origin)
+    var density: float = maxf(1.0,float(_tail.timeline.pixels_per_beat))
+    var left_visible: float = global_beat-_tail.size.x*.42/density
+    if left_visible > _tail_end+.01:
+        _clear_tail()
 
 func _on_future_reply(code: int, body: PackedByteArray) -> void:
     if code != 0:
@@ -140,6 +165,7 @@ func update_state(state: Dictionary, now_ms: int) -> void:
 
 func present_frame(state: Dictionary, global_beat: float) -> void:
     _visual_beat = global_beat
+    _advance_tail(global_beat)
     if _future == null or not is_instance_valid(_future) or _bundle.is_empty():
         if stage != null and stage.has_method("present_runway_steps") and \
                 stage.renderer != null and is_instance_valid(stage.renderer):
@@ -181,6 +207,7 @@ func promote_if_ready(state: Dictionary) -> bool:
             int(state.get("lesson_step",0)) != int(_bundle.get("step_number",-1)):
         return false
     var old = stage.renderer
+    var former_origin: float = float(old.runway_origin_beat)
     var new_renderer = _future
     _future = null
     new_renderer.modulate.a = 1.0
@@ -191,7 +218,17 @@ func promote_if_ready(state: Dictionary) -> bool:
     stage.renderer = new_renderer
     score_session.adopt_prepared(state,new_renderer,_layout)
     if old != null and is_instance_valid(old):
-        old.queue_free()
+        _clear_tail()
+        old.runway_overlay = true
+        old.runway_cutoff_beat = (float(state.get("visual_offset_beats",0.0)) -
+            former_origin)
+        old.set_transport_overlay_enabled(false)
+        old.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        old.queue_redraw()
+        stage.score_frame.move_child(old,stage.score_frame.get_child_count()-1)
+        _tail = old
+        _tail_origin = former_origin
+        _tail_end = float(state.get("visual_offset_beats",0.0))
     _bundle.clear()
     _layout.clear()
     _acknowledged = false

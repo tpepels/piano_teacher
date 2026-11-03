@@ -13,6 +13,10 @@ class MockView:
     var runway_cutoff_beat := INF
     var runway_overlay := true
     var cleared := 0
+    var timeline := {"pixels_per_beat": 100.0}
+    var previous_camera := NAN
+    func present_clock(_clock: float, visual: float = NAN) -> void:
+        previous_camera = visual
     func retained_ready() -> bool:
         return true
     func clear_score() -> void:
@@ -89,6 +93,14 @@ func run() -> void:
         "same precompiled renderer must become the authoritative view")
     check(session.revision == 2 and session.is_ready(),
         "promoted score remains ready at the new revision")
+    check(runway._tail == old_renderer and is_instance_valid(old_renderer),
+        "prior notes must remain in the viewport after promotion")
+    check(old_renderer.runway_overlay and
+        absf(old_renderer.runway_cutoff_beat - 12.17) < .0001,
+        "outgoing score clips its future copies at the stage boundary")
+    runway._advance_tail(15.0)
+    check(absf(old_renderer.previous_camera - 15.0) < .0001,
+        "outgoing score scrolls at the same global beat as new score")
     check(absf(stage.renderer.runway_origin_beat - 12.17) < .0001,
         "new stage keeps global scroll origin")
     check(stage.renderer.runway_overlay == false,
@@ -96,6 +108,9 @@ func run() -> void:
     session.update_context(proposed,1000)
     check(requests.is_empty() and old_renderer.cleared == 0,
         "same score revision must not clear the old view or reload ink")
+    runway._advance_tail(20.0)
+    check(runway._tail == null,
+        "outgoing ink is released only after its last note leaves the viewport")
 
     runway._next_poll_ms = 0
     runway._request_if_needed({
