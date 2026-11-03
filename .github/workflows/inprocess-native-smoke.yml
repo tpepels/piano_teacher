@@ -26,6 +26,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Validate the exact implementation whose native binary was built.
+          # Checkout of mutable main would make the artifact evidence ambiguous.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'

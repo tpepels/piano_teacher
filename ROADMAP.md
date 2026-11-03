@@ -29,7 +29,7 @@ mastery from visual previews; three clean full-target performances required.
 
 | Phase | Scope | Status as of this document | Exit evidence |
 |---|---|---|---|
-| **0 — Foundation** | MIDI import, library, native startup, one process | Implemented; typed-bridge rebuild unverified | Cold Godot startup + open real MIDI |
+| **0 — Foundation** | MIDI import, library, native startup, one process | Native two-hand MIDI open/engraving/transport passed; production UI cold start unverified | Cold production Godot UI with real MIDI |
 | **1 — Practice engine** | Count-in, transport, recovery, retry, tempo ladder, progress | Implemented in software; physical behavior open | Real full session with no clock/stage divergence |
 | **2 — Notation fidelity** | Source IDs, hands, ties, rests, tuplets, native ink and geometry | Broad test/evidence coverage; real-score visual gaps remain possible | Independent framebuffer/original-note parity on required corpus |
 | **3 — Original Coda, MIDI-domain** | Four algorithms; pinned author-differential reproduction and source-safe desktop lesson path | **Algorithm scope complete; post-consolidation Coda tests green** | Existing 1,273-request differential and whole-piece/17-piece corpus, then current refactor regression |
@@ -78,10 +78,14 @@ pedagogical effectiveness belong to Phases 6 and 7, not Phase 5.
 
 ## Immediate order of work
 
-**P6 — Prove real user behavior.** Native CI now additionally exercises the
-actual embedded two-hand MIDI path: catalog, open, Verovio layout, semantic
-model, score-ready acknowledgement and Play/Pause/Resume. This is a
-software/embedded integration gate, not a physical MIDI keyboard test.
+**P6 — Prove real user behavior.** The
+[embedded real-MIDI workflow](https://github.com/tpepels/piano_teacher/actions/runs/41660803843)
+passed at `213cc255`: library catalog, opening an actual two-hand MIDI,
+Verovio note anchors, source-semantic score, score-ready acknowledgement,
+Play/Pause/Resume and the staged package asset audit. Native CI is now pinned
+to the exact build revision and reruns on changes to the score pipeline.
+This establishes embedded software integration, not Godot framebuffer
+correctness or physical MIDI keyboard behavior.
 
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
