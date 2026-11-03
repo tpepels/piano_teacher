@@ -519,3 +519,11 @@ def test_unrelated_adaptive_contributor_is_not_bound_to_coda_fukuda(piece):
     assert describe(stages[0], stages[-1])["label"] == "Harmonic guide"
     assert catalog.generator_name == "future-adaptive"
     assert catalog.exercises[-1].phrase.notes == piece.notes
+    # Replacing an algorithm must invalidate its previously compiled
+    # catalog; otherwise the live course would silently run old stages.
+    changed = replace(adaptive, components=(
+        replace(Independent(), name="replacement-algorithm"),))
+    new_course = changed.generate(piece)
+    selected = new_course.stages(new_course.exercises[0], "right")[0]
+    assert selected.origin == "replacement-algorithm"
+    assert new_course.exercises[-1].phrase.notes == piece.notes
