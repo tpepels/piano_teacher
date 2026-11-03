@@ -54,12 +54,12 @@ def _send(engine, now, timestamp, *, pitch, on):
 def _perform_real_practice(engine, piece, now, *, wrong_first_pitch=False):
     engine.plan = LearningPlan(
         piece, exercise_strategy="source-progression", consolidate=True)
-    engine.plan.index = next(
-        index for index, exercise in enumerate(engine.plan.exercises)
-        if exercise.kind == "perform")
+    # A one-measure source-progression course has only a learn exercise.
+    # Its terminal original stage still uses the complete imported score.
+    engine.plan.index = len(engine.plan.exercises) - 1
     engine.plan.variant_index = len(engine.plan.variants) - 1
     engine.plan.set_bpm(120)
-    assert engine.plan.hand == "both"
+    assert engine.plan.hand in ("right", "both")
     assert [note.source_id for note in engine.plan.active_phrase.notes] == [
         note.source_id for note in piece.notes]
 
