@@ -53,6 +53,7 @@ jobs:
             tests/test_phase6_rest_handoff_real_midi.py \
             tests/test_timed_real_scores_and_recovery.py \
             tests/test_isolated_source_tuplet_recovery.py \
+            tests/test_real_future_score.py \
             2>&1 | tee "$RUNNER_TEMP/engraving-recovery/results.txt"
       - name: Preserve exact failing cases
         if: always()
