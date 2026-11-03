@@ -1,5 +1,7 @@
 # Piano Teacher architecture
 
+This is a technical contract. The sole active phase plan is [ROADMAP.md](../../ROADMAP.md).
+
 The application is one Godot process with an embedded Python practice engine,
 connected through a native in-memory command queue. Source notes,
 written notation, teaching policy, playback time and photographed verification
@@ -24,9 +26,10 @@ The caller retains the established clock sampling order and stateful adapter
 operations.
 
 `ScoreArtifacts` receives a frozen `ScoreSelection` and owns selected notation
-compilation plus semantic, engraving and bounded page-image caches. It has no
-engine or plan reference. A single compilation feeds the semantic and rendering
-paths; durable cache keys keep their established source/stage/hand identity.
+compilation, semantic projection, canonical Verovio source engraving and
+native atlas/fragment preparation. There is no page-PNG renderer or
+non-native score mode. It has no engine or plan reference. One compilation
+feeds model and native rendering; durable keys bind source/stage/hand.
 The engine owns source revisions and acknowledgements, rather than the cache.
 
 `MidiConnection` owns ports, discovery/reconnect deadlines, physical input
@@ -46,9 +49,11 @@ presentation backends.
 `LessonGenerator` instances own complete curricula; a registry selects the
 whole-piece generator, not a conditional branch in `LearningPlan`. The
 reusable `compose_lesson_definitions` merges compatible exercise stages
-without changing source identities, while distinct error-focused repairs
-remain separate lessons. A common `with_mistakes` feedback interface lets the
-practice engine route graded original MIDI attacks to any interested generator.
+without changing source identities. `AdaptiveComposedLessonGenerator` selects
+source-safe passage stages supplied by independent `passage_stages` contributors.
+`with_feedback` forwards graded source-ID error families; source-ID-only
+participants use `with_mistakes`. The practice engine does not branch on
+Coda/Fukuda algorithm identifiers.
 See [composed MIDI generators](composed-midi-generators.md) for contracts,
 course identity, caching, verification and Coda + Fukuda behavior.
 
@@ -67,8 +72,8 @@ picker and performance review are independently usable controls.
 
 Application coordination owns navigation, in-process command results and
 resource readiness. Clock interpolation, source revision acknowledgement and continuous
-score presentation must retain their established ordering. See the completion
-checklist for remaining application/screen extractions.
+score presentation must retain their established ordering. Remaining application/screen ownership critiques and acceptance gates are
+tracked only in [ROADMAP.md](../../ROADMAP.md).
 
 ## Native notation
 
@@ -142,5 +147,5 @@ explicit `scripts/verify-notation.sh --ci` runs broader real-frame, corruption,
 progression and interruption regressions. The full 24-shard audit is a separate
 operation; a refactor's green smoke gate does not certify the entire corpus.
 The parse gate checks emitted diagnostics as well as Godot's exit code, with a
-25-second bound; an emitted parse error cannot pass by exiting zero. The before
-inventory and completion ledger live beside this document.
+25-second bound; an emitted parse error cannot pass by exiting zero. Dated architecture inventories and superseded refactor plans are preserved
+under `docs/archive/development/`; they are not active plans.
