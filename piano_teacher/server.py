@@ -299,30 +299,37 @@ class PracticeEngine:
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
-            before = self.library.settings['music_dir']
-            old_strategy = tuple(self.library.settings[key] for key in
-                                 ("exercise_strategy", "timing_strategy", "tempo_strategy"))
+            # Validate the complete configuration and prepare any new course
+            # while the current session, revision and settings remain intact.
+            # A generator failure must never leave a persisted strategy
+            # pointing at an unrelated active learning plan.
+            proposed = self.library.propose_update(**changes)
+            before = self.library.settings["music_dir"]
+            strategy_keys = ("exercise_strategy", "timing_strategy", "tempo_strategy")
+            previous_strategy = tuple(self.library.settings[key] for key in strategy_keys)
+            strategy_changed = previous_strategy != tuple(
+                proposed[key] for key in strategy_keys)
+            replacement = None
+            if strategy_changed and self.plan is not None:
+                self._save()
+                replacement = restored_strategy_plan(
+                    self.plan, settings=proposed,
+                    progress=self.progress, fingerprint=self.fingerprint,
+                    warmup=self.is_builtin_warmup,
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(self.fingerprint),
+                    feedback=self.fukuda_mistakes.evidence(self.fingerprint))
             updated = self.library.update(**changes)
             if {"diagnosis_strategy", "learner_strategy"} & changes.keys():
                 self.practice_policy = PracticePolicyService(
                     self.progress.assessment_history,
                     diagnosis=self.library.settings["diagnosis_strategy"],
                     learner=self.library.settings["learner_strategy"])
-            if before != self.library.settings['music_dir']:
+            if before != self.library.settings["music_dir"]:
                 self.library_health.reset()
-            if (old_strategy != tuple(self.library.settings[key] for key in
-                        ("exercise_strategy", "timing_strategy", "tempo_strategy"))
-                    and self.plan is not None):
-                old = self.plan
+            if replacement is not None:
                 self._stop()
-                self._save()
                 self._reset_trouble()
-                self.plan = restored_strategy_plan(
-                    old, settings=self.library.settings,
-                    progress=self.progress, fingerprint=self.fingerprint,
-                    warmup=self.is_builtin_warmup,
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(self.fingerprint),
-                    feedback=self.fukuda_mistakes.evidence(self.fingerprint))
+                self.plan = replacement
                 self.open_from_beat = 0.0
                 self.mode = "practice"
                 self.course_guided = False

@@ -86,7 +86,12 @@ class ScoreLibrary:
             raise ValueError('Music folder must be a directory')
         return path
 
-    def update(self, **changes) -> dict:
+    def propose_update(self, **changes) -> dict:
+        """Validate a complete prospective configuration without persisting it.
+
+        Lesson preparation can now fail before a strategy switch commits
+        settings or changes the active transport.
+        """
         allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy'}
         unknown = set(changes) - allowed
         if unknown:
@@ -142,9 +147,15 @@ class ScoreLibrary:
                   ('tempo_strategy' in changes and
                    new['tempo_strategy']!='constant-tempo')):
                 raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
+        return new
+
+    def update(self, **changes) -> dict:
+        new = self.propose_update(**changes)
+        # The filesystem replacement must succeed before publishing this
+        # preference snapshot to the active engine and library browser.
+        self.save(settings=new)
         self.settings = new
         self._folder = Path(new['music_dir'])
-        self.save()
         return self.public_settings()
 
     def public_settings(self) -> dict:
@@ -165,12 +176,13 @@ class ScoreLibrary:
                     {'id': 'repeated-error', 'label': 'Repeated-error recommendation'},
                     {'id': 'repeat-only', 'label': 'Repeat-only baseline'}]}
 
-    def save(self) -> None:
+    def save(self, *, settings: dict | None = None) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix='.settings-', suffix='.tmp', dir=self.config_dir)
         try:
             with os.fdopen(fd, 'w', encoding='utf-8') as stream:
-                json.dump(self.settings, stream, indent=2, ensure_ascii=False)
+                json.dump(self.settings if settings is None else settings,
+                          stream, indent=2, ensure_ascii=False)
                 stream.write('\n')
             os.replace(tmp, self.settings_path)
         finally:
