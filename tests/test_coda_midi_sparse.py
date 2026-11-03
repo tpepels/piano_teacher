@@ -124,8 +124,17 @@ def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
     assert plan.exercises[0].phrase.first_bar == 1
     # Desktop Coda practises bounded MIDI passages and ends at the complete
     # unchanged source performance. Direct research Coda remains whole-score.
-    assert all(1 <= ex.phrase.last_bar - ex.phrase.first_bar + 1 <= 8
-               for ex in plan.exercises if ex.kind == "learn")
+    # A held source note can cross the normal eight-measure teaching limit.
+    # The generator must extend that passage rather than truncate the note.
+    for ex in plan.exercises:
+        if ex.kind != "learn":
+            continue
+        assert ex.phrase.first_bar <= ex.phrase.last_bar
+        assert ex.phrase.notes
+        assert all(ex.phrase.start - 1e-7 <= n.start < ex.phrase.end
+                   and n.end <= ex.phrase.end + 1e-7
+                   for n in ex.phrase.notes)
+        assert all(n in piece.notes for n in ex.phrase.notes)
     assert plan.exercises[-1].kind == "perform"
     assert plan.exercises[-1].phrase.first_bar == 1
     assert plan.exercises[-1].phrase.last_bar == len(piece.bar_boundaries)-1
