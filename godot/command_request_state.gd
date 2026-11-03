@@ -2,7 +2,7 @@ extends RefCounted
 ## Owns only the outstanding command and deferred user intent.
 ## No application, retained request adapter, clock sampling or scene tree.
 var pending := false
-var post_path := ""
+var operation := ""
 var control_action := ""
 var started_ms := 0
 var queued_transport := ""
@@ -18,21 +18,21 @@ func action_requested(action: String) -> bool:
     control_action = action
     return true
 
-func begin(path: String, now_ms: int) -> bool:
+func begin(next_operation: String, now_ms: int) -> bool:
     if pending:
         return false
     pending = true
-    post_path = path
+    operation = next_operation
     started_ms = now_ms
     return true
 
-func dispatch(adapter, path: String, payload: Dictionary) -> int:
+func dispatch(adapter, operation_name: String, payload: Dictionary) -> int:
     ## Dispatch only a request previously reserved by begin(). The adapter
     ## is supplied for this call, never retained or obtained from Main.
-    assert(pending and post_path == path)
-    adapter.timeout = 360.0 if path in [
-        "fingering.correct","library.open","library.open"] else 5.0
-    var err: int = int(adapter.request(path,payload))
+    assert(pending and operation == operation_name)
+    adapter.timeout = 360.0 if operation_name in [
+        "fingering.correct", "library.open"] else 5.0
+    var err: int = int(adapter.request(operation_name,payload))
     if err != OK:
         request_failed()
     return err
@@ -42,13 +42,13 @@ func request_failed() -> void:
 
 func finish() -> Dictionary:
     var metadata := {
-        "path": post_path,
+        "operation": operation,
         "action": control_action,
         "started_ms": started_ms,
-        "resume_saved": post_path == "library.open" and resume_requested,
+        "resume_saved": operation == "library.open" and resume_requested,
     }
     pending = false
-    if post_path == "library.open":
+    if operation == "library.open":
         resume_requested = false
     return metadata
 
