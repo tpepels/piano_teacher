@@ -74,6 +74,22 @@ jobs:
           XDG_CONFIG_HOME: ${{ runner.temp }}/piano-config
           XDG_DATA_HOME: ${{ runner.temp }}/piano-data
         run: bash scripts/verify-native-bridge.sh
+      - name: Exercise actual production practice scene with embedded real MIDI
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+          PIANO_PYTHON: python
+          XDG_CONFIG_HOME: ${{ runner.temp }}/piano-config-ui
+          XDG_DATA_HOME: ${{ runner.temp }}/piano-data-ui
+        run: |
+          timeout 105s bash -c '
+            PY_SITE="$(python -c "import site; print(site.getsitepackages()[0])")"
+            PY_BASE="$(python -c "import sys; print(sys.base_prefix)")"
+            PY_LIB="$(python -c "import sysconfig; print(sysconfig.get_config_var(\"LIBDIR\") or \"\")")"
+            export PIANO_TEACHER_PYTHON_HOME="$PY_BASE"
+            export PYTHONPATH="$PWD:$PY_SITE"
+            export LD_LIBRARY_PATH="$PY_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            "$GODOT_BIN" --headless --audio-driver Dummy --path godot --script res://production_ui_smoke.gd
+          '
       - name: Audit assembled standalone runtime imports and native assets
         env:
           PIANO_GODOT_BINARY: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64

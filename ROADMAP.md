@@ -87,6 +87,14 @@ to the exact build revision and reruns on changes to the score pipeline.
 This establishes embedded software integration, not Godot framebuffer
 correctness or physical MIDI keyboard behavior.
 
+**P6 — Production UI gate.** A new real production-scene smoke opens
+`main.tscn` with the actual embedded Python worker, selects a two-hand MIDI
+file, verifies retained native noteheads and dismissal of the loading overlay,
+then exercises Play/Pause/Resume while retaining the transport identity.
+This test must pass on its own source/build SHA before production UI
+integration can be accepted. It does not substitute for framebuffer
+inspection or physical keyboard testing.
+
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
 retries, and surfaces actionable failure if retained notation never completes.
