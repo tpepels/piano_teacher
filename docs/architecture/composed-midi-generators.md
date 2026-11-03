@@ -32,10 +32,11 @@ tempo; it does not decode generator-name prefixes.
 - `register_composed_lesson_generator(..., adaptive=True)` registers a new
   selectable adaptive combination; versioned course/stage keys isolate saved
   progress. Custom contributors may use opaque stage IDs.
-- `with_feedback(evidence, definition)` transfers source-ID graded error
-  families. The older ID-only `with_mistakes` interface is **still present**
-  for some generator implementations; unifying this to one capability is
-  explicit Phase 5 cleanup, not a second runtime.
+- `with_feedback(evidence, definition)` is the only generator feedback
+  interface. Contributors receive graded source-ID error families and can
+  select musical transformations using whichever error distinctions matter.
+  Unknown generators fail at registration/selection rather than silently
+  falling back to a heuristic course.
 
 The desktop `coda-midi` strategy uses bounded source-safe passages.
 Direct `CodaLessonGenerator()` is the research contract for the pinned

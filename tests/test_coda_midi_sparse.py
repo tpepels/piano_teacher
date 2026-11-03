@@ -122,8 +122,14 @@ def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
     assert plan.piece is piece
     assert plan.exercise_strategy.name == "coda-midi"
     assert plan.exercises[0].phrase.first_bar == 1
-    assert plan.exercises[0].phrase.last_bar == len(piece.bar_boundaries)-1
+    # Desktop Coda practises bounded MIDI passages and ends at the complete
+    # unchanged source performance. Direct research Coda remains whole-score.
+    assert all(1 <= ex.phrase.last_bar - ex.phrase.first_bar + 1 <= 8
+               for ex in plan.exercises if ex.kind == "learn")
     assert plan.exercises[-1].kind == "perform"
+    assert plan.exercises[-1].phrase.first_bar == 1
+    assert plan.exercises[-1].phrase.last_bar == len(piece.bar_boundaries)-1
+    assert plan.exercises[-1].phrase.notes == piece.notes
     assert plan.lesson_steps
     assert any(step.level.startswith("coda-slowdown-x2")
                for step in plan.lesson_steps)

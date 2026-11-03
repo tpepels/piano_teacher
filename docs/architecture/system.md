@@ -51,9 +51,9 @@ whole-piece generator, not a conditional branch in `LearningPlan`. The
 reusable `compose_lesson_definitions` merges compatible exercise stages
 without changing source identities. `AdaptiveComposedLessonGenerator` selects
 source-safe passage stages supplied by independent `passage_stages` contributors.
-`with_feedback` forwards graded source-ID error families; source-ID-only
-participants use `with_mistakes`. The practice engine does not branch on
-Coda/Fukuda algorithm identifiers.
+`with_feedback` forwards graded source-ID error families to participants.
+The practice engine does not branch on Coda/Fukuda algorithm identifiers,
+and an unregistered generator cannot silently select a fallback course.
 See [composed MIDI generators](composed-midi-generators.md) for contracts,
 course identity, caching, verification and Coda + Fukuda behavior.
 

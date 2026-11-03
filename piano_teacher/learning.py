@@ -301,7 +301,7 @@ class LearningPlan:
         signature = hashlib.sha256(json.dumps((phrase.end - phrase.start, events),
                                              separators=(",", ":")).encode()).hexdigest()[:16]
         # Unique generator identity forbids unrelated mastery or BPM migration.
-        profile = f":{self.profile}"
+        profile = ":warmup" if self.warmup else f":{self.profile}"
         # Sparse MIDI-domain Coda transformations change source attack
         # placement relative to the previous v5 catalog. Do not inherit
         # completed steps or tempo mastery under different musical content.
