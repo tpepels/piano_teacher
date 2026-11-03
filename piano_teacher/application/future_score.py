@@ -32,7 +32,7 @@ class FutureScore:
         self._working = None
         # key -> (prepared reply bytes, ScoreArtifacts)
         self._ready = OrderedDict()
-        self._errors = {}
+        self._errors = OrderedDict()
 
     def _enqueue(self, selection: ScoreSelection, number: int,
                  label: str, *, primary: bool) -> None:
@@ -117,6 +117,9 @@ class FutureScore:
                 key = selection.identity
                 if error:
                     self._errors[key] = error
+                    self._errors.move_to_end(key)
+                    while len(self._errors) > MAX_LOOKAHEAD:
+                        self._errors.popitem(last=False)
                 else:
                     self._ready[key] = (payload, assets)
                     self._ready.move_to_end(key)
