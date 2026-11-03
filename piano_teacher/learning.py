@@ -102,6 +102,7 @@ class LearningPlan:
         self.transferable_tempos: set[str] = set()
         self._repeated_groups: tuple[dict[str, tuple], dict[tuple, list[str]]] | None = None
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
+        self._lesson_step_numbers: dict[str, int] = {}
 
     route_version = 3
 
@@ -202,6 +203,7 @@ class LearningPlan:
         self.exercises = definition.exercises
         self._variants_cached = None
         self._lesson_steps_cache = None
+        self._lesson_step_numbers = {}
         self._repeated_groups = None
         # Focus a newly diagnosed, actually failed source attack on the first
         # source passage containing it. An existing selected step survives when
@@ -329,16 +331,22 @@ class LearningPlan:
                             ex.phrase.first_bar, ex.phrase.last_bar,
                             len(variant.notes), ex.kind))
             self._lesson_steps_cache = tuple(steps)
+            self._lesson_step_numbers = {
+                step.key: index for index, step in enumerate(steps, start=1)}
         return self._lesson_steps_cache
 
     @property
     def lesson_step_number(self) -> int:
-        return next((i + 1 for i, step in enumerate(self.lesson_steps)
-                     if step.key == self.identity), 1)
+        # The UI queries the current cursor every 20ms. Its stable stage key
+        # already identifies the selected lesson; avoid scanning thousands
+        # of immutable Hanon course stages for each state snapshot.
+        self.lesson_steps
+        return self._lesson_step_numbers.get(self.identity, 1)
 
     @property
     def lesson_steps_mastered(self) -> int:
-        return sum(step.key in self.mastered for step in self.lesson_steps)
+        self.lesson_steps
+        return sum(key in self._lesson_step_numbers for key in self.mastered)
 
     @property
     def active_stage(self) -> ExerciseStage:

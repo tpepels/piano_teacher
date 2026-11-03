@@ -52,3 +52,26 @@ def test_gapped_passages_are_not_joined():
     p=make_piece(6)
     p=Piece(p.title,p.bpm,p.notes,(p.phrases[0],p.phrases[2]))
     assert not any(x.kind == 'connect' for x in build_exercises(p))
+
+
+def test_large_course_stage_index_preserves_step_numbers_and_mastery_across_navigation():
+    from piano_teacher.learning import LearningPlan
+    from piano_teacher.music import Note, Phrase, Piece
+    notes = tuple(Note(float(i), float(i)+.5, 60+i%7, 0, 0, "right",
+                       "source-"+str(i)) for i in range(48))
+    piece = Piece("Steps", 90, notes, (
+        Phrase(1,1,12,0,48,notes),),
+        bar_boundaries=tuple(float(i) for i in range(0,49,4)))
+    plan = LearningPlan(piece, exercise_strategy="source-progression")
+    steps = plan.lesson_steps
+    assert len(steps) > 6
+    assert len(plan._lesson_step_numbers) == len(steps)
+    for position in (1,3,len(steps)//2,len(steps)):
+        plan.select_step(position)
+        assert plan.lesson_step_number == position
+        assert plan.lesson_steps is steps
+    selected = {steps[0].key, steps[-1].key}
+    plan.mastered = {key:90 for key in selected}
+    plan.mastered["obsolete-previous-course"] = 90
+    assert plan.lesson_steps_mastered == 2
+    assert plan.lesson_step_number == len(steps)
