@@ -487,6 +487,8 @@ def test_registered_adaptive_composition_uses_unmodified_app_contract(piece):
 
 def test_unrelated_adaptive_contributor_is_not_bound_to_coda_fukuda(piece):
     from dataclasses import dataclass
+    from piano_teacher.exercise_generator import ExerciseVariant
+    from piano_teacher.exercise_pipeline import ExerciseStage
     from piano_teacher.lesson_generators import AdaptiveComposedLessonGenerator
     from piano_teacher.lesson_stage_semantics import describe
 
