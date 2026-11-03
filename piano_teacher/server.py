@@ -1972,7 +1972,10 @@ class PracticeEngine:
                 return b'{"status":"none"}'
             selection, number = planned
             future_step = self.plan.lesson_steps[number - 1]
-            label = future_step.level.replace("-", " ").capitalize()
+            hand_name = {"right": "Right hand", "left": "Left hand",
+                         "both": "Both hands"}.get(future_step.hand,
+                                                   future_step.hand.capitalize())
+            label = f'{hand_name} · {future_step.level.replace("-", " ").capitalize()}'
             return self.future_score.ensure(
                 selection, number=number, label=label)
 
