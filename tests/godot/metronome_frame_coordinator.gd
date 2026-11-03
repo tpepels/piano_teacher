@@ -113,5 +113,24 @@ func _initialize() -> void:
     if absf(float(settings.history[-1][0])-1.0) > .00001 or \
             raw_events != [true,false]:
         failures += 1
+    # Five measurement rounds are consecutive. There is exactly one
+    # preparation sequence, with an accent on each new round's first tap.
+    raw_events.clear()
+    owner.calibration_tick_index = -999
+    clock.has_backend_offset = false
+    for tap_clock in range(44):
+        var continuous := {"midi_calibration":{
+            "active":true, "beat":float(tap_clock), "bpm":80.0,
+            "count_in":4, "ticks":8, "rounds":5}}
+        owner.update(continuous,1000,NAN,1000)
+    if raw_events.size() != 44:
+        failures += 1
+    else:
+        for tap_clock in range(44):
+            var expected_accent := tap_clock == 0 or (
+                tap_clock >= 4 and posmod(tap_clock-4,8) == 0)
+            if raw_events[tap_clock] != expected_accent:
+                failures += 1
+                break
     print("METRONOME_FRAME_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
