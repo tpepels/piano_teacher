@@ -29,7 +29,7 @@ fi
 echo "Importing native extension into the Godot project ..."
 timeout 35s "$GODOT_BIN" --headless --path godot --editor --import
 echo "Checking extension registration, embedded Python and library.catalog ..."
-timeout 18s "$GODOT_BIN" --headless --path godot \
+timeout "${PIANO_NATIVE_BRIDGE_TIMEOUT_SECONDS:-18}s" "$GODOT_BIN" --headless --path godot \
   --script res://native_bridge_smoke.gd
 
 # This marker is valid only until the binary or manifest changes.

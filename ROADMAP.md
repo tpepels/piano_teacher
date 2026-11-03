@@ -78,7 +78,12 @@ pedagogical effectiveness belong to Phases 6 and 7, not Phase 5.
 
 ## Immediate order of work
 
-**P6 — Prove real user behavior.** Score loading now supersedes obsolete
+**P6 — Prove real user behavior.** Native CI now additionally exercises the
+actual embedded two-hand MIDI path: catalog, open, Verovio layout, semantic
+model, score-ready acknowledgement and Play/Pause/Resume. This is a
+software/embedded integration gate, not a physical MIDI keyboard test.
+
+**P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
 retries, and surfaces actionable failure if retained notation never completes.
 The Godot `score_asset_lifecycle` regression runs as part of the bounded

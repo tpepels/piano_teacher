@@ -51,8 +51,20 @@ jobs:
             -o /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           chmod +x /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
-      - name: Verify class registration and real embedded library listing
+      - name: Generate real two-hand MIDI for native Coda + Fukuda integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.smoke_phase0 import make_fixture
+          target = Path.home() / "Music" / "Piano Teacher" / "phase6_native_fixture.mid"
+          target.parent.mkdir(parents=True, exist_ok=True)
+          make_fixture(target)
+          print("NATIVE_SCORE_FIXTURE_OK", target)
+          PY
+      - name: Verify class registration and real embedded score workflow
         env:
+          PIANO_NATIVE_REAL_SCORE_SMOKE: "1"
+          PIANO_NATIVE_BRIDGE_TIMEOUT_SECONDS: "125"
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
           PIANO_PYTHON: python
           XDG_CONFIG_HOME: ${{ runner.temp }}/piano-config
