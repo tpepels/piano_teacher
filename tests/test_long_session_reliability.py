@@ -5,8 +5,6 @@ Bluetooth/USB scheduling or the actual timing of a human performance.
 """
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from piano_teacher import server
@@ -61,7 +59,9 @@ def test_250_worker_driven_previews_survive_long_pauses_without_scroll_drift(
                 assert engine.visual_transport.run_at == pytest.approx(origin + 600)
                 origin = engine.visual_transport.run_at
 
-            clock[0] = origin + source_beats * seconds_per_beat + 0.01
+            # The production transport observes the short end-of-take grace
+            # before entering its authored silent measure.
+            clock[0] = origin + source_beats * seconds_per_beat + 0.21
             assert commands.tick() == 20
             assert engine.visual_transport._preview_loop_pending
             gap_deadline = engine.visual_transport.next_at
@@ -99,7 +99,8 @@ def test_rapid_pause_resume_and_worker_ticks_never_advance_a_frozen_take(
         tmp_path, monkeypatch):
     engine, commands, clock = _preview_engine(tmp_path, monkeypatch)
     try:
-        origin = engine.visual_transport.run_at
+        initial_origin = engine.visual_transport.run_at
+        origin = initial_origin
         for index in range(100):
             # Repeated short pauses produce a known additive absolute offset.
             clock[0] = origin + 0.25
@@ -111,7 +112,7 @@ def test_rapid_pause_resume_and_worker_ticks_never_advance_a_frozen_take(
                 assert engine.state()["clock_beat"] == pytest.approx(held_beat)
             engine.control("resume")
             origin = engine.visual_transport.run_at
-            assert origin == pytest.approx(1000.0 + (index + 1) * 1.6, abs=1e-7)
+            assert origin == pytest.approx(initial_origin + (index + 1) * 1.6, abs=1e-7)
             assert engine.pending_result is None
         assert engine.transport_id == 1
         assert engine.visual_transport.visual_offset_beats == 0
