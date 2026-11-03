@@ -45,7 +45,7 @@ std::string python_error() {
 void PianoNative::_bind_methods() {
     ClassDB::bind_method(D_METHOD("is_ready"), &PianoNative::is_ready);
     ClassDB::bind_method(D_METHOD("failure_message"), &PianoNative::failure_message);
-    ClassDB::bind_method(D_METHOD("submit", "method", "path", "body"),
+    ClassDB::bind_method(D_METHOD("submit", "operation", "payload"),
                          &PianoNative::submit);
     ClassDB::bind_method(D_METHOD("take_responses"), &PianoNative::take_responses);
 }
@@ -152,10 +152,15 @@ void PianoNative::worker_loop() {
                 completed_.push_back(std::move(output));
             }
         }
-        // A Play/Pause/Stop POST changes the wakeup cadence immediately,
-        // rather than inheriting a stale 250 ms idle interval. Reads do
-        // not re-anchor transport or influence its scheduled deadlines.
-        if (has_command && next.method == "POST")
+        // Only state-changing commands re-evaluate transport deadlines.
+        // Snapshot and UI reads never re-anchor the musical clock.
+        if (has_command && (next.operation == "practice.command" ||
+                next.operation == "library.open" ||
+                next.operation == "settings.update" ||
+                next.operation == "midi.device.select" ||
+                next.operation == "fingering.correct" ||
+                next.operation == "library.health.start" ||
+                next.operation == "hardware.action"))
             next_tick = Clock::now();
         // Always check after handling a command: sustained state polls may
         // not starve the native transport tick.
@@ -208,8 +213,8 @@ PianoNative::Reply PianoNative::execute(const Command &command) {
     }
     PyGILState_STATE gil = PyGILState_Ensure();
     PyObject *response = PyObject_CallMethod(
-        static_cast<PyObject *>(engine_), "request", "sss",
-        command.method.c_str(), command.path.c_str(), command.body.c_str());
+        static_cast<PyObject *>(engine_), "request", "ss",
+        command.operation.c_str(), command.body.c_str());
     if (response && PyTuple_Check(response) && PyTuple_Size(response) == 2) {
         output.status = static_cast<int>(PyLong_AsLong(PyTuple_GetItem(response, 0)));
         PyObject *payload = PyTuple_GetItem(response, 1);
@@ -227,14 +232,13 @@ PianoNative::Reply PianoNative::execute(const Command &command) {
     return output;
 }
 
-int64_t PianoNative::submit(const String &method, const String &path,
-                             const String &body) {
+int64_t PianoNative::submit(const String &operation, const String &body) {
     if (stopping_ || !ready_) return -1;
     int64_t id;
     {
         std::lock_guard<std::mutex> guard(mutex_);
         id = ++next_id_;
-        pending_.push_back(Command{id, utf8(method), utf8(path), utf8(body)});
+        pending_.push_back(Command{id, utf8(operation), utf8(body)});
     }
     available_.notify_one();
     return id;
