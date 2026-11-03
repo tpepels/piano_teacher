@@ -113,11 +113,13 @@ def teaching_sequence(candidates: tuple[ExerciseStage, ...], *,
     pitch = bool(statuses & {"wrong", "missed", "pitch"})
     rhythm = bool(statuses & {"early", "late", "timing"})
     duration = bool(statuses & {"short", "long", "duration"})
-    fukuda = [s for s in unique if s.variant.level.startswith("fukuda-midi-")]
-    coda = [s for s in unique if s.variant.level.startswith("coda-")]
-    dotted = [s for s in coda if "dotted-" in s.variant.level]
-    chord = [s for s in coda if "chord-" in s.variant.level]
-    slow = [s for s in coda if "slowdown-" in s.variant.level]
+    # Author adapters annotate stages explicitly. Stage keys remain opaque
+    # and may use arbitrary names for independently registered generators.
+    fukuda = [s for s in unique if s.origin == "fukuda-midi"]
+    coda = [s for s in unique if s.origin == "coda-midi"]
+    dotted = [s for s in coda if s.technique.startswith("dotted-")]
+    chord = [s for s in coda if s.technique == "chordified"]
+    slow = [s for s in coda if s.technique == "slowdown"]
 
     # A full 4-note chord reduced to 2 outer notes is more useful than a
     # 16th-note thinning which changes a single already-easy attack.
@@ -149,38 +151,30 @@ def teaching_sequence(candidates: tuple[ExerciseStage, ...], *,
 
 
 def describe(stage: ExerciseStage, original: ExerciseStage) -> dict:
+    """Present author-owned metadata with source-measured differences.
+
+    No component in the application interprets level-string prefixes.
+    Third-party generators can set origin/technique/display_name without
+    changing the lesson UI, state projection or adaptive selection.
+    """
     delta = difference(stage, original)
     level = stage.variant.level
-    family = ("Fukuda" if level.startswith("fukuda-midi-") else
-              "Coda" if level.startswith("coda-") else "Original")
     if level == "original":
+        family = "Original"
         label = "Original notes and rhythm"
-    elif level.startswith("fukuda-midi-chord"):
-        label = "Outer chord notes"
-    elif level.startswith("fukuda-midi-fast"):
-        label = "Fewer fast notes"
-    elif level.startswith("fukuda-midi-return"):
-        label = "Simplified wide leaps"
-    elif level.startswith("fukuda-midi-leap"):
-        label = "Neighboring leap practice"
-    elif "dotted-long-short" in level:
-        label = "Long–short rhythm"
-    elif "dotted-short-long" in level:
-        label = "Short–long rhythm"
-    elif "chord-" in level:
-        label = "Chordified rhythm"
-    elif "slowdown-" in level:
-        label = "Slowed playback"
-    elif "voice-original" in level:
-        label = "Isolated source voice"
     else:
-        label = level.replace("coda-", "").replace("fukuda-midi-", "").replace("-", " ").capitalize()
+        family = {"fukuda-midi": "Fukuda", "coda-midi": "Coda"}.get(
+            stage.origin, stage.origin.replace("-", " ").title()
+            if stage.origin else "Practice")
+        label = stage.display_name or level.replace("-", " ").capitalize()
     change = (
         f"{delta.active_count}/{delta.source_count} source notes" if delta.removed else
         f"{delta.retimed} retimed notes" if delta.retimed else
         "tempo adjustment" if delta.tempo_changed else
         "unchanged source")
     return {"family": family, "label": label, "change": change,
-            "level": level, "removed": delta.removed,
-            "retimed": delta.retimed, "tempo_changed": delta.tempo_changed,
+            "level": level, "origin": stage.origin,
+            "technique": stage.technique,
+            "removed": delta.removed, "retimed": delta.retimed,
+            "tempo_changed": delta.tempo_changed,
             "meaningful": delta.meaningful}
