@@ -13,13 +13,13 @@ func _init(library, practice, settings, home) -> void:
     home_view = home
 
 func present(message: String, path: String, queued_library_failed: bool) -> void:
-    if path == "/library/open":
+    if path == "library.open":
         library_view.present_open_status("Cannot open score: " + message, true)
     elif queued_library_failed:
         library_view.present_open_status(
             "Cannot open selected music: " + message, true)
     practice_view.present_message(message)
     settings_view.present_message(message)
-    if path != "/library/open" and not queued_library_failed:
+    if path != "library.open" and not queued_library_failed:
         library_view.present_request_error(message)
     home_view.present_operation_error(message)
