@@ -30,7 +30,7 @@ def test_count_in_and_live_midi_visibility(tmp_path):
         message = type("Midi", (), {"type": "note_on", "note": 60, "velocity": 90})
         engine._receive(message)
         assert engine.state()["midi_notes"] == 0
-        engine.run_at = time.monotonic() - 0.25
+        engine.visual_transport.run_at = time.monotonic() - 0.25
         engine._receive(message)
         assert engine.state()["phase"] == "playing"
         assert engine.state()["midi_notes"] == 1

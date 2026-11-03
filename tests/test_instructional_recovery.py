@@ -46,7 +46,7 @@ def send(e, now, at, pitch, down=True):
 
 def play(e, now, *, before=None, jitter=False, omit=()):
     """Perform the displayed source events through the physical-input callback."""
-    start, bpm, offset = e.run_at, e.plan.bpm, e.play_from_beat
+    start, bpm, offset = e.visual_transport.run_at, e.plan.bpm, e.visual_transport.play_from_beat
     notes = [n for n in e.plan.active_phrase.notes if n.start >= offset and n.start not in omit and
              (before is None or n.start < before)]
     events = []
@@ -60,12 +60,12 @@ def play(e, now, *, before=None, jitter=False, omit=()):
 
 
 def boundary(e, now, end):
-    now[0] = e.run_at + (end-e.play_from_beat)*60/e.plan.bpm + .03
+    now[0] = e.visual_transport.run_at + (end-e.visual_transport.play_from_beat)*60/e.plan.bpm + .03
     return e.state()
 
 
 def after_break(e, now):
-    now[0] = e.next_at + .01
+    now[0] = e.visual_transport.next_at + .01
     state = e.state()
     if state['phase'] == 'loading':
         e.geometry()
@@ -76,7 +76,7 @@ def after_break(e, now):
 def fail_later_chunk(e, now, grid):
     play(e, now, before=grid[2], jitter=True)
     assert boundary(e, now, grid[2])['phase'] == 'playing'
-    now[0] = e.run_at + (grid[-1]-.1)*60/e.plan.bpm
+    now[0] = e.visual_transport.run_at + (grid[-1]-.1)*60/e.plan.bpm
     assert e.state()['phase'] == 'playing'  # Never stop before the two-bar ending.
     return boundary(e, now, grid[-1])
 
@@ -99,10 +99,10 @@ def test_repeated_failed_chunk_reuses_native_score_then_teaches_exact_source(les
         grid[2]-4, grid[2], 4)
     assert measure['meter'] == [4, 4]
     reverse_seconds = e.feedback_seconds
-    assert e._visual_rewind_seconds == reverse_seconds
+    assert e.visual_transport._visual_rewind_seconds == reverse_seconds
     assert first['transition_in_seconds'] == pytest.approx(
         reverse_seconds + 4*60/first['bpm'])
-    reverse_end = e._visual_rewind_at + reverse_seconds
+    reverse_end = e.visual_transport._visual_rewind_at + reverse_seconds
     now[0] = reverse_end
     preparing = e.state()
     assert preparing['practice_preparation']['phase'] == 'preparing'
@@ -149,7 +149,7 @@ def test_repeated_failed_chunk_reuses_native_score_then_teaches_exact_source(les
     assert returned['phase'] == 'count_in' and returned['play_from_beat'] == grid[2]
     assert returned['bpm'] == slowed and returned['target_bpm'] == bpm
     play(e, now, jitter=True)
-    now[0] = e.run_at+(grid[-1]-grid[2])*60/slowed+.22
+    now[0] = e.visual_transport.run_at+(grid[-1]-grid[2])*60/slowed+.22
     partial = e.state()
     assert partial['phase'] == 'recovering' and partial['mastered'] == 0 and partial['streak'] == 0
     assert 'whole passage' in partial['next_action'].lower()
@@ -160,12 +160,12 @@ def test_feedback_pause_freezes_break_and_does_not_commit_clean_mastery(lesson):
     e, now, grid = lesson()
     for expected_streak in (1, 2):
         play(e, now, jitter=True)
-        now[0] = e.run_at + grid[-1]*60/e.plan.bpm + .22
+        now[0] = e.visual_transport.run_at + grid[-1]*60/e.plan.bpm + .22
         state = e.state()
         assert f'Clean pass {expected_streak}/3' in state['next_action']
         after_break(e, now)
     play(e, now, jitter=True)
-    now[0] = e.run_at + grid[-1]*60/e.plan.bpm + .22
+    now[0] = e.visual_transport.run_at + grid[-1]*60/e.plan.bpm + .22
     feedback = e.state()
     assert 'Clean pass 3/3' in feedback['next_action']
     identity = e.plan.identity
@@ -196,7 +196,7 @@ def test_failed_full_take_cannot_preserve_clean_streak_when_feedback_is_abandone
 
     # One missed final note is below the five-error recovery threshold.
     play(e, now, before=15)
-    now[0] = e.run_at + 16 * 60 / 120 + .22
+    now[0] = e.visual_transport.run_at + 16 * 60 / 120 + .22
     failed = e.state()
     assert failed['phase'] == 'feedback'
     assert e.pending_result.correct == 15 and len(e.pending_result.notes) == 16
@@ -221,11 +221,11 @@ def test_failed_full_imported_practice_repeats_after_its_feedback_interval(lesso
     e, now, _ = lesson(120)
     stage, transport = e.plan.identity, e.transport_id
     play(e, now, before=15)
-    now[0] = e.run_at + 16 * 60 / 120 + .22
+    now[0] = e.visual_transport.run_at + 16 * 60 / 120 + .22
     failed = e.state()
     assert failed['phase'] == 'feedback' and e.pending_result.correct == 15
-    assert e.next_at > now[0]
-    now[0] = e.next_at - .01
+    assert e.visual_transport.next_at > now[0]
+    now[0] = e.visual_transport.next_at - .01
     assert e.state()['phase'] == 'feedback' and e.transport_id == transport
     repeated = after_break(e, now)
     assert repeated['phase'] == 'playing' and e.transport_id == transport + 1
@@ -280,7 +280,7 @@ def test_recovery_pause_freezes_retry_then_stop_cancels_it(lesson):
 
 def test_no_device_preview_never_enters_retry_or_guided_recovery(lesson):
     e, now, grid = lesson(30, True, connected=False)
-    now[0] = e.run_at + grid[-1]*60/e.plan.bpm + .22
+    now[0] = e.visual_transport.run_at + grid[-1]*60/e.plan.bpm + .22
     state = e.state()
     assert state['phase'] == 'preview_gap' and not state['guided_recovery']
     assert state['preview_only'] and not state['running']
@@ -288,7 +288,7 @@ def test_no_device_preview_never_enters_retry_or_guided_recovery(lesson):
     assert state['take_result'] is None
     assert 'piano' in state['next_action'].lower()
     revision = e.score_revision
-    now[0] = e.next_at + .01
+    now[0] = e.visual_transport.next_at + .01
     repeated = e.state()
     assert repeated['phase'] == 'playing' and repeated['preview_only']
     assert repeated['retry_range'] is None and not repeated['guided_recovery']
@@ -300,13 +300,13 @@ def finish_take(e, now, end, *, jitter=True):
     if preparation is not None and preparation['phase'] in ('reverse', 'preparing'):
         # A manual Retry has an explicit rest before the new recording opens.
         # Send the first physical key only after that musical deadline.
-        now[0] = e.next_at
+        now[0] = e.visual_transport.next_at
         prepared = e.state()
         assert prepared['phase'] == 'playing' and prepared['running']
         assert prepared['count_in_beats'] == 0
         assert prepared['practice_preparation']['phase'] == 'complete'
     play(e, now, jitter=jitter)
-    now[0] = e.run_at+(end-e.play_from_beat)*60/e.plan.bpm+.22
+    now[0] = e.visual_transport.run_at+(end-e.visual_transport.play_from_beat)*60/e.plan.bpm+.22
     return e.state()
 
 
@@ -333,7 +333,7 @@ def test_entire_recovery_restores_chosen_tempo_then_three_full_takes_reveal_chor
     boundary(e, now, grid[-1])
     after_break(e, now)
     complete_guidance(e, now)
-    assert e.play_from_beat == 8 and e.plan.bpm == 65 and e.plan.target_bpm == 80
+    assert e.visual_transport.play_from_beat == 8 and e.plan.bpm == 65 and e.plan.target_bpm == 80
     assert finish_take(e, now, 16)['phase'] == 'recovering'
     assert not e.plan.mastered and e.plan.streak == 0
     after_break(e, now)
@@ -353,7 +353,7 @@ def test_entire_recovery_restores_chosen_tempo_then_three_full_takes_reveal_chor
         assert stage not in e.plan.mastered
         if streak == 3:
             assert 'restore missing chord notes' in feedback['next_action']
-            now[0] = e.next_at+.01
+            now[0] = e.visual_transport.next_at+.01
             loading = e.state()
             assert loading['phase'] == 'loading' and loading['lesson_level'] == 'outline'
             assert loading['next_action'] == feedback['next_action']
@@ -397,10 +397,10 @@ def test_only_five_distinct_wrong_or_missed_notes_trigger_after_boundary(lesson,
     # Three correct notes, two wrong pitches, three silence misses: exactly five.
     for beat in (8, 9, 10, 11, 12):
         pitch = (60, 62, 64, 65)[beat % 4] if beat < 11 else 90
-        at = e.run_at+beat*60/bpm+.03
+        at = e.visual_transport.run_at+beat*60/bpm+.03
         send(e, now, at, pitch)
         send(e, now, at+.5*60/bpm, pitch, False)
-    now[0] = e.run_at + 15.99*60/bpm
+    now[0] = e.visual_transport.run_at + 15.99*60/bpm
     assert e.state()['phase'] == 'playing'
     state = boundary(e, now, 16)
     assert state['phase'] == 'recovering'
@@ -414,7 +414,7 @@ def test_rolling_errors_cross_chunk_boundary_but_retry_current_canonical_idea(le
     e, now, grid = lesson(120, mixed=mixed)
     e.fingerprint = 'rolling-source-errors'
     play(e, now, omit=misses)
-    now[0] = e.run_at + (grid[-1]-.01)*.5
+    now[0] = e.visual_transport.run_at + (grid[-1]-.01)*.5
     assert e.state()['phase'] == 'playing'  # Threshold never stops mid-chunk.
     state = boundary(e, now, grid[-1])
     assert state['phase'] == 'recovering' and state['bpm'] == 108
@@ -447,7 +447,7 @@ def test_four_rolling_misses_keep_playing_without_slowdown(lesson, mixed, misses
 
 def test_live_miss_appears_after_release_grace_and_score_keeps_moving_through_rest(lesson):
     e, now, _ = lesson(80)
-    now[0] = e.run_at + .5*60/80+.10
+    now[0] = e.visual_transport.run_at + .5*60/80+.10
     before = e.state()
     assert not [m for m in before['feedback_marks'] if m['beat'] == 0]
     now[0] += .03
@@ -535,7 +535,7 @@ def test_five_error_recovery_animates_backward_on_same_score(lesson):
     assert first["visual_target_beat"] == pytest.approx(4)
     assert first["visual_scroll_beat"] > first["visual_target_beat"]
     assert first["revision"] == revision
-    reverse_end = e._visual_rewind_at + e._visual_rewind_seconds
+    reverse_end = e.visual_transport._visual_rewind_at + e.visual_transport._visual_rewind_seconds
     now[0] = reverse_end - .05
     reversing = e.state()
     assert reversing['practice_preparation']['phase'] == 'reverse'
@@ -546,13 +546,13 @@ def test_five_error_recovery_animates_backward_on_same_score(lesson):
     assert preparing['visual_scroll_beat'] == pytest.approx(4)
     assert preparing['visual_target_beat'] == pytest.approx(8)
     assert preparing['visual_scroll_speed'] == pytest.approx(72/60)
-    now[0] = e.next_at - .05
+    now[0] = e.visual_transport.next_at - .05
     nearly = e.state()
     assert 4 < nearly["visual_scroll_beat"] < grid[2]
     assert nearly['practice_preparation']['phase'] == 'preparing'
     assert not nearly['running']
     assert nearly["visual_scroll_beat"] < first["visual_scroll_beat"]
-    now[0] = e.next_at + .01
+    now[0] = e.visual_transport.next_at + .01
     repeated = e.state()
     assert repeated["phase"] == "playing"
     assert repeated["play_from_beat"] == pytest.approx(grid[2])

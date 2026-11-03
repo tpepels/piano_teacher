@@ -95,10 +95,10 @@ def perform_notes(e, now, *, until=None):
     events = []
     for note in phrase.notes:
         beat = note.start-phrase.start
-        if beat < e.play_from_beat or (until is not None and beat >= until):
+        if beat < e.visual_transport.play_from_beat or (until is not None and beat >= until):
             continue
         for endpoint, down in ((note.start, True), (min(note.end, phrase.end), False)):
-            at = e.run_at+(endpoint-phrase.start-e.play_from_beat)*60/e.plan.bpm+.02
+            at = e.visual_transport.run_at+(endpoint-phrase.start-e.visual_transport.play_from_beat)*60/e.plan.bpm+.02
             events.append((at, note.pitch, down))
     for at, pitch, down in sorted(events):
         midi(e, now, pitch, down, at=at)
@@ -107,7 +107,7 @@ def perform_notes(e, now, *, until=None):
 
 def take(e, now):
     perform_notes(e, now)
-    now[0] = e.run_at+(e.plan.active_phrase.end-e.plan.active_phrase.start-e.play_from_beat)*60/e.plan.bpm+.23
+    now[0] = e.visual_transport.run_at+(e.plan.active_phrase.end-e.plan.active_phrase.start-e.visual_transport.play_from_beat)*60/e.plan.bpm+.23
     return e.state()
 
 
@@ -115,8 +115,8 @@ def advance(e, now):
     state = e.state()
     if state['phase'] == 'loading':
         return ack(e)
-    assert e.next_at > now[0], state
-    now[0] = e.next_at+.01
+    assert e.visual_transport.next_at > now[0], state
+    now[0] = e.visual_transport.next_at+.01
     state = e.state()
     return ack(e) if state['phase'] == 'loading' else state
 
@@ -129,7 +129,7 @@ def begin(e):
 
 def fail_second_unit(e, now):
     perform_notes(e, now, until=8)
-    now[0] = e.run_at+16*60/e.plan.bpm+.03
+    now[0] = e.visual_transport.run_at+16*60/e.plan.bpm+.03
     state = e.state()
     assert state['phase'] == 'recovering'
     return state
@@ -199,7 +199,7 @@ def test_loading_readiness_starts_a_real_count_in_without_advancing_the_clock(co
     counted = advance(e, now)
     assert now[0] == ready_at
     assert counted['phase'] == 'count_in' and counted['clock_beat'] < 0
-    assert e.run_at > ready_at and counted['awaiting_score_revision'] is None
+    assert e.visual_transport.run_at > ready_at and counted['awaiting_score_revision'] is None
     assert e.recorder is not None and not e.recorder.presses
     assert not e.plan.mastered and e.plan.streak == 0
 
@@ -217,14 +217,14 @@ def test_three_real_clean_full_takes_advance_guided_course_to_next_variant_learn
         assert f'Clean pass {streak}/3' in feedback['next_action']
         assert first_stage not in e.plan.mastered
         if streak < 3:
-            deadline = e.next_at
+            deadline = e.visual_transport.next_at
             repeated = advance(e, now)
             # The empty measure between takes supplies preparation. A
             # same-score repeat retains its deadline, including the helper's
             # 10 ms poll overshoot, without adding another count-in.
             assert repeated['phase'] == 'playing' and repeated['count_in_beats'] == 0
             assert repeated['revision'] == revision and repeated['bpm'] == 80
-            assert e.run_at == deadline and now[0] == deadline+.01
+            assert e.visual_transport.run_at == deadline and now[0] == deadline+.01
             assert repeated['clock_beat'] == (deadline+.01-deadline)*80/60
             assert repeated['streak'] == streak and e.plan.identity == first_stage
             assert e.recorder is not None and not e.recorder.presses
@@ -384,7 +384,7 @@ def test_perform_weakness_persists_source_unit_for_later_guided_revisit_without_
     e, now, _, _ = course()
     e.control('perform')
     ack(e)
-    now[0] = e.run_at+(e.plan.active_phrase.end-e.plan.active_phrase.start)*60/e.plan.bpm+.23
+    now[0] = e.visual_transport.run_at+(e.plan.active_phrase.end-e.plan.active_phrase.start)*60/e.plan.bpm+.23
     review = e.state()
     assert review['phase'] == 'performance_complete'
     spots = e.lesson_overview()['trouble_spots']
@@ -402,7 +402,7 @@ def test_legacy_timed_recovery_does_not_enable_guided_course_progression(course)
     e.start()
     fail_second_unit(e, now)
     advance(e, now)
-    now[0] = e.run_at+(16-e.play_from_beat)*60/e.plan.bpm+.03
+    now[0] = e.visual_transport.run_at+(16-e.visual_transport.play_from_beat)*60/e.plan.bpm+.03
     assert e.state()['guided_recovery']
     assert advance(e, now)['mode'] == 'learn'
     assert not e.state()['learner']['course_guided']
@@ -435,22 +435,22 @@ def test_actual_237_bar_import_performs_every_original_event_and_no_input_cannot
         counted = advance(e, now)
         assert counted['phase'] == 'count_in' and counted['clock_beat'] < 0
         transport = counted['transport_id']
-        now[0] = e.run_at+state['duration_beats']*60/e.plan.bpm+.23
+        now[0] = e.visual_transport.run_at+state['duration_beats']*60/e.plan.bpm+.23
         preview = e.state()
         assert preview['phase'] == 'preview_gap' and preview['performance_summary'] is None
         assert preview['preview_only'] and not preview['scoring_available']
         assert preview['take_result'] is None and e.pending_result is None
         assert preview['midi_notes'] == 0
-        now[0] = e.next_at-.01
+        now[0] = e.visual_transport.next_at-.01
         gap = e.state()
         assert gap['phase'] == 'preview_gap'
         assert gap['visual_scroll_beat'] > preview['visual_scroll_beat']
-        deadline, bpm = e.next_at, counted['bpm']
+        deadline, bpm = e.visual_transport.next_at, counted['bpm']
         repeated = advance(e, now)
         assert repeated['phase'] == 'playing' and repeated['preview_only']
         assert repeated['transport_id'] == transport+1 and repeated['revision'] == state['revision']
         assert repeated['count_in_beats'] == 0 and repeated['bpm'] == bpm
-        assert e.run_at == deadline and now[0] == deadline+.01
+        assert e.visual_transport.run_at == deadline and now[0] == deadline+.01
         assert repeated['clock_beat'] == (deadline+.01-deadline)*bpm/60
         assert repeated['visual_scroll_beat'] >= gap['visual_scroll_beat']
         assert repeated['performance_summary'] is None and repeated['take_result'] is None
@@ -525,7 +525,7 @@ def test_tempo_during_guided_recovery_keeps_failed_fragment_and_rhythm_return_wi
     e.start()
     fail_second_unit(e, now)
     advance(e, now)
-    now[0] = e.run_at+(16-e.play_from_beat)*60/e.plan.bpm+.03
+    now[0] = e.visual_transport.run_at+(16-e.visual_transport.play_from_beat)*60/e.plan.bpm+.03
     assert e.state()['guided_recovery']
     recovered = advance(e, now)
     assert recovered['mode'] == 'learn' and recovered['first_bar'] == 3

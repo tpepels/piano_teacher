@@ -74,7 +74,7 @@ def test_listen_is_audible_exact_full_variant_and_cannot_grade_midi(lesson, bpm)
     send(e, now, now[0]+.2, 90, False)
     assert e.recorder is None and e.pending_result is None
     assert e.state()['demo']['token'] == demo['token']
-    now[0] = e.run_at+demo['duration_seconds']+.01
+    now[0] = e.visual_transport.run_at+demo['duration_seconds']+.01
     done = e.state()
     assert done['mode'] == 'listen' and done['phase'] == 'ready'
     assert e.plan.streak == 0 and not e.plan.mastered and e.plan.bpm == bpm
@@ -150,10 +150,10 @@ def test_perform_all_misses_keeps_full_clock_and_finishes_in_review_without_prac
     playing = acknowledge(e)
     assert playing['phase'] == 'count_in' and playing['bpm'] == bpm
     assert boundary(e, now, grid[2])['phase'] == 'playing'
-    assert e.state()['bpm'] == bpm and e.pending_rewind is None
-    now[0] = e.run_at+(grid[-1]-.1)*60/bpm
+    assert e.state()['bpm'] == bpm and e.visual_transport.pending_rewind is None
+    now[0] = e.visual_transport.run_at+(grid[-1]-.1)*60/bpm
     assert e.state()['phase'] == 'playing'
-    now[0] = e.run_at+grid[-1]*60/bpm+.22
+    now[0] = e.visual_transport.run_at+grid[-1]*60/bpm+.22
     review = e.state()
     assert review['phase'] == 'performance_complete' and not review['running']
     assert review['performance_summary']['total'] == grid[-1]
@@ -178,11 +178,11 @@ def test_perform_callback_summary_points_to_later_chunk_then_practice_weak_is_a_
     acknowledge(e)
     play(e, now, before=8, jitter=True)
     # One early note and one wrong pitch, then six misses.
-    send(e, now, e.run_at+8*60/80-.15, 60)
-    send(e, now, e.run_at+8.5*60/80-.15, 60, False)
-    send(e, now, e.run_at+9*60/80, 90)
-    send(e, now, e.run_at+9.5*60/80, 90, False)
-    now[0] = e.run_at+16*60/80+.22
+    send(e, now, e.visual_transport.run_at+8*60/80-.15, 60)
+    send(e, now, e.visual_transport.run_at+8.5*60/80-.15, 60, False)
+    send(e, now, e.visual_transport.run_at+9*60/80, 90)
+    send(e, now, e.visual_transport.run_at+9.5*60/80, 90, False)
+    now[0] = e.visual_transport.run_at+16*60/80+.22
     review = e.state()
     summary = review['performance_summary']
     assert summary['correct'] == 8 and summary['total'] == 16
@@ -198,12 +198,12 @@ def test_perform_callback_summary_points_to_later_chunk_then_practice_weak_is_a_
     started = e.state()
     assert started['phase'] == 'count_in' and started['play_from_beat'] == 8
     assert started['bpm'] == started['target_bpm'] == 80
-    now[0] = e.run_at + (16-8)*60/80 + .21
+    now[0] = e.visual_transport.run_at + (16-8)*60/80 + .21
     reviewed = e.state()
     assert reviewed['phase'] == 'review' and not reviewed['running']
     assert reviewed['performance_summary']['missed'] > 0
     assert not e.plan.mastered and e.plan.streak == 0
-    assert e.next_at == 0  # Never silently continue beyond a selected retry.
+    assert e.visual_transport.next_at == 0  # Never silently continue beyond a selected retry.
 
 
 def test_clean_perform_does_not_fill_practice_clean_streak_or_master_stage(lesson):
@@ -237,9 +237,9 @@ def test_whole_piece_perform_uses_all_original_events_and_held_ending(lesson):
     assert e.plan.active_phrase.notes == notes
     assert state['duration_beats'] == 20 and state['required_notes'] == 4
     acknowledge(e)
-    now[0] = e.run_at+19*60/80
+    now[0] = e.visual_transport.run_at+19*60/80
     assert e.state()['phase'] == 'playing'
-    now[0] = e.run_at+20*60/80+.22
+    now[0] = e.visual_transport.run_at+20*60/80+.22
     assert e.state()['phase'] == 'performance_complete'
 
 
@@ -283,7 +283,7 @@ def test_performance_summary_counts_missed_events_separately_from_unique_pitches
     e, now, _ = lesson()
     e.control('perform')
     acknowledge(e)
-    now[0] = e.run_at+16*60/80+.22
+    now[0] = e.visual_transport.run_at+16*60/80+.22
     summary = e.state()['performance_summary']
     assert summary['missed'] == 16 and summary['wrong'] == 0
     assert len(summary['missed_pitches']) == 4
@@ -389,7 +389,7 @@ def test_listen_without_piano_remains_audible_and_never_grades(lesson):
     assert state['phase'] == 'count_in' and state['demo']['audio_available']
     send(e, now, now[0]+.1, 60)
     assert e.recorder is None and e.pending_result is None and not e.plan.mastered
-    now[0] = e.run_at+state['demo']['duration_seconds']+.01
+    now[0] = e.visual_transport.run_at+state['demo']['duration_seconds']+.01
     assert e.state()['phase'] == 'ready'
 
 
@@ -403,7 +403,7 @@ def test_perform_loading_ack_and_clock_freeze_with_pause_then_stop_discards_revi
     assert e.state()['phase'] == 'paused' and not e.state()['running']
     e.control('resume')
     assert e.state()['phase'] == 'count_in' and e.state()['mode'] == 'perform'
-    now[0] = e.run_at+1
+    now[0] = e.visual_transport.run_at+1
     e.control('pause')
     beat = e.state()['clock_beat']
     now[0] += 50
@@ -423,7 +423,7 @@ def test_duplicate_ready_ack_cannot_replay_a_completed_listen(lesson):
     playing = acknowledge(e)
     token, revision = playing['demo']['token'], playing['revision']
     transport = playing['transport_id']
-    now[0] = e.run_at+playing['demo']['duration_seconds']+.01
+    now[0] = e.visual_transport.run_at+playing['demo']['duration_seconds']+.01
     assert e.state()['phase'] == 'ready'
     for _ in range(2):
         e.control('demo_ready', token=token, revision=revision)
@@ -464,10 +464,10 @@ def test_listen_starts_with_moving_negative_beat_and_no_audio_trim(lesson):
     assert state["phase"] == "count_in"
     assert state["count_in_beats"] > 0
     assert state["clock_beat"] < 0
-    now[0] = e.run_at - .12
+    now[0] = e.visual_transport.run_at - .12
     before = e.state()
     assert before["clock_beat"] < 0
-    now[0] = e.run_at + .02
+    now[0] = e.visual_transport.run_at + .02
     first = e.state()
     assert first["phase"] == "playing"
     assert 0 <= first["clock_beat"] < .1

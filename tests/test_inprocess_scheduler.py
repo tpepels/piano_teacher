@@ -23,19 +23,19 @@ def test_preview_repeats_on_worker_ticks_with_no_state_requests(tmp_path, monkey
         engine.start()
         assert engine.preview_only
         initial_transport = engine.transport_id
-        initial_run_at = engine.run_at
+        initial_run_at = engine.visual_transport.run_at
         source_end = initial_run_at + 4 * 60 / engine.plan.bpm
         now[0] = source_end + .21
         assert bridge.tick() == 20
-        assert engine._preview_loop_pending
-        deadline = engine.next_at
-        assert deadline == source_end + engine.visual_gap_beats*60/engine.plan.bpm
+        assert engine.visual_transport._preview_loop_pending
+        deadline = engine.visual_transport.next_at
+        assert deadline == source_end + engine.visual_transport.visual_gap_beats*60/engine.plan.bpm
         now[0] = deadline+.12
         assert bridge.tick() == 20
         assert engine.running
         assert engine.transport_id == initial_transport + 1
-        assert engine.run_at == deadline
-        assert engine.visual_offset_beats == 4 + engine.visual_gap_beats
+        assert engine.visual_transport.run_at == deadline
+        assert engine.visual_transport.visual_offset_beats == 4 + engine.visual_transport.visual_gap_beats
         # No /state call has happened since the first Start.
     finally:
         engine.db.close()
@@ -58,6 +58,6 @@ def test_worker_does_not_advance_while_paused(tmp_path, monkeypatch):
         now[0] += 60
         assert bridge.tick() == 250
         assert engine.transport_id == before
-        assert engine.paused
+        assert engine.visual_transport.paused
     finally:
         engine.db.close()

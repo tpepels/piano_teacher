@@ -212,7 +212,7 @@ def test_manual_change_abandons_transport_and_uncommitted_take(tmp_path, action,
             engine.control("stop")
             engine.pending_result = _assessment(engine)
             engine.auto = True
-            engine.next_at = time.monotonic() + 60
+            engine.visual_transport.next_at = time.monotonic() + 60
         before = engine.state()
         assert before["phase"] == phase
         if phase == "feedback":
@@ -233,7 +233,7 @@ def test_manual_change_abandons_transport_and_uncommitted_take(tmp_path, action,
         assert state["revision"] == (before["revision"] + 1
                                      if action == "select_step" else before["revision"])
         assert engine.pending_result is None and engine.recorder is None
-        assert engine.next_at == 0
+        assert engine.visual_transport.next_at == 0
         # A delayed renderer acknowledgement must not restart the abandoned take.
         engine.control("score_ready", revision=before["revision"])
         assert engine.state()["phase"] == "ready"
@@ -261,7 +261,7 @@ def test_manual_tempo_without_piano_remains_ungraded_preview(tmp_path, action):
         assert engine.state()["midi_input_count"] == 1
         assert engine.state()["midi_notes"] == 0
         phrase = engine.plan.active_phrase
-        engine.run_at = time.monotonic() - (phrase.end - phrase.start) * 60 / bpm - 1
+        engine.visual_transport.run_at = time.monotonic() - (phrase.end - phrase.start) * 60 / bpm - 1
         finished = engine.state()
         assert finished["phase"] == "preview_gap"
         assert finished["preview_only"] and finished["score_loop_enabled"]
@@ -273,12 +273,12 @@ def test_manual_tempo_without_piano_remains_ungraded_preview(tmp_path, action):
         _assert_no_mastery(engine)
         # Finishing the empty source measure starts another ungraded copy,
         # without awarding a clean run or reloading the original notation.
-        engine.next_at = time.monotonic() - .01
+        engine.visual_transport.next_at = time.monotonic() - .01
         repeated = engine.state()
         assert repeated["phase"] == "playing" and repeated["preview_only"]
         assert repeated["count_in_beats"] == 0
         assert repeated["visual_offset_beats"] == pytest.approx(
-            phrase.end - phrase.start + engine.visual_gap_beats)
+            phrase.end - phrase.start + engine.visual_transport.visual_gap_beats)
         assert repeated["revision"] == revision
         assert repeated["bpm"] == bpm
         assert engine.plan.identity == stage
@@ -404,7 +404,7 @@ def test_http_invalid_stage_preserves_transport_and_pending_assessment(tmp_path,
         assert _commit_take(engine)["streak"] == 2
         request("/control", {"action": "start"})
         if phase in ("playing", "paused"):
-            engine.run_at = time.monotonic() - .25
+            engine.visual_transport.run_at = time.monotonic() - .25
             engine._receive(Message("note_on", note=60, velocity=90))
         if phase == "paused":
             request("/control", {"action": "pause"})
@@ -412,13 +412,13 @@ def test_http_invalid_stage_preserves_transport_and_pending_assessment(tmp_path,
             engine.control("stop")
             engine.pending_result = _assessment(engine)
             engine.auto = True
-            engine.next_at = time.monotonic() + 60
+            engine.visual_transport.next_at = time.monotonic() + 60
         elif phase == "loading":
             request("/control", {"action": "practice"})
         before = request("/state")[1]
         assert before["phase"] == phase
         recorder, pending = engine.recorder, engine.pending_result
-        transport = (engine.run_at, engine.next_at, engine.paused_at,
+        transport = (engine.visual_transport.run_at, engine.visual_transport.next_at, engine.visual_transport.paused_at,
                      engine._deferred_score_ack)
         stage_tempos = dict(engine.plan.stage_tempos)
         saved_progress = tuple(engine.db.iterdump())
@@ -438,7 +438,7 @@ def test_http_invalid_stage_preserves_transport_and_pending_assessment(tmp_path,
                 assert after[field] == before[field], (arguments, field)
             assert engine.recorder is recorder
             assert engine.pending_result is pending
-            assert (engine.run_at, engine.next_at, engine.paused_at,
+            assert (engine.visual_transport.run_at, engine.visual_transport.next_at, engine.visual_transport.paused_at,
                     engine._deferred_score_ack) == transport
             assert engine.plan.stage_tempos == stage_tempos
             assert tuple(engine.db.iterdump()) == saved_progress
