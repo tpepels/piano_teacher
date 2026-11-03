@@ -62,5 +62,24 @@ func _initialize() -> void:
         failures += 1
     if not state.begin("practice.command",310):
         failures += 1
+    # A canceled callback is never allowed to finish an inactive command.
+    var current: Dictionary = state.finish()
+    if current["operation"] != "practice.command" or not state.finish().is_empty():
+        failures += 1
+    if state.pending or not state.operation.is_empty() or not state.control_action.is_empty():
+        failures += 1
+    # Non-command operations cannot inherit a previous practice action.
+    state.action_requested("resume")
+    if not state.begin("settings.update",320):
+        failures += 1
+    var saved: Dictionary = state.finish()
+    if saved["action"] != "" or saved["operation"] != "settings.update":
+        failures += 1
+    # Immediate transport failure clears the request owner.
+    state.action_requested("start")
+    state.begin("practice.command",350)
+    state.request_failed()
+    if state.pending or not state.operation.is_empty() or not state.finish().is_empty():
+        failures += 1
     print("COMMAND_REQUEST_STATE_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

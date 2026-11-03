@@ -46,6 +46,14 @@ func submit(requester: Node, operation: String, payload: String) -> int:
         pending[identifier] = weakref(requester)
     return identifier
 
+func forget(identifier: int, requester: Node) -> void:
+    # The worker may still finish; only its obsolete Godot callback is
+    # detached. Never drop a different request if IDs are reused.
+    var handle: WeakRef = pending.get(identifier)
+    if handle != null and handle.get_ref() == requester:
+        pending.erase(identifier)
+
+
 func poll_midi(after_sequence: int) -> Array:
     # Never call CPython or acquire its GIL on the Godot rendering thread.
     # The one outstanding read is dispatched through the existing worker.

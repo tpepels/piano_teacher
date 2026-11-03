@@ -23,6 +23,8 @@ func begin(next_operation: String, now_ms: int) -> bool:
         return false
     pending = true
     operation = next_operation
+    if next_operation != "practice.command":
+        control_action = ""
     started_ms = now_ms
     return true
 
@@ -39,8 +41,14 @@ func dispatch(adapter, operation_name: String, payload: Dictionary) -> int:
 
 func request_failed() -> void:
     pending = false
+    operation = ""
+    control_action = ""
+    started_ms = 0
+    resume_requested = false
 
 func finish() -> Dictionary:
+    if not pending:
+        return {}
     var metadata := {
         "operation": operation,
         "action": control_action,
@@ -48,8 +56,10 @@ func finish() -> Dictionary:
         "resume_saved": operation == "library.open" and resume_requested,
     }
     pending = false
-    if operation == "library.open":
-        resume_requested = false
+    operation = ""
+    control_action = ""
+    started_ms = 0
+    resume_requested = false
     return metadata
 
 func take_transport() -> String:

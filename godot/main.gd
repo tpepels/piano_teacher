@@ -959,12 +959,21 @@ func _send_command(operation: String, payload: Dictionary) -> void:
     var err: int = command_state.dispatch(action_request,operation,payload)
     if err != OK:
         practice_view.present_busy(false)
-        practice_view.present_message("Cannot reach practice engine", true)
+        if operation == "practice.command":
+            practice_view.finish_action()
+        var message := "Cannot reach practice engine (status %d)" % err
         if operation == "fingering.correct":
-            fingering_save_error = "Cannot reach practice engine. Try the correction again."
+            fingering_save_error = message
             _present_fingering_status(last_state.get("fingering",{}))
+        var queued_library_failed: bool = command_state.discard_library()
+        command_failure_presenter.present(message,operation,queued_library_failed)
+        _flush_transport_action()
 
 func _on_action(code: int, body: PackedByteArray) -> void:
+    # Only the active request may publish a success or error. A timed-out
+    # callback or a canceled worker completion has no live command owner.
+    if not command_state.pending:
+        return
     var completed: Dictionary = command_state.finish()
     practice_view.present_busy(false)
     var operation: String = str(completed["operation"])

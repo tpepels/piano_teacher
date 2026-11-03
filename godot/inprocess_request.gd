@@ -27,15 +27,21 @@ func request(operation: String, payload: Dictionary = {}) -> Error:
 func _process(_delta: float) -> void:
     if _pending_id < 0 or Time.get_ticks_msec() < _deadline_ms:
         return
+    var expired_id: int = _pending_id
     _pending_id = -1
     set_process(false)
+    if _bus != null:
+        _bus.forget(expired_id, self)
     request_completed.emit(3, JSON.stringify(
         {"error": "Embedded operation exceeded its deadline"}).to_utf8_buffer())
 
 func cancel_request() -> void:
-    # An obsolete worker result can complete but cannot change current state.
+    # A timed-out or canceled request must not leak a registered weakref.
+    var canceled_id: int = _pending_id
     _pending_id = -1
     set_process(false)
+    if canceled_id >= 0 and _bus != null:
+        _bus.forget(canceled_id, self)
 
 func complete(identifier: int, status: int, body: PackedByteArray) -> void:
     if identifier != _pending_id:
