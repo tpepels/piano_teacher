@@ -16,11 +16,13 @@ var _density := 96.0
 func present(state: Dictionary, visual_beat: float,
         current_origin: float, next_origin: float = INF,
         next_label: String = "") -> void:
+    var presented_label: String = "%s · %s" % [
+        str(state.get("hand","both")).capitalize(),
+        str(state.get("stage_label",""))]
     var changed: bool = (_loaded != bool(state.get("loaded",false)) or \
             _step != int(state.get("lesson_step",0)) or \
             _total != int(state.get("lesson_steps",0)) or \
-            _label != str(state.get("hand","both")).capitalize() + " · " +
-                str(state.get("stage_label","")) or \
+            _label != presented_label or \
             _next_label != next_label or \
             absf(_current_start-current_origin) > .001 or \
             _next_start != next_origin or \
@@ -28,8 +30,7 @@ func present(state: Dictionary, visual_beat: float,
     _loaded = bool(state.get("loaded",false))
     _step = int(state.get("lesson_step",0))
     _total = int(state.get("lesson_steps",0))
-    _label = str(state.get("hand","both")).capitalize() + " · " +
-        str(state.get("stage_label",""))
+    _label = presented_label
     _next_label = next_label
     _current_start = current_origin
     _next_start = next_origin
