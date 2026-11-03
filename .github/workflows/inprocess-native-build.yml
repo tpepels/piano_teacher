@@ -28,7 +28,7 @@ on:
       - 'scripts/package-inprocess.sh'
       - '.github/workflows/inprocess-native-smoke.yml'
       - 'scripts/install-inprocess-artifact.py'
-      - 'run-inprocess.sh'
+      - 'run.sh'
       - '.github/workflows/inprocess-native-build.yml'
   workflow_dispatch:
 
