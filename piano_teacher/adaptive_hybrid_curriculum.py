@@ -15,7 +15,7 @@ from typing import Mapping
 from .application.coda_midi_curriculum import midi_coda_stages
 from .exercise_generator import ExerciseVariant
 from .exercise_pipeline import ExerciseStage
-from .fukuda_midi import fukuda_midi_variants
+from .fukuda_midi import fukuda_midi_variants, as_fukuda_stage
 from .lesson_settings import SETTINGS
 from .lesson_source_planner import Exercise, _focus_phrases, _hands_for_learning
 from .music import Phrase, Piece
@@ -149,7 +149,7 @@ def compile_hybrid_catalog(piece: Piece):
                                     notes=tuple(n for _, n in selected)),
                 tuple(i for i, _ in selected))
             if exercise.kind != "learn":
-                stages[(exercise.key, hand)] = (ExerciseStage(original),)
+                stages[(exercise.key, hand)] = (as_fukuda_stage(original),)
                 continue
             # Keep every applicable author candidate in the immutable catalog.
             # Coda transforms only source-safe bar-boundary passages.
@@ -157,9 +157,9 @@ def compile_hybrid_catalog(piece: Piece):
                     if (abs(exercise.phrase.end -
                             piece.bar_boundaries[exercise.phrase.last_bar])
                         <= 1e-7)
-                    else (ExerciseStage(original),))
+                    else (as_fukuda_stage(original),))
             fukuda = fukuda_midi_variants(original, bpm=piece.bpm)
-            variants = (*tuple(ExerciseStage(v) for v in fukuda[:-1]),
+            variants = (*tuple(as_fukuda_stage(v) for v in fukuda[:-1]),
                         *coda)
             levels = [stage.variant.level for stage in variants]
             if len(set(levels)) != len(levels):
@@ -218,14 +218,14 @@ def _selection(candidates: tuple[ExerciseStage, ...],
         ranked = sorted((
             (relevance, index, stage)
             for index, stage in enumerate(candidates[:-1])
-            if stage.variant.level.startswith("fukuda-midi-")
+            if stage.origin == "fukuda-midi"
             if (relevance := _fukuda_relevance(
                 stage, original, pitch_ids)) is not None
         ), key=lambda row: (*row[0], row[1]))
         candidates = (
             *(stage for _, _, stage in ranked),
             *(stage for stage in candidates[:-1]
-              if not stage.variant.level.startswith("fukuda-midi-")),
+              if stage.origin != "fukuda-midi"),
             original,
         )
     return teaching_sequence(candidates, evidence=dict(evidence))
