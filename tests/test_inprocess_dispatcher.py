@@ -53,6 +53,10 @@ class FakeEngine:
     def control(self, **kwargs):
         self.controls.append(kwargs)
 
+    def report_preload_failure(self, **kwargs):
+        self.reported_native_failure = kwargs
+        return {"accepted": True, "revision": kwargs["revision"]}
+
     def set_preferences(self, **kwargs):
         self.changes.append(kwargs)
 
@@ -125,3 +129,17 @@ def test_worker_tick_is_independent_of_snapshot_requests():
     assert engine.ticks == 2
     assert _decode(bridge.request("state.snapshot"))[0] == 0
     assert engine.ticks == 2
+
+
+def test_native_failure_command_is_typed_and_source_bound():
+    fake = FakeEngine()
+    bridge = EngineCommands(engine=fake)
+    report = {"fingerprint": "piece", "step_number": 3, "revision": 12,
+              "error": "unrenderable authentic beam"}
+    status, body = _decode(bridge.request(
+        "score.stage_failed", json.dumps(report)))
+    assert status == 0 and body == {"accepted": True, "revision": 12}
+    assert fake.reported_native_failure == report
+    assert _decode(bridge.request("score.stage_failed", "{}"))[0] == 1
+    assert _decode(bridge.request(
+        "score.stage_failed", json.dumps({"error": "stale"})))[0] == 1
