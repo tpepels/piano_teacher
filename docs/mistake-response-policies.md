@@ -45,11 +45,12 @@ of causal teaching effectiveness.
   performance from accuracy-focused procedural practice. This motivates
   an uninterrupted "finish then review" option alongside immediate repair.
   https://pmc.ncbi.nlm.nih.gov/articles/PMC4110716/
-* **Short, directed trouble-spot practice**: Hanberry (2004) studied score
-  analysis, hand shifts, difficult chords, accidentals, metronome-supported
-  slower practice in undergraduate piano learners. The one-measure policy
-  is a conservative way to make such tasks actionable without synthesizing
-  a different score.
+* **Short, directed trouble-spot practice**: Hanberry (2004) studied
+  score analysis, hand shifts, difficult chords, accidentals and
+  metronome-supported slower practice in undergraduate piano learners.
+  The study *did not find significant group differences attributable to
+  the taught practice strategies*. Its practical categories informed our
+  one-measure option, not a claim of proven superiority.
   https://repository.lsu.edu/gradschool_dissertations/1187/
 * **Explicit practice instructions**: Pike and Salas-Ruiz (2025) reported
   improved playing accuracy in a case study involving directed worksheets
@@ -67,5 +68,16 @@ A new response must have a stable ID and explanation, valid tempo/focus
 bounds, a pure no-side-effects policy, full- and rolling-evidence behavior,
 source-bound tests, a Settings option, and a safe fallback for inadequate
 evidence. The engine must not grow a policy-name-specific chain.
+
+The public extension is `register_mistake_policy(MistakePolicy(...))` called
+once before loading settings. A registration can declare `rolling_handler`
+and `whole_handler` pure functions; they receive frozen `RollingEvidence`
+and `WholeEvidence` objects and return `RollingResponse` /
+`WholeResponse` decisions. The public evaluator checks identity, authentic
+metrical boundaries, tempo bounds and source duration even for third-party
+strategies. An invalid decision raises rather than corrupting a transport or
+silently changing the score. The six supplied strategies use the same default
+evaluator with independent parameters; custom algorithms can replace either
+evaluator without touching `PracticeEngine`.
 Policy changes during active playing must preserve the current recorder,
 transport ID, existing score revision and source-derived evidence.
