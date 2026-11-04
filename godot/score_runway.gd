@@ -294,7 +294,7 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
             float(stage.renderer.runway_origin_beat) if is_finite(end_beat) else INF
     if stage.has_method("present_runway_steps"):
         stage.present_runway_steps(state,global_beat,
-            next_start if _acknowledged else INF,
+            next_start if _acknowledged and origin_confirmed else INF,
             str(_bundle.get("stage_label",_bundle.get("level","Next step"))))
 
 func promote_if_ready(state: Dictionary) -> bool:
