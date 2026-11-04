@@ -35,6 +35,7 @@ var tempo_down_button: Button
 var tempo_up_button: Button
 var game_streak: Control
 var practice_skip_button: Button
+var practice_previous_button: Button
 var feedback_label: Label
 var performance_review: PerformanceReviewStrip
 var practice_controls: HFlowContainer
@@ -165,9 +166,16 @@ func _ready() -> void:
     challenge_bar.add_child(tempo_up_button)
     game_streak = GameStreak.new()
     challenge_bar.add_child(game_streak)
-    # Navigation is deliberately outside the three transport buttons.
-    # The progress row directly below the score gives Skip a stable,
-    # immediately visible location without changing the control cluster.
+    # Direct backward navigation does not award mastery or traverse the
+    # previous passage index: it selects the exact previous lesson step.
+    practice_previous_button = _button("Previous lesson", _previous_lesson,
+        false, "navigation")
+    practice_previous_button.tooltip_text = "Return to the previous lesson step without changing mastery"
+    practice_previous_button.disabled = true
+    practice_previous_button.visible = false
+    practice_previous_button.size_flags_horizontal = Control.SIZE_SHRINK_END
+    challenge_bar.add_child(practice_previous_button)
+    # Navigation stays outside the three fixed transport controls.
     practice_skip_button = _button("Next lesson", _skip_lesson,
         false, "navigation")
     practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
@@ -313,6 +321,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
     var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
+    practice_previous_button.visible = bool(parsed.get("loaded", false))
+    practice_previous_button.disabled = _busy or int(parsed.get("lesson_step",1)) <= 1
     practice_skip_button.visible = bool(parsed.get("loaded", false))
     practice_skip_button.disabled = not bool(parsed.get("skip_available", false)) or _busy
     var progress_text := ""
@@ -449,24 +459,10 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
                 previous_tempo, new_tempo, int(notice.get("first_bar", 1)),
                 int(notice.get("last_bar", 1))]
     if not bool(parsed.get("warmup", false)):
-        # Assemble provenance only after playback/review has selected the
-        # current-measure caption, so the real exercise stays identified
-        # during Play, Pause, Listen and source-note feedback.
-        var profile: String = str(parsed.get("exercise_strategy", ""))
-        var course_names: Dictionary = {
-            "coda-fukuda-midi":"Coda + Fukuda",
-            "coda-midi":"Coda", "fukuda-midi":"Fukuda"
-        }
-        var course: String = str(course_names.get(profile, ""))
-        if not course.is_empty():
-            passage_text = course + " · " + passage_text
-        var family: String = str(parsed.get("stage_family", ""))
+        # Show musical stage content, never the internal generator name.
         var transformation: String = str(parsed.get("stage_label", ""))
-        var change: String = str(parsed.get("stage_change", ""))
-        if not family.is_empty() and not transformation.is_empty():
-            passage_text += " · %s: %s" % [family, transformation]
-            if not change.is_empty() and change != "unchanged source":
-                passage_text += " (%s)" % change
+        if not transformation.is_empty():
+            passage_text += " · " + transformation
         passage_label.tooltip_text = passage_text
     passage_label.text = passage_text
     progress_label.text = progress_text
@@ -511,7 +507,7 @@ func present_busy(busy: bool) -> void:
     tempo_down_button.disabled = blocked or not bool(_state.get("can_decrease_tempo",false))
     tempo_up_button.disabled = blocked or not bool(_state.get("can_increase_tempo",false))
     practice_skip_button.disabled = busy or not bool(_state.get("skip_available",false))
-    stage.steps.present_busy(busy)
+    practice_previous_button.disabled = busy or int(_state.get("lesson_step",1)) <= 1
 
 func present_score(status: Dictionary) -> void:
     _score_status = status.duplicate(true)
@@ -530,7 +526,7 @@ func begin_action(requested: String, pending := "") -> void:
         return
     var verb: String = {"listen":"Preparing piano audio","practice":"Returning to practice",
         "start":"Starting count-in","pause":"Pausing","resume":"Resuming","restart":"Restarting the passage",
-        "skip_stage":"Loading next lesson","stop":"Stopping"}.get(requested,"Applying " + requested.replace("_"," "))
+        "skip_stage":"Loading next lesson","select_step":"Opening lesson","stop":"Stopping"}.get(requested,"Applying " + requested.replace("_"," "))
     present_message(verb + "…",true)
     stage.practice_playback_banner.text = verb + "…"
     stage.practice_playback_banner.visible = true
@@ -554,6 +550,11 @@ func open_advanced_pause() -> void:
     if bool(_state.get("paused",false)): _present_pause()
     elif _active_transport(_state): command_requested.emit({"action":"pause"})
     else: advanced_pause_open = false
+
+func _previous_lesson() -> void:
+    var current: int = int(_state.get("lesson_step",1))
+    if not _busy and bool(_state.get("loaded",false)) and current > 1:
+        command_requested.emit({"action":"select_step","number":current - 1})
 
 func _skip_lesson() -> void:
     if not _busy and bool(_state.get("skip_available",false)):
