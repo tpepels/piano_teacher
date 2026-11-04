@@ -7,8 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 from piano_teacher.application.mistake_responses import (
-    available_mistake_policies, resolve_mistake_policy,
-    rolling_response, whole_response,
+    MistakePolicy, RollingResponse, WholeResponse,
+    available_mistake_policies, register_mistake_policy,
+    resolve_mistake_policy, rolling_response, whole_response,
 )
 from piano_teacher.application.rolling_recovery import plan_rolling_recovery
 from piano_teacher.learning import LearningPlan
@@ -172,3 +173,63 @@ def test_live_setting_switch_is_atomic_persistent_and_keeps_current_take(tmp_pat
         assert loaded.settings["mistake_response_strategy"] == "finish-then-review"
     finally:
         engine.db.close()
+
+
+def test_external_mistake_algorithm_registers_without_engine_changes(monkeypatch):
+    from piano_teacher.application import mistake_responses as registry
+
+    def choose_rolling(facts):
+        return RollingResponse(
+            restart_beat=8.0, end_beat=facts.decision.end_beat,
+            bpm=max(facts.minimum_bpm, facts.bpm-7),
+            guided=False, count=1,
+            trouble_key=(facts.identity, 8.0, facts.decision.end_beat),
+            mode="custom-pedagogy")
+
+    def choose_whole(facts):
+        return WholeResponse(
+            bpm=facts.bpm, restart_beat=facts.play_from_beat,
+            mode="custom-pedagogy")
+
+    new = MistakePolicy(
+        "custom-pedagogy", "Focused specialist", "Externally registered algorithm",
+        True, 1.0, 1.0, 1, None,
+        rolling_handler=choose_rolling, whole_handler=choose_whole)
+    try:
+        register_mistake_policy(new)
+        assert resolve_mistake_policy(new.name) is new
+        with pytest.raises(ValueError, match="Duplicate"):
+            register_mistake_policy(new)
+        result = _rolling(new.name)
+        assert result.restart_beat == 8.0 and result.bpm == 93
+        assert result.display.retry_range["start_beat"] == 8.0
+        phrase = SimpleNamespace(start=0.0, end=12.0)
+        again = whole_response(
+            new, SimpleNamespace(notes=()), phrase=phrase,
+            grid=(0.0,4.0,8.0,12.0),
+            bpm=100, minimum_bpm=12, play_from_beat=0)
+        assert again.bpm == 100 and again.restart_beat == 0
+    finally:
+        monkeypatch.delitem(registry._POLICIES, new.name, raising=False)
+
+
+def test_external_algorithm_cannot_return_wrong_score_or_musical_deadline():
+    policy = MistakePolicy(
+        "invalid-source", "Broken", "Exercise contract verification",
+        True, 1, 1, 1, None,
+        rolling_handler=lambda facts: RollingResponse(
+            3.0, facts.decision.end_beat, 99, False, 1,
+            (facts.identity,3.0,facts.decision.end_beat), "invalid-source"),
+        whole_handler=lambda facts: WholeResponse(
+            facts.bpm, 100.0, "invalid-source"))
+    with pytest.raises(ValueError, match="Invalid source-bound rolling"):
+        rolling_response(
+            policy, _decision(), identity="test", bpm=100,
+            minimum_bpm=12, previous_key=None, previous_count=0,
+            grid=(0.0,4.0,8.0,12.0))
+    with pytest.raises(ValueError, match="Invalid source-bound whole"):
+        whole_response(
+            policy, SimpleNamespace(notes=()),
+            phrase=SimpleNamespace(start=0.0,end=12.0),
+            grid=(0.0,4.0,8.0,12.0),
+            bpm=100, minimum_bpm=12, play_from_beat=0)
