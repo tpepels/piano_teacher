@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from piano_teacher import server as backend
 from piano_teacher.application.score_artifacts import ScoreArtifacts
 from piano_teacher.application.attempt_progression import SETTLEMENT_SECONDS
 from piano_teacher.learning import LearningPlan
@@ -373,5 +374,43 @@ def test_late_ack_schedules_handoff_without_waiting_for_full_rest(tmp_path, monk
         assert engine.running and engine.count_in_beats == 0.0
         assert engine.visual_transport.visual_offset_beats == pytest.approx(
             engine._visual_motion(deadline)[0])
+    finally:
+        engine.db.close()
+
+
+def test_changed_next_stage_rolls_back_without_automatic_camera_reset(tmp_path, monkeypatch):
+    engine = _engine(tmp_path)
+    try:
+        engine.future_score = Prepared(engine)
+        selection, _number = engine._next_stage_selection()
+        engine.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key, revision=selection.revision)
+        original = backend.commit_assessed_result
+        old_revision = engine.score_revision
+        old_identity = engine.plan.identity
+        old_offset = engine.visual_transport.visual_offset_beats
+        old_artifacts = engine.score_artifacts
+
+        def mutate_after_grading(**kwargs):
+            result = original(**kwargs)
+            if result.stage_changed:
+                engine._future_stage_ready = ("new-after-feedback",
+                                             engine.score_revision + 1)
+            return result
+
+        monkeypatch.setattr(backend, "commit_assessed_result",
+                            mutate_after_grading)
+        finished_at = _finish(engine)
+        assert engine.visual_transport.paused
+        assert engine.visual_transport.next_at == 0.0
+        assert engine.plan.identity == old_identity
+        assert engine.score_revision == old_revision
+        assert engine.visual_transport.visual_offset_beats == old_offset
+        assert engine.score_artifacts is old_artifacts
+        assert engine.pending_result is not None
+        assert not engine.plan.mastered
+        assert "next lesson score changed" in engine.feedback.lower()
+        assert engine._visual_motion(
+            engine.visual_transport.paused_at)[0] >= old_offset
     finally:
         engine.db.close()
