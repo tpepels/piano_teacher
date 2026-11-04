@@ -38,8 +38,10 @@ class MockRequest:
     extends Node
     var _pending_id := -1
     var requested: Array[String] = []
-    func request(operation: String, _payload: Dictionary = {}) -> Error:
+    var payloads: Array[Dictionary] = []
+    func request(operation: String, payload: Dictionary = {}) -> Error:
         requested.append(operation)
+        payloads.append(payload)
         return OK
     func cancel_request() -> void:
         pass
@@ -73,6 +75,7 @@ func run() -> void:
     runway.score_session = session
     runway._fetch = MockRequest.new()
     runway._ack = MockRequest.new()
+    runway._report = MockRequest.new()
     runway._source_fingerprint = "piece-a"
     runway._source_revision = 1
     runway._source_step = 1
@@ -147,5 +150,44 @@ func run() -> void:
         "stage_label":"Both hands"},12.17,12.17,21.0,"Next source")
     check(markers._step == 2 and markers._next_start == 21.0,
         "stage markers share current scroll and upcoming score axis")
+    runway._future = null
+    runway._bundle.clear()
+    runway.present_frame({
+        "loaded":true, "mode":"practice",
+        "lesson_step":2,"lesson_steps":3,
+        "visual_offset_beats":12.17,"duration_beats":4.0,
+        "bpm":120.0,"target_bpm":120.0,
+        "streak":2,"clean_runs_required":3,
+        "phase":"feedback"},16.4)
+    check(absf(stage.renderer.runway_cutoff_beat - 4.2) < .0001,
+        "unready future stage never exposes stale repeated source notes")
+    check(stage.renderer.cleared == 0,
+        "failed future score must not clear the active renderer")
+
+    runway._register_preload_failure("temporary glyph atlas error")
+    check(runway._native_failures == 1 and not runway._terminal_preload_failure,
+        "first native failure retains retryable runway")
+    runway._register_preload_failure("temporary glyph atlas error")
+    check(runway._native_failures == 2 and not runway._terminal_preload_failure,
+        "second native failure remains bounded and retryable")
+    runway._register_preload_failure("permanent native ink error")
+    check(runway._terminal_preload_failure,
+        "third native failure terminates the rendering retry loop")
+    runway._request_if_needed({
+        "loaded":true,"mode":"practice","lesson_step":2,
+        "lesson_steps":3},Time.get_ticks_msec()+6000)
+    check(runway._report.requested == ["score.stage_failed"],
+        "terminal native failure reports to authoritative in-process engine")
+    var report: Dictionary = runway._report.payloads[0]
+    check(str(report.get("fingerprint","")) == "piece-a" and
+        int(report.get("step_number",-1)) == 3 and
+        int(report.get("revision",-1)) == 3,
+        "report is scoped to exact upcoming fingerprint, step and revision")
+    runway._on_report_reply(0, '{"accepted":true}'.to_utf8_buffer())
+    runway._request_if_needed({
+        "loaded":true,"mode":"practice","lesson_step":2,
+        "lesson_steps":3},Time.get_ticks_msec()+10000)
+    check(runway._report.requested.size() == 1,
+        "accepted terminal report does not duplicate failure commands")
     print("SEAMLESS_SCORE_RUNWAY_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
