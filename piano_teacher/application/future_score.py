@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, deque
 import json
+import time
 from threading import Lock, Thread
 
 from .score_artifacts import ScoreArtifacts, ScoreSelection
@@ -16,6 +17,8 @@ from ..preprocessing_cache import PreprocessingCache
 
 MAX_LOOKAHEAD = 2
 MAX_QUEUED = 2
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 0.5
 
 
 def _reply(value: dict) -> bytes:
@@ -32,6 +35,7 @@ class FutureScore:
         self._working = None
         # key -> (prepared reply bytes, ScoreArtifacts)
         self._ready = OrderedDict()
+        # key -> (message, failure_count, retry_after_monotonic)
         self._errors = OrderedDict()
 
     def _enqueue(self, selection: ScoreSelection, number: int,
@@ -43,7 +47,10 @@ class FutureScore:
             self._errors.clear()
             self._pending.clear()
         key = selection.identity
-        if key not in self._ready and key not in self._errors and key != self._working:
+        failure = self._errors.get(key)
+        retry_due = (failure is None or
+                     (failure[1] < MAX_RETRIES and time.monotonic() >= failure[2]))
+        if key not in self._ready and retry_due and key != self._working:
             if not any(pending[0].identity == key for pending in self._pending):
                 if primary:
                     self._pending.appendleft((selection, number, label, scope))
@@ -64,8 +71,9 @@ class FutureScore:
             key = selection.identity
             if key in self._ready:
                 return self._ready[key][0]
-            if key in self._errors:
-                return _reply({"status": "error", "error": self._errors[key],
+            failure = self._errors.get(key)
+            if failure is not None and failure[1] >= MAX_RETRIES:
+                return _reply({"status": "error", "error": failure[0],
                                "step_number": number})
             return _reply({"status": "preparing", "step_number": number})
 
@@ -83,6 +91,12 @@ class FutureScore:
         with self._guard:
             item = self._ready.get(selection.identity)
             return item[1] if item is not None else None
+
+    def failure(self, selection: ScoreSelection) -> str | None:
+        """Report only an exhausted, exact-source preparation failure."""
+        with self._guard:
+            entry = self._errors.get(selection.identity)
+            return entry[0] if entry is not None and entry[1] >= MAX_RETRIES else None
 
     def _build(self) -> None:
         while True:
@@ -116,11 +130,16 @@ class FutureScore:
                     continue
                 key = selection.identity
                 if error:
-                    self._errors[key] = error
+                    previous = self._errors.get(key)
+                    attempts = (previous[1] if previous else 0) + 1
+                    self._errors[key] = (
+                        error, attempts, time.monotonic() +
+                        RETRY_DELAY_SECONDS * (2 ** (attempts - 1)))
                     self._errors.move_to_end(key)
                     while len(self._errors) > MAX_LOOKAHEAD:
                         self._errors.popitem(last=False)
                 else:
+                    self._errors.pop(key, None)
                     self._ready[key] = (payload, assets)
                     self._ready.move_to_end(key)
                     while len(self._ready) > MAX_LOOKAHEAD:
