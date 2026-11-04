@@ -1,16 +1,17 @@
-"""Pure recovery-tempo and escalation plan for a detected source-grid failure.
+"""Route MIDI-grid failure evidence through a registered response policy.
 
-Only the engine mutates MIDI state, persists trouble, and schedules rewind.
-This value object carries the chosen tempo, repeat history and UI projection.
+This adapter joins metrical source selection to the existing immutable
+recovery display. The engine alone applies decisions and owns transport.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Sequence
 
 from ..lesson_settings import SETTINGS
 from ..recovery_projection import RecoveryDisplay, recovery_display
 from ..recovery import RecoveryDecision
+from .mistake_responses import resolve_mistake_policy, rolling_response
 
 
 @dataclass(frozen=True)
@@ -20,19 +21,38 @@ class RollingRecoveryTransition:
     trouble_count: int
     guided: bool
     display: RecoveryDisplay
+    restart_beat: float
+    mode: str
 
 
 def plan_rolling_recovery(decision: RecoveryDecision, *, identity: str,
                           bpm: int, previous_key: tuple | None,
                           previous_count: int, grid: Sequence[float],
                           first_bar: int, now: float,
-                          allow_guided: bool = True) -> RollingRecoveryTransition:
-    new_bpm = max(SETTINGS.minimum_bpm,
-                  round(bpm * SETTINGS.recovery_tempo_multiplier))
-    key = identity, decision.restart_beat, decision.end_beat
-    count = previous_count + 1 if key == previous_key else 1
-    guided = allow_guided and count >= SETTINGS.guided_recovery_after_failures
+                          allow_guided: bool = True,
+                          strategy: str = "adaptive") -> RollingRecoveryTransition:
+    policy = resolve_mistake_policy(strategy)
+    chosen = rolling_response(
+        policy, decision, identity=identity, bpm=bpm,
+        minimum_bpm=SETTINGS.minimum_bpm,
+        previous_key=previous_key, previous_count=previous_count,
+        grid=grid, allow_guided=allow_guided)
+    adjusted = replace(decision, restart_beat=chosen.restart_beat)
     display = recovery_display(
-        decision, grid=grid, first_bar=first_bar,
-        before_bpm=bpm, after_bpm=new_bpm, now=now, guided=guided)
-    return RollingRecoveryTransition(new_bpm, key, count, guided, display)
+        adjusted, grid=grid, first_bar=first_bar,
+        before_bpm=bpm, after_bpm=chosen.bpm, now=now,
+        guided=chosen.guided)
+    if strategy != "adaptive":
+        notice = dict(display.notice)
+        notice["kind"] = "slowdown" if chosen.bpm < bpm else "repeat"
+        notice["response"] = strategy
+        if strategy == "steady-repeat":
+            instruction = display.next_action
+        elif strategy == "finish-then-review":
+            instruction = "Finish the phrase; review errors after the take."
+        else:
+            instruction = display.next_action
+        display = replace(display, notice=notice, next_action=instruction)
+    return RollingRecoveryTransition(
+        chosen.bpm, chosen.trouble_key, chosen.count, chosen.guided,
+        display, chosen.restart_beat, chosen.mode)
