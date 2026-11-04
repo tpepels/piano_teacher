@@ -630,6 +630,8 @@ func _build_settings_screen() -> void:
         _send_command("settings.update", {"diagnosis_strategy": strategy}))
     settings_view.learner_strategy_requested.connect(func(strategy: String):
         _send_command("settings.update", {"learner_strategy": strategy}))
+    settings_view.mistake_response_requested.connect(func(strategy: String):
+        _send_command("settings.update", {"mistake_response_strategy": strategy}))
     settings_view.metronome_requested.connect(func(enabled: bool):
         _send_command("settings.update", {"metronome": enabled}))
     settings_view.calibration_requested.connect(func(action: String):
