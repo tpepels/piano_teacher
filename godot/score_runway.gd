@@ -277,7 +277,12 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
             float(state.get("bpm",0)) >= float(state.get("target_bpm",INF))
     var active_phase: bool = str(state.get("phase","")) in \
         ["playing","count_in","feedback","preview_gap"]
-    var display: bool = _acknowledged and last_clean and active_phase
+    # A late acknowledgement must not flash notation at a stale origin.
+    # Reveal it only after the backend publishes the actual global start.
+    var origin_confirmed: bool = state.has("next_stage_start_beat") or \
+        global_beat <= natural_start + .01
+    var display: bool = _acknowledged and last_clean and \
+        active_phase and origin_confirmed
     _future.modulate.a = 1.0 if display else 0.001
     if is_instance_valid(stage.renderer):
         # Partially compiled but unacknowledged future ink must not expose
