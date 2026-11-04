@@ -232,9 +232,25 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
     _visual_beat = global_beat
     _advance_tail(global_beat)
     if _future == null or not is_instance_valid(_future) or _bundle.is_empty():
-        if stage != null and stage.has_method("present_runway_steps") and \
-                stage.renderer != null and is_instance_valid(stage.renderer):
-            stage.present_runway_steps(state,global_beat)
+        if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
+            var last_clean: bool = \
+                str(state.get("mode","")) == "practice" and \
+                int(state.get("lesson_step",0)) < int(state.get("lesson_steps",0)) and \
+                int(state.get("streak",0)) >= int(state.get("clean_runs_required",3)) - 1 and \
+                float(state.get("bpm",0)) >= float(state.get("target_bpm",INF)) and \
+                str(state.get("phase","")) in ["playing","count_in","feedback","preview_gap"]
+            if last_clean:
+                var current_end: float = (float(state.get("visual_offset_beats",0.0)) +
+                    float(state.get("duration_beats",0.0)) +
+                    .20 * float(state.get("bpm",60.0)) / 60.0)
+                # Suppress stale repeating notes where the next real score is
+                # still missing. The old ink keeps moving offscreen naturally.
+                stage.renderer.runway_cutoff_beat = current_end - \
+                    float(stage.renderer.runway_origin_beat)
+            else:
+                stage.renderer.runway_cutoff_beat = INF
+            if stage.has_method("present_runway_steps"):
+                stage.present_runway_steps(state,global_beat)
         return
     var stride: float = float(state.get("practice_timeline",{}).get("stride_beats",0.0))
     if stride <= 0.0:
