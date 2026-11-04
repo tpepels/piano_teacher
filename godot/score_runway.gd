@@ -154,7 +154,7 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         return
     _bundle = value
     _layout = installed["layout"]
-    _future_intro_offset = StepTimeline.first_sounding_measure_offset(
+    _future_intro_offset = StepTimeline.first_playable_beat(
         model_data,str(value.get("hand","both")))
     _native_failures = 0
     _failure = ""
@@ -300,7 +300,8 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
     if stage.has_method("present_runway_steps"):
         stage.present_runway_steps(state,global_beat,
             next_start + _future_intro_offset if _acknowledged and origin_confirmed else INF,
-            str(_bundle.get("stage_label",_bundle.get("level","Next step"))))
+            str(_bundle.get("stage_label",_bundle.get("level","Next step"))),
+            float(_future.timeline.pixels_per_beat))
 
 func promote_if_ready(state: Dictionary) -> bool:
     if _future == null or not is_instance_valid(_future) or \
