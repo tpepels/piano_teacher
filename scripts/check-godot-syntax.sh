@@ -56,6 +56,12 @@ for fixture in command_success_effects command_request_state inprocess_request_l
   echo "Checking Godot behavior: $fixture"
   timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/$fixture.gd"
 done
+# Run the real Practice UI in the headless Godot harness after parsing.
+for scenario in captions signals score_gate source_picker midi_guard layout; do
+  echo "Checking Practice UI: $scenario"
+  timeout 15s "$binary" --headless --path godot \
+    --script "$PWD/tests/godot/practice_screen.gd" -- "$scenario"
+done
 for contract in publication stale retry failure native; do
   echo "Checking Godot score-session contract: $contract"
   timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/score_asset_session.gd" -- "$contract"
