@@ -5,6 +5,7 @@ extends Node
 const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
+const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
 
@@ -12,6 +13,7 @@ var stage
 var score_session
 var _fetch: Node
 var _ack: Node
+var _report: Node
 var _future
 # Last lesson's authentic ink remains visible behind the playhead until its
 # final bar has left the viewport; no score-page flash at promotion.
@@ -28,6 +30,9 @@ var _acknowledged := false
 var _ack_waiting := false
 var _failure := ""
 var _reported_failure := ""
+var _native_failures := 0
+var _terminal_preload_failure := false
+var _report_accepted := false
 var _visual_beat := 0.0
 
 func configure(host: Node, practice_stage, session, bus: Node) -> void:
@@ -43,6 +48,11 @@ func configure(host: Node, practice_stage, session, bus: Node) -> void:
     host.add_child(_ack)
     _ack.configure(bus)
     _ack.request_completed.connect(_on_ack_reply)
+    _report = Request.new()
+    _report.timeout = 15.0
+    host.add_child(_report)
+    _report.configure(bus)
+    _report.request_completed.connect(_on_report_reply)
 
 func _discard() -> void:
     if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
@@ -50,6 +60,7 @@ func _discard() -> void:
     _clear_tail()
     _fetch.cancel_request()
     _ack.cancel_request()
+    _report.cancel_request()
     if _future != null and is_instance_valid(_future):
         _future.queue_free()
     _future = null
@@ -60,6 +71,9 @@ func _discard() -> void:
     _next_poll_ms = 0
     _failure = ""
     _reported_failure = ""
+    _native_failures = 0
+    _terminal_preload_failure = false
+    _report_accepted = false
 
 func _clear_tail() -> void:
     if _tail != null and is_instance_valid(_tail):
@@ -82,12 +96,12 @@ func _advance_tail(global_beat: float) -> void:
 
 func _on_future_reply(code: int, body: PackedByteArray) -> void:
     if code != 0:
-        _failure = "Next lesson preloading failed (status %d)" % code
-        _next_poll_ms = Time.get_ticks_msec() + 1200
+        _register_preload_failure(
+            "Next lesson preloading request failed (status %d)" % code)
         return
     var value: Variant = JSON.parse_string(body.get_string_from_utf8())
     if not value is Dictionary:
-        _failure = "Invalid future score response"
+        _register_preload_failure("Invalid future score response")
         return
     if str(value.get("status","")) == "preparing":
         _next_poll_ms = Time.get_ticks_msec() + 600
@@ -97,10 +111,14 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         return
     if str(value.get("status","")) != "ready":
         _failure = str(value.get("error","Next score cannot be engraved"))
-        if str(value.get("status","")) == "error" and _failure != _reported_failure:
-            _reported_failure = _failure
-            preload_problem.emit("Next lesson score failed: " + _failure)
-        _next_poll_ms = Time.get_ticks_msec() + 3000
+        if str(value.get("status","")) == "error":
+            _terminal_preload_failure = true
+            _report_accepted = true # The Python preloader already owns this error.
+            if _failure != _reported_failure:
+                _reported_failure = _failure
+                preload_problem.emit("Next lesson score failed: " + _failure)
+        else:
+            _register_preload_failure(_failure)
         return
     if int(value.get("revision",-1)) != _source_revision + 1 or \
             int(value.get("step_number",-1)) != _source_step + 1 or \
@@ -109,7 +127,8 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     var layout_data: Variant = value.get("layout")
     var model_data: Variant = value.get("model")
     if not layout_data is Dictionary or not model_data is Dictionary:
-        _failure = "Future score lacks authentic layout or semantic model"
+        _register_preload_failure(
+            "Future score lacks authentic layout or semantic model")
         return
     _future = NativeView.new()
     # Preserve the active learner's horizontal density setting across
@@ -125,12 +144,15 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     _future.visible = true
     var installed: Dictionary = NativeAssets.install(_future,layout_data)
     if not bool(installed.get("ok",false)) or not _future.load_score(model_data):
-        _failure = str(installed.get("error",_future.failure_reason))
+        var message: String = str(installed.get("error",_future.failure_reason))
         _future.queue_free()
         _future = null
+        _register_preload_failure(message)
         return
     _bundle = value
     _layout = installed["layout"]
+    _native_failures = 0
+    _failure = ""
     # The future stage's own notes and active hand are positioned on a
     # local score axis; Main feeds it the global minus next-stage origin.
     _future.present({
@@ -146,10 +168,42 @@ func _on_ack_reply(code: int, body: PackedByteArray) -> void:
     _acknowledged = code == 0 and value is Dictionary and \
             bool(value.get("accepted",false))
     if not _acknowledged:
-        _failure = "Future score acknowledgement rejected"
+        _register_preload_failure("Future score acknowledgement rejected")
+
+func _register_preload_failure(message: String) -> void:
+    _failure = message if not message.is_empty() else "Native next-step notation failed"
+    _native_failures += 1
+    var backoff_ms: int = 500 * (1 << mini(_native_failures - 1, 4))
+    _next_poll_ms = Time.get_ticks_msec() + backoff_ms
+    if _native_failures >= MAX_PRELOAD_FAILURES:
+        _terminal_preload_failure = true
+        if _failure != _reported_failure:
+            _reported_failure = _failure
+            preload_problem.emit("Next lesson score failed: " + _failure)
+        _report_if_needed(Time.get_ticks_msec())
+
+func _report_if_needed(now_ms: int) -> void:
+    if not _terminal_preload_failure or _report_accepted or \
+            _report._pending_id >= 0 or now_ms < _next_poll_ms:
+        return
+    if _report.request("score.stage_failed",{
+            "fingerprint":_source_fingerprint,
+            "step_number":_source_step+1,
+            "revision":_source_revision+1,
+            "error":_failure}) != OK:
+        _next_poll_ms = now_ms + 1000
+
+func _on_report_reply(code: int, body: PackedByteArray) -> void:
+    var value: Variant = JSON.parse_string(body.get_string_from_utf8())
+    _report_accepted = code == 0 and value is Dictionary and \
+        bool(value.get("accepted",false))
+    if not _report_accepted:
         _next_poll_ms = Time.get_ticks_msec() + 1000
 
 func _request_if_needed(state: Dictionary, now_ms: int) -> void:
+    if _terminal_preload_failure:
+        _report_if_needed(now_ms)
+        return
     if _future != null or _ack_waiting or now_ms < _next_poll_ms or \
             _fetch._pending_id >= 0:
         return
@@ -195,7 +249,8 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
     var local_beat: float = global_beat - next_start
     _future.present_clock(local_beat,local_beat)
     if _future.retained_ready() and not _acknowledged and not _ack_waiting \
-            and Time.get_ticks_msec() >= _next_poll_ms:
+            and not _terminal_preload_failure and \
+            Time.get_ticks_msec() >= _next_poll_ms:
         _ack_waiting = _ack.request("score.stage_ready",{
             "stage_key":_bundle["stage_key"],
             "revision":_bundle["revision"]}) == OK
@@ -255,6 +310,9 @@ func promote_if_ready(state: Dictionary) -> bool:
     _bundle.clear()
     _layout.clear()
     _acknowledged = false
+    _native_failures = 0
+    _terminal_preload_failure = false
+    _report_accepted = false
     _source_revision = int(state.get("revision",-1))
     _source_step = int(state.get("lesson_step",0))
     _source_fingerprint = str(state.get("piece_fingerprint",""))
