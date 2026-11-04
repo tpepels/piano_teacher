@@ -162,6 +162,20 @@ func run() -> void:
         "stage_label":"Both hands"},12.17,12.17,21.0,"Next source")
     check(markers._step == 2 and markers._next_start == 21.0,
         "stage markers share current scroll and upcoming score axis")
+    var written := {
+        "notes":[{"hand":"right","onset_beats":4.0},
+                 {"hand":"left","onset_beats":8.5}],
+        "measures":[{"start_beat":0.0,"end_beat":4.0},
+                    {"start_beat":4.0,"end_beat":8.0},
+                    {"start_beat":8.0,"end_beat":12.0}]
+    }
+    check(StepTimeline.first_sounding_measure_offset(written,"right") == 4.0 and
+          StepTimeline.first_sounding_measure_offset(written,"left") == 8.0 and
+          StepTimeline.first_sounding_measure_offset(written,"both") == 4.0,
+          "introduction markers move off silent rest bars to the real next measure")
+    check(StepTimeline.first_sounding_measure_offset(
+            {"notes":[],"measures":written.measures},"both") == 0.0,
+          "genuinely silent scores do not create invented note positions")
     runway._future = null
     runway._bundle.clear()
     runway.present_frame({
