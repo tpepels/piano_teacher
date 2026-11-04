@@ -32,7 +32,7 @@ func run() -> void:
                 view.present(values,true)
                 values.title = "mutated"
                 view.present_busy(true)
-                check(view.title_label.text == "A real piece" and view.speed_label.text == "72 BPM · target 80","Practice captures title and tempo values")
+                check(view.title_label.text == "A real piece" and view.speed_label.text == "♪ 72 BPM" and view.speed_label.tooltip_text.contains("target 80 BPM"),"Practice captures title and tempo values")
                 var named_source := state()
                 named_source.exercise_strategy = "coda-fukuda-midi"
                 named_source.stage_label = "Melody outline"
