@@ -5,6 +5,7 @@ extends Node
 const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
+const StepTimeline := preload("res://score_step_timeline.gd")
 const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
@@ -34,6 +35,7 @@ var _native_failures := 0
 var _terminal_preload_failure := false
 var _report_accepted := false
 var _visual_beat := 0.0
+var _future_intro_offset := 0.0
 
 func configure(host: Node, practice_stage, session, bus: Node) -> void:
     stage = practice_stage
@@ -71,6 +73,7 @@ func _discard() -> void:
     _next_poll_ms = 0
     _failure = ""
     _reported_failure = ""
+    _future_intro_offset = 0.0
     _native_failures = 0
     _terminal_preload_failure = false
     _report_accepted = false
@@ -151,6 +154,8 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         return
     _bundle = value
     _layout = installed["layout"]
+    _future_intro_offset = StepTimeline.first_sounding_measure_offset(
+        model_data,str(value.get("hand","both")))
     _native_failures = 0
     _failure = ""
     # The future stage's own notes and active hand are positioned on a
@@ -294,7 +299,7 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
             float(stage.renderer.runway_origin_beat) if is_finite(end_beat) else INF
     if stage.has_method("present_runway_steps"):
         stage.present_runway_steps(state,global_beat,
-            next_start if _acknowledged and origin_confirmed else INF,
+            next_start + _future_intro_offset if _acknowledged and origin_confirmed else INF,
             str(_bundle.get("stage_label",_bundle.get("level","Next step"))))
 
 func promote_if_ready(state: Dictionary) -> bool:
@@ -338,6 +343,7 @@ func promote_if_ready(state: Dictionary) -> bool:
         _tail_end = float(state.get("visual_offset_beats",0.0))
     _bundle.clear()
     _layout.clear()
+    _future_intro_offset = 0.0
     _acknowledged = false
     _native_failures = 0
     _terminal_preload_failure = false
