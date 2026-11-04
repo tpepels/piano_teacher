@@ -13,6 +13,28 @@ var _next_start := INF
 var _beat := 0.0
 var _density := 96.0
 
+static func first_sounding_measure_offset(model: Dictionary, hand: String = "both") -> float:
+    # Mark the beginning of the first real, note-bearing source measure,
+    # not the preparatory rest preceding it. Keep the complete measure
+    # boundary rather than shifting the label to the first notehead.
+    var earliest: float = INF
+    for candidate in model.get("notes", []):
+        if not candidate is Dictionary:
+            continue
+        if hand != "both" and str(candidate.get("hand","")) != hand:
+            continue
+        var onset: float = float(candidate.get("onset_beats",INF))
+        if is_finite(onset):
+            earliest = minf(earliest,onset)
+    if not is_finite(earliest):
+        return 0.0
+    for measure in model.get("measures", []):
+        if measure is Dictionary and \
+                earliest >= float(measure.get("start_beat",-INF)) - .0001 and \
+                earliest < float(measure.get("end_beat",-INF)) + .0001:
+            return float(measure.get("start_beat",0.0))
+    return 0.0
+
 func present(state: Dictionary, visual_beat: float,
         current_origin: float, next_origin: float = INF,
         next_label: String = "") -> void:
