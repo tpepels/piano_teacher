@@ -353,10 +353,35 @@ def test_entire_recovery_restores_chosen_tempo_then_three_full_takes_reveal_chor
         assert stage not in e.plan.mastered
         if streak == 3:
             assert 'restore missing chord notes' in feedback['next_action']
+            # The backend retains assessed feedback until the exact upcoming
+            # score is engraved and acknowledged by the renderer. Late native
+            # preloading extends the forward score runway; it must never
+            # enter the former loading/revision reset handshake.
+            class PreparedForRecovery:
+                def ready(self, _selection):
+                    return True
+                def adopt(self, _selection):
+                    return server.ScoreArtifacts(e.preprocessing)
+                def warm(self, _selection, *, number, label):
+                    pass
+                def failure(self, _selection):
+                    return None
+
+            e.future_score = PreparedForRecovery()
+            selected, _number = e._next_stage_selection()
+            e.acknowledge_preloaded_stage(
+                stage_key=selected.stage_key, revision=selected.revision)
             now[0] = e.visual_transport.next_at+.01
-            loading = e.state()
-            assert loading['phase'] == 'loading' and loading['lesson_level'] == 'outline'
-            assert loading['next_action'] == feedback['next_action']
+            pending = e.state()
+            assert pending['phase'] != 'loading'
+            assert stage not in e.plan.mastered
+            assert e._stage_handoff_visual_beat is not None
+            assert e.visual_transport.next_at > now[0]
+            now[0] = e.visual_transport.next_at+.01
+            continued = e.state()
+            assert continued['phase'] == 'playing'
+            assert continued['lesson_level'] == 'outline'
+            assert continued['awaiting_score_revision'] is None
             assert e.plan.mastered[stage] == 80 and e.plan.target_bpm == 80
         else:
             after_break(e, now)
