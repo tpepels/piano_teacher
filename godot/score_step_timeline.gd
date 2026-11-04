@@ -31,7 +31,7 @@ static func first_sounding_measure_offset(model: Dictionary, hand: String = "bot
     for measure in model.get("measures", []):
         if measure is Dictionary and \
                 earliest >= float(measure.get("start_beat",-INF)) - .0001 and \
-                earliest < float(measure.get("end_beat",-INF)) + .0001:
+                earliest < float(measure.get("end_beat",-INF)) - .000001:
             return float(measure.get("start_beat",0.0))
     return 0.0
 
