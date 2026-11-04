@@ -195,8 +195,10 @@ func _report_if_needed(now_ms: int) -> void:
 
 func _on_report_reply(code: int, body: PackedByteArray) -> void:
     var value: Variant = JSON.parse_string(body.get_string_from_utf8())
+    # A valid rejection means the engine has already moved to a different
+    # source. That old failed score must not be reported repeatedly.
     _report_accepted = code == 0 and value is Dictionary and \
-        bool(value.get("accepted",false))
+        value.has("accepted")
     if not _report_accepted:
         _next_poll_ms = Time.get_ticks_msec() + 1000
 
