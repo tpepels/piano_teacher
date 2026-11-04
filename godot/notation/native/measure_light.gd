@@ -49,12 +49,18 @@ static func paint(canvas: Control, timeline, beat: float, bounds: Vector2,
     if right <= left:
         return
     var area := Rect2(left,top,right-left,bottom-top)
-    # Broad illumination is BELOW staff, glyphs, stems and barlines. Thin
-    # layers soften the light vertically without blurring the musical ink.
-    canvas.draw_rect(area,Color(Design.MINT,.16))
-    for i in range(8):
-        var inset := float(i)*gap*.22
-        var lit := Rect2(left,top+inset,right-left,maxf(0.0,bottom-top-inset*2.0))
-        canvas.draw_rect(lit,Color(Design.MINT,.012))
-    canvas.draw_line(Vector2(left,top),Vector2(right,top),Color(Design.MINT,.55),1.0,true)
-    canvas.draw_line(Vector2(left,bottom),Vector2(right,bottom),Color(Design.MINT,.28),1.0,true)
+    # Light the full active measure behind the retained source ink. A compact
+    # brighter lane follows the actual playhead; hard barline geometry stays
+    # crisp because this is painted before staves, notes and beams.
+    canvas.draw_rect(area,Color(Design.MINT,.20))
+    var glow_width := minf(area.size.x,maxf(24.0,gap*5.0))
+    var glow_center := clampf(playhead_x,left+glow_width*.5,right-glow_width*.5)
+    for band in range(3):
+        var width := glow_width*(1.0-float(band)*.25)
+        canvas.draw_rect(Rect2(glow_center-width*.5,top,width,bottom-top),
+            Color(Design.MINT,.022+float(band)*.016))
+    var edge := Color(Design.MINT,.68)
+    canvas.draw_line(Vector2(left,top),Vector2(right,top),edge,1.2,true)
+    canvas.draw_line(Vector2(left,bottom),Vector2(right,bottom),Color(Design.MINT,.42),1.0,true)
+    canvas.draw_line(Vector2(left,top),Vector2(left,bottom),Color(Design.HIGHLIGHT,.38),1.0,true)
+    canvas.draw_line(Vector2(right,top),Vector2(right,bottom),Color(Design.HIGHLIGHT,.38),1.0,true)
