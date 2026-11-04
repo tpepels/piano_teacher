@@ -90,11 +90,16 @@ func run() -> void:
                 check(intent.size() == 8,"Busy previous navigation cannot dispatch")
             "score_gate":
                 view.present(state(),false)
-                view.present_score(false,"Missing note geometry")
+                view.present_score({
+                    "ready":false,"visible":true,"text":"Missing note geometry",
+                    "error":"Missing note geometry","retry_visible":true,
+                    "browse_visible":false})
                 check(view.stage.score_status_panel.visible and view.stage.score_retry_button.visible and not view.stage.score_browse_button.visible,"Persistent score errors own the stage status")
                 check("Missing note geometry" in view.stage.score_status_label.text and view.start_button.disabled and view.practice_retry_button.disabled,"Score readiness gates both starts and retries")
                 view.present(state("playing"),true)
-                view.present_score(true,"")
+                view.present_score({
+                    "ready":true,"visible":false,"text":"","error":"",
+                    "retry_visible":false,"browse_visible":false})
                 check(not view.stage.score_status_panel.visible and not view.stage.phase_cue.visible and not view.start_button.disabled,"Ready notation hides the preparation capsule")
                 view.stage.present_fingering({"unknown":2},1,"")
                 check("2 unknown fingers" in view.stage.fingering_status_label.text and "1 needs space" in view.stage.fingering_status_label.text,"Fingering warnings receive explicit placement counts")
