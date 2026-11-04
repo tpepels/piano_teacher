@@ -19,21 +19,24 @@ func _ready() -> void:
     summary_label.set_meta("ui_font_base", 17)
     summary_label.add_theme_font_size_override("font_size",
         maxi(14, int(round(17.0*ui_scale))))
+    summary_label.visible = false
     add_child(summary_label)
     review_button = ActionButton.new()
-    review_button.text = "Review notes and repeat a section"
+    review_button.text = "Review difficult measures"
+    review_button.tooltip_text = "Inspect assessed note errors and retry a selected measure range"
     review_button.configure("review")
     review_button.set_meta("ui_font_base", 15)
     review_button.add_theme_font_size_override("font_size",
         maxi(14, int(round(15.0*ui_scale))))
-    review_button.custom_minimum_size = Vector2(320.0*ui_scale,38.0*ui_scale)
+    review_button.custom_minimum_size = Vector2(215.0*ui_scale,38.0*ui_scale)
     review_button.pressed.connect(func():
         review_requested.emit(_summary.duplicate(true)))
     add_child(review_button)
 
 func present(summary: Dictionary) -> void:
     _summary = summary.duplicate(true)
-    visible = not summary.is_empty()
+    var has_weak_bars: bool = not summary.get("weakest_bars",[]).is_empty()
+    visible = has_weak_bars
     if not visible:
         return
     var timing_count: int = (
@@ -44,6 +47,5 @@ func present(summary: Dictionary) -> void:
         int(summary.get("correct",0)), int(summary.get("total",0)),
         int(summary.get("missed",0)), int(summary.get("wrong",0)),
         timing_count, int(summary.get("extra_notes",0))]
-    var has_weak_bars: bool = not summary.get("weakest_bars",[]).is_empty()
     review_button.visible = has_weak_bars
     review_button.disabled = not has_weak_bars
