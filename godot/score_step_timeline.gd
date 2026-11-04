@@ -12,32 +12,51 @@ var _current_start := 0.0
 var _next_start := INF
 var _beat := 0.0
 var _density := 96.0
+var _next_density := 96.0
 
-static func first_sounding_measure_offset(model: Dictionary, hand: String = "both") -> float:
-    # Mark the beginning of the first real, note-bearing source measure,
-    # not the preparatory rest preceding it. Keep the complete measure
-    # boundary rather than shifting the label to the first notehead.
+# The marker belongs at the FIRST ENGRAVED ATTACK, not the containing barline.
+# A measure can start with rests; bar-start positioning labels those rests.
+# Return INF for a genuinely silent active hand, rather than putting the
+# exercise title on a preparatory rest.
+static func first_playable_beat(model: Dictionary, hand: String = "both") -> float:
     var earliest: float = INF
-    for candidate in model.get("notes", []):
-        if not candidate is Dictionary:
+    # Printed attacks are authoritative for visual placement. MIDI grading
+    # uses the same semantic beat axis but quantized tuplets may differ by a
+    # few milliseconds; the label must follow the notehead itself.
+    for event in model.get("notation_events", []):
+        if not event is Dictionary or str(event.get("kind","")) != "note" or \
+                not bool(event.get("is_attack",false)):
             continue
-        if hand != "both" and str(candidate.get("hand","")) != hand:
+        if hand != "both" and str(event.get("hand",event.get("staff",""))) != hand:
             continue
-        var onset: float = float(candidate.get("onset_beats",INF))
-        if is_finite(onset):
-            earliest = minf(earliest,onset)
-    if not is_finite(earliest):
-        return 0.0
-    for measure in model.get("measures", []):
-        if measure is Dictionary and \
-                earliest >= float(measure.get("start_beat",-INF)) - .0001 and \
-                earliest < float(measure.get("end_beat",-INF)) - .000001:
-            return float(measure.get("start_beat",0.0))
-    return 0.0
+        var beat: float = float(event.get("beat",INF))
+        if is_finite(beat) and beat >= 0.0:
+            earliest = minf(earliest,beat)
+    if is_finite(earliest):
+        return earliest
+    # A minimal MIDI source fixture need not carry its printed symbols yet.
+    # Source attacks remain real; rest-only models do not.
+    for note in model.get("notes", []):
+        if not note is Dictionary:
+            continue
+        if hand != "both" and str(note.get("hand","")) != hand:
+            continue
+        var beat: float = float(note.get("onset_beats",INF))
+        if is_finite(beat) and beat >= 0.0:
+            earliest = minf(earliest,beat)
+    return earliest
+
+
+# The score and each pre-engraved future stage can use different note spacing.
+# Project a marker with the SAME pixels/beat as its owner renderer.
+static func marker_x(at: float, visual_beat: float,
+        density: float, width: float) -> float:
+    return width*.42 + (at-visual_beat)*density
 
 func present(state: Dictionary, visual_beat: float,
         current_origin: float, next_origin: float = INF,
-        next_label: String = "") -> void:
+        next_label: String = "", next_density: float = NAN) -> void:
+    var upcoming_density: float = next_density if is_finite(next_density) and next_density > 0.0 else _density
     var presented_label: String = "%s · %s" % [
         str(state.get("hand","both")).capitalize(),
         str(state.get("stage_label",""))]
@@ -46,6 +65,7 @@ func present(state: Dictionary, visual_beat: float,
             _total != int(state.get("lesson_steps",0)) or \
             _label != presented_label or \
             _next_label != next_label or \
+            absf(_next_density-upcoming_density) > .001 or \
             absf(_current_start-current_origin) > .001 or \
             _next_start != next_origin or \
             absf(_beat-visual_beat) > .0001)
@@ -54,6 +74,7 @@ func present(state: Dictionary, visual_beat: float,
     _total = int(state.get("lesson_steps",0))
     _label = presented_label
     _next_label = next_label
+    _next_density = upcoming_density
     _current_start = current_origin
     _next_start = next_origin
     _beat = visual_beat
@@ -65,10 +86,10 @@ func set_density(pixels: float) -> void:
         _density = pixels
         queue_redraw()
 
-func _marker(at: float, label: String, tint: Color) -> void:
+func _marker(at: float, label: String, tint: Color, density: float) -> void:
     if not is_finite(at):
         return
-    var x: float = size.x*.42 + (at-_beat)*_density
+    var x: float = marker_x(at,_beat,density,size.x)
     if x < -10.0 or x > size.x+10.0:
         return
     var font: Font = ThemeDB.fallback_font
@@ -80,5 +101,5 @@ func _marker(at: float, label: String, tint: Color) -> void:
 func _draw() -> void:
     if not _loaded or _step <= 0:
         return
-    _marker(_current_start,"%d/%d · %s" % [_step,_total,_label],INK)
-    _marker(_next_start,"%d/%d · %s" % [_step+1,_total,_next_label],FUTURE)
+    _marker(_current_start,"%d/%d · %s" % [_step,_total,_label],INK,_density)
+    _marker(_next_start,"%d/%d · %s" % [_step+1,_total,_next_label],FUTURE,_next_density)
