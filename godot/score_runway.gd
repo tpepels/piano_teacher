@@ -6,6 +6,7 @@ const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
 signal renderer_promoted(new_renderer)
+signal preload_problem(message: String)
 
 var stage
 var score_session
@@ -26,6 +27,7 @@ var _next_poll_ms := 0
 var _acknowledged := false
 var _ack_waiting := false
 var _failure := ""
+var _reported_failure := ""
 var _visual_beat := 0.0
 
 func configure(host: Node, practice_stage, session, bus: Node) -> void:
@@ -57,6 +59,7 @@ func _discard() -> void:
     _ack_waiting = false
     _next_poll_ms = 0
     _failure = ""
+    _reported_failure = ""
 
 func _clear_tail() -> void:
     if _tail != null and is_instance_valid(_tail):
@@ -94,6 +97,9 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         return
     if str(value.get("status","")) != "ready":
         _failure = str(value.get("error","Next score cannot be engraved"))
+        if str(value.get("status","")) == "error" and _failure != _reported_failure:
+            _reported_failure = _failure
+            preload_problem.emit("Next lesson score failed: " + _failure)
         _next_poll_ms = Time.get_ticks_msec() + 3000
         return
     if int(value.get("revision",-1)) != _source_revision + 1 or \
@@ -179,9 +185,13 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
     var stride: float = float(state.get("practice_timeline",{}).get("stride_beats",0.0))
     if stride <= 0.0:
         return
-    var next_start: float = (float(state.get("visual_offset_beats",0.0)) +
+    # A delayed, exact-score handoff extends the empty scrolling runway.
+    # The backend publishes the same global beat it adopts as the new
+    # renderer's origin; no second clock or reset is introduced here.
+    var natural_start: float = (float(state.get("visual_offset_beats",0.0)) +
         float(state.get("duration_beats",0.0)) +
         .20 * float(state.get("bpm",60.0)) / 60.0)
+    var next_start: float = float(state.get("next_stage_start_beat", natural_start))
     var local_beat: float = global_beat - next_start
     _future.present_clock(local_beat,local_beat)
     if _future.retained_ready() and not _acknowledged and not _ack_waiting \
