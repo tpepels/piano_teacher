@@ -186,6 +186,8 @@ class PracticeEngine:
         self._stage_handoff_visual_beat: float | None = None
         # Pin the renderer-acknowledged source assets through settlement.
         self._stage_handoff_assets: tuple[tuple, ScoreArtifacts] | None = None
+        # Final native renderer failures are tied to one exact future step.
+        self._native_preload_failure: tuple[str, int, str, int, str] | None = None
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
@@ -618,6 +620,7 @@ class PracticeEngine:
         self._prepared_stage_published = False
         self._stage_handoff_visual_beat = None
         self._stage_handoff_assets = None
+        self._native_preload_failure = None
         self.guided_session.stop()
         self.visual_transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
@@ -1471,6 +1474,11 @@ class PracticeEngine:
                 if not prepared:
                     self._stage_handoff_assets = None
                     failure = self.future_score.failure(selection)
+                    reported = self._native_preload_failure
+                    if (reported is not None and reported[:4] == (
+                            self.fingerprint, selection.revision,
+                            selection.stage_key, _number)):
+                        failure = failure or reported[4]
                     if accepted and self.future_score.ready(selection):
                         failure = failure or "Prepared stage assets were lost"
                     if failure is not None:
@@ -2040,6 +2048,27 @@ class PracticeEngine:
             label = self._stage_runway_label(future_step)
             return self.future_score.ensure(
                 selection, number=number, label=label)
+
+    def report_preload_failure(self, *, fingerprint: str, step_number: int,
+                               revision: int, error: str) -> dict:
+        """Fail closed on an exact Godot native-ink compilation failure.
+
+        An old response cannot poison another piece or the next stage.
+        The current scored take still finishes; the failure is consumed only
+        at its already scheduled transition boundary.
+        """
+        with self.lock:
+            planned = self._next_stage_selection()
+            if planned is None:
+                return {"accepted": False}
+            selection, number = planned
+            if (fingerprint != self.fingerprint or number != step_number or
+                    selection.revision != revision):
+                return {"accepted": False}
+            message = str(error).strip()[:400] or "Native score compilation failed"
+            self._native_preload_failure = (
+                self.fingerprint, revision, selection.stage_key, number, message)
+            return {"accepted": True, "revision": revision, "step_number": number}
 
     def acknowledge_preloaded_stage(self, *, stage_key: str,
                                     revision: int) -> dict:
