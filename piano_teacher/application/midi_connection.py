@@ -100,6 +100,8 @@ class MidiConnection:
 
     @contextmanager
     def selecting(self, name: str, *, callback):
+        if not isinstance(name, str):
+            raise ValueError("MIDI input name must be text")
         result = DeviceSelection()
         port = self._release("device_changed")
         try:
@@ -108,8 +110,6 @@ class MidiConnection:
             self._close(port)
         self.retry_after = 0.0
         self.next_scan_at = time.monotonic()+self.SCAN_SECONDS
-        if not isinstance(name, str):
-            raise ValueError("MIDI input name must be text")
         if name:
             if not self.enabled:
                 raise ValueError("MIDI input is disabled")

@@ -28,6 +28,8 @@ var runway_overlay := false
 var runway_origin_beat := 0.0
 var runway_cutoff_beat := INF
 var fingering_pass_clocks: Array = []
+var _ready_preview_key: Array = []
+var _ready_preview_beat := 0.0
 
 func set_transport_overlay_enabled(enabled: bool) -> void:
     transport_overlay_enabled = enabled
@@ -46,6 +48,7 @@ var glyphs = VerovioGlyphs.new():
 var layout = ScoreLayout.new(timeline,glyphs):
     set(value):
         layout = value
+        _ready_preview_key.clear()
         layout.set_viewport(size)
         if ink_geometry != null:
             ink_geometry.score = value
@@ -128,6 +131,7 @@ func _init() -> void:
     tooltip_text = "Right-click a note or tap a finger number to change its fingering"
 
 func clear_score() -> void:
+    _ready_preview_key.clear()
     runway_origin_beat = 0.0
     runway_cutoff_beat = INF
     runway_overlay = false
@@ -197,6 +201,7 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
     return true
 
 func load_score(candidate: Dictionary) -> bool:
+    _ready_preview_key.clear()
     connector_geometry.clear_cache()
     annotations.clear()
     preparation_history.clear()
@@ -756,6 +761,19 @@ func _place_retained_score(playhead_x: float, camera_clock: float,
         active_segments[recovery_rest] = true
     _sync_retained_visibility(active_segments)
 
+func displayed_scroll_beat() -> float:
+    # READY may expose an attack beyond a long opening rest. All overlays
+    # must share this display-only camera while source transport stays put.
+    if running or paused:
+        return visual_scroll_beat
+    var key: Array = [active_hand,play_from_beat,size.x,timeline.pixels_per_beat]
+    if key != _ready_preview_key:
+        _ready_preview_beat = IdlePreview.beat_for_ready(
+            layout.ordered_events,active_hand,play_from_beat,
+            size.x,timeline.pixels_per_beat,PLAYHEAD_FRACTION)
+        _ready_preview_key = key
+    return _ready_preview_beat
+
 func _draw() -> void:
     if layout.size != size:
         layout.set_viewport(size)
@@ -780,9 +798,7 @@ func _draw() -> void:
     var playhead_x: float = size.x * PLAYHEAD_FRACTION
     var ready_preview_beat: float = NAN
     if not running and not paused:
-        ready_preview_beat = IdlePreview.beat_for_ready(
-            layout.ordered_events,active_hand,play_from_beat,
-            size.x,timeline.pixels_per_beat,PLAYHEAD_FRACTION)
+        ready_preview_beat = displayed_scroll_beat()
     var camera_clock: float = (clock_beat if running or paused else
         ready_preview_beat-play_from_beat)
     # A quiet pool of light marks the strike without hiding any engraved ink.

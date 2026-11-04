@@ -127,14 +127,12 @@ def test_poll_schedule_does_not_scan_or_reconnect_without_explicit_preference(mo
     assert backend.events == []  # Scheduling is independent of the ALSA request.
 
 
-@pytest.mark.parametrize("name,message", [(None, "must be text"), (42, "must be text"),
-                                          ("Chosen piano", "MIDI input is disabled")])
-def test_invalid_selection_still_releases_old_device_before_validation(monkeypatch, name, message):
+def test_disabled_named_selection_releases_old_device_before_backend_error(monkeypatch):
     device, backend, clock = owner(monkeypatch, enabled=False)
     previous = Port(backend.events, fail_close=True)
     device.port, device.device = previous, "Previous piano"
-    with pytest.raises(ValueError, match=message):
-        with device.selecting(name, callback=lambda _: None):
+    with pytest.raises(ValueError, match="MIDI input is disabled"):
+        with device.selecting("Chosen piano", callback=lambda _: None):
             backend.events.append("cancel attempt")
     assert backend.events == ["cancel attempt", "close"]
     assert device.port is None and device.device == ""

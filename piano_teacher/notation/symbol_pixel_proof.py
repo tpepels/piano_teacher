@@ -811,7 +811,9 @@ def verify_connector_pixels(xml: str, folder: Path, *, hand='both', constructs=(
     # ownership. No renderer coordinate or atlas geometry can grant credit.
     if 'slur' in constructs:
         from .connector_difference_pixels import measure_slur_interventions
-        causal = measure_slur_interventions(xml,written,pairs,folder)
+        causal = measure_slur_interventions(
+            xml, written, pairs, folder, register_head=_connector_head,
+            measure_shift=_connector_shift, playhead=PLAYHEAD)
         for pair,row in zip(pairs,observations):
             if row['construct'] != 'slur' or pair.get('reason'):
                 continue

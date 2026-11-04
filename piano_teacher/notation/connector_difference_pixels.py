@@ -35,16 +35,14 @@ def _runs(mask):
     return out
 
 
-def measure_slur_interventions(xml, written, pairs, folder):
+def measure_slur_interventions(xml, written, pairs, folder, *,
+                               register_head, measure_shift, playhead):
     """Return physically verified per-source slur differences, or nothing.
 
     All expected source slurs must have unique controls, because a missing
     competing slur makes the exclusivity comparison unsound. Source ties do
     not need suppression; they remain under the unsuppressed curve verifier.
     """
-    from .symbol_pixel_proof import (PLAYHEAD, _connector_head,
-                                     _connector_shift)
-
     folder = Path(folder)
     report_file = folder / "native-overlay-report.json"
     if not report_file.is_file():
@@ -107,18 +105,18 @@ def measure_slur_interventions(xml, written, pairs, folder):
                     source_file = folder / f"native-{onset:.2f}.png"
                     with Image.open(source_file) as img:
                         source = img.convert("RGB")
-                    anchor = _connector_head(source, written, note,
-                                             source.width*PLAYHEAD)
+                    anchor = register_head(source, written, note,
+                                           source.width*playhead)
                     if anchor is None:
                         return {}
                     if onset not in shifts:
                         shifts[onset] = (
                             {"shift": 0} if abs(onset-clock) < 1e-8
-                            else _connector_shift(common, source))
+                            else measure_shift(common, source))
                     shift = shifts[onset]
                     if shift is None:
                         return {}
-                    found = _connector_head(
+                    found = register_head(
                         common, written, note, anchor["x"]+shift["shift"])
                     if found is None:
                         return {}

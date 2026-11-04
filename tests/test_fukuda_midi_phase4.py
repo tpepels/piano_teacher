@@ -493,6 +493,45 @@ def test_recorded_midi_sustain_pedal_extends_note_and_respects_channels(tmp_path
         load_performed_midi(file)
 
 
+@pytest.mark.parametrize("held,error_at,first_bar", [
+    (((0.0, 6.0),), 4.0, 1),
+    (((0.0, 5.0), (4.0, 9.0)), 8.0, 1),
+    (((0.0, 4.0),), 4.0, 2),
+])
+def test_fukuda_remedial_entry_preserves_crossing_source_sustains(
+        held, error_at, first_bar):
+    from piano_teacher.music import Piece
+
+    held_notes = tuple(Note(start, end, 60 + i * 4, 0, 0,
+                            "right", f"held-{i}")
+                       for i, (start, end) in enumerate(held))
+    errors = tuple(Note(error_at + i, error_at + i + .5, 48 + i, 1, 1,
+                        "left", f"error-{i}") for i in range(3))
+    notes = (*held_notes, *errors)
+    piece = Piece("Source-safe Fukuda entry", 80, notes,
+                  (Phrase(1, 1, 4, 0, 16, notes),),
+                  bar_boundaries=(0, 4, 8, 12, 16),
+                  source_format="midi", midi_ticks_per_beat=480)
+    definition = FukudaMidiLessonGenerator(
+        mistakes=frozenset({errors[0].source_id})).generate(piece)
+    learn, = (ex for ex in definition.exercises if ex.kind == "learn")
+
+    assert learn.phrase.first_bar == first_bar
+    assert learn.phrase.start == piece.bar_boundaries[first_bar - 1]
+    assert not any(n.start < learn.phrase.start < n.end for n in piece.notes)
+    assert all(n.end <= learn.phrase.end for n in learn.phrase.notes)
+    selected = tuple(n for n in piece.notes
+                     if learn.phrase.start <= n.start < learn.phrase.end)
+    assert learn.phrase.notes == selected
+    if first_bar == 1:
+        assert learn.hands == ("right", "left", "both")
+        assert definition.stages(learn, "right")[-1].variant.notes == held_notes
+        assert definition.stages(learn, "both")[-1].variant.notes == selected
+    else:
+        assert learn.hands == ("left",)
+    assert definition.exercises[-1].phrase.notes == piece.notes
+
+
 def test_retriggered_pedal_pitch_closes_previous_sounding_note(tmp_path):
     from piano_teacher.fukuda_midi_performance import load_performed_midi
     midi = mido.MidiFile(type=0, ticks_per_beat=480)

@@ -11,6 +11,7 @@ var _next_label := ""
 var _current_start := 0.0
 var _next_start := INF
 var _beat := 0.0
+var _current_beat := 0.0
 var _density := 96.0
 var _next_density := 96.0
 
@@ -55,7 +56,9 @@ static func marker_x(at: float, visual_beat: float,
 
 func present(state: Dictionary, visual_beat: float,
         current_origin: float, next_origin: float = INF,
-        next_label: String = "", next_density: float = NAN) -> void:
+        next_label: String = "", next_density: float = NAN,
+        current_visual_beat: float = NAN) -> void:
+    var current_camera: float = current_visual_beat if is_finite(current_visual_beat) else visual_beat
     var upcoming_density: float = next_density if is_finite(next_density) and next_density > 0.0 else _density
     var presented_label: String = "%s · %s" % [
         str(state.get("hand","both")).capitalize(),
@@ -68,6 +71,7 @@ func present(state: Dictionary, visual_beat: float,
             absf(_next_density-upcoming_density) > .001 or \
             absf(_current_start-current_origin) > .001 or \
             _next_start != next_origin or \
+            absf(_current_beat-current_camera) > .0001 or \
             absf(_beat-visual_beat) > .0001)
     _loaded = bool(state.get("loaded",false))
     _step = int(state.get("lesson_step",0))
@@ -78,6 +82,7 @@ func present(state: Dictionary, visual_beat: float,
     _current_start = current_origin
     _next_start = next_origin
     _beat = visual_beat
+    _current_beat = current_camera
     if changed:
         queue_redraw()
 
@@ -86,10 +91,11 @@ func set_density(pixels: float) -> void:
         _density = pixels
         queue_redraw()
 
-func _marker(at: float, label: String, tint: Color, density: float) -> void:
+func _marker(at: float, label: String, tint: Color, density: float,
+        visual_beat: float) -> void:
     if not is_finite(at):
         return
-    var x: float = marker_x(at,_beat,density,size.x)
+    var x: float = marker_x(at,visual_beat,density,size.x)
     if x < -10.0 or x > size.x+10.0:
         return
     var font: Font = ThemeDB.fallback_font
@@ -101,5 +107,5 @@ func _marker(at: float, label: String, tint: Color, density: float) -> void:
 func _draw() -> void:
     if not _loaded or _step <= 0:
         return
-    _marker(_current_start,"%d/%d · %s" % [_step,_total,_label],INK,_density)
-    _marker(_next_start,"%d/%d · %s" % [_step+1,_total,_next_label],FUTURE,_next_density)
+    _marker(_current_start,"%d/%d · %s" % [_step,_total,_label],INK,_density,_current_beat)
+    _marker(_next_start,"%d/%d · %s" % [_step+1,_total,_next_label],FUTURE,_next_density,_beat)

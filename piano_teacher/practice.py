@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Callable, Literal
-from .music import Note, Phrase, Piece
+from .music import Note, Phrase
 from .lesson_settings import SETTINGS
 from .grading_tolerance import onset_tolerance, duration_tolerance
 
@@ -170,64 +170,3 @@ class Recorder:
             index = self.active[pitch].popleft()
             press = self.presses[index]
             self.presses[index] = PlayedNote(press.pitch, press.onset, at_seconds)
-
-
-class Curriculum:
-    """Right -> left -> both; two clean plays per tempo before progressing."""
-
-    def __init__(self, piece: Piece) -> None:
-        self.piece = piece
-        self.phrase_index = 0
-        self.phase_index = 0
-        self.clean_streak = 0
-        self.start_bpm = min(piece.bpm, max(30, min(72, round(piece.bpm * 0.6))))
-        self.bpm = self.start_bpm
-        self._skip_empty()
-
-    @property
-    def phrase(self) -> Phrase:
-        return self.piece.phrases[self.phrase_index]
-
-    @property
-    def phases(self) -> list[str]:
-        hands = {n.hand for n in self.phrase.notes}
-        return [hand for hand in ("right", "left", "both")
-                if hand == "both" or hand in hands]
-
-    @property
-    def hand(self) -> str:
-        return self.phases[self.phase_index]
-
-    def _skip_empty(self) -> None:
-        if not self.piece.phrases:
-            raise ValueError("No practice phrases were found")
-        self.phase_index = min(self.phase_index, len(self.phases) - 1)
-
-    def jump(self, offset: int) -> None:
-        self.phrase_index = max(0, min(len(self.piece.phrases) - 1, self.phrase_index + offset))
-        self.phase_index = 0
-        self.bpm = self.start_bpm
-        self.clean_streak = 0
-        self._skip_empty()
-
-    def completed(self, result: Assessment) -> str:
-        if not result.clean:
-            self.clean_streak = 0
-            return "Repeat this passage"
-        self.clean_streak += 1
-        if self.clean_streak < 2:
-            return "Once more at this tempo"
-        self.clean_streak = 0
-        if self.bpm < self.piece.bpm:
-            self.bpm = min(self.piece.bpm, max(self.bpm + 4, round(self.bpm * 1.12)))
-            return f"Tempo increased to {self.bpm} BPM"
-        if self.phase_index + 1 < len(self.phases):
-            self.phase_index += 1
-            self.bpm = self.start_bpm
-            return f"Now practice {self.hand} hand"
-        if self.phrase_index + 1 < len(self.piece.phrases):
-            self.phrase_index += 1
-            self.phase_index = 0
-            self.bpm = self.start_bpm
-            return "Next passage"
-        return "Piece complete - all passages passed"

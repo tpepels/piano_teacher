@@ -297,6 +297,13 @@ def _fukuda_error_sections(piece: Piece, mistakes: frozenset[str]) -> tuple[Exer
     for bar in sorted(errored):
         first=max(1,bar)
         last=min(count,first+1)
+        # An error bar may begin while an earlier MIDI note is sounding.
+        # Include its original attack, then recheck the earlier boundary:
+        # overlapping sustains can require more than one preceding bar.
+        while first>1 and any(
+                n.start<grid[first-1]-1e-7 and n.end>grid[first-1]+1e-7
+                for n in piece.notes):
+            first-=1
         while last<count and last-first+1<8:
             chosen=tuple(n for n in piece.notes
                          if grid[first-1]-1e-7<=n.start<grid[last]-1e-7)

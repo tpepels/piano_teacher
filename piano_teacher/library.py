@@ -80,8 +80,18 @@ class ScoreLibrary:
         if (recent and not is_warmup(recent)
                 and Path(recent).suffix.lower() not in FORMATS):
             self.settings['last_piece'] = ''
-        self._folder = self._normalize_folder(self.settings['music_dir'], require_exists=False)
+        try:
+            self._folder = self._normalize_folder(
+                self.settings['music_dir'], require_exists=False)
+        except (OSError, RuntimeError, ValueError):
+            self._folder = self._normalize_folder(
+                str(default_music_dir()), require_exists=False)
         self.settings['music_dir'] = str(self._folder)
+        try:
+            self.settings['midi_offset_ms'] = self._validate_midi_offset(
+                self.settings['midi_offset_ms'])
+        except ValueError:
+            self.settings['midi_offset_ms'] = 0
 
     @staticmethod
     def _normalize_folder(folder: str, *, require_exists: bool = True) -> Path:
@@ -93,6 +103,12 @@ class ScoreLibrary:
         if path.exists() and not path.is_dir():
             raise ValueError('Music folder must be a directory')
         return path
+
+    @staticmethod
+    def _validate_midi_offset(offset: object) -> int:
+        if type(offset) is not int or not 0 <= offset <= 250:
+            raise ValueError('MIDI offset must be 0–250 milliseconds')
+        return offset
 
     def propose_update(self, **changes) -> dict:
         """Validate a complete prospective configuration without persisting it.
@@ -123,10 +139,8 @@ class ScoreLibrary:
                 raise ValueError('Metronome must be true or false')
             new['metronome'] = changes['metronome']
         if 'midi_offset_ms' in changes:
-            offset = changes['midi_offset_ms']
-            if type(offset) is not int or not 0 <= offset <= 250:
-                raise ValueError('MIDI offset must be 0–250 milliseconds')
-            new['midi_offset_ms'] = offset
+            new['midi_offset_ms'] = self._validate_midi_offset(
+                changes['midi_offset_ms'])
         if 'exercise_strategy' in changes:
             selected = changes['exercise_strategy']
             if type(selected) is not str or selected not in {x['id'] for x in available_strategies()}:

@@ -169,6 +169,7 @@ class PracticeEngine:
         self.score_revision = 0
         self.awaiting_score_revision: int | None = None
         self.pending_result = None
+        self._pending_assessed_bpm: float | None = None
         self.feedback_marks: list[dict] = []
         self.feedback_unmapped = 0
         self.midi = MidiConnection(enabled=enable_midi)
@@ -524,6 +525,7 @@ class PracticeEngine:
                 self.next_action = "Press Start to practice."
                 self.score_revision += 1
                 self.pending_result = None
+                self._pending_assessed_bpm = None
                 self.feedback_marks = []
                 self.feedback_unmapped = 0
             if diagnostics:
@@ -638,6 +640,7 @@ class PracticeEngine:
         self.awaiting_score_revision=None
         self.recorder=None
         self.pending_result=None
+        self._pending_assessed_bpm = None
         self.feedback_marks=[]
         self.feedback_unmapped=0
         self.recovery_notice = None
@@ -1027,6 +1030,7 @@ class PracticeEngine:
                 self.retry_range = None
                 outcome = commit_assessed_result(
                     plan=p, result=result, fingerprint=self.fingerprint,
+                    assessed_bpm=self._pending_assessed_bpm,
                     automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
                     observe=self.practice_policy.observe,
                     plan_remediation=self.remediation_planner.plan)
@@ -1115,6 +1119,7 @@ class PracticeEngine:
             self.score_artifacts = score_artifacts_before
             raise
         self.pending_result = None
+        self._pending_assessed_bpm = None
         self._stage_handoff_visual_beat = None
         self._stage_handoff_assets = None
         return outcome.message
@@ -1146,6 +1151,7 @@ class PracticeEngine:
             self.auto = mode == "practice" and not self.preview_only
             self.awaiting_score_revision = None
             self.pending_result = None
+            self._pending_assessed_bpm = None
             self.feedback_marks = []
             self.feedback_unmapped = 0
             self.recorder = Recorder()
@@ -1372,6 +1378,7 @@ class PracticeEngine:
             self._deferred_score_ack = None
             self.awaiting_score_revision = None
             self.pending_result = None
+            self._pending_assessed_bpm = None
             self.visual_transport._retry_previous_pass = False
             self._guided_recovery_pending = False
             self._schedule_preparation(target, now=sampled, from_visual=position,
@@ -1418,7 +1425,8 @@ class PracticeEngine:
         p=self.plan
         if not p:
             raise ValueError("Open a piece first")
-        change = prepare_stage_change(p, action, kwargs)
+        change = prepare_stage_change(
+            p, action, kwargs, warmup=self.is_builtin_warmup)
         was_guided = self.mode == "learn"
         guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
         guided_return = self._guided_return
@@ -1758,6 +1766,9 @@ class PracticeEngine:
             gap_beats=self.visual_transport.visual_gap_beats, bpm=self.plan.bpm,
             feedback_seconds=self.feedback_seconds)
         self.pending_result = result
+        # The response policy may slow the next retry before this take is
+        # committed. Durable evidence must retain the tempo actually assessed.
+        self._pending_assessed_bpm = self.plan.bpm
         whole_recovery = None
         assessed_bpm = self.plan.bpm
         if decision.rewind and not self.is_builtin_warmup:
