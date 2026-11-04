@@ -1759,6 +1759,7 @@ class PracticeEngine:
             feedback_seconds=self.feedback_seconds)
         self.pending_result = result
         whole_recovery = None
+        assessed_bpm = self.plan.bpm
         if decision.rewind and not self.is_builtin_warmup:
             whole_recovery = whole_response(
                 resolve_mistake_policy(
@@ -1794,9 +1795,7 @@ class PracticeEngine:
             self.next_action = (
                 "Repeat the difficult measure at %d BPM, then play the "
                 "whole passage." % whole_recovery.bpm)
-        elif (whole_recovery is not None and
-              whole_recovery.bpm < self.plan.target_bpm and
-              whole_recovery.mode == "slow-practice"):
+        elif whole_recovery is not None and whole_recovery.bpm < assessed_bpm:
             self.next_action = "Retry more slowly at %d BPM." % whole_recovery.bpm
         # A fully pre-rendered next stage on the third accepted target-speed
         # take is allowed to advance on the first post-grading tick. Failed
