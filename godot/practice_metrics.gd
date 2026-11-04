@@ -54,7 +54,11 @@ func _draw() -> void:
     _text("Accuracy",center+Vector2(-25,17),10,Design.SECONDARY_INK)
     _text("Performance",Vector2(96,24),14,Design.STONE,size.x-108)
     _text("%d / %d accepted passes" % [accepted_passes,required],Vector2(96,45),12,Design.SECONDARY_INK,size.x-108)
-    var details := "%d / %d correct" % [int(result.get("correct",0)),total] if total > 0 else "Preview · ungraded" if ungraded else "Awaiting assessed take"
+    var details := "%d/%d correct" % [int(result.get("correct",0)),total] if total > 0 else "Preview · ungraded" if ungraded else "Awaiting assessed take"
+    if total > 0 and result.has("missed") and result.has("wrong"):
+        details = "%d/%d correct · %d missed · %d wrong" % [
+            int(result.get("correct",0)),total,
+            int(result.get("missed",0)),int(result.get("wrong",0))]
     _text(details,Vector2(96,63),12,Design.SECONDARY_INK,size.x-108)
     var x := 100.0
     for item in [["Correct",Design.MINT],["Missed",Design.CORAL],["Timing",Design.AMBER]]:
