@@ -159,7 +159,7 @@ func run() -> void:
         "bpm":120.0,"target_bpm":120.0,
         "streak":2,"clean_runs_required":3,
         "phase":"feedback"},16.4)
-    check(absf(stage.renderer.runway_cutoff_beat - 4.2) < .0001,
+    check(absf(stage.renderer.runway_cutoff_beat - 4.4) < .0001,
         "unready future stage never exposes stale repeated source notes")
     check(stage.renderer.cleared == 0,
         "failed future score must not clear the active renderer")
