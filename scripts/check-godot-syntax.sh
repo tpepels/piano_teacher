@@ -14,6 +14,9 @@ else
 fi
 for script in \
   res://main.gd \
+  res://practice_screen.gd \
+  res://practice_score_stage.gd \
+  res://settings_screen.gd \
   res://practice_frame_coordinator.gd \
   res://practice_state_presenter.gd \
   res://command_failure_presenter.gd \
