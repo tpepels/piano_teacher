@@ -50,10 +50,13 @@ class Prepared:
     def __init__(self, engine):
         self.assets = ScoreArtifacts(engine.preprocessing)
         self.adoptions = []
+        self.warmed = []
     def ready(self, _selection):
         return True
-    def warm(self, _selection, *, number, label):
-        pass
+    def warm(self, selection, *, number, label):
+        self.warmed.append((selection, number, label))
+    def failure(self, _selection):
+        return None
     def adopt(self, selection):
         self.adoptions.append(selection)
         return self.assets
@@ -102,26 +105,67 @@ def test_precompiled_target_stage_replaces_current_without_score_ack_gap(tmp_pat
         engine.db.close()
 
 
-def test_unready_future_keeps_safe_revision_ack_handshake(tmp_path):
+def test_unready_future_extends_scrolling_runway_until_stage_is_compiled(tmp_path):
     engine = _engine(tmp_path)
     try:
+        class Late(Prepared):
+            available = False
+            def ready(self, _selection):
+                return self.available
+            def adopt(self, selection):
+                return super().adopt(selection) if self.available else None
+
+        late = Late(engine)
+        engine.future_score = late
         old_stage = engine.plan.identity
         old_revision = engine.score_revision
         old_transport = engine.transport_id
+        selection, number = engine._next_stage_selection()
         complete_at = _finish(engine)
-        # The required full rest still separates any unprepared transition.
         assert engine.plan.identity == old_stage
         assert engine.pending_result is not None
-        assert engine.visual_transport.next_at > complete_at
-        old_deadline = engine.visual_transport.next_at
-        engine._advance_pending_feedback(old_deadline)
-        assert engine.plan.identity != old_stage
-        assert engine.score_revision == old_revision + 1
-        assert engine.awaiting_score_revision == engine.score_revision
-        assert not engine.auto
-        assert not engine.running
+        deadline = engine.visual_transport.next_at
+        assert deadline > complete_at
+        beat_at_deadline = engine._visual_motion(deadline)[0]
+        engine._advance_pending_feedback(deadline)
+        # No replacement score, revision reset, hidden count-in or grading
+        # before native notation has actually been acknowledged.
+        assert engine.plan.identity == old_stage
+        assert engine.score_revision == old_revision
+        assert engine.awaiting_score_revision is None
+        assert engine.auto and not engine.running
+        assert engine.pending_result is not None
         assert engine.transport_id == old_transport
-        assert engine.visual_transport.visual_offset_beats == 0.0
+        assert engine._visual_motion(deadline + .05)[0] > beat_at_deadline
+        assert engine.visual_transport.next_at == pytest.approx(deadline + .10)
+
+        late.available = True
+        assert engine.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key, revision=selection.revision)["accepted"]
+        ready_at = deadline + .10
+        before = engine._visual_motion(ready_at)[0]
+        engine._advance_pending_feedback(ready_at)
+        start_beat = before + 2.0
+        start_at = engine.visual_transport.next_at
+        assert start_at == pytest.approx(ready_at + 2 * 60.0 / engine.plan.bpm)
+        assert engine._stage_handoff_visual_beat == pytest.approx(start_beat)
+        assert engine._state_snapshot()["next_stage_start_beat"] == pytest.approx(start_beat)
+        assert engine._visual_motion(start_at)[0] == pytest.approx(start_beat)
+
+        engine._advance_pending_feedback(start_at)
+        assert engine.plan.lesson_step_number == number
+        assert engine.plan.mastered
+        assert engine.score_revision == old_revision + 1
+        assert engine.awaiting_score_revision is None
+        assert engine.score_artifacts is late.assets
+        assert engine.running and engine.auto
+        assert engine.transport_id == old_transport + 1
+        assert engine.visual_transport.run_at == pytest.approx(start_at)
+        assert engine.visual_transport.visual_offset_beats == pytest.approx(start_beat)
+        assert engine._visual_motion(start_at)[0] == pytest.approx(start_beat)
+        assert engine.count_in_beats == 0
+        assert engine.pending_result is None
+        assert "next_stage_start_beat" not in engine._state_snapshot()
     finally:
         engine.db.close()
 
@@ -195,7 +239,7 @@ def test_preloaded_stage_continues_in_guided_origin_practice(tmp_path):
         engine.db.close()
 
 
-def test_acknowledged_stage_without_adoptable_ink_falls_back_to_load(tmp_path):
+def test_acknowledged_stage_without_adoptable_ink_fails_closed(tmp_path):
     engine = _engine(tmp_path)
     try:
         class Unavailable(Prepared):
@@ -208,11 +252,13 @@ def test_acknowledged_stage_without_adoptable_ink_falls_back_to_load(tmp_path):
             stage_key=selection.stage_key, revision=selection.revision)
         first_revision = engine.score_revision
         _finish(engine)
-        assert engine.score_revision == first_revision + 1
-        assert engine.awaiting_score_revision == engine.score_revision
-        assert not engine.running and not engine.auto
+        assert engine.score_revision == first_revision
+        assert engine.awaiting_score_revision is None
+        assert not engine.running and engine.visual_transport.paused
+        assert engine.visual_transport.next_at == 0.0
         assert engine.visual_transport.visual_offset_beats == 0.0
-        assert engine.pending_result is None
+        assert engine.pending_result is not None
+        assert engine.feedback == "Cannot prepare the next lesson score"
     finally:
         engine.db.close()
 
@@ -233,5 +279,24 @@ def test_manual_stop_and_restart_do_not_waste_an_already_prepared_step(tmp_path)
         _finish(engine)
         assert engine.plan.lesson_step_number == number
         assert engine.awaiting_score_revision is None
+    finally:
+        engine.db.close()
+
+def test_second_warmed_stage_has_its_actual_future_revision(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        prepared = Prepared(engine)
+        engine.future_score = prepared
+        first, first_number = engine._next_stage_selection()
+        second, second_number = engine._next_stage_selection(offset=2)
+        assert second_number == first_number + 1
+        assert second.revision == first.revision + 1
+        engine.acknowledge_preloaded_stage(
+            stage_key=first.stage_key, revision=first.revision)
+        assert prepared.warmed[0][0].identity == second.identity
+        _finish(engine)
+        current_next, next_number = engine._next_stage_selection()
+        assert next_number == second_number
+        assert current_next.identity == second.identity
     finally:
         engine.db.close()
