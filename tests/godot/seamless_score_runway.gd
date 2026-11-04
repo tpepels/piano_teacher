@@ -85,6 +85,20 @@ func run() -> void:
     stage.score_frame.add_child(future)
     runway._future = future
     var old_renderer = stage.renderer
+    # A late next-stage preload moves its global origin forward without
+    # changing the scrolling source camera or presenting a stale score.
+    runway.present_frame({
+        "loaded":true,"practice_timeline":{"stride_beats":4.0},
+        "visual_offset_beats":0.0,"duration_beats":4.0,
+        "next_stage_start_beat":21.75,"bpm":120.0,
+        "streak":2,"clean_runs_required":3,"target_bpm":120.0,
+        "phase":"feedback"},20.0)
+    check(absf(future.previous_camera + 1.75) < .0001,
+        "delayed future ink follows the authoritative global start beat")
+    check(absf(old_renderer.runway_cutoff_beat - 21.75) < .0001,
+        "outgoing notation clips only when delayed future ink begins")
+    check(old_renderer.cleared == 0,
+        "extending an unprepared runway never clears the active score")
     var proposed := {
         "loaded":true,"revision":2,"piece_fingerprint":"piece-a",
         "lesson_step":2,"visual_offset_beats":12.17}
