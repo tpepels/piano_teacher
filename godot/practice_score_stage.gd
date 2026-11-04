@@ -10,6 +10,7 @@ const NativeNotation := preload("res://notation/native/view.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameImpactCallout := preload("res://game_impact_callout.gd")
 const GameCountIn := preload("res://game_countin.gd")
+const StepTimeline := preload("res://score_step_timeline.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 signal navigation_requested(destination: String)
 signal score_retry_requested
@@ -104,7 +105,7 @@ func _ready() -> void:
     renderer.visible = false
     score_frame.add_child(renderer)
 
-    runway_steps = preload("res://score_step_timeline.gd").new()
+    runway_steps = StepTimeline.new()
     runway_steps.mouse_filter = Control.MOUSE_FILTER_IGNORE
     runway_steps.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
     runway_steps.custom_minimum_size.y = 30
@@ -207,8 +208,11 @@ func present_runway_steps(state: Dictionary, global_visual: float,
     if runway_steps == null or renderer == null:
         return
     runway_steps.set_density(renderer.timeline.pixels_per_beat)
+    var model: Dictionary = renderer.timeline.model if renderer.timeline.model is Dictionary else {}
+    var real_start: float = StepTimeline.first_sounding_measure_offset(
+        model,str(state.get("hand","both")))
     runway_steps.present(state,global_visual,
-        float(renderer.runway_origin_beat),next_start,next_label)
+        float(renderer.runway_origin_beat) + real_start,next_start,next_label)
 
 func present(state: Dictionary, busy: bool) -> void:
     _state = state.duplicate(true)
