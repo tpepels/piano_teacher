@@ -300,3 +300,48 @@ def test_second_warmed_stage_has_its_actual_future_revision(tmp_path):
         assert current_next.identity == second.identity
     finally:
         engine.db.close()
+
+
+def test_native_renderer_failure_fails_closed_only_at_mastery_deadline(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        original_identity = engine.plan.identity
+        original_revision = engine.score_revision
+        original_transport = engine.transport_id
+        next_score, next_number = engine._next_stage_selection()
+        assert not engine.report_preload_failure(
+            fingerprint="stale-score", step_number=next_number,
+            revision=next_score.revision, error="Old source")["accepted"]
+        assert not engine.report_preload_failure(
+            fingerprint=engine.fingerprint, step_number=next_number,
+            revision=next_score.revision - 1, error="Old revision")["accepted"]
+        assert not engine.report_preload_failure(
+            fingerprint=engine.fingerprint, step_number=next_number + 1,
+            revision=next_score.revision, error="Wrong step")["accepted"]
+        assert engine._native_preload_failure is None
+
+        reported = engine.report_preload_failure(
+            fingerprint=engine.fingerprint, step_number=next_number,
+            revision=next_score.revision, error="Verovio glyph atlas invalid")
+        assert reported["accepted"]
+        finish_at = _finish(engine)
+        assert engine.plan.identity == original_identity
+        assert engine.score_revision == original_revision
+        assert not engine.visual_transport.paused
+        deadline = engine.visual_transport.next_at
+        assert deadline > finish_at
+        before = engine._visual_motion(deadline)[0]
+        engine._advance_pending_feedback(deadline)
+        assert engine.visual_transport.paused
+        assert engine.visual_transport.next_at == 0.0
+        assert engine._visual_motion(deadline + 2)[0] == pytest.approx(before)
+        assert engine.plan.identity == original_identity
+        assert engine.score_revision == original_revision
+        assert engine.transport_id == original_transport
+        assert engine.awaiting_score_revision is None
+        assert engine.pending_result is not None
+        assert "Verovio glyph atlas invalid" in engine.next_action
+        engine.control("stop")
+        assert engine._native_preload_failure is None
+    finally:
+        engine.db.close()
