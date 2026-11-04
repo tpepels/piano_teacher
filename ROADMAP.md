@@ -191,13 +191,33 @@ retained renderer promotion and outgoing scrolling ink;
 notation/Verovio bundle in the full engraving workflow. The existing
 `run.sh` fingerprint regressions also run in fast CI.
 
+**Preloading-failure closure (2026-11-04):** Automatic mastery settlement
+now waits for authentic, acknowledged next-step notation while the source
+camera keeps moving on the existing monotonic beat axis. A late prepared
+stage receives an exact two-beat reading runway, and its already-compiled
+Godot renderer promotes without another score revision handshake or count-in.
+The source's repeated ink is clipped at the upcoming boundary until the
+next authentic score exists; stale notation never appears as the new stage.
+
+FutureScore retries transient engraving errors three times with bounded
+backoff. The native Godot renderer has its own three-attempt bound and
+reports exhausted source-specific errors over the typed in-process command
+bus using the precise fingerprint, step number and revision. A genuinely
+unrenderable stage pauses safely at the assessed transition boundary with
+an explicit failure message, without committing mastery or grading invisible
+notes. Successful third-pass transitions remain immediate when preparation
+finishes on time. Wrong-note recovery and backward rewinds are unchanged.
+Lookahead stage +2 now uses its correct future revision, preserving warmed
+assets across consecutive promotions.
+
 **Acceptance limitation:** no captured keyboard/GPU session yet proves
-glitch-free transitions on the target computer. A future score that cannot
-be prepared and acknowledged still falls back to an explicit score revision
-handshake and may interrupt scrolling; silently displaying stale notation
-is prohibited. Real long/complex pieces and automatic adaptive
-replanning remain mandatory Phase 6 acceptance cases. This feature does
-not close physical performance or teaching-effectiveness gates.
+glitch-free transitions on the target computer. Temporary preparation
+delays may produce a longer empty reading runway, although the visual
+clock remains continuous. Permanently invalid source notation is a
+blocking, explicit user-facing error; silent recovery from truly invalid
+engraving would falsify the score. Real long/complex pieces and automatic
+adaptive replanning remain mandatory Phase 6 acceptance cases. This
+feature does not close physical performance or teaching-effectiveness gates.
 
 ## Immediate order of work
 
