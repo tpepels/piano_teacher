@@ -832,7 +832,10 @@ func _draw() -> void:
     if transport_overlay_enabled and not runway_overlay:
         draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
             Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
-            Design.HIGHLIGHT,1.8,true)
+            Design.HIGHLIGHT,2.2,true)
+        draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
+            Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
+            Color(Design.STONE,.50),.8,true)
         # Beat breathing is an accent on the fixed playhead, not a moving
         # alternate clock. Music, retry preparation and calibration each
         # retain the application's single beat axis.
