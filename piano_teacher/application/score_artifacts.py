@@ -30,6 +30,7 @@ class ScoreSelection:
     revision: int
     fingerprint: str
     transformed_rhythm: bool = False
+    display_name: str = ""
 
     @property
     def identity(self) -> tuple:
