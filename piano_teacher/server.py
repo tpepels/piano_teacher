@@ -27,6 +27,7 @@ from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .application.rolling_recovery import plan_rolling_recovery
+from .application.mistake_responses import resolve_mistake_policy, whole_response
 from .music import Phrase
 from .measure_grid import phrase_grid
 from .course_navigation import choose_source_opening
@@ -1639,12 +1640,13 @@ class PracticeEngine:
             decision, identity=self.plan.identity, bpm=self.plan.bpm,
             previous_key=self._trouble_key, previous_count=self._trouble_count,
             grid=grid, first_bar=phrase.first_bar, now=now,
-            allow_guided=self.plan.exercise_strategy.name != "coda-part")
+            allow_guided=self.plan.exercise_strategy.name != "coda-part",
+            strategy=self.library.settings["mistake_response_strategy"])
         self.plan.streak=0
         self.plan.failures+=1
         self.plan.bpm=transition.bpm
         self._save()
-        self._schedule_preparation(decision.restart_beat, now=now,
+        self._schedule_preparation(transition.restart_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds)
         self._trouble_key = transition.trouble_key
@@ -1756,11 +1758,26 @@ class PracticeEngine:
             gap_beats=self.visual_transport.visual_gap_beats, bpm=self.plan.bpm,
             feedback_seconds=self.feedback_seconds)
         self.pending_result = result
+        whole_recovery = None
+        if decision.rewind and not self.is_builtin_warmup:
+            whole_recovery = whole_response(
+                resolve_mistake_policy(
+                    self.library.settings["mistake_response_strategy"]),
+                result, phrase=self.plan.active_phrase,
+                grid=self.attempt_progression.grid_for(
+                    self.plan.active_phrase, self.plan.piece.bar_boundaries),
+                bpm=self.plan.bpm, minimum_bpm=SETTINGS.minimum_bpm,
+                play_from_beat=self.visual_transport.play_from_beat)
         if decision.rewind:
+            # Preserve the original, assessed take before changing tempo.
+            visual_from = self._visual_motion(now)[0]
+            if whole_recovery is not None:
+                self.plan.bpm = whole_recovery.bpm
             self.visual_transport._retry_previous_pass = True
             self._schedule_preparation(
-                self.visual_transport.play_from_beat, now=now,
-                from_visual=self._visual_motion(now)[0],
+                (whole_recovery.restart_beat if whole_recovery is not None
+                 else self.visual_transport.play_from_beat), now=now,
+                from_visual=visual_from,
                 reverse_seconds=decision.rewind_seconds)
         if decision.failed:
             self.plan.streak = 0
@@ -1769,6 +1786,18 @@ class PracticeEngine:
             self.auto = False
             self.visual_transport.cancel_preparation()
         self.next_action = next_full_attempt(self.plan, result)
+        if (whole_recovery is not None and not result.passed and
+                whole_recovery.restart_beat >
+                    self.visual_transport.play_from_beat + 1e-7):
+            # A partial retry never awards mastery; the original take must
+            # be proven clean over the full passage afterward.
+            self.next_action = (
+                "Repeat the difficult measure at %d BPM, then play the "
+                "whole passage." % whole_recovery.bpm)
+        elif (whole_recovery is not None and
+              whole_recovery.bpm < self.plan.target_bpm and
+              whole_recovery.mode == "slow-practice"):
+            self.next_action = "Retry more slowly at %d BPM." % whole_recovery.bpm
         # A fully pre-rendered next stage on the third accepted target-speed
         # take is allowed to advance on the first post-grading tick. Failed
         # attempts, lower BPM clean repetitions and unprepared stages keep
@@ -1792,6 +1821,9 @@ class PracticeEngine:
     def _assess_rolling_boundary(self, boundary: float,
                                  grid: tuple[float, ...]):
         """Grade one authored boundary under the existing session lock."""
+        if not resolve_mistake_policy(
+                self.library.settings["mistake_response_strategy"]).interrupt_rolling:
+            return None
         tempo_map = self._active_tempo_map()
         return self.assessment_policies.select(tempo_map).recover(
             self.plan.active_phrase, hand=self.plan.hand, bpm=self.plan.bpm,
@@ -1942,6 +1974,7 @@ class PracticeEngine:
         with self.lock:
             self._update()
             state = project_session_state(self._capture_session_snapshot())
+            state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self._stage_handoff_visual_beat is not None:
                 state["next_stage_start_beat"] = self._stage_handoff_visual_beat
             if self.plan is not None:
