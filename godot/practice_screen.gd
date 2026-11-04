@@ -104,12 +104,14 @@ func _ready() -> void:
     practice_navigation.add_child(game_brand)
     practice_music_button = _button("Music", func(): navigation_requested.emit("library"), false, "library")
     practice_music_button.tooltip_text = "Choose a piece · Escape"
+    practice_music_button.call("set_icon_only",true)
     practice_navigation.add_child(practice_music_button)
     var path_button := _button("Path", func(): navigation_requested.emit("lesson"), false, "navigation")
     path_button.tooltip_text = "Learning stages and advanced practice"
+    path_button.call("set_icon_only",true)
     practice_navigation.add_child(path_button)
     practice_settings_button = _button("Settings", func(): navigation_requested.emit("settings"), false, "settings")
-    practice_settings_button.set_icon_only(true)
+    practice_settings_button.call("set_icon_only",true)
     practice_navigation.add_child(practice_settings_button)
     var details := HBoxContainer.new()
     details.add_theme_constant_override("separation", 14)
@@ -159,12 +161,14 @@ func _ready() -> void:
     # Keep navigation separate from both notation ink and the progress/tempo
     # row, whose combined minimum width would clip an 800x600 practice window.
     tempo_down_button = _button("-5 BPM", func(): command_requested.emit({"action":"tempo_down"}),
-        false, "settings")
-    tempo_down_button.tooltip_text = "Slow this lesson step without changing its song target"
+        false, "tempo_down")
+    tempo_down_button.tooltip_text = "Decrease by 5 BPM · Keeps the song target"
+    tempo_down_button.call("set_icon_only",true)
     challenge_bar.add_child(tempo_down_button)
     tempo_up_button = _button("+5 BPM", func(): command_requested.emit({"action":"tempo_up"}),
-        false, "settings")
-    tempo_up_button.tooltip_text = "Advance this stage's tempo without changing its target or awarding accepted passes"
+        false, "tempo_up")
+    tempo_up_button.tooltip_text = "Increase by 5 BPM · No mastery credit"
+    tempo_up_button.call("set_icon_only",true)
     tempo_up_button.size_flags_horizontal = Control.SIZE_SHRINK_END
     challenge_bar.add_child(tempo_up_button)
     game_streak = GameStreak.new()
@@ -174,7 +178,7 @@ func _ready() -> void:
     practice_previous_button = _button("Previous lesson", _previous_lesson,
         false, "navigation")
     practice_previous_button.tooltip_text = "Return to the previous lesson step without changing mastery"
-    practice_previous_button.set_icon_only(true)
+    practice_previous_button.call("set_icon_only",true)
     practice_previous_button.disabled = true
     practice_previous_button.visible = false
     practice_previous_button.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -183,7 +187,7 @@ func _ready() -> void:
     practice_skip_button = _button("Next lesson", _skip_lesson,
         false, "navigation")
     practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
-    practice_skip_button.set_icon_only(true)
+    practice_skip_button.call("set_icon_only",true)
     practice_skip_button.disabled = true
     practice_skip_button.visible = false
     practice_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -301,19 +305,19 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             passage_text = "%s · %s" % [kind, bar_text]
     if tempo_down_button != null:
         tempo_down_button.text = "-%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
+        tempo_down_button.tooltip_text = "Decrease by %d BPM · Keeps the song target" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_down_button.disabled = (_busy or not bool(parsed.get("can_decrease_tempo", false))
             or str(parsed.get("phase", "")) in ["count_in", "playing", "loading"])
     if tempo_up_button != null:
         tempo_up_button.text = "+%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
+        tempo_up_button.tooltip_text = "Increase by %d BPM · No mastery credit" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_up_button.disabled = (_busy or not bool(parsed.get("can_increase_tempo",false))
             or str(parsed.get("phase","")) in ["count_in","playing","loading"])
     var selected_bpm: float = float(parsed.get("bpm", 0))
     var effective_bpm: float = float(parsed.get("effective_bpm", selected_bpm))
-    var speed_text := "%d BPM" % int(roundf(selected_bpm))
+    var speed_text := "♪ %d BPM" % int(roundf(selected_bpm))
     if absf(effective_bpm-selected_bpm) >= .1:
-        speed_text += " · plays at %.1f" % effective_bpm
-    if int(selected_bpm) != int(parsed.get("target_bpm", selected_bpm)):
-        speed_text += " · target %d" % int(parsed.get("target_bpm", 0))
+        speed_text += " · effective %.1f" % effective_bpm
     speed_label.text = speed_text
     var recovery_notice: Variant = parsed.get("recovery_notice")
     speed_label.tooltip_text = ("Selected tempo %.1f BPM; effective first-segment tempo %.1f BPM; target %d BPM" %
@@ -625,7 +629,7 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
     var compact_steps: bool = width < 1250.0
     progress_label.visible = true
     for bpm_button in [tempo_down_button, tempo_up_button]:
-        bpm_button.custom_minimum_size.x = 84.0 if compact_steps else 100.0
+        bpm_button.custom_minimum_size = Vector2(42.0 if compact_steps else 46.0,38.0)
     practice_header.add_theme_constant_override("separation", 10 if width < 950.0 else 20)
     game_brand.visible = false
     practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
@@ -657,10 +661,11 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
                 var measured: float = button.get_theme_font("font").get_string_size(
                     button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
                 var available: float = maxf(0.0, width - float(margin * 2) - 56.0)
-                var ideal: float = maxf(180.0 if central else 145.0, measured + 68.0)
+                var ideal: float = maxf(220.0 if central else 124.0,
+                    measured + 68.0 if central else 124.0)
                 # At 800px all three keys must fit on one row, without
                 # shrinking their active hit areas to website-sized chips.
-                var per_button: float = maxf(155.0, (available - 48.0) / 3.0)
+                var per_button: float = maxf(125.0, (available - 48.0) / 3.0)
                 button.custom_minimum_size = Vector2(
                     minf(ideal * (1.13 if width >= 1600.0 else 1.0), per_button * (1.18 if central else .91)),
                     54.0)
