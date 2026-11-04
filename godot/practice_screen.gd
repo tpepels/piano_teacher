@@ -38,6 +38,8 @@ var practice_skip_button: Button
 var practice_previous_button: Button
 var feedback_label: Label
 var performance_review: PerformanceReviewStrip
+var performance_metrics: Control
+var objective_panel: PanelContainer
 var practice_controls: HFlowContainer
 var practice_retry_button: Button
 var start_button: Button
@@ -90,7 +92,7 @@ func _ready() -> void:
     passage_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(passage_label)
     var context := UI.stack(6)
-    context.custom_minimum_size.x = 435
+    context.custom_minimum_size.x = 250
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(context)
     practice_navigation = HFlowContainer.new()
@@ -107,6 +109,7 @@ func _ready() -> void:
     path_button.tooltip_text = "Learning stages and advanced practice"
     practice_navigation.add_child(path_button)
     practice_settings_button = _button("Settings", func(): navigation_requested.emit("settings"), false, "settings")
+    practice_settings_button.set_icon_only(true)
     practice_navigation.add_child(practice_settings_button)
     var details := HBoxContainer.new()
     details.add_theme_constant_override("separation", 14)
@@ -171,6 +174,7 @@ func _ready() -> void:
     practice_previous_button = _button("Previous lesson", _previous_lesson,
         false, "navigation")
     practice_previous_button.tooltip_text = "Return to the previous lesson step without changing mastery"
+    practice_previous_button.set_icon_only(true)
     practice_previous_button.disabled = true
     practice_previous_button.visible = false
     practice_previous_button.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -179,6 +183,7 @@ func _ready() -> void:
     practice_skip_button = _button("Next lesson", _skip_lesson,
         false, "navigation")
     practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
+    practice_skip_button.set_icon_only(true)
     practice_skip_button.disabled = true
     practice_skip_button.visible = false
     practice_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -186,8 +191,19 @@ func _ready() -> void:
     feedback_label = UI.label("Ready", 14, MUTED)
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    information.add_child(_caption_slot(feedback_label, 1))
-    information.add_child(_caption_slot(lesson_info_label, 1))
+    var detail_row := HBoxContainer.new()
+    detail_row.add_theme_constant_override("separation",12)
+    information.add_child(detail_row)
+    objective_panel = UI.card()
+    objective_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    detail_row.add_child(objective_panel)
+    var objective := UI.stack(4)
+    UI.card_body(objective_panel,0).add_child(objective)
+    objective.add_child(UI.title("Current exercise",16))
+    objective.add_child(_caption_slot(lesson_info_label, 1))
+    objective.add_child(_caption_slot(feedback_label, 1))
+    performance_metrics = preload("res://practice_metrics.gd").new()
+    detail_row.add_child(performance_metrics)
     performance_review = PerformanceReviewStrip.new()
     performance_review.ui_scale = ui_scale
     performance_review.review_requested.connect(func(summary: Dictionary):
@@ -235,6 +251,7 @@ func _ready() -> void:
 func present(parsed: Dictionary, ready: bool, busy := false, audio_error := false) -> void:
     _previous_state = _state
     _state = parsed.duplicate(true)
+    performance_metrics.present(parsed)
     _score_ready = ready
     _audio_error = audio_error
     var count: int = int(parsed.get("midi_input_count",0))
@@ -623,7 +640,9 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
             # Icon + label still need one accessible, unclipped click target.
             button.custom_minimum_size = Vector2(maxf(78.0, measured + 40.0),
                 32.0)
-            button.clip_text = false
+            if bool(button.get("icon_only")):
+                button.custom_minimum_size = Vector2(40,36)
+            button.clip_text = bool(button.get("icon_only"))
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
         # The expanding score panel gets all remaining vertical space.
@@ -655,7 +674,8 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
         game_input_indicator.custom_minimum_size.y = 22
         feedback_label.add_theme_font_size_override("font_size", _ui_font(14))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(14))
-        var instruction_lines := 2 if width < 1000.0 else 1
+        performance_metrics.custom_minimum_size.x = 280 if width < 1000 else 340
+        var instruction_lines := 2
         lesson_info_label.set_meta("caption_lines", instruction_lines)
         lesson_info_label.max_lines_visible = instruction_lines
         lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if instruction_lines == 2 else TextServer.AUTOWRAP_OFF

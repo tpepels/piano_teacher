@@ -28,7 +28,7 @@ func _ready() -> void:
     add_child(home_layout)
     var home_nav := HBoxContainer.new()
     home_layout.add_child(home_nav)
-    home_nav.add_child(UI.label("Piano Teacher", 24, INK, true))
+    home_nav.add_child(UI.title("Piano Teacher", 28))
     var spacer := Control.new()
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     home_nav.add_child(spacer)
@@ -40,7 +40,7 @@ func _ready() -> void:
     home_nav.add_child(quit_button)
     var header := UI.stack(12)
     home_layout.add_child(header)
-    header.add_child(UI.label("Your practice", 34, INK, true))
+    header.add_child(UI.title("Your practice", 34))
     header.add_child(UI.label("Choose your music or continue your last lesson.", 18, MUTED))
     var home_row := BoxContainer.new()
     cards = home_row

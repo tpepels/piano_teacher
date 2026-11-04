@@ -160,9 +160,13 @@ func _draw() -> void:
         if p == Vector2.INF or p.x < 36.0:
             continue
         var status: String = markers[id]
-        draw_arc(p, gap*.84, 0, TAU, 28, Color(_tone(status),.85), 1.8, true)
+        var tone := _tone(status)
+        draw_arc(p, gap*.92, 0, TAU, 40, Color(tone,.12), 7.0, true)
+        draw_arc(p, gap*.84, 0, TAU, 40, Color(tone,.92), 1.8, true)
         if status in ["missed", "wrong", "extra"]:
-            draw_circle(p+Vector2(gap,-gap),2.4,Design.CORAL)
+            var badge := p+Vector2(gap,-gap)
+            draw_line(badge-Vector2(2.5,2.5),badge+Vector2(2.5,2.5),tone,1.6,true)
+            draw_line(badge+Vector2(-2.5,2.5),badge+Vector2(2.5,-2.5),tone,1.6,true)
     var now := Time.get_ticks_msec()
     for pulse in pulses:
         var p: Vector2 = note_position(str(pulse.id))
@@ -170,8 +174,8 @@ func _draw() -> void:
             continue
         var life: float = clampf(float(int(pulse.until)-now)/320.0,0.0,1.0)
         var tone: Color = _tone(str(pulse.status))
-        draw_arc(p,gap*(.85+(1.0-life)*.45),0,TAU,28,Color(tone,life*.8),2,true)
-        for ray in range(6):
-            var direction := Vector2.RIGHT.rotated(float(ray)*TAU/6.0)
-            var start: Vector2 = p+direction*gap*(1.1+(1.0-life)*.9)
-            draw_line(start,start+direction*life*3.0,Color(tone,life*.55),1.3,true)
+        # Concentric light surrounds the authentic head; no particles or
+        # painted substitute pitch. The central notation stays untouched.
+        for radius in [1.35,1.1]:
+            draw_arc(p,gap*radius,0,TAU,40,Color(tone,life*.15),5.0,true)
+        draw_arc(p,gap*.87,0,TAU,40,Color(tone,life*.95),2.0,true)

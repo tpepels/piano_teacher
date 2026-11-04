@@ -127,7 +127,9 @@ func _draw() -> void:
     while font_size > 12 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT,
             -1, font_size).x > available:
         font_size -= 1
-    var label: String = text
+    # Standard secondary actions are icon-first. Keep native Button.text
+    # intact for accessibility, shortcuts and existing command bindings.
+    var label: String = text if primary else ""
     if font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > available:
         while not label.is_empty() and font.get_string_size(label + "…",
                 HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > available:

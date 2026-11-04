@@ -2,31 +2,32 @@ extends RefCounted
 
 # Piano Teacher visual system. Screens describe *meaning*, not their own
 # independent colors or borders. Keep static drawing cheap on HiDPI displays.
-const FOREST := Color("#1E3A34")
-const NIGHT := Color("#091C19")
-const CANOPY := Color("#173D34")
-const PINE := Color("#2E4D46")
-const CHARCOAL := Color("#2D3532")
+const FOREST := Color("#0D302A")
+const NIGHT := Color("#061D19")
+const CANOPY := Color("#123D33")
+const PINE := Color("#1D4640")
+const CHARCOAL := Color("#102C27")
 const SAGE := Color("#5B7068")
 const SLATE := Color("#8B9A92")
-const STONE := Color("#C4CDC6")
-const SECONDARY_INK := Color("#AEBAB2")
-const STAGE := Color("#10251F")
-const SCORE_INK := Color("#EAF4ED")
+const STONE := Color("#F3F7F3")
+const SECONDARY_INK := Color("#B1C8BF")
+const STAGE := Color("#0B2722")
+const SCORE_INK := Color("#EEF5F1")
 const SCORE_MUTED := Color("#A0B9AD")
 const STAFF_INK := Color.WHITE
 const STAFF_MUTED := Color("#81918B")
-const SCORE_ACCENT := Color("#75DDB4")
+const SCORE_ACCENT := Color("#3CD2A0")
+const HIGHLIGHT := Color("#A7F8DC")
 const SCORE_PROGRESS := SCORE_ACCENT
 const PANEL := CHARCOAL
 const PANEL_RAISED := PINE
-const PANEL_RECESSED := Color("#23322D")
+const PANEL_RECESSED := Color("#102F2A")
 const TEAL := SCORE_ACCENT
 const MINT := TEAL
-const BLUE := Color("#9DCAFF")
-const AMBER := Color("#F2CB92")
-const CORAL := Color("#FFA5A0")
-const BORDER := SAGE
+const BLUE := SLATE
+const AMBER := Color("#F2B755")
+const CORAL := Color("#F15B60")
+const BORDER := Color("#42685F")
 const FOCUS := Color("#EDF1EA")
 
 # A consistent scale for cards, modal interiors and form layout.
@@ -76,7 +77,11 @@ static func bordered_surface(color: Color, radius: int = RADIUS_CARD,
     return box
 
 static func card_surface() -> StyleBoxFlat:
-    return bordered_surface(PANEL, RADIUS_CARD)
+    var box := bordered_surface(PANEL, RADIUS_CARD, .48)
+    box.shadow_color = Color(NIGHT,.3)
+    box.shadow_size = 8
+    box.shadow_offset = Vector2(0,4)
+    return box
 
 static func drawer_surface() -> StyleBoxFlat:
     var box := bordered_surface(FOREST, RADIUS_CARD, .55)
@@ -84,13 +89,13 @@ static func drawer_surface() -> StyleBoxFlat:
     return box
 
 static func modal_surface() -> StyleBoxFlat:
-    var box := bordered_surface(PANEL_RAISED, RADIUS_MODAL, .72)
+    var box := bordered_surface(PANEL, RADIUS_MODAL, .72)
     box.set_border_width_all(1)
     box.set_content_margin_all(5)
     return box
 
 static func stage_surface() -> StyleBoxFlat:
-    var box := bordered_surface(STAGE, 14, .20)
+    var box := bordered_surface(STAGE, RADIUS_CARD, .55)
     box.set_content_margin_all(0)
     box.shadow_color = Color(NIGHT, .28)
     box.shadow_size = 16
@@ -111,9 +116,9 @@ static func role_accent(role: String) -> Color:
 static func role_fill(role: String, selected: bool = false) -> Color:
     match role:
         "primary", "play":
-            return PINE
+            return MINT
         "choice":
-            return PINE if selected else PANEL_RECESSED
+            return MINT if selected else PANEL_RECESSED
         "settings", "listen", "review", "retry":
             return PANEL_RECESSED
         "danger":

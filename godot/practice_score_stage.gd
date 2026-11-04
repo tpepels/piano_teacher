@@ -298,16 +298,13 @@ func _update_hand_stages(state: Dictionary) -> void:
         label.tooltip_text = "Completed" if complete else "Active hand" if active else "Locked" if locked else "Next hand"
         label.custom_minimum_size = Vector2(102 if _view_size.x < 1150.0 else 122, 24)
         label.add_theme_color_override("font_color",
-            Color("#79DAAD") if complete else INK if active else MUTED)
-        # Read as a three-step instrument runway, not three separate
-        # web-form cards. The active hand has a bright lower edge; completed
-        # hands retain a quieter mint trace, and locked ones recede.
-        var stage_color := Color(Design.PINE, .45) if active else Color.TRANSPARENT
-        var style := Design.surface(stage_color, 5)
+            Design.NIGHT if active else Design.MINT if complete else MUTED)
+        var stage_color := Design.MINT if active else Design.FOREST if complete else Design.PANEL_RECESSED
+        var style := Design.bordered_surface(stage_color, Design.RADIUS_INPUT,.4)
         style.set_content_margin_all(5)
-        style.set_border_width_all(0)
-        style.set_border_width(SIDE_BOTTOM, 1)
-        style.border_color = Design.TEAL if active else Color(Design.SAGE, .3)
+        style.border_color = Design.HIGHLIGHT if active else Color(Design.MINT,.4) if complete else Color(Design.BORDER,.3)
+        style.shadow_color = Color(Design.MINT,.18)
+        style.shadow_size = 8 if active else 0
         label.add_theme_stylebox_override("normal", style)
 
 

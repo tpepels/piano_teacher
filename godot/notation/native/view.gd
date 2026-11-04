@@ -12,6 +12,7 @@ const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const PREVIEW_LIGHT := Design.MINT
+const MeasureLight := preload("res://notation/native/measure_light.gd")
 const ViewportFit := preload("res://notation/native/viewport_fit.gd")
 const MAX_STAFF_GAP := ViewportFit.MAX_STAFF_GAP
 # A piano learner needs upcoming notation in view. Preserve the largest
@@ -806,9 +807,15 @@ func _draw() -> void:
     var bottom: float = layout.staff_center("left")+gap*3.7
     var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
     if transport_overlay_enabled and not runway_overlay:
-        for radius in [20.0, 10.0, 4.0]:
+        var displayed_beat := displayed_scroll_beat() if score_loop_enabled else camera_clock+play_from_beat
+        if running or paused:
+            var bounds := MeasureLight.interval(timeline.measures,displayed_beat,
+                practice_timeline if score_loop_enabled else {},
+                preparation_history if score_loop_enabled else {},runway_cutoff_beat)
+            MeasureLight.paint(self,timeline,displayed_beat,bounds,gap,top,bottom,playhead_x)
+        for radius in [14.0, 7.0, 3.0]:
             draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
-                Color(PREVIEW_LIGHT, .012+breath*.004))
+                Color(PREVIEW_LIGHT, .045+breath*.012))
     # Always draw ten native rules; no copied or stitched raster systems.
     for staff in (["right","left"] if not runway_overlay else []):
         var center: float = layout.staff_center(staff)
@@ -817,7 +824,7 @@ func _draw() -> void:
         for line_index in range(5):
             var y: float = center+(float(line_index)-2.0)*gap
             draw_line(Vector2(0,y),Vector2(size.x,y),
-                Color(ink,.34),1.3,true)
+                Color(ink,.48 if selected else .28),1.15,true)
     # Keep the fixed playhead visible but BEHIND source ink. At exact
     # onset a foreground cursor previously covered small eighth-rest dots,
     # flagged stems and noteheads, preventing independent contour recovery.
@@ -825,7 +832,7 @@ func _draw() -> void:
     if transport_overlay_enabled and not runway_overlay:
         draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
             Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
-            PREVIEW_LIGHT,2.0,true)
+            Design.HIGHLIGHT,1.8,true)
         # Beat breathing is an accent on the fixed playhead, not a moving
         # alternate clock. Music, retry preparation and calibration each
         # retain the application's single beat axis.

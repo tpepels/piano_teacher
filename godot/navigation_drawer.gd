@@ -19,7 +19,7 @@ func mount(host: Control, screens: Dictionary, make_button: Callable,
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     host.add_child(root)
     var backdrop := ColorRect.new()
-    backdrop.color = Design.NIGHT
+    backdrop.color = Color(Design.NIGHT,.96)
     backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(backdrop)
     drawer = PanelContainer.new()

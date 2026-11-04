@@ -272,8 +272,8 @@ func present_overview(values: Dictionary) -> void:
         label.visible = true
         label.text = "%d. %s" % [position + 1, level.replace("-", " ").capitalize()]
         var selected: bool = str(_context.get("lesson_level", "")) == level
-        label.add_theme_color_override("font_color", INK if selected else MUTED)
-        var face := Design.bordered_surface(Design.PINE if selected else Design.PANEL_RECESSED, 6, .6 if selected else .25)
+        label.add_theme_color_override("font_color", Design.NIGHT if selected else MUTED)
+        var face := Design.bordered_surface(Design.MINT if selected else Design.PANEL_RECESSED, 6, .6 if selected else .25)
         face.border_color = Design.TEAL if selected else Color(Design.SAGE, .3)
         label.add_theme_stylebox_override("normal", face)
     summary.text = "%d of %d stages completed · %d clean performances at your target tempo" % [

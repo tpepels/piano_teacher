@@ -260,3 +260,7 @@ func _draw() -> void:
         if filled > 0.0:
             draw_rect(Rect2(segment_x, track_y, segment_width * filled, 7.0),
                 Color(fill_tone, .84), true)
+        if segment_width >= 18.0:
+            var marker := Vector2(segment_x+segment_width*.5,track_y+3.5)
+            draw_circle(marker,5.0,fill_tone if filled >= .5 else Design.SAGE)
+            draw_circle(marker,2.2,Design.STAGE)
