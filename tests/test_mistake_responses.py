@@ -233,3 +233,69 @@ def test_external_algorithm_cannot_return_wrong_score_or_musical_deadline():
             phrase=SimpleNamespace(start=0.0,end=12.0),
             grid=(0.0,4.0,8.0,12.0),
             bpm=100, minimum_bpm=12, play_from_beat=0)
+
+
+def test_micro_loop_failed_complete_take_rewinds_to_difficult_bar_without_mastery(tmp_path):
+    from piano_teacher.practice import Assessment, NoteAssessment
+
+    notes = (
+        Note(0.0, .5, 60, 0, 0, "right", "first"),
+        Note(4.0, 4.5, 62, 0, 0, "right", "second"),
+        Note(8.0, 8.5, 64, 0, 0, "right", "third"))
+    piece = Piece(
+        "Whole-take regression", 100, notes,
+        (Phrase(1, 1, 3, 0, 12, notes),),
+        bar_boundaries=(0,4,8,12), time_signatures=((0,4,4),))
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.set_preferences(mistake_response_strategy="micro-loop")
+        engine.plan = LearningPlan(piece, exercise_strategy="source-progression")
+        engine.plan.set_bpm(100)
+        engine.fingerprint = "real-source-failure"
+        engine.midi.port = object()
+        engine.start()
+        result = Assessment((
+            NoteAssessment(notes[0], "correct"),
+            NoteAssessment(notes[1], "correct"),
+            NoteAssessment(notes[2], "missed")), 0)
+        prior_stage = engine.plan.identity
+        finish = engine.visual_transport.run_at + 12 * 60 / 100 + .2
+        engine._finish_full_passage(result, 12.0, 12 * 60 / 100, finish)
+        assert engine.plan.bpm == 90
+        assert engine.visual_transport.pending_rewind == 8.0
+        assert engine.visual_transport.practice_preparation is not None
+        assert engine.visual_transport._retry_previous_pass
+        assert engine.pending_result is result
+        assert not engine.running and engine.auto
+        assert engine.plan.identity == prior_stage and not engine.plan.mastered
+        assert "whole passage" in engine.next_action
+        # The focused take is deliberately partial: it must return to the
+        # whole passage before awarding a clean-run or changing score revision.
+        from piano_teacher.completion_route import completion_route
+        assert completion_route("practice", None, 8.0) == "partial_recovery"
+    finally:
+        engine.db.close()
+
+
+def test_finish_then_review_retains_tempo_until_full_take_is_assessed(tmp_path):
+    from piano_teacher.practice import Assessment, NoteAssessment
+
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.set_preferences(mistake_response_strategy="finish-then-review")
+        engine.plan = LearningPlan(_song(), exercise_strategy="source-progression")
+        engine.plan.set_bpm(100)
+        engine.midi.port = object()
+        engine.start()
+        score = engine.plan.active_phrase
+        result = Assessment(
+            (NoteAssessment(score.notes[0], "missed"),),0)
+        finish = engine.visual_transport.run_at + 4 * 60 / 100 + .2
+        engine._finish_full_passage(result, 4.0, 4 * 60 / 100, finish)
+        assert engine.visual_transport.pending_rewind == 0.0
+        assert engine.plan.bpm == 100
+        assert engine.pending_result is result
+        assert not engine.plan.mastered
+        assert engine._assess_rolling_boundary(4.0,(0.0,4.0)) is None
+    finally:
+        engine.db.close()
