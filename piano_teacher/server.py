@@ -184,6 +184,8 @@ class PracticeEngine:
         self._prepared_stage_published = False
         # Global musical origin of a delayed, pre-engraved next stage.
         self._stage_handoff_visual_beat: float | None = None
+        # Pin the renderer-acknowledged source assets through settlement.
+        self._stage_handoff_assets: tuple[tuple, ScoreArtifacts] | None = None
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
@@ -615,6 +617,7 @@ class PracticeEngine:
         # identity check automatically at the next settlement.
         self._prepared_stage_published = False
         self._stage_handoff_visual_beat = None
+        self._stage_handoff_assets = None
         self.guided_session.stop()
         self.visual_transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
@@ -995,6 +998,7 @@ class PracticeEngine:
             "awaiting_score_revision", "open_from_beat",
             "performance_summary", "review_stage_identity",
             "_prepared_stage_published", "_stage_handoff_visual_beat",
+            "_stage_handoff_assets",
         )
         engine_before = {key: getattr(self, key) for key in engine_fields}
         visual_offset_before = self.visual_transport.visual_offset_beats
@@ -1067,7 +1071,10 @@ class PracticeEngine:
                     if (self.auto and self._future_stage_ready ==
                             (p.identity, self.score_revision)):
                         next_selected = self._score_selection()
-                        prebuilt = self.future_score.adopt(next_selected)
+                        pinned = self._stage_handoff_assets
+                        prebuilt = (pinned[1] if pinned is not None and
+                                    pinned[0] == next_selected.identity
+                                    else self.future_score.adopt(next_selected))
                         if prebuilt is not None:
                             self.score_artifacts = prebuilt
                             self._prepared_stage_published = True
@@ -1091,6 +1098,7 @@ class PracticeEngine:
             raise
         self.pending_result = None
         self._stage_handoff_visual_beat = None
+        self._stage_handoff_assets = None
         return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
@@ -1440,7 +1448,7 @@ class PracticeEngine:
 
     def _mastery_candidate(self, result):
         """Exact next step eligible for an automatic clean-run advancement."""
-        if (not self.auto or result is None or not result.passed or
+        if (not self.auto or result is None or not getattr(result, "passed", False) or
                 self.plan is None or self.plan.bpm < self.plan.target_bpm or
                 self.plan.streak + 1 < SETTINGS.clean_runs_to_master):
             return None
@@ -1457,9 +1465,11 @@ class PracticeEngine:
                 selection, _number = upcoming
                 accepted = self._future_stage_ready == (
                     selection.stage_key, selection.revision)
-                prepared = (accepted and self.future_score.ready(selection) and
-                            self.future_score.adopt(selection) is not None)
+                prebuilt = (self.future_score.adopt(selection)
+                            if accepted and self.future_score.ready(selection) else None)
+                prepared = prebuilt is not None
                 if not prepared:
+                    self._stage_handoff_assets = None
                     failure = self.future_score.failure(selection)
                     if accepted and self.future_score.ready(selection):
                         failure = failure or "Prepared stage assets were lost"
@@ -1476,6 +1486,7 @@ class PracticeEngine:
                     self.visual_transport.next_at = now + .10
                     self.feedback = "Preparing the next lesson while scrolling"
                     return
+                self._stage_handoff_assets = (selection.identity, prebuilt)
                 if self._stage_handoff_visual_beat is None and not prepared_on_time:
                     # Reserve a two-beat reading runway when assets arrive
                     # after the natural handoff. The existing score keeps
