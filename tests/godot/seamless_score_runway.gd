@@ -29,10 +29,15 @@ class MockStage:
     extends Node
     var renderer
     var score_frame := Control.new()
+    var marker_call: Dictionary = {}
     func _init() -> void:
         add_child(score_frame)
         renderer = MockView.new()
         score_frame.add_child(renderer)
+    func present_runway_steps(_state: Dictionary, _visual_beat: float,
+            next_start: float = INF, _label: String = "",
+            next_density: float = NAN) -> void:
+        marker_call = {"start":next_start,"density":next_density}
 
 class MockRequest:
     extends Node
@@ -87,6 +92,10 @@ func run() -> void:
     var future := MockView.new()
     stage.score_frame.add_child(future)
     runway._future = future
+    # Dense future engraving can differ substantially from the current page.
+    # Its title marker must use the future renderer's pixels per beat.
+    future.timeline["pixels_per_beat"] = 160.0
+    runway._future_intro_offset = 2.25
     var old_renderer = stage.renderer
     # A fully retained late score must remain invisible until the engine
     # confirms its delayed global origin; provisional placement would jump.
@@ -112,6 +121,9 @@ func run() -> void:
         "delayed future ink follows the authoritative global start beat")
     check(absf(old_renderer.runway_cutoff_beat - 21.75) < .0001,
         "outgoing notation clips only when delayed future ink begins")
+    check(absf(float(stage.marker_call.get("start",INF)) - 24.0) < .0001 and
+        absf(float(stage.marker_call.get("density",NAN)) - 160.0) < .0001,
+        "upcoming title is anchored at the actual first attack with future score density")
     check(old_renderer.cleared == 0,
         "extending an unprepared runway never clears the active score")
     var proposed := {
@@ -162,20 +174,40 @@ func run() -> void:
         "stage_label":"Both hands"},12.17,12.17,21.0,"Next source")
     check(markers._step == 2 and markers._next_start == 21.0,
         "stage markers share current scroll and upcoming score axis")
+    # Real staff rest at the START of the same source measure. Returning
+    # measure.start_beat (the former implementation) incorrectly labels that rest.
     var written := {
-        "notes":[{"hand":"right","onset_beats":4.0},
-                 {"hand":"left","onset_beats":8.5}],
+        "notes":[{"hand":"right","onset_beats":5.251},
+                 {"hand":"left","onset_beats":9.0}],
+        "notation_events":[
+            {"kind":"rest","hand":"right","beat":4.0},
+            {"kind":"note","hand":"right","is_attack":false,"beat":4.5},
+            {"kind":"note","hand":"right","is_attack":true,"beat":5.25},
+            {"kind":"note","hand":"left","is_attack":true,"beat":9.0}],
         "measures":[{"start_beat":0.0,"end_beat":4.0},
                     {"start_beat":4.0,"end_beat":8.0},
                     {"start_beat":8.0,"end_beat":12.0}]
     }
-    check(StepTimeline.first_sounding_measure_offset(written,"right") == 4.0 and
-          StepTimeline.first_sounding_measure_offset(written,"left") == 8.0 and
-          StepTimeline.first_sounding_measure_offset(written,"both") == 4.0,
-          "introduction markers move off silent rest bars to the real next measure")
-    check(StepTimeline.first_sounding_measure_offset(
-            {"notes":[],"measures":written.measures},"both") == 0.0,
-          "genuinely silent scores do not create invented note positions")
+    check(StepTimeline.first_playable_beat(written,"right") == 5.25 and
+          StepTimeline.first_playable_beat(written,"left") == 9.0 and
+          StepTimeline.first_playable_beat(written,"both") == 5.25,
+          "active and preloaded lesson titles follow their first actual printed attack")
+    check(StepTimeline.first_playable_beat(
+            {"notes":[{"hand":"right","onset_beats":5.251}]}, "right") == 5.251,
+          "MIDI-only score fixtures use real source attack beats")
+    check(not is_finite(StepTimeline.first_playable_beat(
+            {"notes":[],"notation_events":[{"kind":"rest","beat":0.0}]},"both")),
+          "rest-only scores must not place titles on invented notes")
+    var overlay_beat := 23.0
+    markers.set_density(97.0)
+    markers.present({"loaded":true,"lesson_step":2,"lesson_steps":3},
+        overlay_beat,12.17,24.0,"Next source",160.0)
+    # Native future score: .42*width + (first_attack-(global - origin))*future_density
+    var future_note_x: float = 900.0*.42 + (2.25-(overlay_beat-21.75))*160.0
+    check(absf(StepTimeline.marker_x(markers._next_start,overlay_beat,
+            markers._next_density,markers.size.x)-future_note_x) < .0001 and
+          markers._density == 97.0 and markers._next_density == 160.0,
+          "stage labels align in native pixels across different score densities")
     runway._future = null
     runway._bundle.clear()
     runway.present_frame({
