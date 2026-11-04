@@ -69,6 +69,10 @@ from .fukuda_mistake_store import FukudaMistakeStore
 from .remediation import RemediationPlanner, RemedialAssignment, plan_timed_remedial_review
 
 
+class UnpreparedNextStage(RuntimeError):
+    """A graded source change invalidated the already approved future ink."""
+
+
 class PracticeEngine:
     # Existing public attributes delegate to one actual transport-state owner.
 
@@ -1085,8 +1089,18 @@ class PracticeEngine:
                                 self._stage_handoff_visual_beat
                                 if self._stage_handoff_visual_beat is not None
                                 else self.visual_transport.visual_offset_beats + stage_advance_beats)
+                        elif self.auto and result.passed and self._stage_handoff_assets is not None:
+                            # Never commit an automatic step that cannot be
+                            # displayed by the renderer already approved for
+                            # this musical handoff. Roll back all assessment
+                            # effects and report the invalidated source.
+                            raise UnpreparedNextStage(
+                                "The next lesson score changed after preloading")
                         else:
                             self.visual_transport.visual_offset_beats = 0.0
+                    elif self.auto and result.passed and self._stage_handoff_assets is not None:
+                        raise UnpreparedNextStage(
+                            "The graded lesson selected a different next score")
                     else:
                         self.visual_transport.visual_offset_beats = 0.0
                 self._save()
@@ -1507,6 +1521,15 @@ class PracticeEngine:
             previous_identity = self.plan.identity
             try:
                 message = self._commit_pending()
+            except UnpreparedNextStage as exc:
+                # The transaction rolled back to the score still on screen.
+                # Never reset the camera or ask Godot to load the wrong step.
+                self.visual_transport.pause(at=now)
+                self.visual_transport.next_at = 0.0
+                self.feedback = "The next lesson score changed during grading"
+                self.next_action = (
+                    f"{exc}. Select another step or reopen the piece.")
+                return
             except Exception as exc:
                 # A transient disk/generator failure cannot settle partial
                 # evidence or repeatedly retry the same transaction at 20ms.
