@@ -808,11 +808,13 @@ func _draw() -> void:
     var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
     if transport_overlay_enabled and not runway_overlay:
         var displayed_beat := displayed_scroll_beat() if score_loop_enabled else camera_clock+play_from_beat
-        if running or paused:
-            var bounds := MeasureLight.interval(timeline.measures,displayed_beat,
-                practice_timeline if score_loop_enabled else {},
-                preparation_history if score_loop_enabled else {},runway_cutoff_beat)
-            MeasureLight.paint(self,timeline,displayed_beat,bounds,gap,top,bottom,playhead_x)
+        # Illuminate the selected measure in READY as well as PLAYING and
+        # PAUSED. The first playable note owns the idle camera, not wall time.
+        var light_beat := maxf(0.0,displayed_beat) if not running and not paused else displayed_beat
+        var bounds := MeasureLight.interval(timeline.measures,light_beat,
+            practice_timeline if score_loop_enabled else {},
+            preparation_history if score_loop_enabled else {},runway_cutoff_beat)
+        MeasureLight.paint(self,timeline,displayed_beat,bounds,gap,top,bottom,playhead_x)
         for radius in [14.0, 7.0, 3.0]:
             draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
                 Color(PREVIEW_LIGHT, .045+breath*.012))

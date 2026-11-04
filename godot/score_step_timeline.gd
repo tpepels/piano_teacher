@@ -1,8 +1,9 @@
 extends Control
 ## Small music-axis markers. Lesson steps advance along the score rather than
 ## being presented as replacement pages or interrupting score movement.
-const INK := Color("#B6E7D8")
-const FUTURE := Color("#78C6B4")
+const Design := preload("res://practice_theme.gd")
+const INK := Design.HIGHLIGHT
+const FUTURE := Design.SECONDARY_INK
 var _loaded := false
 var _step := 0
 var _total := 0
@@ -91,21 +92,43 @@ func set_density(pixels: float) -> void:
         _density = pixels
         queue_redraw()
 
+# Keep short step labels on the musical axis. Full stage descriptions already
+# appear in the Practice header; long floating text must not cover the score.
+# Hide the next label when two markers would occupy the same text region.
+static func markers_separated(current_x: float, next_x: float) -> bool:
+    return not is_finite(current_x) or next_x >= current_x + 168.0
+
 func _marker(at: float, label: String, tint: Color, density: float,
         visual_beat: float) -> void:
     if not is_finite(at):
         return
     var x: float = marker_x(at,visual_beat,density,size.x)
-    if x < -10.0 or x > size.x+10.0:
+    if x < -10.0 or x > size.x-10.0:
         return
-    var font: Font = ThemeDB.fallback_font
-    draw_line(Vector2(x,5),Vector2(x,29),tint,2.0,true)
-    draw_rect(Rect2(x,4,4,5),tint)
-    draw_string(font,Vector2(x+9,19),label,
-        HORIZONTAL_ALIGNMENT_LEFT,mini(240,int(size.x-x-12)),13,tint)
+    draw_line(Vector2(x,5),Vector2(x,30),Color(tint,.86),1.6,true)
+    draw_circle(Vector2(x,7),3.0,tint)
+    var label_left := maxf(5.0,x+9.0)
+    var available := minf(155.0,size.x-label_left-7.0)
+    if available < 55.0:
+        return
+    var card := Rect2(label_left,2.0,available,23.0)
+    draw_rect(card,Color(Design.PANEL_RECESSED,.94),true)
+    draw_rect(card,Color(tint,.43),false,1.0)
+    draw_string(Design.font(600),Vector2(label_left+8.0,18.0),label,
+        HORIZONTAL_ALIGNMENT_LEFT,available-16.0,12,tint)
 
 func _draw() -> void:
     if not _loaded or _step <= 0:
         return
-    _marker(_current_start,"%d/%d · %s" % [_step,_total,_label],INK,_density,_current_beat)
-    _marker(_next_start,"%d/%d · %s" % [_step+1,_total,_next_label],FUTURE,_next_density,_beat)
+    var current_x := marker_x(_current_start,_current_beat,_density,size.x) if is_finite(_current_start) else -INF
+    var next_x := marker_x(_next_start,_beat,_next_density,size.x) if is_finite(_next_start) else INF
+    var current_visible := is_finite(current_x) and current_x >= -10.0 and current_x < size.x-10.0
+    if current_visible:
+        _marker(_current_start,"STEP %d/%d" % [_step,_total],
+            INK,_density,_current_beat)
+    # A preloaded next stage can project directly onto the current marker.
+    # Its note ink remains visible; only the duplicate caption is suppressed.
+    if is_finite(next_x) and next_x >= -10.0 and next_x < size.x-10.0 and (
+            not current_visible or markers_separated(current_x,next_x)):
+        _marker(_next_start,"NEXT %d/%d" % [_step+1,_total],
+            FUTURE,_next_density,_beat)

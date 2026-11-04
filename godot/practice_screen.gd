@@ -120,10 +120,17 @@ func _ready() -> void:
     speed_label = UI.label("-- BPM", 14, INK)
     speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     speed_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+    var tempo_face := Design.bordered_surface(Design.PANEL_RECESSED,7,.62)
+    tempo_face.set_content_margin_all(7)
+    speed_label.add_theme_stylebox_override("normal",tempo_face)
     details.add_child(speed_label)
     hand_label = UI.label("", 14, ACCENT)
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+    var hand_face := Design.bordered_surface(Design.PANEL_RECESSED,7,.62)
+    hand_face.set_content_margin_all(7)
+    hand_face.border_color = Color(Design.MINT,.48)
+    hand_label.add_theme_stylebox_override("normal",hand_face)
     details.add_child(hand_label)
     game_input_indicator = GameInputIndicator.new()
     details.add_child(game_input_indicator)

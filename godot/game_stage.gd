@@ -258,11 +258,26 @@ func _draw() -> void:
         var segment_x: float = inset + (left_beat-start_beat)/duration * usable + gap*i
         var segment_width: float = maxf(1.0, (right_beat-left_beat)/duration * usable)
         var filled: float = clampf((played-left_beat) / maxf(.001, right_beat-left_beat), 0.0, 1.0)
-        draw_rect(Rect2(segment_x, track_y, segment_width, 7.0), Color(Design.SAGE, .58), true)
+        var current: bool = measure_boundaries.size() >= 2 and (
+            played >= left_beat-.001 and played < right_beat-.001)
+        if current:
+            # Distinguish selected from completed. The glow marks the measure
+            # being played; only the filled fraction represents earned time.
+            draw_rect(Rect2(segment_x-2.0,track_y-4.0,segment_width+4.0,15.0),
+                Color(Design.MINT,.13),true)
+        draw_rect(Rect2(segment_x,track_y,segment_width,7.0),
+            Color(Design.SAGE,.43),true)
         if filled > 0.0:
-            draw_rect(Rect2(segment_x, track_y, segment_width * filled, 7.0),
-                Color(fill_tone, .84), true)
+            draw_rect(Rect2(segment_x,track_y,segment_width*filled,7.0),
+                Color(fill_tone,.92),true)
+        if current:
+            draw_rect(Rect2(segment_x,track_y,segment_width,7.0),
+                Color(Design.HIGHLIGHT,.82),false,1.3)
+            var played_x := clampf(segment_x+segment_width*filled,
+                segment_x,segment_x+segment_width)
+            draw_circle(Vector2(played_x,track_y+3.5),6.0,Color(Design.MINT,.18))
+            draw_circle(Vector2(played_x,track_y+3.5),3.2,Design.HIGHLIGHT)
         if segment_width >= 18.0:
             var marker := Vector2(segment_x+segment_width*.5,track_y+3.5)
-            draw_circle(marker,5.0,fill_tone if filled >= .5 else Design.SAGE)
-            draw_circle(marker,2.2,Design.STAGE)
+            draw_circle(marker,4.6,fill_tone if filled >= 1.0 else Design.HIGHLIGHT if current else Design.SAGE)
+            draw_circle(marker,2.0,Design.STAGE)
