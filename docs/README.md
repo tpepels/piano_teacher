@@ -14,6 +14,7 @@
 | Fingering data and inference | [Piano fingering](piano-fingering.md) |
 | Teaching behavior and mastery criteria | [Teaching methodology](teaching-methodology.md) |
 | Fixed retry contracts, adaptive proposal and evaluation | [Mistake-response policies](mistake-response-policies.md) |
+| Learning variables and evidence gaps | [Learning-measurement implementation audit (2026-11-04)](learning-measurement-audit-2026-11-04.md) |
 
 ## Verified historical or research evidence (not development instructions)
 
