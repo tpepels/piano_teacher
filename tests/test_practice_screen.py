@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GODOT = shutil.which("godot") or shutil.which("godot4")
 
 @pytest.mark.skipif(GODOT is None, reason="Godot 4 unavailable")
-@pytest.mark.parametrize("scenario", ["captions", "signals", "score_gate", "source_picker", "midi_guard", "layout", "app_polling", "app_busy_ack"])
+@pytest.mark.parametrize("scenario", ["captions", "signals", "score_gate", "intro_markers", "source_picker", "midi_guard", "layout", "app_polling", "app_busy_ack"])
 def test_independent_practice_screen(scenario, tmp_path):
     script = "practice_polling.gd" if scenario.startswith("app_") else "practice_screen.gd"
     proc = subprocess.run([GODOT,"--headless","--path",str(ROOT/"godot"),"--audio-driver","Dummy",
