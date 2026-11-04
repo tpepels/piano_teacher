@@ -345,3 +345,33 @@ def test_native_renderer_failure_fails_closed_only_at_mastery_deadline(tmp_path)
         assert engine._native_preload_failure is None
     finally:
         engine.db.close()
+
+
+def test_late_ack_schedules_handoff_without_waiting_for_full_rest(tmp_path, monkeypatch):
+    engine = _engine(tmp_path)
+    try:
+        engine.future_score = Prepared(engine)
+        selection, number = engine._next_stage_selection()
+        finished_at = _finish(engine)
+        full_rest_deadline = engine.visual_transport.next_at
+        clock = [finished_at + .03]
+        monkeypatch.setattr("piano_teacher.server.time.monotonic",
+                            lambda: clock[0])
+        acknowledged = engine.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key, revision=selection.revision)
+        assert acknowledged["accepted"]
+        assert engine.pending_result is not None
+        assert engine._stage_handoff_visual_beat is not None
+        assert engine.visual_transport.next_at < full_rest_deadline
+        assert engine._state_snapshot()["next_stage_start_beat"] == pytest.approx(
+            engine._stage_handoff_visual_beat)
+        deadline = engine.visual_transport.next_at
+        clock[0] = deadline
+        engine._advance_pending_feedback(deadline)
+        assert engine.plan.lesson_step_number == number
+        assert engine.awaiting_score_revision is None
+        assert engine.running and engine.count_in_beats == 0.0
+        assert engine.visual_transport.visual_offset_beats == pytest.approx(
+            engine._visual_motion(deadline)[0])
+    finally:
+        engine.db.close()
