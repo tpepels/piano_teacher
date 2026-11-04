@@ -371,7 +371,8 @@ def test_entire_recovery_restores_chosen_tempo_then_three_full_takes_reveal_chor
             selected, _number = e._next_stage_selection()
             e.acknowledge_preloaded_stage(
                 stage_key=selected.stage_key, revision=selected.revision)
-            now[0] = e.visual_transport.next_at+.01
+            # Acknowledgement itself now schedules the exact two-beat runway,
+            # instead of waiting through the previous full rest.
             pending = e.state()
             assert pending['phase'] != 'loading'
             assert stage not in e.plan.mastered
