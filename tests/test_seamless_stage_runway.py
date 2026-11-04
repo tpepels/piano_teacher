@@ -334,7 +334,7 @@ def test_native_renderer_failure_fails_closed_only_at_mastery_deadline(tmp_path)
         engine._advance_pending_feedback(deadline)
         assert engine.visual_transport.paused
         assert engine.visual_transport.next_at == 0.0
-        assert engine._visual_motion(deadline + 2)[0] == pytest.approx(before)
+        assert engine._visual_motion(engine.visual_transport.paused_at)[0] == pytest.approx(before)
         assert engine.plan.identity == original_identity
         assert engine.score_revision == original_revision
         assert engine.transport_id == original_transport
