@@ -103,6 +103,44 @@ func run() -> void:
                 check(not view.stage.score_status_panel.visible and not view.stage.phase_cue.visible and not view.start_button.disabled,"Ready notation hides the preparation capsule")
                 view.stage.present_fingering({"unknown":2},1,"")
                 check("2 unknown fingers" in view.stage.fingering_status_label.text and "1 needs space" in view.stage.fingering_status_label.text,"Fingering warnings receive explicit placement counts")
+            "intro_markers":
+                # A measure starts with an engraved rest but the real first
+                # note is two beats later. The marker must follow the attack
+                # on the renderer's global musical axis.
+                var model := {
+                    "schema":"piano-teacher-score-model-v1",
+                    "beat_unit":"quarter","revision":77,
+                    "duration_beats":8.0,
+                    "notes":[
+                        {"id":"right","onset_beats":2.0,"duration_beats":1.0,"hand":"right"},
+                        {"id":"left","onset_beats":6.25,"duration_beats":1.0,"hand":"left"}],
+                    "notation_events":[
+                        {"kind":"rest","beat":0.0,"hand":"right"},
+                        {"kind":"note","beat":2.0,"hand":"right","is_attack":true},
+                        {"kind":"note","beat":6.25,"hand":"left","is_attack":true}],
+                    "measures":[{"start_beat":0.0,"end_beat":4.0},
+                                {"start_beat":4.0,"end_beat":8.0}]
+                }
+                check(view.stage.renderer.timeline.load_model(model),
+                    "Native marker fixture uses an authentic contiguous source beat axis")
+                view.stage.renderer.runway_origin_beat = 20.0
+                var heading := state()
+                heading.hand = "right"
+                view.stage.present_runway_steps(heading,20.0)
+                check(is_equal_approx(view.stage.runway_steps._current_start,22.0),
+                    "Right-hand name sits on beat two's first note, not the opening rest")
+                heading.hand = "left"
+                view.stage.present_runway_steps(heading,20.0)
+                check(is_equal_approx(view.stage.runway_steps._current_start,26.25),
+                    "Changing active hand recomputes its own section start")
+                heading.hand = "both"
+                view.stage.present_runway_steps(heading,20.0)
+                check(is_equal_approx(view.stage.runway_steps._current_start,22.0),
+                    "Both hands use their earliest actually playable attack")
+                view.stage.present_runway_steps(heading,20.0,30.0,"Next",240.0)
+                check(is_equal_approx(view.stage.runway_steps._next_start,30.0) and
+                    is_equal_approx(view.stage.runway_steps._next_density,240.0),
+                    "The preloaded step retains its independent native score density")
             "source_picker":
                 var intent: Array = []
                 view.command_requested.connect(func(command: Dictionary): intent.append(command))
