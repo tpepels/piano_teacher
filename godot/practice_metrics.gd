@@ -3,7 +3,7 @@ extends Control
 ## an empty ring, never a manufactured accuracy or successful note count.
 const Design := preload("res://practice_theme.gd")
 var result: Dictionary = {}
-var clean_passes := 0
+var accepted_passes := 0
 var required := 3
 var ungraded := true
 var _face := Design.card_surface()
@@ -26,9 +26,9 @@ func present(state: Dictionary) -> void:
             next = take
     var count := int(state.get("streak",0)) if not next_ungraded else 0
     var total := maxi(1,int(state.get("clean_runs_required",3)))
-    if next != result or count != clean_passes or total != required or next_ungraded != ungraded:
+    if next != result or count != accepted_passes or total != required or next_ungraded != ungraded:
         result = next.duplicate(true)
-        clean_passes = count
+        accepted_passes = count
         required = total
         ungraded = next_ungraded
         queue_redraw()
@@ -53,7 +53,7 @@ func _draw() -> void:
     draw_string(Design.font(600),center+Vector2(-extent*.5,3),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Design.STONE)
     _text("Accuracy",center+Vector2(-25,17),10,Design.SECONDARY_INK)
     _text("Performance",Vector2(96,24),14,Design.STONE,size.x-108)
-    _text("%d / %d clean passes" % [clean_passes,required],Vector2(96,45),12,Design.SECONDARY_INK,size.x-108)
+    _text("%d / %d accepted passes" % [accepted_passes,required],Vector2(96,45),12,Design.SECONDARY_INK,size.x-108)
     var details := "%d / %d correct" % [int(result.get("correct",0)),total] if total > 0 else "Preview · ungraded" if ungraded else "Awaiting assessed take"
     _text(details,Vector2(96,63),12,Design.SECONDARY_INK,size.x-108)
     var x := 100.0

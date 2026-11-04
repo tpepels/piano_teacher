@@ -1,7 +1,7 @@
 extends RefCounted
 
-# Pure presentation of the engine's existing three-clean-run lesson rule.
-# The backend alone decides whether a take was clean, whether a stage is
+# Pure presentation of the engine's accepted target-tempo repetitions.
+# The backend alone decides whether a take was accepted, whether a stage is
 # mastered, and when it is safe to advance to a new hand or passage.
 static func present(state: Dictionary) -> Dictionary:
     if not bool(state.get("loaded", false)):
@@ -29,32 +29,34 @@ static func present(state: Dictionary) -> Dictionary:
             "kind":"learn", "streak":raw_streak,"required":required}
     if bool(state.get("preview_only", false)):
         return {"visible":true, "label":"%s · PREVIEW" % hand,
-            "detail":"MIDI piano required to earn clean runs",
+            "detail":"MIDI piano required to earn accepted runs",
             "kind":"preview", "streak":0,"required":required}
     var result: Variant = state.get("take_result")
     if phase == "feedback" and result is Dictionary:
-        if bool(result.get("clean", false)):
+        var accepted: bool = bool(result.get("accepted", result.get("clean",false)))
+        if accepted:
             var completed: int = mini(required, raw_streak + 1)
-            var detail := "%d clean target-tempo passes unlock the next stage" % required
+            var detail := "%d accepted target-tempo passes unlock the next stage" % required
             var seconds = state.get("transition_in_seconds")
             if seconds != null and bool(state.get("auto", false)):
                 detail = "Next automatically in %.1f s" % maxf(0.0, float(seconds))
+            var verdict := "✓ CLEAN PASS" if bool(result.get("clean",false)) else "✓ ACCEPTED · TIMING WARNINGS"
             return {"visible":true,
-                "label":"✓ CLEAN PASS · %s · %d/%d" % [hand, completed,required],
+                "label":"%s · %s · %d/%d" % [verdict,hand,completed,required],
                 "detail":detail,
                 "kind":"success", "streak":completed,"required":required}
         return {"visible":true,
             "label":"RETRY · %s" % hand,
-            "detail":"Review the red notes; the clean-run streak resets",
+            "detail":"Review the marked notes; the accepted-run streak resets",
             "kind":"retry", "streak":0,"required":required}
     if phase == "recovering":
         return {"visible":true, "label":"SHORT RETRY · %s" % hand,
             "detail":str(state.get("next_action", "Practise the difficult bars again")),
             "kind":"recovering", "streak":raw_streak,"required":required}
-    var label := "%s · %d/%d CLEAN" % [hand, raw_streak,required]
-    var detail := "Play this short challenge %d times cleanly at target tempo" % required
+    var label := "%s · %d/%d ACCEPTED" % [hand, raw_streak,required]
+    var detail := "Complete %d accepted takes at target tempo" % required
     if bool(state.get("warmup", false)):
-        detail = "Next hand unlocks after %d clean runs" % required
+        detail = "Next hand unlocks after %d accepted runs" % required
         if name == "both":
             detail = "Final stage · master both hands together"
     if phase == "paused":

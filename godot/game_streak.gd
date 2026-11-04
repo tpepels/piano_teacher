@@ -2,7 +2,7 @@ extends Control
 
 const Design := preload("res://practice_theme.gd")
 
-# Three clean passes rendered as luminous instrument indicators.
+# Backend-accepted target-tempo passes rendered as luminous indicators.
 # Engine-assessed result/streak are passed in; this component never scores.
 const ON := Design.MINT
 const OFF := Design.SAGE

@@ -74,9 +74,10 @@ func present(state: Dictionary) -> void:
     var next_active: bool = next_phase in ["playing", "count_in"] and (
         bool(state.get("running", false)) and not bool(state.get("paused", false)))
     var result: Variant = state.get("take_result")
-    var failed_take: bool = result is Dictionary and not bool(result.get("clean", false))
+    var failed_take: bool = result is Dictionary and not bool(result.get("accepted", result.get("clean",false)))
     var next_accent: Color = (
         ERROR if next_phase == "feedback" and failed_take
+        else AMBER if next_phase == "feedback" and result is Dictionary and not bool(result.get("clean",false))
         else AMBER if next_phase in ["paused", "recovering"]
         else AURA)
     if (bool(state.get("loaded", false))
@@ -88,7 +89,8 @@ func present(state: Dictionary) -> void:
             str(state.get("hand", "")), str(result.get("clean", false))]
         if result_key != last_result_key:
             last_result_key = result_key
-            result_tone = Design.SCORE_ACCENT if bool(result.get("clean", false)) else Color("#BC5A50")
+            result_tone = (Design.SCORE_ACCENT if bool(result.get("clean",false))
+                else AMBER if bool(result.get("accepted",false)) else ERROR)
             result_age = 0.0
             result_wave = 1.0
             queue_redraw()

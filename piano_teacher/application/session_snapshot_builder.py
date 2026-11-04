@@ -204,6 +204,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         visual_gap_beats=gap_beats, visual_motion=visual_motion,
         practice_timeline=practice_timeline, practice_preparation=state.practice_preparation,
         take_result=({"clean": bool(state.pending_result.clean),
+                      "accepted": bool(state.pending_result.passed),
                       "correct": state.pending_result.correct,
                       "total": len(state.pending_result.notes)}
                      if state.mode == "practice" and state.pending_result is not None else None),

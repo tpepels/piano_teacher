@@ -119,7 +119,7 @@ static func role_fill(role: String, selected: bool = false) -> Color:
             return MINT
         "choice":
             return MINT if selected else PANEL_RECESSED
-        "settings", "listen", "review", "retry":
+        "settings", "listen", "review", "retry", "tempo_down", "tempo_up":
             return PANEL_RECESSED
         "danger":
             return Color("#39292B")
