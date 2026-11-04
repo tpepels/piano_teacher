@@ -1488,7 +1488,7 @@ class PracticeEngine:
                         self.visual_transport.next_at = 0.0
                         self.feedback = "Cannot prepare the next lesson score"
                         self.next_action = (
-                            f"{failure}. Select another step or stop and retry.")
+                            f"{failure}. Select another step or reopen the piece.")
                         return
                     self._stage_handoff_visual_beat = None
                     self.visual_transport.next_at = now + .10
