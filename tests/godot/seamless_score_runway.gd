@@ -88,6 +88,18 @@ func run() -> void:
     stage.score_frame.add_child(future)
     runway._future = future
     var old_renderer = stage.renderer
+    # A fully retained late score must remain invisible until the engine
+    # confirms its delayed global origin; provisional placement would jump.
+    runway.present_frame({
+        "loaded":true,"practice_timeline":{"stride_beats":4.0},
+        "visual_offset_beats":0.0,"duration_beats":4.0,
+        "bpm":120.0,
+        "streak":2,"clean_runs_required":3,"target_bpm":120.0,
+        "phase":"feedback"},20.0)
+    check(future.modulate.a < .01 and
+        absf(old_renderer.runway_cutoff_beat - 4.4) < .0001,
+        "late score remains hidden until the backend confirms its global origin")
+
     # A late next-stage preload moves its global origin forward without
     # changing the scrolling source camera or presenting a stale score.
     runway.present_frame({
