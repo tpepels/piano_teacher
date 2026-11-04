@@ -133,7 +133,7 @@ def test_invalid_recovery_boundary_is_rejected_before_transport_mutation():
                                 status="wrong"),)),
             phrase=SimpleNamespace(start=40.0, end=60.0),
             grid=(0.0, 4.0), bpm=80, minimum_bpm=12,
-            play_from_beat=40.0)
+            play_from_beat=0.0)
 
 
 def _song():
