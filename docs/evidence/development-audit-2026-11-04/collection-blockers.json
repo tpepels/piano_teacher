@@ -1,0 +1,98 @@
+{
+  "command": ".venv/bin/python -m pytest --collect-only -q --continue-on-collection-errors",
+  "summary": "4536 tests collected, 23 errors in 1.06s",
+  "collection_errors": [
+    {
+      "module": "tests/test_feedback.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score_geometry'"
+    },
+    {
+      "module": "tests/test_feedback_server.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_following_practice.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_grading_session_capture.py",
+      "error": "ImportError: cannot import name 'check_grading_session' from 'scripts' (unknown location)"
+    },
+    {
+      "module": "tests/test_grand_staff_barlines.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_integrated_variants.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_learning_ui.py",
+      "error": "ModuleNotFoundError: No module named 'scripts.smoke_learning_ui'"
+    },
+    {
+      "module": "tests/test_lesson_duration_alignment.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_lesson_tempo_route.py",
+      "error": "ImportError: cannot import name 'build_exercises' from 'piano_teacher.learning' (/home/tom/Projects/piano_teacher/piano_teacher/learning.py)"
+    },
+    {
+      "module": "tests/test_musical_fidelity_corpus.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.raster'"
+    },
+    {
+      "module": "tests/test_native_backend_defaults.py",
+      "error": "ImportError: cannot import name 'Handler' from 'piano_teacher.server' (/home/tom/Projects/piano_teacher/piano_teacher/server.py)"
+    },
+    {
+      "module": "tests/test_native_singleton_tuplets.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_notation_metadata.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_note_reactions.py",
+      "error": "ModuleNotFoundError: No module named 'scripts.smoke_teaching_godot'"
+    },
+    {
+      "module": "tests/test_phase0_cursor_trace.py",
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/tom/Projects/piano_teacher/scripts/smoke_godot.py'"
+    },
+    {
+      "module": "tests/test_piece_wide_midi_clefs.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_reading_spacing.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_source_fidelity.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_strip_header_safety.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_transformed_source_notation.py",
+      "error": "ImportError: cannot import name 'LegacyStrategy' from 'piano_teacher.exercise_strategies' (/home/tom/Projects/piano_teacher/piano_teacher/exercise_strategies.py)"
+    },
+    {
+      "module": "tests/test_user_midi_visual_regression.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_verovio_resources.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    },
+    {
+      "module": "tests/test_visible_accidentals.py",
+      "error": "ModuleNotFoundError: No module named 'piano_teacher.score'"
+    }
+  ]
+}

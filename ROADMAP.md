@@ -1,6 +1,6 @@
 # Piano Teacher — single development roadmap
 
-**Authoritative plan • 2026-11-03 • MIDI input only**
+**Authoritative plan • 2026-11-04 • MIDI input only**
 
 This is the sole active phase plan. Other `docs/` files are technical
 specifications, dated research evidence, verification protocols or archived
@@ -23,7 +23,8 @@ and saved progress. The unchanged original MIDI is the final performance.
 New installations select adaptive **Coda + Fukuda**. Existing explicit
 preferences are respected. Lessons are meaningfully transformed from
 source material, not editorial renamings of the same notes. No artificial
-mastery from visual previews; three clean full-target performances required.
+mastery from visual previews; three accepted full-target performances required
+(the exact warning allowance is defined by `Assessment.passed`, below).
 
 ## Phase status and acceptance gates
 
@@ -220,6 +221,53 @@ adaptive replanning remain mandatory Phase 6 acceptance cases. This
 feature does not close physical performance or teaching-effectiveness gates.
 
 ## Immediate order of work
+
+**2026-11-04 development audit and adaptive retry proposal.** The current
+[architecture map](docs/architecture/system.md) inventories subsystem owners,
+dependencies and invariants. The
+[dated verification/findings ledger](docs/verification/development-audit-2026-11-04.md)
+distinguishes reproduced defects, corrected obsolete fixtures, passing checks
+and remaining verification debt. Historical Phase 5 acceptance above is not a
+claim that every current local test or physical gate passes.
+
+Confirmed fixes in this audit preserve performed BPM in completed-take evidence
+when a policy slows the retry, validate stage commands before stopping a valid
+take, normalize invalid saved folder/calibration values, align READY lesson
+labels with the native preview camera, preserve sustained notes at standalone
+Fukuda excerpt entry, and remove the unused two-pass `Curriculum`. The notation
+verifier no longer imports its coordinator through its causal-difference helper.
+Legacy HTTP/PNG test seams in the exercised gates are migrated to typed/native
+contracts; no compatibility runtime has been restored.
+
+Whole-suite collection is restored (4,716 tests, zero collection errors).
+The next verification priority is the outstanding fingering-clearance and
+small-staff attachment failures, plus remaining unexecuted broad assertions;
+collection success is not whole-suite acceptance. Complete this investigation
+before an adaptive-policy rollout. The full independent notation sweep and
+physical gates below remain open.
+
+The [adaptive retry specification](docs/mistake-response-policies.md) reviews
+primary studies, defines structured error evidence, graduated interventions,
+offline replay and a small controlled physical comparison. It recommends an
+explainable deterministic selector before online learning. **It is a proposal;
+no new adaptive policy is implemented or approved by this handoff.** The current
+six fixed strategies remain available and retain their identifiers/behavior.
+
+Proposed implementation sequence within P6/P7, requiring review before product
+behavior changes:
+
+| Step | Complete implementation scope | Exit gate |
+| --- | --- | --- |
+| P6 retry evidence | Immutable per-attack multidimensional grading evidence, source/tempo/scope-aware action history, versioned SQLite persistence and deterministic MIDI replay through the current callback/registry path. | Raw match/residual correctness, transaction failure/restart tests, fixed-baseline replay parity and no transport/mastery changes. |
+| P6 adaptive selector | Separately registered/versioned deterministic policy; generic continue/repair interface for dynamic interruption; complete repeat/loop/slow/guided/reintegration/verification route, explicit reasons, bounded actions and learner overrides. | No policy-ID engine branches; all source/meter/readiness/partial-credit/rollback gates plus full native sessions; fixed baselines unchanged. |
+| P7 comparison | Preregistered matched-passage feasibility study, followed by power/precision-planned retention comparison. | Unsupported full-original tests at common tempo after 24 hours; burden/frustration, missingness and uncertainty reported; no superiority claim from pilot/replay. |
+| P7 optional online learning | Local interpretable contextual bandit only after randomized eligible-action logs and comparable unsupported outcomes exist. | Action support/propensities, effective sample size, held-out learners and prespecified delayed learning/safety outcomes. Otherwise retain deterministic policy. |
+
+The numerical thresholds in the proposed selector are calibration hypotheses.
+The existing `adaptive` response is parameterized recovery, not a learned
+personalized policy. `Assessment.passed` permits a minority of timing/hold
+warnings, whereas `Assessment.clean` requires all notes precise; retention and
+clean-pass reports must state which criterion they measure.
 
 **P6 — Prove real user behavior.** The
 [embedded real-MIDI workflow](https://github.com/tpepels/piano_teacher/actions/runs/41660803843)

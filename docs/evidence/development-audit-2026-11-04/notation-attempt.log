@@ -1,0 +1,510 @@
+........................FFF...........................EEEEEEEEEEEE...F.. [  5%]
+...
+==================================== ERRORS ====================================
+_ ERROR at setup of test_real_framebuffer_fingers_clear_source_ink_and_scroll_with_notes _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_popup_keeps_canonical_identities_and_corrected_pixels _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+__ ERROR at setup of test_compact_practice_canvas_keeps_chord_fingers_visible __
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_fingering_stays_locally_attached_to_each_actual_note __
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_insufficient_staff_space_is_reported_without_losing_source_assignments _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+__ ERROR at setup of test_repeat_loops_and_tempo_preserve_fingering_positions __
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_clear_authored_placement_takes_precedence_over_hand_default _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_authentic_sprite_obstacles_cover_faint_flag_and_stem_edges _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_pixel_oracle_rejects_erased_wrong_and_colliding_fingering _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_real_application_popup_posts_correction_and_reloads_revision[xml] _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_real_application_popup_posts_correction_and_reloads_revision[chopin-midi] _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+_ ERROR at setup of test_real_application_popup_posts_correction_and_reloads_revision[hanon-midi] _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f7bdada3950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-493'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def captured(tmp_path_factory):
+        command = _godot()
+        folder = tmp_path_factory.mktemp("native-fingering")
+>       data = _fixture(folder)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_native_fingering.py:146:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+folder = PosixPath('/tmp/pytest-of-tom/pytest-493/native-fingering0')
+
+    def _fixture(folder):
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+>       from piano_teacher.score import import_piece
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_native_fingering.py:64: ModuleNotFoundError
+=================================== FAILURES ===================================
+_ test_complete_real_piece_and_all_lesson_variants[Le_Pianiste_virtuose_-_Premi\xe8re_partie_(1-20)_-_C_L_Hanon.midi] _
+
+name = 'Le_Pianiste_virtuose_-_Première_partie_(1-20)_-_C_L_Hanon.midi'
+tmp_path = PosixPath('/tmp/pytest-of-tom/pytest-493/test_complete_real_piece_and_a0')
+
+    @pytest.mark.parametrize('name', PIECES)
+    def test_complete_real_piece_and_all_lesson_variants(name, tmp_path):
+        path = ROOT/'midi'/name
+        piece,_ = import_piece(path)
+        signature = sha256(path.read_bytes()).hexdigest()
+        started = time.monotonic()
+        plan = FingeringService(tmp_path).prepare(piece,signature)
+        elapsed = time.monotonic()-started
+        print(f'\n{name}: {len(piece.notes)} original notes, {plan.summary()}, {elapsed:.2f}s')
+        assert plan.status in ('ready','partial'), plan.error
+        assert len(plan.assignments)==len(piece.notes)
+        # This export assigns six to ten concurrent distinct keys to its RH
+        # track. Rejecting impossible fingers is required, not an inference error.
+        overfull=any(len({q.pitch for q in piece.notes if q.hand==n.hand
+                          and q.start<=n.start+1e-7 and q.end>n.start+1e-7})>5
+                     for n in piece.notes) if 'Evans' in name else False
+        if overfull:
+            assert plan.status=='partial'
+            assert plan.summary()['assigned']>0
+            assert all(a.reason for a in plan.assignments.values() if a.finger is None)
+        else:
+            assert plan.summary()['assigned']==len(piece.notes)
+        assert {a.hand for a in plan.assignments.values()}=={'left','right'}
+        # All distinct held keys must have distinct known automatic fingers.
+        for hand in ('left','right'):
+            held=[]
+            for n in sorted((n for n in piece.notes if n.hand==hand),key=lambda n:(n.start,n.pitch)):
+                held=[old for old in held if old.end>n.start+1e-7]
+                a=plan.assignments[n.source_id]
+                if a.finger is not None:
+                    assert all(old.pitch==n.pitch or plan.assignments[old.source_id].finger!=a.finger for old in held)
+                    held.append(n)
+        # A fresh process/service with deliberately unavailable Node must reuse
+        # the original plan, proving restart and absence of hidden reinference.
+        cached=FingeringService(tmp_path,provider=LumikeyProvider(node='/unavailable/node')).prepare(piece,signature)
+        assert cached==plan
+        learning=LearningPlan(replace(piece,fingering_plan=plan))
+        covered=set()
+        stages=0
+        for ex in learning.exercises:
+            for hand in ('right','left','both'):
+>               for variant in learning._stage_variants(ex,hand):
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_fingering_real_pieces.py:66:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+piano_teacher/learning.py:302: in _stage_variants
+    return tuple(stage.variant for stage in self.lesson_definition.stages(exercise,hand))
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = LessonPlanDefinition(exercises=(Exercise(kind='learn', phrase=Phrase(number=1, first_bar=1, last_bar=1, start=0.0, end..., origin='', technique='', display_name=''),)}), generator_name='source-progression', requires_unique_source_ids=False)
+exercise = Exercise(kind='learn', phrase=Phrase(number=59, first_bar=59, last_bar=60, start=116.0, end=120.0, notes=(Note(start=1...hand='right', source_id='midi-t0-e940', voice='midi-t0-c0', spelling=None, velocity=80))), key='learn:59-60', hands=())
+hand = 'right'
+
+    def stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
+>       return self.stage_sequences[(exercise.key,hand)]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: ('learn:59-60', 'right')
+
+piano_teacher/lesson_generators.py:83: KeyError
+----------------------------- Captured stdout call -----------------------------
+
+Le_Pianiste_virtuose_-_Première_partie_(1-20)_-_C_L_Hanon.midi: 18058 original notes, {'status': 'ready', 'provider': {'name': 'lumikey', 'version': '0.3.0', 'model_version': {'left': '246f2fed013c27ca8c32ce9d070002afcc49da4f1dfb0c43e09a4a3f9f2fb86e', 'right': 'f931288302b87f5eec1c8af29a570ee0213a272a13eeb590991a285e1f1b67eb'}, 'runtime': 'onnxruntime-node@1.30.0/cpu', 'adapter_version': 3}, 'source_fingerprint': 'ec5ee753c6de4b3a76dff66e3f07f2542e60e974d10e5999faafbbf1ee7a2e46', 'assigned': 18058, 'unknown': 0, 'manual': 0, 'review': 0, 'issues': [], 'error': ''}, 3.11s
+_ test_complete_real_piece_and_all_lesson_variants[Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi] _
+
+name = 'Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi'
+tmp_path = PosixPath('/tmp/pytest-of-tom/pytest-493/test_complete_real_piece_and_a1')
+
+    @pytest.mark.parametrize('name', PIECES)
+    def test_complete_real_piece_and_all_lesson_variants(name, tmp_path):
+        path = ROOT/'midi'/name
+        piece,_ = import_piece(path)
+        signature = sha256(path.read_bytes()).hexdigest()
+        started = time.monotonic()
+        plan = FingeringService(tmp_path).prepare(piece,signature)
+        elapsed = time.monotonic()-started
+        print(f'\n{name}: {len(piece.notes)} original notes, {plan.summary()}, {elapsed:.2f}s')
+        assert plan.status in ('ready','partial'), plan.error
+        assert len(plan.assignments)==len(piece.notes)
+        # This export assigns six to ten concurrent distinct keys to its RH
+        # track. Rejecting impossible fingers is required, not an inference error.
+        overfull=any(len({q.pitch for q in piece.notes if q.hand==n.hand
+                          and q.start<=n.start+1e-7 and q.end>n.start+1e-7})>5
+                     for n in piece.notes) if 'Evans' in name else False
+        if overfull:
+            assert plan.status=='partial'
+            assert plan.summary()['assigned']>0
+            assert all(a.reason for a in plan.assignments.values() if a.finger is None)
+        else:
+            assert plan.summary()['assigned']==len(piece.notes)
+        assert {a.hand for a in plan.assignments.values()}=={'left','right'}
+        # All distinct held keys must have distinct known automatic fingers.
+        for hand in ('left','right'):
+            held=[]
+            for n in sorted((n for n in piece.notes if n.hand==hand),key=lambda n:(n.start,n.pitch)):
+                held=[old for old in held if old.end>n.start+1e-7]
+                a=plan.assignments[n.source_id]
+                if a.finger is not None:
+                    assert all(old.pitch==n.pitch or plan.assignments[old.source_id].finger!=a.finger for old in held)
+                    held.append(n)
+        # A fresh process/service with deliberately unavailable Node must reuse
+        # the original plan, proving restart and absence of hidden reinference.
+        cached=FingeringService(tmp_path,provider=LumikeyProvider(node='/unavailable/node')).prepare(piece,signature)
+        assert cached==plan
+        learning=LearningPlan(replace(piece,fingering_plan=plan))
+        covered=set()
+        stages=0
+        for ex in learning.exercises:
+            for hand in ('right','left','both'):
+>               for variant in learning._stage_variants(ex,hand):
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_fingering_real_pieces.py:66:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+piano_teacher/learning.py:302: in _stage_variants
+    return tuple(stage.variant for stage in self.lesson_definition.stages(exercise,hand))
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = LessonPlanDefinition(exercises=(Exercise(kind='learn', phrase=Phrase(number=1, first_bar=1, last_bar=1, start=0.0, end..., origin='', technique='', display_name=''),)}), generator_name='source-progression', requires_unique_source_ids=False)
+exercise = Exercise(kind='learn', phrase=Phrase(number=1, first_bar=1, last_bar=1, start=0.0, end=0.5, notes=(Note(start=0.0, end..., hand='right', source_id='midi-t0-e10', voice='midi-t0-c0', spelling=None, velocity=65),)), key='learn:1-1', hands=())
+hand = 'left'
+
+    def stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
+>       return self.stage_sequences[(exercise.key,hand)]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: ('learn:1-1', 'left')
+
+piano_teacher/lesson_generators.py:83: KeyError
+----------------------------- Captured stdout call -----------------------------
+
+Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi: 1299 original notes, {'status': 'ready', 'provider': {'name': 'lumikey', 'version': '0.3.0', 'model_version': {'left': '246f2fed013c27ca8c32ce9d070002afcc49da4f1dfb0c43e09a4a3f9f2fb86e', 'right': 'f931288302b87f5eec1c8af29a570ee0213a272a13eeb590991a285e1f1b67eb'}, 'runtime': 'onnxruntime-node@1.30.0/cpu', 'adapter_version': 3}, 'source_fingerprint': '2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9', 'assigned': 1299, 'unknown': 0, 'manual': 0, 'review': 0, 'issues': [], 'error': ''}, 0.32s
+_ test_complete_real_piece_and_all_lesson_variants[Peace_Piece_-_Bill_Evans_(Piano_Solo).midi] _
+
+name = 'Peace_Piece_-_Bill_Evans_(Piano_Solo).midi'
+tmp_path = PosixPath('/tmp/pytest-of-tom/pytest-493/test_complete_real_piece_and_a2')
+
+    @pytest.mark.parametrize('name', PIECES)
+    def test_complete_real_piece_and_all_lesson_variants(name, tmp_path):
+        path = ROOT/'midi'/name
+        piece,_ = import_piece(path)
+        signature = sha256(path.read_bytes()).hexdigest()
+        started = time.monotonic()
+        plan = FingeringService(tmp_path).prepare(piece,signature)
+        elapsed = time.monotonic()-started
+        print(f'\n{name}: {len(piece.notes)} original notes, {plan.summary()}, {elapsed:.2f}s')
+        assert plan.status in ('ready','partial'), plan.error
+        assert len(plan.assignments)==len(piece.notes)
+        # This export assigns six to ten concurrent distinct keys to its RH
+        # track. Rejecting impossible fingers is required, not an inference error.
+        overfull=any(len({q.pitch for q in piece.notes if q.hand==n.hand
+                          and q.start<=n.start+1e-7 and q.end>n.start+1e-7})>5
+                     for n in piece.notes) if 'Evans' in name else False
+        if overfull:
+            assert plan.status=='partial'
+            assert plan.summary()['assigned']>0
+            assert all(a.reason for a in plan.assignments.values() if a.finger is None)
+        else:
+            assert plan.summary()['assigned']==len(piece.notes)
+        assert {a.hand for a in plan.assignments.values()}=={'left','right'}
+        # All distinct held keys must have distinct known automatic fingers.
+        for hand in ('left','right'):
+            held=[]
+            for n in sorted((n for n in piece.notes if n.hand==hand),key=lambda n:(n.start,n.pitch)):
+                held=[old for old in held if old.end>n.start+1e-7]
+                a=plan.assignments[n.source_id]
+                if a.finger is not None:
+                    assert all(old.pitch==n.pitch or plan.assignments[old.source_id].finger!=a.finger for old in held)
+                    held.append(n)
+        # A fresh process/service with deliberately unavailable Node must reuse
+        # the original plan, proving restart and absence of hidden reinference.
+        cached=FingeringService(tmp_path,provider=LumikeyProvider(node='/unavailable/node')).prepare(piece,signature)
+        assert cached==plan
+        learning=LearningPlan(replace(piece,fingering_plan=plan))
+        covered=set()
+        stages=0
+        for ex in learning.exercises:
+            for hand in ('right','left','both'):
+>               for variant in learning._stage_variants(ex,hand):
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_fingering_real_pieces.py:66:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+piano_teacher/learning.py:302: in _stage_variants
+    return tuple(stage.variant for stage in self.lesson_definition.stages(exercise,hand))
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = LessonPlanDefinition(exercises=(Exercise(kind='learn', phrase=Phrase(number=1, first_bar=1, last_bar=2, start=0.0, end..., origin='', technique='', display_name=''),)}), generator_name='source-progression', requires_unique_source_ids=False)
+exercise = Exercise(kind='perform', phrase=Phrase(number=0, first_bar=1, last_bar=78, start=0.0, end=308.5, notes=(Note(start=0.0...and='right', source_id='midi-t0-e2710', voice='midi-t0-c1', spelling=None, velocity=49))), key='perform:all', hands=())
+hand = 'right'
+
+    def stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
+>       return self.stage_sequences[(exercise.key,hand)]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: ('perform:all', 'right')
+
+piano_teacher/lesson_generators.py:83: KeyError
+----------------------------- Captured stdout call -----------------------------
+
+Peace_Piece_-_Bill_Evans_(Piano_Solo).midi: 1990 original notes, {'status': 'partial', 'provider': {'name': 'lumikey', 'version': '0.3.0', 'model_version': {'left': '246f2fed013c27ca8c32ce9d070002afcc49da4f1dfb0c43e09a4a3f9f2fb86e', 'right': 'f931288302b87f5eec1c8af29a570ee0213a272a13eeb590991a285e1f1b67eb'}, 'runtime': 'onnxruntime-node@1.30.0/cpu', 'adapter_version': 3}, 'source_fingerprint': '56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a', 'assigned': 1640, 'unknown': 350, 'manual': 0, 'review': 0, 'issues': ['No physically available finger for these overlapping keys/constraints'], 'error': ''}, 0.43s
+_ test_real_piece_digits_own_their_source_notes_and_clear_canonical_ink[chopin-turn] _
+
+real_capture = (PosixPath('/tmp/pytest-of-tom/pytest-493/chopin-turn0'), {'capture_config': {'version': 1, 'score_ink': 'canonical', ...apture_config': {'fingering_annotations': True, 'transport_overlay': False}, 'file': 'scroll.png', 'gap': 11.0, ...}]})
+
+    def test_real_piece_digits_own_their_source_notes_and_clear_canonical_ink(real_capture):
+        folder,data,expected,report=real_capture
+        for frame in report['frames']:
+>           assert not frame['placement_issues'],frame['placement_issues']
+E           AssertionError: [{'event_ids': ['pt49d6f9d20c3138c273e5b81103aa2bc3s0'], 'reason': 'No local fingering position clears the musical ink...e934aa2fb493f72s0'], 'reason': 'No local fingering position clears the musical ink', 'source_id': 'midi-t1-e178'}, ...]
+E           assert not [{'event_ids': ['pt49d6f9d20c3138c273e5b81103aa2bc3s0'], 'reason': 'No local fingering position clears the musical ink...e934aa2fb493f72s0'], 'reason': 'No local fingering position clears the musical ink', 'source_id': 'midi-t1-e178'}, ...]
+
+tests/test_fingering_real_placement.py:77: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+VEROVIO_NATIVE_BEAMS: 12
+=========================== short test summary info ============================
+FAILED tests/test_fingering_real_pieces.py::test_complete_real_piece_and_all_lesson_variants[Le_Pianiste_virtuose_-_Premi\xe8re_partie_(1-20)_-_C_L_Hanon.midi]
+FAILED tests/test_fingering_real_pieces.py::test_complete_real_piece_and_all_lesson_variants[Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi]
+FAILED tests/test_fingering_real_pieces.py::test_complete_real_piece_and_all_lesson_variants[Peace_Piece_-_Bill_Evans_(Piano_Solo).midi]
+FAILED tests/test_fingering_real_placement.py::test_real_piece_digits_own_their_source_notes_and_clear_canonical_ink[chopin-turn]
+ERROR tests/test_native_fingering.py::test_real_framebuffer_fingers_clear_source_ink_and_scroll_with_notes
+ERROR tests/test_native_fingering.py::test_popup_keeps_canonical_identities_and_corrected_pixels
+ERROR tests/test_native_fingering.py::test_compact_practice_canvas_keeps_chord_fingers_visible
+ERROR tests/test_native_fingering.py::test_fingering_stays_locally_attached_to_each_actual_note
+ERROR tests/test_native_fingering.py::test_insufficient_staff_space_is_reported_without_losing_source_assignments
+ERROR tests/test_native_fingering.py::test_repeat_loops_and_tempo_preserve_fingering_positions
+ERROR tests/test_native_fingering.py::test_clear_authored_placement_takes_precedence_over_hand_default
+ERROR tests/test_native_fingering.py::test_authentic_sprite_obstacles_cover_faint_flag_and_stem_edges
+ERROR tests/test_native_fingering.py::test_pixel_oracle_rejects_erased_wrong_and_colliding_fingering
+ERROR tests/test_native_fingering.py::test_real_application_popup_posts_correction_and_reloads_revision[xml]
+ERROR tests/test_native_fingering.py::test_real_application_popup_posts_correction_and_reloads_revision[chopin-midi]
+ERROR tests/test_native_fingering.py::test_real_application_popup_posts_correction_and_reloads_revision[hanon-midi]
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/usr/lib/python3.14/selectors.py:398: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+4 failed, 59 passed, 12 errors in 260.94s (0:04:20)

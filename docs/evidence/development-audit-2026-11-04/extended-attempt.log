@@ -1,0 +1,421 @@
+........................................................................ [ 23%]
+........................................................................ [ 47%]
+........................................................................ [ 71%]
+........................................................................ [ 95%]
+..............                                                           [100%]
+302 passed in 45.46s
+..............F...........................................F............F [ 46%]
+...................EEEE...FF............................................ [ 92%]
+...........                                                              [100%]
+==================================== ERRORS ====================================
+_ ERROR at setup of test_chord_flag_does_not_absorb_source_owned_tie[bass-start] _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f5369747950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-505'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def chord_frames(tmp_path_factory):
+        from piano_teacher.notation.assets.glyphs import native_glyphs
+        from piano_teacher.notation.assets.notes import note_templates
+        from piano_teacher.notation.assets.ties import tie_templates
+        from piano_teacher.notation.assets.chords import chord_templates
+        from test_native_fingering import _godot, _run_godot
+
+        folder = tmp_path_factory.mktemp("chord-flag-ties")
+        cases = [
+            _case("left", [("E", -1, 2), ("B", -1, 2)], "eighth", "quarter", "up", 1, "bass-start"),
+            _case("left", [("B", -1, 2), ("E", -1, 2)], "eighth", "quarter", "up", 0, "bass-upper-leader"),
+            _case("right", [("B", 0, 4), ("F", 0, 5)], "quarter", "eighth", "down", 0, "treble-end"),
+        ]
+        assets = {}
+        for case, _ in cases:
+            assets.update(chord_templates(dict(measures=[case["measure"]], notation_events=case["events"])))
+        rendered = []
+        for case, _ in cases:
+            rendered.extend([case, {**case, "name":case["name"]+"-old", "old":True}])
+        payload = dict(cases=rendered, glyphs=native_glyphs(), notes=note_templates(), ties=tie_templates(), chords=assets)
+        (folder/"fixture.json").write_text(json.dumps(payload))
+        (folder/"probe.gd").write_text(HARNESS)
+        result = _run_godot([*_godot(), "--path", str(ROOT/"godot"), "--audio-driver", "Dummy",
+            "--rendering-method", "gl_compatibility", "--script", str(folder/"probe.gd"), "--",
+            str(folder/"fixture.json"), str(folder)], timeout=45)
+        output = result.stdout+result.stderr
+        (folder/"godot.log").write_text(output)
+>       assert result.returncode == 0 and "SCRIPT ERROR" not in output, output
+E       AssertionError: Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+E         OpenGL API 4.6 (Core Profile) Mesa 26.2.6-arch1.1 - Compatibility - Using Device: AMD - AMD Radeon 860M Graphics (radeonsi, krackan1, ACO, DRM 3.64, 7.2.11-zen1-1-zen)
+E
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E
+E       assert (0 == 0 and 'SCRIPT ERROR' not in 'Godot Engin...obe.gd:42)\n'
+E        +  where 0 = CompletedProcess(args=['/usr/bin/godot', '--path', '/home/tom/Projects/piano_teacher/godot', '--audio-driver', 'Dummy'...ace (most recent call first):\n              [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)\n").returncode
+E
+E         'SCRIPT ERROR' is contained here:
+E           1-1-zen)
+E
+E           SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E         ? ++++++++++++
+E                     at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)...
+E
+E         ...Full output truncated (22 lines hidden), use '-vv' to show)
+
+tests/test_native_chord_flag_ties.py:135: AssertionError
+_ ERROR at setup of test_chord_flag_does_not_absorb_source_owned_tie[bass-upper-leader] _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f5369747950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-505'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def chord_frames(tmp_path_factory):
+        from piano_teacher.notation.assets.glyphs import native_glyphs
+        from piano_teacher.notation.assets.notes import note_templates
+        from piano_teacher.notation.assets.ties import tie_templates
+        from piano_teacher.notation.assets.chords import chord_templates
+        from test_native_fingering import _godot, _run_godot
+
+        folder = tmp_path_factory.mktemp("chord-flag-ties")
+        cases = [
+            _case("left", [("E", -1, 2), ("B", -1, 2)], "eighth", "quarter", "up", 1, "bass-start"),
+            _case("left", [("B", -1, 2), ("E", -1, 2)], "eighth", "quarter", "up", 0, "bass-upper-leader"),
+            _case("right", [("B", 0, 4), ("F", 0, 5)], "quarter", "eighth", "down", 0, "treble-end"),
+        ]
+        assets = {}
+        for case, _ in cases:
+            assets.update(chord_templates(dict(measures=[case["measure"]], notation_events=case["events"])))
+        rendered = []
+        for case, _ in cases:
+            rendered.extend([case, {**case, "name":case["name"]+"-old", "old":True}])
+        payload = dict(cases=rendered, glyphs=native_glyphs(), notes=note_templates(), ties=tie_templates(), chords=assets)
+        (folder/"fixture.json").write_text(json.dumps(payload))
+        (folder/"probe.gd").write_text(HARNESS)
+        result = _run_godot([*_godot(), "--path", str(ROOT/"godot"), "--audio-driver", "Dummy",
+            "--rendering-method", "gl_compatibility", "--script", str(folder/"probe.gd"), "--",
+            str(folder/"fixture.json"), str(folder)], timeout=45)
+        output = result.stdout+result.stderr
+        (folder/"godot.log").write_text(output)
+>       assert result.returncode == 0 and "SCRIPT ERROR" not in output, output
+E       AssertionError: Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+E         OpenGL API 4.6 (Core Profile) Mesa 26.2.6-arch1.1 - Compatibility - Using Device: AMD - AMD Radeon 860M Graphics (radeonsi, krackan1, ACO, DRM 3.64, 7.2.11-zen1-1-zen)
+E
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E
+E       assert (0 == 0 and 'SCRIPT ERROR' not in 'Godot Engin...obe.gd:42)\n'
+E        +  where 0 = CompletedProcess(args=['/usr/bin/godot', '--path', '/home/tom/Projects/piano_teacher/godot', '--audio-driver', 'Dummy'...ace (most recent call first):\n              [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)\n").returncode
+E
+E         'SCRIPT ERROR' is contained here:
+E           1-1-zen)
+E
+E           SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E         ? ++++++++++++
+E                     at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)...
+E
+E         ...Full output truncated (22 lines hidden), use '-vv' to show)
+
+tests/test_native_chord_flag_ties.py:135: AssertionError
+_ ERROR at setup of test_chord_flag_does_not_absorb_source_owned_tie[treble-end] _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f5369747950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-505'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def chord_frames(tmp_path_factory):
+        from piano_teacher.notation.assets.glyphs import native_glyphs
+        from piano_teacher.notation.assets.notes import note_templates
+        from piano_teacher.notation.assets.ties import tie_templates
+        from piano_teacher.notation.assets.chords import chord_templates
+        from test_native_fingering import _godot, _run_godot
+
+        folder = tmp_path_factory.mktemp("chord-flag-ties")
+        cases = [
+            _case("left", [("E", -1, 2), ("B", -1, 2)], "eighth", "quarter", "up", 1, "bass-start"),
+            _case("left", [("B", -1, 2), ("E", -1, 2)], "eighth", "quarter", "up", 0, "bass-upper-leader"),
+            _case("right", [("B", 0, 4), ("F", 0, 5)], "quarter", "eighth", "down", 0, "treble-end"),
+        ]
+        assets = {}
+        for case, _ in cases:
+            assets.update(chord_templates(dict(measures=[case["measure"]], notation_events=case["events"])))
+        rendered = []
+        for case, _ in cases:
+            rendered.extend([case, {**case, "name":case["name"]+"-old", "old":True}])
+        payload = dict(cases=rendered, glyphs=native_glyphs(), notes=note_templates(), ties=tie_templates(), chords=assets)
+        (folder/"fixture.json").write_text(json.dumps(payload))
+        (folder/"probe.gd").write_text(HARNESS)
+        result = _run_godot([*_godot(), "--path", str(ROOT/"godot"), "--audio-driver", "Dummy",
+            "--rendering-method", "gl_compatibility", "--script", str(folder/"probe.gd"), "--",
+            str(folder/"fixture.json"), str(folder)], timeout=45)
+        output = result.stdout+result.stderr
+        (folder/"godot.log").write_text(output)
+>       assert result.returncode == 0 and "SCRIPT ERROR" not in output, output
+E       AssertionError: Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+E         OpenGL API 4.6 (Core Profile) Mesa 26.2.6-arch1.1 - Compatibility - Using Device: AMD - AMD Radeon 860M Graphics (radeonsi, krackan1, ACO, DRM 3.64, 7.2.11-zen1-1-zen)
+E
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E
+E       assert (0 == 0 and 'SCRIPT ERROR' not in 'Godot Engin...obe.gd:42)\n'
+E        +  where 0 = CompletedProcess(args=['/usr/bin/godot', '--path', '/home/tom/Projects/piano_teacher/godot', '--audio-driver', 'Dummy'...ace (most recent call first):\n              [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)\n").returncode
+E
+E         'SCRIPT ERROR' is contained here:
+E           1-1-zen)
+E
+E           SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E         ? ++++++++++++
+E                     at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)...
+E
+E         ...Full output truncated (22 lines hidden), use '-vv' to show)
+
+tests/test_native_chord_flag_ties.py:135: AssertionError
+_ ERROR at setup of test_former_single_note_clearance_rejects_chord_flag_collision _
+
+tmp_path_factory = TempPathFactory(_given_basetemp=None, _trace=<pluggy._tracing.TagTracerSub object at 0x7f5369747950>, _basetemp=PosixPath('/tmp/pytest-of-tom/pytest-505'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def chord_frames(tmp_path_factory):
+        from piano_teacher.notation.assets.glyphs import native_glyphs
+        from piano_teacher.notation.assets.notes import note_templates
+        from piano_teacher.notation.assets.ties import tie_templates
+        from piano_teacher.notation.assets.chords import chord_templates
+        from test_native_fingering import _godot, _run_godot
+
+        folder = tmp_path_factory.mktemp("chord-flag-ties")
+        cases = [
+            _case("left", [("E", -1, 2), ("B", -1, 2)], "eighth", "quarter", "up", 1, "bass-start"),
+            _case("left", [("B", -1, 2), ("E", -1, 2)], "eighth", "quarter", "up", 0, "bass-upper-leader"),
+            _case("right", [("B", 0, 4), ("F", 0, 5)], "quarter", "eighth", "down", 0, "treble-end"),
+        ]
+        assets = {}
+        for case, _ in cases:
+            assets.update(chord_templates(dict(measures=[case["measure"]], notation_events=case["events"])))
+        rendered = []
+        for case, _ in cases:
+            rendered.extend([case, {**case, "name":case["name"]+"-old", "old":True}])
+        payload = dict(cases=rendered, glyphs=native_glyphs(), notes=note_templates(), ties=tie_templates(), chords=assets)
+        (folder/"fixture.json").write_text(json.dumps(payload))
+        (folder/"probe.gd").write_text(HARNESS)
+        result = _run_godot([*_godot(), "--path", str(ROOT/"godot"), "--audio-driver", "Dummy",
+            "--rendering-method", "gl_compatibility", "--script", str(folder/"probe.gd"), "--",
+            str(folder/"fixture.json"), str(folder)], timeout=45)
+        output = result.stdout+result.stderr
+        (folder/"godot.log").write_text(output)
+>       assert result.returncode == 0 and "SCRIPT ERROR" not in output, output
+E       AssertionError: Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+E         OpenGL API 4.6 (Core Profile) Mesa 26.2.6-arch1.1 - Compatibility - Using Device: AMD - AMD Radeon 860M Graphics (radeonsi, krackan1, ACO, DRM 3.64, 7.2.11-zen1-1-zen)
+E
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E         SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E                   at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E                   GDScript backtrace (most recent call first):
+E                       [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)
+E
+E       assert (0 == 0 and 'SCRIPT ERROR' not in 'Godot Engin...obe.gd:42)\n'
+E        +  where 0 = CompletedProcess(args=['/usr/bin/godot', '--path', '/home/tom/Projects/piano_teacher/godot', '--audio-driver', 'Dummy'...ace (most recent call first):\n              [0] _draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)\n").returncode
+E
+E         'SCRIPT ERROR' is contained here:
+E           1-1-zen)
+E
+E           SCRIPT ERROR: Invalid call. Nonexistent function 'paint_tie_contour' in base 'RefCounted (symbol_painter.gd)'.
+E         ? ++++++++++++
+E                     at: Probe._draw (/tmp/pytest-of-tom/pytest-505/chord-flag-ties0/probe.gd:42)...
+E
+E         ...Full output truncated (22 lines hidden), use '-vv' to show)
+
+tests/test_native_chord_flag_ties.py:135: AssertionError
+=================================== FAILURES ===================================
+____________ test_main_uses_score_asset_session_for_stale_and_retry ____________
+
+    def test_main_uses_score_asset_session_for_stale_and_retry():
+        binary = shutil.which("godot") or shutil.which("godot4")
+        if binary is None:
+            pytest.skip("Godot 4 unavailable")
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [binary, "--headless", "--path", str(root / "godot"),
+             "--audio-driver", "Dummy", "--script",
+             str(root / "tests/godot/score_application_lifecycle.gd")],
+            capture_output=True, text=True, timeout=25)
+        output = result.stdout + result.stderr
+>       assert result.returncode == 0, output
+E       AssertionError: Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+E
+E         SCRIPT ERROR: Parse Error: Too many arguments for "_on_state()" call. Expected at most 3 but received 4.
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:19)
+E         SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "PackedByteArray".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:18)
+E         SCRIPT ERROR: Parse Error: Invalid argument for "_on_state()" function: argument 2 should be "PackedByteArray" but is "int".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:18)
+E         SCRIPT ERROR: Parse Error: Invalid argument for "_on_state()" function: argument 3 should be "int" but is "PackedStringArray".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:18)
+E         SCRIPT ERROR: Parse Error: Too many arguments for "_on_layout()" call. Expected at most 2 but received 4.
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:25)
+E         SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "PackedByteArray".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:25)
+E         SCRIPT ERROR: Parse Error: Invalid argument for "_on_layout()" function: argument 2 should be "PackedByteArray" but is "int".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:25)
+E         SCRIPT ERROR: Parse Error: Too many arguments for "_on_state()" call. Expected at most 3 but received 4.
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:39)
+E         SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "PackedByteArray".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:38)
+E         SCRIPT ERROR: Parse Error: Invalid argument for "_on_state()" function: argument 2 should be "PackedByteArray" but is "int".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:38)
+E         SCRIPT ERROR: Parse Error: Invalid argument for "_on_state()" function: argument 3 should be "int" but is "PackedStringArray".
+E                   at: GDScript::reload (/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd:38)
+E         ERROR: Failed to load script "/home/tom/Projects/piano_teacher/tests/godot/score_application_lifecycle.gd" with error "Parse error".
+E            at: load (modules/gdscript/gdscript_resource_format.cpp:46)
+E
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/usr/bin/godot', '--headless', '--path', '/home/tom/Projects/piano_teacher/godot', '--audio-dr...application_lifecycle.gd" with error "Parse error".\n   at: load (modules/gdscript/gdscript_resource_format.cpp:46)\n').returncode
+
+tests/test_score_application_lifecycle.py:19: AssertionError
+_________ test_lesson_overview_preserves_step_skip_and_mastery_values __________
+
+service = <piano_teacher.application.learner_progress.LearnerProgress object at 0x7f5369e30390>
+store = <piano_teacher.learner_state.LearnerStateStore object at 0x7f5364fd7d40>
+
+    def test_lesson_overview_preserves_step_skip_and_mastery_values(service, store):
+        plan = make_plan()
+        first, second, third = plan.lesson_steps
+        plan.mastered[first.key] = 100
+        store.mark_skipped(FINGERPRINT, second.key, reason="Try both hands", status="placed")
+        store.mark_skipped(FINGERPRINT, third.key, reason="Return later")
+        overview = service.lesson_overview(plan, fingerprint=FINGERPRINT)
+>       assert {k: v for k, v in overview.items() if k != "steps"} == dict(
+            trouble_spots=[], route_version=3, piece_fingerprint=FINGERPRINT,
+            current_step=1, total_steps=3, completed_steps=1)
+E       AssertionError: assert {'trouble_spo...-timing', ...} == {'trouble_spo...step': 1, ...}
+E
+E         Omitting 6 identical items, use -vv to show
+E         Left contains 3 more items:
+E         {'exercise_strategy': 'source-progression',
+E          'tempo_strategy': 'constant-tempo',
+E          'timing_strategy': 'original-timing'}
+E         Use -v to get more diff
+
+tests/test_learner_progress_service.py:182: AssertionError
+______ test_short_slur_across_two_measure_focus_boundary_is_kept_together ______
+
+    def test_short_slur_across_two_measure_focus_boundary_is_kept_together():
+        piece = written_piece(4, [
+            (0., 1., 60), (4., .5, 62), (7.5, .5, 64),
+            (8., .5, 65), (8.5, .5, 67), (12., 1., 69),
+        ], slurs=((2, 3, 4),))
+>       from piano_teacher.learning import build_exercises
+E       ImportError: cannot import name 'build_exercises' from 'piano_teacher.learning' (/home/tom/Projects/piano_teacher/piano_teacher/learning.py)
+
+tests/test_musical_groups.py:117: ImportError
+__________________ test_real_verovio_source_slur_export[None] __________________
+
+source_id = None
+
+    @pytest.mark.parametrize("source_id",[None,"source-phrase"])
+    def test_real_verovio_source_slur_export(source_id):
+        import verovio
+>       from piano_teacher.score import _create_verovio_toolkit
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_verovio_slur_fragments.py:83: ModuleNotFoundError
+_____________ test_real_verovio_source_slur_export[source-phrase] ______________
+
+source_id = 'source-phrase'
+
+    @pytest.mark.parametrize("source_id",[None,"source-phrase"])
+    def test_real_verovio_source_slur_export(source_id):
+        import verovio
+>       from piano_teacher.score import _create_verovio_toolkit
+E       ModuleNotFoundError: No module named 'piano_teacher.score'
+
+tests/test_verovio_slur_fragments.py:83: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED tests/test_score_application_lifecycle.py::test_main_uses_score_asset_session_for_stale_and_retry
+FAILED tests/test_learner_progress_service.py::test_lesson_overview_preserves_step_skip_and_mastery_values
+FAILED tests/test_musical_groups.py::test_short_slur_across_two_measure_focus_boundary_is_kept_together
+FAILED tests/test_verovio_slur_fragments.py::test_real_verovio_source_slur_export[None]
+FAILED tests/test_verovio_slur_fragments.py::test_real_verovio_source_slur_export[source-phrase]
+ERROR tests/test_native_chord_flag_ties.py::test_chord_flag_does_not_absorb_source_owned_tie[bass-start]
+ERROR tests/test_native_chord_flag_ties.py::test_chord_flag_does_not_absorb_source_owned_tie[bass-upper-leader]
+ERROR tests/test_native_chord_flag_ties.py::test_chord_flag_does_not_absorb_source_owned_tie[treble-end]
+ERROR tests/test_native_chord_flag_ties.py::test_former_single_note_clearance_rejects_chord_flag_collision
+5 failed, 146 passed, 4 errors in 15.74s

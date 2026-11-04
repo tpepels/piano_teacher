@@ -1,0 +1,260 @@
+Checking res://main.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://practice_screen.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://practice_score_stage.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://settings_screen.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://practice_frame_coordinator.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://practice_state_presenter.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://command_failure_presenter.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://command_success_policy.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://command_success_presenter.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://command_success_effects.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://practice_control_policy.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://metronome_frame_coordinator.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://command_request_state.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://navigation_policy.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://live_midi_feedback.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://notation/native/view.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://inprocess_bus.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://native_bridge_smoke.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://production_ui_smoke.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://production_session_journey.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://inprocess_request.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://score_asset_queue.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://score_asset_session.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://score_runway.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://score_step_timeline.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://demo_player.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://library_catalog_coordinator.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking res://midi_device_coordinator.gd
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+Checking Godot behavior: command_success_effects
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+COMMAND_SUCCESS_EFFECTS_FAILURES:0
+Checking Godot behavior: command_request_state
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+COMMAND_REQUEST_STATE_FAILURES:0
+Checking Godot behavior: inprocess_request_lifecycle
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+INPROCESS_REQUEST_LIFECYCLE_FAILURES:0
+Checking Godot behavior: command_success_presenter
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+COMMAND_SUCCESS_PRESENTER_FAILURES:0
+Checking Godot behavior: practice_control_policy
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_CONTROL_POLICY_FAILURES:0
+Checking Godot behavior: metronome_frame_coordinator
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+METRONOME_FRAME_FAILURES:0
+Checking Godot behavior: calibration_beat_pulse
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+CALIBRATION_PULSE_FAILURES:0
+Checking Godot behavior: coda_piece_strategy
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+CODA_PIECE_STRATEGY_FAILURES:0
+Checking Godot behavior: score_asset_lifecycle
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+ERROR: SCORE_ASSET_FAILURE: Semantic score failed after 3 attempts: Embedded operation exceeded its deadline
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _retry_model (res://score_asset_session.gd:321)
+       [2] _complete_model (res://score_asset_session.gd:273)
+       [3] complete_response (res://score_asset_session.gd:213)
+       [4] run (/home/tom/Projects/piano_teacher/tests/godot/score_asset_lifecycle.gd:100)
+ERROR: SCORE_ASSET_FAILURE: Retained notation did not finish compiling. Retry the score.
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] poll (res://score_asset_session.gd:152)
+       [2] run (/home/tom/Projects/piano_teacher/tests/godot/score_asset_lifecycle.gd:115)
+ERROR: SCORE_ASSET_FAILURE: Engraving response revision differs from selected score. Retry the score.
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_layout (res://score_asset_session.gd:251)
+       [2] complete_response (res://score_asset_session.gd:211)
+       [3] run (/home/tom/Projects/piano_teacher/tests/godot/score_asset_lifecycle.gd:139)
+SCORE_ASSET_LIFECYCLE_FAILURES:0
+Checking Godot behavior: seamless_score_runway
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+SEAMLESS_SCORE_RUNWAY_FAILURES:0
+WARNING: 2 RIDs of type "CanvasItem" were leaked.
+   at: _free_rids (servers/rendering/renderer_canvas_cull.cpp:2735)
+WARNING: 7 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+Checking Practice UI: captions
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_SCREEN_FAILURES:0
+Checking Practice UI: signals
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_SCREEN_FAILURES:0
+Checking Practice UI: score_gate
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_SCREEN_FAILURES:0
+Checking Practice UI: intro_markers
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_SCREEN_FAILURES:0
+Checking Practice UI: source_picker
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_SCREEN_FAILURES:0
+Checking Practice UI: midi_guard
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_SCREEN_FAILURES:0
+Checking Practice UI: layout
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+PRACTICE_SCREEN_FAILURES:0
+Checking Godot score-session contract: publication
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+SCORE_ASSET_SESSION_FAILURES:0
+Checking Godot score-session contract: stale
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+SCORE_ASSET_SESSION_FAILURES:0
+Checking Godot score-session contract: retry
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+ERROR: SCORE_ASSET_FAILURE: Semantic score failed after 3 attempts: Embedded operation exceeded its deadline
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _retry_model (res://score_asset_session.gd:321)
+       [2] _complete_model (res://score_asset_session.gd:273)
+       [3] complete_response (res://score_asset_session.gd:213)
+       [4] test_retry (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:244)
+       [5] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:113)
+SCORE_ASSET_SESSION_FAILURES:0
+Checking Godot score-session contract: failure
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+ERROR: SCORE_ASSET_FAILURE: Cannot request score geometry from the practice engine
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] request_start_result (res://score_asset_session.gd:198)
+       [2] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:271)
+       [3] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: Invalid score
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_layout (res://score_asset_session.gd:240)
+       [2] complete_response (res://score_asset_session.gd:211)
+       [3] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:273)
+       [4] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: The engraving engine returned invalid note positions
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_layout (res://score_asset_session.gd:244)
+       [2] complete_response (res://score_asset_session.gd:211)
+       [3] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:276)
+       [4] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: The engraving engine returned invalid note positions
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_layout (res://score_asset_session.gd:244)
+       [2] complete_response (res://score_asset_session.gd:211)
+       [3] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:278)
+       [4] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: Engraving response revision differs from selected score. Retry the score.
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_layout (res://score_asset_session.gd:251)
+       [2] complete_response (res://score_asset_session.gd:211)
+       [3] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:281)
+       [4] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: authentic asset failure
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_layout (res://score_asset_session.gd:257)
+       [2] complete_response (res://score_asset_session.gd:211)
+       [3] finish_layout (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:101)
+       [4] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:286)
+       [5] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: Practice engine returned an invalid semantic score
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_model (res://score_asset_session.gd:279)
+       [2] complete_response (res://score_asset_session.gd:213)
+       [3] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:288)
+       [4] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: authentic asset failure
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_model (res://score_asset_session.gd:285)
+       [2] complete_response (res://score_asset_session.gd:213)
+       [3] finish_model (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:104)
+       [4] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:292)
+       [5] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+ERROR: SCORE_ASSET_FAILURE: Retained notation did not finish compiling. Retry the score.
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] poll (res://score_asset_session.gd:152)
+       [2] test_failure (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:309)
+       [3] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:114)
+SCORE_ASSET_SESSION_FAILURES:0
+Checking Godot score-session contract: native
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+ERROR: SCORE_ASSET_FAILURE: Missing authentic Verovio glyph: brace
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail (res://score_asset_session.gd:354)
+       [1] _complete_layout (res://score_asset_session.gd:257)
+       [2] complete_response (res://score_asset_session.gd:211)
+       [3] finish_layout (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:101)
+       [4] test_native (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:320)
+       [5] run_contract (/home/tom/Projects/piano_teacher/tests/godot/score_asset_session.gd:115)
+SCORE_ASSET_SESSION_FAILURES:0
+GODOT_STARTUP_SYNTAX_OK

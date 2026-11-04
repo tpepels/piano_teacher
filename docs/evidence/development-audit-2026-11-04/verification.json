@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-04",
+  "base_commit": "b8a2aa8f",
+  "implementation_commits": [
+    "f9b7a154778e320e6dd6aa4743b07c8fb5518b99",
+    "42a63f702436441898239f7129be300690351192"
+  ],
+  "python": "3.14.9 (main, Oct 25 2026, 14:52:47) [GCC 16.2.1 20260810]",
+  "godot": "4.7.2.stable.arch_linux.ed1daf0bf",
+  "commands": [
+    {
+      "command": "PYTHON=.venv/bin/python bash scripts/ci-smoke.sh",
+      "exit": 0,
+      "result": "581 passed",
+      "log": "fast-final.log"
+    },
+    {
+      "command": "PYTHON=.venv/bin/python bash scripts/ci-extended.sh",
+      "exit": 0,
+      "result": "Six groups: 302,155,36,1,12,1 passed; final Godot parse exit 0",
+      "log": "extended-final.log"
+    },
+    {
+      "command": "bash scripts/check-godot-syntax.sh",
+      "exit": 0,
+      "result": "GODOT_STARTUP_SYNTAX_OK; expected injected failure diagnostics in fixtures",
+      "log": "godot-final.log"
+    },
+    {
+      "command": "PIANO_PYTHON=.venv/bin/python bash scripts/verify-native-bridge.sh",
+      "exit": 0,
+      "result": "PIANO_NATIVE_CLASS_OK; PIANO_NATIVE_LIBRARY_OK pieces=18",
+      "log": "native-final.log"
+    },
+    {
+      "command": ".venv/bin/python -m pytest --collect-only -q",
+      "exit": 0,
+      "result": "4716 tests collected; all assertions not executed",
+      "log": "collection-final.log"
+    },
+    {
+      "command": "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 LIBGL_ALWAYS_SOFTWARE=1 timeout 700s xvfb-run -a bash scripts/verify-notation.sh --ci",
+      "exit": 2,
+      "result": "Interrupted after 4 failed,59 passed,12 errors; later focused repairs do not make this a passing complete suite",
+      "log": "notation-attempt.log"
+    },
+    {
+      "command": ".venv/bin/python -m pytest -q tests/test_native_fingering.py -k \"not real_application_popup\" --maxfail=3 (Xvfb/software GL)",
+      "exit": 1,
+      "result": "1 failed,8 passed,3 deselected; local-attachment bound",
+      "log": "native-fingering-failures.log"
+    },
+    {
+      "command": "Full engraving source-recovery workflow test selection (see phase6-engraving-recovery.yml)",
+      "exit": 0,
+      "result": "52 passed early in audit",
+      "log": "engraving-recovery.log"
+    },
+    {
+      "command": "Composed/repertoire/sparse Coda selection",
+      "exit": 0,
+      "result": "161 passed early in audit; subsequent Fukuda regression group58 passed",
+      "log": "composed-corpus.log"
+    },
+    {
+      "command": "Bounded independent Coda contract workflow selection",
+      "exit": 0,
+      "result": "225 passed",
+      "log": "coda-contracts.log"
+    }
+  ],
+  "source_sha256": {
+    "godot/notation/native/view.gd": "7d892b2fe67b347006f2b56685bb6a6d75ea4fa0a057c3ed52bf8128028966c7",
+    "godot/practice_score_stage.gd": "045c962100231236084f9ec4d53f8016d270a49e2e86a3a445874bfb94432c5b",
+    "godot/score_step_timeline.gd": "5f71cf1cc931c705126569be268b493391a4ecbf4742e7d1e696916ad25e687d",
+    "piano_teacher/application/assessment_commit.py": "98741b8c1e228e90770529a271e87ad99232dd1dad5e53fbf6510fc33b4abeb1",
+    "piano_teacher/application/midi_connection.py": "26e05ec9dc904fe90135c425610eac3a03c86e2c3a13ca197354868eba54599d",
+    "piano_teacher/application/stage_change.py": "31b9966a77002447ec874a161da48a5bf46a8da16964ceb314bda6d7912519a3",
+    "piano_teacher/lesson_generators.py": "1b813d60bc19e339c38d57bf774b678eabf50931b57512cb661e78cb3f904f6a",
+    "piano_teacher/library.py": "2962a0e3afb0e8045eb3a9bfeaf31db1c4fe8c0e993d38e826c9eaff1f279cd4",
+    "piano_teacher/notation/connector_difference_pixels.py": "7625e2eae37a74e0e889bf6002d9feba4215d3d250e8bac3574cdefbb1dfdfea",
+    "piano_teacher/notation/symbol_pixel_proof.py": "8bc1f65e9d06ed3c0c7bfc1eab00aff3daa3ae094e42f017ab434e04c05c5026",
+    "piano_teacher/practice.py": "5bb2bd5fcd87752e036ce50e9dd69a1b689fe6de14a5df2629171553973f7c3a",
+    "piano_teacher/server.py": "8822ec72c880437f91ae02fa003e004ccdb52780b9a047b6a431a96966379dc3",
+    "scripts/audit_scroll_velocity.py": "fa2aafa84d55179786eefda3e8754e0327aec8eee496e625ffd0ad0a59114168",
+    "scripts/ci-smoke.sh": "006db4232bcee10fc55268f137a23459c296e9e537d0fbc5009ce2a6e4cffa16",
+    "scripts/verify-notation.sh": "8c95fa4932ccb90fcbe024d28154d7dd78018d7cc079408cbdd37706da13f9ea"
+  },
+  "logs_sha256": {
+    "coda-contracts.log": "279aa53e01d4781da2c098be8b2dc0bb49e778dff5ebd8772e95d5a05c374414",
+    "collection-final.log": "d0becfa3fd3eb97bbe5718ba6ede445a9bb86624d316e03fb2a854070c8b1099",
+    "composed-corpus.log": "a0a4385863f6d4453c4410d1300cb9dace936e5624e0566b391151ca1226610d",
+    "engraving-recovery.log": "dce46edc8e06571b78b07670ad98cc57eadc919bdcd224a6afaaaf39c9dd8e7f",
+    "extended-attempt.log": "b63aa6062e8159b9284cf56bbc4004747965e1eaf1c13a3aa972f120baa53f73",
+    "extended-final.log": "cdf0a0e2a80adb8d7ba70bf909343626f609f03f66d94f5ccf4c24f0f0859fab",
+    "fast-final.log": "74e405294a334867e6e07e15ee6a4e95b55274a11166e676b38c1daa74b9d1f5",
+    "godot-final.log": "31c460f4f04f6e2ac7a5c25c6449b180ea931571f45b8da83fcc5f1d8d261371",
+    "native-final.log": "b93b8d2298f41eb58c7fac99afffef0ea028520179335757e611ed0bb42b128b",
+    "native-fingering-failures.log": "c946d95977888a50adb0a2b3febfb0321cc7967263a29af9387a4103c045afd2",
+    "notation-attempt.log": "a69969991db20d7d9624e07766442ea4007158b1f88340d881c72fe7ed7c0b3d"
+  },
+  "limitations": [
+    "No physical MIDI/user study",
+    "No full24-shard notation sweep",
+    "No whole4716-test assertion run",
+    "Retained pre-existing moodboard deletions and untracked UID/runtime files"
+  ],
+  "raw_logs_sha256": {
+    "coda-contracts.log": "279aa53e01d4781da2c098be8b2dc0bb49e778dff5ebd8772e95d5a05c374414",
+    "collection-final.log": "d0becfa3fd3eb97bbe5718ba6ede445a9bb86624d316e03fb2a854070c8b1099",
+    "composed-corpus.log": "a0a4385863f6d4453c4410d1300cb9dace936e5624e0566b391151ca1226610d",
+    "engraving-recovery.log": "dce46edc8e06571b78b07670ad98cc57eadc919bdcd224a6afaaaf39c9dd8e7f",
+    "extended-attempt.log": "c9abb7474c40265d3e1deeacef079cf914b315347c7108728355c2373694f7a4",
+    "extended-final.log": "b08704f5451be0101b31ca66729b1d33892e13d7c184cabbd6c00800a867956a",
+    "fast-final.log": "74e405294a334867e6e07e15ee6a4e95b55274a11166e676b38c1daa74b9d1f5",
+    "godot-final.log": "31c460f4f04f6e2ac7a5c25c6449b180ea931571f45b8da83fcc5f1d8d261371",
+    "native-final.log": "b93b8d2298f41eb58c7fac99afffef0ea028520179335757e611ed0bb42b128b",
+    "native-fingering-failures.log": "c946d95977888a50adb0a2b3febfb0321cc7967263a29af9387a4103c045afd2",
+    "notation-attempt.log": "3338ff9e67e7df8035c82fdb93253471d6393a33a087735f5b2aed16ae973770"
+  },
+  "log_normalization": "Trailing spaces/tabs and CR line endings normalized for tracked logs; raw hashes retained separately. No diagnostic content removed."
+}

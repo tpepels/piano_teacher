@@ -1,12 +1,19 @@
 # Teaching method and progression
 
-All learning material comes from the student's imported MIDI or MusicXML. The
+All learning material comes from the student's imported MIDI. The
 same active source variant supplies notation, guided targets, timed assessment
 and Listen audio. There is no built-in song catalogue or proprietary course.
 
 ## Current course construction
 
-`learning.py` conservatively joins adjacent easy source passages into sections
+New installations use the registered adaptive Coda + Fukuda MIDI generator.
+It composes source-safe passage stages from independent contributors and
+selects genuinely changed material using graded source-ID feedback. Existing
+explicit generator preferences remain selected. See the
+[composed generator contract](architecture/composed-midi-generators.md) for
+the default route and final-original preservation rules.
+
+The selectable source-progression generator conservatively joins adjacent easy source passages into sections
 of at most eight bars. It preserves source notes, stops at gaps and meter
 changes, and keeps difficult material in its original short passage. Difficulty
 is checked per hand: more than three notes per beat, a chord exceeding four
@@ -32,8 +39,11 @@ section's final two bars and the next section's first two bars. The complete
 performance retains every original source event, introductory rests and held
 endings. These omissions of redundant stages never create mastery records.
 
-Timed Practice alone earns mastery: three consecutive clean full attempts at
-the selected target BPM. Slower full attempts restore tempo first. Partial
+Timed Practice alone earns mastery: three consecutive accepted full attempts at
+the selected target BPM. `Assessment.passed` requires no wrong, omitted or extra
+notes and fewer than half the distinct attacks with timing/hold warnings;
+`Assessment.clean` is stricter and requires every note to be precise. This
+distinction must remain explicit in evaluation reports. Slower full attempts restore tempo first. Partial
 retries, guided completions, hints, Listen, Perform and disconnected previews
 earn no clean-run credit. The selected target survives hand and passage changes.
 
@@ -52,14 +62,20 @@ The backend and `learner_state.py` use the following route:
    subsequent sections and their connections. Offer uninterrupted complete
    original Perform as a review experience, with Practice of weak sections.
 
-Timed recovery preserves the existing transport policy: after five distinct
+The default mistake response preserves the existing transport policy: after five distinct
 wrong or missed required notes, finish the two-bar chunk, show a short break,
 slow by 10%, then retry from that chunk's start through the stage's end. The
 two-bar range identifies the trouble location; it does not shorten the retry's
 ending. A clean retry starting partway through the stage earns no mastery and
 is followed by the full stage. Repeated trouble can first return to the same
 source idea in Learn. Full clean Practice takes restore the selected target
-before the three target-speed clean takes begin.
+before the three target-speed accepted takes begin.
+
+Six selectable mistake responses keep their fixed contracts independently of
+the exercise generator. Their evidence limits and the proposed adaptive retry
+selector are defined in [mistake-response policies](mistake-response-policies.md).
+No adaptive selector or human-learning benefit is claimed by the existing
+fixed-parameter response named Adaptive recovery.
 
 Perform continues through mistakes and finishes with a review and an offer to
 practice a weak section. Its accuracy and timing summary, including a clean

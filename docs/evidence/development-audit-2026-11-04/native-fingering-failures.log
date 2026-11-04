@@ -1,0 +1,15 @@
+....F....                                                                [100%]
+=================================== FAILURES ===================================
+_ test_insufficient_staff_space_is_reported_without_losing_source_assignments __
+tests/test_native_fingering.py:285: in test_insufficient_staff_space_is_reported_without_losing_source_assignments
+    _verify_numbers(folder,frame,len(frame['labels']))
+tests/test_native_fingering.py:196: in _verify_numbers
+    assert np.linalg.norm(offset)<=frame['gap']*2.5 and abs(offset[0])<=frame['gap']*2.1, \
+E   AssertionError: Fingering must remain locally attached to its source head
+E   assert (np.float64(15.368287150412511) <= (6.12 * 2.5))
+E    +  where np.float64(15.368287150412511) = <function norm at 0x7faf62c7e930>(array([ -7.34399414, -13.5       ]))
+E    +    where <function norm at 0x7faf62c7e930> = <module 'numpy.linalg' from '/home/tom/Projects/piano_teacher/.venv/lib/python3.14/site-packages/numpy/linalg/__init__.py'>.norm
+E    +      where <module 'numpy.linalg' from '/home/tom/Projects/piano_teacher/.venv/lib/python3.14/site-packages/numpy/linalg/__init__.py'> = np.linalg
+=========================== short test summary info ============================
+FAILED tests/test_native_fingering.py::test_insufficient_staff_space_is_reported_without_losing_source_assignments
+1 failed, 8 passed, 3 deselected in 10.83s
