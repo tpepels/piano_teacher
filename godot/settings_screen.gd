@@ -17,6 +17,7 @@ signal timing_strategy_requested(strategy: String)
 signal tempo_strategy_requested(strategy: String)
 signal diagnosis_strategy_requested(strategy: String)
 signal learner_strategy_requested(strategy: String)
+signal mistake_response_requested(strategy: String)
 signal metronome_requested(enabled: bool)
 signal calibration_requested(action: String)
 signal volume_changed(db: float)
@@ -44,6 +45,7 @@ var timing_strategy_picker: OptionButton
 var tempo_strategy_picker: OptionButton
 var diagnosis_strategy_picker: OptionButton
 var learner_strategy_picker: OptionButton
+var mistake_response_picker: OptionButton
 var listen_volume_slider: HSlider
 var listen_volume_label: Label
 var fullscreen_toggle: CheckButton
@@ -262,8 +264,20 @@ func _ready() -> void:
     learner_strategy_picker.item_selected.connect(func(index: int):
         learner_strategy_requested.emit(str(learner_strategy_picker.get_item_metadata(index))))
     practice.add_child(learner_strategy_picker)
+    practice.add_child(_label("When a note is wrong", 14, MUTED))
+    mistake_response_picker = OptionButton.new()
+    mistake_response_picker.custom_minimum_size = Vector2(260,40)
+    mistake_response_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    mistake_response_picker.tooltip_text = (
+        "Choose how mistakes affect the next rewind, tempo or guided exercise. "
+        + "Changing this affects future mistakes without resetting the current lesson.")
+    mistake_response_picker.item_selected.connect(func(index: int):
+        mistake_response_requested.emit(
+            str(mistake_response_picker.get_item_metadata(index))))
+    practice.add_child(mistake_response_picker)
     practice.add_child(_label(
-        "Exercise, rhythm and tempo changes restart practice. Assessment policy changes affect future recommendations only.",
+        "Exercise, rhythm and tempo generation changes restart practice. "
+        + "Mistake responses can be changed without resetting your progress.",
         12, MUTED))
 
     var audio := _section("Listen audio")
@@ -405,6 +419,14 @@ func present_preferences(values: Dictionary) -> void:
     _present_strategy_picker(learner_strategy_picker,
         values.get("available_learner_strategies", []),
         str(values.get("learner_strategy", "repeated-error")))
+    _present_strategy_picker(mistake_response_picker,
+        values.get("available_mistake_response_strategies", []),
+        str(values.get("mistake_response_strategy", "adaptive")))
+    for option in values.get("available_mistake_response_strategies", []):
+        if option is Dictionary and str(option.get("id","")) == \
+                str(values.get("mistake_response_strategy","adaptive")):
+            mistake_response_picker.tooltip_text = str(option.get("description",""))
+            break
     var selected_strategy: String = str(values.get("exercise_strategy", ""))
     var owns_timing := false
     for entry in values.get("available_exercise_strategies", []):
@@ -459,6 +481,7 @@ func present_busy(pending: bool) -> void:
     tempo_strategy_picker.disabled = pending
     diagnosis_strategy_picker.disabled = pending
     learner_strategy_picker.disabled = pending
+    mistake_response_picker.disabled = pending
 
 func present_volume(db: float) -> void:
     listen_volume_slider.set_value_no_signal(db)
