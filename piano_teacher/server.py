@@ -1446,7 +1446,7 @@ class PracticeEngine:
             return None
         return self._next_stage_selection()
 
-    def _advance_pending_feedback(self, now: float):
+    def _advance_pending_feedback(self, now: float, *, prepared_on_time: bool = False):
         """Commit finished feedback and schedule exactly one next transition."""
         if self.auto and self.visual_transport.next_at and now >= self.visual_transport.next_at:
             # Keep the current music axis moving until authentic next-step ink
@@ -1476,7 +1476,7 @@ class PracticeEngine:
                     self.visual_transport.next_at = now + .10
                     self.feedback = "Preparing the next lesson while scrolling"
                     return
-                if self._stage_handoff_visual_beat is None:
+                if self._stage_handoff_visual_beat is None and not prepared_on_time:
                     # Reserve a two-beat reading runway when assets arrive
                     # after the natural handoff. The existing score keeps
                     # scrolling through this gap at the authoritative BPM.
@@ -1733,13 +1733,13 @@ class PracticeEngine:
         # the existing musical rewind/rest schedule.
         planned = self._mastery_candidate(result)
         if planned is not None:
-                selection, _number = planned
-                if (self._future_stage_ready ==
-                        (selection.stage_key, selection.revision) and
-                        self.future_score.ready(selection)):
-                    self.visual_transport.next_at = now
-                    self._advance_pending_feedback(now)
-                    return
+            selection, _number = planned
+            if (self._future_stage_ready ==
+                    (selection.stage_key, selection.revision) and
+                    self.future_score.ready(selection)):
+                self.visual_transport.next_at = now
+                self._advance_pending_feedback(now, prepared_on_time=True)
+                return
         if decision.deadline_action == "clear":
             self.visual_transport.next_at = 0
         elif decision.deadline_action == "schedule":
