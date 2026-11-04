@@ -10,6 +10,7 @@ func state(phase: String = "ready") -> Dictionary:
         "mode":"practice","phase":phase,"hand":"right","bpm":72,"target_bpm":80,
         "first_bar":1,"last_bar":4,"current_bar":2,"device":"Test piano","midi_input_count":0,
         "clean_runs_required":3,"streak":1,"feedback":"Ready to play","skip_available":true,
+        "lesson_step":2,"lesson_steps":4,
         "can_decrease_tempo":true,"can_increase_tempo":true,"manual_tempo_step_bpm":4,
         "running":phase in ["count_in","playing","paused"],"paused":phase == "paused",
         "hand_stages":[{"hand":"right","active":true},{"hand":"left","locked":true},{"hand":"both","locked":true}]}
@@ -32,7 +33,17 @@ func run() -> void:
                 values.title = "mutated"
                 view.present_busy(true)
                 check(view.title_label.text == "A real piece" and view.speed_label.text == "72 BPM · target 80","Practice captures title and tempo values")
-                check(view.tempo_up_button.disabled and view.tempo_down_button.disabled and view.practice_skip_button.disabled,"Busy state updates all immediate Practice choices")
+                var named_source := state()
+                named_source.exercise_strategy = "coda-fukuda-midi"
+                named_source.stage_label = "Melody outline"
+                view.present(named_source,true)
+                check("Coda" not in view.passage_label.text and
+                    "Melody outline" in view.passage_label.text,
+                    "Practice introduces music without internal generator labels")
+                view.present_busy(true)
+                check(view.tempo_up_button.disabled and view.tempo_down_button.disabled and
+                    view.practice_skip_button.disabled and view.practice_previous_button.disabled,
+                    "Busy state updates every immediate Practice control")
                 view.present(state("playing"),true)
                 check(view.passage_label.text == "Learn · Measure 2 of 4" and view.start_button.text == "Pause","Live source-bar and transport captions are backend-derived")
                 check(not view.feedback_label.visible and not view.lesson_info_label.visible,"Graded music keeps ordinary coaching outside the score")
@@ -60,9 +71,23 @@ func run() -> void:
                 view.practice_retry_button.pressed.emit()
                 view.listen_button.pressed.emit()
                 view.tempo_up_button.pressed.emit()
+                view.practice_previous_button.pressed.emit()
                 view.practice_skip_button.pressed.emit()
                 check(intent == ["library","settings","play","retry","listen",{"action":"tempo_up"},
-                    {"action":"skip_stage","reason":"Learner skipped to the next lesson from the practice screen"}],"Widgets emit complete intent without main callbacks")
+                    {"action":"select_step","number":1},
+                    {"action":"skip_stage","reason":"Learner skipped to the next lesson from the practice screen"}],
+                    "Previous and next lesson controls emit exact navigation without main callbacks")
+                var first := state()
+                first.lesson_step = 1
+                view.present(first,true)
+                view.practice_previous_button.pressed.emit()
+                check(view.practice_previous_button.disabled and intent.size() == 8,
+                    "Previous lesson is blocked on step one")
+                var busy := state()
+                busy.lesson_step = 3
+                view.present(busy,true,true)
+                view.practice_previous_button.pressed.emit()
+                check(intent.size() == 8,"Busy previous navigation cannot dispatch")
             "score_gate":
                 view.present(state(),false)
                 view.present_score(false,"Missing note geometry")
