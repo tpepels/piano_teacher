@@ -75,6 +75,13 @@ rendering or audio verification. Run exhaustive notation diagnostics locally usi
 `bash scripts/verify-notation.sh` when explicitly needed; they are not
 part of short CI.
 
+Local learning history is stored with progress in SQLite. Settings provides
+detail retention (365 days / 256 MiB by default), local JSON export with optional
+note detail, and confirmed deletion of piece or learner history and learning
+progress. Reset Lesson preserves history. Exports omit source paths and device
+names; exported copies remain outside the app's deletion control. See the
+[learning evidence contract](docs/learning-measurement.md).
+
 ## Packaging
 
 `scripts/package-inprocess.sh` assembles the distributable desktop

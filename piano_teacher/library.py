@@ -20,6 +20,10 @@ from .exercise_contracts import (resolve_timing_strategy, resolve_tempo_strategy
 
 FORMATS = frozenset({'.mid', '.midi'})  # Only user-supplied MIDI enters the desktop library.
 MAX_FILES = 5000
+EVIDENCE_PREFERENCES = {
+    'evidence_retention_days': (365, 7, 3650),
+    'evidence_budget_mib': (256, 16, 4096),
+}
 
 
 def default_music_dir() -> Path:
@@ -43,7 +47,8 @@ class ScoreLibrary:
                          'tempo_strategy': 'constant-tempo',
                          'diagnosis_strategy': 'error-family',
                          'learner_strategy': 'repeated-error',
-                         'mistake_response_strategy': 'adaptive'}
+                         'mistake_response_strategy': 'adaptive',
+                         **{key: bounds[0] for key, bounds in EVIDENCE_PREFERENCES.items()}}
         if self.settings_path.exists():
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
@@ -92,6 +97,11 @@ class ScoreLibrary:
                 self.settings['midi_offset_ms'])
         except ValueError:
             self.settings['midi_offset_ms'] = 0
+        for key, (default, _lower, _upper) in EVIDENCE_PREFERENCES.items():
+            try:
+                self.settings[key] = self._validate_evidence_preference(key, self.settings[key])
+            except ValueError:
+                self.settings[key] = default
 
     @staticmethod
     def _normalize_folder(folder: str, *, require_exists: bool = True) -> Path:
@@ -110,6 +120,14 @@ class ScoreLibrary:
             raise ValueError('MIDI offset must be 0–250 milliseconds')
         return offset
 
+    @staticmethod
+    def _validate_evidence_preference(key: str, value: object) -> int:
+        _default, lower, upper = EVIDENCE_PREFERENCES[key]
+        if type(value) is not int or not lower <= value <= upper:
+            label = 'Detail retention days' if key == 'evidence_retention_days' else 'Detail budget MiB'
+            raise ValueError(f'{label} must be an integer from {lower} to {upper}')
+        return value
+
     def propose_update(self, **changes) -> dict:
         """Validate a complete prospective configuration without persisting it.
 
@@ -117,6 +135,7 @@ class ScoreLibrary:
         settings or changes the active transport.
         """
         allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
+        allowed.update(EVIDENCE_PREFERENCES)
         unknown = set(changes) - allowed
         if unknown:
             raise ValueError('Unknown preference: ' + ', '.join(sorted(unknown)))
@@ -141,6 +160,9 @@ class ScoreLibrary:
         if 'midi_offset_ms' in changes:
             new['midi_offset_ms'] = self._validate_midi_offset(
                 changes['midi_offset_ms'])
+        for key in EVIDENCE_PREFERENCES:
+            if key in changes:
+                new[key] = self._validate_evidence_preference(key, changes[key])
         if 'exercise_strategy' in changes:
             selected = changes['exercise_strategy']
             if type(selected) is not str or selected not in {x['id'] for x in available_strategies()}:

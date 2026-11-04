@@ -22,6 +22,10 @@ signal metronome_requested(enabled: bool)
 signal calibration_requested(action: String)
 signal volume_changed(db: float)
 signal fullscreen_requested(enabled: bool)
+signal retention_save_requested(days: int, budget_mib: int)
+signal history_export_requested(path: String, include_detail: bool)
+signal piece_history_delete_requested(fingerprint: String)
+signal learner_history_delete_requested
 signal exit_requested
 
 var ui_scale := 1.0
@@ -53,6 +57,21 @@ var settings_message: Label
 var folder_dialog: FileDialog
 var device_menu: PopupMenu
 var _device_names: Array = []
+var evidence_days_setting: SpinBox
+var evidence_budget_setting: SpinBox
+var retention_save_button: Button
+var export_detail_toggle: CheckButton
+var export_history_button: Button
+var export_dialog: FileDialog
+var delete_piece_button: Button
+var delete_learner_button: Button
+var delete_piece_dialog: ConfirmationDialog
+var delete_learner_dialog: ConfirmationDialog
+var history_summary_label: Label
+var _history_default_path := ""
+var _current_fingerprint := ""
+var _deletion_fingerprint := ""
+var _history_busy := false
 
 func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
@@ -198,6 +217,7 @@ func _ready() -> void:
     folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
     folder_actions.add_child(_button("Save folder", func(): save_folder_requested.emit(folder_edit.text.strip_edges()), false, "secondary"))
     music.add_child(_label("MIDI files in this folder and its subfolders.", 13, MUTED))
+    _build_learning_controls(music)
 
     var practice := _section("Practice tempo")
     var practice_panel := _card()
@@ -330,6 +350,121 @@ func _ready() -> void:
     device_menu.id_pressed.connect(_device_chosen)
     add_child(device_menu)
 
+func _build_learning_controls(parent: VBoxContainer) -> void:
+    parent.add_child(_label("Local learning history", 17, INK, true))
+    history_summary_label = _label("Loading local learning history…", 13, MUTED)
+    parent.add_child(history_summary_label)
+    var retention_row := HFlowContainer.new()
+    retention_row.add_theme_constant_override("h_separation", 10)
+    retention_row.add_theme_constant_override("v_separation", 6)
+    parent.add_child(retention_row)
+    evidence_days_setting = SpinBox.new()
+    evidence_days_setting.min_value = 7
+    evidence_days_setting.max_value = 3650
+    evidence_days_setting.step = 1
+    evidence_days_setting.value = 365
+    evidence_days_setting.suffix = " days"
+    evidence_days_setting.tooltip_text = "Retain detailed note observations for 7–3,650 days."
+    evidence_days_setting.custom_minimum_size = Vector2(150, 40)
+    retention_row.add_child(evidence_days_setting)
+    evidence_budget_setting = SpinBox.new()
+    evidence_budget_setting.min_value = 16
+    evidence_budget_setting.max_value = 4096
+    evidence_budget_setting.step = 1
+    evidence_budget_setting.value = 256
+    evidence_budget_setting.suffix = " MiB"
+    evidence_budget_setting.tooltip_text = "Logical detail payload budget, 16–4,096 MiB."
+    evidence_budget_setting.custom_minimum_size = Vector2(150, 40)
+    retention_row.add_child(evidence_budget_setting)
+    retention_save_button = _button("Save retention", func():
+        retention_save_requested.emit(int(evidence_days_setting.value),
+            int(evidence_budget_setting.value)), false, "settings")
+    retention_row.add_child(retention_save_button)
+    parent.add_child(_label(
+        "Limits apply to note detail at the next safe transition. Compact summaries " +
+        "remain until deletion. The MiB budget measures detail payload, not database file size.",
+        13, MUTED))
+    export_detail_toggle = CheckButton.new()
+    export_detail_toggle.text = "Include detailed note observations in export"
+    export_detail_toggle.button_pressed = false
+    parent.add_child(export_detail_toggle)
+    var actions := HFlowContainer.new()
+    actions.add_theme_constant_override("h_separation", 10)
+    actions.add_theme_constant_override("v_separation", 6)
+    parent.add_child(actions)
+    export_history_button = _button("Export history…", _browse_history_export, false, "secondary")
+    actions.add_child(export_history_button)
+    delete_piece_button = _button("Delete current piece history…", _confirm_piece_history_delete, false, "utility")
+    delete_piece_button.disabled = true
+    actions.add_child(delete_piece_button)
+    delete_learner_button = _button("Delete all learner history…", func():
+        delete_learner_dialog.popup_centered(), false, "utility")
+    actions.add_child(delete_learner_button)
+    parent.add_child(_label(
+        "Reset Lesson restarts lesson progress and preserves learning history. " +
+        "Permanent deletion also removes saved learning progress. Exported files " +
+        "remain wherever you saved them. Source MIDI and device settings are preserved.",
+        13, MUTED))
+    export_dialog = FileDialog.new()
+    export_dialog.title = "Export local learning history"
+    export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+    export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+    export_dialog.filters = PackedStringArray(["*.json ; Learning history JSON"])
+    export_dialog.use_native_dialog = true
+    export_dialog.file_selected.connect(func(path: String):
+        history_export_requested.emit(path, export_detail_toggle.button_pressed))
+    add_child(export_dialog)
+    delete_piece_dialog = ConfirmationDialog.new()
+    delete_piece_dialog.title = "Delete current piece history?"
+    delete_piece_dialog.dialog_text = (
+        "Permanently delete this piece's learning history and all saved learning progress " +
+        "and generator feedback? Source MIDI and device settings remain. " +
+        "Previously exported files are outside this deletion.")
+    delete_piece_dialog.ok_button_text = "Delete piece history"
+    delete_piece_dialog.confirmed.connect(func():
+        piece_history_delete_requested.emit(_deletion_fingerprint))
+    add_child(delete_piece_dialog)
+    delete_learner_dialog = ConfirmationDialog.new()
+    delete_learner_dialog.title = "Delete all learner history?"
+    delete_learner_dialog.dialog_text = (
+        "Permanently delete all local learning history and learning progress, including " +
+        "mastery, tempo credit, guidance and generator feedback? A new local learner " +
+        "starts on next use. Source MIDI and device settings remain. " +
+        "Previously exported files are outside this deletion.")
+    delete_learner_dialog.ok_button_text = "Delete all learner history"
+    delete_learner_dialog.confirmed.connect(func(): learner_history_delete_requested.emit())
+    add_child(delete_learner_dialog)
+
+func _browse_history_export() -> void:
+    if not _history_default_path.is_empty():
+        var directory := _history_default_path.get_base_dir()
+        while not directory.is_empty() and not DirAccess.dir_exists_absolute(directory):
+            var ancestor := directory.get_base_dir()
+            if ancestor == directory:
+                break
+            directory = ancestor
+        if DirAccess.dir_exists_absolute(directory):
+            export_dialog.current_dir = directory
+        export_dialog.current_file = _history_default_path.get_file()
+    else:
+        export_dialog.current_file = "learning-history.json"
+    export_dialog.popup_centered_ratio(0.7)
+
+func _confirm_piece_history_delete() -> void:
+    if _current_fingerprint.is_empty() or _history_busy:
+        return
+    _deletion_fingerprint = _current_fingerprint
+    delete_piece_dialog.popup_centered()
+
+func present_learning_status(values: Dictionary) -> void:
+    history_summary_label.text = str(values.get("summary", "Local learning history"))
+    if values.has("detail_attempt_count") and values.has("pruned_attempt_count"):
+        history_summary_label.text += " %d takes with detail retained; %d pruned." % [
+            int(values["detail_attempt_count"]), int(values["pruned_attempt_count"])]
+    _history_default_path = str(values.get("default_path", ""))
+    _current_fingerprint = str(values.get("current_fingerprint", ""))
+    delete_piece_button.disabled = _history_busy or _current_fingerprint.is_empty()
+
 func animate_calibration_beat(beat: float, active: bool,
         round_beats: int = 12, preparation: int = 4) -> void:
     if calibration_beat_pulse != null:
@@ -402,6 +537,8 @@ func present_calibration(state: Dictionary, offset_ms: int) -> void:
 
 func present_preferences(values: Dictionary) -> void:
     folder_edit.text = str(values.get("music_dir", ""))
+    evidence_days_setting.set_value_no_signal(float(values.get("evidence_retention_days", 365)))
+    evidence_budget_setting.set_value_no_signal(float(values.get("evidence_budget_mib", 256)))
     present_window_mode(bool(values.get("fullscreen", true)))
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
     _present_strategy_picker(strategy_picker,
@@ -475,6 +612,7 @@ func present_practice(state: Dictionary, editing: bool = false) -> void:
             tempo_setting.set_value_no_signal(float(state.get("target_bpm", state.get("bpm", 40))))
 
 func present_busy(pending: bool) -> void:
+    _history_busy = pending
     apply_tempo_button.disabled = pending
     strategy_picker.disabled = pending
     timing_strategy_picker.disabled = pending
@@ -482,6 +620,13 @@ func present_busy(pending: bool) -> void:
     diagnosis_strategy_picker.disabled = pending
     learner_strategy_picker.disabled = pending
     mistake_response_picker.disabled = pending
+    retention_save_button.disabled = pending
+    evidence_days_setting.editable = not pending
+    evidence_budget_setting.editable = not pending
+    export_history_button.disabled = pending
+    export_detail_toggle.disabled = pending
+    delete_piece_button.disabled = pending or _current_fingerprint.is_empty()
+    delete_learner_button.disabled = pending
 
 func present_volume(db: float) -> void:
     listen_volume_slider.set_value_no_signal(db)

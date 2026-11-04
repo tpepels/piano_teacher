@@ -54,6 +54,7 @@ def _send(engine, now, timestamp, *, pitch, on):
 def _perform_real_practice(engine, piece, now, *, wrong_first_pitch=False):
     engine.plan = LearningPlan(
         piece, exercise_strategy="source-progression", consolidate=True)
+    engine.fingerprint = "calibration-grading-fixture"
     # A one-measure source-progression course has only a learn exercise.
     # Its terminal original stage still uses the complete imported score.
     engine.plan.index = len(engine.plan.exercises) - 1

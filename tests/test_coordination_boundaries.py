@@ -21,10 +21,11 @@ def test_attempt_progression_uses_explicit_inputs_and_returns_decisions():
     methods = {node.name: ast.get_source_segment(server,node)
                for node in engine.body if isinstance(node,ast.FunctionDef)}
     assert "self.attempt_progression.schedule_start(" in methods["start"]
-    assert "self.attempt_progression.inspect(AttemptTick(" in methods["_update"]
-    assert "self._run_pre_assessment_transition(now)" in methods["_update"]
-    assert "_apply_rolling_recovery(" in methods["_update"]
-    assert "_complete_attempt(" in methods["_update"]
+    assert "self._update_transition()" in methods["_update"]
+    assert "self.attempt_progression.inspect(AttemptTick(" in methods["_update_transition"]
+    assert "self._run_pre_assessment_transition(now)" in methods["_update_transition"]
+    assert "_apply_rolling_recovery(" in methods["_update_transition"]
+    assert "_complete_attempt(" in methods["_update_transition"]
     policy = (ROOT/"piano_teacher/application/attempt_progression.py").read_text()
     assert "class AttemptTick:" in policy
     assert "class AttemptStart:" in policy

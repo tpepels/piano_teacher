@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-04",
+  "base_revision": "549f4bb3093f8da1e2e9e1dfe8022918145130e7",
+  "tested_state": "Working-tree source bytes identified below; committed on main after verification.",
+  "python": "3.14.9",
+  "sqlite": "3.54.1",
+  "gates": [
+    {
+      "gate": "fast",
+      "command": "rtk proxy env PYTHON=.venv/bin/python bash scripts/ci-smoke.sh",
+      "exit_code": 0,
+      "count": 703,
+      "count_kind": "passed",
+      "overlaps_other_gates": true,
+      "log": "fast.log",
+      "log_sha256": "b10c628c430a2c5c8b50397dfdbb908596181ec2989aed36240a532d264de20d"
+    },
+    {
+      "gate": "measurement",
+      "command": "rtk proxy .venv/bin/python -m pytest -q tests/test_learning_capture.py tests/test_learning_ledger.py tests/test_measurement_controls.py tests/test_mastery_acceptance_contract.py tests/test_reset_atomicity.py tests/test_recovery_settings_contract.py tests/test_grading_observations.py tests/test_assessment_atomicity.py tests/test_assessment_tempo_evidence.py",
+      "exit_code": 0,
+      "count": 135,
+      "count_kind": "passed",
+      "overlaps_other_gates": true,
+      "log": "measurement.log",
+      "log_sha256": "6cc852adda619e8c6307482fcd16a7d45d4ffeed0f3d971a3c8a6afa7facca0a"
+    },
+    {
+      "gate": "hybrid",
+      "command": "rtk proxy env OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 timeout 180s bash scripts/verify-hybrid-workflow.sh --all",
+      "exit_code": 0,
+      "count": 180,
+      "count_kind": "passed",
+      "overlaps_other_gates": true,
+      "log": "hybrid.log",
+      "log_sha256": "9f64e375a56e9ead8d92ccc4730c42ba8b72d3d984b963b89ccf38ff6376dc8f"
+    },
+    {
+      "gate": "package_source",
+      "command": "rtk proxy .venv/bin/python -m pytest -q tests/test_inprocess_artifact_install.py tests/test_notation_diagnostic_package.py tests/test_notation_release_provenance.py tests/test_native_smoke_consumers.py",
+      "exit_code": 0,
+      "count": 18,
+      "count_kind": "passed",
+      "overlaps_other_gates": true,
+      "log": "package_source.log",
+      "log_sha256": "e8f42f6b13b0096eb93350f9b9f3764d8abfefc1c22387ce2b7bfe5032496919"
+    },
+    {
+      "gate": "collection",
+      "command": "rtk proxy .venv/bin/python -m pytest --collect-only -q",
+      "exit_code": 0,
+      "count": 4838,
+      "count_kind": "collected",
+      "overlaps_other_gates": true,
+      "log": "collection.log",
+      "log_sha256": "01be03d1044e8f3d95f04cc6c2e0863480318038ef8152295b05408cf1b900bd",
+      "full_output_sha256": "b50904fbc517a8af4805a53d7620cd9555127f2eb9722a2f637dca0b92a672dc",
+      "log_scope": "Summary; full test-name listing omitted."
+    },
+    {
+      "gate": "developer_launch",
+      "command": "./run.sh --phase0-smoke under Xvfb with isolated XDG directories",
+      "exit_code": 0,
+      "scope": "Harness passed; application intentionally stopped with signal15 after native READY; physical/graceful-shutdown not inferred.",
+      "report": "launch.json",
+      "log": "launch.log"
+    },
+    {
+      "gate": "native",
+      "command": "rtk proxy bash scripts/verify-native-bridge.sh",
+      "exit_code": 0,
+      "marker": "PIANO_NATIVE_LIBRARY_OK pieces=18",
+      "log": "native.log",
+      "log_sha256": "b93b8d2298f41eb58c7fac99afffef0ea028520179335757e611ed0bb42b128b"
+    },
+    {
+      "gate": "godot",
+      "command": "rtk proxy bash scripts/check-godot-syntax.sh",
+      "exit_code": 0,
+      "marker": "GODOT_STARTUP_SYNTAX_OK",
+      "log": "godot.log",
+      "log_sha256": "31c460f4f04f6e2ac7a5c25c6449b180ea931571f45b8da83fcc5f1d8d261371"
+    }
+  ],
+  "source_sha256": {
+    "godot/command_request_state.gd": "05c6f92517b598689a16006a3607e8f12caafb88d2e99092bfc3e9555207b848",
+    "godot/main.gd": "b368ff91c8928ac8fca6482500d139bc6e96bef08bb05cef101490d72388858c",
+    "godot/settings_screen.gd": "ed9460fb9fa42812a2e8a75854fba5e7b15fc2be594c424c1276f3c2c1857c75",
+    "piano_teacher/application/learning_capture.py": "0739c24c770263181e80286964afdb67be2632a5689b11e9c867a2ea3396f2c1",
+    "piano_teacher/application/mistake_responses.py": "7afdbe2b33a73d178d3bce9e8674b82498633d6d8fdd22e07cb57b4a10643ef9",
+    "piano_teacher/assessment_service.py": "3aee51ad29a24c64ed8d0a0fb4625a8734fc9367b0826b5dd891634c53659fa4",
+    "piano_teacher/fukuda_mistake_store.py": "c4ab678e2ffcc8f8e2ff562119966524ad704e1c764d9b9898ff04a1a9500e10",
+    "piano_teacher/inprocess.py": "05decdaefc747f80180d0ef1e70d2cfe811998bb54e843242b11434126f68637",
+    "piano_teacher/learner_state.py": "c3ca438ef7d09cc51f3f170d03403b1179897c222361816a93b57a8c61d0f436",
+    "piano_teacher/learning_ledger.py": "3ec2f0266cb6d31c0fe28a7c610e92c2ace2954b5fe6bcf3898b977584a99e92",
+    "piano_teacher/library.py": "294f8d3e67c4fddcb72b14cf84f6afcce294dd717ca31d89e83d7e8cdde7619e",
+    "piano_teacher/practice.py": "3ca8d7061207342cde6ab9f130fefef411fbd1875d96a7383d15cef71e25fa94",
+    "piano_teacher/practice_history.py": "ad65db425cab007e9be9ea2d8cfbe18f9b438c4c0ed67a6ae8a330bd82dd06e0",
+    "piano_teacher/progress_repository.py": "56c8d8c6387d9726bbc636ca1588106b42ffb2141f1aaffcf59d89324301c99c",
+    "piano_teacher/server.py": "ae1fa4407a42c3e066f3070efee544939e61053a8bb5481a0d55779740b10ddf",
+    "scripts/benchmark-learning-ledger.py": "dcc962ad4351ff96db4d66a6b40106e039b17b4b841f6219e941164cc1866886",
+    "scripts/ci-smoke.sh": "9175c7316cc09764c2cf1d7d1836fd6726c30bea2675277b182157673feac61e",
+    "tests/godot/practice_frame_coordinator.gd": "129f10f0733e7d5bc8208143d3c0b005b51219d839bb82ce295879e8f8af042b",
+    "tests/test_adaptive_session.py": "6023ad645237a5efaa5269996ea7070cfe17722a049a368d63870dffda2bfafb",
+    "tests/test_assessment_atomicity.py": "88e29ecae61e8012aa6e65829b6d28be0b26d223978a5762e0582193bf0a83b7",
+    "tests/test_assessment_tempo_evidence.py": "c177195e58398a4be85101d36b0ec0f02ee732f369b3280539c8118e8d593f94",
+    "tests/test_calibration_grading_integration.py": "99b950f56851a285c77ed763d1ce6eb88aca86106cbd8d24baae78c1fb2b9d56",
+    "tests/test_continuous_practice_loop.py": "1d5f0ad45d8bf14d190cb171e96b698a3d03a3d4070d3e0c7df87a9227fe20a9",
+    "tests/test_coordination_boundaries.py": "21d8f12ae0a80277fe17b11a6d85c9881c2091f64771cb6b0b2ec25968a440cd",
+    "tests/test_course_consolidation.py": "e420107127a7054dcd5f7ee9d3b4f0cf1799fcb82fcdacab5e25e1a0fb88f43f",
+    "tests/test_engine_command_errors.py": "9fbc1819776739555cdd37b2dc1375c9537595b60c7791ecd0ff1ac050e6b643",
+    "tests/test_exercise_contracts.py": "045b18f070bf06cb326a3af21505ad1b901333507870e6a39dbb5aff5632dc18",
+    "tests/test_grading_observations.py": "051a7a03bcc61292bf2728cb6021003b9edc1028b8e74edc95335b6ec9335323",
+    "tests/test_guided_engine.py": "cf763c41011e6ae5a405e84f438a68b37998dd4455fe62b008d2209b4570336f",
+    "tests/test_inprocess_scheduler.py": "5548e5b47b6e2bbbc1da4ffabcee74cc3d80096c78bc74d77e19c25df67bd106",
+    "tests/test_learner_progression.py": "f365a9d5c9280cd0c82634f7201c7c0910e49fe883c3719f2f58f73d5307b9aa",
+    "tests/test_learning_capture.py": "be05a5669b2fcd0bed10e0a0cc45c8711c351bd27130585f031f176e9d9527d0",
+    "tests/test_learning_ledger.py": "856b1b8e64d7dacb8e826455161de119c6d406f4aaf5ba89c56a70451f62c3e5",
+    "tests/test_lesson_settings_grading.py": "2654d4302f6d464bd6be615a1bd3f3a40e4e3db10718036f4761e3b740f29c96",
+    "tests/test_long_session_reliability.py": "3b76806053a04071f44c0b0fe0778e34869627b52a77d317c728ca2cc22a58a1",
+    "tests/test_mastery_acceptance_contract.py": "50bfb3fb07b24e5509d25efdc70b822e57b8edc6c20041bbc1ebc25e12f4c39a",
+    "tests/test_measurement_controls.py": "7043c00fa202e855beafe597eaa9d6aacba6682d719366bade4c30d2cc8c4cfc",
+    "tests/test_midi_visual_fast_path.py": "354213fcb156f0741e2b43610388696cbbcccb3dfb844632d3cd5d134cba612b",
+    "tests/test_mistake_responses.py": "e8c1789fa98ddf0776cecb7f0867e5caadda8b209f20d7fdcf8a58a377691ccf",
+    "tests/test_phase0_smoke.py": "510ae0bf261d5ce63968a954c34506e28906187af9abe5083651d49496e63614",
+    "tests/test_phase1_camera.py": "6c1348a4885146494d9b7236c4b99568dc3b4955bef8ae3fb6e45861cc7d1298",
+    "tests/test_phase1_transport.py": "956e6fa2cb541eaad0f189a21ac8764e351465efb0f4a8971d502e3c66e94b1e",
+    "tests/test_practice_stage_tempo_ladder.py": "1bc611588b7505b1c23d7eed63196424f277783ab9b43d1253d2d3f36262c4fb",
+    "tests/test_recovery_settings_contract.py": "e139a50fe7cbc34a959e4be7524431f4025bab67b87179dc6e7a099732a65e36",
+    "tests/test_reset_atomicity.py": "f12113bee3ff332ea096fd92ffd17cad514ca5066e81d58b9143ff2e8c2d89a0",
+    "tests/test_state_projection.py": "791f2c65f586408496ebf8f00fb02d999fc2a2cab97ec7808fa8b6f65487da8f",
+    "tests/test_step4_algorithms.py": "c5fe940155f27bacf5d666cadc591654c36dc1c910b0d7e7248a061594ff2b9a"
+  },
+  "review": {
+    "status": "Independent intermediate reviews completed; final independent whole-change review interrupted by agent usage limit.",
+    "reported_findings": "Corrected and regression-tested; primary agent reviewed final fixes."
+  },
+  "known_intermediate_failures": [
+    {
+      "kind": "bounded Listen render join timeout",
+      "test": "test_combined_stage_uses_real_notation_listen_and_grading[coda-dotted-]",
+      "resolution": "Uncontended hybrid reruns passed; timeout unchanged."
+    },
+    {
+      "kind": "stale fixtures",
+      "resolution": "Explicit source identity, real ledger exposure, current native/typed contracts and actual grading tolerance ownership used; assertions retained."
+    },
+    {
+      "kind": "newly uncovered product defects",
+      "resolution": "See verification findings table and failing-then-passing regression logs; all reported fixes included in final fast gate."
+    }
+  ],
+  "not_certified": [
+    "whole-suite execution",
+    "completed independent final review",
+    "P1 statistical analytical reports or dashboard",
+    "physical USB/Bluetooth/GPU/latency and long sessions",
+    "clean-machine standalone package",
+    "empirical teaching superiority, delayed retention or learner skill model"
+  ]
+}

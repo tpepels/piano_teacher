@@ -18,6 +18,7 @@ def boot(tmp_path,monkeypatch,bars):
     monkeypatch.setattr(server.time,"monotonic",lambda:now[0])
     engine=PracticeEngine(tmp_path,enable_midi=False)
     engine.plan=LearningPlan(piece(bars))
+    engine.fingerprint=f"recovery-fixture-{bars}"
     engine.midi.port=object()
     engine.start()
     return engine,now
@@ -155,7 +156,7 @@ def test_target_bpm_survives_engine_reload(tmp_path, monkeypatch):
         other.db.close()
 
 
-def test_existing_database_migrates_without_losing_progress(tmp_path):
+def test_existing_database_retains_unknown_progress_without_awarding_current_stage_credit(tmp_path):
     import sqlite3
     with sqlite3.connect(tmp_path / "progress.db") as database:
         database.execute("CREATE TABLE sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER)")
@@ -165,20 +166,42 @@ def test_existing_database_migrates_without_losing_progress(tmp_path):
         engine.plan=LearningPlan(piece(2))
         engine.fingerprint="old-piece"
         engine._restore()
-        assert engine.plan.bpm==64
+        assert engine.plan.bpm==40
         assert engine.plan.target_bpm==100
-        assert engine.plan.streak==1
+        assert engine.plan.streak==0
+        assert engine.db.execute(
+            "SELECT bpm,streak FROM sessions WHERE fingerprint='old-piece'"
+        ).fetchone() == (64, 1)
         engine._save()
         assert "target_bpm" in {r[1] for r in engine.db.execute("PRAGMA table_info(sessions)")}
     finally:
         engine.db.close()
 
 
-def test_leaving_practice_stops_scheduled_retries():
+def test_leaving_practice_pauses_recovery_and_loading(tmp_path):
     from pathlib import Path
-    code=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
-    assert '"recovering", "loading"' in code
-    assert '_send_action({"action": "stop"})' in code
+    import shutil
+    import subprocess
+    binary = shutil.which("godot") or shutil.which("godot4")
+    if not binary:
+        pytest.skip("Godot 4 unavailable")
+    script = tmp_path / "navigation_pause.gd"
+    script.write_text('''extends SceneTree
+const Policy = preload("res://navigation_policy.gd")
+func _initialize():
+    for phase in ["recovering", "loading"]:
+        var decision = Policy.plan("library", "practice", phase, false, "", "")
+        if not decision["pause"] or decision["target"] != "library":
+            quit(1)
+            return
+    print("RECOVERY_NAVIGATION_PAUSED")
+    quit(0)
+''')
+    process = subprocess.run(
+        [binary, "--headless", "--path", str(Path(__file__).resolve().parents[1] / "godot"),
+         "--script", str(script)], capture_output=True, text=True, timeout=15)
+    assert process.returncode == 0, process.stdout + process.stderr
+    assert "RECOVERY_NAVIGATION_PAUSED" in process.stdout
 
 
 def test_three_quarter_time_has_six_lead_in_beats(tmp_path,monkeypatch):
@@ -187,6 +210,7 @@ def test_three_quarter_time_has_six_lead_in_beats(tmp_path,monkeypatch):
     notes=(Note(0,1,60,0,0,"right"),Note(4,5,62,0,0,"right"))
     e=PracticeEngine(tmp_path,enable_midi=False)
     e.plan=LearningPlan(Piece("3/4",100,notes,(Phrase(1,1,2,0,6,notes),)))
+    e.fingerprint="three-quarter-fixture"
     try:
         e.start()
         assert e.state()["lead_in_bars"]==1

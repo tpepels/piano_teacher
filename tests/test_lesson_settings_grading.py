@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from piano_teacher.lesson_settings import SETTINGS, load_lesson_settings
-from piano_teacher import practice, lesson_timing
+from piano_teacher import practice, lesson_timing, grading_tolerance
 from piano_teacher.music import Note, Phrase
 from piano_teacher.practice import PlayedNote
 
@@ -17,18 +17,18 @@ def _phrase():
 
 
 def test_onset_threshold_changes_grade_without_changing_source(monkeypatch):
-    played = [PlayedNote(60, 0.15, 1.15)]
+    played = [PlayedNote(60, 0.21, 1.21)]
     assert practice.evaluate(_phrase(), "right", 60, played).notes[0].status == "late"
-    monkeypatch.setattr(practice, "SETTINGS", replace(
-        SETTINGS, grading_onset_tolerance_seconds=0.2))
+    monkeypatch.setattr(grading_tolerance, "SETTINGS", replace(
+        SETTINGS, grading_onset_tolerance_seconds=0.22))
     assert practice.evaluate(_phrase(), "right", 60, played).clean
 
 
 def test_duration_threshold_changes_grade(monkeypatch):
-    played = [PlayedNote(60, 0.0, 0.72)]
+    played = [PlayedNote(60, 0.0, 0.35)]
     assert practice.evaluate(_phrase(), "right", 60, played).notes[0].status == "short"
-    monkeypatch.setattr(practice, "SETTINGS", replace(
-        SETTINGS, grading_duration_tolerance_fraction=0.3))
+    monkeypatch.setattr(grading_tolerance, "SETTINGS", replace(
+        SETTINGS, grading_duration_tolerance_fraction=0.6))
     assert practice.evaluate(_phrase(), "right", 60, played).clean
 
 

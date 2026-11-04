@@ -1,0 +1,4 @@
+Command: rtk proxy .venv/bin/python -m pytest --collect-only -q
+4838 tests collected in 0.96s
+Exit code: 0; no collection errors.
+Full collection output SHA-256: b50904fbc517a8af4805a53d7620cd9555127f2eb9722a2f637dca0b92a672dc

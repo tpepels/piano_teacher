@@ -3,7 +3,75 @@ Date: 2026-11-04
 Baseline: `b8a2aa8f7e28aef8ca27b6b857bc4ca8ece89092` (`main`)
 Scope: MIDI-only learning, retries, grading, persistence, analytics, and runtime evidence. UI art direction is excluded. Read-only source audit; this document changes no application code.
 
-## Verdict
+## Current implementation and preserved baseline
+
+The user approved the complete P0 contract and its local retention/privacy
+defaults. P0 now implements one transactional learning ledger, authoritative
+matched observations, all exposure scopes, intervention/outcome links,
+migration, crash-prefix recovery, retention and working Settings export/deletion.
+Accepted-take mastery is unchanged. The
+[verification receipt](verification/learning-measurement-2026-11-04.md) records
+tested routes, corrected failures and remaining acceptance limits.
+
+The 74-row JSON audit now includes an explicit `p0_delta` on every row and
+current implementation hashes. Its original source excerpts remain a preserved
+**pre-P0** snapshot, not claims about the new ledger. The continuation adds
+descriptive statistics through `learning.statistics` and a selectable
+deterministic `evidence-adaptive` retry policy. Learned selection, delayed
+retention, learner ability calibration and physical latency remain
+absent/unverified; descriptive outcomes do not establish teaching effectiveness.
+
+### Before-P0 reconciliation
+
+The original tables below are the `b8a2aa8` source audit imported by documentation
+commits `4ee02414` / `9d58c98`. Local `main` now includes those commits and the
+earlier verified fixes through merge `549f4bb3`. Do not treat the original test
+count or intermediate runtime failure as current-head evidence.
+
+Every variable row in sections 1–5 has been rechecked: **74 rows**
+(15 curriculum, 17 tempo/mastery, 10 grading, 18 interventions, 14 longitudinal).
+The [row-level evidence ledger](evidence/learning-measurement-2026-11-04/variable-audit.json)
+preserves each original cell, current classification, discrepancy and source
+excerpt. “Absent” still means absent as a durable first-class measurement;
+the [approved ledger contract](learning-measurement.md) subsequently addresses
+the capture/persistence gaps. Analytical interfaces remain P1 work.
+
+**User decision:** preserve three consecutive **accepted** full-target Practice
+takes for mastery. `Assessment.clean` remains stricter and is a separate metric.
+Ten real-MIDI callback → grading → settlement → SQLite regressions cover warning
+eligibility, exact-half rejection, wrong/missed/extras, chord onset grouping,
+durable three-pass mastery and ineligible partial/guided completions. No grading
+tolerance or mastery predicate was tightened.
+
+| Row / subject | Correction or qualification against current source |
+| --- | --- |
+| 1.03 focus maximum | Eight measures is a planner budget. Sustain-safe extension and deliberate consolidation can create longer active passages; it is not a universal maximum. |
+| 1.05 transfer threshold | `repeated_tempo_min_attacks` currently counts source-note events (`len(phrase.notes)`), not unique onset groups. A two-note chord satisfies two; no teaching-effectiveness inference follows. |
+| 1.09/1.11 difficulty | The planner has its own rapid/irregular-note heuristic, not the estimator's complete feature vector. `feature-gated` is a strategy ID, not a runtime feature-flag guarantee. |
+| 1.15 transformation proportions | Counts and denominators are calculated. Proportions are calculable but not explicit historical metrics; the normal state snapshot exposes descriptive change text. |
+| 2.07 minimum increment | The one-BPM setting directly governs below-start catch-up; normal advancement selects the next distinct integer ladder rung. |
+| 2.11 history scope | The 64-row window excludes graded Perform, section-review and partial routes as well as interrupted/ungraded work; it is not an exact repetition counter. |
+| 2.14/3.05 mastery/outcomes | Accepted mastery is now an explicit product decision. Strict clean is inferable from status rows, but historical passed is not self-contained without source onset groups; historical target-at-attempt is also absent. |
+| 3.02 actual wrong pitch | Actual incorrect pitch is live, not durably retained. Trouble pitches are expected source pitches; Fukuda retains source ID/status/failure count, not the wrong played pitch. |
+| 3.04/3.07 timing detail | The grader discards matched timings and priority status hides independent hold/timing flags. Mapped-tempo takes currently have categorical marks but no detailed performance summary. |
+| 3.10 trace | Recorder retains transient note events, not a complete raw MIDI stream or durable performance recording. |
+| 4.05 recovery parameters | The existing adaptive policy now reads validated startup slowdown/escalation settings, removing inert duplicated values. Defaults and the other five fixed policies are unchanged; no learned policy selector was added. |
+| 4.16 trouble resolution | Ordinary Practice resolves on passed; Perform uses strict clean. This is route-specific current behavior, not linked intervention-outcome history. |
+| 5.11 processing timings | Python `RuntimeTimings` deque samples are always recorded in bounded RAM. The opt-in flag gates extra slow-command/catalog logging, not those samples. Godot frame diagnostics are genuinely opt-in. |
+
+At the pre-P0 snapshot, the pending-result guard was process-local and
+Stop/navigation discarded completed feedback. The new ledger uses stable IDs,
+unique settlement and sealed payload hashes, retains those exposures and keeps
+progression eligibility separate from historical capture. Legacy rows cannot
+recover the discarded historical matches; their missing fields remain unknown.
+
+Separate confirmed maintenance fixes preserve existing contracts: path reset
+now preflights the replacement and coordinates progress/Fukuda deletion plus
+replacement save in one existing SQLite transaction; failed deletion, generation
+or save preserves the current take and durable records. Current command and
+native verification evidence is recorded in ROADMAP and the delivery receipt.
+
+## Original verdict (before P0)
 Learning rules and immediate assessment are substantially implemented. Durable attempt-level, note-level, retry-decision, timing, and longitudinal evidence are not. Six selectable retry policies are predefined; no evidence-driven automatic choice of policy, no intervention outcome attribution, and no validated adaptive learner model. A recent assessment history exists but is **bounded to 64 graded attempts per exact stage** and records only BPM, note-status sequence, and extra-note count.
 
 **Vocabulary:** Rule = fixed or configurable policy; Derived = computed from source MIDI or live grading; Live = exposed through current state/diagnostics; Persisted = retained in SQLite/settings across restarts; Absent = not implemented as a durable first-class metric. An exposed number is not necessarily a historical measurement.

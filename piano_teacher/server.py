@@ -5,6 +5,7 @@ Communication with Godot uses an in-memory native command queue.
 """
 from __future__ import annotations
 from dataclasses import asdict, replace
+from collections import deque
 import hashlib
 import json
 import os
@@ -27,7 +28,7 @@ from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .application.rolling_recovery import plan_rolling_recovery
-from .application.mistake_responses import resolve_mistake_policy, whole_response
+from .application.mistake_responses import resolve_mistake_policy, whole_response, mistake_policy_facts
 from .music import Phrase
 from .measure_grid import phrase_grid
 from .course_navigation import choose_source_opening
@@ -64,6 +65,8 @@ from .learner_state import guided_units
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
+from .teaching import TeachingConfig
+from .application.learning_capture import LearningCapture, identifier
 
 from .practice_history import PracticePolicyService
 from .fukuda_mistake_store import FukudaMistakeStore
@@ -147,6 +150,7 @@ class PracticeEngine:
         self._trouble_key: tuple | None = None
         self._trouble_count = 0
         self._guided_recovery_pending = False
+        self._policy_retry = None
         self._guided_return: tuple[str, float] | None = None
         self.performance_summary: dict | None = None
         self.review_stage_identity: str | None = None
@@ -197,11 +201,18 @@ class PracticeEngine:
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
+        self.measurement = LearningCapture(self.progress.ledger)
+        self.progress.ledger.prune(days=self.library.settings["evidence_retention_days"],
+                                   budget_mib=self.library.settings["evidence_budget_mib"])
+        self._action_reason = "transition"
+        self._pending_rolling = None
+        self._settlement_failed = False
+        self._deferred_midi = deque()
         self.fukuda_mistakes = FukudaMistakeStore(self.db)
         self.learner_store = self.progress.learner_store
         self.learner_progress = LearnerProgress(self.learner_store)
         self.practice_policy = PracticePolicyService(
-            self.progress.assessment_history,
+            self.progress.ledger,
             diagnosis=self.library.settings["diagnosis_strategy"],
             learner=self.library.settings["learner_strategy"])
         self.remediation_planner = RemediationPlanner()
@@ -212,7 +223,7 @@ class PracticeEngine:
         """Cancel session state after detachment and before closing the input."""
         with self.midi.disconnected(reason) as notice:
             self.live_input.clear_device()
-            self._stop()
+            self._stop(reason=reason)
             if self.teaching is not None:
                 self.teaching.set_connected(False, now=time.monotonic())
         self.feedback = notice.feedback
@@ -246,12 +257,12 @@ class PracticeEngine:
             try:
                 with self.midi.selecting(name, callback=self._receive) as selected:
                     self.live_input.clear_device()
-                    self._stop()
+                    self._stop(reason="device_changed")
             except RuntimeError as exc:
                 self.feedback = str(exc)
                 raise
             self._present_midi_notice(selected.notice)
-            self.library.update(midi_device=name)
+            self.set_preferences(midi_device=name)
 
     def hardware_diagnostics(self) -> dict:
         with self.lock:
@@ -285,17 +296,282 @@ class PracticeEngine:
                 result = self.midi_calibration.snapshot(time.monotonic())["result"]
                 if not result or not result.get("reliable"):
                     raise ValueError("Finish a consistent calibration before applying it")
-                self.library.update(midi_offset_ms=max(0, min(250, result["estimate_ms"])))
+                self.set_preferences(midi_offset_ms=max(0, min(250, result["estimate_ms"])))
             elif action == "calibration_reset":
                 self.midi_calibration.cancel()
                 self.midi_calibration.result = None
-                self.library.update(midi_offset_ms=0)
+                self.set_preferences(midi_offset_ms=0)
             else:
                 raise ValueError("Unsupported calibration command")
 
     def preferences(self) -> dict:
         with self.lock:
             return self.library.public_settings()
+
+    def _learning_context(self, *, scope: str, start: float, end: float,
+                          run_at: float | None = None) -> dict:
+        p = self.plan
+        phrase = p.active_phrase
+        tempo = self._active_tempo_map()
+        segments = (list(tempo.as_segments()) if tempo is not None else
+                    [{"start_beat": 0.0, "end_beat": phrase.end-phrase.start,
+                      "bpm": p.bpm}])
+        rule = {"schema_version": 1, "grader": "nearest-onset-v1",
+                "mastery": "accepted-full-target-v1", "lesson_settings": asdict(SETTINGS),
+                "onset_formula": "max(grading_onset_tolerance_seconds,min(0.30,0.20*local_spb))",
+                "hold_formula": "max(grading_duration_floor_seconds,duration*max(grading_duration_tolerance_fraction,min(0.75,grading_duration_tolerance_fraction+0.28*max(0,local_spb-0.5))))",
+                "importer": "midi-source-v1", "generator": p.lesson_generator.name,
+                "generator_version": p.route_version,
+                "timing_strategy": self.library.settings["timing_strategy"],
+                "tempo_strategy": self.library.settings["tempo_strategy"],
+                "retry_version": resolve_mistake_policy(self.library.settings["mistake_response_strategy"]).version,
+                "guided_config": {**asdict(self.teaching.config if self.teaching else TeachingConfig()),
+                                  "persistent_hints": self.persistent_hints},
+                "retry": mistake_policy_facts(resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))}
+        rule_id = self.progress.ledger.store_rules(rule)
+        return {"fingerprint": self.fingerprint, "source_sha256": self.fingerprint,
+                "stage_key": p.identity, "hand": p.hand, "scope": scope,
+                "variant": p.active_variant.level, "generator": p.lesson_generator.name,
+                "generator_version": p.route_version, "rule_id": rule_id,
+                "source_note_ids": [n.source_id for n in phrase.notes],
+                "variant_source_indices": list(p.active_variant.source_indices),
+                "expected_notes": [asdict(n) for n in phrase.notes],
+                "bar_boundaries": list(p.piece.bar_boundaries),
+                "time_signatures": [list(signature) for signature in p.piece.time_signatures],
+                "phrase_start": phrase.start, "phrase_end": phrase.end,
+                "from_beat": start, "end_beat": end, "target_bpm": p.target_bpm,
+                "source_bpm": p.piece.bpm,
+                "performed_bpm": p.bpm, "tempo_map": segments,
+                "tempo_map_hash": hashlib.sha256(json.dumps(segments, sort_keys=True).encode()).hexdigest(),
+                "transport_id": self.transport_id, "score_revision": self.score_revision,
+                "scheduled_origin": None if run_at is None else run_at-self.measurement.origin,
+                "count_in_beats": self.count_in_beats,
+                "count_in_meter": list(self.count_in_meter),
+                "midi_available": self.midi.connected,
+                "device_name": self.midi.device,
+                "calibration_ms": self.library.settings["midi_offset_ms"],
+                "calibration_result": self.midi_calibration.result,
+                "calibration_applied_ms": (0 if scope in ("guided", "preview") else
+                                            self.library.settings["midi_offset_ms"]),
+                "assistance": self.persistent_hints or scope == "guided"}
+
+    def learning_history_status(self) -> dict:
+        with self.lock:
+            status = self.progress.ledger.status()
+            return {**status, "attempt_count": status["attempts"],
+                    "detail_attempt_count": status["attempts"]-status["coverage"]["pruned_detail_attempts"]-status["coverage"]["legacy_bounded_attempts"],
+                    "pruned_attempt_count": status["coverage"]["pruned_detail_attempts"],
+                    "current_fingerprint": self.fingerprint,
+                    "default_path": str(self._data_dir / "exports" / "learning-history.json"),
+                    "evidence_retention_days": self.library.settings["evidence_retention_days"],
+                    "evidence_budget_mib": self.library.settings["evidence_budget_mib"],
+                    "summary": (f"{status['attempts']} recorded takes. "
+                                "History stays on this computer. Reset Lesson preserves history.")}
+
+    def learning_statistics(self, fingerprint: str | None = None) -> dict:
+        """Read measured learning outcomes without advancing the musical clock."""
+        from .learning_statistics import learning_statistics
+        with self.lock:
+            return learning_statistics(self.progress.ledger, fingerprint=fingerprint)
+
+    def _retry_context(self, result, *, end_beat=None):
+        """Use compatible, retained original grading evidence at retry boundaries."""
+        from .application.mistake_responses import (
+            AdaptiveAttempt, AdaptiveContext, adaptive_attempt_from_assessment)
+        context = self.measurement.context or {}
+        phrase = self.plan.active_phrase
+        attempts = []
+        rows = self.db.execute("""SELECT t.context_json,d.detail_json FROM learning_attempts t
+            JOIN learning_attempt_details d USING(attempt_id)
+            WHERE t.fingerprint=? AND t.stage_key=? AND t.state IN ('completed','interrupted')
+            ORDER BY t.rowid DESC LIMIT 16""", (self.fingerprint, self.plan.identity)).fetchall()
+        for encoded, detail_json in reversed(rows):
+            if not encoded:
+                continue
+            previous, detail = json.loads(encoded), json.loads(detail_json)
+            if any(previous.get(key) != context.get(key) for key in
+                   ("hand", "rule_id", "target_bpm", "calibration_applied_ms")):
+                continue
+            assessment = detail.get("assessment")
+            observations = detail.get("observations", [])
+            if not assessment or not observations or previous.get("scope") in ("perform", "preview", "guided"):
+                continue
+            if any(item.get("missingness") for item in observations):
+                continue
+            selected = {}
+            if previous.get("parent_decision_id"):
+                row = self.db.execute("SELECT data_json FROM learning_decisions WHERE decision_id=?",
+                                      (previous["parent_decision_id"],)).fetchone()
+                if row and row[0]:
+                    selected = json.loads(row[0]).get("selected", {})
+            attempts.append(AdaptiveAttempt(
+                identity=self.plan.identity, start_beat=previous["from_beat"],
+                end_beat=detail.get("assessed_end_beat", previous["end_beat"]),
+                bpm=previous["performed_bpm"],
+                wrong_beats=tuple(n["source_beat"]-phrase.start for n in observations if n["status"] == "wrong"),
+                missed_beats=tuple(n["source_beat"]-phrase.start for n in observations if n["status"] == "missed"),
+                timing_errors=sum(bool(n.get("timing_error")) for n in observations),
+                hold_errors=sum(bool(n.get("hold_error")) for n in observations),
+                accepted=assessment["passed"], assisted=bool(detail.get("assistance_used")),
+                action=selected.get("action", "repeat"), extra_errors=assessment.get("extra_notes", 0)))
+        action = "repeat"
+        parent = context.get("parent_decision_id")
+        if parent:
+            row = self.db.execute("SELECT data_json FROM learning_decisions WHERE decision_id=?", (parent,)).fetchone()
+            if row and row[0]:
+                action = json.loads(row[0]).get("selected", {}).get("action", "repeat")
+        attempts.append(adaptive_attempt_from_assessment(result, identity=self.plan.identity,
+            start_beat=self.visual_transport.play_from_beat,
+            end_beat=end_beat if end_beat is not None else context.get("end_beat", phrase.end-phrase.start),
+            bpm=context.get("performed_bpm", self.plan.bpm), phrase_start=phrase.start,
+            assisted=self.measurement.assistance_used, action=action))
+        episode = self.measurement.episode
+        count, reference = 0, context.get("performed_bpm", self.plan.bpm)
+        if episode:
+            count = self.db.execute("SELECT count(*) FROM learning_decisions WHERE json_extract(summary_json,'$.episode_id')=?",
+                                    (episode["id"],)).fetchone()[0]
+            row = self.db.execute("""SELECT t.summary_json FROM learning_decisions d
+                JOIN learning_attempts t ON t.attempt_id=d.attempt_id WHERE d.decision_id=?""",
+                (episode["first_decision"],)).fetchone()
+            if row:
+                reference = json.loads(row[0]).get("performed_bpm", reference)
+        onsets = {n.start for n in phrase.notes if self.plan.hand == "both" or n.hand == self.plan.hand}
+        return AdaptiveContext(self.plan.identity, tuple(attempts), episode_action_count=count,
+            original_start_beat=0., original_end_beat=phrase.end-phrase.start,
+            source_attacks=len(onsets), attacks_per_beat=len(onsets)/(phrase.end-phrase.start),
+            reference_bpm=reference)
+
+    def _record_policy_response(self, response, result, *, trigger: str):
+        self.measurement.decision({"trigger": trigger,
+            "policy": self.library.settings["mistake_response_strategy"],
+            "policy_version": resolve_mistake_policy(self.library.settings["mistake_response_strategy"]).version,
+            "stage_key": self.plan.identity,
+            "reason": response.reason, "eligible": True, "selected": asdict(response),
+            "before_bpm": self.measurement.context["performed_bpm"], "after_bpm": response.bpm,
+            "trigger_evidence": {"accepted": result.passed, "strict_clean": result.clean,
+                "wrong": sum(n.status == "wrong" for n in result.notes),
+                "missed": sum(n.status == "missed" for n in result.notes)},
+            "wrong_missed_source_ids": [n.note.source_id for n in result.notes if n.status in ("wrong", "missed")],
+            "origin": "automatic", "state": "applied"})
+
+    def _source_safe_response(self, response):
+        """Expand source bars so a repair never severs an authored held note."""
+        if response.end_beat is None or response.action in ("continue", "pause", "repair"):
+            return response
+        phrase = self.plan.active_phrase
+        grid = self.attempt_progression.grid_for(phrase, self.plan.piece.bar_boundaries)
+        start, end = response.restart_beat, response.end_beat
+        notes = [n for n in phrase.notes if self.plan.hand == "both" or n.hand == self.plan.hand]
+        while start > grid[0] and any(n.start < phrase.start+start-1e-7 < n.end-1e-7 for n in notes):
+            start = grid[grid.index(start)-1]
+        while end < grid[-1] and any(phrase.start+start-1e-7 <= n.start < phrase.start+end-1e-7
+                                     and n.end > phrase.start+end+1e-7 for n in notes):
+            end = grid[grid.index(end)+1]
+        return replace(response, restart_beat=start, end_beat=end)
+
+    def _apply_policy_response(self, response, *, now: float, deadline: float | None = None,
+                               visual_from: float | None = None):
+        """Apply registered source-bound decisions through the existing transport."""
+        phrase = self.plan.active_phrase
+        full_end = phrase.end-phrase.start
+        self.open_from_beat = response.restart_beat
+        self.review_end_beat = response.end_beat if response.end_beat is not None and response.end_beat < full_end-1e-7 else None
+        self.retry_range = ({"start_beat": response.restart_beat, "end_beat": response.end_beat,
+                             "response": response.action} if self.review_end_beat is not None else None)
+        instruction = {
+            "repeat": f"Repeat this passage at {response.bpm} BPM.",
+            "isolate": f"Practise the difficult measures at {response.bpm} BPM before reconnecting the passage.",
+            "slow": f"Practise this passage more slowly at {response.bpm} BPM.",
+            "guided": "Find the notes without timing pressure, then retry without hints.",
+            "reintegrate": f"Reconnect the surrounding measures at {response.bpm} BPM before the full passage.",
+            "pause": "Take a break or choose another retry strategy, then press Start when ready.",
+        }.get(response.action, f"Continue at {response.bpm} BPM.")
+        self.next_action = instruction
+        if response.action == "pause":
+            self.auto = False
+            self.visual_transport.cancel_preparation()
+            self.visual_transport.next_at = 0.
+            self.feedback = "Practice paused after repeated automatic retries"
+        elif response.guided:
+            self._begin_learn(from_beat=response.restart_beat, recovery=True)
+            self.next_action = instruction
+        elif deadline is not None:
+            self._continue_at(deadline, from_beat=response.restart_beat)
+            self.next_action = instruction
+        else:
+            self._schedule_preparation(response.restart_beat, now=now,
+                from_visual=self._visual_motion(now)[0] if visual_from is None else visual_from,
+                reverse_seconds=self.feedback_seconds)
+            self.next_action = instruction
+
+    def export_learning_history(self, path: str, include_detail: bool = False) -> dict:
+        if not isinstance(path, str) or not path.strip() or type(include_detail) is not bool:
+            raise ValueError("Choose an export file and detail preference")
+        with self.lock:
+            return self.progress.ledger.export(Path(path).expanduser(), include_detail=include_detail)
+
+    def delete_piece_history(self, fingerprint: str, confirm: bool = False) -> dict:
+        with self.lock:
+            if confirm is not True or not self.plan or fingerprint != self.fingerprint:
+                raise ValueError("Confirm deletion for the currently loaded piece")
+            replacement = LearningPlan(self.plan.piece, warmup=self.is_builtin_warmup,
+                exercise_strategy=self.library.settings["exercise_strategy"],
+                timing_strategy=self.library.settings["timing_strategy"],
+                tempo_strategy=self.library.settings["tempo_strategy"],
+                fukuda_mistakes=frozenset(), feedback={})
+            with self.measurement.atomic():
+                self.progress.ledger.delete_piece(fingerprint)
+            self.measurement.discard_deleted()
+            self._stop(reason="delete_piece_history", persist_evidence=False)
+            self.plan = replacement
+            self._reset_trouble()
+            self.open_from_beat = 0.0
+            self.mode = "practice"
+            self.teaching = None
+            self.guided_range = None
+            self.score_artifacts.invalidate()
+            self.score_revision += 1
+            self.feedback = "Piece history and learning progress deleted"
+            self.course_guided = False
+            self.persistent_hints = False
+            return self.learning_history_status()
+
+    def delete_learner_history(self, confirm: bool = False) -> dict:
+        with self.lock:
+            if confirm is not True:
+                raise ValueError("Confirm deletion of all learning history and progress")
+            replacement = (LearningPlan(self.plan.piece, warmup=self.is_builtin_warmup,
+                exercise_strategy=self.library.settings["exercise_strategy"],
+                timing_strategy=self.library.settings["timing_strategy"],
+                tempo_strategy=self.library.settings["tempo_strategy"],
+                fukuda_mistakes=frozenset(), feedback={}) if self.plan else None)
+            with self.measurement.atomic():
+                self.progress.ledger.delete_learner()
+            self.measurement.discard_deleted()
+            self._stop(reason="delete_learner_history", persist_evidence=False)
+            self.measurement = LearningCapture(self.progress.ledger)
+            self.plan = replacement
+            self._reset_trouble()
+            self.open_from_beat = 0.0
+            self.mode = "practice"
+            self.teaching = None
+            self.guided_range = None
+            self.score_artifacts.invalidate()
+            self.score_revision += 1
+            self.feedback = "All learning history and progress deleted"
+            self.course_guided = False
+            self.persistent_hints = False
+            return self.learning_history_status()
+
+    def close(self) -> None:
+        with self.lock:
+            if self.measurement.closed:
+                return
+            self._stop(reason="shutdown")
+            self.measurement.close()
+            with self.midi.selecting("", callback=self._receive):
+                pass
+            self.progress.close()
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
@@ -318,16 +594,34 @@ class PracticeEngine:
                     warmup=self.is_builtin_warmup,
                     fukuda_mistakes=self.fukuda_mistakes.problematic(self.fingerprint),
                     feedback=self.fukuda_mistakes.evidence(self.fingerprint))
+            intent = identifier()
+            self.measurement.event("settings_intent", {
+                "intent_id": intent, "before": {key: self.library.settings[key] for key in changes},
+                "after": {key: proposed[key] for key in changes}})
+            if proposed["midi_offset_ms"] != self.library.settings["midi_offset_ms"]:
+                self._stop(reason="calibration_changed")
+                self.feedback = "MIDI timing correction changed"
+                self.next_action = "Press Play to start a new attempt."
+            if proposed["mistake_response_strategy"] != self.library.settings["mistake_response_strategy"]:
+                self._stop(reason="policy_changed")
+                self.feedback = "Retry strategy changed"
+                self.next_action = "Press Play to start a new attempt."
             updated = self.library.update(**changes)
+            self.measurement.event("settings_applied", {"intent_id": intent, "changes": changes})
+            if {"evidence_retention_days", "evidence_budget_mib"} & changes.keys():
+                if self.running and not self.visual_transport.paused:
+                    self._pause_current_session()
+                self.progress.ledger.prune(days=proposed["evidence_retention_days"],
+                                           budget_mib=proposed["evidence_budget_mib"])
             if {"diagnosis_strategy", "learner_strategy"} & changes.keys():
                 self.practice_policy = PracticePolicyService(
-                    self.progress.assessment_history,
+                    self.progress.ledger,
                     diagnosis=self.library.settings["diagnosis_strategy"],
                     learner=self.library.settings["learner_strategy"])
             if before != self.library.settings["music_dir"]:
                 self.library_health.reset()
             if replacement is not None:
-                self._stop()
+                self._stop(reason="strategy_changed")
                 self._reset_trouble()
                 self.plan = replacement
                 self.open_from_beat = 0.0
@@ -412,16 +706,18 @@ class PracticeEngine:
             self.runtime_timings.midi_ms.append(
                 (time.perf_counter()-began)*1000.0)
 
-    def _receive_message(self, message):
+    def _receive_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
         # Timestamp in the hardware input callback, not on the rendering thread.
-        now = time.monotonic()
+        now = time.monotonic() if received_at is None else received_at
         with self.lock:
-            self.midi.observe(message, now=now)
+            if not deferred:
+                self.midi.observe(message, now=now)
             if self.midi_calibration.active:
                 if message.type == "note_on" and message.velocity > 0:
                     self.midi_calibration.observe(now)
                 return
-            corrected_at = now - self.library.settings["midi_offset_ms"] / 1000.0
+            corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
+                            if corrected_at is None else corrected_at)
             # A key can reach the next attempt's musical deadline before the
             # next frame-state snapshot, even if none observed the source ending.
             # Settle only a due handoff; retain the hardware timestamp above.
@@ -439,8 +735,10 @@ class PracticeEngine:
                     source_end = self.visual_transport.run_at + (self._elapsed_seconds(phrase.end-phrase.start)
                         - self._elapsed_seconds(self.visual_transport.play_from_beat))
                     due = now >= source_end + self.visual_transport.visual_gap_beats*60/self.plan.bpm
-                if due:
-                    self._update()
+                if not deferred and (due or self._deferred_midi):
+                    self._deferred_midi.append((message.copy(), now, corrected_at,
+                                                self.transport_id))
+                    return
             if message.type in ("note_on", "note_off"):
                 is_on = message.type == "note_on" and message.velocity > 0
                 self.live_input.receive(
@@ -462,7 +760,10 @@ class PracticeEngine:
                     self.teaching.receive(pitch=message.note,
                         is_on=message.type == "note_on" and message.velocity > 0,
                         channel=getattr(message, "channel", 0), at=now)
-                    self._save_guided_preparation()
+                    if self.measurement.attempt_id is not None:
+                        self.measurement.guided.add(message.note,
+                            message.type == "note_on" and message.velocity > 0,
+                            now-self.measurement.origin-self.measurement.context["monotonic_start"])
                 return
             if self.mode == "listen":
                 return
@@ -502,7 +803,7 @@ class PracticeEngine:
                     fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
                     feedback=self.fukuda_mistakes.evidence(fingerprint))
                 self.progress.restore(candidate, fingerprint)
-                self._stop()
+                self._stop(reason="source_changed")
                 self._reset_trouble()
                 self.course_guided = False
                 self.source = str(source)
@@ -596,17 +897,26 @@ class PracticeEngine:
             raise ValueError("Confirm the reset for the currently loaded piece")
         piece = self.plan.piece
         warmup = self.is_builtin_warmup
-        # The database deletes are atomic, scoped exclusively to this score.
-        self.progress.reset_piece(fingerprint)
-        self.fukuda_mistakes.reset(fingerprint)
-        self._stop()
-        self._reset_trouble()
-        self.plan = LearningPlan(piece, warmup=warmup,
+        # Validate the reset course against cleared source feedback while the
+        # current take and durable records are still intact.
+        replacement = LearningPlan(piece, warmup=warmup,
                     exercise_strategy=self.library.settings['exercise_strategy'],
                     timing_strategy=self.library.settings['timing_strategy'],
                     tempo_strategy=self.library.settings['tempo_strategy'],
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
-                    feedback=self.fukuda_mistakes.evidence(fingerprint))
+                    fukuda_mistakes=frozenset(), feedback={})
+        # Publish all replacement records before stopping the current take.
+        with self.measurement.atomic():
+            self.measurement.interrupt("lesson_reset", self.recorder.presses if self.recorder else
+                                       self.measurement.guided.presses)
+            self.measurement.flush_intervals(time.monotonic())
+            self.progress.reset_piece(fingerprint)
+            self.fukuda_mistakes.reset(fingerprint)
+            self.progress.save(replacement, fingerprint)
+            self.measurement.event("lesson_reset", {"fingerprint": fingerprint,
+                                                    "preserves_history": True})
+        self._stop(reason="lesson_reset", persist_evidence=False)
+        self._reset_trouble()
+        self.plan = replacement
         self.open_from_beat = 0.0
         self.course_guided = False
         self.mode = "practice"
@@ -617,9 +927,19 @@ class PracticeEngine:
         self.awaiting_score_revision = None
         self.feedback = "Lesson path reset to its first step"
         self.next_action = "Press Play when you are ready."
-        self._save()
 
-    def _stop(self):
+    def _stop(self, *, reason: str | None = None, preserve_episode: bool = False,
+              persist_evidence: bool = True):
+        reason = reason or self._action_reason
+        played = (self.recorder.presses if self.recorder is not None else
+                  self.measurement.guided.presses)
+        if persist_evidence:
+            with self.measurement.atomic():
+                self.measurement.interrupt(reason, played, censor=not preserve_episode,
+                    extra={"guidance": self.teaching.snapshot(now=time.monotonic())}
+                          if self.mode == "learn" and self.teaching is not None else None)
+                self.measurement.flush_intervals(time.monotonic())
+        self._deferred_midi.clear()
         # Stopping/restarting a take does not invalidate precompiled next
         # notation. Its stage-key + score revision remain authoritative:
         # navigation, library changes and generation mismatches fail that
@@ -647,6 +967,7 @@ class PracticeEngine:
         self.live_input.reset_attempt()
         self.retry_range=None
         self._guided_recovery_pending=False
+        self._policy_retry = None
         self._guided_return=None
         self.listen.cancel()
         self.performance_summary=None
@@ -656,6 +977,9 @@ class PracticeEngine:
         self._guided_prepared=False
         self._remediation_pending = None
         self._remediation_active = None
+        self._pending_rolling = None
+        self._settlement_failed = False
+
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
         return self.learner_progress.saved(
@@ -667,13 +991,52 @@ class PracticeEngine:
 
     def _save_guided_preparation(self):
         """Record a completed guided idea once, without awarding timed mastery."""
-        self.guided_session.commit_completed_preparation(
-            learning=self.mode == "learn",
-            remediation_active=self._remediation_active is not None,
-            fingerprint=self.fingerprint,
-            stage_key=self.plan.identity if self.plan is not None else "",
-            current_unit=self._guided_unit,
-            record_preparation=self.learner_progress.record_guided_preparation)
+        prepared_before = self.guided_session.prepared
+        completed = False
+        guidance = (self.teaching.snapshot(now=time.monotonic()) if
+                    self.mode == "learn" and self.teaching is not None else None)
+        exposure_completed = bool(guidance and guidance["completed"] and
+                                  self.measurement.attempt_id is not None)
+        if guidance and not guidance["completed"]:
+            self.measurement.observe_guidance(guidance)
+            return
+        if exposure_completed:
+            self.measurement.seal(self.measurement.guided.presses,
+                state="completed", reason="guided_preparation", extra={"guidance": guidance})
+        try:
+            with self.measurement.atomic():
+                completed = self.guided_session.commit_completed_preparation(
+                    learning=self.mode == "learn",
+                    remediation_active=self._remediation_active is not None,
+                    fingerprint=self.fingerprint,
+                    stage_key=self.plan.identity if self.plan is not None else "",
+                    current_unit=self._guided_unit,
+                    record_preparation=self.learner_progress.record_guided_preparation)
+                if exposure_completed:
+                    self.measurement.observe_guidance(guidance)
+                    policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
+                    if (self._guided_return is not None and policy.whole_handler is not None
+                            and self.measurement.episode is not None and not self.measurement.decisions):
+                        start, end = self.guided_range
+                        self.measurement.decision({"trigger": "guided_completion",
+                            "policy": policy.name, "policy_version": policy.version,
+                            "stage_key": self.plan.identity, "reason": "guidance_requires_unsupported_retry",
+                            "before_bpm": self.plan.bpm, "after_bpm": self.plan.bpm,
+                            "selected": {"bpm": self.plan.bpm, "restart_beat": start,
+                                "end_beat": end, "guided": False, "action": "isolate",
+                                "reason": "guidance_requires_unsupported_retry", "mode": policy.name},
+                            "assisted_count": guidance.get("assisted_count"),
+                            "mastery_eligible": False, "origin": "automatic", "state": "applied"})
+                    self.measurement.persist()
+        except Exception:
+            self.guided_session.prepared = prepared_before
+            if not self.visual_transport.paused:
+                self.visual_transport.pause(at=time.monotonic())
+            self.feedback = "Could not save the guided preparation"
+            self.next_action = "Check storage, then Resume to save this same exposure."
+            raise
+        if exposure_completed:
+            self.measurement.finish()
 
 
     def _learner_snapshot(self) -> dict:
@@ -702,7 +1065,7 @@ class PracticeEngine:
         following = self.learner_progress.next_skippable_step(p, reason)
         self.learner_progress.mark_skipped(
             fingerprint=self.fingerprint, stage_key=p.identity, reason=reason)
-        self._stop()
+        self._stop(reason="skip_stage")
         self._select_step(following)
         self.course_guided = True
         self._begin_course_stage()
@@ -786,7 +1149,7 @@ class PracticeEngine:
             from_beat=from_beat)
         start, end = fragment.beat_range
         retry_range = self.retry_range if recovery else None
-        self._stop()
+        self._stop(reason="guided_recovery" if recovery else "learn", preserve_episode=recovery)
         self._remediation_active = remediation
         if recovery:
             self.retry_range = retry_range
@@ -809,6 +1172,7 @@ class PracticeEngine:
             stage_key=self.plan.identity, revision=self.score_revision,
             now=time.monotonic(), connected=self.midi.connected,
             recovery=recovery)
+        self.measurement.begin(self._learning_context(scope="guided", start=start, end=end))
         self.awaiting_score_revision = self.score_revision
         self.feedback = "Preparing a short idea to learn"
         self.next_action = (f"Learn the selected {remediation.focus} notes, then retry the original."
@@ -831,7 +1195,8 @@ class PracticeEngine:
             raise ValueError("Open a piece first")
         return_context = self._guided_return
         retry_range = self.retry_range
-        self._stop()
+        guided_range = self.guided_range
+        self._stop(reason="reintegration", preserve_episode=return_context is not None)
         # An idle score selected with Open at measure N must already point
         # at that source measure. Start later uses the same origin.
         phrase = self.plan.active_phrase
@@ -841,6 +1206,10 @@ class PracticeEngine:
             self.visual_transport.pending_rewind = return_context[1]
             self.retry_range = retry_range
             self._guided_return = return_context
+            if (guided_range is not None and resolve_mistake_policy(
+                    self.library.settings["mistake_response_strategy"]).whole_handler is not None):
+                self.open_from_beat = return_context[1]
+                self.review_end_beat = guided_range[1] if guided_range[1] < phrase.end-phrase.start-1e-7 else None
         self.mode = "practice"
         self.teaching = None
         self.guided_range = None
@@ -927,9 +1296,13 @@ class PracticeEngine:
 
     def _performance_review(self, phrase: Phrase, result) -> dict:
         """Retained engine API; assessment service owns report construction."""
+        tempo = self._active_tempo_map()
+        elapsed_to_beat = (None if tempo is None else
+            lambda seconds: tempo.beat_at(tempo.seconds_at(self.visual_transport.play_from_beat)+seconds))
         return self.assessment.review(
             phrase, result, bar_boundaries=self.plan.piece.bar_boundaries,
-            played_from_beat=self.visual_transport.play_from_beat, bpm=self.plan.bpm)
+            played_from_beat=self.visual_transport.play_from_beat, bpm=self.plan.bpm,
+            elapsed_to_beat=elapsed_to_beat)
 
     def _review_retry(self, first_bar, last_bar):
         """Select only a scored, real source interval from the current review."""
@@ -1016,7 +1389,8 @@ class PracticeEngine:
         score_artifacts_before = self.score_artifacts
         self._prepared_stage_published = False
         try:
-            with sqlite_atomic(self.db):
+            with self.measurement.atomic():
+                self.measurement.persist()
                 # Source-specific mistakes are learned from authentic original
                 # MIDI attempts, never from generated exercises or Listen previews.
                 use_feedback = (p.accepts_performance_feedback
@@ -1033,7 +1407,9 @@ class PracticeEngine:
                     assessed_bpm=self._pending_assessed_bpm,
                     automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
                     observe=self.practice_policy.observe,
-                    plan_remediation=self.remediation_planner.plan)
+                    plan_remediation=(self.remediation_planner.plan if resolve_mistake_policy(
+                        self.library.settings["mistake_response_strategy"]).whole_handler is None
+                        else lambda *args, **kwargs: None))
                 if use_feedback:
                     # Reuse graded original source IDs through the selected generator's
                     # feedback contract. No name-based algorithm dispatch in the engine.
@@ -1109,6 +1485,17 @@ class PracticeEngine:
                     else:
                         self.visual_transport.visual_offset_beats = 0.0
                 self._save()
+                if self.measurement.attempt_id is not None:
+                    self.measurement.event("progression", {
+                        "fingerprint": self.fingerprint,
+                        "before_stage": outcome.previous_stage,
+                        "after_stage": p.identity, "before_bpm": outcome.previous_bpm,
+                        "after_bpm": p.bpm, "streak": p.streak,
+                        "mastery_transition": (outcome.previous_stage not in plan_before["mastered"]
+                                               and outcome.previous_stage in p.mastered),
+                        "mastery_bpm": p.mastered.get(outcome.previous_stage),
+                        },
+                        key=f"{self.measurement.attempt_id}:progression")
 
         except Exception:
             vars(p).clear()
@@ -1117,21 +1504,27 @@ class PracticeEngine:
                 setattr(self, key, value)
             self.visual_transport.visual_offset_beats = visual_offset_before
             self.score_artifacts = score_artifacts_before
+            self._settlement_failed = True
             raise
         self.pending_result = None
         self._pending_assessed_bpm = None
+        self.measurement.finish()
+        self._settlement_failed = False
         self._stage_handoff_visual_beat = None
         self._stage_handoff_assets = None
         return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
-              loop_continuation: bool = False):
+              loop_continuation: bool = False, scheduled_deadline: float | None = None):
         with self.lock:
             if self.plan is None:
                 raise ValueError("Open a piece first")
             if self.mode == "learn":
                 self._prepare_practice()
                 return
+            if self.measurement.attempt_id is not None:
+                self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
+            self._policy_retry = None
             self.mode = mode
             self.teaching = None
             self.guided_range = None
@@ -1169,14 +1562,30 @@ class PracticeEngine:
             self.count_in_meter = list(scheduled.count_in_meter)
             self.count_in_beats = scheduled.count_in_beats
             self.next_boundary_beat = scheduled.next_boundary_beat
-            self.visual_transport.run_at = scheduled.run_at
+            self.visual_transport.run_at = (scheduled.run_at if scheduled_deadline is None
+                                            else scheduled_deadline)
+            scope = ("preview" if self.preview_only else "perform" if mode == "perform" else
+                     "section_review" if self.review_end_beat is not None else
+                     "partial" if scheduled.from_beat > 1e-7 else "full")
+            try:
+                self.measurement.begin(self._learning_context(
+                    scope=scope, start=scheduled.from_beat,
+                    end=self.review_end_beat or phrase.end-phrase.start,
+                    run_at=self.visual_transport.run_at))
+            except Exception:
+                self.running = False
+                self.recorder = None
+                self.auto = False
+                self.feedback = "Could not record the start of this attempt"
+                raise
+            self.measurement.phase_changed("count_in" if self.count_in_beats else "active", time.monotonic())
             self.feedback = "Count in, then play"
             self.next_action = scheduled.next_action
 
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Retain polling overshoot instead of moving the musical deadline."""
-        self.start(from_beat=from_beat, mode=self.mode, loop_continuation=True)
-        self.visual_transport.run_at = deadline
+        self.start(from_beat=from_beat, mode=self.mode, loop_continuation=True,
+                   scheduled_deadline=deadline)
 
     def _schedule_preparation(self, target: float, *, now: float,
                               from_visual: float, reverse_seconds: float):
@@ -1188,6 +1597,7 @@ class PracticeEngine:
         self.running = False
         self.recorder = None
         self.count_in_beats = 0.0
+        self.measurement.phase_changed("preparation", now)
 
     def _visual_motion(self, now: float) -> tuple[float, float, float]:
         """Read the one transport projection, including authored tempo and silence."""
@@ -1199,6 +1609,26 @@ class PracticeEngine:
             tempo_map=self._active_tempo_map())
 
     def control(self, action: str, **kwargs) -> None:
+        with self.lock:
+            previous_reason = self._action_reason
+            self._action_reason = action
+            before = {"fingerprint": self.fingerprint,
+                      "stage_key": self.plan.identity if self.plan else None,
+                      "bpm": self.plan.bpm if self.plan else None, "mode": self.mode}
+            try:
+                result = self._dispatch_control(action, **kwargs)
+                if action not in ("score_ready", "demo_ready", "reset_path"):
+                    self.measurement.event("manual_action", {"action": action,
+                        "fingerprint": before["fingerprint"] or None,
+                        "parameters": kwargs, "before": before,
+                        "after": {"fingerprint": self.fingerprint,
+                                  "stage_key": self.plan.identity if self.plan else None,
+                                  "bpm": self.plan.bpm if self.plan else None, "mode": self.mode}})
+                return result
+            finally:
+                self._action_reason = previous_reason
+
+    def _dispatch_control(self, action: str, **kwargs) -> None:
         """Single locked command entry; dispatch owns no engine state."""
         with self.lock:
             self._apply_listen_failure()
@@ -1293,6 +1723,8 @@ class PracticeEngine:
         elif action == "hints":
             self.guided_session.set_hints(
                 bool(kwargs.get("enabled", False)), now=time.monotonic())
+            if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
+                self.measurement.assistance_used = True
 
     def _control_transport(self, action: str, kwargs: dict) -> None:
         if action == "practice":
@@ -1303,7 +1735,7 @@ class PracticeEngine:
                 self.feedback = "Ready to play"
                 self.next_action = "Play one piano key to begin, or press Play."
         elif action == "stop":
-            self._stop()
+            self._stop(reason="stop")
             self.feedback = "Stopped"
             self.next_action = "Start when you are ready."
         elif action in ("start", "restart"):
@@ -1347,6 +1779,19 @@ class PracticeEngine:
 
     def _start_or_restart(self, action: str):
         """Start a take or schedule a seamless retry under the control lock."""
+        if self._settlement_failed:
+            revision = self.score_revision
+            self.feedback = self._commit_pending() or "Assessment saved"
+            if self.score_revision != revision:
+                self.awaiting_score_revision = self.score_revision
+            self.next_action = "Press Play when the score is ready."
+            return
+        if self._pending_rolling is not None:
+            decision, phrase, grid, score_beat, _old_now = self._pending_rolling
+            self._apply_rolling_recovery(decision, phrase, grid, score_beat, time.monotonic())
+            self.visual_transport.paused = False
+            self.visual_transport.paused_at = 0.0
+            return
         p = self.plan
         route = select_start_route(StartFacts(
             action=action, mode=self.mode, loaded=p is not None,
@@ -1368,6 +1813,7 @@ class PracticeEngine:
             return
         if route == "rewind":
             sampled = time.monotonic()
+            self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
             visual_now = self.visual_transport.paused_at if self.visual_transport.paused else sampled
             position, _, _ = self._visual_motion(visual_now)
             target = (self.visual_transport.pending_rewind if self.visual_transport.pending_rewind is not None
@@ -1378,6 +1824,7 @@ class PracticeEngine:
             self._deferred_score_ack = None
             self.awaiting_score_revision = None
             self.pending_result = None
+            self._policy_retry = None
             self._pending_assessed_bpm = None
             self.visual_transport._retry_previous_pass = False
             self._guided_recovery_pending = False
@@ -1395,6 +1842,7 @@ class PracticeEngine:
         require_pausable(paused=self.visual_transport.paused, phase=context)
         self.pause_context = context
         self.visual_transport.pause(at=now)
+        self.measurement.phase_changed("pause", now)
         if self.mode == "learn" and self.teaching is not None:
             self.teaching.pause(now=now)
         return
@@ -1407,9 +1855,16 @@ class PracticeEngine:
             preview_pending=self.visual_transport._preview_loop_pending,
             automatic_feedback=self.pending_result is not None and self.auto)
         now = time.monotonic()
+        previous_origin = self.visual_transport.run_at
         if learning:
             self.teaching.resume(now=now)
         self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
+        self.measurement.event("timeline_resume", {
+            "scheduled_origin_before": previous_origin-self.measurement.origin,
+            "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,
+            "shift_run_at": shift_run_at})
+        self.measurement.phase_changed("guided" if learning else
+            "count_in" if self.running and now < self.visual_transport.run_at else "active", now)
         self.pause_context = None
         if self.running:
             self.feedback = "Count in" if now < self.visual_transport.run_at else "Playing"
@@ -1575,6 +2030,12 @@ class PracticeEngine:
                 self._continue_at(deadline)
                 return
             self._prepared_stage_published = False
+            selected_retry = self._policy_retry
+            self._policy_retry = None
+            if selected_retry is not None and selected_retry[0] == self.plan.identity and self.auto:
+                self._remediation_pending = None
+                self._apply_policy_response(selected_retry[1], now=now, deadline=deadline)
+                return
             if route == "remediation":
                 self._start_remedial_assignment(assignment)
                 return
@@ -1630,30 +2091,71 @@ class PracticeEngine:
         # BPM selected for the next retry. Re-scaling the recorded
         # timestamps early would move mistakes to incorrect notes.
         self.feedback_marks=self._live_feedback((now-self.visual_transport.run_at))
-        if self.fingerprint:
-            unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
-                         if unit["start_beat"] == decision.restart_beat and unit["end_beat"] == decision.end_beat), None)
-            if unit is not None:
-                tempo_map = self._active_tempo_map()
-                assessed = self.assessment_policies.select(tempo_map).grade(
-                    phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-                    played=self.recorder.presses if self.recorder else [],
-                    from_beat=self.visual_transport.play_from_beat, end_beat=decision.end_beat,
-                    tempo=tempo_map)
-                self.learner_progress.record_rolling_trouble(
-                    fingerprint=self.fingerprint, stage_key=self.plan.identity,
-                    unit=unit, assessed_notes=assessed.notes,
-                    phrase_start=phrase.start)
+        tempo_map = self._active_tempo_map()
+        assessed = self.assessment_policies.select(tempo_map).grade(
+            phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+            played=self.recorder.presses if self.recorder else [],
+            from_beat=self.visual_transport.play_from_beat, end_beat=decision.end_beat,
+            tempo=tempo_map)
         transition = plan_rolling_recovery(
             decision, identity=self.plan.identity, bpm=self.plan.bpm,
             previous_key=self._trouble_key, previous_count=self._trouble_count,
             grid=grid, first_bar=phrase.first_bar, now=now,
             allow_guided=self.plan.exercise_strategy.name != "coda-part",
-            strategy=self.library.settings["mistake_response_strategy"])
-        self.plan.streak=0
-        self.plan.failures+=1
-        self.plan.bpm=transition.bpm
-        self._save()
+            strategy=self.library.settings["mistake_response_strategy"],
+            context=(self._retry_context(assessed, end_beat=decision.end_beat)
+                if resolve_mistake_policy(self.library.settings["mistake_response_strategy"]).rolling_handler is not None else None))
+        unsafe_focus = False
+        if transition.action == "isolate":
+            from .application.mistake_responses import WholeResponse
+            selected = self._source_safe_response(WholeResponse(transition.bpm,
+                transition.restart_beat, transition.mode, decision.end_beat, action="isolate"))
+            unsafe_focus = selected.restart_beat != transition.restart_beat or selected.end_beat != decision.end_beat
+        if transition.action == "continue" or unsafe_focus:
+            from .measure_grid import next_chunk_end
+            following = next_chunk_end(grid, decision.end_beat)
+            self.next_boundary_beat = following if following > decision.end_beat+1e-7 else 0.
+            return
+        self.measurement.seal(self.recorder.presses if self.recorder else (),
+            state="interrupted", reason="rolling_recovery", result=assessed,
+            extra={"assessed_end_beat": decision.end_beat})
+        if not self.measurement.decisions:
+            self.measurement.decision({"trigger": "rolling", "policy":
+                self.library.settings["mistake_response_strategy"],
+                "policy_version": "registered-recovery-v1",
+                "reason": "wrong_missed_threshold", "eligible": True,
+                "parameters": mistake_policy_facts(resolve_mistake_policy(self.library.settings["mistake_response_strategy"])),
+                "trigger_evidence": asdict(decision), "selected": asdict(transition),
+                "before_bpm": self.plan.bpm, "after_bpm": transition.bpm,
+                "wrong_missed_source_ids": [n.note.source_id for n in assessed.notes
+                                             if n.status in ("wrong", "missed")],
+                "origin": "automatic", "state": "applied"})
+        before = (self.plan.streak, self.plan.failures, self.plan.bpm)
+        try:
+            with self.measurement.atomic():
+                self.measurement.persist()
+                if self.fingerprint:
+                    unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
+                        if unit["start_beat"] == decision.restart_beat and unit["end_beat"] == decision.end_beat), None)
+                    if unit is not None:
+                        self.learner_progress.record_rolling_trouble(
+                            fingerprint=self.fingerprint, stage_key=self.plan.identity,
+                            unit=unit, assessed_notes=assessed.notes, phrase_start=phrase.start)
+                self.plan.streak = 0
+                self.plan.failures += 1
+                self.plan.bpm = transition.bpm
+                self._save()
+        except Exception:
+            self.plan.streak, self.plan.failures, self.plan.bpm = before
+            self._pending_rolling = (decision, phrase, grid, score_beat, now)
+            self.running = self.auto = False
+            if not self.visual_transport.paused:
+                self.visual_transport.pause(at=now)
+            self.feedback = "Could not save the retry evidence"
+            self.next_action = "Check storage, then press Retry to save this same attempt."
+            raise
+        self._pending_rolling = None
+        self.measurement.finish()
         self._schedule_preparation(transition.restart_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds)
@@ -1664,6 +2166,13 @@ class PracticeEngine:
         self.retry_range = transition.display.retry_range
         self.feedback = transition.display.feedback
         self.next_action = transition.display.next_action
+        if transition.action != "repair":
+            self.next_action = transition.reason
+        if transition.action == "pause":
+            self.auto = False
+            self.visual_transport.cancel_preparation()
+            self.visual_transport.next_at = 0.
+            self.feedback = "Practice paused · " + transition.reason
         return
 
     def _complete_attempt(self, phrase: Phrase, ending: float,
@@ -1676,6 +2185,10 @@ class PracticeEngine:
         if self.preview_only:
             # A preview loops visually just like graded practice, but never
             # invents notes, clean runs, mastery or a MIDI recording.
+            self.measurement.seal((), state="completed", reason="preview")
+            with self.measurement.atomic():
+                self.measurement.persist()
+            self.measurement.finish()
             self.running = False
             self.visual_transport._preview_loop_pending = True
             self.visual_transport.next_at = repeat_deadline(
@@ -1696,15 +2209,51 @@ class PracticeEngine:
             tempo=tempo_map, policies=self.assessment_policies,
             layout_for_feedback=lambda: self.engraving().layout)
         result = assessed.result
+        route = completion_route(self.mode, self.review_end_beat, self.visual_transport.play_from_beat)
+        self.measurement.seal(self.recorder.presses if self.recorder else (),
+            state="completed", reason=route, result=result,
+            eligible=(route == "full_passage" and self.mode == "practice"
+                      and self.plan.bpm >= self.plan.target_bpm),
+            extra={"assessed_end_beat": ending})
+        summary = self._performance_review(phrase, result)
+        completed_visual = self._visual_motion(now)[0]
+        response = None
+        policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
+        if (route in ("section_review", "partial_recovery") and self.auto
+                and policy.whole_handler is not None and self.measurement.parent_decision is not None):
+            response = whole_response(policy, result, phrase=phrase,
+                grid=self.attempt_progression.grid_for(phrase, self.plan.piece.bar_boundaries),
+                bpm=self.plan.bpm, minimum_bpm=SETTINGS.minimum_bpm,
+                play_from_beat=self.visual_transport.play_from_beat,
+                context=self._retry_context(result, end_beat=ending))
+            response = self._source_safe_response(response)
+        if route != "full_passage":
+            previous_bpm = self.plan.bpm
+            try:
+                with self.measurement.atomic():
+                    if response is not None:
+                        self._record_policy_response(response, result, trigger="focused_take")
+                        self.plan.bpm = response.bpm
+                    self.measurement.persist()
+                    if response is not None:
+                        self._save()
+                    if route == "perform":
+                        self._save_performance_feedback(phrase, result, summary)
+            except Exception:
+                self.plan.bpm = previous_bpm
+                raise
+            self.measurement.finish()
         self.feedback_marks = assessed.marks
         self.feedback_unmapped = assessed.unmapped
         self.feedback = assessed.feedback
         self.running=False
         self.recorder=None
-        self.performance_summary = (self._performance_review(phrase, result)
-                                    if tempo_map is None else None)
+        self.performance_summary = summary
         self.review_stage_identity = self.plan.identity
-        route = completion_route(self.mode, self.review_end_beat, self.visual_transport.play_from_beat)
+        self.measurement.phase_changed("feedback", now)
+        if response is not None:
+            self._apply_policy_response(response, now=now, visual_from=completed_visual)
+            return
         if route == "perform":
             self._finish_performance_review(phrase, result)
         elif route == "section_review":
@@ -1714,16 +2263,19 @@ class PracticeEngine:
         else:
             self._finish_full_passage(result, total_beats, duration, now)
 
-    def _finish_performance_review(self, phrase: Phrase, result):
-        """Complete finish performance review after a scored take."""
+    def _save_performance_feedback(self, phrase: Phrase, result, summary: dict):
+        """Join original-source trouble feedback to the exposure's savepoint."""
         if self.fingerprint:
             if result.clean:
                 self.learner_progress.resolve_trouble(
                     fingerprint=self.fingerprint, stage_key=self.plan.identity)
             else:
-                for unit in self.performance_summary["weakest_bars"]:
+                for unit in summary["weakest_bars"]:
                     self._record_saved_trouble(phrase, result, start=unit["start_beat"],
                                               end=unit["end_beat"], errors=unit["errors"])
+
+    def _finish_performance_review(self, phrase: Phrase, result):
+        """Publish review only after its evidence and source feedback commit."""
         self.next_action = ("Review your performance, then press Start to repeat this warm-up."
             if self.is_builtin_warmup else
             "Review your performance, then Practice the weakest section."
@@ -1772,17 +2324,35 @@ class PracticeEngine:
         whole_recovery = None
         assessed_bpm = self.plan.bpm
         if decision.rewind and not self.is_builtin_warmup:
+            policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
             whole_recovery = whole_response(
-                resolve_mistake_policy(
-                    self.library.settings["mistake_response_strategy"]),
+                policy,
                 result, phrase=self.plan.active_phrase,
                 grid=self.attempt_progression.grid_for(
                     self.plan.active_phrase, self.plan.piece.bar_boundaries),
                 bpm=self.plan.bpm, minimum_bpm=SETTINGS.minimum_bpm,
-                play_from_beat=self.visual_transport.play_from_beat)
+                play_from_beat=self.visual_transport.play_from_beat,
+                context=self._retry_context(result) if policy.whole_handler is not None else None)
+            if policy.whole_handler is not None:
+                whole_recovery = self._source_safe_response(whole_recovery)
         if decision.rewind:
             # Preserve the original, assessed take before changing tempo.
             visual_from = self._visual_motion(now)[0]
+            if whole_recovery is not None and policy.whole_handler is not None:
+                self._record_policy_response(whole_recovery, result, trigger="full_take")
+                self._policy_retry = self.plan.identity, whole_recovery
+            else:
+                self.measurement.decision({"trigger": "full_take",
+                "policy": self.library.settings["mistake_response_strategy"],
+                "policy_version": "registered-recovery-v1",
+                "reason": "full_take_not_accepted", "eligible": True,
+                "parameters": mistake_policy_facts(resolve_mistake_policy(self.library.settings["mistake_response_strategy"])),
+                "before_bpm": assessed_bpm,
+                "after_bpm": whole_recovery.bpm if whole_recovery else assessed_bpm,
+                "restart_beat": whole_recovery.restart_beat if whole_recovery else 0.0,
+                "wrong_missed_source_ids": [n.note.source_id for n in result.notes
+                                             if n.status in ("wrong", "missed")],
+                    "origin": "automatic", "state": "applied"})
             if whole_recovery is not None:
                 self.plan.bpm = whole_recovery.bpm
             self.visual_transport._retry_previous_pass = True
@@ -1793,7 +2363,6 @@ class PracticeEngine:
                 reverse_seconds=decision.rewind_seconds)
         if decision.failed:
             self.plan.streak = 0
-            self._save()
         if decision.stop_auto:
             self.auto = False
             self.visual_transport.cancel_preparation()
@@ -1831,6 +2400,14 @@ class PracticeEngine:
     def _assess_rolling_boundary(self, boundary: float,
                                  grid: tuple[float, ...]):
         """Grade one authored boundary under the existing session lock."""
+        try:
+            self.measurement.checkpoint(self.recorder.presses if self.recorder else (), boundary=boundary)
+        except Exception:
+            if not self.visual_transport.paused:
+                self.visual_transport.pause(at=time.monotonic())
+            self.feedback = "Could not save the recording checkpoint"
+            self.next_action = "Check storage, then Resume to retry this boundary."
+            raise
         if not resolve_mistake_policy(
                 self.library.settings["mistake_response_strategy"]).interrupt_rolling:
             return None
@@ -1885,10 +2462,38 @@ class PracticeEngine:
         return decision.consumed
 
     def _update(self) -> None:
+        try:
+            self._update_transition()
+        except Exception:
+            if not self.visual_transport.paused:
+                self.visual_transport.pause(at=time.monotonic())
+            self.feedback = "Could not save or finish the practice transition"
+            self.next_action = "Check storage or the reported error, then Resume to retry this same take."
+            raise
+
+    def _update_transition(self) -> None:
         """Advance the backend clock under its existing session lock."""
         self._poll_midi_connection()
         self._apply_listen_failure()
         now = time.monotonic()
+        if self.visual_transport.paused:
+            self.measurement.phase_changed("pause", now)
+        elif self.mode == "learn":
+            self.measurement.phase_changed("preparation" if self.awaiting_score_revision else
+                "feedback" if self.teaching is not None and self.teaching.snapshot(now=now)["completed"] else "guided", now)
+        elif self.running:
+            # Split a count-in at its musical deadline even when polling is late.
+            if self.measurement.phase == "count_in" and now >= self.visual_transport.run_at:
+                self.measurement.phase_changed("active", self.visual_transport.run_at)
+            else:
+                self.measurement.phase_changed("count_in" if now < self.visual_transport.run_at else
+                    "listen" if self.mode == "listen" else "preview" if self.preview_only else "active", now)
+        elif self.pending_result is not None:
+            self.measurement.phase_changed("feedback", now)
+        elif self.visual_transport._preparation_pending or self.awaiting_score_revision is not None:
+            self.measurement.phase_changed("preparation", now)
+        else:
+            self.measurement.phase_changed("feedback" if self.performance_summary is not None else "idle", now)
         if self._run_pre_assessment_transition(now):
             return
         phrase = self.plan.active_phrase
@@ -1959,6 +2564,10 @@ class PracticeEngine:
         try:
             with self.lock:
                 self._update()
+                while self._deferred_midi:
+                    message, received_at, corrected_at, _transport = self._deferred_midi.popleft()
+                    self._receive_message(message, received_at=received_at,
+                                          corrected_at=corrected_at, deferred=True)
                 if self.plan is None or self.visual_transport.paused:
                     return 250
                 if (self.running or self.visual_transport._preview_loop_pending or self.visual_transport._preparation_pending

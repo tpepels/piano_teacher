@@ -26,6 +26,19 @@ def source(count=8, *, two_bars=True):
                  bar_boundaries=(0, 4, 8) if two_bars else (0, 4))
 
 
+def settle_exposure(engine, result, *, automatic=True):
+    """Give diagnostics a completed take from the one production ledger."""
+    engine.midi.port = object()
+    engine.start()
+    engine.auto = automatic
+    engine.measurement.seal(engine.recorder.presses, state="completed",
+                            reason="full_passage", result=result,
+                            eligible=engine.plan.bpm >= engine.plan.target_bpm)
+    engine.pending_result = result
+    engine._pending_assessed_bpm = engine.plan.bpm
+    engine._commit_pending()
+
+
 def test_features_are_explainable_and_estimator_injectable():
     p = source()
     report = HeuristicDifficulty().estimate(p.notes, 8)
@@ -108,10 +121,8 @@ def test_remediation_never_creates_unscored_mastery_and_repeat_only_stays_manual
             for i, n in enumerate(engine.plan.active_variant.notes)), 0)
         assert errors.notes and any(n.status == "wrong" for n in errors.notes)
         for attempt in range(2):
-            engine.mode = "practice"
-            engine.auto = True
-            engine.pending_result = errors
-            engine._commit_pending()
+            settle_exposure(engine, errors)
+        assert len(engine.progress.ledger.recent(engine.fingerprint, stage).recent) == 2
         assert engine._remediation_pending is not None
         assert engine._remediation_pending.action == "note-isolation"
         assert stage == engine.plan.identity
@@ -131,10 +142,8 @@ def test_remediation_never_creates_unscored_mastery_and_repeat_only_stays_manual
         baseline.plan = LearningPlan(p)
         baseline.fingerprint = "baseline"
         for attempt in range(2):
-            baseline.mode = "practice"
-            baseline.auto = True
-            baseline.pending_result = errors
-            baseline._commit_pending()
+            settle_exposure(baseline, errors)
+        assert len(baseline.progress.ledger.recent(baseline.fingerprint, baseline.plan.identity).recent) == 2
         assert baseline._remediation_pending is None
     finally:
         baseline.db.close()
@@ -198,10 +207,8 @@ def test_repeated_timing_or_duration_errors_route_to_partial_nonmastery_retry(
         result = Assessment(tuple(NoteAssessment(n, status if i < 2 else "correct")
                                   for i, n in enumerate(engine.plan.active_variant.notes)), 0)
         for attempt in range(2):
-            engine.mode = "practice"
-            engine.auto = True
-            engine.pending_result = result
-            engine._commit_pending()
+            settle_exposure(engine, result)
+        assert len(engine.progress.ledger.recent(engine.fingerprint, identity).recent) == 2
         assignment = engine._remediation_pending
         assert assignment is not None and assignment.action == action
         assert not assignment.guided
@@ -224,10 +231,8 @@ def test_manual_attempt_never_automatically_routes_a_remedial_session(tmp_path):
         result = Assessment(tuple(NoteAssessment(n, "wrong")
                                   for n in engine.plan.active_variant.notes), 0)
         for attempt in range(2):
-            engine.mode = "practice"
-            engine.auto = False
-            engine.pending_result = result
-            engine._commit_pending()
+            settle_exposure(engine, result, automatic=False)
+        assert len(engine.progress.ledger.recent(engine.fingerprint, engine.plan.identity).recent) == 2
         assert engine._remediation_pending is None
     finally:
         engine.db.close()

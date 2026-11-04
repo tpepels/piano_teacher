@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "python": "3.14.9",
+  "sqlite": "3.54.1",
+  "fixture": {
+    "settled_attempts": 200,
+    "notes_per_attempt": 256,
+    "note_observations": 51200,
+    "phase_intervals": 1000,
+    "synthetic_active_hours": 166.66666666666666,
+    "checkpoints": 20
+  },
+  "settle_seconds": 0.6105603369999244,
+  "checkpoint_max_seconds": 0.00010275199997522577,
+  "checkpoint_history_detail_read_denied": true,
+  "export_seconds": 0.42737799499991524,
+  "logical_bytes_before": 13986472,
+  "sqlite_file_bytes": 15147008,
+  "logical_bytes_after": 4228,
+  "coverage_after": {
+    "summary_retained_since_utc": "2020-01-01T00:00:00Z",
+    "detail_retained_since_utc": "2026-11-04T00:00:00Z",
+    "pruned_detail_attempts": 200,
+    "legacy_bounded_attempts": 0,
+    "pruned_detail_sessions": 1,
+    "censored_outcomes": 0,
+    "legacy_history_complete": false,
+    "detail_history_complete": false
+  },
+  "pending_preserved": true,
+  "source_sha256": {
+    "piano_teacher/learning_ledger.py": "8162510cbe303b173cca8b340ecebfd244593f7622689fb5130bf0d4b046a9d0",
+    "piano_teacher/progress_repository.py": "56c8d8c6387d9726bbc636ca1588106b42ffb2141f1aaffcf59d89324301c99c",
+    "scripts/benchmark-learning-ledger.py": "dcc962ad4351ff96db4d66a6b40106e039b17b4b841f6219e941164cc1866886"
+  },
+  "limits": "Synthetic local storage only; timings are observations, not hardware, musical learning or clean-machine acceptance."
+}

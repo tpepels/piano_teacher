@@ -28,6 +28,7 @@ def test_no_midi_mode_cannot_award_mastery(tmp_path):
     make_fixture(file)
     engine = PracticeEngine(tmp_path / "db", enable_midi=False)
     engine.plan = LearningPlan(load_midi(file))
+    engine.fingerprint = "phase0-preview-fixture"
     try:
         engine.start()
         assert engine.state()["preview_only"]

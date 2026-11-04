@@ -25,6 +25,10 @@ flowchart LR
     Policy --> Engine[PracticeEngine locked application]
     Grader --> Commit[Transactional evidence and progression]
     Commit --> DB[SQLite progress and learner state]
+    Commit --> Ledger[LearningCapture and one LearningLedger]
+    Ledger --> DB
+    UI --> Privacy[Local export, retention and deletion]
+    Privacy --> Ledger
     Engine --> Clock[VisualTransport and active TempoMap]
     Plan --> Assets[ScoreArtifacts and bounded FutureScore]
     Assets --> Native[Retained native Godot notation]
@@ -47,6 +51,7 @@ flowchart LR
 | Mistake response | `recovery.py`, `application/mistake_responses.py`, `rolling_recovery.py`, `recovery_projection.py` | Immutable explicit evidence → validated decision and source-grid presentation. | Policy owns no clock, persistence or engine; partial retries cannot earn whole-target mastery. |
 | Clock/transitions | `visual_transport.py`, `transport_projection.py`, `application/attempt_progression.py`, `practice_transitions.py`, `transport_commands.py`, `score_ack.py` | One monotonic transport and exact active `TempoMap`; authentic meter controls count-in, rest, rewind and handoff deadlines. | Tempo/Listen/grading/camera use the same source mapping; readiness cannot start invisible grading. |
 | Evidence/progression | `application/assessment_settlement.py`, `assessment_evidence.py`, `assessment_commit.py`, `learner_progress.py`, `guided_session.py` | Settled `Assessment`, performed BPM, source identity; separate guided acquisition, trouble resolution and full-target application. | Assistance/partial/preview/Perform cannot manufacture mastery; retry BPM is not performed BPM. |
+| Learning measurement | `application/learning_capture.py`, `learning_ledger.py`, `practice.py:NoteObservation` | Stable learner/session/attempt/decision IDs, original matching facts, frozen source/rule/map context, explicit terminal and proximal/episode outcomes; existing connection and savepoint. | Identical settlement is a no-op; conflicting payloads fail. Interrupted prefixes never create future misses. Legacy unknowns and pruned coverage remain explicit. |
 | Persistence/settings | `progress_repository.py`, `sqlite_transaction.py`, learner/practice stores, `library.py` | SQLite nested savepoints for coordinated evidence+progress; atomic JSON replace and shared settings validators. | Rollback restores plan and pending take; versionless/changed-content progress cannot award current mastery. |
 | Score preparation | `application/score_artifacts.py`, `score_preparation.py`, `future_score.py`, `notation/lesson.py`, `notation/model.py`, `notation/assets/` | Frozen `ScoreSelection` keys one semantic/native compilation; bounded worker prepares next two exact stages with three attempts. | Stale source/revision cannot promote; failed fragments never cache successful empty assets; no alternate renderer. |
 | Godot score lifecycle | `score_asset_session.gd`, `score_runway.gd`, `practice_score_stage.gd`, `score_step_timeline.gd` | Exact revision readiness, retained next-score acknowledgement and current/future density-aware labels. | Promotion preserves outgoing tail and backend axis; READY preview's display camera is shared with its current marker only. |
@@ -64,6 +69,15 @@ score key; genuine semantic/native preparation must be acknowledged before the
 engine begins the count-in. A physical callback timestamps once, applies the
 saved correction once, and adds to the current recorder. Fixed/mapped assessment
 uses the exact same active source interval and tempo route as Listen.
+
+A callback arriving at a due handoff queues that event with its original arrival
+time and correction. The existing worker advances the boundary and drains it;
+the hardware callback performs no SQL settlement. `LearningCapture` seals every
+exposure before recorder disposal, including partial, guided, preview, Perform
+and aborted routes. The ledger replaces the old status-only history writer;
+advisory policy history is a bounded read of completed full exposures. Settings
+uses typed local export/deletion operations. See the
+[measurement contract](../learning-measurement.md) for retention and privacy.
 
 A rolling failure is classified at a source-grid boundary. The registered
 policy returns a bounded decision; the engine saves and schedules a rewind/rest

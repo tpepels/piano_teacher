@@ -33,7 +33,8 @@ func dispatch(adapter, operation_name: String, payload: Dictionary) -> int:
     ## is supplied for this call, never retained or obtained from Main.
     assert(pending and operation == operation_name)
     adapter.timeout = 360.0 if operation_name in [
-        "fingering.correct", "library.open"] else 5.0
+        "fingering.correct", "library.open", "learning.export",
+        "learning.delete_piece", "learning.delete_learner"] else 5.0
     var err: int = int(adapter.request(operation_name,payload))
     if err != OK:
         request_failed()

@@ -161,7 +161,7 @@ func _ready() -> void:
     challenge_bar.add_child(tempo_down_button)
     tempo_up_button = _button("+5 BPM", func(): command_requested.emit({"action":"tempo_up"}),
         false, "settings")
-    tempo_up_button.tooltip_text = "Advance this stage's tempo without changing its target or awarding clean passes"
+    tempo_up_button.tooltip_text = "Advance this stage's tempo without changing its target or awarding accepted passes"
     tempo_up_button.size_flags_horizontal = Control.SIZE_SHRINK_END
     challenge_bar.add_child(tempo_up_button)
     game_streak = GameStreak.new()
@@ -371,7 +371,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
         if bool(parsed.get("preview_only", false)):
-            feedback_text = "PREVIEW · connect your piano to earn clean runs"
+            feedback_text = "PREVIEW · connect your piano to earn accepted passes"
         else:
             feedback_text = "PLAYING · %d notes heard" % midi_count if midi_count > 0 else "PLAYING · waiting for your piano"
     else:
@@ -410,11 +410,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         instruction_text = "Review the red notes · play a new piano key to retry."
     if not learning:
         var needed_runs: int = int(parsed.get("clean_runs_required", 3))
-        progress_text = "Clean runs %d of %d at %d BPM" % [
+        progress_text = "Accepted passes %d of %d at %d BPM" % [
             int(parsed.get("streak", 0)), needed_runs, int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
         if bool(parsed.get("warmup", false)):
             var name: String = "Both hands" if str(parsed.get("hand", "")) == "both" else str(parsed.get("hand", "")).capitalize() + " hand"
-            progress_text = "%s · %d of %d clean runs · Next hand unlocks when mastered" % [
+            progress_text = "%s · %d of %d accepted passes · Next hand unlocks when mastered" % [
                 name, int(parsed.get("streak", 0)), needed_runs]
         if str(parsed.get("mode", "")) == "perform":
             progress_text = "Perform · keep going to the end; review follows"

@@ -29,6 +29,7 @@ def _preview_engine(tmp_path, monkeypatch):
                   bar_boundaries=(0, 4), time_signatures=((0, 4, 4),))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(piece)
+    engine.fingerprint = "long-preview-fixture"
     engine.start()
     assert engine.preview_only
     return engine, EngineCommands(engine=engine), clock
@@ -88,9 +89,12 @@ def test_250_worker_driven_previews_survive_long_pauses_without_scroll_drift(
                 assert snapshot["visual_offset_beats"] == pytest.approx(expected_offset)
                 assert snapshot["midi_notes"] == 0
                 assert snapshot["mastered"] == 0
-        # Preview is not graded; 250 repeats must not generate learner records.
+        # Preview exposure is retained without fabricated assessment/mastery.
         assert engine.db.execute(
-            "SELECT count(*) FROM practice_evidence").fetchone()[0] == 0
+            "SELECT count(*) FROM learning_assessments").fetchone()[0] == 0
+        assert engine.db.execute(
+            "SELECT count(*) FROM learning_attempts WHERE state='completed' AND reason='preview'"
+        ).fetchone()[0] == 250
         assert engine.db.execute(
             "SELECT count(*) FROM mastery").fetchone()[0] == 0
     finally:

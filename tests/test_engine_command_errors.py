@@ -57,6 +57,7 @@ def test_invalid_stage_command_preserves_active_take(tmp_path, command):
         engine.plan = LearningPlan(Piece(
             "Invalid commands", 100, notes, (Phrase(1, 1, 1, 0, 4, notes),),
             bar_boundaries=(0, 4)), exercise_strategy="source-progression")
+        engine.fingerprint = "invalid-stage-command-fixture"
         engine.start()
         recorder = engine.recorder
         recorder.add(60, True, 0)
@@ -89,6 +90,7 @@ def test_invalid_midi_name_preserves_connected_port_and_active_take(tmp_path, na
         engine.plan = LearningPlan(Piece(
             "Device command", 100, (note,), (Phrase(1, 1, 1, 0, 4, (note,)),),
             bar_boundaries=(0, 4)), exercise_strategy="source-progression")
+        engine.fingerprint = "invalid-device-command-fixture"
         port = Port()
         engine.midi.port, engine.midi.device = port, "Current piano"
         engine.library.update(midi_device="Current piano")

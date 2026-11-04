@@ -18,6 +18,7 @@ def test_preview_repeats_on_worker_ticks_with_no_state_requests(tmp_path, monkey
                   bar_boundaries=(0, 4), time_signatures=((0, 4, 4),))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(piece)
+    engine.fingerprint = "worker-repeat-timer-fixture"
     bridge = EngineCommands(engine=engine)
     try:
         engine.start()
@@ -50,6 +51,7 @@ def test_worker_does_not_advance_while_paused(tmp_path, monkeypatch):
                   bar_boundaries=(0,4), time_signatures=((0,4,4),))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(piece)
+    engine.fingerprint = "worker-pause-timer-fixture"
     bridge = EngineCommands(engine=engine)
     try:
         engine.start()

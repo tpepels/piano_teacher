@@ -35,9 +35,23 @@ def _result(engine, status):
     return Assessment(tuple(NoteAssessment(n, status) for n in notes), 0)
 
 
+def _pending(engine, status):
+    """Seal the same exposure that the production commit will settle."""
+    engine.midi.port = object()
+    engine.start()
+    result = _result(engine, status)
+    engine.measurement.seal(engine.recorder.presses, state="completed",
+                            reason="full_passage", result=result,
+                            eligible=engine.plan.bpm >= engine.plan.target_bpm)
+    engine.pending_result = result
+    engine._pending_assessed_bpm = engine.plan.bpm
+    return result
+
+
 def _durable_counts(engine):
     return tuple(engine.db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
-        for table in ("practice_evidence", "fukuda_mistakes",
+        for table in ("learning_assessments", "learning_attempt_details",
+                      "learning_decisions", "learning_outcomes", "learning_events", "fukuda_mistakes",
                       "strategy_sessions", "sessions", "stage_tempos", "mastery"))
 
 
@@ -64,8 +78,7 @@ def test_history_failure_preserves_pending_take_and_durable_state(
         tmp_path, monkeypatch):
     engine = _engine(tmp_path)
     try:
-        result = _result(engine, "correct")
-        engine.pending_result = result
+        result = _pending(engine, "correct")
         before = _durable_counts(engine)
         stage, streak = engine.plan.identity, engine.plan.streak
         observed = engine.practice_policy.observe
@@ -83,7 +96,7 @@ def test_history_failure_preserves_pending_take_and_durable_state(
         monkeypatch.setattr(engine.practice_policy, "observe", observed)
         engine._commit_pending()
         assert engine.pending_result is None
-        assert engine.db.execute("SELECT count(*) FROM practice_evidence").fetchone()[0] == 1
+        assert engine.db.execute("SELECT count(*) FROM learning_assessments").fetchone()[0] == 1
     finally:
         engine.db.close()
 
@@ -94,8 +107,8 @@ def test_fukuda_write_failure_restores_existing_source_mistake(
     try:
         bad = _result(engine, "wrong")
         engine.fukuda_mistakes.observe(engine.fingerprint, bad)
+        _pending(engine, "correct")
         before = _durable_counts(engine)
-        engine.pending_result = _result(engine, "correct")
         pending = engine.pending_result
         stage, streak = engine.plan.identity, engine.plan.streak
         observed = engine.fukuda_mistakes.observe
@@ -123,7 +136,7 @@ def test_failure_after_progress_write_rolls_back_all_evidence_and_plan(
         tmp_path, monkeypatch):
     engine = _engine(tmp_path)
     try:
-        engine.pending_result = _result(engine, "correct")
+        _pending(engine, "correct")
         pending = engine.pending_result
         engine.plan.streak = 2  # Force a stage or speed transition.
         before = _durable_counts(engine)
@@ -145,7 +158,7 @@ def test_failure_after_progress_write_rolls_back_all_evidence_and_plan(
         monkeypatch.setattr(engine.progress, "save", old_save)
         engine._commit_pending()
         assert engine.pending_result is None
-        assert engine.db.execute("SELECT count(*) FROM practice_evidence").fetchone()[0] == 1
+        assert engine.db.execute("SELECT count(*) FROM learning_assessments").fetchone()[0] == 1
         assert engine.db.execute("SELECT count(*) FROM strategy_sessions").fetchone()[0] == 1
     finally:
         engine.db.close()
@@ -155,7 +168,7 @@ def test_runtime_settlement_failure_stops_retries_without_losing_pending_take(
         tmp_path, monkeypatch):
     engine = _engine(tmp_path)
     try:
-        engine.pending_result = _result(engine, "correct")
+        _pending(engine, "correct")
         pending = engine.pending_result
         engine.auto = True
         engine.visual_transport.next_at = 30.0
@@ -181,6 +194,6 @@ def test_runtime_settlement_failure_stops_retries_without_losing_pending_take(
         engine._commit_pending()
         assert engine.pending_result is None
         assert engine.db.execute(
-            "SELECT count(*) FROM practice_evidence").fetchone()[0] == 1
+            "SELECT count(*) FROM learning_assessments").fetchone()[0] == 1
     finally:
         engine.db.close()

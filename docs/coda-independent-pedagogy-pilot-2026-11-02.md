@@ -2,8 +2,9 @@
 
 **Protocol ID:** `coda-pedagogy-fixed-performance-pilot-v1`
 
-**Status:** Software infrastructure implemented; **no real participants enrolled
-and no pedagogical effect established**. This protocol is recorded as
+**Status:** Historical v1 analysis infrastructure only; **no real participants enrolled
+and no pedagogical effect established**. The v1 intervention description used a
+removed comparator and is not ready for prospective enrollment. This protocol is recorded as
 a design document, not a retrospectively successful experiment.
 
 ## Question and comparison
@@ -14,7 +15,12 @@ the existing heuristic lessons?
 
 The intervention is the **actual application teaching order**, NOT
 the historical Tang Coda backend (which does not specify a curriculum).
-Experimental Coda is `coda-midi`, comparator is `legacy`.
+Historical v1 specified Coda as `coda-midi` and its comparator as `legacy`.
+`legacy` is no longer registered and must not be restored. The available
+original-progression comparator is `source-progression`. A new prospective
+protocol must freeze that actual registered generator/version and the selected
+Coda generator/version, rather than silently interpreting old v1 records as a
+different intervention. The existing v1 analysis remains a historical instrument.
 The specific software revision and strategy snapshot must be fixed at
 the start of data collection; neither branch is updated mid-study.
 
@@ -25,7 +31,7 @@ the start of data collection; neither branch is updated mid-study.
    to their level. Keep any identity mapping separately from study data.
 2. Randomize with `scripts/evaluate_coda_pedagogy.py assign` using a
    private randomization secret. The coordinator privately maps blinded
-   `A` and `B` to Coda/legacy strategies before enrollment; the person
+   `A` and `B` to the prospectively fixed registered strategies before enrollment; the person
    analyzing results must not see that mapping.
 3. Each participant performs the **complete original score** on a real
    physical MIDI keyboard at a **fixed identical BPM** for their piece.
@@ -43,8 +49,11 @@ the start of data collection; neither branch is updated mid-study.
    tempo or stage-specific mastery score can substitute.
 6. An independent analyst runs the predefined program over
    pseudonymized observations. Keep the A/B mapping blinded until the
-   analysis is finalized. Real follow-up retention (e.g. a later-day test)
-   would be a separate outcome and needs its own recorded protocol.
+   analysis is finalized. A new prospective protocol must include a 24-hour unsupported original-target
+   retention test at the common test BPM, with a seven-day test when feasible.
+   Those delayed outcomes need explicit fields and a prespecified analysis; the
+   v1 immediate pre/post program does not analyze them. See the current
+   [retry evaluation protocol](mistake-response-policies.md#evaluation-protocol).
 
 **Unit of randomization:** one participant learning one piece. A
 participant may contribute only one piece to avoid falsely treating

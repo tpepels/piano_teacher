@@ -222,6 +222,101 @@ feature does not close physical performance or teaching-effectiveness gates.
 
 ## Immediate order of work
 
+**Learning measurement and adaptive teaching continuation (2026-11-04):**
+The local ledger retains sessions, attempts, original note assessments,
+repetitions, actual BPM, durations, interventions and linked subsequent outcomes.
+Mastery still requires three accepted full-target takes; strictly clean takes
+are a separate metric, and the practice labels now say accepted passes.
+`learning.statistics` on the in-process API reports these measurements,
+timing residuals, comparable retry outcomes and unknown/pruned coverage.
+
+The selectable `evidence-adaptive` policy uses actual source error clusters,
+source attack density and compatible prior outcomes to repeat, isolate, slow,
+guide and reintegrate. Repairs expand across held-note boundaries and return to
+unsupported full-passage grading. All six existing policies retain their
+behavior. Twelve automatic actions bound an episode; manual overrides cancel
+stale decisions. MIDI replay covers the complete repair route, write-failure
+retry and source preservation. Physical-instrument behavior, delayed retention
+and comparative teaching effectiveness remain unverified. No UI redesign,
+architecture replacement or long CI run is part of this continuation.
+Verification: 254 targeted Python tests passed in 6.65 seconds, covering grading,
+ledger/capture rollback, statistics/API, the full adaptive MIDI route, fixed
+policies, Coda/Fukuda generation and seamless stage transitions.
+
+### Approved P0 learning measurement implementation plan — 2026-11-04
+
+**Goal:** Preserve all practice exposure and authoritative grading evidence in
+one local ledger, with working privacy controls and unchanged accepted-take mastery.
+**Architecture:** The existing SQLite connection and engine lock own settlement;
+grading captures its original assignments and an application evidence owner seals
+attempts before recorder disposal. Existing Settings exposes local controls.
+**Tech stack:** Python, SQLite, Godot 4.7.2 and the current in-process bridge.
+**Spec:** [Approved contract](docs/learning-measurement.md).
+
+Global constraints: main only; no service, alternate history backend or visual
+redesign; three accepted full-target takes, `accepted-full-target-v1`; detail
+defaults 365 days/256 MiB, bounds 7–3650 days/16–4096 MiB; local redacted export;
+unknown crash suffix and legacy fields remain unknown; all six policies retained.
+
+Review focus: repeated/chord wrong-pitch assignment; failed write with a pending
+third take; stop/navigation/device replacement before settlement; migrated unknown
+timing and pruned coverage; deletion during an active session without inherited credit.
+
+1. **Authoritative grading detail** (`practice.py`, `timed_assessment.py`, new
+   grading evidence tests). Add frozen observation values to the actual matching
+   pass: press index, expected/actual seconds, local tempo/tolerances, signed
+   residuals and independent flags. Preserve status/passed behavior. Write failing
+   repeated/chord/wrong/mapped/unreleased tests, implement, run grading contracts.
+2. **One durable ledger** (new `learning_ledger.py`, `progress_repository.py`,
+   `practice_history.py`, new ledger tests). Define `start_session`, `store_rules`,
+   `start_attempt`, `checkpoint`, `settle_attempt`, `record_event`, `add_decision`,
+   `record_outcome`, `close_session`, `recent`, `prune`, `export`, `delete_piece`,
+   `delete_learner`. All share the repository connection/savepoint. IDs and sealed
+   payload hashes enforce identical replay/no-op and conflicting replay/error.
+   Migrate bounded old rows atomically, remove their writer/table, read advisory
+   history from the ledger. First test migration/restart/rollback/retention/export/
+   deletion, then implement and run those tests against reopened databases.
+3. **Lifecycle integration** (`server.py`, new application evidence owner,
+   in-process shutdown, new replay tests). Freeze source/rule/map/device context at
+   each timed/guided/preview/Perform start; checkpoint existing musical boundaries;
+   seal completed/partial/rolling/guided/aborted exposures before recorder disposal.
+   Commit assessment and progress together; preserve pending payload on write error.
+   Record decisions, next-exposure outcomes, episode verification/censoring, manual
+   events and distinct measured phase intervals. Tests drive real MIDI callbacks,
+   repeated settlement, failed writes, acknowledgment, overrides and restart.
+4. **Functional local controls** (`library.py`, typed command contracts/bridge,
+   `godot/settings_screen.gd` and its coordinator, new control tests). Add validated
+   retention preferences and working local JSON export with detail opt-in; current
+   piece and all-learner deletion use explicit UI confirmation. Reset preserves
+   ledger evidence. Intent/applied records surround file-backed setting changes.
+   Test invalid settings, cancellation, redaction and complete deletion/reset.
+5. **Acceptance and canonical documentation** (bounded scripts, ROADMAP, current
+   audit and verification receipts). Run each task's targeted tests after its
+   RED→GREEN cycle, then bounded fast/hybrid/Godot/native/launch gates; review the
+   complete change independently, correct confirmed findings and commit verified
+   changes directly to main. Record actual counts, runtime/resource coverage and
+   remaining physical/packaging gates. P1 analytics and adaptive rollout remain
+   separate later phases, never inferred from ledger completion.
+
+Status: tasks 1–4 implemented, with bounded software acceptance and review
+corrections recorded in the [P0 verification receipt](docs/verification/learning-measurement-2026-11-04.md).
+All 74 variables have a source audit and explicit implementation delta. Task 5
+does not close full architecture, independent notation, physical MIDI or release
+acceptance. Resumed independent storage/lifecycle and controls reviews found
+additional episode/maintenance issues; their fixes have regressions and the
+scoped reviews report no remaining confirmed Critical/Important findings.
+
+Ruling: a valid manual retry-policy or calibration change ends the old exposure
+and requires Play for the next. This preserves one frozen policy/correction per
+attempt; it changes manual override continuity. Invalid changes preserve the
+active take. Fixed-policy decision rules and accepted-take mastery remain intact.
+
+Next software phase is the contract's P1 read-only analytical queries/report,
+with retained/pruned/legacy coverage and comparable fixed-policy denominators.
+No dashboard, difficulty-adjusted learner model or learned retry selector is
+claimed by P0. Complete the outstanding current-head notation gates
+before adaptive rollout; retain the physical and clean-machine gates below.
+
 **2026-11-04 development audit and adaptive retry proposal.** The current
 [architecture map](docs/architecture/system.md) inventories subsystem owners,
 dependencies and invariants. The
@@ -239,27 +334,28 @@ verifier no longer imports its coordinator through its causal-difference helper.
 Legacy HTTP/PNG test seams in the exercised gates are migrated to typed/native
 contracts; no compatibility runtime has been restored.
 
-Whole-suite collection is restored (4,716 tests, zero collection errors).
-The next verification priority is the outstanding fingering-clearance and
-small-staff attachment failures, plus remaining unexecuted broad assertions;
-collection success is not whole-suite acceptance. Complete this investigation
-before an adaptive-policy rollout. The full independent notation sweep and
-physical gates below remain open.
+Whole-suite collection was restored in the first audit; the P0 delivery now
+collects 4,839 tests with zero collection errors (704 fast tests pass).
+Outstanding fingering-clearance and small-staff attachment failures and remaining
+broad assertions retain their own verification gates; collection success is not
+whole-suite acceptance. The selectable recovery implementation does not close
+those notation or physical gates.
 
 The [adaptive retry specification](docs/mistake-response-policies.md) reviews
 primary studies, defines structured error evidence, graduated interventions,
 offline replay and a small controlled physical comparison. It recommends an
-explainable deterministic selector before online learning. **It is a proposal;
-no new adaptive policy is implemented or approved by this handoff.** The current
-six fixed strategies remain available and retain their identifiers/behavior.
+explainable deterministic selector before online learning. The owner's subsequent
+development request authorizes the implemented `evidence-adaptive` selector.
+Its thresholds are engineering defaults, not proven optimal pedagogy. The six
+fixed strategies retain their identifiers and behavior.
 
 Proposed implementation sequence within P6/P7, requiring review before product
 behavior changes:
 
 | Step | Complete implementation scope | Exit gate |
 | --- | --- | --- |
-| P6 retry evidence | Immutable per-attack multidimensional grading evidence, source/tempo/scope-aware action history, versioned SQLite persistence and deterministic MIDI replay through the current callback/registry path. | Raw match/residual correctness, transaction failure/restart tests, fixed-baseline replay parity and no transport/mastery changes. |
-| P6 adaptive selector | Separately registered/versioned deterministic policy; generic continue/repair interface for dynamic interruption; complete repeat/loop/slow/guided/reintegration/verification route, explicit reasons, bounded actions and learner overrides. | No policy-ID engine branches; all source/meter/readiness/partial-credit/rollback gates plus full native sessions; fixed baselines unchanged. |
+| P0 retry evidence | Implemented through the approved local measurement contract above; one ledger replaces the status-only writer. | Bounded software and scoped independent review evidence is recorded; broader notation and physical/release gates remain open. Manual policy/calibration changes now seal the current exposure. |
+| P6 adaptive selector | Implemented as a separately registered/versioned deterministic policy using the existing transport and ledger; complete repeat/isolate/slow/guided/reintegration path, source-safe ranges, reasons and learner overrides. | Focused real MIDI replay and rollback checks pass; baseline policies retained. Full physical sessions and teaching-effectiveness evidence remain open. |
 | P7 comparison | Preregistered matched-passage feasibility study, followed by power/precision-planned retention comparison. | Unsupported full-original tests at common tempo after 24 hours; burden/frustration, missingness and uncertainty reported; no superiority claim from pilot/replay. |
 | P7 optional online learning | Local interpretable contextual bandit only after randomized eligible-action logs and comparable unsupported outcomes exist. | Action support/propensities, effective sample size, held-out learners and prespecified delayed learning/safety outcomes. Otherwise retain deterministic policy. |
 

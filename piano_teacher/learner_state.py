@@ -153,7 +153,7 @@ class LearnerStateStore:
     def save_resume(self, fingerprint: str, stage_key: str, unit: dict):
         _identity(fingerprint, stage_key)
         unit = _unit(unit)
-        with self.db:
+        with sqlite_atomic(self.db):
             self._ensure_stage(fingerprint, stage_key)
             self.db.execute("UPDATE learner_stages SET resume_unit=? WHERE fingerprint=? AND stage_key=?",
                             (_json(unit), fingerprint, stage_key))
@@ -161,7 +161,7 @@ class LearnerStateStore:
     def complete_unit(self, fingerprint: str, stage_key: str, unit: dict, *, assisted: bool = False):
         _identity(fingerprint, stage_key)
         unit = _unit(unit)
-        with self.db:
+        with sqlite_atomic(self.db):
             self._ensure_unit(fingerprint, stage_key, unit)
             self.db.execute("""UPDATE learner_units SET completed=1,assisted=max(assisted,?)
                                WHERE fingerprint=? AND stage_key=? AND start_beat=? AND end_beat=?""",
@@ -178,7 +178,7 @@ class LearnerStateStore:
         if (not isinstance(pitches, (tuple, list, set))
                 or any(not isinstance(pitch, int) or isinstance(pitch, bool) or not 0 <= pitch <= 127 for pitch in pitches)):
             raise ValueError("Trouble pitches must be valid MIDI note numbers")
-        with self.db:
+        with sqlite_atomic(self.db):
             self._ensure_unit(fingerprint, stage_key, unit)
             key = (fingerprint, stage_key, unit['start_beat'], unit['end_beat'])
             failures, old_pitches, resolved = self.db.execute("""SELECT failures,pitches,resolved FROM learner_units
@@ -213,13 +213,13 @@ class LearnerStateStore:
         _identity(fingerprint, stage_key)
         if status not in ("skipped", "placed") or not isinstance(reason, str) or not reason.strip():
             raise ValueError("Skip/placement needs an explicit skipped or placed status and a reason")
-        with self.db:
+        with sqlite_atomic(self.db):
             self._ensure_stage(fingerprint, stage_key)
             self.db.execute("UPDATE learner_stages SET skip_status=?,skip_reason=? WHERE fingerprint=? AND stage_key=?",
                             (status, reason.strip(), fingerprint, stage_key))
 
     def reactivate(self, fingerprint: str, stage_key: str):
         _identity(fingerprint, stage_key)
-        with self.db:
+        with sqlite_atomic(self.db):
             self.db.execute("UPDATE learner_stages SET skip_status='active',skip_reason='' WHERE fingerprint=? AND stage_key=?",
                             (fingerprint, stage_key))

@@ -19,6 +19,7 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.setattr(server.time, 'monotonic', lambda: t[0])
     e = PracticeEngine(tmp_path, enable_midi=False)
     e.plan = LearningPlan(piece())
+    e.fingerprint = "phase1-transport-fixture"
     try:
         yield e, t
     finally:

@@ -193,6 +193,7 @@ def test_engine_updates_then_captures_and_projects_under_its_lock(tmp_path, monk
     notes = (Note(0, 1, 60, 0, 0, "right", "source-1"),)
     engine.plan = LearningPlan(Piece("Poll handoff", 120, notes,
         (Phrase(1, 1, 2, 0, 8, notes),), bar_boundaries=(0, 4, 8)))
+    engine.fingerprint = "poll-handoff-fixture"
     engine.plan.set_bpm(120)
     captured = []
 

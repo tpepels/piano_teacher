@@ -13,7 +13,8 @@ from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.library import ScoreLibrary
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import PlayedNote
-from piano_teacher.practice_history import AssessmentHistoryStore, PracticePolicyService
+from piano_teacher.practice_history import PracticePolicyService
+from piano_teacher.learning_ledger import LearningLedger
 from piano_teacher.server import PracticeEngine
 from piano_teacher.learning import LearningPlan
 
@@ -106,22 +107,33 @@ def test_builtin_warmups_keep_shared_original_stage_keys():
     assert source_plan.identity == fukuda.identity
 
 
-def test_history_is_persistent_scoped_and_bounded(tmp_path):
+def test_history_is_persistent_scoped_and_read_without_duplicate_writes(tmp_path):
     db_path = tmp_path / "history.db"
     db = sqlite3.connect(db_path)
-    store = AssessmentHistoryStore(db)
+    store = LearningLedger(db)
+    store.start_session("session", "run", "2026-11-04T10:00:00Z", "UTC")
     policy = PracticePolicyService(store)
     bad = AssessmentEvidence("stage-fukuda", ("late", "late", "correct"), 0, 60.)
+    def record(index):
+        identity = f"attempt-{index}"
+        store.start_attempt(identity, "session", {"fingerprint": "score", "stage_key": bad.stage_key, "scope": "full"})
+        store.settle_attempt(identity, {"state": "completed", "reason": "deadline",
+            "assessment": {"statuses": list(bad.statuses), "extra_notes": 0, "bpm": 60,
+                           "clean": False, "passed": False, "mastery_eligible": True}})
+    record(0)
     assert policy.observe("score", bad).action == "repeat"
+    assert policy.observe("score", bad).action == "repeat"
+    assert db.execute("SELECT count(*) FROM learning_assessments").fetchone()[0] == 1
+    record(1)
     assert policy.observe("score", bad).action == "timing-practice"
     assert policy.inspect("score", "stage-fukuda")["latest_diagnosis"] == "rhythm"
     assert not store.recent("score", "stage-legacy").recent
-    for _ in range(70):
-        store.record("score", bad)
+    for index in range(2, 72):
+        record(index)
     assert len(store.recent("score", "stage-fukuda", 64).recent) == 64
     db.close()
     reopened = sqlite3.connect(db_path)
-    assert len(AssessmentHistoryStore(reopened).recent("score", "stage-fukuda").recent) == 8
+    assert len(LearningLedger(reopened).recent("score", "stage-fukuda").recent) == 8
     reopened.close()
 
 

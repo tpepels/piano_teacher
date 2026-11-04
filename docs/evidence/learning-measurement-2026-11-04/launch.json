@@ -1,0 +1,11 @@
+{
+  "command": "./run.sh --phase0-smoke under Xvfb with isolated XDG directories",
+  "data_dir": "/tmp/piano-measurement-launch-3rp4gd0n",
+  "observed_seconds": 10.01,
+  "process_alive_until_intentional_termination": true,
+  "phase_marker_observed": true,
+  "exit_after_intentional_stop": -15,
+  "fatal_errors": [],
+  "log": "launch.log",
+  "scope": "developer preflight and bounded production launch only; no physical MIDI or graceful shutdown claim"
+}

@@ -7,12 +7,13 @@ def next_full_attempt(plan, result) -> str:
     """Describe the pending decision without applying or crediting it early."""
     if not getattr(result, "passed", result.clean):
         return "Retry the whole passage (red errors or at least half the attacks yellow)."
+    label = "Clean" if result.clean else "Accepted"
     if plan.bpm < plan.target_bpm:
         following = plan._next_automatic_bpm()
-        return f"Clean passage — restore tempo to {following} BPM toward {plan.target_bpm} BPM."
+        return f"{label} passage — restore tempo to {following} BPM toward {plan.target_bpm} BPM."
     streak = plan.streak + 1
     if streak < SETTINGS.clean_runs_to_master:
-        return f"Clean pass {streak}/{SETTINGS.clean_runs_to_master} — play the passage again."
+        return f"{label} pass {streak}/{SETTINGS.clean_runs_to_master} — play the passage again."
     if plan.variant_index + 1 < len(plan.variants):
         following = plan.variants[plan.variant_index + 1]
         if any(sum(abs(other.start-note.start) < 1e-6 for other in following.notes) > 1
@@ -29,4 +30,4 @@ def next_full_attempt(plan, result) -> str:
         action = "now learn the next passage"
     else:
         action = "passage mastered"
-    return f"Clean pass {SETTINGS.clean_runs_to_master}/{SETTINGS.clean_runs_to_master} — {action}."
+    return f"{label} pass {SETTINGS.clean_runs_to_master}/{SETTINGS.clean_runs_to_master} — {action}."

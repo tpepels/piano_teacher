@@ -51,6 +51,8 @@ var lesson_session := LessonSession.new()
 var screens: Dictionary = {}
 var library_catalog = LibraryCatalogCoordinator.new()
 var settings_request
+var learning_status_request
+var learning_status_pending := false
 var library_view: LibraryScreen
 var settings_pending := false
 var preferences: Dictionary = {}
@@ -218,6 +220,7 @@ func _ready() -> void:
         _new_request(library_catalog.on_catalog),
         _new_request(library_catalog.on_health))
     settings_request = _new_request(_on_settings)
+    learning_status_request = _new_request(_on_learning_status)
     lesson_request = _new_request(_on_lesson)
     state_poll_timer = Timer.new()
     state_poll_timer.wait_time = 0.15
@@ -634,6 +637,15 @@ func _build_settings_screen() -> void:
         _send_command("settings.update", {"mistake_response_strategy": strategy}))
     settings_view.metronome_requested.connect(func(enabled: bool):
         _send_command("settings.update", {"metronome": enabled}))
+    settings_view.retention_save_requested.connect(func(days: int, budget_mib: int):
+        _send_command("settings.update", {
+            "evidence_retention_days": days, "evidence_budget_mib": budget_mib}))
+    settings_view.history_export_requested.connect(func(path: String, include_detail: bool):
+        _send_command("learning.export", {"path": path, "include_detail": include_detail}))
+    settings_view.piece_history_delete_requested.connect(func(fingerprint: String):
+        _send_command("learning.delete_piece", {"fingerprint": fingerprint, "confirm": true}))
+    settings_view.learner_history_delete_requested.connect(func():
+        _send_command("learning.delete_learner", {"confirm": true}))
     settings_view.calibration_requested.connect(func(action: String):
         _send_action({"action": action}))
     settings_view.volume_changed.connect(_on_listen_volume_changed)
@@ -755,11 +767,40 @@ func _on_settings(code: int, body: PackedByteArray) -> void:
         return
     preferences = parsed
     settings_view.present_preferences(preferences)
+    _request_learning_status()
     _apply_window_mode(bool(preferences.get("fullscreen", true)))
     var saved_device := str(preferences.get("midi_device", ""))
     if not saved_device.is_empty() and str(last_state.get("device", "")) == "" and not device_names.is_empty():
         if device_names.has(saved_device) and not saved_device.to_lower().contains("midi through"):
             _choose_device(saved_device)
+
+func _request_learning_status() -> void:
+    if learning_status_pending or learning_status_request == null:
+        return
+    learning_status_pending = true
+    if learning_status_request.request("learning.status") != OK:
+        learning_status_pending = false
+        settings_view.present_message("Cannot read local learning history")
+
+func _on_learning_status(code: int, body: PackedByteArray) -> void:
+    learning_status_pending = false
+    if code != 0:
+        settings_view.present_message(_command_failure(code, body))
+        return
+    var parsed = _decode_json(body)
+    if parsed is Dictionary:
+        settings_view.present_learning_status(parsed)
+
+func _learning_command_accepted(operation: String, values: Dictionary) -> void:
+    if operation == "learning.export":
+        settings_view.present_message("Learning history exported to " + str(values.get("path", "chosen file")))
+    else:
+        settings_view.present_message("Current piece history and learning progress deleted."
+            if operation == "learning.delete_piece" else "All learner history and learning progress deleted.")
+        lesson_session.invalidate()
+        _request_settings()
+        _request_library()
+    _request_learning_status()
 
 func _apply_window_mode(fullscreen: bool) -> void:
     var expected := Window.MODE_FULLSCREEN if fullscreen else Window.MODE_WINDOWED
@@ -974,9 +1015,11 @@ func _send_command(operation: String, payload: Dictionary) -> void:
     if not command_state.begin(operation,Time.get_ticks_msec()):
         return
     practice_view.present_busy(true)
+    settings_view.present_busy(true)
     var err: int = command_state.dispatch(action_request,operation,payload)
     if err != OK:
         practice_view.present_busy(false)
+        settings_view.present_busy(false)
         if operation == "practice.command":
             practice_view.finish_action()
         var message := "Cannot reach practice engine (status %d)" % err
@@ -994,6 +1037,7 @@ func _on_action(code: int, body: PackedByteArray) -> void:
         return
     var completed: Dictionary = command_state.finish()
     practice_view.present_busy(false)
+    settings_view.present_busy(false)
     var operation: String = str(completed["operation"])
     if operation == "practice.command":
         practice_view.finish_action()
@@ -1009,6 +1053,9 @@ func _on_action(code: int, body: PackedByteArray) -> void:
         _flush_transport_action()
         return
     var opened: Variant = _decode_json(body) if operation == "library.open" else null
+    if operation in ["learning.export", "learning.delete_piece", "learning.delete_learner"]:
+        var result = _decode_json(body)
+        _learning_command_accepted(operation, result if result is Dictionary else {})
     var decision: Dictionary = CommandSuccessPolicy.decide(
         operation,completed_action,resume_saved,opened)
     if str(decision["kind"]) == "fingering":

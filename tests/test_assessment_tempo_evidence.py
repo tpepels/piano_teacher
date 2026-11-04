@@ -11,6 +11,12 @@ from piano_teacher.practice import Assessment, NoteAssessment
 from piano_teacher.server import PracticeEngine
 
 
+def _seal_completed(engine, result):
+    engine.measurement.seal(engine.recorder.presses, state="completed",
+                            reason="full_passage", result=result,
+                            eligible=engine.plan.bpm >= engine.plan.target_bpm)
+
+
 @pytest.mark.parametrize("strategy,restart", [
     ("slow-practice", 0.0),
     ("micro-loop", 8.0),
@@ -37,6 +43,7 @@ def test_completed_take_history_uses_performed_bpm_before_retry_slowdown(
                                   for note in notes), 0)
         end = engine.visual_transport.run_at + 7.4
 
+        _seal_completed(engine, result)
         engine._finish_full_passage(result, 12.0, 7.2, end)
         assert engine.plan.bpm == 90
         assert engine.visual_transport.pending_rewind == restart
@@ -48,12 +55,12 @@ def test_completed_take_history_uses_performed_bpm_before_retry_slowdown(
                 engine._commit_pending()
             assert engine.pending_result is result
             assert engine.db.execute(
-                "SELECT count(*) FROM practice_evidence").fetchone()[0] == 0
+                "SELECT count(*) FROM learning_assessments").fetchone()[0] == 0
             engine.db.execute("DROP TRIGGER reject_progress_write")
         engine._commit_pending()
 
         assert engine.db.execute(
-            "SELECT bpm FROM practice_evidence").fetchall() == [(100.0,)]
+            "SELECT bpm FROM learning_assessments").fetchall() == [(100.0,)]
         assert engine.db.execute(
             "SELECT bpm FROM strategy_sessions").fetchall() == [(90,)]
         assert engine.plan.bpm == 90
@@ -68,7 +75,7 @@ def test_completed_take_history_uses_performed_bpm_before_retry_slowdown(
     {"action": "select_step", "number": 2},
     {"action": "learn"},
 ])
-def test_cancelled_feedback_does_not_attach_old_tempo_to_later_take(tmp_path, command):
+def test_cancelled_feedback_retains_evidence_without_attaching_old_tempo_to_later_take(tmp_path, command):
     notes = tuple(Note(index * .25, (index + 1) * .25, 60 + index, 0, 0,
                        "right", f"source-{index}") for index in range(16))
     piece = Piece("New take tempo", 100, notes,
@@ -84,6 +91,7 @@ def test_cancelled_feedback_does_not_attach_old_tempo_to_later_take(tmp_path, co
         engine.start()
         result = Assessment(tuple(NoteAssessment(n, "missed")
                                   for n in engine.plan.active_phrase.notes), 0)
+        _seal_completed(engine, result)
         engine._finish_full_passage(
             result, 4.0, 2.4, engine.visual_transport.run_at + 2.6)
 
@@ -91,7 +99,8 @@ def test_cancelled_feedback_does_not_attach_old_tempo_to_later_take(tmp_path, co
         assert engine.pending_result is None
         engine._commit_pending()
         assert engine.db.execute(
-            "SELECT count(*) FROM practice_evidence").fetchone()[0] == 0
+            "SELECT bpm,mastery_eligible FROM learning_assessments").fetchall() == [(100.0, 0)]
+        assert engine.plan.streak == 0 and not engine.plan.mastered
 
         engine.control("tempo", bpm=80)
         if engine.mode == "learn":
@@ -100,11 +109,12 @@ def test_cancelled_feedback_does_not_attach_old_tempo_to_later_take(tmp_path, co
         selected_notes = engine.plan.active_phrase.notes
         result = Assessment(tuple(NoteAssessment(n, "missed")
                                   for n in selected_notes), 0)
+        _seal_completed(engine, result)
         engine._finish_full_passage(
             result, 4.0, 3.0, engine.visual_transport.run_at + 3.2)
         engine._commit_pending()
         assert engine.db.execute(
-            "SELECT bpm FROM practice_evidence").fetchall() == [(80.0,)]
+            "SELECT bpm FROM learning_assessments ORDER BY id").fetchall() == [(100.0,), (80.0,)]
         assert engine.plan.bpm == 72
     finally:
         engine.db.close()

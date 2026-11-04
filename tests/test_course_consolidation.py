@@ -140,6 +140,7 @@ def test_preview_of_consolidated_material_cannot_award_mastery(tmp_path, monkeyp
     monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(course_piece(8), consolidate=True)
+    engine.fingerprint = "consolidated-preview-fixture"
     try:
         engine.start()
         assert engine.state()["preview_only"]

@@ -38,6 +38,7 @@ def test_note_on_publishes_to_memory_without_waiting_for_release(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.plan = LearningPlan(piece, exercise_strategy="source-progression")
+        engine.fingerprint = "midi-callback-fixture"
         engine.midi.port = SimpleNamespace(closed=False)
         engine.start()
         engine.visual_transport.run_at = time.monotonic() - .015

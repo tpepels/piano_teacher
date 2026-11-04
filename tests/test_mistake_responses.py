@@ -32,9 +32,9 @@ def _rolling(name, previous_key=None, count=0, allow_guided=True):
         now=1000.0, strategy=name, allow_guided=allow_guided)
 
 
-def test_all_six_strategies_are_registered_with_valid_user_labels():
+def test_six_baselines_and_evidence_policy_are_registered_with_valid_user_labels():
     expected = {"adaptive", "steady-repeat", "slow-practice",
-                "micro-loop", "guided-repair", "finish-then-review"}
+                "micro-loop", "guided-repair", "finish-then-review", "evidence-adaptive"}
     choices = available_mistake_policies()
     assert {c["id"] for c in choices} == expected
     assert all(c["label"] and c["description"] for c in choices)
@@ -147,28 +147,35 @@ def _song():
                  bar_boundaries=(0, 4), time_signatures=((0, 4, 4),))
 
 
-def test_live_setting_switch_is_atomic_persistent_and_keeps_current_take(tmp_path):
+def test_policy_switch_preserves_old_evidence_and_invalid_switch_keeps_new_take(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.plan = LearningPlan(_song(), exercise_strategy="source-progression")
         engine.fingerprint = "policy-fixture"
         engine.midi.port = object()
         engine.start()
-        recorder = engine.recorder
+        attempt = engine.measurement.attempt_id
         revision = engine.score_revision
         transport = engine.transport_id
-        start = engine.visual_transport.run_at
         engine.set_preferences(mistake_response_strategy="finish-then-review")
         assert engine.library.settings["mistake_response_strategy"] == "finish-then-review"
         assert engine._state_snapshot()["mistake_response_strategy"] == "finish-then-review"
         assert not engine._assess_rolling_boundary(4.0, (0.0, 4.0))
-        assert engine.recorder is recorder and engine.running
+        assert engine.recorder is None and not engine.running
+        assert engine.feedback == "Retry strategy changed"
+        assert "Play" in engine.next_action
+        assert engine.db.execute("SELECT state,reason FROM learning_attempts WHERE attempt_id=?", (attempt,)).fetchone() == (
+            "aborted", "policy_changed")
         assert engine.score_revision == revision
         assert engine.transport_id == transport
-        assert engine.visual_transport.run_at == start
+        engine.start()
+        recorder = engine.recorder
+        start = engine.visual_transport.run_at
         with pytest.raises(ValueError, match="Unknown mistake-response"):
             engine.set_preferences(mistake_response_strategy="unregistered")
         assert engine.library.settings["mistake_response_strategy"] == "finish-then-review"
+        assert engine.recorder is recorder and engine.running
+        assert engine.visual_transport.run_at == start
         loaded = ScoreLibrary(tmp_path / "config")
         assert loaded.settings["mistake_response_strategy"] == "finish-then-review"
     finally:
@@ -284,6 +291,7 @@ def test_finish_then_review_retains_tempo_until_full_take_is_assessed(tmp_path):
     try:
         engine.set_preferences(mistake_response_strategy="finish-then-review")
         engine.plan = LearningPlan(_song(), exercise_strategy="source-progression")
+        engine.fingerprint = "finish-then-review-fixture"
         engine.plan.set_bpm(100)
         engine.midi.port = object()
         engine.start()

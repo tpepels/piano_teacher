@@ -23,6 +23,8 @@ class RollingRecoveryTransition:
     display: RecoveryDisplay
     restart_beat: float
     mode: str
+    action: str = "repair"
+    reason: str = "registered_policy"
 
 
 def plan_rolling_recovery(decision: RecoveryDecision, *, identity: str,
@@ -30,13 +32,13 @@ def plan_rolling_recovery(decision: RecoveryDecision, *, identity: str,
                           previous_count: int, grid: Sequence[float],
                           first_bar: int, now: float,
                           allow_guided: bool = True,
-                          strategy: str = "adaptive") -> RollingRecoveryTransition:
+                          strategy: str = "adaptive", context=None) -> RollingRecoveryTransition:
     policy = resolve_mistake_policy(strategy)
     chosen = rolling_response(
         policy, decision, identity=identity, bpm=bpm,
         minimum_bpm=SETTINGS.minimum_bpm,
         previous_key=previous_key, previous_count=previous_count,
-        grid=grid, allow_guided=allow_guided)
+        grid=grid, allow_guided=allow_guided, context=context)
     adjusted = replace(decision, restart_beat=chosen.restart_beat)
     display = recovery_display(
         adjusted, grid=grid, first_bar=first_bar,
@@ -55,4 +57,4 @@ def plan_rolling_recovery(decision: RecoveryDecision, *, identity: str,
         display = replace(display, notice=notice, next_action=instruction)
     return RollingRecoveryTransition(
         chosen.bpm, chosen.trouble_key, chosen.count, chosen.guided,
-        display, chosen.restart_beat, chosen.mode)
+        display, chosen.restart_beat, chosen.mode, chosen.action, chosen.reason)

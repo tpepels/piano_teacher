@@ -126,6 +126,7 @@ def test_server_controls_persist_step_choice_and_decrease(tmp_path):
 def test_reset_path_clears_all_saved_learning_data_for_only_the_loaded_song(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
+        engine.library.update(exercise_strategy="source-progression")
         engine.plan = LearningPlan(song(110))
         engine.fingerprint = "song-one"
         engine.control("tempo_down")

@@ -27,6 +27,7 @@ class EngineCommands:
         "library.health_status": "library_health_status",
         "lesson.overview": "lesson_overview",
         "settings.snapshot": "preferences",
+        "learning.status": "learning_history_status",
         "exercise.diagnostics": "exercise_diagnostics",
         "hardware.diagnostics": "hardware_diagnostics",
         "performance.diagnostics": "performance_diagnostics",
@@ -52,6 +53,13 @@ class EngineCommands:
             if not isinstance(values, dict):
                 raise ValueError("Command payload must be a JSON object")
             engine = self.engine
+            if operation == "learning.statistics":
+                if set(values) - {"fingerprint"}:
+                    raise ValueError("Unknown learning statistics input")
+                fingerprint = values.get("fingerprint")
+                if fingerprint is not None and (type(fingerprint) is not str or not fingerprint.strip()):
+                    raise ValueError("Piece fingerprint must be a nonempty string")
+                return self._reply(OK, engine.learning_statistics(fingerprint))
             if operation in self.READS:
                 if values:
                     raise ValueError(f"{operation} takes no input")
@@ -81,6 +89,29 @@ class EngineCommands:
                     revision=values["revision"], error=values["error"]))
             if operation == "listen.audio":
                 return OK, engine.demo_audio(values.get("token", "")).read_bytes()
+            if operation == "learning.export":
+                if set(values) - {"path", "include_detail"}:
+                    raise ValueError("Unknown learning export input")
+                path = values.get("path")
+                include_detail = values.get("include_detail", False)
+                if type(path) is not str or not path.strip() or "\x00" in path:
+                    raise ValueError("Choose a local export file")
+                if type(include_detail) is not bool:
+                    raise ValueError("Include detail must be true or false")
+                return self._reply(OK, engine.export_learning_history(
+                    path, include_detail=include_detail))
+            if operation in {"learning.delete_piece", "learning.delete_learner"}:
+                allowed = {"confirm", "fingerprint"} if operation == "learning.delete_piece" else {"confirm"}
+                if set(values) - allowed:
+                    raise ValueError("Unknown learning deletion input")
+                if values.get("confirm") is not True:
+                    raise ValueError("Permanent history deletion requires confirmation")
+                if operation == "learning.delete_piece":
+                    fingerprint = values.get("fingerprint")
+                    if type(fingerprint) is not str or not fingerprint.strip():
+                        raise ValueError("Select a piece before deleting its history")
+                    return self._reply(OK, engine.delete_piece_history(fingerprint, confirm=True))
+                return self._reply(OK, engine.delete_learner_history(confirm=True))
             if operation == "fingering.correct":
                 engine.correct_fingering(values["source_id"], values["finger"],
                                          fingerprint=values.get("fingerprint"))
@@ -120,5 +151,4 @@ class EngineCommands:
     def close(self) -> None:
         if not self.owned:
             return
-        self.engine.connect("")
-        self.engine.db.close()
+        self.engine.close()

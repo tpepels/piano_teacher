@@ -40,7 +40,8 @@ class AssessmentService:
                   < phrase.start+end_beat-1e-7))
         return evaluator(active_phrase, hand, bpm, played)
 
-    def review(self, phrase: Phrase, result, *, bar_boundaries, played_from_beat: float, bpm: float) -> dict:
+    def review(self, phrase: Phrase, result, *, bar_boundaries, played_from_beat: float, bpm: float,
+               elapsed_to_beat=None) -> dict:
         """Review real scored attacks by source measure, including chord pitches.
 
         Every recommended retry corresponds to an existing two-bar source
@@ -69,7 +70,8 @@ class AssessmentService:
                     issue["played_name"] = note_name(entry.played_pitch)
                 issues.append(issue)
             for note in result.unmatched_played:
-                local = played_from_beat + note.onset * bpm / 60
+                local = (elapsed_to_beat(note.onset) if elapsed_to_beat is not None else
+                         played_from_beat + note.onset * bpm / 60)
                 if start-1e-7 <= local < end-1e-7:
                     counts["extra"] += 1
                     issues.append({"bar": bar_number_at(grid, local, phrase.first_bar),

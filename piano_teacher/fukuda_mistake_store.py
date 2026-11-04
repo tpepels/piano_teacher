@@ -68,5 +68,5 @@ class FukudaMistakeStore:
         return self.problematic(fingerprint)
 
     def reset(self,fingerprint:str)->None:
-        with self.db:
+        with sqlite_atomic(self.db):
             self.db.execute("DELETE FROM fukuda_mistakes WHERE fingerprint=?",(fingerprint,))

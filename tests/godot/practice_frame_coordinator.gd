@@ -15,6 +15,7 @@ class Effects:
 
 class Renderer:
     extends RefCounted
+    var runway_origin_beat := 0.0
     var last_beat := NAN
     var last_visual := NAN
     func present_clock(beat: float, visual: float) -> void:

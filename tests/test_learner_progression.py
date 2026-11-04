@@ -7,6 +7,7 @@ from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.learner_state import LearnerStateStore, guided_units
 from piano_teacher.server import PracticeEngine
+from test_seamless_stage_runway import Prepared
 
 
 @pytest.fixture
@@ -204,7 +205,7 @@ def test_loading_readiness_starts_a_real_count_in_without_advancing_the_clock(co
     assert not e.plan.mastered and e.plan.streak == 0
 
 
-def test_three_real_clean_full_takes_advance_guided_course_to_next_variant_learn(course):
+def test_three_real_clean_full_takes_wait_for_exact_preloaded_next_variant(course):
     e, now, _, _ = course()
     begin(e)
     first_stage = e.plan.identity
@@ -228,11 +229,28 @@ def test_three_real_clean_full_takes_advance_guided_course_to_next_variant_learn
             assert repeated['clock_beat'] == (deadline+.01-deadline)*80/60
             assert repeated['streak'] == streak and e.plan.identity == first_stage
             assert e.recorder is not None and not e.recorder.presses
+    waiting = advance(e, now)
+    assert e.plan.identity == first_stage and first_stage not in e.plan.mastered
+    assert e.plan.streak == 2 and e.pending_result is not None
+    assert waiting['revision'] == revision and not waiting['running']
+    assert e.db.execute('SELECT count(*) FROM learning_assessments').fetchone()[0] == 2
+    selection, number = e._next_stage_selection()
+    e.future_score = Prepared(e)
+    assert e.acknowledge_preloaded_stage(
+        stage_key=selection.stage_key, revision=selection.revision)['accepted']
+    reading = e.state()
+    assert e.plan.identity == first_stage and first_stage not in e.plan.mastered
+    assert reading['revision'] == revision and e.pending_result is not None
+    assert e.visual_transport.next_at == pytest.approx(now[0] + 2 * 60 / 80)
     next_stage = advance(e, now)
     assert e.plan.mastered[first_stage] == 80
-    assert next_stage['mode'] == 'learn' and next_stage['phase'] == 'guided_wait'
-    assert next_stage['lesson_level'] == 'outline' and next_stage['first_bar'] == 1 and next_stage['last_bar'] == 2
-    assert next_stage['required_notes'] == 16 and next_stage['learner']['prepared_units'] == 0
+    assert e.db.execute('SELECT bpm FROM mastery WHERE exercise=?', (first_stage,)).fetchone() == (80,)
+    assert e.db.execute('SELECT count(*) FROM learning_assessments').fetchone()[0] == 3
+    assert next_stage['lesson_step'] == number
+    assert next_stage['mode'] == 'practice' and next_stage['phase'] == 'playing'
+    assert next_stage['revision'] == selection.revision and next_stage['count_in_beats'] == 0
+    assert next_stage['lesson_level'] == 'outline' and next_stage['first_bar'] == 1 and next_stage['last_bar'] == 8
+    assert next_stage['required_notes'] == 64 and next_stage['learner']['prepared_units'] == 0
     assert next_stage['target_bpm'] == 80
 
 
@@ -415,8 +433,22 @@ def test_legacy_timed_recovery_does_not_enable_guided_course_progression(course)
     for _ in range(3):
         take(e, now)
         state = advance(e, now)
+    previous_stage = e.plan.identity
+    assert previous_stage not in e.plan.mastered and e.pending_result is not None
+    assert e.plan.streak == 2 and not e.state()['learner']['course_guided']
+    selection, number = e._next_stage_selection()
+    e.future_score = Prepared(e)
+    assert e.acknowledge_preloaded_stage(
+        stage_key=selection.stage_key, revision=selection.revision)['accepted']
+    assert e.visual_transport.next_at == pytest.approx(now[0] + 2 * 60 / 80)
+    assert previous_stage not in e.plan.mastered and e.plan.identity == previous_stage
+    state = advance(e, now)
+    assert e.plan.mastered[previous_stage] == 80
+    assert e.db.execute('SELECT bpm FROM mastery WHERE exercise=?', (previous_stage,)).fetchone() == (80,)
+    assert state['lesson_step'] == number
     assert state['lesson_level'] == 'outline' and state['mode'] == 'practice'
-    assert state['phase'] == 'count_in'
+    assert state['phase'] == 'playing' and state['count_in_beats'] == 0
+    assert not state['learner']['course_guided'] and e.pending_result is None
 
 
 def test_actual_237_bar_import_performs_every_original_event_and_no_input_cannot_score(tmp_path, monkeypatch):

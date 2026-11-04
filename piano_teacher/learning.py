@@ -24,7 +24,7 @@ from .lesson_generators import (
 
 @dataclass(frozen=True)
 class LessonStep:
-    """One teachable stage; three clean target-tempo passes earn mastery."""
+    """One teachable stage; three accepted full-target passes earn mastery."""
     exercise_index: int
     hand: str
     level: str
@@ -534,7 +534,7 @@ class LearningPlan:
 
     def apply_result(self, *, correct: int, total: int, extras: int = 0,
                      accepted: bool | None = None) -> str:
-        """A clean run restores tempo; three target-speed clean runs confer mastery.
+        """Accepted takes restore tempo; three full target-speed passes earn mastery.
 
         Recovery slowdowns happen on five pitch errors in a two-bar window.
         Partial retries never call this method.

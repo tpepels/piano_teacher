@@ -289,6 +289,7 @@ def clocked_engine(tmp_path, monkeypatch):
         app = PracticeEngine(tmp_path / str(len(engines)), enable_midi=False)
         engines.append(app)
         app.plan = LearningPlan(piece, consolidate=True)
+        app.fingerprint = "timed-loop-fixture"
         app.plan.set_bpm(bpm)
         if connected:
             app.midi.port = object()

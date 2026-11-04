@@ -13,12 +13,13 @@ from .learning import LearningPlan
 from .sqlite_transaction import sqlite_atomic
 from .lesson_settings import SETTINGS
 from .learner_state import LearnerStateStore
-from .practice_history import AssessmentHistoryStore
+from .learning_ledger import LearningLedger, SCHEMA_VERSION
 
 
 class ProgressRepository:
     def __init__(self, db_path: Path) -> None:
         self.db = sqlite3.connect(db_path, check_same_thread=False)
+        self.db.execute("PRAGMA foreign_keys=ON")
         self.db.execute("CREATE TABLE IF NOT EXISTS sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER)")
         columns={row[1] for row in self.db.execute("PRAGMA table_info(sessions)")}
         if "target_bpm" not in columns:
@@ -48,7 +49,18 @@ class ProgressRepository:
         self.db.commit()
         # One owner initializes both progress and learner-state tables.
         self.learner_store = LearnerStateStore(self.db)
-        self.assessment_history = AssessmentHistoryStore(self.db)
+        try:
+            with sqlite_atomic(self.db):
+                version = self.db.execute("PRAGMA user_version").fetchone()[0]
+                if version > SCHEMA_VERSION:
+                    raise ValueError("The learning database schema is newer than this application")
+                self.ledger = LearningLedger(self.db)
+                if version < 1:
+                    self.ledger.migrate_legacy()
+                    self.db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        except BaseException:
+            self.db.close()
+            raise
 
     def restore(self, plan: LearningPlan | None, fingerprint: str, *,
                 restore_session: bool = True) -> None:
@@ -174,11 +186,17 @@ class ProgressRepository:
 
 
     def reset_piece(self, fingerprint: str) -> None:
-        """Delete one piece's saved path and learner records transactionally."""
-        with self.db:
-            for table in ("practice_evidence", "strategy_sessions", "learner_units", "learner_stages", "repeat_tempo_credit",
+        """Reset saved progress while preserving the authoritative evidence ledger."""
+        with sqlite_atomic(self.db):
+            for table in ("strategy_sessions", "learner_units", "learner_stages", "repeat_tempo_credit",
                           "stage_tempos", "mastery", "sessions"):
                 self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
+            # A reset is historical exposure context, distinct from deletion.
+            session = self.db.execute("""SELECT session_id FROM learning_sessions
+                WHERE learner_id=? AND closure_reason IS NULL ORDER BY rowid DESC LIMIT 1""",
+                (self.ledger.learner_id,)).fetchone()
+            if session:
+                self.ledger.record_event(session[0], "progress_reset", {"fingerprint": fingerprint})
 
     def close(self) -> None:
         self.db.close()

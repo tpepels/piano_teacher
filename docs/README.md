@@ -15,12 +15,14 @@
 | Teaching behavior and mastery criteria | [Teaching methodology](teaching-methodology.md) |
 | Fixed retry contracts, adaptive proposal and evaluation | [Mistake-response policies](mistake-response-policies.md) |
 | Learning variables and evidence gaps | [Learning-measurement implementation audit (2026-11-04)](learning-measurement-audit-2026-11-04.md) |
+| Durable measurement and proposed read-only analytics | [Local learning evidence contract](learning-measurement.md) |
 
 ## Verified historical or research evidence (not development instructions)
 
 - [Phase 3 Coda MIDI-domain completion](coda-midi-phase3-completion-2026-11-02.md).
 - [Phase 4 Fukuda MIDI-domain implementation](fukuda-midi-phase4-2026-11-02.md).
 - [2026-11-04 architecture/retry development audit](verification/development-audit-2026-11-04.md) records reproduced defects, local checks and open acceptance limits.
+- [2026-11-04 learning measurement verification](verification/learning-measurement-2026-11-04.md) records P0 capture, migration, privacy controls and remaining gates.
 - `docs/research-*.md`, `docs/coda-*.md` and dated notation reports are experiments, comparisons or implementation evidence. Their time-relative claims must not override ROADMAP.
 - `docs/evidence/` contains captured images, logs, corpus ledgers and provenance.
 - [Archived plans and superseded architecture](archive/development/README.md) preserve old material without an active implementation track.
