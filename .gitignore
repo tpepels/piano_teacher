@@ -17,3 +17,15 @@ build/
 # Godot regenerates these editor/import/shader caches per machine.
 # Keep .gd.uid and other source UID files versioned for stable references.
 godot/.godot/
+
+# Installed offline-fingering dependencies (recreated by setup-fingering.sh).
+piano_teacher/fingering/lumikey_runtime/node_modules/
+
+# Machine-specific native bridge build outputs (recreated by build-inprocess.sh).
+godot/native/build-inputs.json
+godot/native/python-abi.txt
+godot/native/piano_bridge.gdextension
+godot/native/piano_bridge.gdextension.uid
+
+# Intentionally do not ignore *.gd.uid: source-script UIDs are versioned
+# to keep Godot resource references stable across checkouts.
