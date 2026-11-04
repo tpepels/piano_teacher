@@ -7,7 +7,7 @@ import mido
 import pytest
 
 from piano_teacher import music
-from piano_teacher.score import import_piece
+from piano_teacher.importing.pieces import import_piece
 from piano_teacher.learning import LearningPlan
 
 

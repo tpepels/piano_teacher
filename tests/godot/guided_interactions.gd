@@ -3,10 +3,7 @@ extends SceneTree
 class FixtureApp extends "native_production_fixture.gd":
     var commands: Array = []
     func _ready() -> void:
-        _build_interface()
-        resized.connect(_update_responsive_layout)
-        _update_responsive_layout()
-        set_process(false)
+        super._ready()
     func _send_action(command: Dictionary) -> void:
         commands.append(command)
     func _request_lesson() -> void: pass
@@ -28,6 +25,7 @@ func check(ok: bool, message: String) -> void:
 func state(phase: String, hint: bool = false) -> Dictionary:
     return {"loaded": true, "mode": "learn", "phase": phase, "running": false,
         "paused": phase == "paused", "revision": 1, "transport_id": 4,
+        "piece_fingerprint":str(app.last_state.get("piece_fingerprint","")),
         "title": "Learn a short imported idea", "hand": "right", "hands": ["right"],
         "bpm": 80, "target_bpm": 100, "duration_beats": app.practice_view.stage.renderer.timeline.duration_beats, "clock_beat": 0,
         "first_bar": 1, "last_bar": 2, "required_notes": 4, "lesson_level": "original",
@@ -40,7 +38,7 @@ func state(phase: String, hint: bool = false) -> Dictionary:
             "fragment": {"first_bar":1,"last_bar":2,"start_beat":0,"end_beat":8}}}
 
 func show(phase: String, hint: bool = false) -> void:
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(state(phase,hint)).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(state(phase,hint)).to_utf8_buffer())
 
 func expect(action: String, description: String) -> void:
     check(app.commands == [{"action":action}],description+str(app.commands))
@@ -54,7 +52,7 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     app._navigate("practice")
-    var fixture_error: String = app.load_native_fixture(OS.get_cmdline_user_args()[0])
+    var fixture_error: String = await app.load_native_fixture(OS.get_cmdline_user_args()[0])
     check(fixture_error.is_empty(), fixture_error)
     if not fixture_error.is_empty():
         quit(1)

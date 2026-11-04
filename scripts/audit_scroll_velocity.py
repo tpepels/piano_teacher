@@ -20,13 +20,33 @@ MIN_JOIN_RATIO = 0.90
 
 
 def _write_fixture(folder, phrase, boundaries, *, hand, meter):
-    from piano_teacher.notation.lesson import build_lesson_score
+    import mido
     from piano_teacher.server import PracticeEngine
 
     folder.mkdir(parents=True, exist_ok=True)
-    source = folder / "source.musicxml"
-    source.write_text(build_lesson_score(phrase, boundaries=boundaries,
-        time_signatures=((0, *meter),)).musicxml)
+    source = folder / "source.mid"
+    midi = mido.MidiFile(ticks_per_beat=480)
+    for source_hand in ("right", "left"):
+        notes = [note for note in phrase.notes if note.hand == source_hand]
+        if not notes:
+            continue
+        track = mido.MidiTrack()
+        midi.tracks.append(track)
+        track.append(mido.MetaMessage("track_name", name=source_hand + " hand"))
+        track.append(mido.MetaMessage("time_signature", numerator=meter[0],
+                                      denominator=meter[1]))
+        events = sorted((round(beat*480), on, note.pitch)
+                        for note in notes
+                        for beat, on in ((note.start, True), (note.end, False)))
+        previous = 0
+        for tick, on, pitch in events:
+            track.append(mido.Message("note_on" if on else "note_off",
+                                      note=pitch, velocity=85 if on else 0,
+                                      time=tick-previous))
+            previous = tick
+        track.append(mido.MetaMessage("end_of_track",
+                                      time=round(boundaries[-1]*480)-previous))
+    midi.save(source)
     engine = PracticeEngine(folder / "engine", enable_midi=False)
     try:
         engine.load(str(source), warmup=True)

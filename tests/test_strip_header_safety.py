@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase
-from piano_teacher.score import _can_remove_repeated_system_headers
+from piano_teacher.engraving.engraving import _can_remove_repeated_system_headers
 
 
 def _lesson():

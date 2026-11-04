@@ -80,8 +80,8 @@ def test_ambiguous_slurs_refuse_to_guess(monkeypatch):
 @pytest.mark.parametrize("source_id",[None,"source-phrase"])
 def test_real_verovio_source_slur_export(source_id):
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
-    from piano_teacher.score_geometry import parse_svg_geometry
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
+    from piano_teacher.source_svg import parse_svg_geometry
     kit=_create_verovio_toolkit(verovio)
     assert kit.setOptions({"inputFrom":"xml","scale":48,
         "pageWidth":900,"pageHeight":650,"svgViewBox":True,

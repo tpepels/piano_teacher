@@ -16,9 +16,10 @@ from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.lesson_validation import require_lesson_alignment
 from piano_teacher.music import Phrase
 from piano_teacher.practice import Assessment, NoteAssessment, PlayedNote, evaluate
-from piano_teacher.raster import rasterize_score
-from piano_teacher.score import import_piece, render_layout
-from piano_teacher.score_geometry import locate_beat
+from piano_teacher.engraving.raster import rasterize_score
+from piano_teacher.importing.pieces import import_piece
+from piano_teacher.engraving.engraving import render_layout
+from piano_teacher.engraving.geometry import locate_beat
 
 
 CORPUS = Path(__file__).parent / "fixtures" / "musical_fidelity"

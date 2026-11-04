@@ -21,7 +21,7 @@ func run() -> void:
     await process_frame
     await process_frame
     for hand in ["right","left","both"]:
-        var error: String = app.load_native_fixture(folder.path_join(hand))
+        var error: String = await app.load_native_fixture(folder.path_join(hand))
         check(error.is_empty(),error)
         if not error.is_empty():
             quit(1)

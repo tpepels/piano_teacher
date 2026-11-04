@@ -76,7 +76,8 @@ def test_partial_recovery_schedules_whole_passage_without_mastery(tmp_path):
 def test_full_passage_result_waits_for_feedback_commit(tmp_path):
     engine = _engine(tmp_path)
     try:
-        result = Obj(clean=True)
+        result = Assessment(tuple(NoteAssessment(note, "correct")
+                                  for note in engine.plan.active_phrase.notes), 0)
         engine.auto = False
         engine.plan.streak = 1
         engine._finish_full_passage(result, 8, 8, 100)

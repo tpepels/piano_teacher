@@ -11,8 +11,8 @@ func context(fp: String = "song") -> Dictionary:
         "mode":"learn","phase":"guided_wait","skip_available":true,"placement_available":true}
 func overview(fp: String = "song") -> Dictionary:
     return {"piece_fingerprint":fp,"current_step":2,"completed_steps":1,"total_steps":3,
-        "steps":[{"number":1,"exercise":0,"first_bar":1,"last_bar":4,"hand":"right","level":"skeleton","completed":true},
-        {"number":2,"exercise":0,"first_bar":1,"last_bar":4,"hand":"right","level":"original","skip_status":"skipped"},
+        "steps":[{"number":1,"exercise":0,"first_bar":1,"last_bar":4,"hand":"right","level":"skeleton","stage_family":"Source progression","stage_label":"Skeleton notes","completed":true},
+        {"number":2,"exercise":0,"first_bar":1,"last_bar":4,"hand":"right","level":"original","stage_family":"Source progression","stage_label":"Original notes","skip_status":"skipped"},
         {"number":3,"exercise":1,"first_bar":5,"last_bar":8,"hand":"both","level":"original","kind":"perform"}],
         "trouble_spots":[{"stage_key":"source-unit","start_beat":8.0,"first_bar":3,"last_bar":4}]}
 func press(view: Node, caption: String) -> void:
@@ -98,8 +98,8 @@ func test_selector(view: Control) -> void:
     var values := overview()
     view.present_overview(values)
     values.steps.clear()
-    check(view.picker.item_count == 3 and view.picker.text == "Step 2 / 3", "Captured popup rows have a bounded selected caption")
-    check(view.picker.get_item_text(0) == "1/3 · 1–4 · Right · Skeleton", "Popup retains complete step descriptions")
+    check(view.picker.item_count == 3 and view.picker.text == "Step 2 / 3 · Original notes", "Captured popup rows retain the selected stage caption")
+    check(view.picker.get_item_text(0) == "1/3 · 1–4 · Right · Source progression: Skeleton notes", "Popup retains the real stage family and label")
     view.previous_button.pressed.emit()
     view.next_button.pressed.emit()
     view.picker.item_selected.emit(1)
@@ -117,7 +117,7 @@ func test_session(model: RefCounted, scenario: String) -> void:
     var requests: Array = []
     var snapshots: Array = []
     var errors: Array = []
-    model.request_requested.connect(func(): requests.append("GET /lesson"))
+    model.request_requested.connect(func(): requests.append("lesson.overview"))
     model.overview_changed.connect(func(values: Dictionary): snapshots.append(values))
     model.request_failed.connect(func(message: String): errors.append(message))
     model.update_context(context(),10)

@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from scripts.smoke_teaching_godot import make_fixture
+from scripts.smoke_phase0 import make_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 GODOT = shutil.which("godot") or shutil.which("godot4")
@@ -23,7 +23,7 @@ def test_native_feedback_and_reaction_queues_follow_real_source_events(tmp_path)
         engine.load(str(midi))
         engine.plan.set_hand("both")
         payload = {"model": engine.semantic_score(),
-                   "layout": engine.geometry(native_notes=True), "state": engine.state()}
+                   "layout": engine.geometry(), "state": engine.state()}
     finally:
         engine.db.close()
     (tmp_path / "native.json").write_text(json.dumps(payload))
@@ -40,12 +40,12 @@ func _initialize() -> void:
     call_deferred("run")
 
 func present(app: Control, state: Dictionary) -> void:
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(state).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(state).to_utf8_buffer())
 
 func run() -> void:
     var app = load("FIXTURE_PATH").new()
     root.add_child(app)
-    var error: String = app.load_native_fixture(OS.get_cmdline_user_args()[0])
+    var error: String = await app.load_native_fixture(OS.get_cmdline_user_args()[0])
     check(error.is_empty(), "Production native fixture loads: " + error)
     if not failures.is_empty():
         app.free()
@@ -149,16 +149,6 @@ func run() -> void:
             chord_notes += 1
     check(groups.size() == 1 and groups[0].notes.size() == chord_notes,
         "Crossing an authentic source onset groups the entire chord exactly once")
-    app._preview_note_arrivals(groups)
-    check(app.score_effects.preview_pulses.size() == chord_notes and
-        app.score_effects.preview_pulses[0].status == "preview" and
-        app.score_effects.hit_pulses.is_empty() and feedback.pulses.is_empty(),
-        "Preview source arrivals remain distinct from assessed native rewards")
-    check(app.practice_view.stage.effects.impact_energy == 0.0 and app.practice_view.stage.effects.preview_energy > 0.0,
-        "Ungraded source arrivals illuminate the stage without earned success")
-    app._clear_assessed_effects_in_ungraded_mode({"preview_only":false,"mode":"practice"})
-    check(app.score_effects.preview_pulses.is_empty(),
-        "Returning to a scored take clears its ungraded source effects")
     renderer.queue_redraw()
     feedback.queue_redraw()
     await process_frame

@@ -17,7 +17,7 @@ func run() -> void:
     app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(app)
     await process_frame
-    var error: String = app.load_native_fixture(OS.get_cmdline_user_args()[0])
+    var error: String = await app.load_native_fixture(OS.get_cmdline_user_args()[0])
     check(error.is_empty(), error)
     if not error.is_empty():
         quit(1)

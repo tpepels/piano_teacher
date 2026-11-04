@@ -10,7 +10,7 @@ import pytest
 
 from scripts.check_user_midi_visual_regression import CASES, MIDI_DIR
 from piano_teacher.lesson_timing import preparation_meter, lead_in_beats
-from piano_teacher.score import import_piece
+from piano_teacher.importing.pieces import import_piece
 
 
 @pytest.mark.parametrize("exit_code", [0, 23])

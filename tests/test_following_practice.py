@@ -8,7 +8,7 @@ import pytest
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.learning import LearningPlan
 from piano_teacher.server import PracticeEngine
-from piano_teacher.score import _fade_inactive_staff
+from piano_teacher.engraving.engraving import _fade_inactive_staff
 from test_phase1_camera import native_camera_run
 
 ROOT = Path(__file__).resolve().parents[1]

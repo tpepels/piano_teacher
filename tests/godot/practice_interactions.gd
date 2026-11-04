@@ -1,17 +1,14 @@
 extends SceneTree
 
 # Exercise the actual interface and handlers without a backend or MIDI device.
-# Only outbound HTTP requests are replaced; controls and navigation stay real.
+# Only outbound worker requests are replaced; controls and navigation stay real.
 class FixtureApp extends "native_production_fixture.gd":
     var commands: Array[Dictionary] = []
     var layout_calls := 0
     var model_calls := 0
 
     func _ready() -> void:
-        _build_interface()
-        resized.connect(_update_responsive_layout)
-        _update_responsive_layout()
-        set_process(false)
+        super._ready()
 
     func _send_action(command: Dictionary) -> void:
         commands.append(command.duplicate(true))
@@ -56,7 +53,7 @@ func state(phase: String = "ready") -> Dictionary:
         "lesson_level": "skeleton", "lesson_level_number": 1,
         "lesson_level_count": 2, "required_notes": 11,
         "lesson_step": 1, "lesson_steps": 301, "lesson_steps_mastered": 0,
-        "hand": "right", "hands": ["right", "left", "both"],
+        "hand": str(app.last_state.get("hand","right")), "hands": ["right", "left", "both"],
         "bpm": 80, "original_bpm": 100, "target_bpm": 80,
         "streak": 0, "mastered": 0, "phase": phase,
         "countdown": 1.0 if phase == "count_in" else 0.0,
@@ -70,12 +67,13 @@ func state(phase: String = "ready") -> Dictionary:
         "duration_beats": 12.0, "running": phase in ["count_in", "playing", "paused"],
         "device": "", "feedback": "MIDI piano disconnected. Connect your USB piano in Settings, or start a timing preview to read along. Your place will be kept while you check the connection.",
         "revision": 1, "feedback_marks": [], "feedback_unmapped": 0,
+        "piece_fingerprint":str(app.last_state.get("piece_fingerprint","")),
         "midi_input_count": 0, "midi_input_note": null, "midi_input_age": null,
         "metronome": true,
     }
 
 func show_state(phase: String = "ready") -> void:
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(state(phase)).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(state(phase)).to_utf8_buffer())
 
 func key(code: Key) -> void:
     var event := InputEventKey.new()
@@ -134,16 +132,16 @@ func test_three_button_stage() -> void:
     expect_command("listen", "One tap enters Listen")
     var listening: Dictionary = state("ready")
     listening["mode"] = "listen"
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(listening).to_utf8_buffer())
     check(app.practice_view.listen_button.text == "Practice", "Listen becomes a one-tap return")
     listening["demo"] = {"token":"sound-test", "instrument":"Salamander Grand Piano (sampled)",
         "sampled":true, "audio_available":true, "url":""}
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(listening).to_utf8_buffer())
     check(app.practice_view.lesson_info_label.text.contains("Acoustic grand piano"),
         "Listen must identify sampled acoustic audio rather than synthetic tones")
     listening["demo"] = {"token":"basic-test", "instrument":"Basic synthesized piano",
         "sampled":false, "audio_available":true, "url":""}
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(listening).to_utf8_buffer())
     check(app.practice_view.lesson_info_label.text.contains("Basic piano sound"),
         "Missing optional samples must be identified instead of claimed acoustic")
     app.practice_view.listen_button.pressed.emit()
@@ -173,13 +171,13 @@ func test_short_challenge_loop() -> void:
         {"hand":"left","active":true,"complete":false,"locked":false},
         {"hand":"right","active":false,"complete":false,"locked":true},
         {"hand":"both","active":false,"complete":false,"locked":true}]
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(run).to_utf8_buffer())
     var ribbon_visible_at_ready: bool = app.practice_view.stage.practice_stage_bar.visible
     check("LEFT HAND" in app.practice_view.progress_label.text and "1/3 CLEAN" in app.practice_view.progress_label.text,
         "Practice should show the short musical challenge and committed clean streak")
     run["phase"] = "count_in"
     run["running"] = true
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(run).to_utf8_buffer())
     check(app.practice_view.stage.phase_cue.message == "GET READY",
         "Count-in uses one compact cue alongside beat lights")
     check(not app.practice_view.feedback_label.visible,
@@ -188,17 +186,17 @@ func test_short_challenge_loop() -> void:
         and app.practice_view.stage.practice_stage_bar.visible,
         "Hand progression remains an overlay through count-in at all supported sizes")
     run["phase"] = "playing"
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(run).to_utf8_buffer())
     check(app.practice_view.stage.phase_cue.message.is_empty() and not app.practice_view.feedback_label.visible,
         "Graded playing leaves the sheet music as the main feedback")
     run["preview_only"] = true
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(run).to_utf8_buffer())
     check(app.practice_view.feedback_label.visible,
         "An ungraded preview is still clearly identified")
     run["preview_only"] = false
     run["phase"] = "ready"
     run["running"] = false
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(run).to_utf8_buffer())
     check(app.practice_view.stage.phase_cue.message == "READY FOR PREVIEW",
         "Ready is explicit before any piano input")
     var pending := run.duplicate(true)
@@ -206,7 +204,7 @@ func test_short_challenge_loop() -> void:
     pending["take_result"] = {"clean":true,"correct":3,"total":3}
     pending["auto"] = true
     pending["transition_in_seconds"] = 1.2
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(pending).to_utf8_buffer())
     check("CLEAN PASS" in app.practice_view.progress_label.text and "2/3" in app.practice_view.progress_label.text,
         "Success must show the engine-confirmed clean pass before the next automatic take")
     check(app.practice_view.stage.phase_cue.message == "CLEAN PASS",
@@ -216,14 +214,14 @@ func test_short_challenge_loop() -> void:
     pending["take_result"] = {"clean":false,"correct":1,"total":3}
     pending["auto"] = false
     pending["transition_in_seconds"] = null
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(pending).to_utf8_buffer())
     check("RETRY" in app.practice_view.progress_label.text and "CLEAN PASS" not in app.practice_view.progress_label.text,
         "Failed take must never appear as a clean completion")
     check(app.practice_view.stage.phase_cue.message == "RETRY",
         "A failed take must not appear to be a success")
     pending["recovery_notice"] = {"kind":"slowdown", "from_bpm":80,
         "to_bpm":68, "first_bar":3, "last_bar":4}
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(pending).to_utf8_buffer())
     check("80" in app.practice_view.lesson_info_label.text and "68" in app.practice_view.lesson_info_label.text
         and "3–4" in app.practice_view.lesson_info_label.text,
         "Recovery tempo and retry bars remain visible below score")
@@ -232,7 +230,7 @@ func test_short_challenge_loop() -> void:
     pending["preview_only"] = true
     pending["phase"] = "playing"
     pending["take_result"] = null
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(pending).to_utf8_buffer())
     check("PREVIEW" in app.practice_view.progress_label.text,
         "Disconnected preview must not pretend the user is earning mastery")
     pending["preview_only"] = false
@@ -243,7 +241,7 @@ func test_short_challenge_loop() -> void:
     pending["hand_stages"][0]["active"] = false
     pending["hand_stages"][1]["locked"] = false
     pending["hand_stages"][1]["active"] = true
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(pending).to_utf8_buffer())
     var labels: Dictionary = app.practice_view.stage.practice_stage_labels
     check(labels["left"].text.begins_with("✓") and labels["right"].text.begins_with("●"),
         "Backend hand completion must unlock the next real stage")
@@ -383,7 +381,7 @@ func test_abandon_practice() -> void:
         app._navigate("library")
         expect_command("pause", "Opening music preserves " + phase + " through Pause")
         check(app.screens["practice"].visible, "Practice stays rendered behind music drawer")
-        check(app.overlay_root.visible and app.overlay_drawer.visible,
+        check(app.navigation_drawer.root.visible and app.navigation_drawer.drawer.visible,
             "Music selection is an in-context overlay, not a new screen")
     app._navigate("practice")
     show_state("paused")
@@ -392,7 +390,7 @@ func test_abandon_practice() -> void:
     check(app.commands.is_empty(), "Browsing an already paused attempt does not restart or stop it")
     check(app.screens["practice"].visible, "The sheet music remains rendered while browsing")
     app._navigate("practice")
-    check(not app.overlay_root.visible, "Closing music returns to the existing practice stage")
+    check(not app.navigation_drawer.root.visible, "Closing music returns to the existing practice stage")
     app._navigate("home")
     check(app.current_screen == "practice", "The old Home route redirects to the single practice view")
 
@@ -429,7 +427,7 @@ func test_caption_bounds() -> void:
                 {"hand": "both", "active": false, "complete": false, "locked": true}]
             snapshot["feedback"] = "This detailed connection guidance must remain available while the notation keeps the same size. ".repeat(8)
             snapshot["next_action"] = "Retry measures 1–2, release the key, and prepare to play after the count-in. ".repeat(8)
-            app._on_state(0, 200, PackedStringArray(), JSON.stringify(snapshot).to_utf8_buffer())
+            app._on_state(0,JSON.stringify(snapshot).to_utf8_buffer())
             for frame in range(6):
                 await process_frame
             var score_rect: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
@@ -457,7 +455,7 @@ func test_caption_bounds() -> void:
 func test_notation_phase_cues() -> void:
     for dimensions in [Vector2i(800, 600), Vector2i(1536, 960)]:
         root.size = dimensions
-        check(app.load_native_fixture(OS.get_cmdline_user_args()[1]).is_empty(), "Native source reloads")
+        check((await app.load_native_fixture(OS.get_cmdline_user_args()[1])).is_empty(), "Native source reloads")
         await process_frame
         await process_frame
         for phase in ["ready", "count_in", "playing", "paused", "feedback"]:
@@ -468,7 +466,7 @@ func test_notation_phase_cues() -> void:
             snapshot["feedback"] = "Review your notes before trying again"
             # This direct fixture is sampled now, without an HTTP request.
             # A zero request timestamp would invent startup-sized latency.
-            app._on_state(0, 200, PackedStringArray(), JSON.stringify(snapshot).to_utf8_buffer(), Time.get_ticks_msec())
+            app._on_state(0,JSON.stringify(snapshot).to_utf8_buffer(), Time.get_ticks_msec())
             app._update_count_in()
             await process_frame
             await process_frame
@@ -497,7 +495,7 @@ func test_notation_phase_cues() -> void:
         # A preparing score can still show a genuine transition cue: there
         # are no engraved noteheads until the native model is ready.
         app.practice_view.stage.renderer.clear_score()
-        app._on_state(0, 200, PackedStringArray(), JSON.stringify(state("loading")).to_utf8_buffer())
+        app._on_state(0,JSON.stringify(state("loading")).to_utf8_buffer())
         check(app.practice_view.stage.phase_cue.visible and app.practice_view.stage.phase_cue.message == "PREPARING",
             "The phase cue remains available while engraving is not yet ready")
 
@@ -506,7 +504,7 @@ func test_instructional_transition() -> void:
     var retry: Dictionary = state("recovering")
     retry["next_action"] = "Retry measures 3–4 at 72 BPM"
     retry["transition_in_seconds"] = 1.5
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(retry).to_utf8_buffer())
     check(app.practice_view.lesson_info_label.text.contains("Retry measures 3–4 at 72 BPM"),
         "The teaching instruction says exactly what will happen next")
     check(app.practice_view.lesson_info_label.text.contains("1.5"), "The brief automatic break has a visible countdown")
@@ -514,13 +512,13 @@ func test_instructional_transition() -> void:
     retry["paused"] = true
     retry["pause_context"] = "recovering"
     app.practice_view.stage.renderer.clear_score() # Pausing loading must not disable Resume.
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(retry).to_utf8_buffer())
     check(not app.practice_view.start_button.disabled, "Resume remains available while the next score is loading")
     check(not app.lesson_view.stop_button.disabled, "Stop remains available during an automatic break")
     retry["mode"] = "learn"
     retry["phase"] = "loading"
     retry["paused"] = false
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(retry).to_utf8_buffer())
     app.commands.clear()
     app._toggle_playing()
     check(app.practice_view.start_button.text.contains("Pause"), "Guided preparation offers Pause")
@@ -549,7 +547,7 @@ func test_modes() -> void:
             ]
         }]
     }
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(review).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(review).to_utf8_buffer())
     check(app.practice_view.performance_review.visible, "Finished Perform shows a persistent review")
     check(app.practice_view.performance_review.summary_label.text.contains("25") and app.practice_view.performance_review.summary_label.text.contains("missed"),
         "Review summarizes accuracy and specific error categories")
@@ -567,19 +565,18 @@ func test_modes() -> void:
     for pending_mode in ["listen", "perform"]:
         app._navigate("practice")
         show_state("ready")
-        app.action_pending = true
-        app.last_post_path = "/control"
-        app.last_control_action = pending_mode
+        app.command_state.action_requested(pending_mode)
+        app.command_state.begin("practice.command",Time.get_ticks_msec())
         app.commands.clear()
         app._navigate("library")
         check(app.commands.back().get("action") == "pause", "Opening music during preparation preserves the attempt")
-        app.action_pending = false
+        app.command_state.finish()
 
 func test_pause_choices() -> void:
     var paused := state("paused")
     paused["seek_available"] = true
     paused["seek_range"] = {"first_bar":1,"last_bar":6}
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(paused).to_utf8_buffer())
     check(not app.practice_view.pause_sheet.visible, "Ordinary Pause never opens a menu over the score")
     app.practice_view.open_advanced_pause()
     check(app.practice_view.pause_sheet.visible, "Explicit advanced controls open a focused sheet")
@@ -600,7 +597,7 @@ func test_pause_choices() -> void:
     check(app.practice_view.speed_label.text.contains("80 BPM") and app.settings_view.tempo_setting.value == 80,
         "Matching current and target tempo retains one clear BPM value")
     paused["bpm"] = 64
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(paused).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(paused).to_utf8_buffer())
     check(app.practice_view.speed_label.text.contains("64 BPM") and app.practice_view.speed_label.text.contains("target 80"),
         "Reduced practice tempo shows both its current BPM and the selected target")
     app.practice_view.pause_sheet.exit_button.pressed.emit()
@@ -611,7 +608,7 @@ func test_focus_trap() -> void:
     var paused := state("paused")
     paused["seek_available"] = true
     paused["seek_range"] = {"first_bar":1,"last_bar":6}
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(paused).to_utf8_buffer())
     app.practice_view.open_advanced_pause()
     await process_frame
     app.commands.clear()
@@ -647,16 +644,16 @@ func test_focus_trap() -> void:
     paused["mode"] = "listen"
     paused["seek_available"] = false
     paused["seek_range"] = null
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(paused).to_utf8_buffer())
     check(app.practice_view.pause_sheet.visible and app.practice_view.pause_sheet.seek_button.disabled,
         "Paused Listen accepts a null seek range and offers no seek action")
     check(not app.practice_view.pause_sheet.bar_choice.editable, "Unavailable Listen seek cannot be edited")
 
 func test_learner_progression() -> void:
-    app.action_pending = true
+    app.command_state.begin("practice.command",Time.get_ticks_msec())
     app._process(0.0)
     check(app.settings_view.apply_tempo_button.disabled, "Tempo waits visibly for an in-flight pause instead of dropping a click")
-    app.action_pending = false
+    app._on_action(1,JSON.stringify({"error":"Pause failed"}).to_utf8_buffer())
     app._process(0.0)
     check(not app.settings_view.apply_tempo_button.disabled, "Tempo becomes available after the acknowledgement")
     var learned := state("guided_complete")
@@ -665,7 +662,7 @@ func test_learner_progression() -> void:
     learned["learner"] = {"prepared_units":1,"total_units":4,"unit_number":1}
     learned["placement_available"] = true
     learned["skip_available"] = true
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(learned).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(learned).to_utf8_buffer())
     check(app.practice_view.start_button.text.contains("Next idea"), "Prepared idea offers the next musical unit")
     app.commands.clear()
     app.practice_view.start_button.pressed.emit()
@@ -676,8 +673,8 @@ func test_learner_progression() -> void:
     check(app.lesson_view.skip_button.text.contains("no mastery"), "Skip never pretends mastery")
     app.lesson_view.placement_button.pressed.emit()
     check(app.commands.back().get("action") == "place_original", "Optional placement selects original source notes")
-    var overview: Dictionary = {"completed_steps":0,"total_steps":3,"steps":[],"trouble_spots":[{"stage_key":"source-stage","first_bar":3,"last_bar":4,"start_beat":8,"errors":5}]}
-    app._on_lesson(0,200,PackedStringArray(),JSON.stringify(overview).to_utf8_buffer())
+    var overview: Dictionary = {"piece_fingerprint":str(app.last_state.get("piece_fingerprint","")),"completed_steps":0,"total_steps":3,"steps":[],"trouble_spots":[{"stage_key":"source-stage","first_bar":3,"last_bar":4,"start_beat":8,"errors":5}]}
+    app._on_lesson(0,JSON.stringify(overview).to_utf8_buffer())
     var found := false
     for node in app.lesson_view.rows.find_children("*","Button",true,false):
         if node.text.contains("Revisit bars"):
@@ -692,52 +689,52 @@ func test_handsfree_midi_start_and_readability() -> void:
     ready["mode"] = "perform"
     ready["device"] = "Kawai CA-49"
     ready["midi_input_count"] = 0
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     app.commands.clear()
     ready["midi_input_count"] = 1
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     expect_command("start", "Fresh piano note starts ready Perform mode")
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     check(app.commands.is_empty(), "Duplicate MIDI snapshots cannot start twice")
     app._navigate("settings")
     ready["midi_input_count"] = 2
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     check(app.commands.is_empty(), "Checking MIDI in Settings never starts practice")
     app._navigate("practice")
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     check(app.commands.is_empty(), "Returning from Settings does not replay an old key")
     ready["midi_input_count"] = 3
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     expect_command("start", "New note after returning starts Perform")
     var playing := ready.duplicate(true)
     playing["phase"] = "playing"
     playing["running"] = true
     playing["midi_input_count"] = 4
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(playing).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(playing).to_utf8_buffer())
     check(app.commands.is_empty(), "Playing notes do not restart the transport")
     var learning := state("guided_wait")
     learning["mode"] = "learn"
     learning["device"] = "Kawai CA-49"
     learning["midi_input_count"] = 5
     learning["teaching"] = {"completed":false, "target_index":0,"target_count":1}
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(learning).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(learning).to_utf8_buffer())
     check(app.commands.is_empty(), "Learn mode still uses piano notes for teaching")
     learning["phase"] = "guided_complete"
     learning["teaching"] = {"completed":true,"target_index":1,"target_count":1,"has_more_units":true}
     learning["midi_input_count"] = 6
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(learning).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(learning).to_utf8_buffer())
     check(app.commands.is_empty(), "Note that completes the idea cannot immediately skip it")
     learning["midi_input_count"] = 7
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(learning).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(learning).to_utf8_buffer())
     expect_command("learn_next", "Fresh note after an idea advances hands-free")
     var finished := state("performance_complete")
     finished["mode"] = "perform"
     finished["device"] = "Kawai CA-49"
     finished["midi_input_count"] = 8
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(finished).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(finished).to_utf8_buffer())
     check(app.commands.is_empty(), "Phase transition cannot reuse a previous key")
     finished["midi_input_count"] = 9
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(finished).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(finished).to_utf8_buffer())
     expect_command("start", "Fresh note repeats a completed warm-up")
     # A new physical key after the feedback is visible can retry a failed
     # scored passage. The same key at the phase transition cannot skip it.
@@ -746,19 +743,18 @@ func test_handsfree_midi_start_and_readability() -> void:
     failed["device"] = "Kawai CA-49"
     failed["midi_input_count"] = 10
     failed["auto"] = false
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(failed).to_utf8_buffer())
     check(app.commands.is_empty(), "The key that ended a take cannot dismiss feedback")
     failed["midi_input_count"] = 11
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(failed).to_utf8_buffer())
     expect_command("restart", "Fresh piano key explicitly retries a failed passage")
     failed["auto"] = true
     failed["midi_input_count"] = 12
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(failed).to_utf8_buffer())
     check(app.commands.is_empty(), "Piano key cannot override an automatic recovery")
     # There is no mode change when a warm-up is opened from the library.
-    app.last_post_path = "/library/open"
-    app.action_pending = true
-    app._on_action(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app.command_state.begin("library.open",Time.get_ticks_msec())
+    app._on_action(0,JSON.stringify(ready).to_utf8_buffer())
     check(app.commands.is_empty(), "Opening an existing Perform warm-up must not force Learn")
 
     root.size = Vector2i(2048, 1280)
@@ -779,7 +775,7 @@ func test_handsfree_midi_start_and_readability() -> void:
 func test_picker_polling() -> void:
     var before := state()
     before["piece_fingerprint"] = "old-piece"
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(before).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(before).to_utf8_buffer())
     app.layout_calls = 0
     app.model_calls = 0
     var choosing := state()
@@ -788,7 +784,7 @@ func test_picker_polling() -> void:
     choosing["piece_last_bar"] = 80
     app.practice_view.show_source_picker(choosing)
     check(app.current_screen == "practice" and app.practice_view.open_picker.visible,"Source picker is the only overlay above Practice")
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(choosing).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(choosing).to_utf8_buffer())
     check(app.revision == 1 and app.last_state.piece_fingerprint == "old-piece",
         "State polls cannot replace the chosen passage while its source picker is open")
     check(app.layout_calls == 0 and app.model_calls == 0,
@@ -799,19 +795,19 @@ func test_picker_midi_guard() -> void:
     ready["mode"] = "perform"
     ready["device"] = "Test piano"
     ready["midi_input_count"] = 0
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     app.practice_view.show_source_picker(ready)
     app.commands.clear()
     ready["midi_input_count"] = 1
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     check(app.commands.is_empty(),"Piano input cannot start a transport under the source picker")
     app.practice_view.cancel_source_picker()
     app._navigate("practice")
     app.commands.clear()
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     check(app.commands.is_empty(),"Closing the picker cannot replay a key heard while choosing a source measure")
     ready["midi_input_count"] = 2
-    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
     expect_command("start","A fresh key after closing the picker still starts Perform")
 
 func run() -> void:
@@ -823,7 +819,7 @@ func run() -> void:
     await process_frame
     await process_frame
     app._navigate("practice")
-    var fixture_error: String = app.load_native_fixture(OS.get_cmdline_user_args()[1])
+    var fixture_error: String = await app.load_native_fixture(OS.get_cmdline_user_args()[1])
     check(fixture_error.is_empty(), fixture_error)
     if not fixture_error.is_empty():
         quit(1)

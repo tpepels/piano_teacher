@@ -8,6 +8,8 @@ class ScorePollSpy:
 class App extends "res://main.gd":
     func _ready() -> void:
         _build_interface()
+        command_failure_presenter = CommandFailurePresenter.new(
+            library_view,practice_view,settings_view,home_view)
         _update_responsive_layout()
         set_process(false)
     func _request_library() -> void: pass
@@ -20,10 +22,11 @@ func run() -> void:
         var values := {"loaded":true,"phase":"ready","can_increase_tempo":true}
         app.practice_view.present(values,true)
         app.practice_view.present_busy(true)
-        app.action_pending = true
-        app._on_action(0,503,PackedStringArray(),PackedByteArray())
+        app.command_state.action_requested("tempo_up")
+        app.command_state.begin("practice.command",Time.get_ticks_msec())
+        app._on_action(1,PackedByteArray())
         var cleared: bool = not app.practice_view.tempo_up_button.disabled
-        if not cleared: print("PRACTICE_SCREEN_FAIL:HTTP acknowledgement must publish cleared busy state to Practice immediately")
+        if not cleared: print("PRACTICE_SCREEN_FAIL:Worker acknowledgement must publish cleared busy state to Practice immediately")
         app.free()
         print("PRACTICE_SCREEN_FAILURES:",0 if cleared else 1)
         quit(0 if cleared else 1)

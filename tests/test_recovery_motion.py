@@ -27,7 +27,7 @@ def write_native_fixture(folder, source, hand="both", bpm=80):
         # Interaction snapshots use one stable initial revision.
         engine.score_revision = 1
         model = engine.semantic_score()
-        layout = engine.geometry(native_notes=True)
+        layout = engine.geometry()
         state = engine.state()
         assert model["revision"] == layout["revision"] == state["revision"]
         assert model["notes"] and layout["native_note_templates"]

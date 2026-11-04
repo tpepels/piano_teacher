@@ -1,20 +1,22 @@
 extends SceneTree
 
 # Keep the real request arbitration, navigation and response handlers. The wire
-# alone is controlled so a user can navigate before an HTTP response arrives.
+# alone is controlled so a user can navigate before a worker reply arrives.
+class RecordingRequest extends RefCounted:
+    var timeout := 5.0
+    var calls: Array[Dictionary]
+    func _init(recorded: Array[Dictionary]) -> void:
+        calls = recorded
+    func request(_operation: String, payload: Dictionary) -> int:
+        calls.append(payload.duplicate(true))
+        return OK
+
 class FixtureApp extends "native_production_fixture.gd":
     var wire_commands: Array[Dictionary] = []
 
     func _ready() -> void:
-        _build_interface()
-        set_process(false)
-
-    func _send_post(path: String, payload: Dictionary) -> void:
-        if action_pending:
-            return
-        action_pending = true
-        last_post_path = path
-        wire_commands.append(payload.duplicate(true))
+        super._ready()
+        action_request = RecordingRequest.new(wire_commands)
 
     func _poll() -> void:
         pass
@@ -49,17 +51,18 @@ func state(phase: String) -> Dictionary:
     return {"loaded": true, "phase": phase,
         "running": phase in ["count_in", "playing", "paused"],
         "paused": phase == "paused", "revision": 1, "title": "Navigation fixture",
+        "piece_fingerprint":str(app.last_state.get("piece_fingerprint","")),
         "clock_beat": -1.0 if phase == "count_in" else 2.0,
         "transport_id": 3, "target_bpm": 80, "bpm": 80,
         "hands": ["right", "left", "both"], "hand": "right",
         "feedback_marks": [], "duration_beats": 12.0}
 
 func show_state(phase: String) -> void:
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(state(phase)).to_utf8_buffer())
+    app._on_state(0,JSON.stringify(state(phase)).to_utf8_buffer())
 
-func acknowledge(phase: String, code: int = 200) -> void:
-    var body: Dictionary = state(phase) if code == 200 else {"error": "Temporary request failure"}
-    app._on_action(0, code, PackedStringArray(), JSON.stringify(body).to_utf8_buffer())
+func acknowledge(phase: String, code: int = 0) -> void:
+    var body: Dictionary = state(phase) if code == 0 else {"error": "Temporary request failure"}
+    app._on_action(code,JSON.stringify(body).to_utf8_buffer())
 
 func test_pending_start_or_resume(action: String, destination: String) -> void:
     show_state("paused" if action == "resume" else "ready")
@@ -75,21 +78,21 @@ func test_pending_start_or_resume(action: String, destination: String) -> void:
         expected.append({"action": wanted})
     check(app.wire_commands == expected,
         action + " immediately followed by " + destination + " preserves the user's " + wanted + " intent: " + str(app.wire_commands))
-    check(app.action_pending == not wanted.is_empty(),
+    check(app.command_state.pending == not wanted.is_empty(),
         "Only a real pending overlay pause should remain after acknowledgement")
 
 func test_quick_music_selection_survives_pending_pause() -> void:
     show_state("playing")
     app._navigate("library")
-    check(app.action_pending, "Opening the music drawer requests a pause")
+    check(app.command_state.pending, "Opening the music drawer requests a pause")
     app._open_library_piece("selected.mid")
-    check(app.pending_library_piece == "selected.mid",
+    check(app.command_state.queued_library_piece == "selected.mid",
         "A quick music click is held while Pause is still in flight")
     acknowledge("paused")
     await process_frame
     check(app.wire_commands == [{"action": "pause"}, {"id": "selected.mid"}],
         "The selected file must open after Pause finishes: " + str(app.wire_commands))
-    check(app.pending_library_piece.is_empty(),
+    check(app.command_state.queued_library_piece.is_empty(),
         "Successful queue draining must not reopen a song twice")
 
 
@@ -118,14 +121,13 @@ func test_start_picker_keyboard_is_modal() -> void:
 func test_response_before_poll() -> void:
     show_state("ready")
     app._send_action({"action": "start"})
+    app.state_request_started_ms = app.command_state.started_ms
+    show_state("playing") # A pre-action poll arrives while Start is pending.
+    check(str(app.last_state.get("phase", "")) == "ready",
+        "A pre-Start poll cannot publish while the command owns the pending snapshot")
     acknowledge("count_in")
     check(str(app.last_state.get("phase", "")) == "count_in",
         "A successful control response refreshes transport state before the next poll")
-    app.state_request_started_ms = 20 # Poll and click may share one millisecond.
-    app.action_request_started_ms = 20
-    show_state("ready") # A poll issued before Start returns after its response.
-    check(str(app.last_state.get("phase", "")) == "count_in",
-        "A delayed pre-Start poll cannot overwrite the acknowledged count-in")
     app._navigate("settings")
     check(app.wire_commands == [{"action": "start"}, {"action": "pause"}],
         "Navigating after Start acknowledgement pauses the count-in even before a state poll: " + str(app.wire_commands))
@@ -143,10 +145,10 @@ func test_failed_request_flushes_intent() -> void:
     show_state("ready")
     app._send_action({"action": "start"})
     app._navigate("settings")
-    acknowledge("ready", 500)
+    acknowledge("ready", 1)
     check(app.wire_commands == [{"action": "start"}, {"action": "pause"}],
         "A failed first response cannot strand the queued navigation intent: " + str(app.wire_commands))
-    check(app.action_pending, "The navigation request is sent after the first failure")
+    check(app.command_state.pending, "The navigation request is sent after the first failure")
 
 func run() -> void:
     app = FixtureApp.new()
@@ -154,7 +156,7 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     app._navigate("practice")
-    var fixture_error: String = app.load_native_fixture(OS.get_cmdline_user_args()[1])
+    var fixture_error: String = await app.load_native_fixture(OS.get_cmdline_user_args()[1])
     check(fixture_error.is_empty(), fixture_error)
     if not fixture_error.is_empty():
         quit(1)

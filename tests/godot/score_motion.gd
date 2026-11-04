@@ -16,12 +16,15 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void: call_deferred("run")
 
 func sample(beat: float, bpm: float = 80.0, start: float = 0.0) -> Dictionary:
-    app.last_state = {"loaded":true, "revision":app.revision,
+    var state: Dictionary = app.last_state.duplicate(true)
+    state.merge({"loaded":true, "revision":app.revision,
         "running":true, "paused":true, "phase":"count_in" if beat < 0.0 else "playing",
         "mode":"practice", "preview_only":true, "clock_beat":beat,
+        "visual_offset_beats":0.0, "visual_scroll_beat":start+beat,
         "bpm":bpm, "hand":"both", "transport_id":198,
         "play_from_beat":start, "count_in_beats":4.0,
-        "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats}
+        "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats},true)
+    app._on_state(0,JSON.stringify(state).to_utf8_buffer(),Time.get_ticks_msec())
     app._process(0.0)
     app.practice_view.stage.renderer.queue_redraw()
     await process_frame
@@ -38,13 +41,16 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     await process_frame
-    var error: String = app.load_native_fixture(folder)
+    var error: String = await app.load_native_fixture(folder)
     check(error.is_empty(), error)
     if not error.is_empty():
         quit(1)
         return
     var view = app.practice_view.stage.renderer
     var source: Dictionary = view.timeline.model.duplicate(true)
+    # Initialize the actual presentation before recording its viewport. The
+    # asset response alone does not publish transport captions or controls.
+    await sample(-.125)
     var size_before: Vector2 = view.size
     var position_before: Vector2 = view.position
     var density: float = view.timeline.pixels_per_beat

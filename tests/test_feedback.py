@@ -2,7 +2,7 @@
 from piano_teacher.feedback import project_assessment
 from piano_teacher.music import Note, Phrase
 from piano_teacher.practice import Assessment, NoteAssessment, PlayedNote, evaluate
-from piano_teacher.score_geometry import layout_from_pages
+from piano_teacher.engraving.geometry import layout_from_pages
 
 
 def sample_layout():
@@ -27,7 +27,8 @@ def fixture():
 def test_wrong_early_late_short_and_missed_are_at_real_glyph_coordinates():
     phrase=fixture()
     # First pitch incorrect; 2nd early; 3rd late; 4th short; 5th missed; 6th correct.
-    played=[PlayedNote(61,0,1),PlayedNote(62,.82,1.82),PlayedNote(64,2.18,3.18),
+    # 250 ms exceeds the slow-tempo onset tolerance while retaining matches.
+    played=[PlayedNote(61,0,1),PlayedNote(62,.75,1.75),PlayedNote(64,2.25,3.25),
             PlayedNote(60,3,3.2),PlayedNote(62,4,5)]
     assessed=evaluate(phrase,'right',60,played)
     assert [n.status for n in assessed.notes] == ['wrong','early','late','short','missed','correct']

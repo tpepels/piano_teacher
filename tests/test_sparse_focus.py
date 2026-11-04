@@ -3,7 +3,8 @@ from dataclasses import replace
 
 import pytest
 
-from piano_teacher.learning import LearningPlan, build_exercises
+from piano_teacher.learning import LearningPlan
+from piano_teacher.lesson_source_planner import build_exercises
 from piano_teacher.lesson_settings import SETTINGS, load_lesson_settings
 from piano_teacher.music import Note, Phrase, Piece
 
@@ -77,7 +78,7 @@ def test_source_meter_grid_is_used_for_variable_length_focus_passages():
     assert sorted(n.source_id for e in learned for n in e.phrase.notes) == sorted(n.source_id for n in song.notes)
 
 
-def test_historical_fixed_focus_can_be_reconstructed_for_saved_unversioned_sessions():
+def test_explicit_fixed_focus_uses_authentic_two_measure_sections():
     song = piece_with_onsets(8, (0, 8, 16, 24))
     fixed = build_exercises(song, consolidate=False, adaptive_focus=False)
     assert [r[1:] for r in ranges(fixed) if r[0] == "learn"] == [(1, 2), (3, 4), (5, 6), (7, 8)]

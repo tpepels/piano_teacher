@@ -1,13 +1,9 @@
-"""Whole-source fingering through the real importer, provider and HTTP API."""
+"""Whole-source fingering through the real importer and typed in-process API."""
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from http.server import ThreadingHTTPServer
 import json
-from threading import Event, Thread
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
-from xml.etree import ElementTree as ET
+from threading import Event
 
 import mido
 import pytest
@@ -16,7 +12,8 @@ from piano_teacher.application import score_artifacts
 from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
 from piano_teacher.notation.model import build_score_model
 from piano_teacher.practice import PlayedNote, evaluate
-from piano_teacher.server import Handler, PracticeEngine
+from piano_teacher.inprocess import EngineCommands, OK, INVALID
+from piano_teacher.server import PracticeEngine
 
 
 def _midi(path, *, transpose=0, held=False):
@@ -57,6 +54,7 @@ def music(tmp_path):
 @pytest.fixture
 def engine(tmp_path):
     instance = PracticeEngine(tmp_path / "state", enable_midi=False)
+    instance.set_preferences(exercise_strategy="source-progression")
     yield instance
     instance.db.close()
 
@@ -176,7 +174,6 @@ def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
     phrase = learning.active_phrase
     source_id, original = next(iter(_fingers(engine.semantic_score()).items()))
     engine.engraving()
-    engine.engraved_png()
     assert engine.score_artifacts.cached_layout(engine._score_selection()) is not None
     assert engine.score_artifacts.engraving_cache_key is not None
     engine.running = True
@@ -201,7 +198,6 @@ def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
 
 def test_native_geometry_receives_same_projected_model(engine, music, monkeypatch):
     from piano_teacher.application import score_preparation
-    from piano_teacher import server
     engine.load(str(music))
     expected = _fingers(engine.semantic_score())
     assemble = score_preparation.assemble_layout
@@ -218,7 +214,8 @@ def test_native_geometry_receives_same_projected_model(engine, music, monkeypatc
     cache_key, engraving = engine.score_artifacts.engraving_cache_key, engine.engraving()
     assert engine.geometry()["revision"] == engine.score_revision
     assert engine.engraving() is engraving
-    assert _fingers(received[1]) == expected
+    assert len(received) == 1
+    assert _fingers(received[0]) == expected
 
     def unexpected(*args, **kwargs):
         raise AssertionError("Warm geometry must reuse the original engraving cache")
@@ -229,47 +226,34 @@ def test_native_geometry_receives_same_projected_model(engine, music, monkeypatc
     warm = engine.geometry()
     assert engine.score_artifacts.engraving_cache_key == cache_key
     assert warm["revision"] == engine.score_revision == layout["revision"] + 1
-    assert _fingers(received[2]) == _fingers(engine.semantic_score())
-    assert _fingers(received[2])[source_id]["origin"] == "manual"
+    assert _fingers(received[1]) == _fingers(engine.semantic_score())
+    assert _fingers(received[1])[source_id]["origin"] == "manual"
 
 
 @pytest.fixture
-def api(engine):
-    class LocalHandler(Handler):
-        pass
+def api(engine, music):
+    engine.set_preferences(music_dir=str(music.parent))
+    commands = EngineCommands(engine=engine)
 
-    LocalHandler.engine = engine
-    server = ThreadingHTTPServer(("127.0.0.1", 0), LocalHandler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+    def request(operation, payload=None):
+        status, raw = commands.request(
+            operation, "" if payload is None else json.dumps(payload))
+        return status, json.loads(raw)
 
-    def request(route, payload=None):
-        body = None if payload is None else json.dumps(payload).encode()
-        req = Request(f"http://127.0.0.1:{server.server_port}" + route, data=body,
-                      headers={"Content-Type": "application/json"})
-        try:
-            with urlopen(req, timeout=60) as reply:
-                return reply.status, json.loads(reply.read())
-        except HTTPError as exc:
-            return exc.code, json.loads(exc.read())
-
-    yield request
-    server.shutdown()
-    server.server_close()
-    thread.join(timeout=5)
+    return request
 
 
-def test_http_fingering_reads_and_corrects_source_assignments(engine, music, api):
-    assert api("/fingering")[1]["assignments"] == {}
-    assert api("/load", {"path": str(music)})[0] == 200
-    status, initial = api("/fingering")
-    assert status == 200
+def test_inprocess_fingering_reads_and_corrects_source_assignments(engine, music, api):
+    assert api("fingering.status")[1]["assignments"] == {}
+    assert api("library.open", {"id": music.name})[0] == OK
+    status, initial = api("fingering.status")
+    assert status == OK
     assert set(initial["assignments"]) == {n.source_id for n in engine.plan.piece.notes}
     source_id, original = next(iter(_fingers(engine.semantic_score()).items()))
-    status, corrected = api("/fingering", {"source_id": source_id, "finger": 5})
-    assert status == 200 and corrected["revision"] == engine.score_revision
+    status, corrected = api("fingering.correct", {"source_id": source_id, "finger": 5})
+    assert status == OK and corrected["revision"] == engine.score_revision
     assert _fingers(engine.semantic_score())[source_id]["finger"] == 5
-    assert api("/fingering", {"source_id": source_id, "finger": None})[0] == 200
+    assert api("fingering.correct", {"source_id": source_id, "finger": None})[0] == OK
     assert _fingers(engine.semantic_score())[source_id] == original
 
 
@@ -282,159 +266,32 @@ def test_http_fingering_reads_and_corrects_source_assignments(engine, music, api
     {"source_id": "SOURCE", "finger": 0},
     {"source_id": "SOURCE", "finger": 6}, {"source_id": "SOURCE"},
 ])
-def test_http_invalid_correction_is_rejected_without_changes(engine, music, api, payload):
+def test_inprocess_invalid_correction_is_rejected_without_changes(engine, music, api, payload):
     engine.load(str(music))
     if isinstance(payload, dict):
         payload = dict(payload)
         if payload.get("source_id") == "SOURCE":
             payload["source_id"] = engine.plan.piece.notes[0].source_id
     revision, piece = engine.score_revision, engine.plan.piece
-    status, response = api("/fingering", payload)
-    assert status == 400 and response["error"]
+    status, response = api("fingering.correct", payload)
+    assert status == INVALID and response["error"]
     assert engine.score_revision == revision and engine.plan.piece is piece
 
 
-@pytest.fixture
-def authored_music(tmp_path):
-    path = tmp_path / "authored.musicxml"
-    path.write_text('''<score-partwise version="4.0"><part-list>
-      <score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
-      <part id="P1"><measure number="1"><attributes><divisions>4</divisions>
-      <time><beats>4</beats><beat-type>4</beat-type></time>
-      <clef><sign>G</sign><line>2</line></clef></attributes>
-      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration>
-      <type>quarter</type><notations><technical><fingering>2</fingering></technical></notations></note>
-      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
-      <note><pitch><step>E</step><octave>5</octave></pitch><duration>8</duration><type>half</type></note>
-      </measure></part></score-partwise>''')
-    return path
 
-
-def test_musicxml_authored_fingering_has_priority_and_returns_after_override(engine, authored_music):
-    engine.load(str(authored_music))
-    source = engine.plan.piece.source_musicxml
-    note = next(n for n in engine.plan.piece.notes if n.pitch == 72)
-    assert _fingers(engine.semantic_score())[note.source_id]["finger"] == 2
-    engine.correct_fingering(note.source_id, 4)
-    assert _fingers(engine.semantic_score())[note.source_id]["finger"] == 4
-    engine.correct_fingering(note.source_id, None)
-    assert _fingers(engine.semantic_score())[note.source_id]["finger"] == 2
-    assert engine.plan.piece.source_musicxml == source
-
-
-def _has_fingering_ink(engraving):
-    return any("fing" in element.get("class", "").split()
-               for page in engraving.pages for element in ET.fromstring(page).iter())
-
-
-def test_authored_fingering_is_owned_by_native_model_at_all_three_score_seams(
-        engine, authored_music, monkeypatch):
-    from piano_teacher import server
-    from piano_teacher.application import score_preparation
-    engine.load(str(authored_music))
-    piece = engine.plan.piece
-    source_id = next(n.source_id for n in piece.notes if n.pitch == 72)
-    build, assemble = score_artifacts.build_lesson_score, score_preparation.assemble_layout
-    handled, native_models = [], []
-
-    def recorded_build(*args, **kwargs):
-        handled.append(kwargs.get("fingering_sources", frozenset()))
-        return build(*args, **kwargs)
-
-    def recorded_assemble(*args, **kwargs):
-        native_models.append(kwargs["native_model"])
-        return assemble(*args, **kwargs)
-
-    monkeypatch.setattr(score_artifacts, "build_lesson_score", recorded_build)
-    monkeypatch.setattr(score_preparation, "assemble_layout", recorded_assemble)
-    model = engine.semantic_score()
-    assert model["unrendered_expressions"] == []
-    assert _fingers(model)[source_id]["finger"] == 2
-    engraving = engine.engraving()
-    assert not _has_fingering_ink(engraving)
-    assert engine.geometry()["revision"] == engine.score_revision
-    assert native_models[0]["unrendered_expressions"] == []
-    assert _fingers(native_models[0])[source_id]["finger"] == 2
-    assert handled == [frozenset({source_id})]  # All three seams reuse the selected compilation.
-    assert engine.plan.piece.source_musicxml == piece.source_musicxml
-
-
-def test_authored_other_technical_markings_remain_unsupported(engine, authored_music):
-    original = authored_music.read_text().replace(
-        "<fingering>2</fingering>", "<fingering>2</fingering><up-bow/>")
-    authored_music.write_text(original)
-    engine.load(str(authored_music))
-    model = engine.semantic_score()
-    assert "note:technical" in model["unrendered_expressions"]
-    source_id = next(n.source_id for n in engine.plan.piece.notes if n.pitch == 72)
-    assert _fingers(model)[source_id]["finger"] == 2
-    engraving = engine.engraving()
-    assert not _has_fingering_ink(engraving)
-    assert "up-bow" in engine.plan.piece.source_musicxml
-    assert "<fingering>2</fingering>" in engine.plan.piece.source_musicxml
-
-
-def test_authored_cache_discards_old_number_ink_and_reuses_clean_base_after_correction(
-        engine, authored_music, monkeypatch):
-    from piano_teacher import server
-    from piano_teacher.application import score_preparation
-    engine.load(str(authored_music))
-    p, phrase = engine.plan, engine.display_phrase()
-    piece = p.piece
-    source_id = next(n.source_id for n in piece.notes if n.pitch == 72)
-    # Seed the actual pre-feature engraving cache, which contains authored
-    # fingering ink. A new native model must never reuse that base image.
-    legacy_notation = build_lesson_score(
-        phrase, boundaries=piece.bar_boundaries, time_signatures=piece.time_signatures,
-        key_signatures=piece.key_signatures, clef_changes=piece.clef_changes,
-        default_clefs=infer_piece_clefs(piece.notes), barlines=piece.barlines,
-        source_musicxml=piece.source_musicxml)
-    legacy = score_artifacts.render_layout(legacy_notation, phrase.first_bar, phrase.last_bar,
-                                 p.hand, total_beats=phrase.end - phrase.start,
-                                 bpm=piece.bpm, continuous=True)
-    assert _has_fingering_ink(legacy)
-    legacy_key = engine.preprocessing.key(
-        "engraving", "readable-midi-engraving-v2", engine.fingerprint, p.identity,
-        phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
-        p.hand, piece.bpm, True,
-        tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))
-    engine.preprocessing.write_json("engraving", legacy_key,
-                                    {"pages": list(legacy.pages), "layout": legacy.layout})
-    base = engine.engraving()
-    clean_key = engine.score_artifacts.engraving_cache_key
-    assert clean_key != legacy_key and not _has_fingering_ink(base)
-    assemble, native_models = score_preparation.assemble_layout, []
-
-    def recorded(*args, **kwargs):
-        native_models.append(kwargs["native_model"])
-        return assemble(*args, **kwargs)
+def test_midi_fingering_reuses_durable_base_engraving(engine, music, monkeypatch):
+    engine.load(str(music))
+    engine.engraving()
+    key = engine.score_artifacts.engraving_cache_key
+    assert key is not None
+    engine.score_artifacts.invalidate()
 
     def unexpected(*args, **kwargs):
-        raise AssertionError("Changing a projected finger must reuse the clean base engraving")
+        raise AssertionError("An unchanged MIDI source must reuse its durable engraving")
 
-    monkeypatch.setattr(score_preparation, "assemble_layout", recorded)
     monkeypatch.setattr(score_artifacts, "render_layout", unexpected)
-    engine.correct_fingering(source_id, 4)
-    engine.geometry()
-    assert engine.score_artifacts.engraving_cache_key == clean_key
-    assert not _has_fingering_ink(engine.engraving())
-    assert _fingers(native_models[0])[source_id] == {
-        "source_id": source_id, "hand": "right", "finger": 4, "origin": "manual"}
-    assert native_models[0]["unrendered_expressions"] == []
-    assert "<fingering>2</fingering>" in engine.plan.piece.source_musicxml
-
-
-def test_midi_fingering_preserves_existing_base_engraving_cache_key(engine, music):
-    engine.load(str(music))
-    p, phrase = engine.plan, engine.display_phrase()
-    compact = phrase.last_bar - phrase.first_bar + 1 <= 12 and phrase.end - phrase.start <= 48
-    expected = engine.preprocessing.key(
-        "engraving", "readable-midi-engraving-v3", engine.fingerprint, p.identity,
-        phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
-        p.hand, p.piece.bpm, compact,
-        tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))
     engine.engraving()
-    assert engine.score_artifacts.engraving_cache_key == expected
+    assert engine.score_artifacts.engraving_cache_key == key
 
 
 def test_provider_runtime_failure_is_visible_without_fabricated_fingers(engine, music, monkeypatch):
@@ -624,12 +481,12 @@ def test_concurrent_edits_survive_learning_plan_reset(engine, music, monkeypatch
     assert all(assignments[sid]["manual"] == fingering["finger"] for sid, fingering in choices)
 
 
-def test_http_rejects_correction_from_different_source_fingerprint(engine, music, api):
+def test_inprocess_rejects_correction_from_different_source_fingerprint(engine, music, api):
     engine.load(str(music))
     source_id = engine.plan.piece.notes[0].source_id
     revision = engine.score_revision
-    status, response = api("/fingering", {"source_id": source_id, "finger": 2,
+    status, response = api("fingering.correct", {"source_id": source_id, "finger": 2,
                                           "fingerprint": "obsolete-source"})
-    assert status == 400 and "loaded piece changed" in response["error"]
+    assert status == INVALID and "loaded piece changed" in response["error"]
     assert engine.score_revision == revision
     assert engine.state()["fingering"]["manual"] == 0

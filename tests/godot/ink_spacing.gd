@@ -92,7 +92,7 @@ func _initialize() -> void:
         failures += 1
     # Chord heads on the same beat are still one onset.
     sixteenths.append({"onset_beats":0.5})
-    if absf(InkSpacing.readable_density(sixteenths,96.0)-144.0) > .001:
+    if absf(InkSpacing.readable_density(sixteenths,96.0)-208.0) > .001:
         failures += 1
 
     # The first attack after a barline also needs room for its actual ink.

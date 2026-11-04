@@ -11,11 +11,12 @@ import pytest
 import numpy as np
 from PIL import Image
 
-from piano_teacher.server import PracticeEngine
+from piano_teacher.importing.pieces import import_piece
+from piano_teacher.music import Phrase
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.notation.model import build_score_model
 from piano_teacher.application.score_preparation import assemble_layout
-from piano_teacher.score import render_layout
+from piano_teacher.engraving.engraving import render_layout
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,29 +41,25 @@ def test_native_requires_authentic_visible_singleton_artwork(tmp_path, rest):
            + "</measure></part></score-partwise>")
     path = tmp_path/"singleton.musicxml"
     path.write_text(xml)
-    engine = PracticeEngine(tmp_path/"cache", enable_midi=False)
-    try:
-        engine.load(str(path))
-        engine.plan.restore_location(kind="learn", first_bar=1, last_bar=1,
-                                     hand="right", level="original")
-        piece = engine.plan.piece
-        score = build_lesson_score(engine.display_phrase(), boundaries=piece.bar_boundaries,
-            time_signatures=piece.time_signatures, source_musicxml=piece.source_musicxml)
-        # Exercise the compositor with an explicit visible source choice.
-        # The MIDI lesson writer ordinarily keeps an isolated ratio hidden.
-        root = ET.fromstring(score.musicxml)
-        target = next(n for n in root.find("part").findall("measure/note")
-                      if n.find("time-modification") is not None)
-        start = target.find("notations/tuplet[@type='start']")
-        start.set("show-number", "both")
-        start.set("bracket", "yes")
-        score = replace(score, musicxml=ET.tostring(root, encoding="unicode"))
-        model = build_score_model(score, boundaries=piece.bar_boundaries, hand="right")
-        engraved = render_layout(score, 1, 1, "right", total_beats=score.phrase.end,
-                                 bpm=120, continuous=True)
-        layout = assemble_layout(engraved, native_model=model, notation_xml=score.musicxml)
-    finally:
-        engine.db.close()
+    # Authored XML is an internal engraving fixture, not desktop MIDI input.
+    piece, _ = import_piece(path)
+    phrase = Phrase(1, 1, len(piece.bar_boundaries)-1,
+                    piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
+    score = build_lesson_score(phrase, boundaries=piece.bar_boundaries,
+        time_signatures=piece.time_signatures, source_musicxml=piece.source_musicxml)
+    # Exercise the compositor with an explicit visible source choice.
+    # The MIDI lesson writer ordinarily keeps an isolated ratio hidden.
+    root = ET.fromstring(score.musicxml)
+    target = next(n for n in root.find("part").findall("measure/note")
+                  if n.find("time-modification") is not None)
+    start = target.find("notations/tuplet[@type='start']")
+    start.set("show-number", "both")
+    start.set("bracket", "yes")
+    score = replace(score, musicxml=ET.tostring(root, encoding="unicode"))
+    model = build_score_model(score, boundaries=piece.bar_boundaries, hand="right")
+    engraved = render_layout(score, 1, 1, "right", total_beats=score.phrase.end,
+                             bpm=120, continuous=True)
+    layout = assemble_layout(engraved, native_model=model, notation_xml=score.musicxml)
     payload = dict(model=model, assets=layout)
     fixture = tmp_path/"fixture.json"
     fixture.write_text(json.dumps(payload))

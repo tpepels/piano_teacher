@@ -2,7 +2,7 @@ from piano_teacher.application import score_artifacts
 from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
-from piano_teacher.score import EngravedScore, _pitches_from_verovio
+from piano_teacher.engraving.engraving import EngravedScore, _pitches_from_verovio
 from piano_teacher.server import PracticeEngine
 from piano_teacher.practice import PlayedNote
 import time

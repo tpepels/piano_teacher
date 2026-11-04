@@ -5,8 +5,8 @@ from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.notation.lesson import LessonScore
 from piano_teacher.music import Note, Phrase, Piece
-from piano_teacher.score import EngravedScore
-from piano_teacher.practice import PlayedNote, evaluate
+from piano_teacher.engraving.engraving import EngravedScore
+from piano_teacher.practice import Assessment, NoteAssessment, PlayedNote, evaluate
 from piano_teacher.server import PracticeEngine
 
 
@@ -79,7 +79,8 @@ def test_stage_change_increments_score_revision(tmp_path):
     e.fingerprint="stage-change"
     try:
         for _ in range(3):
-            e.pending_result=type("R",(),{"correct":2,"extra_notes":0,"notes":[1,2]})()
+            e.pending_result=Assessment(tuple(NoteAssessment(note,"correct")
+                for note in e.plan.active_phrase.notes),0)
             e._commit_pending()
         assert e.plan.active_variant.level=="outline"
         assert e.score_revision==1

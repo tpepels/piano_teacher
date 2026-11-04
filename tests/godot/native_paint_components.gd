@@ -321,6 +321,7 @@ func check_context() -> void:
     check(score.glyphs.calls[-2][1] == Vector2(150,405) and score.glyphs.calls[-2][3] == Color(Design.STAFF_MUTED,.46),"dynamic inherits performer tint on display staff")
     check(score.glyphs.calls[-1][0] == "artic_staccato_above" and score.glyphs.calls[-1][1] == Vector2(155,259),"linked articulation uses painted actual head")
     score.source_expressions = [{"kind":"hairpin","value":"crescendo","staff":"right","beat":0.0},{"kind":"hairpin","value":"stop","staff":"right","beat":2.0}]
+    score.prepared_hairpins = load("res://notation/native/source_spans.gd").hairpins(score.source_expressions,score)
     var line_start := canvas.lines.size()
     painter.paint_hairpins(canvas,frame,-2.0,4.0,.5,200.0,20.0)
     check(canvas.lines.size() == line_start+2 and canvas.lines[-2][0].is_equal_approx(Vector2(59.6,250.4)) and canvas.lines[-2][1].is_equal_approx(Vector2(245,246.3)),"hairpin endpoints preserve source axis and wedge slope")
@@ -330,6 +331,7 @@ func check_context() -> void:
     check(score.glyphs.calls[-1][3] == Color(Design.STAFF_MUTED,.46),"preparation rest observes explicit hand selection")
     score.timeline.measures[0]["left_barline"] = {"ending":{"type":"start","number":"1"}}
     score.timeline.measures[0]["right_barline"] = {"ending":{"type":"stop","number":"1"}}
+    score.prepared_voltas = load("res://notation/native/source_spans.gd").voltas(score.timeline.measures,score.timeline.duration_beats)
     painter.paint_volta_endings(canvas,frame,-2.0,5.0,.5,200.0,20.0)
     check(canvas.strings[-1][1] == "1.","source volta text retains closed endpoint label")
 

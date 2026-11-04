@@ -1,24 +1,48 @@
 extends "library_fixture.gd"
 
+class RecordingRequest extends RefCounted:
+    var timeout := 5.0
+    var calls: Array[Dictionary]
+    func _init(recorded: Array[Dictionary]) -> void:
+        calls = recorded
+    func request(operation: String, payload: Dictionary = {}) -> int:
+        calls.append({"operation":operation, "payload":payload.duplicate(true)})
+        return OK
+
 class OfflineApp extends "res://main.gd":
-    var posts: Array[Dictionary] = []
+    var commands: Array[Dictionary] = []
+    var lesson_requests: Array[Dictionary] = []
     func _ready() -> void:
         _build_interface()
+        # Replace only the worker transport. Keep real command ownership and
+        # production presentation effects in these application regressions.
+        action_request = RecordingRequest.new(commands)
+        lesson_request = RecordingRequest.new(lesson_requests)
+        startup_last_music_checked = true
+        frame_coordinator = PracticeFrameCoordinator.new(
+            practice_view,settings_view,lesson_view,lesson_session,
+            score_effects,null,frame_meter)
+        state_presenter = PracticeStatePresenter.new(
+            practice_view,settings_view,lesson_view,lesson_session,
+            score_effects,null)
+        command_failure_presenter = CommandFailurePresenter.new(
+            library_view,practice_view,settings_view,home_view)
+        command_success_presenter = CommandSuccessPresenter.new(
+            library_view,practice_view,settings_view,lesson_session)
+        command_success_effects = CommandSuccessEffects.new(
+            command_success_presenter,_on_state,_navigate,
+            _request_settings,_request_library,_request_library_health,
+            _refresh_score_status)
+        metronome_frame = MetronomeFrameCoordinator.new(
+            settings_view,practice_view,visual_transport_clock,
+            _transport_beat_at,_count_tick,_raw_click)
         _update_responsive_layout()
         set_process(false)
-    func _send_post(path: String, payload: Dictionary) -> void:
-        if action_pending:
-            return
-        action_pending = true
-        last_post_path = path
-        action_request_started_ms = Time.get_ticks_msec()
-        posts.append({"path":path, "payload":payload.duplicate(true)})
     func _poll() -> void: pass
     func _request_library() -> void: pass
     func _request_library_health() -> void: pass
     func _request_settings() -> void: pass
     func _request_devices() -> void: pass
-    func _request_lesson() -> void: pass
     func _request_layout() -> void: pass
 
 func saved_state() -> Dictionary:
@@ -33,7 +57,7 @@ func app_library(app: Control) -> Control:
     return app.screens["library"].find_child("LibraryScreen",true,false)
 
 func test_app_open_resume(app: Control) -> void:
-    app._on_library(0,200,PackedStringArray(),JSON.stringify(catalog()).to_utf8_buffer())
+    app._on_library(0,JSON.stringify(catalog()).to_utf8_buffer())
     app._navigate("library")
     await process_frame
     var view := app_library(app)
@@ -41,46 +65,46 @@ func test_app_open_resume(app: Control) -> void:
     if view == null:
         return
     entries(view)[0].pressed.emit()
-    check(app.posts == [{"path":"/library/open","payload":{"id":"Collection/real.mid"}}],
+    check(app.commands == [{"operation":"library.open","payload":{"id":"Collection/real.mid"}}],
         "Continue is coordinated through the real application open route")
-    app._on_action(0,200,PackedStringArray(),JSON.stringify(saved_state()).to_utf8_buffer())
+    app._on_action(0,JSON.stringify(saved_state()).to_utf8_buffer())
     check(app.current_screen == "practice" and not app.practice_view.open_picker.visible and app.last_state.lesson_step == 17,
         "Continue preserves saved place and bypasses the source picker")
     app._navigate("library")
     entries(view)[1].pressed.emit()
-    app._on_action(0,200,PackedStringArray(),JSON.stringify(saved_state()).to_utf8_buffer())
+    app._on_action(0,JSON.stringify(saved_state()).to_utf8_buffer())
     check(app.practice_view.open_picker.visible and app.practice_view.open_picker.title_label.text == "Saved music",
         "Ordinary selection still opens the independent source picker")
 
 func test_app_pending_failure(app: Control) -> void:
-    app._on_library(0,200,PackedStringArray(),JSON.stringify(catalog()).to_utf8_buffer())
+    app._on_library(0,JSON.stringify(catalog()).to_utf8_buffer())
     app._navigate("library")
     var view := app_library(app)
     check(view != null, "Main mounts the independent Library screen")
     if view == null:
         return
-    app.action_pending = true
-    app.last_post_path = "/control"
+    app._send_action({"action":"pause"})
+    app.commands.clear()
     entries(view)[0].pressed.emit()
-    check(app.pending_library_piece == "Collection/real.mid" and app.pending_library_resume,
+    check(app.command_state.queued_library_piece == "Collection/real.mid" and app.command_state.queued_library_resume,
         "Quick Continue retains both identifier and resume intent behind Pause")
-    app._on_action(0,400,PackedStringArray(),JSON.stringify({"error":"Pause rejected"}).to_utf8_buffer())
-    app._on_library(0,200,PackedStringArray(),JSON.stringify(catalog()).to_utf8_buffer())
+    app._on_action(1,JSON.stringify({"error":"Pause rejected"}).to_utf8_buffer())
+    app._on_library(0,JSON.stringify(catalog()).to_utf8_buffer())
     app._update_responsive_layout()
-    check(app.pending_library_piece.is_empty() and not app.pending_library_resume,
+    check(app.command_state.queued_library_piece.is_empty() and not app.command_state.queued_library_resume,
         "A failed Pause discards queued music and resume intent")
     check(control(view,"LibraryMessage").visible and control(view,"LibraryMessage").text.contains("Pause rejected"),
         "The owned Library screen retains a failed queued selection after refresh")
     app._open_library_piece("other.mid")
-    check(app.posts == [{"path":"/library/open","payload":{"id":"other.mid"}}],
+    check(app.commands == [{"operation":"library.open","payload":{"id":"other.mid"}}],
         "A later selection cannot replay an abandoned Continue")
 
 func test_app_open_failure_visible(app: Control) -> void:
-    app._on_library(0,200,PackedStringArray(),JSON.stringify(catalog()).to_utf8_buffer())
+    app._on_library(0,JSON.stringify(catalog()).to_utf8_buffer())
     app._navigate("library")
     app._update_responsive_layout()
     app._open_library_piece("other.mid")
-    app._on_action(0,400,PackedStringArray(),JSON.stringify({"error":"Unreadable file"}).to_utf8_buffer())
+    app._on_action(1,JSON.stringify({"error":"Unreadable file"}).to_utf8_buffer())
     var view := app_library(app)
     var message: Label = control(view,"LibraryMessage")
     check(message.visible and message.text.contains("Unreadable file"),

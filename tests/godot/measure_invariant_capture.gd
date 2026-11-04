@@ -1,26 +1,32 @@
 extends SceneTree
 # The production app and its real handlers own the renderer. Only outbound
-# HTTP and the sampling time are supplied by this deterministic wire fixture.
+# worker replies and sampling time are supplied by this deterministic fixture.
 class SampledApp extends "native_production_fixture.gd":
     var sampled_clock := 0.0
     var model_loads := 0
-    func _transport_beat_now() -> float:
+    func _transport_beat_at(_at_ms: int) -> float:
         return sampled_clock
-    func _on_timeline_model(result: int, code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
+    func _ready() -> void:
+        super._ready()
+        score_session.score_published.connect(_model_published)
+    func _model_published(_revision: int) -> void:
         model_loads += 1
-        super._on_timeline_model(result,code,headers,body)
 
 class CorruptedView extends "res://notation/native/view.gd":
     # Test-only render mutations keep the original model, source notes,
     # transport snapshots and glyph assets intact.
     var corruption := ""
     var cutoff := 0.0
-    func present(state: Dictionary, transport: float, visual: float = NAN) -> void:
+    func _corrupt_visual(visual: float) -> float:
         if corruption == "changed-speed" and visual > cutoff:
-            visual = cutoff+(visual-cutoff)*.5
-        elif corruption == "repeat-jump" and visual >= float(practice_timeline.get("stride_beats",INF)):
-            visual += .25
-        super.present(state,transport,visual)
+            return cutoff+(visual-cutoff)*.5
+        if corruption == "repeat-jump" and visual >= float(practice_timeline.get("stride_beats",INF)):
+            return visual+.25
+        return visual
+    func present(state: Dictionary, transport: float, visual: float = NAN) -> void:
+        super.present(state,transport,_corrupt_visual(visual))
+    func present_clock(transport: float, visual: float = NAN) -> void:
+        super.present_clock(transport,_corrupt_visual(visual))
 
 class CorruptedContextPainter extends "res://notation/native/context_painter.gd":
     # Preparation corruption belongs at the actual drawing policy. The source
@@ -71,7 +77,7 @@ func run() -> void:
         root.add_child(app)
         await process_frame
         await process_frame
-        var error: String = app.load_native_fixture(folder)
+        var error: String = await app.load_native_fixture(folder)
         if not error.is_empty():
             push_error(error)
             quit(1)
@@ -82,8 +88,14 @@ func run() -> void:
             renderer.set_script(CorruptedView)
             renderer.corruption = corruption
             renderer.cutoff = float(payload.model.duration_beats)-.25
-            app._on_layout(0,200,PackedStringArray(),JSON.stringify(payload.layout).to_utf8_buffer())
-            app._on_timeline_model(0,200,PackedStringArray(),JSON.stringify(payload.model).to_utf8_buffer())
+            # The intentional subclass is a rendering negative control; use
+            # genuine request ownership while retaining that test script.
+            app._retry_score()
+            app._on_layout(0,JSON.stringify(payload.layout).to_utf8_buffer())
+            app._on_timeline_model(0,JSON.stringify(payload.model).to_utf8_buffer())
+            var deadline := Time.get_ticks_msec() + 5000
+            while not app._native_score_ready() and app.score_error.is_empty() and Time.get_ticks_msec() < deadline:
+                await process_frame
             assert(app._native_score_ready(),renderer.failure_reason)
         elif not corruption.is_empty():
             var painter: CorruptedContextPainter = CorruptedContextPainter.new(renderer.layout,renderer.symbols)
@@ -124,7 +136,7 @@ func run() -> void:
                     state.merge({"loaded":true,"revision":app.revision,"bpm":tempo,
                         "running":true,"paused":true,"phase":"paused","mode":"practice",
                         "hand":configuration.get("hand","both"),"score_loop_enabled":true,
-                        "visual_offset_beats":0.0,"play_from_beat":0.0,
+                        "visual_offset_beats":0.0,"visual_scroll_beat":app.sampled_clock,"play_from_beat":0.0,
                         "clock_beat":app.sampled_clock,"count_in_beats":0.0,
                         "visual_gap_beats":configuration["gap_beats"]},true)
                     # Recovery snapshots use absolute visual coordinates, not
@@ -134,7 +146,7 @@ func run() -> void:
                         state["paused"] = true
                         if not bool(state.get("running",false)):
                             state["visual_scroll_beat"] = app.sampled_clock
-                    app._on_state(0,200,PackedStringArray(),JSON.stringify(state).to_utf8_buffer())
+                    app._on_state(0,JSON.stringify(state).to_utf8_buffer())
                     app._process(0.0)
                     renderer.queue_redraw()
                     await process_frame

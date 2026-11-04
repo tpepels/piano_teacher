@@ -17,19 +17,19 @@ def test_repository_persists_stage_tempo_and_mastery(tmp_path):
     first = ProgressRepository(path)
     plan = _plan()
     plan.set_bpm(70)
-    plan.mastered["learn:1-2:right"] = 100
+    stage_key = plan.identity
+    plan.mastered[stage_key] = 100
     first.save(plan, "first")
     first.close()
     second = ProgressRepository(path)
     restored = _plan()
     second.restore(restored, "first")
     assert restored.bpm == 70
-    assert restored.mastered["learn:1-2:right"] == 100
+    assert restored.mastered[stage_key] == 100
     second.close()
 
 
 def test_existing_original_mastery_and_tempo_survive_new_section_levels(tmp_path):
-    from piano_teacher.musical_groups import MusicalGroup, MusicalGrouping
     from piano_teacher.grouped_variants import group_variants
 
     notes = tuple(Note(i*.25, (i+1)*.25, 60+i, 0, 0,
@@ -51,9 +51,47 @@ def test_existing_original_mastery_and_tempo_survive_new_section_levels(tmp_path
     ex = Exercise("learn", phrase, "learn:1-1")
     old = ExerciseVariant("original", phrase, tuple(range(16)))
     new = ExerciseVariant("original", phrase, variants[-1][1])
-    from piano_teacher.learning import LearningPlan
-    assert LearningPlan._stage_key(ex, "right", old) == LearningPlan._stage_key(
-        ex, "right", new)
+    piece = Piece("Stable original", 100, notes, (phrase,))
+    plan = LearningPlan(piece, exercise_strategy="source-progression")
+    old_key = plan._stage_key(ex, "right", old)
+    new_key = plan._stage_key(ex, "right", new)
+    assert old_key == new_key
+    plan.variant_index = len(plan.variants) - 1
+    assert plan.identity == old_key
+    plan.set_bpm(76)
+    plan.mastered[old_key] = 100
+    repo = ProgressRepository(tmp_path / "progress.db")
+    try:
+        repo.save(plan, "original-source")
+        restored = LearningPlan(piece, exercise_strategy="source-progression")
+        repo.restore(restored, "original-source")
+        assert restored.identity == new_key
+        assert restored.bpm == 76
+        assert restored.mastered[new_key] == 100
+    finally:
+        repo.close()
+
+
+def test_unversioned_records_remain_on_disk_without_awarding_credit(tmp_path):
+    repo = ProgressRepository(tmp_path / "progress.db")
+    try:
+        old_key = "learn:1-2:right"
+        repo.db.execute("INSERT INTO mastery VALUES (?,?,?)",
+                        ("old-source", old_key, 100))
+        repo.db.execute("INSERT INTO stage_tempos VALUES (?,?,?)",
+                        ("old-source", old_key, 70))
+        repo.db.commit()
+        plan = _plan()
+
+        repo.restore(plan, "old-source")
+
+        assert not plan.mastered
+        assert not plan.stage_tempos
+        assert plan.streak == 0
+        assert repo.db.execute("SELECT exercise,bpm FROM mastery").fetchall() == [
+            (old_key, 100)]
+    finally:
+        repo.close()
 
 
 def test_reset_scopes_all_tables_to_selected_fingerprint(tmp_path):

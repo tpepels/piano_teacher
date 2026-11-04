@@ -61,7 +61,7 @@ def _godot():
 
 def _fixture(folder):
     from scripts.check_native_verovio_overlay import AuditCase, fixture
-    from piano_teacher.score import import_piece
+    from piano_teacher.importing.pieces import import_piece
     from piano_teacher.fingering.service import FingeringService
     from piano_teacher.fingering.projection import project_model
 

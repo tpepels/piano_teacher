@@ -24,9 +24,9 @@ func watch(node: Node) -> void:
 
 func present(app: Control, state: Dictionary) -> void:
     # Every snapshot has a fresh sample timestamp even when its visible
-    # musical state is identical. Comparing whole HTTP bodies cannot work.
+    # musical state is identical. Comparing whole worker replies cannot work.
     state["clock_sampled_at_ms"] = Time.get_ticks_msec()
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(state).to_utf8_buffer())
+    app._on_state(0, JSON.stringify(state).to_utf8_buffer())
 
 func unchanged_polls(app: Control, state: Dictionary, label: String) -> void:
     present(app, state)
@@ -54,7 +54,7 @@ func run() -> void:
     present(app, empty_state)
     await create_timer(1.5).timeout # Finish initial window/font/layout changes.
     await unchanged_polls(app, empty_state, "Empty application")
-    var error: String = app.load_native_fixture(OS.get_cmdline_user_args()[0])
+    var error: String = await app.load_native_fixture(OS.get_cmdline_user_args()[0])
     check(error.is_empty(), "Production score loads: " + error)
     if not failures.is_empty():
         quit(1)

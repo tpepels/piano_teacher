@@ -4,7 +4,7 @@ import pytest
 
 from piano_teacher.music import Note, Phrase, KeySignature, ClefChange
 from piano_teacher.notation.lesson import build_lesson_score
-from piano_teacher.score import render_layout
+from piano_teacher.engraving.engraving import render_layout
 
 
 def test_explicit_flat_key_spelling_and_readable_treble_left_hand_are_preserved():

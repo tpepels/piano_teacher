@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from piano_teacher.lesson_settings import SETTINGS, load_lesson_settings
-from piano_teacher.learning import LearningPlan, build_exercises
+from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 
 

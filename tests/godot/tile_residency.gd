@@ -31,7 +31,7 @@ func run() -> void:
     await process_frame
     await process_frame
     var folder: String = OS.get_cmdline_user_args()[0]
-    var error: String = app.load_native_fixture(folder)
+    var error: String = await app.load_native_fixture(folder)
     check(error.is_empty(),error)
     if not error.is_empty():
         quit(1)
@@ -65,11 +65,12 @@ func run() -> void:
     # stale notation. A fresh prepared payload must recover through handlers.
     var invalid: Dictionary = source.duplicate(true)
     invalid["schema"] = "invalid-test-schema"
-    app._on_timeline_model(0,200,PackedStringArray(),JSON.stringify(invalid).to_utf8_buffer())
+    check(app.score_session.request_model(), "Replacement semantic response has a current typed request owner")
+    app._on_timeline_model(0,JSON.stringify(invalid).to_utf8_buffer())
     check(not app._native_score_ready() and not view.native_ready,
         "Rejected source model clears actual renderer readiness")
     check(not app.score_error.is_empty(), "Rejected source has a persistent error")
-    check(app.load_native_fixture(folder).is_empty(), "Fresh authentic preparation recovers rejected model")
+    check((await app.load_native_fixture(folder)).is_empty(), "Fresh authentic preparation recovers rejected model")
     check(app._native_score_ready(), "Recovered production model is ready again")
     print("TILE_RESIDENCY_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

@@ -13,7 +13,7 @@ from piano_teacher.notation.lesson import (
     infer_piece_clefs,
 )
 from piano_teacher.music import ClefChange, Note, Phrase
-from piano_teacher.score import import_piece
+from piano_teacher.importing.pieces import import_piece
 from piano_teacher.server import PracticeEngine
 
 

@@ -19,8 +19,8 @@ def test_native_production_readiness_and_failure_gate(tmp_path, renderer):
         pytest.skip("Godot 4 unavailable")
     engine = PracticeEngine(tmp_path / "cache", enable_midi=False)
     try:
-        engine.load(str(ROOT / "tests/fixtures/native_pixel_pitch_probe.musicxml"))
-        payload = {"layout": engine.geometry(native_notes=True),
+        engine.load(str(ROOT / "tests/fixtures/musical_fidelity/midi_four_four.mid"))
+        payload = {"layout": engine.geometry(),
                    "model": engine.semantic_score()}
     finally:
         engine.db.close()

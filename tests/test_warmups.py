@@ -138,7 +138,15 @@ def test_real_engraving_covers_required_warmup_notes(tmp_path, warmup):
         require_lesson_alignment(engine.plan.active_phrase, engraved.layout, "both")
         assert engraved.pages
         assert len(engraved.layout["notes"]) >= len(engine.plan.active_phrase.notes)
-        assert engine.engraved_png(0).startswith(b"\x89PNG")
+        layout = engine.geometry()
+        model = engine.semantic_score()
+        expected = {note.source_id for note in engine.plan.active_phrase.notes}
+        require_lesson_alignment(engine.plan.active_phrase, layout, "both")
+        assert layout["revision"] == model["revision"] == engine.score_revision
+        assert set(layout["attack_map"]) == expected
+        assert {event["source_id"] for event in model["notation_events"]
+                if event["kind"] == "note" and event["is_attack"]} == expected
+        assert layout["native_glyphs"] and layout["native_note_templates"]
     finally:
         engine.db.close()
 

@@ -12,7 +12,7 @@ import pytest
 from piano_teacher.exercise_contracts import ConstantTempo, DottedPairTiming
 from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.exercise_pipeline import ExercisePipeline
-from piano_teacher.exercise_strategies import ExerciseContext, LegacyStrategy
+from piano_teacher.exercise_strategies import ExerciseContext, SourceProgressionStrategy
 from piano_teacher.importing.musicxml import load_musicxml
 from piano_teacher.music import Phrase, source_note_id
 from piano_teacher.notation.lesson import build_lesson_score
@@ -104,7 +104,7 @@ def _exercise(piece):
                     piece.bar_boundaries[-1], piece.notes)
     original = ExerciseVariant("original", phrase,
                                tuple(range(len(phrase.notes))))
-    pipeline = ExercisePipeline(LegacyStrategy(), DottedPairTiming(), ConstantTempo())
+    pipeline = ExercisePipeline(SourceProgressionStrategy(), DottedPairTiming(), ConstantTempo())
     stages = pipeline.build(
         ExerciseContext(phrase, "right"), lambda: (original,),
         source_musicxml=piece.source_musicxml)
@@ -158,7 +158,7 @@ def test_authored_tuplets_are_ineligible_for_dotted_transform_without_loss():
     phrase = Phrase(1, 1, len(piece.bar_boundaries) - 1,
                     piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
     original = ExerciseVariant("original", phrase, tuple(range(len(phrase.notes))))
-    pipeline = ExercisePipeline(LegacyStrategy(), DottedPairTiming(), ConstantTempo())
+    pipeline = ExercisePipeline(SourceProgressionStrategy(), DottedPairTiming(), ConstantTempo())
     stages = pipeline.build(
         ExerciseContext(phrase, "right"), lambda: (original,),
         source_musicxml=piece.source_musicxml)

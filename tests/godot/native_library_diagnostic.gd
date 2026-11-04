@@ -34,7 +34,7 @@ func run() -> void:
         root.add_child(app)
         await process_frame
         await process_frame
-        var error: String = app.load_native_fixture(folder.path_join(
+        var error: String = await app.load_native_fixture(folder.path_join(
             str(manifest.get("native_fixture", "missing"))))
         check(error.is_empty(), filename + ": " + error)
         if not error.is_empty():

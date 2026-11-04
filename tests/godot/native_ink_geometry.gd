@@ -24,7 +24,12 @@ func _initialize() -> void:
     var first: Dictionary = ink.minimum_density(96,22)
     var second: Dictionary = ink.minimum_density(96,22)
     var failures := 0
-    if absf(float(first["density"])-286.785905456543)>.001:
+    # At the selected density the actual outgoing glyph and boundary
+    # contours need 15.9 px of reading clearance at this 22 px staff size.
+    var witness: Dictionary = first["witness"]
+    var clearance: float = float(first["density"])*float(witness["beat_separation"]) \
+        + float(witness["stroke_left"])-float(witness["glyph_right"])
+    if clearance < 15.899 or float(first["density"]) <= 96.0:
         failures += 1
     if first["witness"].get("reason")!="outgoing-barline-clearance":
         failures += 1

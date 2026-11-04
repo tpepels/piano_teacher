@@ -2,7 +2,7 @@
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from piano_teacher.score import import_piece
+from piano_teacher.importing.pieces import import_piece
 from piano_teacher.music import Phrase
 from piano_teacher.notation.lesson import build_lesson_score
 

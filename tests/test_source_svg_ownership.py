@@ -76,13 +76,3 @@ assert report['coverage']['expected'] == report['coverage']['verified'] == 2
     result = subprocess.run([sys.executable, "-c", code], cwd=ROOT,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_score_geometry_retains_public_geometry_and_legacy_layout_contracts():
-    assert (ROOT / "piano_teacher/source_svg.py").is_file()
-    from piano_teacher import score_geometry, source_svg
-    from piano_teacher.rendering.legacy.geometry import layout_from_pages, locate_beat
-    assert score_geometry.parse_svg_geometry is source_svg.parse_svg_geometry
-    assert score_geometry.PageGeometry is source_svg.PageGeometry
-    assert score_geometry.layout_from_pages is layout_from_pages
-    assert score_geometry.locate_beat is locate_beat

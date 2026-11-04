@@ -5,7 +5,7 @@ import pytest
 
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase
-from piano_teacher.score import render_layout
+from piano_teacher.engraving.engraving import render_layout
 
 
 def test_lesson_accidentals_follow_measure_context_across_voices():

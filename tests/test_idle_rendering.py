@@ -1,8 +1,7 @@
 """Unchanged backend polls must let the actual Godot framebuffer sleep."""
 import json
 from pathlib import Path
-
-from scripts.smoke_teaching_godot import make_fixture
+import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -12,13 +11,12 @@ def test_idle_polls_sleep_but_changed_feedback_and_playback_still_render(tmp_pat
     from test_native_fingering import _godot, _run_godot
 
     midi = tmp_path / "chords.mid"
-    make_fixture(midi)
+    shutil.copyfile(ROOT / "tests/fixtures/musical_fidelity/midi_four_four.mid", midi)
     engine = PracticeEngine(tmp_path / "data", enable_midi=False)
     try:
         engine.load(str(midi))
-        engine.plan.set_hand("both")
         payload = {"model": engine.semantic_score(),
-                   "layout": engine.geometry(native_notes=True), "state": engine.state()}
+                   "layout": engine.geometry(), "state": engine.state()}
     finally:
         engine.db.close()
     (tmp_path / "native.json").write_text(json.dumps(payload))

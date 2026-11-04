@@ -13,6 +13,7 @@ import pytest
 from piano_teacher.fingering import FingeringService, LumikeyProvider, project_model
 from piano_teacher.importing.pieces import import_piece
 from piano_teacher.learning import LearningPlan
+from piano_teacher.lesson_generators import lesson_hands
 
 ROOT = Path(__file__).resolve().parents[1]
 PIECES = [
@@ -62,7 +63,7 @@ def test_complete_real_piece_and_all_lesson_variants(name, tmp_path):
     covered=set()
     stages=0
     for ex in learning.exercises:
-        for hand in ('right','left','both'):
+        for hand in lesson_hands(ex):
             for variant in learning._stage_variants(ex,hand):
                 events=[{'source_id':n.source_id,'is_attack':True} for n in variant.notes]
                 projected=project_model({'notation_events':events},plan)

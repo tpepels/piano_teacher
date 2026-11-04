@@ -11,20 +11,18 @@ func run() -> void:
     if view != null:
         var values := {"loaded":true,"piece_fingerprint":"song","lesson_step":1,"hands":["right"],"hand":"right","phase":"ready"}
         app.last_state = values
-        app._on_state(0,200,PackedStringArray(),JSON.stringify(values).to_utf8_buffer())
-        check(app.lesson_calls == 1,"Application routes lesson demand to its HTTP boundary")
-        app._on_lesson(0,200,PackedStringArray(),JSON.stringify({"piece_fingerprint":"song","steps":[{"number":1},{"number":2}],"total_steps":2}).to_utf8_buffer())
+        app._on_state(0,JSON.stringify(values).to_utf8_buffer())
+        check(app.lesson_calls == 1,"Application routes lesson demand to its typed request boundary")
+        app._on_lesson(0,JSON.stringify({"piece_fingerprint":"song","steps":[{"number":1},{"number":2}],"total_steps":2}).to_utf8_buffer())
         press(view,"Next passage")
-        check(app.posts.back() == {"path":"/control","payload":{"action":"next"}} and app.current_screen == "practice", "Lesson command and navigation signals use real application routing")
-        app.action_pending = false
-        app.last_post_path = "/control"
-        app.last_control_action = "reset_path"
-        app._on_action(0,200,PackedStringArray(),JSON.stringify(values).to_utf8_buffer())
+        check(app.commands.back() == {"operation":"practice.command","payload":{"action":"next"}} and app.current_screen == "practice", "Lesson command and navigation signals use real application routing")
+        app._on_action(0,JSON.stringify(values).to_utf8_buffer())
+        app._send_action({"action":"reset_path","fingerprint":"song","confirm":true})
+        app._on_action(0,JSON.stringify(values).to_utf8_buffer())
         check(app.lesson_calls == 2,"Reset invalidates the lesson session through the real acknowledgement route")
-        app.action_pending = false
-        app._on_lesson(0,200,PackedStringArray(),JSON.stringify({"piece_fingerprint":"song","steps":[{"number":1},{"number":2}]}).to_utf8_buffer())
-        app.practice_view.stage.steps.picker.item_selected.emit(1)
-        check(app.posts.back().payload == {"action":"select_step","number":2}, "Practice step selection routes an explicit numeric command")
+        app._on_lesson(0,JSON.stringify({"piece_fingerprint":"song","steps":[{"number":1},{"number":2}]}).to_utf8_buffer())
+        view.steps.picker.item_selected.emit(1)
+        check(app.commands.back().payload == {"action":"select_step","number":2}, "Lesson Path selection routes an explicit numeric command")
     app.free()
     print("LESSON_FAILURES:",failures.size())
     quit(0 if failures.is_empty() else 1)

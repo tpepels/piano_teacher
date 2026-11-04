@@ -50,7 +50,7 @@ def test_render_runs_outside_application_lock_and_publishes_only_after_it_is_rel
         assert entered.wait(1), "rendering must not acquire the application lock"
         initial = session.snapshot()
         assert initial == {
-            "token": token, "url": "", "audio_available": False,
+            "token": token, "audio_available": False,
             "instrument": "Preparing piano audio", "duration_seconds": 5.0,
             "ready": False, "stage_key": "selected-stage",
             "source_ids": ["selected-stage:3", "selected-stage:9"],
@@ -58,8 +58,9 @@ def test_render_runs_outside_application_lock_and_publishes_only_after_it_is_rel
         }
     finish(session)
     available = session.snapshot()
-    assert available["audio_available"] and available["url"] == f"/demo.wav?token={token}"
+    assert available["audio_available"] and available["token"] == token
     assert available["duration_seconds"] == 5 and available["sampled"] is False
+    assert available["instrument"] == "Basic synthesized piano"
     assert session.audio_path(token) == tmp_path/"audio.wav"
 
 
@@ -162,7 +163,8 @@ def test_failed_render_is_honest_and_cannot_be_acknowledged_or_served(tmp_path):
     finish(session)
     failed = session.snapshot()
     message = "Listen audio could not be prepared: controlled unavailable cache"
-    assert failed["error"] == message and not failed["audio_available"] and failed["url"] == ""
+    assert failed["error"] == message and not failed["audio_available"]
+    assert failed["token"] == token
     assert session.take_failure() == message and session.take_failure() is None
     assert not session.acknowledge_audio(token) and not session.acknowledge_score(7)
     assert session.begin_playback(7) is None

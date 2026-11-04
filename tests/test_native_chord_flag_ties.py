@@ -34,10 +34,11 @@ class Probe extends "res://notation/native/view.gd":
     var spec: Dictionary
     func _init() -> void:
         layout = FixedStaffLayout.new(timeline,glyphs)
-        symbols.connector_geometry = LegacyTieGeometry.new(layout)
+        connector_geometry = LegacyTieGeometry.new(layout)
+        symbols.connector_geometry = connector_geometry
     func _draw() -> void:
         layout.set_viewport(size)
-        symbols.connector_geometry.old = bool(spec.get("old",false))
+        connector_geometry.old = bool(spec.get("old",false))
         var gap := 21.875
         draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
         for center in [110.0,280.0]:
@@ -48,12 +49,16 @@ class Probe extends "res://notation/native/view.gd":
         layout.ordered_events = events
         layout.measure_by_number = {1:measure}
         timeline.measures = [measure]
+        # Preserve the original 81px span on the canonical beat axis.
+        assert(timeline.set_density(202.5))
         layout.chord_members = {"a0":[events[0],events[1]],"b0":[events[2],events[3]]}
         var first: Dictionary = events[int(spec["tone"])]
         var last: Dictionary = events[2+int(spec["tone"])]
+        layout.tie_pairs = [{"first":first,"last":last}]
+        connector_geometry.prewarm_tie_clearances(gap)
         symbols.paint_engraved_chord(self,RenderPass.new(),events[0],100.0,gap,NOTE_INK)
         symbols.paint_engraved_chord(self,RenderPass.new(),events[2],181.0,gap,NOTE_INK)
-        symbols.paint_tie_contour(self,RenderPass.new(),first,last,connector_geometry.tie_placement(first,last,100.0,181.0,gap),gap)
+        symbols.paint_ties(self,RenderPass.new(),100.0,0.0,gap)
 func _initialize() -> void:
     call_deferred("run")
 func run() -> void:

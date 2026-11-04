@@ -5,8 +5,8 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from piano_teacher.score import (_create_verovio_toolkit, _pitches_from_verovio,
-                                 _verovio_object, render_layout)
+from piano_teacher.engraving.engraving import _pitches_from_verovio, render_layout
+from piano_teacher.notation.assets.runtime import _create_verovio_toolkit, _verovio_object
 
 
 def fake_install(tmp_path):

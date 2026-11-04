@@ -28,7 +28,7 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     await process_frame
-    var error: String = app.load_native_fixture(folder)
+    var error: String = await app.load_native_fixture(folder)
     if not error.is_empty():
         push_error(error)
         quit(1)
