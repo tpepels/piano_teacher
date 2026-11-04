@@ -90,3 +90,78 @@ def test_switching_source_drops_stale_in_flight_native_bundle(tmp_path, monkeypa
     reply = json.loads(future.ensure(second, number=2, label="New"))
     assert reply["fingerprint"] == second.fingerprint
     assert reply["layout"]["anchors"] == [second.fingerprint]
+
+
+def _await_failure(future, selection, count):
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        with future._guard:
+            failed = future._errors.get(selection.identity)
+        if failed is not None and failed[1] == count:
+            return failed
+        time.sleep(.002)
+    raise AssertionError(f"Missing preparation failure {count}")
+
+
+def test_future_score_retries_transient_native_failures_without_losing_stage(tmp_path, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+
+    class Flaky:
+        attempts = 0
+        def __init__(self, cache):
+            pass
+        def geometry(self, selected):
+            Flaky.attempts += 1
+            if Flaky.attempts <= 2:
+                raise RuntimeError("temporary Verovio preparation failure")
+            return {"ready": selected.stage_key}
+        def semantic_score(self, selected):
+            return {"notes": [selected.stage_key]}
+
+    monkeypatch.setattr(module, "ScoreArtifacts", Flaky)
+    monkeypatch.setattr(module, "PreprocessingCache", lambda root: root)
+    selection = _selection(object(), 2)
+    future = module.FutureScore(tmp_path)
+    for attempt in (1, 2):
+        assert json.loads(future.ensure(
+            selection, number=2, label="Next"))["status"] == "preparing"
+        error, count, due = _await_failure(future, selection, attempt)
+        assert "temporary Verovio" in error and count == attempt
+        assert future.failure(selection) is None
+        assert due > clock[0]
+        clock[0] = due + .01
+    future.ensure(selection, number=2, label="Next")
+    _ready(future, selection)
+    assert Flaky.attempts == 3
+    assert future.failure(selection) is None
+    assert json.loads(future.ensure(
+        selection, number=2, label="Next"))["status"] == "ready"
+
+
+def test_future_score_exhaustion_returns_explicit_error_without_fake_ink(tmp_path, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+
+    class Broken:
+        def __init__(self, cache):
+            pass
+        def geometry(self, selected):
+            raise ValueError("unengraveable authentic notation")
+        def semantic_score(self, selected):
+            raise AssertionError("geometry failed first")
+
+    monkeypatch.setattr(module, "ScoreArtifacts", Broken)
+    monkeypatch.setattr(module, "PreprocessingCache", lambda root: root)
+    selection = _selection(object(), 2)
+    future = module.FutureScore(tmp_path)
+    for attempt in (1, 2, 3):
+        future.ensure(selection, number=2, label="Next")
+        error, count, due = _await_failure(future, selection, attempt)
+        assert count == attempt and "unengraveable" in error
+        clock[0] = due + .01
+    assert future.failure(selection) == "ValueError: unengraveable authentic notation"
+    assert not future.ready(selection)
+    assert future.adopt(selection) is None
+    reply = json.loads(future.ensure(selection, number=2, label="Next"))
+    assert reply["status"] == "error" and "unengraveable" in reply["error"]
