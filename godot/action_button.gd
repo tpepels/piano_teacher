@@ -56,7 +56,8 @@ func _has_symbol() -> bool:
 	# reserves unwanted space and can contradict a Previous chevron.
 	if action_role == "navigation" and text in ["‹", "›", "←", "→"]:
 		return false
-	return action_role in ["navigation", "utility", "listen", "settings", "review", "danger", "library"]
+	return action_role in ["navigation", "utility", "listen", "settings", "review",
+		"danger", "library", "tempo_down", "tempo_up"]
 
 func _skin() -> void:
 	var accent: Color = _accent()
@@ -72,13 +73,15 @@ func _skin() -> void:
 	normal.content_margin_right = 0 if icon_only else 14
 	normal.content_margin_top = 8
 	normal.content_margin_bottom = 8
-	normal.shadow_color = Color(Design.MINT,.16) if important else Color(Design.NIGHT,.25)
-	normal.shadow_size = 9 if important else 3
+	normal.shadow_color = Color(Design.MINT,.25) if important else Color(Design.NIGHT,.22)
+	normal.shadow_size = 12 if important else 2
 	normal.shadow_offset = Vector2(0,2)
 	add_theme_stylebox_override("normal", normal)
 	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = background.lightened(.06)
-	hover.border_color = Color(accent, .72) if important else Color(Design.SLATE, .65)
+	hover.bg_color = background.lightened(.09)
+	hover.border_color = Color(Design.HIGHLIGHT,.92) if important else Color(Design.MINT,.70)
+	hover.shadow_color = Color(Design.MINT,.24)
+	hover.shadow_size = 9
 	add_theme_stylebox_override("hover", hover)
 	var pressed := normal.duplicate() as StyleBoxFlat
 	pressed.bg_color = background.darkened(.13)
@@ -110,7 +113,8 @@ func _skin() -> void:
 	add_theme_color_override("font_focus_color", ink)
 	add_theme_color_override("font_disabled_color",
 		Design.NIGHT if action_role == "choice" and is_selected else Design.SLATE)
-	add_theme_color_override("icon_normal_color", accent)
+	add_theme_color_override("icon_normal_color",
+		Design.NIGHT if important else accent)
 	if icon_only:
 		for state in ["font_color","font_hover_color","font_pressed_color",
 				"font_hover_pressed_color","font_focus_color","font_disabled_color"]:
@@ -122,6 +126,10 @@ func _draw() -> void:
 	var accent: Color = _accent()
 	var alpha := 1.0 if action_role == "choice" and is_selected else .32 if disabled else 1.0
 	accent.a *= alpha
+	if (action_role == "choice" and is_selected) or action_role == "primary":
+		accent = Color(Design.NIGHT,alpha)
+	elif is_hovered() and not disabled:
+		accent = Design.MINT
 	var center := Vector2(size.x*.5 if icon_only else 18.0, size.y*.5)
 	match action_role:
 		"primary":
@@ -129,7 +137,7 @@ func _draw() -> void:
 			draw_line(center+Vector2(1,-5),center+Vector2(6,0),accent,2.4,true)
 			draw_line(center+Vector2(1,5),center+Vector2(6,0),accent,2.4,true)
 		"navigation":
-			var backward := text.begins_with("←") or text in ["Close", "Back", "Practice", "Previous passage"]
+			var backward := text.begins_with("←") or text.begins_with("Previous") or text in ["Close", "Back", "Practice"]
 			var direction := -1.0 if backward else 1.0
 			draw_line(center+Vector2(-direction*5,0),center+Vector2(direction*5,0),accent,1.9,true)
 			draw_line(center+Vector2(direction*1,-4),center+Vector2(direction*5,0),accent,1.9,true)
@@ -137,6 +145,13 @@ func _draw() -> void:
 		"utility":
 			for x in [-5.0, 0.0, 5.0]:
 				draw_circle(center+Vector2(x,0),1.65,accent)
+		"tempo_down", "tempo_up":
+			draw_circle(center+Vector2(-4,3),3.0,accent)
+			draw_line(center+Vector2(-1,3),center+Vector2(-1,-8),accent,1.8,true)
+			draw_line(center+Vector2(2,-8),center+Vector2(-1,-8),accent,1.8,true)
+			draw_line(center+Vector2(4,0),center+Vector2(10,0),accent,1.8,true)
+			if action_role == "tempo_up":
+				draw_line(center+Vector2(7,-3),center+Vector2(7,3),accent,1.8,true)
 		"listen":
 			draw_circle(center + Vector2(-5, 0), 2.6, accent)
 			draw_arc(center + Vector2(-5, 0), 6.8, -.36*PI, .36*PI, 24, accent, 2.0, true)
