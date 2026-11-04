@@ -2083,6 +2083,21 @@ class PracticeEngine:
             if not self.future_score.ready(selection):
                 raise ValueError("Next lesson notation is not yet prepared")
             self._future_stage_ready = (stage_key, revision)
+            # If the future ink became ready during the existing rest gap,
+            # schedule its exact delayed start immediately. Waiting for the
+            # old full-bar deadline would show native ink on a false origin.
+            if (self.pending_result is not None and self.auto and
+                    not self.running and not self.visual_transport.paused and
+                    self._mastery_candidate(self.pending_result) is not None):
+                now = time.monotonic()
+                phrase = self.plan.active_phrase
+                finish = (self.visual_transport.run_at +
+                          self._elapsed_seconds(phrase.end-phrase.start) -
+                          self._elapsed_seconds(self.visual_transport.play_from_beat) +
+                          SETTLEMENT_SECONDS)
+                if now >= finish - 1e-7:
+                    self.visual_transport.next_at = now
+                    self._advance_pending_feedback(now)
             # Prepare one more source-identity-bound stage while this step is
             # still being played. The next stage remains first in the queue.
             farther = self._next_stage_selection(offset=2)
