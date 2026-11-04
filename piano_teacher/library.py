@@ -12,6 +12,9 @@ import tempfile
 
 from .warmups import catalog as built_in_warmups, is_warmup, materialize
 from .exercise_strategies import available_strategies
+from .application.mistake_responses import (
+    available_mistake_policies, resolve_mistake_policy,
+)
 from .exercise_contracts import (resolve_timing_strategy, resolve_tempo_strategy,
                                  resolve_diagnosis_strategy, resolve_learner_strategy)
 
@@ -39,7 +42,8 @@ class ScoreLibrary:
                          'exercise_strategy': 'coda-fukuda-midi', 'timing_strategy': 'original-timing',
                          'tempo_strategy': 'constant-tempo',
                          'diagnosis_strategy': 'error-family',
-                         'learner_strategy': 'repeated-error'}
+                         'learner_strategy': 'repeated-error',
+                         'mistake_response_strategy': 'adaptive'}
         if self.settings_path.exists():
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
@@ -67,6 +71,10 @@ class ScoreLibrary:
                 ("learner_strategy", {"repeated-error", "repeat-only"}, "repeated-error")):
             if self.settings[key] not in valid:
                 self.settings[key] = fallback
+        try:
+            resolve_mistake_policy(self.settings['mistake_response_strategy'])
+        except ValueError:
+            self.settings['mistake_response_strategy'] = 'adaptive'
         # A previously selected MusicXML file is not a valid MIDI-only library entry.
         recent = self.settings['last_piece']
         if (recent and not is_warmup(recent)
@@ -92,7 +100,7 @@ class ScoreLibrary:
         Lesson preparation can now fail before a strategy switch commits
         settings or changes the active transport.
         """
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
         unknown = set(changes) - allowed
         if unknown:
             raise ValueError('Unknown preference: ' + ', '.join(sorted(unknown)))
@@ -134,6 +142,10 @@ class ScoreLibrary:
                     raise ValueError("Invalid " + key)
                 resolver(value)
                 new[key] = value
+        if 'mistake_response_strategy' in changes:
+            selected_response = changes['mistake_response_strategy']
+            resolve_mistake_policy(selected_response)
+            new['mistake_response_strategy'] = selected_response
         from .lesson_generators import lesson_generator_registration
         selected = lesson_generator_registration(new['exercise_strategy'])
         if selected is not None and selected.owns_timing:
@@ -174,7 +186,8 @@ class ScoreLibrary:
                     {'id': 'accuracy-only', 'label': 'Overall accuracy baseline'}],
                 'available_learner_strategies': [
                     {'id': 'repeated-error', 'label': 'Repeated-error recommendation'},
-                    {'id': 'repeat-only', 'label': 'Repeat-only baseline'}]}
+                    {'id': 'repeat-only', 'label': 'Repeat-only baseline'}],
+                'available_mistake_response_strategies': available_mistake_policies()}
 
     def save(self, *, settings: dict | None = None) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
