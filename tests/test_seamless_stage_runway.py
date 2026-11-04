@@ -414,3 +414,22 @@ def test_changed_next_stage_rolls_back_without_automatic_camera_reset(tmp_path, 
             engine.visual_transport.paused_at)[0] >= old_offset
     finally:
         engine.db.close()
+
+
+def test_next_stage_runway_label_never_leaks_internal_generator_keys(tmp_path):
+    from types import SimpleNamespace
+
+    engine = _engine(tmp_path)
+    try:
+        selected, number = engine._next_stage_selection()
+        assert isinstance(selected.display_name, str)
+        step = engine.plan.lesson_steps[number - 1]
+        label = engine._stage_runway_label(step, selected.display_name)
+        assert label.startswith(("Right hand · ", "Left hand · ", "Both hands · "))
+        assert selected.display_name in label if selected.display_name else "Next exercise" in label
+        internal = SimpleNamespace(hand="right", level="coda-slowdown-x4")
+        human = engine._stage_runway_label(internal, "Slow and steady rhythm")
+        assert human == "Right hand · Slow and steady rhythm"
+        assert "coda" not in human.lower()
+    finally:
+        engine.db.close()
