@@ -38,6 +38,9 @@ var practice_note_feedback_panel: PanelContainer
 var practice_note_feedback_label: Label
 var _state: Dictionary = {}
 var _view_size := Vector2(800,600)
+var _marker_renderer
+var _marker_revision := -999999
+var _first_measure_offset := 0.0
 
 func _ready() -> void:
     name = "PracticeScoreStage"
@@ -208,11 +211,16 @@ func present_runway_steps(state: Dictionary, global_visual: float,
     if runway_steps == null or renderer == null:
         return
     runway_steps.set_density(renderer.timeline.pixels_per_beat)
-    var model: Dictionary = renderer.timeline.model if renderer.timeline.model is Dictionary else {}
-    var real_start: float = StepTimeline.first_sounding_measure_offset(
-        model,str(state.get("hand","both")))
+    # Note-bearing measure discovery is O(score notes), so run only once
+    # per retained native renderer revision, not on every camera frame.
+    if _marker_renderer != renderer or _marker_revision != renderer.timeline.revision:
+        _marker_renderer = renderer
+        _marker_revision = renderer.timeline.revision
+        var model: Dictionary = renderer.timeline.model if renderer.timeline.model is Dictionary else {}
+        _first_measure_offset = StepTimeline.first_sounding_measure_offset(
+            model,str(state.get("hand","both")))
     runway_steps.present(state,global_visual,
-        float(renderer.runway_origin_beat) + real_start,next_start,next_label)
+        float(renderer.runway_origin_beat) + _first_measure_offset,next_start,next_label)
 
 func present(state: Dictionary, busy: bool) -> void:
     _state = state.duplicate(true)
