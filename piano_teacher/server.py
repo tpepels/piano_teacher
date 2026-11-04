@@ -182,6 +182,8 @@ class PracticeEngine:
         self.future_score = FutureScore(data_dir / "preprocessed")
         self._future_stage_ready: tuple[str, int] | None = None
         self._prepared_stage_published = False
+        # Global musical origin of a delayed, pre-engraved next stage.
+        self._stage_handoff_visual_beat: float | None = None
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
@@ -612,6 +614,7 @@ class PracticeEngine:
         # navigation, library changes and generation mismatches fail that
         # identity check automatically at the next settlement.
         self._prepared_stage_published = False
+        self._stage_handoff_visual_beat = None
         self.guided_session.stop()
         self.visual_transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
@@ -991,7 +994,7 @@ class PracticeEngine:
             "_remediation_pending", "recovery_notice", "score_revision",
             "awaiting_score_revision", "open_from_beat",
             "performance_summary", "review_stage_identity",
-            "_prepared_stage_published",
+            "_prepared_stage_published", "_stage_handoff_visual_beat",
         )
         engine_before = {key: getattr(self, key) for key in engine_fields}
         visual_offset_before = self.visual_transport.visual_offset_beats
@@ -1068,7 +1071,10 @@ class PracticeEngine:
                         if prebuilt is not None:
                             self.score_artifacts = prebuilt
                             self._prepared_stage_published = True
-                            self.visual_transport.visual_offset_beats += stage_advance_beats
+                            self.visual_transport.visual_offset_beats = (
+                                self._stage_handoff_visual_beat
+                                if self._stage_handoff_visual_beat is not None
+                                else self.visual_transport.visual_offset_beats + stage_advance_beats)
                         else:
                             self.visual_transport.visual_offset_beats = 0.0
                     else:
@@ -1084,6 +1090,7 @@ class PracticeEngine:
             self.score_artifacts = score_artifacts_before
             raise
         self.pending_result = None
+        self._stage_handoff_visual_beat = None
         return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
@@ -1431,9 +1438,51 @@ class PracticeEngine:
                 # Keep actionable device feedback without failing /state.
                 pass
 
+    def _mastery_candidate(self, result):
+        """Exact next step eligible for an automatic clean-run advancement."""
+        if (not self.auto or result is None or not result.passed or
+                self.plan is None or self.plan.bpm < self.plan.target_bpm or
+                self.plan.streak + 1 < SETTINGS.clean_runs_to_master):
+            return None
+        return self._next_stage_selection()
+
     def _advance_pending_feedback(self, now: float):
         """Commit finished feedback and schedule exactly one next transition."""
         if self.auto and self.visual_transport.next_at and now >= self.visual_transport.next_at:
+            # Keep the current music axis moving until authentic next-step ink
+            # is compiled, acknowledged, and adoptable. A cache miss is never
+            # allowed to change the score revision and blank the viewport.
+            upcoming = self._mastery_candidate(self.pending_result)
+            if upcoming is not None:
+                selection, _number = upcoming
+                accepted = self._future_stage_ready == (
+                    selection.stage_key, selection.revision)
+                prepared = (accepted and self.future_score.ready(selection) and
+                            self.future_score.adopt(selection) is not None)
+                if not prepared:
+                    failure = self.future_score.failure(selection)
+                    if accepted and self.future_score.ready(selection):
+                        failure = failure or "Prepared stage assets were lost"
+                    if failure is not None:
+                        # A genuinely unengraveable exercise must fail visibly,
+                        # without trying to grade unrendered or stale notation.
+                        self.visual_transport.pause(at=now)
+                        self.visual_transport.next_at = 0.0
+                        self.feedback = "Cannot prepare the next lesson score"
+                        self.next_action = (
+                            f"{failure}. Select another step or stop and retry.")
+                        return
+                    self._stage_handoff_visual_beat = None
+                    self.visual_transport.next_at = now + .10
+                    self.feedback = "Preparing the next lesson while scrolling"
+                    return
+                if self._stage_handoff_visual_beat is None:
+                    # Reserve a two-beat reading runway when assets arrive
+                    # after the natural handoff. The existing score keeps
+                    # scrolling through this gap at the authoritative BPM.
+                    self._stage_handoff_visual_beat = self._visual_motion(now)[0] + 2.0
+                    self.visual_transport.next_at = now + 2.0 * 60.0 / self.plan.bpm
+                    return
             deadline = self.visual_transport.next_at
             previous_revision = self.score_revision
             previous_identity = self.plan.identity
@@ -1682,11 +1731,8 @@ class PracticeEngine:
         # take is allowed to advance on the first post-grading tick. Failed
         # attempts, lower BPM clean repetitions and unprepared stages keep
         # the existing musical rewind/rest schedule.
-        if (self.auto and result.passed and
-                self.plan.bpm >= self.plan.target_bpm and
-                self.plan.streak + 1 >= SETTINGS.clean_runs_to_master):
-            planned = self._next_stage_selection()
-            if planned is not None:
+        planned = self._mastery_candidate(result)
+        if planned is not None:
                 selection, _number = planned
                 if (self._future_stage_ready ==
                         (selection.stage_key, selection.revision) and
@@ -1854,6 +1900,8 @@ class PracticeEngine:
         with self.lock:
             self._update()
             state = project_session_state(self._capture_session_snapshot())
+            if self._stage_handoff_visual_beat is not None:
+                state["next_stage_start_beat"] = self._stage_handoff_visual_beat
             if self.plan is not None:
                 beat = self.plan.active_phrase.start + self.visual_transport.play_from_beat
                 if self.running and time.monotonic() >= self.visual_transport.run_at:
@@ -1961,7 +2009,7 @@ class PracticeEngine:
         return ScoreSelection(
             piece=future.piece, phrase=future.active_phrase,
             hand=future.hand, stage_key=future.identity,
-            revision=self.score_revision + 1, fingerprint=self.fingerprint,
+            revision=self.score_revision + offset, fingerprint=self.fingerprint,
             transformed_rhythm=future.active_stage.transformed_rhythm), number
 
     @staticmethod
