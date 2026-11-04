@@ -74,6 +74,11 @@ class EngineCommands:
             if operation == "score.stage_ready":
                 return self._reply(OK, engine.acknowledge_preloaded_stage(
                     stage_key=values["stage_key"], revision=values["revision"]))
+            if operation == "score.stage_failed":
+                return self._reply(OK, engine.report_preload_failure(
+                    fingerprint=values["fingerprint"],
+                    step_number=values["step_number"],
+                    revision=values["revision"], error=values["error"]))
             if operation == "listen.audio":
                 return OK, engine.demo_audio(values.get("token", "")).read_bytes()
             if operation == "fingering.correct":
