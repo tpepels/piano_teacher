@@ -2084,13 +2084,16 @@ class PracticeEngine:
             piece=future.piece, phrase=future.active_phrase,
             hand=future.hand, stage_key=future.identity,
             revision=self.score_revision + offset, fingerprint=self.fingerprint,
-            transformed_rhythm=future.active_stage.transformed_rhythm), number
+            transformed_rhythm=future.active_stage.transformed_rhythm,
+            display_name=str(future.active_stage.display_name or "")), number
 
     @staticmethod
-    def _stage_runway_label(step) -> str:
+    def _stage_runway_label(step, display_name: str = "") -> str:
         hand = {"right": "Right hand", "left": "Left hand",
                 "both": "Both hands"}.get(step.hand, step.hand.capitalize())
-        return f'{hand} · {step.level.replace("-", " ").capitalize()}'
+        # Presentation is derived from the registered stage description,
+        # never a technical generator identifier used for saved progress.
+        return f'{hand} · {display_name or "Next exercise"}'
 
     def next_stage_score(self) -> bytes:
         """Begin ahead-of-time score preparation without blocking MIDI timing."""
@@ -2100,7 +2103,7 @@ class PracticeEngine:
                 return b'{"status":"none"}'
             selection, number = planned
             future_step = self.plan.lesson_steps[number - 1]
-            label = self._stage_runway_label(future_step)
+            label = self._stage_runway_label(future_step, selection.display_name)
             return self.future_score.ensure(
                 selection, number=number, label=label)
 
@@ -2161,7 +2164,8 @@ class PracticeEngine:
                 ahead_step = self.plan.lesson_steps[ahead_number-1]
                 self.future_score.warm(
                     ahead_selection, number=ahead_number,
-                    label=self._stage_runway_label(ahead_step))
+                    label=self._stage_runway_label(
+                        ahead_step, ahead_selection.display_name))
             return {"accepted": True, "step_number": number,
                     "revision": revision, "stage_key": stage_key}
 
