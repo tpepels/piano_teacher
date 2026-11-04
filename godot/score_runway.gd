@@ -273,12 +273,18 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
     var last_clean: bool = int(state.get("streak",0)) >= \
             int(state.get("clean_runs_required",3)) - 1 and \
             float(state.get("bpm",0)) >= float(state.get("target_bpm",INF))
-    var display: bool = _acknowledged and last_clean and \
-            str(state.get("phase","")) in ["playing","count_in","feedback","preview_gap"]
+    var active_phase: bool = str(state.get("phase","")) in \
+        ["playing","count_in","feedback","preview_gap"]
+    var display: bool = _acknowledged and last_clean and active_phase
     _future.modulate.a = 1.0 if display else 0.001
     if is_instance_valid(stage.renderer):
-        stage.renderer.runway_cutoff_beat = (next_start - \
-            float(stage.renderer.runway_origin_beat)) if display else INF
+        # Partially compiled but unacknowledged future ink must not expose
+        # stale repeating current-stage notes. Keep its natural endpoint
+        # clipped until the complete next renderer can be shown.
+        var end_beat: float = next_start if display else \
+            (natural_start if last_clean and active_phase else INF)
+        stage.renderer.runway_cutoff_beat = end_beat - \
+            float(stage.renderer.runway_origin_beat) if is_finite(end_beat) else INF
     if stage.has_method("present_runway_steps"):
         stage.present_runway_steps(state,global_beat,
             next_start if _acknowledged else INF,
