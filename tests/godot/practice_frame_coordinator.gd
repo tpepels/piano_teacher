@@ -18,6 +18,9 @@ class Renderer:
     var runway_origin_beat := 0.0
     var last_beat := NAN
     var last_visual := NAN
+    var ambient_blank := false
+    func present_ambient(blank: bool, _ticks: int) -> void:
+        ambient_blank = blank
     func present_clock(beat: float, visual: float) -> void:
         last_beat = beat
         last_visual = visual
@@ -78,6 +81,7 @@ func _initialize() -> void:
     if settings.calls != 2 or practice.calls != 2 or lesson.calls != 2:
         failures += 1
     if demo.synchronized != 1.25 or demo.kept != 1.25 or \
+            practice.stage.renderer.ambient_blank or \
             practice.stage.renderer.last_beat != 1.25 or \
             practice.stage.renderer.last_visual != 9.25 or \
             practice.stage.effects.last_beat != 1.25 or \
