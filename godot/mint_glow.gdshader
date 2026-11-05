@@ -23,18 +23,29 @@ void fragment() {
         light = (0.76 * core + 0.41 * close_halo + 0.21 * spill)
             * vertical * midpoint;
     } else if (shape == 1) {
-        // Continuous soft edge bloom around the real rectangular button.
-        // It renders behind the native Button, never over its text or icon.
-        vec2 distance_to_box = max(abs(p) - vec2(0.72, 0.40), vec2(0.0));
-        float d = length(distance_to_box / vec2(0.25, 0.42));
-        float halo = exp(-3.0 * d * d);
-        float haze = exp(-0.63 * d * d);
-        light = 0.43 * halo + 0.21 * haze;
+        // Rounded rectangle signed-distance bloom. The previous clamp()
+        // made EVERY pixel inside the oversized quad equally bright,
+        // exposing a hard rectangular patch behind the button.
+        vec2 half_box = vec2(0.69, 0.41);
+        float radius = 0.115;
+        vec2 q = abs(p) - half_box + vec2(radius);
+        float sdf = length(max(q, vec2(0.0))) +
+            min(max(q.x, q.y), 0.0) - radius;
+        float outside = max(sdf, 0.0);
+        float outer = exp(-pow(outside / 0.17, 2.0));
+        float haze = exp(-pow(outside / 0.41, 2.0));
+        float near_edge = exp(-pow(sdf / 0.18, 2.0));
+        light = 0.40 * outer + 0.16 * haze + 0.09 * near_edge;
     } else {
         // Small circular flare for the actual progress position.
         float d2 = dot(p / vec2(0.78, 0.62), p / vec2(0.78, 0.62));
         light = 0.38 * exp(-3.0 * d2) + 0.35 * exp(-16.0 * d2);
     }
+    // Exact zero at all quad edges. Avoids visible GPU shader rectangles,
+    // also for the narrow progress lights and the vertical playhead.
+    vec2 edge = 1.0 - abs(p);
+    float feather = smoothstep(0.0, 0.10, min(edge.x, edge.y));
     float breathe = 0.95 + 0.05 * sin(TIME * 0.85);
-    COLOR = vec4(tint.rgb, clamp(light * intensity * breathe, 0.0, 1.0) * tint.a);
+    COLOR = vec4(tint.rgb,
+        clamp(light * feather * intensity * breathe, 0.0, 1.0) * tint.a);
 }
