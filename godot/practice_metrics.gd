@@ -39,31 +39,46 @@ func _text(value: String, at: Vector2, font_size: int, tone: Color, width: float
 func _draw() -> void:
     draw_style_box(_face,Rect2(Vector2.ZERO,size))
     var compact := size.x < 320.0
-    var center := Vector2(49,size.y*.5)
-    var radius := 29.0
+    var center := Vector2(53.0,size.y*.5)
+    var radius := 30.0
     var total := int(result.get("total",0))
     var accuracy := clampf(float(result.get("accuracy_percent",
         100.0*float(result.get("correct",0))/maxi(1,total))),0.0,100.0)
-    draw_arc(center,radius,0,TAU,64,Color(Design.PINE,.98),6,true)
+    draw_arc(center,radius,0,TAU,64,Color(Design.PINE,.98),5.5,true)
     if total > 0:
-        draw_arc(center,radius,-PI*.5,-PI*.5+TAU*accuracy/100.0,64,Color(Design.MINT,.22),12,true)
-        draw_arc(center,radius,-PI*.5,-PI*.5+TAU*accuracy/100.0,64,Design.MINT,5,true)
+        draw_arc(center,radius,-PI*.5,-PI*.5+TAU*accuracy/100.0,64,
+            Color(Design.MINT,.20),10.0,true)
+        draw_arc(center,radius,-PI*.5,-PI*.5+TAU*accuracy/100.0,64,
+            Design.MINT,4.5,true)
+    # Keep only the percentage inside the narrow circular gauge. Previously
+    # "Accuracy" was drawn at y+17, crossing the lower arc.
     var caption := "%.0f%%" % accuracy if total > 0 else "—"
-    var extent := Design.font(600).get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
-    draw_string(Design.font(600),center+Vector2(-extent*.5,3),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Design.STONE)
-    _text("Accuracy",center+Vector2(-25,17),10,Design.SECONDARY_INK)
-    _text("Performance",Vector2(96,24),16,Design.STONE,size.x-108)
-    _text("%d / %d accepted passes" % [accepted_passes,required],Vector2(96,45),13,Design.SECONDARY_INK,size.x-108)
-    var details := "%d/%d correct" % [int(result.get("correct",0)),total] if total > 0 else "Preview · ungraded" if ungraded else "Awaiting assessed take"
+    var face: Font = Design.font(600)
+    var amount_size := 20
+    var extent := face.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,
+        amount_size).x
+    var baseline := center.y + (face.get_ascent(amount_size) -
+        face.get_descent(amount_size))*.5
+    draw_string(face,Vector2(center.x-extent*.5,baseline),caption,
+        HORIZONTAL_ALIGNMENT_LEFT,-1,amount_size,Design.STONE)
+    var text_x := 110.0
+    var text_width := maxf(1.0,size.x-text_x-12.0)
+    _text("Accuracy",Vector2(text_x,25),16,Design.STONE,text_width)
+    _text("%d / %d clean passes" % [accepted_passes,required],
+        Vector2(text_x,46),13,Design.SECONDARY_INK,text_width)
+    var details := ("%d of %d notes correct" % [int(result.get("correct",0)),total]
+        if total > 0 else "Listen/preview · not graded"
+        if ungraded else "No assessed attempt yet")
     if total > 0 and result.has("missed") and result.has("wrong"):
-        details = "%d/%d correct · %d missed · %d wrong" % [
-            int(result.get("correct",0)),total,
-            int(result.get("missed",0)),int(result.get("wrong",0))]
-    _text(details,Vector2(96,64),13,Design.SECONDARY_INK,size.x-108)
-    var x := 100.0
-    for item in [["Correct",Design.MINT],["Missed",Design.CORAL],["Timing",Design.AMBER]]:
+        details = "%d correct · %d missed · %d wrong" % [
+            int(result.get("correct",0)),int(result.get("missed",0)),
+            int(result.get("wrong",0))]
+    _text(details,Vector2(text_x,65),12,Design.SECONDARY_INK,text_width)
+    var x := text_x
+    for item in [["Correct",Design.MINT],["Missed",Design.CORAL],
+            ["Timing",Design.AMBER]]:
         if compact and item[0] == "Timing":
             continue
         draw_circle(Vector2(x,size.y-17),3,item[1])
-        _text(item[0],Vector2(x+7,size.y-13),10,Design.SECONDARY_INK)
-        x += 72.0
+        _text(item[0],Vector2(x+8,size.y-13),10,Design.SECONDARY_INK)
+        x += 69.0
