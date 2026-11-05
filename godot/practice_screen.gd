@@ -292,11 +292,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         return
     title_label.text = str(parsed.get("title", "Piano Teacher")).replace("_", " ")
     var kind := str(parsed.get("kind", "learn")).capitalize()
-    var first_bar := int(parsed.get("first_bar",0))
-    var last_bar := int(parsed.get("last_bar",0))
-    var passage_text: String = ("%s · Measure %d" % [kind,first_bar]
-        if first_bar == last_bar
-        else "%s · Measures %d–%d" % [kind,first_bar,last_bar])
+    var range_first := int(parsed.get("first_bar",0))
+    var range_last := int(parsed.get("last_bar",0))
+    var passage_text: String = ("%s · Measure %d" % [kind,range_first]
+        if range_first == range_last
+        else "%s · Measures %d–%d" % [kind,range_first,range_last])
     if bool(parsed.get("warmup", false)):
         var hand_step: int = (["left", "right", "both"].find(str(parsed.get("hand", "left"))) + 1)
         passage_text = "WARM-UP %d/3 · %s · Measures %d–%d" % [
