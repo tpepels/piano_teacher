@@ -28,6 +28,7 @@ class Renderer:
 class Stage:
     extends RefCounted
     var renderer = Renderer.new()
+    var runway_steps = null
     var effects = Effects.new()
 
 class Practice:
