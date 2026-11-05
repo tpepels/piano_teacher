@@ -46,7 +46,7 @@ func run() -> void:
                 view.present(values,true)
                 values.title = "mutated"
                 view.present_busy(true)
-                check(view.title_label.text == "A real piece" and view.speed_label.text == "♪ 72 BPM ▾" and view.speed_label.tooltip_text.contains("target 80 BPM"),"Practice captures title and tempo values")
+                check(view.title_label.text == "A real piece" and view.speed_label.text == "Adagio · 72 BPM ▾" and view.speed_label.tooltip_text.contains("target 80 BPM"),"Practice captures title and tempo values")
                 var named_source := state()
                 named_source.exercise_strategy = "coda-fukuda-midi"
                 named_source.stage_label = "Melody outline"
@@ -55,6 +55,10 @@ func run() -> void:
                     "Melody outline" in view.title_label.tooltip_text,
                     "Practice introduces music without internal generator labels")
                 view.present_busy(true)
+                check(view.tempo_name_label.text == "Adagio" and
+                    view.tempo_value_label.text.contains("4 BPM") and
+                    view.tempo_up_button.text == "+" and view.tempo_down_button.text == "−",
+                    "Tempo dropdown presents an Italian name with legible +/- controls")
                 check(view.tempo_up_button.disabled and view.tempo_down_button.disabled and
                     view.practice_skip_button.disabled and view.practice_previous_button.disabled,
                     "Busy state updates every immediate Practice control")
@@ -83,6 +87,8 @@ func run() -> void:
                 view.present(state(),true)
                 view._toggle_tempo_popup()
                 check(view.tempo_popup.visible,"BPM button reveals tempo controls")
+                check(view.practice_navigation.get_child_count() == 2,
+                    "Header contains only BPM and Settings, not a duplicate Play button")
                 view.tempo_popup.hide()
                 view.practice_music_button.pressed.emit()
                 view.practice_settings_button.pressed.emit()
