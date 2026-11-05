@@ -16,6 +16,8 @@ for script in \
   res://main.gd \
   res://practice_screen.gd \
   res://practice_score_stage.gd \
+  res://tempo_vocabulary.gd \
+  res://mint_glow_field.gd \
   res://settings_screen.gd \
   res://practice_frame_coordinator.gd \
   res://practice_state_presenter.gd \
