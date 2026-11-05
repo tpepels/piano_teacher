@@ -1,5 +1,7 @@
 # Practice experience design — 2026-10-15
 
+**Historical, superseded design brief.** The current architecture, delivery phases, acceptance gates and unsolved blockers live only in [ROADMAP](../ROADMAP.md), indexed through [docs/README](README.md). In particular, the 42%-playhead, HTTP-polling, and branch guidance below are historical and must not be implemented. The production practice interface uses a 33% fixed playhead, a forward-only visual axis, native retained score ink and an embedded in-process worker. The authoritative Python MIDI scoring clock stays separate from this presentation-only axis.
+
 The supplied handoff is the product brief. Functional score movement is the first
 acceptance gate; cosmetic completion cannot precede it. Python remains the sole
 musical clock, with Godot extrapolating each HTTP snapshot between polls.
