@@ -48,25 +48,19 @@ static func paint(canvas: Control, timeline, beat: float, bounds: Vector2,
     right = minf(canvas.size.x,right)
     if right <= left:
         return
-    var area := Rect2(left,top,right-left,bottom-top)
-    # The reference uses a pool of light, not an opaque green rectangle.
-    # Preserve luminous boundaries while retaining sharp white staff ink.
-    canvas.draw_rect(area,Color(Design.MINT,.085))
-    var glow_width := minf(area.size.x,maxf(28.0,gap*6.0))
-    var glow_center := clampf(playhead_x,left+glow_width*.5,right-glow_width*.5)
-    for band in range(4):
-        var width := glow_width*(1.0-float(band)*.18)
-        canvas.draw_rect(Rect2(glow_center-width*.5,top,width,bottom-top),
-            Color(Design.MINT,.016+float(band)*.009))
-    # Narrow edge halos make the measure readable without coloring every
-    # notehead and rest. This presentation uses the existing score geometry.
-    for edge_x in [left,right]:
-        canvas.draw_rect(Rect2(edge_x-3.0,top,6.0,bottom-top),
-            Color(Design.MINT,.070))
-        canvas.draw_line(Vector2(edge_x,top),Vector2(edge_x,bottom),
-            Color(Design.HIGHLIGHT,.65),1.1,true)
-    canvas.draw_rect(Rect2(left,top,right-left,3.0),Color(Design.MINT,.055))
-    canvas.draw_line(Vector2(left,top),Vector2(right,top),
-        Color(Design.HIGHLIGHT,.85),1.25,true)
-    canvas.draw_line(Vector2(left,bottom),Vector2(right,bottom),
-        Color(Design.MINT,.48),1.0,true)
+    # Never outline or fill the entire measure. On a short exercise that
+    # turns the music into a large green box. The native view already draws
+    # the sharp playhead; this helper adds only a soft halo nearby.
+    # The authoritative measure bounds merely clip that localized light.
+    var halo_width := minf(112.0,maxf(48.0,gap*6.0))
+    var strip_width := halo_width/16.0
+    for index in range(16):
+        var relative := (float(index)+0.5)/8.0-1.0
+        var strength := pow(maxf(0.0,1.0-absf(relative)),2.0)
+        var strip_left := maxf(left,playhead_x-halo_width*0.5+
+            float(index)*strip_width)
+        var strip_right := minf(right,playhead_x-halo_width*0.5+
+            float(index+1)*strip_width)
+        if strip_right > strip_left and strength > 0.0:
+            canvas.draw_rect(Rect2(strip_left,top,strip_right-strip_left,
+                bottom-top),Color(Design.MINT,0.085*strength))
