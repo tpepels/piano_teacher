@@ -380,17 +380,7 @@ func present_overview(values: Dictionary) -> void:
         rows.add_child(UI.label("%d later passages available from the step selector" % (group_keys.size()-last_visible),14,MUTED))
 
 func _stage_for_reader(source: String) -> String:
-    var phrase := source.replace("-"," ").strip_edges()
-    var normalized := phrase.to_lower()
-    if normalized.begins_with("coda chord"):
-        return "Chord notes"
-    if normalized.contains("slowdown x 4"):
-        return "Quarter-speed notes"
-    if normalized.contains("slowdown x 2"):
-        return "Half-speed notes"
-    if normalized == "original":
-        return "Original notes"
-    return phrase.capitalize()
+    return PracticeStepSelector.reader_level(source)
 
 
 func apply_viewport(view_size: Vector2, scale: float) -> void:

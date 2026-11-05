@@ -120,7 +120,8 @@ func test_screen(view: Control, scenario: String) -> void:
                 view.rows.get_child_count() <= 10,
                 "Only the nearby passages consume vertical layout space")
             check(view.summary.text.contains("319 of 639") and
-                view.passage_summary.text.contains("hand"),
+                view.passage_summary.text.contains("hand") and
+                view.steps.picker.text.contains("Quarter-speed notes"),
                 "The large course shows precise current position and playable context")
             view.apply_viewport(Vector2(800,600),1.0)
             for frame in range(5): await process_frame
@@ -143,7 +144,9 @@ func test_selector(view: Control) -> void:
     view.present_overview(values)
     values.steps.clear()
     check(view.picker.item_count == 3 and view.picker.text == "Step 2 / 3 · Original notes", "Captured popup rows retain the selected stage caption")
-    check(view.picker.get_item_text(0) == "1/3 · 1–4 · Right · Source progression: Skeleton notes", "Popup retains the real stage family and label")
+    check(view.picker.get_item_text(0) ==
+        "1/3 · measures 1–4 · Right hand · Basic notes",
+        "Full-stage selector uses readable names without changing source identity")
     view.previous_button.pressed.emit()
     view.next_button.pressed.emit()
     view.picker.item_selected.emit(1)

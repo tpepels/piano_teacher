@@ -2,6 +2,35 @@ extends HBoxContainer
 # Captures only lesson-step presentation and emits a numeric selection intent.
 const UI := preload("res://ui_factory.gd")
 signal step_requested(number: int)
+
+static func reader_level(raw: String) -> String:
+    # User-facing names only; the source-specific stage identifiers remain
+    # unchanged for lesson selection, grading and saved mastery.
+    var lower := raw.to_lower().replace("-"," ").strip_edges()
+    if lower.begins_with("coda chord"):
+        return "Chord notes"
+    if lower.contains("slowdown x 4") or lower.contains("slowdown x4"):
+        return "Quarter-speed notes"
+    if lower.contains("slowdown x 2") or lower.contains("slowdown x2"):
+        return "Half-speed notes"
+    if lower == "original" or lower == "original notes":
+        return "Original notes"
+    if lower == "skeleton" or lower == "skeleton notes":
+        return "Basic notes"
+    return raw.replace("-"," ").capitalize()
+
+
+static func reader_hand(raw: String) -> String:
+    match raw:
+        "right":
+            return "Right hand"
+        "left":
+            return "Left hand"
+        "both":
+            return "Both hands"
+        _:
+            return raw.capitalize()
+
 var picker: OptionButton
 var previous_button: Button
 var next_button: Button
@@ -57,12 +86,11 @@ func present_overview(values: Dictionary) -> void:
     entries = values.get("steps",[]).duplicate(true)
     picker.clear()
     for step in entries:
-        picker.add_item("%d/%d · %d–%d · %s · %s: %s" % [
+        picker.add_item("%d/%d · measures %d–%d · %s · %s" % [
             int(step.get("number",0)),entries.size(),
             int(step.get("first_bar",1)),int(step.get("last_bar",1)),
-            str(step.get("hand","")).capitalize(),
-            str(step.get("stage_family","Practice")),
-            str(step.get("stage_label",step.get("level","")))])
+            reader_hand(str(step.get("hand",""))),
+            reader_level(str(step.get("stage_label",step.get("level",""))))])
         picker.set_item_tooltip(picker.item_count - 1,
             "%s · %s · %s" % [str(step.get("stage_family","Practice")),
                 str(step.get("stage_label",step.get("level",""))),
@@ -78,8 +106,8 @@ func _present() -> void:
         picker.select(_current - 1)
         picker.text = "Step %d / %d · %s" % [
             _current, entries.size(),
-            str(entries[_current - 1].get("stage_label",
-                entries[_current - 1].get("level", "")))]
+            reader_level(str(entries[_current - 1].get("stage_label",
+                entries[_current - 1].get("level", ""))))]
         picker.tooltip_text = "Current lesson: %s · %s" % [
             str(entries[_current - 1].get("stage_family", "Practice")),
             str(entries[_current - 1].get("stage_label", ""))]
@@ -91,7 +119,7 @@ func _select(number: int) -> void:
 func apply_viewport(view_size: Vector2, scale: float) -> void:
     var compact: bool = view_size.x < 1250.0
     custom_minimum_size.x = 350.0 if view_size.x < 850.0 else 420.0 if compact else 500.0
-    picker.custom_minimum_size.x = 120.0 if view_size.x < 850.0 else 150.0 if compact else 180.0
+    picker.custom_minimum_size.x = 192.0 if view_size.x < 850.0 else 218.0 if compact else 264.0
     for arrow in [previous_button,next_button]:
         arrow.custom_minimum_size.x = 40.0
         arrow.add_theme_font_size_override("font_size",UI.font_size(15,scale))
