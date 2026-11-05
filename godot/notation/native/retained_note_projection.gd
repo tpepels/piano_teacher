@@ -5,8 +5,9 @@ extends RefCounted
 
 static func append_visible(notes: Array, shift_x: float, viewport_width: float,
         playhead_x: float, pass_index: int,
-        instances: Array, nearest_heads: Dictionary) -> int:
-    var minimum: float = -60.0-shift_x
+        instances: Array, nearest_heads: Dictionary,
+        local_floor_x: float = -INF) -> int:
+    var minimum: float = maxf(-60.0-shift_x,local_floor_x)
     var maximum: float = viewport_width+60.0-shift_x
     var low := 0
     var high: int = notes.size()
