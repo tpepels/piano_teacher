@@ -37,7 +37,6 @@ for library in "$PY_LIB_DIR"/*.so*; do
 done
 tar -C "$PY_LIB_DIR" \
   --exclude='*/__pycache__' --exclude='*.pyc' \
-  --exclude='*/tests/*' --exclude='*/test/*' \
   -cf - "python$PY_VERSION" | tar -C "$STAGE/runtime/python/lib" -xf -
 cp "$PIANO_GODOT_BINARY" "$STAGE/bin/godot"
 cp "$PIANO_BUNDLED_NODE" "$STAGE/bin/node"
