@@ -834,9 +834,10 @@ func _draw() -> void:
     var bottom: float = layout.staff_center("left")+gap*3.7
     if not layout.focused_staff.is_empty():
         var center: float = layout.staff_center(layout.focused_staff)
-        var playhead_half := maxf(gap*7.0,size.y*.27)
-        top = center-playhead_half
-        bottom = center+playhead_half
+        # Reference artwork uses a taller strike line than the staff itself.
+        # Glow is visual only; all note positions still use the same clock.
+        top = center-maxf(gap*8.0,size.y*.31)
+        bottom = center+maxf(gap*9.0,size.y*.37)
     var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
     if transport_overlay_enabled and not runway_overlay:
         var displayed_beat := displayed_scroll_beat() if score_loop_enabled else camera_clock+play_from_beat
@@ -847,9 +848,12 @@ func _draw() -> void:
             practice_timeline if score_loop_enabled else {},
             preparation_history if score_loop_enabled else {},runway_cutoff_beat)
         MeasureLight.paint(self,timeline,displayed_beat,bounds,gap,top,bottom,playhead_x)
-        for radius in [14.0, 7.0, 3.0]:
-            draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
-                Color(PREVIEW_LIGHT, .045+breath*.012))
+        # Soft concentric mint strokes without the former hard-edged box.
+        # Drawn behind original Verovio ink, so noteheads remain crisp.
+        for halo in [Vector2(72.0,.025), Vector2(42.0,.045),
+                Vector2(23.0,.080), Vector2(10.0,.14)]:
+            draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
+                Color(PREVIEW_LIGHT,halo.y+breath*.014),halo.x,true)
     # Always draw ten native rules; no copied or stitched raster systems.
     for staff in (layout.visible_staves() if not runway_overlay else []):
         var center: float = layout.staff_center(staff)
@@ -865,9 +869,11 @@ func _draw() -> void:
     # Engraving is always painted later; the transport clock is unchanged.
     if transport_overlay_enabled and not runway_overlay:
         draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
-            Design.HIGHLIGHT,2.2,true)
+            Design.HIGHLIGHT,2.4,true)
         draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
-            Color(Design.STONE,.50),.8,true)
+            Color(Design.STONE,.62),.9,true)
+        draw_circle(Vector2(playhead_x,top),9.0,Color(Design.MINT,.16))
+        draw_circle(Vector2(playhead_x,top),3.7,Design.STONE)
         # Beat breathing is an accent on the fixed playhead, not a moving
         # alternate clock. Music, retry preparation and calibration each
         # retain the application's single beat axis.
