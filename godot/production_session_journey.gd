@@ -178,8 +178,26 @@ func _process(_delta: float) -> bool:
             if restarted_transport <= initial_transport or not retry_prepared or                     int(state.get("revision",-1)) != initial_revision:
                 _fail("Retry changed the score or skipped the full rest")
                 return true
-            if not _ready_score() or view._stream_serial <= paused_serial:
-                _fail("Retry did not admit fresh pre-engraved notes")
+            var reserved_match := false
+            var wrong_side := false
+            for item in view.stream_passes:
+                if str(item.get("kind","source")) != "source":
+                    continue
+                var take_key: String = str(item.get("take_key",""))
+                if take_key.contains("|%d|" % restarted_transport) and \
+                        not bool(item.get("pending",false)):
+                    reserved_match = true
+                    # Real note ink must be attached to one immutable
+                    # source position. A reused offscreen candidate is
+                    # allowed; a new serial is not required on Retry.
+                    wrong_side = wrong_side or \
+                        float(item["world_origin"])+float(item["source_floor"]) < \
+                        retry_world_start + 0.25
+            if not _ready_score() or not reserved_match or wrong_side:
+                _fail("Retry lacks a matched future-only source reservation " +
+                    "ready=%s matching=%s early=%s serial=%d before=%d" % [
+                    str(_ready_score()),str(reserved_match),str(wrong_side),
+                    view._stream_serial,paused_serial])
                 return true
             if not _press(app.practice_view.listen_button,"Listen"):
                 return false

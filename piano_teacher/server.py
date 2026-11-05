@@ -44,7 +44,7 @@ from .application.control_dispatch import ControlDispatcher
 from .application.score_ack import ScoreAckState, choose_score_ack_action
 from .application.transport_commands import (
     StartFacts, select_start_route, require_pausable, resume_timeline,
-    scheduled_offscreen_start,
+    scheduled_offscreen_start, planned_retry_reverse_seconds,
 )
 from .application.stage_change import prepare_stage_change, apply_stage_change, guided_reentry
 from .application.practice_transitions import TransitionContext, decide_transition
@@ -1945,9 +1945,31 @@ class PracticeEngine:
             self._guided_recovery_pending = False
             self._resume_grading_after = 0.0
             self._resume_ignored_pitches.clear()
+            reverse_seconds = self.feedback_seconds
+            if presentation_lead_seconds > 0:
+                source = self._source_model()
+                measures = source["measures"]
+                context = max(
+                    (index for index, measure in enumerate(measures)
+                     if float(measure["start_beat"]) <= target + 1e-7),
+                    default=0)
+                rest_beats = float(
+                    source["practice_timeline"]["gap"]["duration_beats"])
+                # Source-metre preparation may be a different length from
+                # the general repeat gap (e.g., a changing time signature).
+                if 0 <= context < len(measures):
+                    from .notation.practice_timeline import preparation_measure_descriptor
+                    selected = measures[context]
+                    following = measures[context + 1] if context+1 < len(measures) else None
+                    rest_beats = float(preparation_measure_descriptor(
+                        selected, 0.0, source["staff_order"],
+                        following_measure=following)["duration_beats"])
+                reverse_seconds = planned_retry_reverse_seconds(
+                    reading_lead_seconds=presentation_lead_seconds,
+                    semantic_rest_seconds=rest_beats * 60.0 / self.plan.bpm,
+                    minimum_rewind_seconds=self.feedback_seconds)
             self._schedule_preparation(target, now=sampled, from_visual=position,
-                                       reverse_seconds=max(
-                                           self.feedback_seconds,presentation_lead_seconds))
+                                       reverse_seconds=reverse_seconds)
             self.feedback = "Get ready to retry"
             return
         self.start(mode="perform" if self.mode == "perform" else "practice",

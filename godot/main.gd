@@ -1035,7 +1035,8 @@ func _send_action(command: Dictionary) -> void:
         command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
             float(reserved["start_world"]),visual_now,score_flow.bpm)
         if requested == "resume":
-            command["reuse_pending_score"] = bool(reserved.get("reused",false))
+            command["reuse_pending_score"] = bool(
+                reserved.get("reused_unplayed_count_in",false))
         command["continuous_horizon_beats"] = maxf(4.0,
             renderer._stream_right_beats()+
             renderer._stream_header_beats(0.0)+1.5)

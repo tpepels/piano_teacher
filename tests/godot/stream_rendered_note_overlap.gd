@@ -28,7 +28,7 @@ class InstrumentedView:
         stream_passes.append({"segment":segment,"clip":clip,
             "world_origin":start_world-source_beat,
             "source_floor":from_beat,"source_ceiling":through_beat,
-            "take_key":take_key,"pending":take_key=="prepared",
+            "take_key":take_key,"pending":take_key in ["prepared","autopending"],
             "serial":_stream_serial})
 var failures := 0
 func check(ok: bool, message: String) -> void:

@@ -58,3 +58,33 @@ def test_resume_shifts_only_running_non_guided_deadlines(inputs, expected):
     assert resume_timeline(**{**facts,**inputs}) is expected
     with pytest.raises(ValueError, match="unless an exercise is paused"):
         resume_timeline(**{**facts, **inputs, "paused":False})
+
+
+
+@pytest.mark.parametrize(("lead","rest","minimum","expected"), [
+    (14.0,6.0,1.0,8.0),
+    (7.0,6.0,1.0,1.0),
+    (3.5,3.0,0.1,0.5),
+])
+def test_retry_reading_lead_accounts_for_written_rest_once(lead, rest, minimum, expected):
+    from piano_teacher.application.transport_commands import planned_retry_reverse_seconds
+    assert planned_retry_reverse_seconds(
+        reading_lead_seconds=lead,
+        semantic_rest_seconds=rest,
+        minimum_rewind_seconds=minimum) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(("lead","rest","minimum"), [
+    (4.0,6.0,1.0),
+    (7.0,6.0,2.0),
+    (float("nan"),4.0,1.0),
+    (8.0,0.0,1.0),
+])
+def test_retry_reservation_fails_closed_if_rest_or_reading_lead_cannot_fit(
+        lead, rest, minimum):
+    from piano_teacher.application.transport_commands import planned_retry_reverse_seconds
+    with pytest.raises(ValueError, match="retry"):
+        planned_retry_reverse_seconds(
+            reading_lead_seconds=lead,
+            semantic_rest_seconds=rest,
+            minimum_rewind_seconds=minimum)

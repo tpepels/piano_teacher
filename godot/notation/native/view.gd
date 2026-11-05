@@ -658,6 +658,7 @@ func arm_stream_take(world: float, opening: float,
     stream_world_beat = maxf(stream_world_beat,world)
     var serial := -1
     var reused := false
+    var reused_unplayed := false
     if resuming_paused and _stream_was_paused and \
             absf(opening-_stream_paused_source) < .0001:
         var old_index: int = StreamAdmission.paused_unplayed_index(
@@ -665,6 +666,7 @@ func arm_stream_take(world: float, opening: float,
         if old_index >= 0:
             serial = int(stream_passes[old_index]["serial"])
             reused = true
+            reused_unplayed = true
     if serial < 0 and resuming_paused:
         serial = _stream_claim_pending_auto(stream_world_beat,opening)
         reused = serial >= 0
@@ -688,7 +690,8 @@ func arm_stream_take(world: float, opening: float,
             item["armed"] = true
             _stream_armed_serial = serial
             return {"start_world":float(item["world_origin"])+opening,
-                "opening":opening,"reused":reused}
+                "opening":opening,"reused":reused,
+                "reused_unplayed_count_in":reused_unplayed}
     return {}
 
 

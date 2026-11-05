@@ -65,3 +65,29 @@ def scheduled_offscreen_start(deadline: float, lead_beats: float,
             and bpm > 0.0):
         raise ValueError("Invalid future notation reading lead")
     return deadline + lead_beats * 60.0 / bpm
+
+
+
+def planned_retry_reverse_seconds(
+    *, reading_lead_seconds: float, semantic_rest_seconds: float,
+    minimum_rewind_seconds: float,
+) -> float:
+    """Place the graded retry at the already engraved world's future onset.
+
+    The visible preparation contains one genuine written empty measure.
+    Subtract that measure from the supplied total lead. The prior implementation
+    treated the total lead as just the reverse-animation duration and inserted
+    the entire rest AGAIN, making the sound/score start late by one measure.
+
+    No-UI engine calls still use their established intrinsic preparation
+    schedule; this function applies only to an explicitly reserved world onset.
+    """
+    values = (reading_lead_seconds, semantic_rest_seconds, minimum_rewind_seconds)
+    if not all(math.isfinite(v) for v in values) or (
+        reading_lead_seconds <= 0 or semantic_rest_seconds <= 0
+        or minimum_rewind_seconds < 0):
+        raise ValueError("Invalid scheduled retry time")
+    available = reading_lead_seconds - semantic_rest_seconds
+    if available + 0.01 < max(0.05, minimum_rewind_seconds):
+        raise ValueError("Future retry reservation lacks space for one full rest")
+    return max(0.05, available)
