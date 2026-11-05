@@ -21,6 +21,9 @@ var ready_visible_since_ms := -1
 var paused_sample_ms := -1
 var paused_world_beat := NAN
 var paused_pass_serial := -1
+var ready_pass_serial := -1
+var ready_world_origin := NAN
+var ready_world_beat := NAN
 var resumed_sample_ms := -1
 var resumed_world_beat := NAN
 var resumed_pass_serial := -1
@@ -112,13 +115,41 @@ func _process(_delta: float) -> bool:
                 not bool(app.last_state.get("loaded",false)):
             _fail("Startup did not navigate to the loaded practice screen")
             return true
-        # Ready intentionally shows a continuously moving EMPTY staff. The
-        # original retained note atlas must still be compiled before Play.
-        if not renderer.stream_enabled or not renderer.stream_passes.is_empty():
-            _fail("Ready stream must be active and contain no admitted notes")
+        # READY must preposition authentic source notes OFFSCREEN before Play,
+        # rather than using a transport callback to spawn source-local ink.
+        # An empty candidate means the renderer has not run its first frame.
+        if renderer.stream_passes.is_empty():
+            return false
+        var prepared: Dictionary = {}
+        for item in renderer.stream_passes:
+            if str(item.get("kind","source")) == "source" and \
+                    bool(item.get("pending",false)):
+                prepared = item
+                break
+        if prepared.is_empty():
+            _fail("Ready lacks a future pre-engraved source reservation")
+            return true
+        var density: float = renderer.timeline.pixels_per_beat
+        var first_ink_x: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
+            (float(prepared["world_origin"])-renderer.stream_world_beat) * \
+            density - 15.0*renderer.staff_gap()
+        if first_ink_x <= renderer.size.x+12.0:
+            _fail("Ready source was placed within the visible staff")
             return true
         if not renderer.drawn_noteheads.is_empty():
-            _fail("Ready screen revealed exercise noteheads before transport")
+            _fail("Source noteheads appeared onscreen before offscreen travel")
+            return true
+        if ready_visible_since_ms < 0:
+            ready_visible_since_ms = Time.get_ticks_msec()
+            ready_world_beat = renderer.stream_world_beat
+            ready_world_origin = float(prepared["world_origin"])
+            ready_pass_serial = int(prepared["serial"])
+            return false
+        if Time.get_ticks_msec()-ready_visible_since_ms < 250:
+            return false
+        if renderer.stream_world_beat <= ready_world_beat or \
+                float(prepared["world_origin"]) != ready_world_origin:
+            _fail("Ready world-axis stopped or repositioned source while waiting for Play")
             return true
         var forward_beats: float = renderer.size.x*(1.0-ScoreView.PLAYHEAD_FRACTION) / renderer.timeline.pixels_per_beat
         if forward_beats < 2.0:
@@ -141,6 +172,11 @@ func _process(_delta: float) -> bool:
         if not str(app.last_state.get("phase","")) in ["count_in","playing"]:
             return false
         initial_transport = int(app.last_state.get("transport_id",-1))
+        if renderer._stream_serial != ready_pass_serial or \
+                renderer.stream_passes.is_empty() or \
+                float(renderer.stream_passes[0]["world_origin"]) != ready_world_origin:
+            _fail("Play spawned notes or changed the prepositioned source origin")
+            return true
         transport_seen = true
         print("PHASE6_PRODUCTION_TRANSPORT_STARTED transport=",initial_transport)
         return false
@@ -194,7 +230,19 @@ func _process(_delta: float) -> bool:
         _fail("Resume froze or reset the continuously moving staff")
         return true
     if renderer._stream_serial < paused_pass_serial+1:
-        _fail("Resume failed to admit a fresh copy of remaining notation")
+        _fail("Resume failed to preposition a fresh future passage")
+        return true
+    var resumed_future := false
+    for item in renderer.stream_passes:
+        if int(item["serial"]) > paused_pass_serial and \
+                str(item.get("kind","source")) == "source":
+            var x: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
+                (float(item["world_origin"])+float(item["source_floor"])-
+                renderer.stream_world_beat)*renderer.timeline.pixels_per_beat
+            if x > renderer.size.x:
+                resumed_future = true
+    if not resumed_future:
+        _fail("Resume inserted a new source in the viewport rather than offscreen")
         return true
     if not is_equal_approx(renderer.timeline.pixels_per_beat,
             renderer.configured_density) and renderer.timeline.pixels_per_beat < 1.0:
