@@ -134,6 +134,12 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
             "Future score lacks authentic layout or semantic model")
         return
     _future = NativeView.new()
+    # A future stage must use the same staff presentation and background
+    # as the active stage before its retained note ink is pre-engraved.
+    if is_instance_valid(stage.renderer):
+        _future.external_backdrop = stage.renderer.external_backdrop
+        _future.compact_inactive_staff = stage.renderer.compact_inactive_staff
+        _future.active_hand = stage.renderer.active_hand
     # Preserve the active learner's horizontal density setting across
     # precompiled stages; retain native collision fitting if it needs more.
     if is_instance_valid(stage.renderer):
