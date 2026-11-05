@@ -300,7 +300,7 @@ func _update_hand_stages(state: Dictionary) -> void:
     var stages: Array = state.get("hand_stages", [])
     # Transport changes must not add/remove a layout row: doing so changes
     # the score's zoom and moves its notes at Start and Pause.
-    practice_stage_bar.visible = false
+    practice_stage_bar.visible = not stages.is_empty()
     if stages == presented_hand_stages:
         return
     presented_hand_stages = stages.duplicate(true)
