@@ -716,8 +716,6 @@ class PracticeEngine:
         # Timestamp in the hardware input callback, not on the rendering thread.
         now = time.monotonic() if received_at is None else received_at
         with self.lock:
-            if not deferred:
-                self.midi.observe(message, now=now)
             if self.midi_calibration.active:
                 if message.type == "note_on" and message.velocity > 0:
                     self.midi_calibration.observe(now)
@@ -744,6 +742,8 @@ class PracticeEngine:
                     self.control(action)
                 if decision.consumed:
                     return
+            if not deferred:
+                self.midi.observe(message, now=now)
             corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
                             if corrected_at is None else corrected_at)
             # A key can reach the next attempt's musical deadline before the
