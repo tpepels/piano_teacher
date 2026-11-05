@@ -173,10 +173,26 @@ func _process(_delta: float) -> bool:
         if not str(app.last_state.get("phase","")) in ["count_in","playing"]:
             return false
         initial_transport = int(app.last_state.get("transport_id",-1))
-        if renderer._stream_serial != ready_pass_serial or \
-                renderer.stream_passes.is_empty() or \
-                float(renderer.stream_passes[0]["world_origin"]) != ready_world_origin:
-            _fail("Play spawned notes or changed the prepositioned source origin")
+        var original_survived := false
+        var new_ink_offscreen := true
+        for item in renderer.stream_passes:
+            if int(item["serial"]) == ready_pass_serial:
+                original_survived = is_equal_approx(
+                    float(item["world_origin"]),ready_world_origin)
+            elif int(item["serial"]) > ready_pass_serial and \
+                    str(item.get("kind","source")) == "source":
+                # Automatic successors can already be prepared during the
+                # first graded frame, but NEVER inside the visible viewport.
+                var leading: float = renderer._stream_header_beats(
+                    float(item["source_floor"]))
+                var onset: float = float(item["world_origin"])+ \
+                    float(item["source_floor"])
+                var left: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
+                    (onset-renderer.stream_world_beat-leading) * \
+                    renderer.timeline.pixels_per_beat
+                new_ink_offscreen = new_ink_offscreen and left > renderer.size.x
+        if not original_survived or not new_ink_offscreen:
+            _fail("Play shifted its existing world origin or admitted notes onscreen")
             return true
         transport_seen = true
         print("PHASE6_PRODUCTION_TRANSPORT_STARTED transport=",initial_transport)
