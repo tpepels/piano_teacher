@@ -107,3 +107,47 @@ def test_range_validation_rejects_invalid_or_reversed_midi_values(tmp_path):
         with pytest.raises(ValueError):
             library.update(midi_key_ranges=invalid)
     assert library.public_settings()["midi_key_ranges"] == {}
+
+
+
+def test_real_midi_pause_shortcut_resumes_after_count_in_without_restarting_take(
+        tmp_path, monkeypatch):
+    from piano_teacher import server
+    from piano_teacher.learning import LearningPlan
+    from piano_teacher.music import Note, Phrase, Piece
+
+    clock = [100.0]
+    monkeypatch.setattr(server.time, "monotonic",lambda: clock[0])
+    notes = (Note(0, 1, 60, 0, 0, "right"),
+             Note(2, 3, 64, 0, 0, "right"))
+    phrase = Phrase(1,1,1,0.0,4.0,notes)
+    engine = PracticeEngine(tmp_path,enable_midi=False)
+    engine.plan = LearningPlan(Piece("Resume",80,notes,(phrase,)))
+    engine.fingerprint = "pause-key-shortcut"
+    engine.midi.port = object()
+    engine.midi.device = "piano"
+    engine.midi_key_shortcuts.configure({"piano":[21,108]})
+    try:
+        engine.start()
+        old_id = engine.transport_id
+        old_origin = engine.visual_transport.run_at
+        clock[0] = old_origin + .5
+        engine._receive(pressed(21))
+        assert engine.visual_transport.paused
+        frozen = engine.state()["clock_beat"]
+        engine._receive(released(21))
+        clock[0] += 7.0
+        assert engine.state()["clock_beat"] == pytest.approx(frozen)
+        engine._receive(pressed(21))
+        assert not engine.visual_transport.paused
+        assert engine.transport_id == old_id
+        assert engine.state()["phase"] == "count_in"
+        assert engine.visual_transport.run_at > old_origin + 7.0
+        lead_end = engine.visual_transport.run_at
+        engine._receive(released(21))
+        clock[0] = lead_end
+        assert engine.state()["clock_beat"] == pytest.approx(frozen)
+        assert engine.midi.input_count == 0
+    finally:
+        engine.midi.port = None
+        engine.close()
