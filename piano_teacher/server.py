@@ -142,6 +142,10 @@ class PracticeEngine:
         self.runtime_timings = RuntimeTimings()
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
+        # Musical clock resumes at its previous beat after a reading lead-in.
+        # No MIDI attack during that lead-in can alter a graded attempt.
+        self._resume_grading_after = 0.0
+        self._resume_ignored_pitches: set[int] = set()
         self._deferred_score_ack: int | None = None
         self.next_action = "Open a MIDI file."
         self.retry_range: dict | None = None
@@ -759,6 +763,21 @@ class PracticeEngine:
                     return
             if not deferred:
                 self.midi.observe(message, now=now)
+            # Manual resume temporarily revisits source-time positions for
+            # reading. Suppress that ungraded pre-roll, including the eventual
+            # releases of keys first pressed during it.
+            if message.type in ("note_on","note_off"):
+                is_on = message.type == "note_on" and message.velocity > 0
+                if now < self._resume_grading_after and self.running:
+                    if is_on:
+                        self._resume_ignored_pitches.add(message.note)
+                    else:
+                        self._resume_ignored_pitches.discard(message.note)
+                    return
+                if message.note in self._resume_ignored_pitches:
+                    if not is_on:
+                        self._resume_ignored_pitches.remove(message.note)
+                    return
             corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
                             if corrected_at is None else corrected_at)
             # A key can reach the next attempt's musical deadline before the
@@ -983,6 +1002,8 @@ class PracticeEngine:
                           if self.mode == "learn" and self.teaching is not None else None)
                 self.measurement.flush_intervals(time.monotonic())
         self._deferred_midi.clear()
+        self._resume_grading_after = 0.0
+        self._resume_ignored_pitches.clear()
         # Stopping/restarting a take does not invalidate precompiled next
         # notation. Its stage-key + score revision remain authoritative:
         # navigation, library changes and generation mismatches fail that
@@ -1568,6 +1589,8 @@ class PracticeEngine:
             if self.measurement.attempt_id is not None:
                 self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
             self._policy_retry = None
+            self._resume_grading_after = 0.0
+            self._resume_ignored_pitches.clear()
             self.mode = mode
             self.teaching = None
             self.guided_range = None
@@ -1881,6 +1904,8 @@ class PracticeEngine:
             self._pending_assessed_bpm = None
             self.visual_transport._retry_previous_pass = False
             self._guided_recovery_pending = False
+            self._resume_grading_after = 0.0
+            self._resume_ignored_pitches.clear()
             self._schedule_preparation(target, now=sampled, from_visual=position,
                                        reverse_seconds=self.feedback_seconds)
             self.feedback = "Get ready to retry"
@@ -1908,10 +1933,14 @@ class PracticeEngine:
             preview_pending=self.visual_transport._preview_loop_pending,
             automatic_feedback=self.pending_result is not None and self.auto)
         now = time.monotonic()
+        paused_at = self.visual_transport.paused_at
         previous_origin = self.visual_transport.run_at
+        had_reading_lead = self._resume_grading_after > paused_at
         if learning:
             self.teaching.resume(now=now)
         self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
+        if had_reading_lead:
+            self._resume_grading_after += max(0.0, now-paused_at)
         # A paused passage returns with a short genuine count-in. Its
         # authoritative run_at moves, so MIDI grading and source ink agree
         # and no note is required during the visual reading lead-in.
@@ -1919,9 +1948,12 @@ class PracticeEngine:
                 and self.mode in ("practice", "perform")
                 and self.midi.connected and not self.preview_only
                 and self.pause_context == "playing"
+                and not had_reading_lead
                 and self.visual_transport.run_at <= now):
             lead_beats = max(1.0, min(4.0, self.count_in_bar_beats))
-            self.visual_transport.run_at += lead_beats * 60.0 / self.plan.bpm
+            lead_seconds = lead_beats * 60.0 / self.plan.bpm
+            self.visual_transport.run_at += lead_seconds
+            self._resume_grading_after = now + lead_seconds
             self.count_in_beats = lead_beats
         self.measurement.event("timeline_resume", {
             "scheduled_origin_before": previous_origin-self.measurement.origin,
@@ -2586,6 +2618,9 @@ class PracticeEngine:
         if not self.visual_transport.paused and self.mode == "learn" and self.teaching is not None:
             teaching_phase = ("loading" if self.awaiting_score_revision is not None
                               else self.teaching.snapshot(now=now)["phase"])
+        if (self.running and not self.visual_transport.paused
+                and now < self._resume_grading_after):
+            return "count_in"
         return project_phase(PhaseSnapshot(
             paused=self.visual_transport.paused, running=self.running, run_at=self.visual_transport.run_at,
             teaching_phase=teaching_phase,
@@ -2674,6 +2709,12 @@ class PracticeEngine:
             calibration_sample_at = time.monotonic()
             state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
+            state["resume_count_in_beat"] = (
+                (calibration_sample_at - self._resume_grading_after)
+                * self.plan.bpm / 60.0
+                if self.running and not self.visual_transport.paused
+                and calibration_sample_at < self._resume_grading_after
+                and self.plan is not None else None)
             state["midi_key_range"] = self.midi_key_shortcuts.status(self.midi.device)
             state["midi_calibration"] = self.midi_calibration.snapshot(
                 calibration_sample_at)
