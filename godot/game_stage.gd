@@ -239,8 +239,10 @@ func _draw() -> void:
                 Color(Design.SCORE_ACCENT, beat_ripple * .32))
     # Segments represent actual source measures, including pickup measures
     # and mixed meters. They never use a decorative fixed 5-slot subdivision.
-    var inset: float = clampf(w * .045, 15.0, 58.0)
-    var track_y: float = h - 20.0
+    # Wide, thin rail floats above the transport instead of hugging the
+    # bottom edge of a dark rectangular score panel.
+    var inset: float = clampf(w * .025, 14.0, 38.0)
+    var track_y: float = h - 48.0
     var rail_width: float = maxf(1.0, w - inset * 2.0)
     var fill_tone: Color = Design.SCORE_PROGRESS
     if result_wave > .001:
@@ -249,7 +251,7 @@ func _draw() -> void:
     var end_beat: float = float(measure_boundaries[-1]) if measure_boundaries.size() >= 2 else 1.0
     var duration: float = maxf(.001, end_beat - start_beat)
     var count: int = measure_boundaries.size() - 1 if measure_boundaries.size() >= 2 else 1
-    var gap: float = minf(7.0, rail_width / float(maxi(1, count)) * .12)
+    var gap: float = minf(1.5, rail_width / float(maxi(1, count)) * .025)
     var total_gaps: float = gap * float(count-1)
     var usable: float = maxf(1.0, rail_width-total_gaps)
     var played: float = play_from_beat + shown_progress * (progress_end_beat - play_from_beat)
@@ -261,11 +263,11 @@ func _draw() -> void:
         var filled: float = clampf((played-left_beat) / maxf(.001, right_beat-left_beat), 0.0, 1.0)
         var current: bool = measure_boundaries.size() >= 2 and (
             played >= left_beat-.001 and played < right_beat-.001)
-        draw_rect(Rect2(segment_x,track_y,segment_width,6.0),
-            Color(Design.SAGE,.37),true)
+        draw_rect(Rect2(segment_x,track_y,segment_width,5.0),
+            Color(Design.SAGE,.44),true)
         if filled > 0.0:
-            draw_rect(Rect2(segment_x,track_y,segment_width*filled,6.0),
-                Color(fill_tone,.94),true)
+            draw_rect(Rect2(segment_x,track_y,segment_width*filled,5.0),
+                Color(fill_tone,.98),true)
         if current:
             # For a one-measure exercise, lighting its entire full-width
             # rail looked like a border. Keep the cue at the real play point.
@@ -276,9 +278,9 @@ func _draw() -> void:
                 segment_x+segment_width-halo_width)
             draw_rect(Rect2(halo_left,track_y-3.0,halo_width,12.0),
                 Color(Design.MINT,.11),true)
-            draw_circle(Vector2(played_x,track_y+3.0),6.0,
-                Color(Design.MINT,.23))
-            draw_circle(Vector2(played_x,track_y+3.0),3.2,Design.HIGHLIGHT)
+            draw_circle(Vector2(played_x,track_y+2.5),6.0,
+                Color(Design.MINT,.20))
+            draw_circle(Vector2(played_x,track_y+2.5),3.0,Design.HIGHLIGHT)
         if segment_width >= 18.0:
             var marker := Vector2(segment_x+segment_width*.5,track_y+3.0)
             draw_circle(marker,4.4,
