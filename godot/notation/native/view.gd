@@ -364,8 +364,12 @@ func _stream_release_all() -> void:
     for item in stream_passes:
         var segment = item.get("segment")
         var clip = item.get("clip")
-        if segment != null and is_instance_valid(segment) and clip != null and is_instance_valid(clip):
+        if segment != null and is_instance_valid(segment):
             segment.reparent(self,false)
+            if str(item.get("kind","source")) == "rest":
+                retained_all_segments.erase(segment)
+                segment.queue_free()
+        if clip != null and is_instance_valid(clip):
             clip.queue_free()
     stream_passes.clear()
     _stream_last_take = ""
@@ -545,7 +549,31 @@ func _stream_add_take(source_beat: float, start_world: float,
         "take_key":take_key,
         "pending":take_key == "prepared",
         "serial":_stream_serial,
+        "kind":"source",
     })
+    # The rest belongs to exactly the same immutable moving-bar world axis
+    # as its preceding source. It is never a second source renderer/camera.
+    var silence: Dictionary = practice_timeline.get("gap",{})
+    var gap: float = float(silence.get("duration_beats",0.0))
+    if gap > .0001:
+        _stream_add_rest(start_world-source_beat+timeline.duration_beats,
+            gap,_stream_serial)
+
+
+func _stream_add_rest(world: float, duration: float, owner_serial: int) -> void:
+    var rest = _new_retained_segment("rest")
+    var window := Control.new()
+    window.name = "StreamSemanticRest"
+    window.clip_contents = true
+    window.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    window.focus_mode = Control.FOCUS_NONE
+    add_child(window)
+    rest.reparent(window,false)
+    stream_passes.append({
+        "segment":rest,"clip":window,"world_origin":world,
+        "source_floor":0.0,"source_ceiling":duration,
+        "take_key":"rest","pending":false,"kind":"rest",
+        "serial":-owner_serial})
 
 
 func _stream_right_beats() -> float:
@@ -640,6 +668,9 @@ func _stream_prune_expired() -> void:
         if source_left + float(item.get("source_ceiling",
                 timeline.duration_beats))*density < -60.0:
             segment.reparent(self,false)
+            if str(item.get("kind","source")) == "rest":
+                retained_all_segments.erase(segment)
+                segment.queue_free()
             clip.queue_free()
             stream_passes.remove_at(index)
 
@@ -715,9 +746,12 @@ func _project_stream(playhead_x: float) -> void:
             float(item["world_origin"])-stream_world_beat)*density
         var floor_x: float = float(item["source_floor"])*density
         var ceiling_x: float = float(item["source_ceiling"])*density
-        var bounds: Vector2 = StreamAdmission.engraved_clip_bounds(
-            float(item["source_floor"]),float(item["source_ceiling"]),
-            density,staff_gap(),timeline.duration_beats)
+        var is_rest: bool = str(item.get("kind","source")) == "rest"
+        var bounds: Vector2 = (Vector2(0.0,
+            float(item["source_ceiling"])*density)
+            if is_rest else StreamAdmission.engraved_clip_bounds(
+                float(item["source_floor"]),float(item["source_ceiling"]),
+                density,staff_gap(),timeline.duration_beats))
         # Physical crop extends beyond semantic attacks. The extra prefix
         # contains the real initial clef/key/meter; the extra suffix contains
         # full noteheads and barline ink. Grading and hit-tests stay bounded
@@ -733,11 +767,12 @@ func _project_stream(playhead_x: float) -> void:
                 floor_x,ceiling_x)
             visible_symbols += count
             frame_scanned_events += count
-            fingering_pass_clocks.append({
-                "clock":stream_world_beat-float(item["world_origin"])-play_from_beat,
-                "pass_index":0,"pass_start":0.0,
-                "stream_floor":float(item["source_floor"]),
-                "stream_ceiling":float(item["source_ceiling"])})
+            if not is_rest:
+                fingering_pass_clocks.append({
+                    "clock":stream_world_beat-float(item["world_origin"])-play_from_beat,
+                    "pass_index":0,"pass_start":0.0,
+                    "stream_floor":float(item["source_floor"]),
+                    "stream_ceiling":float(item["source_ceiling"])})
     # The source geometry is in immutable local source coordinates. Only
     # the clip windows and Node2D transforms change on every render frame.
     for item in stream_passes:
