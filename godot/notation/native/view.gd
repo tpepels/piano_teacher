@@ -100,6 +100,7 @@ var stream_world_beat := 0.0
 var stream_passes: Array = []
 var _stream_last_take := ""
 var _stream_was_paused := false
+var _stream_paused_source := 0.0
 var _stream_live_serial := -1
 var _stream_serial := 0
 # Pure presentation clock for empty idle/paused staves. Never fed into
@@ -388,6 +389,7 @@ func _stream_release_all() -> void:
     stream_passes.clear()
     _stream_last_take = ""
     _stream_was_paused = false
+    _stream_paused_source = 0.0
     _stream_live_serial = -1
 
 
@@ -657,32 +659,49 @@ func present_flow(world_beat: float, state: Dictionary,
     var paused_now: bool = bool(state.get("paused",false))
     var running_now: bool = bool(state.get("running",false)) and not paused_now
     if paused_now:
-        # Freeze admission, never the visual world axis. Previously exposed
-        # notes and rests may leave the viewport, but no new source arrives.
+        # Already admitted notes continue past the playhead. No new ink is
+        # admitted during a pause, and the source position remains available
+        # when a fresh reading lead-in is scheduled.
+        if not _stream_was_paused:
+            _stream_paused_source = maxf(0.0,source)
         _stream_was_paused = true
         _stream_live_serial = -1
     elif allow_admission and running_now and phase in ["count_in","playing",
             "guided_wait"]:
         if key != _stream_last_take or _stream_was_paused:
             _stream_live_serial = -1
+        var opening: float = maxf(0.0,
+            float(state.get("play_from_beat",0.0)))
+        if _stream_was_paused and key == _stream_last_take:
+            opening = maxf(opening,_stream_paused_source)
         if _stream_live_serial >= 0:
             var extended := false
             for item in stream_passes:
                 if int(item["serial"]) == _stream_live_serial:
+                    # A retained score copy never crosses the next separately
+                    # reserved copy on the global timeline.
+                    var extension: float = minf(timeline.duration_beats,
+                        source + StreamAdmission.LOOKAHEAD_BEATS)
+                    for other in stream_passes:
+                        if int(other["serial"]) == _stream_live_serial:
+                            continue
+                        var next_start: float = float(other["world_origin"]) + \
+                            float(other["source_floor"])
+                        if next_start > float(item["world_origin"]) + \
+                                float(item["source_floor"]):
+                            extension = minf(extension,next_start -
+                                StreamAdmission.REST_GAP_BEATS -
+                                float(item["world_origin"]))
                     item["source_ceiling"] = maxf(
-                        float(item["source_ceiling"]),
-                        minf(timeline.duration_beats,
-                            source + StreamAdmission.LOOKAHEAD_BEATS))
+                        float(item["source_ceiling"]),extension)
                     extended = true
                     break
             if not extended:
                 _stream_live_serial = -1
         if _stream_live_serial < 0:
-            var occupied: float = StreamAdmission.reserved_through(
-                stream_passes,key,stream_world_beat)
             var admission: Dictionary = StreamAdmission.window(
-                source,maxf(0.0,float(state.get("play_from_beat",0.0))),
-                timeline.duration_beats,occupied)
+                source,opening,timeline.duration_beats,
+                stream_world_beat,stream_passes)
             if bool(admission["admit"]):
                 _stream_add_take(source,stream_world_beat,
                     float(admission["floor"]),float(admission["ceiling"]),key)

@@ -36,6 +36,7 @@ const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
 const CommandSuccessEffects := preload("res://command_success_effects.gd")
 const PracticeControlPolicy := preload("res://practice_control_policy.gd")
+const StreamAdmission := preload("res://score_stream_admission.gd")
 const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
@@ -1013,6 +1014,18 @@ func _send_action(command: Dictionary) -> void:
         practice_view.begin_action(requested, previous_action)
         return
     practice_view.begin_action(requested)
+    if requested in ["start","restart","resume"] and \
+            str(last_state.get("mode","practice")) in ["practice","perform"] and \
+            practice_view.stage.renderer != null:
+        # The user's action reserves the next musical deadline beyond all
+        # notes still moving on the visual bar. The engine, not the GUI,
+        # applies this lead to MIDI grading and count-in.
+        var visual_now: float = score_flow.project(Time.get_ticks_msec())
+        var requested_lead: float = StreamAdmission.reading_lead_seconds(
+            practice_view.stage.renderer.stream_passes,visual_now,
+            maxf(1.0,float(last_state.get("bpm",40.0))))
+        command = command.duplicate(true)
+        command["presentation_lead_seconds"] = requested_lead
     _send_command("practice.command", command)
 
 

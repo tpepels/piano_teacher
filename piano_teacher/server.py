@@ -1583,7 +1583,8 @@ class PracticeEngine:
         return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
-              loop_continuation: bool = False, scheduled_deadline: float | None = None):
+              loop_continuation: bool = False, scheduled_deadline: float | None = None,
+              presentation_lead_seconds: float = 0.0):
         with self.lock:
             if self.plan is None:
                 raise ValueError("Open a piece first")
@@ -1634,6 +1635,13 @@ class PracticeEngine:
             self.next_boundary_beat = scheduled.next_boundary_beat
             self.visual_transport.run_at = (scheduled.run_at if scheduled_deadline is None
                                             else scheduled_deadline)
+            if scheduled_deadline is None and presentation_lead_seconds > 0:
+                self.visual_transport.run_at = max(
+                    self.visual_transport.run_at,
+                    time.monotonic() + min(30.0, presentation_lead_seconds))
+                self.count_in_beats = max(
+                    self.count_in_beats,
+                    (self.visual_transport.run_at-time.monotonic())*self.plan.bpm/60)
             scope = ("preview" if self.preview_only else "perform" if mode == "perform" else
                      "partial" if self._automatic_remedial_review else
                      "section_review" if self.review_end_beat is not None else
@@ -1820,11 +1828,13 @@ class PracticeEngine:
             self.feedback = "Stopped"
             self.next_action = "Start when you are ready."
         elif action in ("start", "restart"):
-            self._start_or_restart(action)
+            self._start_or_restart(action, presentation_lead_seconds=float(
+                kwargs.get("presentation_lead_seconds",0.0)))
         elif action == "pause":
             self._pause_current_session()
         elif action == "resume":
-            self._resume_current_session()
+            self._resume_current_session(presentation_lead_seconds=float(
+                kwargs.get("presentation_lead_seconds",0.0)))
 
     def _open_selected_measure(self, kwargs: dict):
         """Open a source measure using the existing lesson navigation policy."""
@@ -1858,7 +1868,8 @@ class PracticeEngine:
             self.next_action = "Press Start to play from the selected measure."
         return
 
-    def _start_or_restart(self, action: str):
+    def _start_or_restart(self, action: str, *,
+                          presentation_lead_seconds: float = 0.0):
         """Start a take or schedule a seamless retry under the control lock."""
         if self._settlement_failed:
             revision = self.score_revision
@@ -1912,10 +1923,12 @@ class PracticeEngine:
             self._resume_grading_after = 0.0
             self._resume_ignored_pitches.clear()
             self._schedule_preparation(target, now=sampled, from_visual=position,
-                                       reverse_seconds=self.feedback_seconds)
+                                       reverse_seconds=max(
+                                           self.feedback_seconds,presentation_lead_seconds))
             self.feedback = "Get ready to retry"
             return
-        self.start(mode="perform" if self.mode == "perform" else "practice")
+        self.start(mode="perform" if self.mode == "perform" else "practice",
+                   presentation_lead_seconds=presentation_lead_seconds)
         return
 
     def _pause_current_session(self):
@@ -1930,8 +1943,8 @@ class PracticeEngine:
             self.teaching.pause(now=now)
         return
 
-    def _resume_current_session(self):
-        """Resume teaching and transport from the same monotonic instant."""
+    def _resume_current_session(self, *, presentation_lead_seconds: float = 0.0):
+        """Resume grading after future-only visual notes have reading space."""
         learning = self.mode == "learn" and self.teaching is not None
         shift_run_at = resume_timeline(
             paused=self.visual_transport.paused, learning=learning, running=self.running,
@@ -1951,15 +1964,23 @@ class PracticeEngine:
         # and no note is required during the visual reading lead-in.
         if (shift_run_at and self.running and self.plan is not None
                 and self.mode in ("practice", "perform")
-                and self.midi.connected and not self.preview_only
-                and self.pause_context == "playing"
-                and not had_reading_lead
-                and self.visual_transport.run_at <= now):
-            lead_beats = max(1.0, min(4.0, self.count_in_bar_beats))
-            lead_seconds = lead_beats * 60.0 / self.plan.bpm
-            self.visual_transport.run_at += lead_seconds
-            self._resume_grading_after = now + lead_seconds
-            self.count_in_beats = lead_beats
+                and self.pause_context in ("playing", "count_in")):
+            # At every resume (including a silent MIDI preview), existing
+            # pre-engraved notes must leave before the next scheduled source
+            # can enter. An explicit client lead may extend this window.
+            # This moves the graded deadline too, without re-anchoring the
+            # always-moving Godot presentation axis.
+            base_beats = max(4.0,min(5.0,self.count_in_bar_beats+1.0))
+            lead_seconds = max(base_beats*60.0/self.plan.bpm,
+                               min(30.0,max(0.0,presentation_lead_seconds)))
+            already_waiting = max(0.0,self._resume_grading_after-now)
+            additional = max(0.0,lead_seconds-already_waiting)
+            if additional > 0:
+                self.visual_transport.run_at += additional
+            self._resume_grading_after = now + max(lead_seconds,already_waiting)
+            self.count_in_beats = max(
+                self.count_in_beats,
+                (self._resume_grading_after-now)*self.plan.bpm/60)
         self.measurement.event("timeline_resume", {
             "scheduled_origin_before": previous_origin-self.measurement.origin,
             "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,
