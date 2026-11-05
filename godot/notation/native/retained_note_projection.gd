@@ -6,9 +6,9 @@ extends RefCounted
 static func append_visible(notes: Array, shift_x: float, viewport_width: float,
         playhead_x: float, pass_index: int,
         instances: Array, nearest_heads: Dictionary,
-        local_floor_x: float = -INF) -> int:
+        local_floor_x: float = -INF, local_ceiling_x: float = INF) -> int:
     var minimum: float = maxf(-60.0-shift_x,local_floor_x)
-    var maximum: float = viewport_width+60.0-shift_x
+    var maximum: float = minf(viewport_width+60.0-shift_x,local_ceiling_x)
     var low := 0
     var high: int = notes.size()
     while low < high:
@@ -17,11 +17,13 @@ static func append_visible(notes: Array, shift_x: float, viewport_width: float,
             low = midpoint+1
         else:
             high = midpoint
+    if maximum <= minimum:
+        return 0
     var count := 0
     for index in range(low,notes.size()):
         var original: Dictionary = notes[index]
         var point: Vector2 = original["position"]
-        if point.x > maximum:
+        if point.x >= maximum:
             break
         var screen: Vector2 = point+Vector2(shift_x,0.0)
         var ident: String = str(original["event_id"])

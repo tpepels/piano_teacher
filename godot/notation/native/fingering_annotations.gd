@@ -141,9 +141,17 @@ func paint(canvas, clock: float, playhead_x: float, gap: float,
         var item: Dictionary = fingering_layout[index]
         if float(item["rect"].position.x) > latest:
             break
-        if not SourceVisibility.event_visible(score_layout.expression_note_index.get(str(item["event_ids"][0]),{}),
-                pass_start,bool(context.get("score_loop_enabled",false)),context.get("preparation_history",{})):
+        var source_note: Dictionary = score_layout.expression_note_index.get(
+            str(item["event_ids"][0]),{})
+        if not SourceVisibility.event_visible(source_note,
+                pass_start,bool(context.get("score_loop_enabled",false)),
+                context.get("preparation_history",{})):
             continue
+        if context.has("stream_floor"):
+            var onset: float = float(source_note.get("beat",-INF))
+            if onset < float(context["stream_floor"]) or \
+                    onset >= float(context["stream_ceiling"]):
+                continue
         var rect: Rect2 = item["rect"]
         rect.position += translation
         # A partial numeral can look like a different finger. Keep annotation

@@ -22,6 +22,19 @@ func _initialize() -> void:
         failures += 1
     if notes!=original:
         failures += 1
+    # Dynamic admission clips BOTH sides of a retained score, even when
+    # the notehead itself is spatially visible in the viewport.
+    var bounded_instances: Array = []
+    var bounded_heads: Dictionary = {}
+    count = Projector.append_visible(notes,-85.0,40.0,30.0,10,
+        bounded_instances,bounded_heads,100.0,110.0)
+    if count != 1 or bounded_instances.size()!=1 or \
+            bounded_instances[0]["position"]!=Vector2(15,30):
+        failures += 1
+    count = Projector.append_visible(notes,-85.0,40.0,30.0,11,
+        bounded_instances,bounded_heads,120.0,110.0)
+    if count != 0 or bounded_instances.size()!=1:
+        failures += 1
     count = Projector.append_visible(notes,-1200.0,40.0,30.0,8,
         instances,heads)
     if count!=0 or instances.size()!=2:

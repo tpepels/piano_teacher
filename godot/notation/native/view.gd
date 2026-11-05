@@ -78,6 +78,7 @@ const SymbolPainter := preload("res://notation/native/symbol_painter.gd")
 const ContextPainter := preload("res://notation/native/context_painter.gd")
 const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
+const StreamAdmission := preload("res://score_stream_admission.gd")
 const IdlePreview := preload("res://notation/native/idle_preview.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
 const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
@@ -99,7 +100,7 @@ var stream_world_beat := 0.0
 var stream_passes: Array = []
 var _stream_last_take := ""
 var _stream_was_paused := false
-var _stream_resume_floor := 0.0
+var _stream_live_serial := -1
 var _stream_serial := 0
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
@@ -387,7 +388,7 @@ func _stream_release_all() -> void:
     stream_passes.clear()
     _stream_last_take = ""
     _stream_was_paused = false
-    _stream_resume_floor = 0.0
+    _stream_live_serial = -1
 
 
 func _clear_retained_segments() -> void:
@@ -548,11 +549,16 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     var gap: float = staff_gap()
     var playhead_x: float = size.x*PLAYHEAD_FRACTION
     for annotation_pass in fingering_pass_clocks:
+        var context := {
+            "active_hand":active_hand,"play_from_beat":play_from_beat,
+            "score_loop_enabled":score_loop_enabled,
+            "preparation_history":preparation_history}
+        if annotation_pass.has("stream_floor"):
+            context["stream_floor"] = annotation_pass["stream_floor"]
+            context["stream_ceiling"] = annotation_pass["stream_ceiling"]
         annotations.paint(canvas,float(annotation_pass["clock"]),playhead_x,gap,
-            int(annotation_pass["pass_index"]),float(annotation_pass["pass_start"]),{
-                "active_hand":active_hand,"play_from_beat":play_from_beat,
-                "score_loop_enabled":score_loop_enabled,
-                "preparation_history":preparation_history})
+            int(annotation_pass["pass_index"]),
+            float(annotation_pass["pass_start"]),context)
     if runway_overlay:
         # The future overlay reuses the same fixed staff, brace and playhead
         # drawn by the current primary renderer. Only its notes scroll in.
@@ -576,7 +582,7 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
         Color(NOTE_INK,.50),1.2,true)
 
 func _stream_add_take(source_beat: float, start_world: float,
-        from_beat: float) -> void:
+        from_beat: float, through_beat: float, take_key: String) -> void:
     var used: Dictionary = {}
     for item in stream_passes:
         used[item["segment"]] = true
@@ -598,11 +604,14 @@ func _stream_add_take(source_beat: float, start_world: float,
     add_child(clip)
     choice.reparent(clip,false)
     _stream_serial += 1
+    _stream_live_serial = _stream_serial
     stream_passes.append({
         "segment":choice,
         "clip":clip,
         "world_origin":start_world-source_beat,
         "source_floor":maxf(0.0,from_beat),
+        "source_ceiling":through_beat,
+        "take_key":take_key,
         "serial":_stream_serial,
     })
 
@@ -622,7 +631,8 @@ func _stream_prune_expired() -> void:
             continue
         var source_left: float = playhead_x + (
             float(item["world_origin"])-stream_world_beat)*density
-        if source_left + timeline.duration_beats*density < -60.0:
+        if source_left + float(item.get("source_ceiling",
+                timeline.duration_beats))*density < -60.0:
             segment.reparent(self,false)
             clip.queue_free()
             stream_passes.remove_at(index)
@@ -646,20 +656,41 @@ func present_flow(world_beat: float, state: Dictionary,
         int(state.get("transport_id",-1)),mode]
     var paused_now: bool = bool(state.get("paused",false))
     var running_now: bool = bool(state.get("running",false)) and not paused_now
-    if paused_now and not _stream_was_paused:
-        _stream_resume_floor = maxf(0.0,source)
+    if paused_now:
+        # Freeze admission, never the visual world axis. Previously exposed
+        # notes and rests may leave the viewport, but no new source arrives.
         _stream_was_paused = true
-    if allow_admission and running_now and phase in ["count_in","playing",
-            "guided_wait"] and (key != _stream_last_take or _stream_was_paused):
-        # Source openings and resume markers are both clip boundaries.
-        # Never reveal measures prior to the learner's selected opening.
-        var opening: float = maxf(0.0,
-            float(state.get("play_from_beat",0.0)))
-        if _stream_was_paused and key == _stream_last_take:
-            opening = maxf(opening,_stream_resume_floor)
-        _stream_add_take(source,stream_world_beat,opening)
-        _stream_last_take = key
-        _stream_was_paused = false
+        _stream_live_serial = -1
+    elif allow_admission and running_now and phase in ["count_in","playing",
+            "guided_wait"]:
+        if key != _stream_last_take or _stream_was_paused:
+            _stream_live_serial = -1
+        if _stream_live_serial >= 0:
+            var extended := false
+            for item in stream_passes:
+                if int(item["serial"]) == _stream_live_serial:
+                    item["source_ceiling"] = maxf(
+                        float(item["source_ceiling"]),
+                        minf(timeline.duration_beats,
+                            source + StreamAdmission.LOOKAHEAD_BEATS))
+                    extended = true
+                    break
+            if not extended:
+                _stream_live_serial = -1
+        if _stream_live_serial < 0:
+            var occupied: float = StreamAdmission.reserved_through(
+                stream_passes,key,stream_world_beat)
+            var admission: Dictionary = StreamAdmission.window(
+                source,maxf(0.0,float(state.get("play_from_beat",0.0))),
+                timeline.duration_beats,occupied)
+            if bool(admission["admit"]):
+                _stream_add_take(source,stream_world_beat,
+                    float(admission["floor"]),float(admission["ceiling"]),key)
+                _stream_last_take = key
+                _stream_was_paused = false
+    elif not paused_now:
+        # Feedback, Ready and gaps cannot produce new note copies.
+        _stream_live_serial = -1
     queue_redraw()
 
 
@@ -676,22 +707,24 @@ func _project_stream(playhead_x: float) -> void:
         var position: float = playhead_x + (
             float(item["world_origin"])-stream_world_beat)*density
         var floor_x: float = float(item["source_floor"])*density
+        var ceiling_x: float = float(item["source_ceiling"])*density
         var clip_x: float = position+floor_x
         clip.position = Vector2(clip_x,0.0)
-        clip.size = Vector2(maxf(1.0,
-            (timeline.duration_beats+2.0)*density-floor_x+size.x),size.y)
+        clip.size = Vector2(maxf(1.0,ceiling_x-floor_x),size.y)
         segment.position = Vector2(-floor_x,0.0)
         if segment.compiled:
             used[segment] = true
             var count: int = RetainedNoteProjection.append_visible(
                 segment.note_instances,position,size.x,playhead_x,
                 int(item["serial"]),drawn_note_instances,drawn_noteheads,
-                floor_x)
+                floor_x,ceiling_x)
             visible_symbols += count
             frame_scanned_events += count
             fingering_pass_clocks.append({
                 "clock":stream_world_beat-float(item["world_origin"])-play_from_beat,
-                "pass_index":0,"pass_start":0.0})
+                "pass_index":0,"pass_start":0.0,
+                "stream_floor":float(item["source_floor"]),
+                "stream_ceiling":float(item["source_ceiling"])})
     # The source geometry is in immutable local source coordinates. Only
     # the clip windows and Node2D transforms change on every render frame.
     for item in stream_passes:
