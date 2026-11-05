@@ -146,9 +146,21 @@ def test_real_midi_pause_shortcut_resumes_after_count_in_without_restarting_take
         resume_at = clock[0]
         lead_seconds = engine.count_in_beats * 60.0 / engine.plan.bpm
         engine._receive(released(21))
+        assert engine.state()["resume_count_in_beat"] < 0.0
+        clock[0] = resume_at + .3 * lead_seconds
+        # Expected musical notes during reading lead-in must not become
+        # duplicate graded takes or unexpected note-on/off observations.
+        engine._receive(pressed(60))
+        engine._receive(released(60))
+        assert engine.recorder is not None and not engine.recorder.presses
         clock[0] = resume_at + lead_seconds
         assert engine.state()["clock_beat"] == pytest.approx(frozen)
-        assert engine.midi.input_count == 0
+        assert engine.state()["resume_count_in_beat"] is None
+        engine._receive(pressed(64))
+        assert len(engine.recorder.presses) == 1
+        engine._receive(released(64))
+        # Shortcut notes still never register as MIDI activity.
+        assert engine.midi.input_count == 2
     finally:
         engine.midi.port = None
         engine.close()
