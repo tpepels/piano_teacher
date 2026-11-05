@@ -32,8 +32,9 @@ flowchart LR
     Engine --> Clock[VisualTransport and active TempoMap]
     Plan --> Assets[ScoreArtifacts and bounded FutureScore]
     Assets --> Native[Retained native Godot notation]
-    Clock --> Native
     Clock --> Listen[Listen audio and metronome]
+    Snapshot --> Flow[Godot perpetual visual flow]
+    Flow --> Native
     Engine --> Snapshot[Detached state projection and typed queue]
     Snapshot --> UI[Godot screens and coordinators]
     UI --> Engine
@@ -49,12 +50,15 @@ flowchart LR
 | Input/device lifecycle | `application/midi_connection.py`, `live_input_view.py`, `live_event_ring.py`, `practice.py:Recorder`, `midi_calibration.py` | Callback timestamp before application lock, one saved calibration correction, bounded provisional events and authoritative note capture. | Device loss/reconnect belongs to the engine's session transition; provisional pulses never award mastery. |
 | Assessment | `practice.py:evaluate`, `assessment_service.py`, `assessment_clock.py`, `timed_assessment.py`, `application/practice_assessment.py` | Fixed or mapped timing policy uses actual expected seconds and original source IDs; explicit onset/hold tolerances. | Wrong pitch is not double-counted as miss+extra; full takes retain extras; rendering failure cannot discard assessment. |
 | Mistake response | `recovery.py`, `application/mistake_responses.py`, `rolling_recovery.py`, `recovery_projection.py` | Immutable explicit evidence → validated decision and source-grid presentation. | Policy owns no clock, persistence or engine; partial retries cannot earn whole-target mastery. |
-| Clock/transitions | `visual_transport.py`, `transport_projection.py`, `application/attempt_progression.py`, `practice_transitions.py`, `transport_commands.py`, `score_ack.py` | One monotonic transport and exact active `TempoMap`; authentic meter controls count-in, rest, rewind and handoff deadlines. | Tempo/Listen/grading/camera use the same source mapping; readiness cannot start invisible grading. |
+| Clock/transitions | `visual_transport.py`, `transport_projection.py`, `application/attempt_progression.py`, `practice_transitions.py`, `transport_commands.py`, `score_ack.py` | One monotonic transport and exact active `TempoMap`; authentic meter controls count-in, rest, rewind and handoff deadlines. | Source tempo/Listen/grading use the same musical map; the presentation world
+    clock advances independently and never seeks. Readiness cannot start
+    invisible grading. |
 | Evidence/progression | `application/assessment_settlement.py`, `assessment_evidence.py`, `assessment_commit.py`, `learner_progress.py`, `guided_session.py` | Settled `Assessment`, performed BPM, source identity; separate guided acquisition, trouble resolution and full-target application. | Assistance/partial/preview/Perform cannot manufacture mastery; retry BPM is not performed BPM. |
 | Learning measurement | `application/learning_capture.py`, `learning_ledger.py`, `practice.py:NoteObservation` | Stable learner/session/attempt/decision IDs, original matching facts, frozen source/rule/map context, explicit terminal and proximal/episode outcomes; existing connection and savepoint. | Identical settlement is a no-op; conflicting payloads fail. Interrupted prefixes never create future misses. Legacy unknowns and pruned coverage remain explicit. |
 | Persistence/settings | `progress_repository.py`, `sqlite_transaction.py`, learner/practice stores, `library.py` | SQLite nested savepoints for coordinated evidence+progress; atomic JSON replace and shared settings validators. | Rollback restores plan and pending take; versionless/changed-content progress cannot award current mastery. |
 | Score preparation | `application/score_artifacts.py`, `score_preparation.py`, `future_score.py`, `notation/lesson.py`, `notation/model.py`, `notation/assets/` | Frozen `ScoreSelection` keys one semantic/native compilation; bounded worker prepares next two exact stages with three attempts. | Stale source/revision cannot promote; failed fragments never cache successful empty assets; no alternate renderer. |
-| Godot score lifecycle | `score_asset_session.gd`, `score_runway.gd`, `practice_score_stage.gd`, `score_step_timeline.gd` | Exact revision readiness, retained next-score acknowledgement and current/future density-aware labels. | Promotion preserves outgoing tail and backend axis; READY preview's display camera is shared with its current marker only. |
+| Godot score lifecycle | `score_asset_session.gd`, `score_runway.gd`, `practice_score_stage.gd`, `score_step_timeline.gd` | Exact revision readiness, retained next-score acknowledgement and current/future density-aware labels. | Promotion preserves outgoing tail on the monotonic forward world axis;
+    the renderer admits no new note clips while paused/idle. |
 | Painting/layout | `notation/native/view.gd`, `score_layout.gd`, geometry/painter/span components and shared timeline | Authentic glyph/connector assets, one score-wide density and explicit viewport. | Display-only READY framing cannot change grading time; actual first attack can follow rests or belong to another hand. |
 | Listen/audio | `application/listen_session.py`, `demo.py`, `sample_piano.py`, `godot/demo_player.gd`, metronome coordinators | Source/revision/token capture, render outside engine lock, typed audio bytes and both score/audio readiness gates. | Same active tempo map; stale render/audio acknowledgement cannot start another stage. |
 | Fingering | `fingering/`, `piano-fingering.md`, native fingering components | Offline whole-source prediction, source-keyed corrections and projection; unavailable provider is explicit. | Never changes pitches, source hand, timing, grading or mastery. |
@@ -88,13 +92,16 @@ commit retains the pending assessment for explicit retry; it cannot repeatedly
 award progress. Partial clean work returns to full verification.
 
 On eligible mastery, exact prepared+acknowledged next assets promote at the
-existing musical deadline. Late preparation receives the existing reading
-runway; exhausted preparation errors pause without committing invisible work.
-No worker response owns progression. Godot converts the backend monotonic epoch
-for interpolation; its native beat-to-pixel scale affects spacing only. READY
-may frame a distant first note for preview, and the label uses that same
-display-only camera. Playing, paused, count-in and retry time remain governed
-by the one backend transport.
+existing musical deadline. Late preparation receives an empty visual reading
+runway; exhausted preparation errors pause scoring without committing
+invisible work. No worker response owns progression. Godot maintains a
+separate forward-only `ContinuousScoreFlow` for the presentation world:
+every frame advances with source tempo even during READY, Pause, Retry and
+waiting for future notation. Pre-engraved, source-identity-bound note passes
+are admitted and clipped on that one world axis. The engine's authoritative
+transport and local tempo map remain the only clocks for MIDI grading,
+count-in deadlines, source seeks, Listen and persisted evidence. The frontend
+world position never feeds back into musical assessment.
 
 ## Backend ownership
 

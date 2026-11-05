@@ -173,9 +173,11 @@ possible without cluttering the practice stage.
   deadline **without a new count-in or score-load panel**. The outgoing
   stage stays visible to the left until it scrolls out. No new scoring clock
   or alternate teaching implementation is introduced.
-- Failed takes still use their existing backwards rewind and authentic
-  preparation rest. Pause/resume and manual Stop/Retry retain identity-bound
-  next-stage preparation; a changed source/revision cannot adopt stale ink.
+- Failed takes keep the backend's original source-bound recovery and
+  preparation deadlines. The front-of-house staff now **never reverses**:
+  Retry and Resume admit another already-engraved copy ahead of the fixed
+  playhead. Pausing keeps the empty staff moving but stops new admissions.
+  A changed source/revision cannot adopt stale ink.
 - `./run.sh` now checks actual native inputs, binary and CPython ABI. It
   rebuilds when the compiled bridge is stale, and rechecks Godot registration
   and embedded Python when source/runtime inputs change. A Python-only pull
@@ -207,7 +209,8 @@ bus using the precise fingerprint, step number and revision. A genuinely
 unrenderable stage pauses safely at the assessed transition boundary with
 an explicit failure message, without committing mastery or grading invisible
 notes. Successful third-pass transitions remain immediate when preparation
-finishes on time. Wrong-note recovery and backward rewinds are unchanged.
+finishes on time. Backend source recovery remains intact; the production
+Godot visual staff no longer moves backward, including during retries.
 Lookahead stage +2 now uses its correct future revision, preserving warmed
 assets across consecutive promotions.
 
@@ -219,6 +222,47 @@ blocking, explicit user-facing error; silent recovery from truly invalid
 engraving would falsify the score. Real long/complex pieces and automatic
 adaptive replanning remain mandatory Phase 6 acceptance cases. This
 feature does not close physical performance or teaching-effectiveness gates.
+
+## Phase 6 — perpetual practice staff and calmer UI (2026-11-05)
+
+**Product behavior, implemented in `main`:** The production Godot stage
+uses one `ContinuousScoreFlow` that advances its world position each rendered
+frame, independently of the backend's source position and whether a physical
+MIDI keyboard is connected. READY, Pause and between-step waiting continue to
+show a moving blank staff. Starting a take, restarting and resuming admit
+authentic pre-engraved source notes as separate clipped passes on that same
+world axis. Already admitted notes leave the screen naturally, even after Pause;
+none are reset or rewound. Note timing, assessment, count-in, synthetic Listen
+and saved mastery remain owned by the backend and use its authoritative
+source tempo map. Forward camera velocity follows authored tempo changes;
+tempo control never seeks the camera. All stage transitions reuse the
+revision-bound prepared renderer and preserve departing ink.
+
+**Rendering:** Local GPU additive CanvasItem bloom remains compatible with
+Godot's Compatibility renderer. The play/pause bloom now uses a rounded SDF
+and feathered alpha at the quad edges, with dark-blue button halos. No
+global HDR/Forward+ switch, per-frame CPU-generated blurred textures or
+scene-tree mutations inside a draw callback. Native source contours remain
+retained CanvasItem commands; only their transforms and clipping move.
+
+**UI:** Settings prioritizes MIDI and practice tempo, followed by library
+and listening. Calibration, exercise strategy, and history maintenance are
+disclosures; all underlying actions remain available. The lesson path
+summarizes position, mastery goal and the current passage, with a bounded
+neighboring-passage preview and full step selection via the picker.
+The Accuracy ring contains the percentage alone and labels it outside.
+
+**Verification, not yet final release acceptance:** The fast Python tests and
+Godot 4.7.2 syntax/UI/flow fixtures passed on the updated head. One matching
+embedded runtime previously passed a real two-hand score, Moonlight Sonata
+Play/Pause/Retry/Listen/stage/tempo/reopen, Peace Piece and Chopin UI flows;
+its final packaging audit timed out because it copied the entire developer
+Python prefix. A smaller self-contained CPython staging operation with an
+explicit staged-import check is now used; its matching runtime CI must pass.
+The separate independent framebuffer/source-notation checks still report
+failures for sampled Peace Piece rests and Chopin/Moonlight note contours.
+Those are not waived by a successful UI runtime, and target-GPU/real-MIDI
+acceptance remains open.
 
 ## Immediate order of work
 
