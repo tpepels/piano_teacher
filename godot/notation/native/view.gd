@@ -831,6 +831,19 @@ func displayed_scroll_beat() -> float:
         _ready_preview_key = key
     return _ready_preview_beat
 
+func playhead_region() -> Rect2:
+    # The bloom and precise timing line share these exact native coordinates.
+    var gap: float = staff_gap()
+    var top: float = layout.staff_center("right")-gap*3.8
+    var bottom: float = layout.staff_center("left")+gap*3.7
+    if not layout.focused_staff.is_empty():
+        var center: float = layout.staff_center(layout.focused_staff)
+        top = center-maxf(gap*8.0,size.y*.31)
+        bottom = center+maxf(gap*9.0,size.y*.37)
+    return Rect2(Vector2(size.x*PLAYHEAD_FRACTION,top),
+        Vector2(1.0,maxf(1.0,bottom-top)))
+
+
 func _draw() -> void:
     if layout.size != size:
         layout.set_viewport(size)
@@ -860,16 +873,10 @@ func _draw() -> void:
         ready_preview_beat = displayed_scroll_beat()
     var camera_clock: float = (clock_beat if running or paused else
         ready_preview_beat-play_from_beat)
-    # A quiet pool of light marks the strike without hiding any engraved ink.
-    var top: float = layout.staff_center("right")-gap*3.8
-    var bottom: float = layout.staff_center("left")+gap*3.7
-    if not layout.focused_staff.is_empty():
-        var center: float = layout.staff_center(layout.focused_staff)
-        # Reference artwork uses a taller strike line than the staff itself.
-        # Glow is visual only; all note positions still use the same clock.
-        top = center-maxf(gap*8.0,size.y*.31)
-        bottom = center+maxf(gap*9.0,size.y*.37)
-    var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
+    # The precise line and GPU halo use one geometry contract.
+    var line_region: Rect2 = playhead_region()
+    var top: float = line_region.position.y
+    var bottom: float = line_region.end.y
     if transport_overlay_enabled and not runway_overlay and not ambient_blank:
         var displayed_beat := displayed_scroll_beat() if score_loop_enabled else camera_clock+play_from_beat
         # Illuminate the selected measure in READY as well as PLAYING and
@@ -879,12 +886,8 @@ func _draw() -> void:
             practice_timeline if score_loop_enabled else {},
             preparation_history if score_loop_enabled else {},runway_cutoff_beat)
         MeasureLight.paint(self,timeline,displayed_beat,bounds,gap,top,bottom,playhead_x)
-        # Soft concentric mint strokes without the former hard-edged box.
-        # Drawn behind original Verovio ink, so noteheads remain crisp.
-        for halo in [Vector2(72.0,.025), Vector2(42.0,.045),
-                Vector2(23.0,.080), Vector2(10.0,.14)]:
-            draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
-                Color(PREVIEW_LIGHT,halo.y+breath*.014),halo.x,true)
+        # The soft halo is now a GPU additive Gaussian in MintGlow,
+        # below the engraved source. Do not paint thick rectangular bands.
     # Always draw ten native rules; no copied or stitched raster systems.
     for staff in (layout.visible_staves() if not runway_overlay else []):
         var center: float = layout.staff_center(staff)
