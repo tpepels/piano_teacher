@@ -1022,7 +1022,7 @@ func _send_action(command: Dictionary) -> void:
         # applies this lead to MIDI grading and count-in.
         var visual_now: float = score_flow.project(Time.get_ticks_msec())
         var renderer = practice_view.stage.renderer
-        var header_beats: float = 15.0*renderer.staff_gap()/
+        var header_beats: float = 15.0*renderer.staff_gap()/ \
             maxf(1.0,renderer.timeline.pixels_per_beat)
         var requested_lead: float = StreamAdmission.reading_lead_seconds(
             renderer.stream_passes,visual_now,
