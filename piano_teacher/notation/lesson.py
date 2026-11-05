@@ -556,6 +556,60 @@ def infer_piece_clefs(notes) -> dict:
     }
 
 
+def infer_midi_clef_plan(notes, boundaries) -> dict[int, dict[str, dict]]:
+    """Choose RH clefs per measure from a stable two-bar MIDI register window.
+
+    MIDI has no authored clef changes. A whole-piece average can incorrectly
+    print treble over an opening bass-register passage; short exercise notes
+    alone can fluctuate in the opposite direction. Look ahead two source
+    measures and require a substantial ledger-line benefit, with hysteresis
+    for subsequent switches. LH retains the tested whole-piece default.
+    Returned keys are original 1-based bar numbers, independent of lessons.
+    """
+    if len(boundaries) < 2:
+        return {}
+    right = sorted(
+        (note for note in notes if note.hand == "right"),
+        key=lambda note: note.start)
+    fallback = infer_piece_clefs(notes)["right"]
+    current = fallback.copy()
+    pending = ""
+    pending_count = 0
+    result: dict[int, dict[str, dict]] = {}
+    for index in range(len(boundaries) - 1):
+        start = boundaries[index]
+        horizon = boundaries[min(index + 2, len(boundaries) - 1)]
+        pitches = [note.pitch for note in right
+                   if start <= note.start < horizon]
+        candidate = ""
+        if len(pitches) >= 2:
+            # Positive advantage favours bass, negative favours treble.
+            g_cost = sum(max(0, 64 - p, p - 77) for p in pitches) / len(pitches)
+            f_cost = sum(max(0, 43 - p, p - 57) for p in pitches) / len(pitches)
+            advantage = g_cost - f_cost
+            if advantage >= 3.0:
+                candidate = "F"
+            elif advantage <= -3.0:
+                candidate = "G"
+        if index == 0 and candidate:
+            current = {"sign":candidate,"line":4 if candidate == "F" else 2,
+                       "octave_change":0}
+        elif candidate and candidate != current["sign"]:
+            pending_count = pending_count + 1 if pending == candidate else 1
+            pending = candidate
+            if pending_count >= 2:
+                current = {"sign":candidate,
+                           "line":4 if candidate == "F" else 2,
+                           "octave_change":0}
+                pending = ""
+                pending_count = 0
+        else:
+            pending = ""
+            pending_count = 0
+        result[index + 1] = {"right":current.copy()}
+    return result
+
+
 def _spelling(note, fifths):
     if note.spelling is not None:
         return note.spelling
@@ -738,6 +792,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        time_signatures: tuple[tuple[float, int, int], ...] = (),
                        key_signatures=(), clef_changes=(),
                        default_clefs: dict | None = None,
+                       inferred_clefs: dict[int, dict[str, dict]] | None = None,
                        barlines: tuple = (), source_musicxml: str = "",
                        fingering_sources: frozenset[str] = frozenset(),
                        retimed_source: bool = False) -> LessonScore:
@@ -803,7 +858,9 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
     lanes_by_staff = {hand:_phrase_lanes(phrase,hand,grid,
         from_source_musicxml=bool(source_musicxml)) for hand in ('right','left')}
     if not source_musicxml and not clef_changes:
-        display_clefs = default_clefs or infer_piece_clefs(phrase.notes)
+        display_clefs = (default_clefs or infer_piece_clefs(phrase.notes)).copy()
+        if inferred_clefs:
+            display_clefs.update(inferred_clefs.get(phrase.first_bar, {}))
         lanes_by_staff = distribute_piano_registers(lanes_by_staff,display_clefs)
     for hand, ident in (("right", "RH"), ("left", "LH")):
         part = ET.SubElement(root, "part", id=ident)
@@ -839,12 +896,21 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             # A short practice phrase can sit in a different register from
             # the rest of the piano part. Reuse the piece-wide MIDI default
             # instead of jumping clefs between lessons. Source clefs override.
-            if active_clef is None and default_clefs is not None and hand in default_clefs:
+            midi_bar_clefs = (
+                inferred_clefs.get(phrase.first_bar + b, {})
+                if inferred_clefs is not None and not source_musicxml else {})
+            if active_clef is not None:
+                chosen_clef = _readable_clef(
+                    [note for note in phrase.notes if note.hand == hand],
+                    active_clef, hand)
+            elif hand in midi_bar_clefs:
+                chosen_clef = midi_bar_clefs[hand].copy()
+            elif default_clefs is not None and hand in default_clefs:
                 chosen_clef = default_clefs[hand].copy()
             else:
                 chosen_clef = _readable_clef(
                     [note for note in phrase.notes if note.hand == hand],
-                    active_clef, hand)
+                    None, hand)
             if b == 0:
                 staff_clefs[hand] = chosen_clef
             if b == 0 or (beats, beat_type) != last_meter or key_value != last_key or chosen_clef != last_clef:
