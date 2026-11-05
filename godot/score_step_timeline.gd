@@ -109,17 +109,10 @@ func _marker(at: float, label: String, tint: Color, density: float,
     var x: float = marker_x(at,visual_beat,density,size.x)
     if x < -10.0 or x > size.x-10.0:
         return
-    draw_line(Vector2(x,5),Vector2(x,30),Color(tint,.86),1.6,true)
-    draw_circle(Vector2(x,7),3.0,tint)
-    var label_left := maxf(5.0,x+9.0)
-    var available := minf(155.0,size.x-label_left-7.0)
-    if available < 55.0:
-        return
-    var card := Rect2(label_left,2.0,available,23.0)
-    draw_rect(card,Color(Design.PANEL_RECESSED,.94),true)
-    draw_rect(card,Color(tint,.43),false,1.0)
-    draw_string(Design.font(600),Vector2(label_left+8.0,18.0),label,
-        HORIZONTAL_ALIGNMENT_LEFT,available-16.0,12,tint)
+    # The source-aligned stage entry remains discoverable without repeating
+    # lesson names above the score. A subtle pin replaces its old text card.
+    draw_line(Vector2(x,5),Vector2(x,20),Color(tint,.53),1.2,true)
+    draw_circle(Vector2(x,6),2.4,Color(tint,.88))
 
 func _draw() -> void:
     if not _loaded or _step <= 0:
