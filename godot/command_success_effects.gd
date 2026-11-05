@@ -45,6 +45,12 @@ func apply(decision: Dictionary, opened: Variant,
                     refresh_score.call()
                 "picker":
                     presenter.present_source_picker(opened)
+                "resume_choice":
+                    navigate_practice.call("practice")
+                    if bool(decision["publish_state"]):
+                        publish_state.call(code, body, started_ms)
+                    refresh_score.call()
+                    presenter.present_resume_choice(opened, not bool(decision.get("resume_saved",false)))
         "settings":
             if bool(decision["refresh_settings"]):
                 request_settings.call()

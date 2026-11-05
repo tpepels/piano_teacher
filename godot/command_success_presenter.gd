@@ -23,3 +23,7 @@ func present_accepted(decision: Dictionary) -> void:
 
 func present_source_picker(opened: Dictionary) -> void:
     practice_view.show_source_picker(opened)
+
+
+func present_resume_choice(opened: Dictionary, allow_measure: bool) -> void:
+    practice_view.show_resume_prompt(opened, allow_measure)

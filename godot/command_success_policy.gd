@@ -17,8 +17,11 @@ static func decide(path: String, action: String,
     elif path == "library.open":
         kind = "library_open"
         if opened is Dictionary:
-            open_mode = ("practice" if bool(opened.get("warmup",false))
-                or resume_saved else "picker")
+            if not bool(opened.get("warmup",false)) and int(opened.get("lesson_step",1)) > 1:
+                open_mode = "resume_choice"
+            else:
+                open_mode = ("practice" if bool(opened.get("warmup",false))
+                    or resume_saved else "picker")
     elif path == "settings.update":
         kind = "settings"
     elif path == "midi.device.select":
@@ -30,8 +33,11 @@ static func decide(path: String, action: String,
             or kind in ["settings","device"],
         "refresh_library": kind == "settings",
         "navigate_practice": (kind == "control" and action in GUIDED_NAVIGATION)
-            or (kind == "library_open" and open_mode == "practice"),
+            or (kind == "library_open" and open_mode in ["practice","resume_choice"]),
         "publish_state": kind in ["fingering","control"] or
-            (kind == "library_open" and open_mode == "practice" and resume_saved),
+            (kind == "library_open" and
+             (open_mode == "resume_choice" or
+              (open_mode == "practice" and resume_saved))),
+        "resume_saved": resume_saved,
         "open_mode": open_mode,
     }
