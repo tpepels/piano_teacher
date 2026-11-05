@@ -22,7 +22,7 @@ signal score_retry_requested
 var stage: ScoreStage
 var practice_layout_box: VBoxContainer
 var practice_header: HBoxContainer
-var practice_navigation: HFlowContainer
+var practice_navigation: HBoxContainer
 var header_play_button: Button
 var details_popup: PopupPanel
 var details_scroll: ScrollContainer
