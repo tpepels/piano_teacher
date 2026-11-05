@@ -156,7 +156,7 @@ func _ready() -> void:
     details_scroll.add_child(details_panel)
     # Reuse the existing RH/LH/Together stage indicators in More, not above
     # the score; state updates and unlock animations remain wired.
-    stage.practice_stage_bar.reparent(details_panel)
+    stage.practice_stage_bar.reparent(details_panel,false)
     var details_header := HBoxContainer.new()
     details_header.add_theme_constant_override("separation",10)
     details_panel.add_child(details_header)
