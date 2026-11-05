@@ -93,6 +93,11 @@ var preparation_history: Dictionary = {}
 var selected_density := 0.0
 var external_backdrop := false
 var compact_inactive_staff := false
+# Pure presentation clock for empty idle/paused staves. Never fed into
+# MIDI grading, transport projection or recorded source events.
+var ambient_blank := false
+var ambient_scroll_beat := 0.0
+var ambient_last_ms := 0
 
 func _focused_staff_for_score() -> String:
     if not compact_inactive_staff or active_hand not in ["right","left"]:
@@ -148,6 +153,8 @@ func _init() -> void:
     tooltip_text = "Right-click a note or tap a finger number to change its fingering"
 
 func clear_score() -> void:
+    ambient_blank = false
+    ambient_last_ms = 0
     _ready_preview_key.clear()
     runway_origin_beat = 0.0
     runway_cutoff_beat = INF
@@ -545,6 +552,30 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
         Color(NOTE_INK,.50),1.2,true)
 
+func present_ambient(blank: bool, ticks: int) -> void:
+    if not native_ready or runway_overlay:
+        return
+    if blank:
+        if not ambient_blank:
+            ambient_blank = true
+            ambient_scroll_beat = visual_scroll_beat
+            _hide_retained_segments()
+            if retained_annotations != null:
+                retained_annotations.visible = false
+        elif ambient_last_ms > 0:
+            # The empty canvas can move while the authoritative clock is
+            # stopped; it never moves graded noteheads or affects playback.
+            ambient_scroll_beat += maxf(0.0,float(ticks-ambient_last_ms)) * bpm / 60000.0
+        ambient_last_ms = ticks
+        queue_redraw()
+    elif ambient_blank:
+        ambient_blank = false
+        ambient_last_ms = 0
+        if retained_annotations != null:
+            retained_annotations.visible = true
+        queue_redraw()
+
+
 func present_clock(transport_beat: float, visual_beat: float = NAN) -> void:
     super.present_clock(transport_beat,visual_beat)
     if score_loop_enabled and not preparation_history.is_empty():
@@ -839,7 +870,7 @@ func _draw() -> void:
         top = center-maxf(gap*8.0,size.y*.31)
         bottom = center+maxf(gap*9.0,size.y*.37)
     var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
-    if transport_overlay_enabled and not runway_overlay:
+    if transport_overlay_enabled and not runway_overlay and not ambient_blank:
         var displayed_beat := displayed_scroll_beat() if score_loop_enabled else camera_clock+play_from_beat
         # Illuminate the selected measure in READY as well as PLAYING and
         # PAUSED. The first playable note owns the idle camera, not wall time.
@@ -863,6 +894,24 @@ func _draw() -> void:
             var y: float = center+(float(line_index)-2.0)*gap
             draw_line(Vector2(0,y),Vector2(size.x,y),
                 Color(ink,.48 if selected else .28),1.15,true)
+    # Empty idle and paused canvas: source ink is hidden while barlines
+    # continue to move. Staff and playhead remain fixed and legible.
+    if ambient_blank and not runway_overlay:
+        var measure_beats: float = 4.0
+        if not timeline.measures.is_empty():
+            var opening: Dictionary = timeline.measures[0]
+            measure_beats = maxf(.25, float(opening.get("end_beat",4.0)) -
+                float(opening.get("start_beat",0.0)))
+        var bar_width: float = maxf(64.0,measure_beats*timeline.pixels_per_beat)
+        var offset: float = fposmod(ambient_scroll_beat*timeline.pixels_per_beat,
+            bar_width)
+        var barline_top_y: float = layout.barline_top(gap)
+        var barline_bottom_y: float = layout.barline_bottom(gap)
+        for index in range(-1,ceili(size.x/bar_width)+3):
+            var x: float = playhead_x-offset+float(index)*bar_width
+            if x >= 0.0 and x <= size.x:
+                draw_line(Vector2(x,barline_top_y),
+                    Vector2(x,barline_bottom_y),Color(NOTE_INK,.33),1.0,true)
     # Keep the fixed playhead visible but BEHIND source ink. At exact
     # onset a foreground cursor previously covered small eighth-rest dots,
     # flagged stems and noteheads, preventing independent contour recovery.
@@ -897,6 +946,8 @@ func _draw() -> void:
         draw_string(font,Vector2(20,size.y*.5),practice_contract_error,
             HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
         _hide_retained_segments()
+        return
+    if ambient_blank and not runway_overlay:
         return
     _place_retained_score(playhead_x,camera_clock,ready_preview_beat)
     if retained_annotations != null:
