@@ -139,6 +139,31 @@ func layout(view: Control) -> void:
                 "Settings fields fit their current viewport: " + str(dimensions))
     check(view.folder_controls is VBoxContainer, "Folder actions remain below the path on compact screens")
 
+func hierarchy(view: Control) -> void:
+    check(not view.midi_calibration_body.visible and
+        not view.practice_strategy_body.visible and
+        not view.history_actions_body.visible,
+        "Secondary calibration, generator and history controls start collapsed")
+    check(view.settings_grid.get_child_count() == 4,
+        "MIDI, practice, music and listening keep separate clear visual groups")
+    view.midi_calibration_toggle.pressed.emit()
+    view.practice_strategy_toggle.pressed.emit()
+    view.history_toggle.pressed.emit()
+    check(view.midi_calibration_body.visible and
+        view.practice_strategy_body.visible and
+        view.history_actions_body.visible,
+        "Every full advanced settings group can be expanded")
+    check(view.calibration_apply_button != null and
+        view.strategy_picker != null and
+        view.retention_save_button != null and
+        view.export_history_button != null,
+        "Progressive disclosure preserves all original settings actions")
+    view.history_toggle.pressed.emit()
+    check(not view.history_actions_body.visible and
+        view.history_summary_label.visible,
+        "History summary stays visible when destructive actions are collapsed")
+
+
 func run() -> void:
     root.mode = Window.MODE_WINDOWED
     root.size = Vector2i(800,600)
@@ -148,7 +173,8 @@ func run() -> void:
     await process_frame
     var scenario := OS.get_cmdline_user_args()[0]
     var needed := {"preferences":"present_preferences","tempo_draft":"present_practice",
-        "signals":"present_volume","pickers":"present_devices","layout":"apply_viewport"}
+        "signals":"present_volume","pickers":"present_devices","layout":"apply_viewport",
+        "hierarchy":"apply_viewport"}
     check(view.has_method(needed[scenario]), "Independent Settings presentation contract is not implemented: " + scenario)
     if view.has_method(needed[scenario]):
         match scenario:
@@ -157,6 +183,7 @@ func run() -> void:
             "signals": signals(view)
             "pickers": pickers(view)
             "layout": await layout(view)
+            "hierarchy": hierarchy(view)
     view.free()
     print("SETTINGS_OWNERSHIP_FAILURES:",failures.size())
     quit(0 if failures.is_empty() else 1)

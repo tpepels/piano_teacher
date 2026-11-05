@@ -89,6 +89,43 @@ func test_screen(view: Control, scenario: String) -> void:
             press(view,"Reset this song's lesson path…")
             press(view,"Erase this song's progress")
             check(commands == [{"action":"reset_path","fingerprint":"song","confirm":true}], "Confirmed reset carries the captured song identity")
+        "large_course":
+            var course: Dictionary = {
+                "piece_fingerprint":"song","current_step":319,
+                "completed_steps":100,"total_steps":639,"steps":[],
+                "trouble_spots":[]}
+            for index in range(639):
+                var passage: int = index / 4
+                course["steps"].append({
+                    "number":index+1, "exercise":passage,
+                    "hand":"right" if index % 8 < 4 else "left",
+                    "first_bar":passage+1,"last_bar":passage+1,
+                    "level":["coda-chord-240","coda-slowdown-x-2",
+                        "coda-slowdown-x-4","original"][index % 4],
+                    "stage_label":["Coda Chord 240","Coda Slowdown X 2",
+                        "Coda Slowdown X 4","Original"][index % 4],
+                    "completed":index<100})
+            var selected := context()
+            selected.lesson_step = 319
+            selected.lesson_level = "coda-slowdown-x-4"
+            view.present_context(selected,false)
+            view.present_overview(course)
+            var panel_count := 0
+            for child in view.rows.get_children():
+                if child is PanelContainer:
+                    panel_count += 1
+            check(view.steps.picker.item_count == 639,
+                "The complete 639-step course remains directly selectable")
+            check(panel_count > 0 and panel_count <= 7 and
+                view.rows.get_child_count() <= 10,
+                "Only the nearby passages consume vertical layout space")
+            check(view.summary.text.contains("319 of 639") and
+                view.passage_summary.text.contains("hand"),
+                "The large course shows precise current position and playable context")
+            view.apply_viewport(Vector2(800,600),1.0)
+            for frame in range(5): await process_frame
+            check(view.get_combined_minimum_size().x <= 800,
+                "Generated Coda levels and long course do not force horizontal overflow")
         "layout":
             for dimensions in [Vector2i(800,600),Vector2i(1280,800),Vector2i(1536,960)]:
                 root.size = dimensions
