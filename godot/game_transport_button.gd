@@ -150,13 +150,13 @@ func _draw() -> void:
                 mid + Vector2(-8, -7), mid + Vector2(-8, 0),
                 mid + Vector2(-1, -5)]), ink)
         "listen":
-            # Speaker silhouette stays distinct from Play's single triangle.
-            draw_colored_polygon(PackedVector2Array([
-                mid + Vector2(-8, -3), mid + Vector2(-4, -3),
-                mid + Vector2(1, -7), mid + Vector2(1, 7),
-                mid + Vector2(-4, 3), mid + Vector2(-8, 3)]), ink)
-            draw_arc(mid + Vector2(-1, 0), 7, -.28 * PI, .28 * PI, 16, ink, 1.6, true)
-            draw_arc(mid + Vector2(-1, 0), 11, -.25 * PI, .25 * PI, 20, ink, 1.6, true)
+            # Headphones distinguish Listen from the two Play controls,
+            # matching the compact transport vocabulary in the reference.
+            draw_arc(mid,8.0,PI,TAU,30,ink,2.1,true)
+            draw_line(mid+Vector2(-8,0),mid+Vector2(-8,7),ink,2.0,true)
+            draw_line(mid+Vector2(8,0),mid+Vector2(8,7),ink,2.0,true)
+            draw_rect(Rect2(mid.x-10,mid.y+2,4.5,7.5),ink)
+            draw_rect(Rect2(mid.x+5.5,mid.y+2,4.5,7.5),ink)
         "practice":
             draw_line(mid + Vector2(-7, 0), mid + Vector2(7, 0), ink, 1.8, true)
             draw_line(mid + Vector2(-7, 0), mid + Vector2(-1, -5), ink, 1.8, true)
