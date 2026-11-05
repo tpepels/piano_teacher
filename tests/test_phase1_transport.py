@@ -290,3 +290,41 @@ def test_worker_resume_command_reserves_future_note_deadline(harness):
     now[0] += 7.0
     assert engine.state()["clock_beat"] == pytest.approx(clock_before)
     assert engine.state()["phase"] == "playing"
+
+
+
+def test_single_future_stage_schedule_respects_offscreen_source_reading_time():
+    from piano_teacher.application.transport_commands import scheduled_offscreen_start
+    assert scheduled_offscreen_start(100.0, 14.0, 31.0) == pytest.approx(
+        100.0 + 14.0*60.0/31.0)
+    assert scheduled_offscreen_start(105.0, 0.0, 40.0) == 105.0
+    for lead in (float("nan"), float("inf"), -1.0, 65.0):
+        with pytest.raises(ValueError, match="future notation"):
+            scheduled_offscreen_start(105.0, lead, 40.0)
+
+
+def test_future_stage_acknowledgement_records_verified_offscreen_lead():
+    from threading import RLock
+    from types import SimpleNamespace
+    selection = SimpleNamespace(stage_key="stage-v2", revision=2)
+    class Prepared:
+        def __init__(self):
+            self.lock = RLock()
+            self.future_score = SimpleNamespace(ready=lambda _selection: True)
+            self.pending_result = None
+            self._future_stage_ready = None
+            self._future_stage_lead_beats = 0.0
+        def _next_stage_selection(self, *, offset=1):
+            return (selection, 2) if offset == 1 else None
+    fake = Prepared()
+    result = PracticeEngine.acknowledge_preloaded_stage(
+        fake, stage_key="stage-v2", revision=2,
+        presentation_lead_beats=14.0)
+    assert result["accepted"]
+    assert fake._future_stage_ready == ("stage-v2",2)
+    assert fake._future_stage_lead_beats == 14.0
+    with pytest.raises(ValueError, match="future notation reading lead"):
+        PracticeEngine.acknowledge_preloaded_stage(
+            fake, stage_key="stage-v2", revision=2,
+            presentation_lead_beats=float("nan"))
+    assert fake._future_stage_lead_beats == 14.0

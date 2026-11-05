@@ -251,9 +251,12 @@ func present_frame(_state: Dictionary, global_beat: float) -> void:
     if _future.retained_ready() and not _acknowledged and not _ack_waiting and \
             not _terminal_preload_failure and \
             Time.get_ticks_msec() >= _next_poll_ms:
-        var lead: float = maxf(3.0,
+        # Reserve an additional 1.5 source beats for polling/IPC jitter,
+        # beyond the entire offscreen staff and Verovio header. Neither
+        # the frontend nor the backend may recenter a late source.
+        var lead: float = maxf(5.0,
             _future._stream_right_beats()+
-            _future._stream_header_beats(0.0)+.65)
+            _future._stream_header_beats(0.0)+1.5)
         _ack_waiting = _ack.request("score.stage_ready",{
             "stage_key":_bundle["stage_key"],
             "revision":_bundle["revision"],

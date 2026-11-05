@@ -44,6 +44,7 @@ from .application.control_dispatch import ControlDispatcher
 from .application.score_ack import ScoreAckState, choose_score_ack_action
 from .application.transport_commands import (
     StartFacts, select_start_route, require_pausable, resume_timeline,
+    scheduled_offscreen_start,
 )
 from .application.stage_change import prepare_stage_change, apply_stage_change, guided_reentry
 from .application.practice_transitions import TransitionContext, decide_transition
@@ -2167,7 +2168,8 @@ class PracticeEngine:
                 # A visual stage must be completely outside the right edge
                 # when the next graded clock starts counting down. Extend
                 # that SAME Python deadline; no second frontend clock.
-                next_deadline = deadline + lead_beats*60.0/self.plan.bpm
+                next_deadline = scheduled_offscreen_start(
+                    deadline, lead_beats, self.plan.bpm)
                 self._continue_at(next_deadline)
                 self.count_in_beats = max(self.count_in_beats,lead_beats)
                 return

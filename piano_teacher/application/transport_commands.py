@@ -6,6 +6,7 @@ executed by PracticeEngine/VisualTransport under the existing session lock.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 StartRoute = Literal["listen", "prepare_practice", "reload_score", "rewind", "start"]
@@ -49,3 +50,18 @@ def resume_timeline(*, paused: bool, learning: bool, running: bool,
     if not paused:
         raise ValueError("Cannot resume unless an exercise is paused")
     return not learning and (running or preview_pending or automatic_feedback)
+
+
+def scheduled_offscreen_start(deadline: float, lead_beats: float,
+                              bpm: float) -> float:
+    """One future MIDI deadline for an already engraved lesson handoff.
+
+    The UI supplies the entire offscreen reading horizon including its
+    header. The engine applies it to its own graded transport; no second
+    scrolling timeline or speculative on-screen source insertion exists.
+    """
+    if not (math.isfinite(deadline) and math.isfinite(lead_beats)
+            and math.isfinite(bpm) and 0.0 <= lead_beats <= 64.0
+            and bpm > 0.0):
+        raise ValueError("Invalid future notation reading lead")
+    return deadline + lead_beats * 60.0 / bpm
