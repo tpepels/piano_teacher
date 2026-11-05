@@ -894,6 +894,76 @@ func playhead_region() -> Rect2:
         Vector2(1.0,maxf(1.0,bottom-top)))
 
 
+func _cursor_ink_clearances(gap: float) -> Array:
+    # Only a tiny beat window around the fixed cursor is inspected. The
+    # already sorted canonical MusicXML event index is binary searched; no
+    # full-score traversal, renderer variant, or new camera exists.
+    var exclusions: Array = []
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var events: Array = layout.ordered_events
+    if events.is_empty():
+        return exclusions
+    var guard: float = gap*1.7/density
+    for item in stream_passes:
+        if str(item.get("kind","source")) != "source":
+            continue
+        var source_at_line: float = stream_world_beat - float(item["world_origin"])
+        if source_at_line+guard < float(item["source_floor"]) or \
+                source_at_line-guard > float(item["source_ceiling"]):
+            continue
+        var lo := 0
+        var hi: int = events.size()
+        while lo < hi:
+            var mid: int = (lo+hi)>>1
+            if float(events[mid].get("beat",0.0)) < source_at_line-guard:
+                lo = mid+1
+            else:
+                hi = mid
+        for idx in range(lo,events.size()):
+            var event: Dictionary = events[idx]
+            var at: float = float(event.get("beat",0.0))
+            if at > source_at_line+guard:
+                break
+            if absf((at-source_at_line)*density) > gap*1.5:
+                continue
+            var kind: String = str(event.get("kind",""))
+            if kind not in ["note","rest"]:
+                continue
+            var staff: String = str(event.get("staff","right"))
+            if active_hand not in ["both",staff]:
+                continue
+            var y: float = (layout.rest_y(event,gap) if kind=="rest"
+                else layout.event_y(event,gap))
+            var half_height: float = gap*(1.8 if kind=="rest" else 1.1)
+            exclusions.append(Vector2(y-half_height,y+half_height))
+    exclusions.sort_custom(func(a: Vector2,b: Vector2) -> bool:
+        return a.x < b.x)
+    return exclusions
+
+
+func _paint_cursor_behind_ink(x: float, top: float, bottom: float,
+        gap: float) -> void:
+    # A bright cursor directly through a rest/note at its exact onset
+    # creates an illegible composite and fails source-rest isolation.
+    # Keep the fixed timing axis but leave only local vertical notches
+    # where genuine glyph ink is crossing it; the mint halo stays behind.
+    var cursor_y: float = top
+    for interval in _cursor_ink_clearances(gap):
+        var start_y: float = clampf(float(interval.x),top,bottom)
+        var end_y: float = clampf(float(interval.y),top,bottom)
+        if start_y > cursor_y:
+            draw_line(Vector2(x,cursor_y),Vector2(x,start_y),
+                Design.HIGHLIGHT,2.4,true)
+            draw_line(Vector2(x,cursor_y),Vector2(x,start_y),
+                Color(Design.STONE,.62),.9,true)
+        cursor_y = maxf(cursor_y,end_y)
+    if cursor_y < bottom:
+        draw_line(Vector2(x,cursor_y),Vector2(x,bottom),
+            Design.HIGHLIGHT,2.4,true)
+        draw_line(Vector2(x,cursor_y),Vector2(x,bottom),
+            Color(Design.STONE,.62),.9,true)
+
+
 func _draw() -> void:
     if layout.size != size:
         layout.set_viewport(size)
@@ -968,10 +1038,7 @@ func _draw() -> void:
     # flagged stems and noteheads, preventing independent contour recovery.
     # Engraving is always painted later; the transport clock is unchanged.
     if transport_overlay_enabled and not runway_overlay:
-        draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
-            Design.HIGHLIGHT,2.4,true)
-        draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
-            Color(Design.STONE,.62),.9,true)
+        _paint_cursor_behind_ink(playhead_x,top,bottom,gap)
         draw_circle(Vector2(playhead_x,top),9.0,Color(Design.MINT,.16))
         draw_circle(Vector2(playhead_x,top),3.7,Design.STONE)
         # Beat breathing is an accent on the fixed playhead, not a moving
