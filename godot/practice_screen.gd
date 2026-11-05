@@ -23,6 +23,10 @@ var stage: ScoreStage
 var practice_layout_box: VBoxContainer
 var practice_header: HBoxContainer
 var practice_navigation: HFlowContainer
+var header_play_button: Button
+var details_popup: PopupPanel
+var details_scroll: ScrollContainer
+var details_caption: Label
 var game_brand: Label
 var title_label: Label
 var speed_label: Button
@@ -76,71 +80,60 @@ func _ready() -> void:
     theme = Design.create()
     var practice_layout: VBoxContainer = self
     practice_layout_box = practice_layout
-    # One compact lesson header. Music occupies the expanding stage below;
-    # navigation never gets a separate full-width toolbar of its own.
     practice_header = HBoxContainer.new()
-    practice_header.add_theme_constant_override("separation", 20)
+    practice_header.add_theme_constant_override("separation",14)
     practice_layout.add_child(practice_header)
-    var heading := UI.stack(5)
+    practice_music_button = _button("Back",func(): navigation_requested.emit("library"),false,"navigation")
+    practice_music_button.tooltip_text = "Back to music · Escape"
+    practice_music_button.call("set_icon_only",true)
+    practice_header.add_child(practice_music_button)
+    var heading := UI.stack(0)
     heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     practice_header.add_child(heading)
-    title_label = UI.title("Choose your music", 26)
+    title_label = UI.title("Choose your music",30)
     title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(title_label)
-    var context := UI.stack(6)
-    context.custom_minimum_size.x = 250
+    var context := HBoxContainer.new()
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(context)
     practice_navigation = HFlowContainer.new()
     practice_navigation.alignment = FlowContainer.ALIGNMENT_END
-    practice_navigation.add_theme_constant_override("h_separation", 6)
+    practice_navigation.add_theme_constant_override("h_separation",12)
     context.add_child(practice_navigation)
-    game_brand = UI.title("Piano Teacher", 18)
+    game_brand = UI.title("Piano Teacher",18)
     game_brand.visible = false
     practice_navigation.add_child(game_brand)
-    practice_music_button = _button("Music", func(): navigation_requested.emit("library"), false, "library")
-    practice_music_button.tooltip_text = "Choose a piece · Escape"
-    practice_music_button.call("set_icon_only",true)
-    practice_navigation.add_child(practice_music_button)
-    var path_button := _button("Path", func(): navigation_requested.emit("lesson"), false, "navigation")
-    path_button.tooltip_text = "Learning stages and advanced practice"
-    path_button.call("set_icon_only",true)
-    practice_navigation.add_child(path_button)
-    practice_settings_button = _button("Settings", func(): navigation_requested.emit("settings"), false, "settings")
+    speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"secondary")
+    speed_label.custom_minimum_size = Vector2(138,46)
+    speed_label.tooltip_text = "Adjust tempo"
+    practice_navigation.add_child(speed_label)
+    header_play_button = _button("Play",func(): play_requested.emit(),false,"header_play")
+    header_play_button.tooltip_text = "Play or pause · Space"
+    header_play_button.call("set_icon_only",true)
+    practice_navigation.add_child(header_play_button)
+    practice_settings_button = _button("Settings",
+        func(): navigation_requested.emit("settings"),false,"settings")
+    practice_settings_button.tooltip_text = "Settings"
     practice_settings_button.call("set_icon_only",true)
     practice_navigation.add_child(practice_settings_button)
-    practice_details_button = _button("Details",_toggle_details,false,"utility")
-    practice_details_button.tooltip_text = "Show exercise details and performance"
+    practice_details_button = _button("More",_toggle_details,false,"utility")
+    practice_details_button.tooltip_text = "More lesson options and performance"
     practice_details_button.call("set_icon_only",true)
-    practice_navigation.add_child(practice_details_button)
-    var details := HBoxContainer.new()
-    details.add_theme_constant_override("separation", 14)
-    details.alignment = BoxContainer.ALIGNMENT_END
-    context.add_child(details)
-    speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"secondary")
-    speed_label.custom_minimum_size = Vector2(124,36)
-    speed_label.size_flags_horizontal = Control.SIZE_SHRINK_END
-    var tempo_face := Design.bordered_surface(Design.PANEL_RECESSED,7,.62)
-    tempo_face.set_content_margin_all(8)
-    speed_label.add_theme_stylebox_override("normal",tempo_face)
-    speed_label.tooltip_text = "Tempo settings"
-    details.add_child(speed_label)
     tempo_popup = PopupPanel.new()
     tempo_popup.name = "TempoAdjustment"
-    tempo_popup.add_theme_stylebox_override("panel",Design.card_surface())
+    tempo_popup.add_theme_stylebox_override("panel",Design.modal_surface())
     add_child(tempo_popup)
     var tempo_margin := MarginContainer.new()
     for side in ["left","right","top","bottom"]:
-        tempo_margin.add_theme_constant_override("margin_"+side,8)
+        tempo_margin.add_theme_constant_override("margin_"+side,9)
     tempo_popup.add_child(tempo_margin)
     var tempo_actions := HBoxContainer.new()
     tempo_actions.add_theme_constant_override("separation",8)
     tempo_margin.add_child(tempo_actions)
     game_input_indicator = GameInputIndicator.new()
-    details.add_child(game_input_indicator)
     lesson_info_label = UI.label("", 14, MUTED)
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     stage = ScoreStage.new()
@@ -160,11 +153,31 @@ func _ready() -> void:
     # Progress already appears as a single thin rail *inside* GameStage.
     # A second full-width bar below the notation made this a dashboard.
     practice_progress.visible = false
+    details_popup = PopupPanel.new()
+    details_popup.name = "PracticeOptions"
+    details_popup.add_theme_stylebox_override("panel",Design.modal_surface())
+    add_child(details_popup)
+    details_popup.popup_hide.connect(_on_details_hidden)
+    var details_margin := MarginContainer.new()
+    for side in ["left","right","top","bottom"]:
+        details_margin.add_theme_constant_override("margin_"+side,12)
+    details_popup.add_child(details_margin)
+    details_scroll = ScrollContainer.new()
+    details_scroll.custom_minimum_size = Vector2(690,240)
+    details_margin.add_child(details_scroll)
     details_panel = VBoxContainer.new()
     details_panel.name = "PracticeDetails"
     details_panel.visible = false
-    details_panel.add_theme_constant_override("separation", 4)
-    practice_layout.add_child(details_panel)
+    details_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    details_panel.add_theme_constant_override("separation",10)
+    details_scroll.add_child(details_panel)
+    var details_header := HBoxContainer.new()
+    details_header.add_theme_constant_override("separation",10)
+    details_panel.add_child(details_header)
+    details_header.add_child(game_input_indicator)
+    details_caption = UI.label("",12,MUTED)
+    details_caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    details_header.add_child(details_caption)
     var challenge_bar := HBoxContainer.new()
     challenge_bar.add_theme_constant_override("separation", 18)
     details_panel.add_child(challenge_bar)
@@ -189,6 +202,11 @@ func _ready() -> void:
     tempo_actions.add_child(tempo_up_button)
     game_streak = GameStreak.new()
     challenge_bar.add_child(game_streak)
+    var path_button := _button("Lesson path",func():
+        details_popup.hide()
+        navigation_requested.emit("lesson"),false,"navigation")
+    path_button.tooltip_text = "Browse the lesson path"
+    challenge_bar.add_child(path_button)
     # Direct backward navigation does not award mastery or traverse the
     # previous passage index: it selects the exact previous lesson step.
     practice_previous_button = _button("Previous lesson", _previous_lesson,
@@ -253,6 +271,7 @@ func _ready() -> void:
     listen_button = _transport_button("Listen", func(): listen_requested.emit(), "listen")
     listen_button.tooltip_text = "Hear this passage, or return to practice · L"
     controls.add_child(listen_button)
+    controls.add_child(practice_details_button)
     var modal_layer := CanvasLayer.new()
     modal_layer.layer = 1
     add_child(modal_layer)
@@ -507,6 +526,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         if not transformation.is_empty():
             passage_text += " · " + transformation
     title_label.tooltip_text = passage_text
+    details_caption.text = passage_text
     progress_label.text = progress_text
     lesson_info_label.text = instruction_text
     # The transport action is Play. Do not show the engine's obsolete
@@ -520,7 +540,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         lesson_info_label.add_theme_color_override("font_color", instruction_tone)
     # Secondary information is available on demand. Normal playing does not
     # shrink the music or repeat state already conveyed by score and controls.
-    details_panel.visible = _details_open or _audio_error
+    details_panel.visible = _details_open
     # During graded playback, notation and MIDI note reactions provide the
     # information. Preserve warnings for ungraded previews and audio errors.
     var busy_music: bool = phase in ["playing", "count_in"] and not learning
@@ -547,16 +567,36 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     start_button.disabled = not active_transport and (not _score_ready)
     start_button.call("configure", "pause" if start_button.text == "Pause" else "play",
         active_transport and not bool(parsed.get("paused", false)))
+    header_play_button.text = "Pause" if start_button.text == "Pause" else "Play"
+    header_play_button.disabled = start_button.disabled
+    header_play_button.tooltip_text = start_button.text + " · Space"
+    header_play_button.queue_redraw()
     listen_button.call("configure", "practice" if str(parsed.get("mode", "")) == "listen" else "listen",
         str(parsed.get("mode", "")) == "listen")
 
 func _toggle_details() -> void:
-    _details_open = not _details_open
-    details_panel.visible = _details_open or _audio_error
-    practice_details_button.tooltip_text = (
-        "Hide exercise details and performance" if _details_open
-        else "Show exercise details and performance")
-    practice_details_button.call("set_selected",_details_open)
+    if details_popup.visible:
+        details_popup.hide()
+        return
+    _details_open = true
+    details_panel.visible = true
+    practice_details_button.call("set_selected",true)
+    practice_details_button.tooltip_text = "Close lesson options"
+    var popup_width := mini(740,maxi(320,roundi(size.x)-32))
+    var popup_height := mini(330,maxi(210,roundi(size.y*.52)))
+    var anchor := Vector2i(practice_details_button.get_screen_position())
+    var viewport_width := roundi(get_viewport_rect().size.x)
+    anchor.x = clampi(anchor.x+roundi(practice_details_button.size.x)-popup_width,
+        8,maxi(8,viewport_width-popup_width-8))
+    anchor.y = maxi(8,anchor.y-popup_height-12)
+    details_popup.popup(Rect2i(anchor,Vector2i(popup_width,popup_height)))
+
+
+func _on_details_hidden() -> void:
+    _details_open = false
+    details_panel.visible = false
+    practice_details_button.call("set_selected",false)
+    practice_details_button.tooltip_text = "More lesson options and performance"
 
 
 func _toggle_tempo_popup() -> void:
@@ -583,6 +623,7 @@ func present_score(status: Dictionary) -> void:
     _score_ready = bool(status.get("ready",false))
     stage.present_score_status(status)
     start_button.disabled = not _active_transport(_state) and not _score_ready
+    header_play_button.disabled = start_button.disabled
     practice_retry_button.disabled = not bool(_state.get("loaded",false)) or not _score_ready
 
 func present_message(message: String, reveal := false) -> void:
@@ -608,6 +649,9 @@ func _active_transport(state: Dictionary) -> bool:
 
 func set_active(active: bool) -> void:
     _active = active
+    if not active:
+        if details_popup.visible: details_popup.hide()
+        if tempo_popup.visible: tempo_popup.hide()
     _present_pause()
 
 func _present_pause() -> void:
@@ -673,28 +717,26 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
     var margin: int = 26 if width >= 1100.0 else 14
     stage.apply_viewport(view_size,scale,compact)
     open_picker.resize_panel(view_size)
+    details_scroll.custom_minimum_size.x = minf(690.0,maxf(290.0,width-68.0))
     # The reserved score header keeps navigation outside the notation region.
     var compact_steps: bool = width < 1250.0
     progress_label.visible = true
     for bpm_button in [tempo_down_button, tempo_up_button]:
         bpm_button.custom_minimum_size = Vector2(42.0 if compact_steps else 46.0,38.0)
-    practice_header.add_theme_constant_override("separation", 10 if width < 950.0 else 20)
+    practice_header.add_theme_constant_override("separation",8 if width < 950.0 else 16)
     game_brand.visible = false
     practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
     practice_navigation.add_theme_constant_override("v_separation", 4)
     for child in practice_navigation.get_children():
         if child is Button:
             var button := child as Button
-            var font_size := _ui_font(12)
-            button.add_theme_font_size_override("font_size", font_size)
-            var measured: float = button.get_theme_font("font").get_string_size(
-                button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-            # Icon + label still need one accessible, unclipped click target.
-            button.custom_minimum_size = Vector2(maxf(78.0, measured + 40.0),
-                32.0)
+            button.add_theme_font_size_override("font_size",_ui_font(14))
             if bool(button.get("icon_only")):
-                button.custom_minimum_size = Vector2(40,36)
-            button.clip_text = bool(button.get("icon_only"))
+                button.custom_minimum_size = Vector2(46,46)
+                button.clip_text = true
+            else:
+                button.custom_minimum_size = Vector2(134 if width >= 950.0 else 112,46)
+    practice_music_button.custom_minimum_size = Vector2(46,46)
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
         # The expanding score panel gets all remaining vertical space.
@@ -704,28 +746,24 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
             if child is Button:
                 var button := child as Button
                 var central: bool = button == start_button
-                var font_size := _ui_font(16 if central else 15)
-                button.add_theme_font_size_override("font_size", font_size)
-                var measured: float = button.get_theme_font("font").get_string_size(
-                    button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-                var available: float = maxf(0.0, width - float(margin * 2) - 56.0)
-                var ideal: float = maxf(220.0 if central else 124.0,
-                    measured + 68.0 if central else 124.0)
-                # At 800px all three keys must fit on one row, without
-                # shrinking their active hit areas to website-sized chips.
-                var per_button: float = maxf(125.0, (available - 48.0) / 3.0)
-                button.custom_minimum_size = Vector2(
-                    minf(ideal * (1.13 if width >= 1600.0 else 1.0), per_button * (1.18 if central else .91)),
-                    54.0)
-                button.clip_text = false
-        title_label.add_theme_font_size_override("font_size", _ui_font(24))
+                button.add_theme_font_size_override("font_size",_ui_font(18 if central else 15))
+                if central:
+                    button.custom_minimum_size = Vector2(
+                        minf(270.0,maxf(185.0,width*.19)),66.0 if not compact else 55.0)
+                elif button == practice_details_button:
+                    button.custom_minimum_size = Vector2(64.0,54.0 if not compact else 48.0)
+                else:
+                    button.custom_minimum_size = Vector2(78.0,54.0 if not compact else 48.0)
+                button.clip_text = not central
+        title_label.add_theme_font_size_override("font_size",_ui_font(
+            22 if width < 1024.0 else 31 if width >= 1400.0 else 27))
         speed_label.add_theme_font_size_override("font_size", _ui_font(14))
         progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
         game_input_indicator.custom_minimum_size.y = 22
         feedback_label.add_theme_font_size_override("font_size", _ui_font(14))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(14))
-        performance_metrics.custom_minimum_size.x = 280 if width < 1000 else 340
+        performance_metrics.custom_minimum_size.x = 270 if width < 1000 else 315
         var instruction_lines := 2
         lesson_info_label.set_meta("caption_lines", instruction_lines)
         lesson_info_label.max_lines_visible = instruction_lines
