@@ -664,7 +664,8 @@ func _project_stream(playhead_x: float) -> void:
             used[segment] = true
             var count: int = RetainedNoteProjection.append_visible(
                 segment.note_instances,position,size.x,playhead_x,
-                int(item["serial"]),drawn_note_instances,drawn_noteheads)
+                int(item["serial"]),drawn_note_instances,drawn_noteheads,
+                floor_x)
             visible_symbols += count
             frame_scanned_events += count
             fingering_pass_clocks.append({
@@ -1005,7 +1006,7 @@ func _draw() -> void:
     var line_region: Rect2 = playhead_region()
     var top: float = line_region.position.y
     var bottom: float = line_region.end.y
-    if transport_overlay_enabled and not runway_overlay and not ambient_blank:
+    if transport_overlay_enabled and not runway_overlay and not ambient_blank and not stream_enabled:
         var displayed_beat := displayed_scroll_beat() if score_loop_enabled else camera_clock+play_from_beat
         # Illuminate the selected measure in READY as well as PLAYING and
         # PAUSED. The first playable note owns the idle camera, not wall time.
@@ -1027,22 +1028,24 @@ func _draw() -> void:
                 Color(ink,.48 if selected else .28),1.15,true)
     # Empty idle and paused canvas: source ink is hidden while barlines
     # continue to move. Staff and playhead remain fixed and legible.
-    if ambient_blank and not runway_overlay:
+    if (ambient_blank or stream_enabled) and not runway_overlay:
         var measure_beats: float = 4.0
         if not timeline.measures.is_empty():
             var opening: Dictionary = timeline.measures[0]
             measure_beats = maxf(.25, float(opening.get("end_beat",4.0)) -
                 float(opening.get("start_beat",0.0)))
         var bar_width: float = maxf(64.0,measure_beats*timeline.pixels_per_beat)
-        var offset: float = fposmod(ambient_scroll_beat*timeline.pixels_per_beat,
-            bar_width)
+        var offset: float = fposmod((
+            stream_world_beat if stream_enabled else ambient_scroll_beat) *
+            timeline.pixels_per_beat,bar_width)
         var barline_top_y: float = layout.barline_top(gap)
         var barline_bottom_y: float = layout.barline_bottom(gap)
         for index in range(-1,ceili(size.x/bar_width)+3):
             var x: float = playhead_x-offset+float(index)*bar_width
             if x >= 0.0 and x <= size.x:
                 draw_line(Vector2(x,barline_top_y),
-                    Vector2(x,barline_bottom_y),Color(NOTE_INK,.33),1.0,true)
+                    Vector2(x,barline_bottom_y),
+                    Color(NOTE_INK,.20 if stream_enabled else .33),1.0,true)
     # Keep the fixed playhead visible but BEHIND source ink. At exact
     # onset a foreground cursor previously covered small eighth-rest dots,
     # flagged stems and noteheads, preventing independent contour recovery.
@@ -1060,7 +1063,8 @@ func _draw() -> void:
         var rhythmic: bool = (running and not paused) or (
             score_loop_enabled and not practice_preparation.is_empty() and not paused)
         if rhythmic:
-            var beat_axis := visual_scroll_beat if score_loop_enabled else clock_beat
+            var beat_axis := (stream_world_beat if stream_enabled else
+                visual_scroll_beat if score_loop_enabled else clock_beat)
             var fraction := fposmod(beat_axis, 1.0)
             var impulse := pow(1.0-fraction, 2.4)
             var center := Vector2(playhead_x, top + gap*.22)
@@ -1073,14 +1077,17 @@ func _draw() -> void:
     # and used to look like an orphaned vertical rule in the score.
     # One semantic practice timeline owns both source-copy placement and
     # preparation silence. No independently inferred final-bar duration.
-    if score_loop_enabled and not practice_contract_error.is_empty():
+    if score_loop_enabled and not stream_enabled and not practice_contract_error.is_empty():
         draw_string(font,Vector2(20,size.y*.5),practice_contract_error,
             HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
         _hide_retained_segments()
         return
-    if ambient_blank and not runway_overlay:
+    if stream_enabled:
+        _project_stream(playhead_x)
+    elif ambient_blank and not runway_overlay:
         return
-    _place_retained_score(playhead_x,camera_clock,ready_preview_beat)
+    else:
+        _place_retained_score(playhead_x,camera_clock,ready_preview_beat)
     if retained_annotations != null:
         retained_annotations.queue_redraw()
     # Never put engineering telemetry on top of the actual lesson.
