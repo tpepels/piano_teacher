@@ -3,6 +3,7 @@ extends Button
 # Physical transport key. Button owns input; this canvas only presents it.
 # Keep the real text available to accessibility and automation.
 const Design := preload("res://practice_theme.gd")
+const GlowField := preload("res://mint_glow_field.gd")
 const TEAL := Design.MINT
 const DIM := Design.SLATE
 
@@ -14,6 +15,7 @@ var hover_phase := 0.0
 var press_phase := 0.0
 var release_flash := 0.0
 var _was_disabled := false
+var primary_glow: ColorRect
 
 func _init() -> void:
     for state in ["font_color", "font_hover_color", "font_pressed_color",
@@ -24,6 +26,14 @@ func _init() -> void:
 
 func _ready() -> void:
     set_process(false)
+    primary_glow = GlowField.new()
+    primary_glow.name = "TransportBloom"
+    primary_glow.configure(1,1.28,Color("#49F6B4"))
+    primary_glow.show_behind_parent = true
+    primary_glow.visible = action_kind in ["play","pause"]
+    add_child(primary_glow)
+    resized.connect(_sync_primary_glow)
+    _sync_primary_glow()
     mouse_entered.connect(func():
         pointer_inside = true
         _wake_motion())
@@ -54,7 +64,15 @@ func configure(kind: String, playing: bool = false) -> void:
     if action_kind != kind or live != playing:
         action_kind = kind
         live = playing
+        _sync_primary_glow()
         queue_redraw()
+
+func _sync_primary_glow() -> void:
+    if primary_glow == null:
+        return
+    primary_glow.visible = action_kind in ["play","pause"] and not disabled
+    primary_glow.position = Vector2(-49.0,-39.0)
+    primary_glow.size = size + Vector2(98.0,78.0)
 
 func _wake_motion() -> void:
     if disabled or not is_visible_in_tree():
@@ -95,6 +113,7 @@ func _draw() -> void:
         pointer_inside = is_hovered()
         _wake_motion()
     _was_disabled = disabled
+    _sync_primary_glow()
     if size.x < 42 or size.y < 35:
         return
     var primary: bool = action_kind in ["play", "pause"]
