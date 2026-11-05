@@ -619,6 +619,34 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     return _stream_serial
 
 
+func _stream_claim_pending_auto(world: float, opening: float) -> int:
+    # Manual Resume/Retry supersedes a speculative automatic repeat.
+    # Reuse the existing offscreen CanvasItem and clip the earlier notes,
+    # instead of leaving an ungraded repeat and allocating a duplicate.
+    var edge: float = world+_stream_right_beats()+ \
+        _stream_header_beats(opening)+StreamAdmission.OFFSCREEN_MARGIN_BEATS
+    var chosen := -1
+    var closest := INF
+    for i in range(stream_passes.size()):
+        var item: Dictionary = stream_passes[i]
+        if str(item.get("take_key","")) != "autopending" or \
+                not bool(item.get("pending",false)) or \
+                str(item.get("kind","source")) != "source":
+            continue
+        var upcoming: float = float(item["world_origin"])+opening
+        if upcoming < edge or upcoming >= closest:
+            continue
+        chosen=i
+        closest=upcoming
+    if chosen >= 0:
+        var item: Dictionary = stream_passes[chosen]
+        item["source_floor"] = opening
+        item["source_ceiling"] = maxf(float(item["source_ceiling"]),
+            _stream_complete_measure(opening+_stream_right_beats()+1.0))
+        return int(item["serial"])
+    return -1
+
+
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
         resuming_paused: bool = false) -> Dictionary:
@@ -637,8 +665,11 @@ func arm_stream_take(world: float, opening: float,
         if old_index >= 0:
             serial = int(stream_passes[old_index]["serial"])
             reused = true
+    if serial < 0 and resuming_paused:
+        serial = _stream_claim_pending_auto(stream_world_beat,opening)
+        reused = serial >= 0
     if serial >= 0:
-        pass # Existing unplayed original notes retain their world origin.
+        pass # Reused source ink retains its world coordinate.
     elif is_finite(planned_start_world):
         var safe_start: float = StreamAdmission.future_start(
             stream_passes,stream_world_beat,_stream_right_beats(),

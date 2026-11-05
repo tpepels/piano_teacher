@@ -112,6 +112,24 @@ func _initialize() -> void:
                     continue
                 check(absf(float(a["position"].x)-float(b["position"].x))>=12.0,
                     "two source copies may never overlap a notehead")
+    # A later manual Resume or Retry consumes any still-offscreen automatic
+    # passage instead of stacking another future duplicate.
+    var future_world: float = world+65.0
+    v._stream_add_take(0.0,future_world,0.0,8.0,"autopending")
+    var auto_serial: int = v._stream_serial
+    var previous_count: int = v.admissions.size()
+    var reused: Dictionary = v.arm_stream_take(world,3.0,NAN,true)
+    check(bool(reused.get("reused",false)) and
+            v._stream_serial == auto_serial and
+            v.admissions.size() == previous_count,
+        "manual Resume reuses future auto ink rather than duplicating notes")
+    var retained_origin := false
+    for item in v.stream_passes:
+        if int(item["serial"]) == auto_serial:
+            retained_origin = is_equal_approx(float(item["source_floor"]),3.0) and \
+                is_equal_approx(float(item["world_origin"]),future_world)
+    check(retained_origin,
+        "repurposed source preserves world position and hides earlier noteheads")
     v.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
