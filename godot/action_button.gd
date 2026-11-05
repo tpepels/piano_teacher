@@ -44,7 +44,7 @@ func set_selected(selected: bool) -> void:
 	queue_redraw()
 
 func _accent() -> Color:
-	return Design.FOCUS if action_role == "header_play" else Design.role_accent(action_role)
+	return Design.role_accent(action_role)
 
 
 func _background() -> Color:
@@ -57,7 +57,7 @@ func _has_symbol() -> bool:
 	if action_role == "navigation" and text in ["‹", "›", "←", "→"]:
 		return false
 	return action_role in ["navigation", "utility", "listen", "settings", "review",
-		"danger", "library", "tempo_down", "tempo_up", "header_play"]
+		"danger", "library", "practice_tempo"]
 
 func _skin() -> void:
 	var accent: Color = _accent()
@@ -66,16 +66,16 @@ func _skin() -> void:
 	var important := action_role == "primary" or (is_selected and action_role in ["choice", "utility"])
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = background
-	normal.set_corner_radius_all(23 if action_role == "header_play" else Design.RADIUS_INPUT)
+	normal.set_corner_radius_all(Design.RADIUS_INPUT)
 	normal.set_border_width_all(1)
-	normal.border_color = (Color(Design.MINT,.60) if action_role in ["header_play","practice_tempo"]
+	normal.border_color = (Color(Design.MINT,.60) if action_role == "practice_tempo"
 		else Color(accent,.66) if important else Color(Design.BORDER,.5))
 	normal.content_margin_left = 0 if icon_only else 36 if _has_symbol() else 14
 	normal.content_margin_right = 0 if icon_only else 14
 	normal.content_margin_top = 8
 	normal.content_margin_bottom = 8
-	normal.shadow_color = Color(Design.MINT,.25) if action_role == "header_play" else Color(Design.MINT,.36) if important else Color(Design.NIGHT,.22)
-	normal.shadow_size = 15 if important else 5 if action_role == "header_play" else 2
+	normal.shadow_color = Color(Design.MINT,.36) if important else Color(Design.NIGHT,.22)
+	normal.shadow_size = 15 if important else 2
 	normal.shadow_offset = Vector2(0,2)
 	add_theme_stylebox_override("normal", normal)
 	var hover := normal.duplicate() as StyleBoxFlat
@@ -146,21 +146,16 @@ func _draw() -> void:
 		"utility":
 			for x in [-5.0, 0.0, 5.0]:
 				draw_circle(center+Vector2(x,0),1.65,accent)
-		"header_play":
-			if text == "Pause":
-				draw_rect(Rect2(center.x-6.0,center.y-7.0,4.0,14.0),accent)
-				draw_rect(Rect2(center.x+2.0,center.y-7.0,4.0,14.0),accent)
-			else:
-				draw_colored_polygon(PackedVector2Array([
-				center+Vector2(-4.5,-8),center+Vector2(8,0),
-				center+Vector2(-4.5,8)]),accent)
-		"tempo_down", "tempo_up":
-			draw_circle(center+Vector2(-4,3),3.0,accent)
-			draw_line(center+Vector2(-1,3),center+Vector2(-1,-8),accent,1.8,true)
-			draw_line(center+Vector2(2,-8),center+Vector2(-1,-8),accent,1.8,true)
-			draw_line(center+Vector2(4,0),center+Vector2(10,0),accent,1.8,true)
-			if action_role == "tempo_up":
-				draw_line(center+Vector2(7,-3),center+Vector2(7,3),accent,1.8,true)
+		"practice_tempo":
+			# Small drawn metronome; no eighth-note glyph or emoji fallback.
+			var left := center+Vector2(-6.5,7)
+			var right := center+Vector2(6.5,7)
+			var upper_left := center+Vector2(-2.8,-5.5)
+			var upper_right := center+Vector2(2.8,-5.5)
+			for edge in [[left,right],[left,upper_left],[upper_left,upper_right],[upper_right,right]]:
+				draw_line(edge[0],edge[1],accent,1.65,true)
+			draw_line(center+Vector2(-1,3),center+Vector2(4,-8),accent,1.7,true)
+			draw_circle(center+Vector2(4,-8),1.5,accent)
 		"listen":
 			draw_circle(center + Vector2(-5, 0), 2.6, accent)
 			draw_arc(center + Vector2(-5, 0), 6.8, -.36*PI, .36*PI, 24, accent, 2.0, true)
