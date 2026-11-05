@@ -84,7 +84,22 @@ func _process(_delta: float) -> bool:
                 str(app.last_state.get("piece_fingerprint","")) != expected_fingerprint:
             _fail("Loaded a different MIDI from the requested real score")
             return true
-        var renderer = app.practice_view.stage.renderer
+        var chrome = app.practice_view
+        # The title must yield width to a single-line transport header.
+        # The previous flowing header wrapped BPM above Play/Settings and
+        # consumed nearly twice the intended vertical space.
+        if not chrome.practice_navigation is HBoxContainer or (
+                absf(chrome.speed_label.get_global_rect().get_center().y
+                    - chrome.header_play_button.get_global_rect().get_center().y) > 2.0):
+            _fail("Practice header controls wrapped onto different rows")
+            return true
+        if chrome.practice_header.size.y > 56.0 or chrome.start_button.size.y > 60.0:
+            _fail("Practice chrome is too tall and crowds out the score")
+            return true
+        if chrome.stage.fingering_status_label.get_parent() != chrome.details_panel:
+            _fail("Fingering diagnostics still occupy the notation stage")
+            return true
+        var renderer = chrome.stage.renderer
         var notes: int = renderer.timeline.notes.size()
         if not renderer.visible or notes <= 0 or not renderer.retained_ready():
             _fail("Published score has no visible native retained notation")
