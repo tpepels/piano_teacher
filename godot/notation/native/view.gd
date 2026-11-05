@@ -607,11 +607,33 @@ func _stream_add_take(source_beat: float, start_world: float,
     })
 
 
+func _stream_prune_expired() -> void:
+    # Scene-tree mutations belong to the frame coordinator, never _draw().
+    # The GPU command-list pass only translates retained CanvasItems.
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var playhead_x: float = size.x*PLAYHEAD_FRACTION
+    for index in range(stream_passes.size()-1,-1,-1):
+        var item: Dictionary = stream_passes[index]
+        var segment = item["segment"]
+        var clip = item["clip"]
+        if segment == null or not is_instance_valid(segment) or \
+                clip == null or not is_instance_valid(clip):
+            stream_passes.remove_at(index)
+            continue
+        var source_left: float = playhead_x + (
+            float(item["world_origin"])-stream_world_beat)*density
+        if source_left + timeline.duration_beats*density < -60.0:
+            segment.reparent(self,false)
+            clip.queue_free()
+            stream_passes.remove_at(index)
+
+
 func present_flow(world_beat: float, state: Dictionary,
         graded_beat: float, allow_admission: bool = true) -> void:
     if not stream_enabled:
         return
     stream_world_beat = maxf(stream_world_beat,world_beat)
+    _stream_prune_expired()
     if not native_ready or not retained_ready():
         queue_redraw()
         return
@@ -654,12 +676,6 @@ func _project_stream(playhead_x: float) -> void:
         var position: float = playhead_x + (
             float(item["world_origin"])-stream_world_beat)*density
         var floor_x: float = float(item["source_floor"])*density
-        var trailing_end: float = position+timeline.duration_beats*density
-        if trailing_end < -60.0:
-            segment.reparent(self,false)
-            clip.queue_free()
-            stream_passes.remove_at(index)
-            continue
         var clip_x: float = position+floor_x
         clip.position = Vector2(clip_x,0.0)
         clip.size = Vector2(maxf(1.0,
