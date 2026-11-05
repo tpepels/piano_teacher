@@ -52,6 +52,14 @@ jobs:
           cache: pip
       - name: Install compile tools in CI only
         run: python -m pip install 'scons>=4.7,<5'
+      - name: Cache pinned godot-cpp compilation
+        uses: actions/cache@v4
+        with:
+          # The Godot C++ binding version is pinned in build-inprocess.sh.
+          # Cached external build objects cannot conceal any native bridge
+          # source change; SCons still compiles and links current sources.
+          path: native/godot-cpp
+          key: godot-cpp-${{ runner.os }}-${{ runner.arch }}-10.0.0-stable-scons4-release-v1
       - name: Compile native extension
         env:
           PIANO_PYTHON: python

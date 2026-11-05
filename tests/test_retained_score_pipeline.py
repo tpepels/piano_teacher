@@ -127,3 +127,11 @@ def test_production_journey_does_not_depend_on_removed_camera_switch():
     assert "stream_enabled" not in scenario
     assert "retained_ready()" in scenario
     assert "stream_world_beat" in scenario
+
+
+def test_production_ready_smoke_accepts_hidden_future_reservation_retiming():
+    script = (ROOT/"godot/production_ui_smoke.gd").read_text()
+    assert "pending_count != 1" in script
+    assert "ready_world_origin = float(prepared[\"world_origin\"])" in script
+    assert "moved hidden ink backwards" in script
+    assert "Ready world-axis stopped or repositioned source" not in script

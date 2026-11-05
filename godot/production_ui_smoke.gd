@@ -121,13 +121,15 @@ func _process(_delta: float) -> bool:
         if renderer.stream_passes.is_empty():
             return false
         var prepared: Dictionary = {}
+        var pending_count := 0
         for item in renderer.stream_passes:
             if str(item.get("kind","source")) == "source" and \
+                    str(item.get("take_key","")) == "prepared" and \
                     bool(item.get("pending",false)):
                 prepared = item
-                break
-        if prepared.is_empty():
-            _fail("Ready lacks a future pre-engraved source reservation")
+                pending_count += 1
+        if pending_count != 1:
+            _fail("Ready must retain exactly one offscreen unplayed source")
             return true
         var density: float = renderer.timeline.pixels_per_beat
         var first_ink_x: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
@@ -148,9 +150,14 @@ func _process(_delta: float) -> bool:
         if Time.get_ticks_msec()-ready_visible_since_ms < 250:
             return false
         if renderer.stream_world_beat <= ready_world_beat or \
-                float(prepared["world_origin"]) != ready_world_origin:
-            _fail("Ready world-axis stopped or repositioned source while waiting for Play")
+                int(prepared["serial"]) != ready_pass_serial or \
+                float(prepared["world_origin"]) < ready_world_origin:
+            _fail("Ready stopped, duplicated a score, or moved hidden ink backwards")
             return true
+        # Repositioning a still-hidden READY reservation farther right is
+        # required during long waits. The identity stays unchanged; Play
+        # must bind the most recent offscreen world origin.
+        ready_world_origin = float(prepared["world_origin"])
         var forward_beats: float = renderer.size.x*(1.0-ScoreView.PLAYHEAD_FRACTION) / renderer.timeline.pixels_per_beat
         if forward_beats < 2.0:
             _fail("Engraving leaves under two beats visible ahead of playhead")
