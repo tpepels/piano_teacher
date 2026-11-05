@@ -644,3 +644,49 @@ outdated planning notes; update **this file** when statuses change.
 - **2026-11-05 photographed Beethoven opening regression:** SourcePassPainter correctly engraved the initial Verovio clef, key and meter to the *left* of source beat zero, but `StreamPassWindow` clipped every copy at `source_floor * density`, removing the full initial header and bisecting its first notehead. The admitted copy also had an arbitrary 3.5-beat right crop which could bisect an upcoming note or beam on screen. The fix keeps the original pre-engraved source, extends the first clip by fifteen staff spaces into the real header, reserves notehead clearance at later left boundaries, fills the visible right-side staff, and snaps the admitted right boundary to a complete source measure. Intermediate right crops do not expose the next measure's first notehead; the terminal barline gets its authored trailing clearance. Ambient staff lines no longer draw through the preserved header interval.
 - **Saved progress UX:** `ResumePracticeChoice` is now a compact, non-modal inline banner just below the Practice header. The saved step and optional review/measure actions remain available without blocking keyboard/transport. Ordinary Play, later playback, the measure picker or explicit dismissal hides it without modifying existing saved progression. These behaviors are covered by the headless Practice-screen test.
 - **Bounded software evidence:** [Godot parse, UI review and score-stream admission/projection](https://github.com/tpepels/piano_teacher/actions/runs/42093260267) passed for commit `f0b041ea`. The screenshot scenario itself still requires a new *actual* Beethoven framebuffer/physical input acceptance run. Existing full real-score framebuffer cases (Peace Piece, Chopin, Moonlight) still fail their separate pixel obligations and are not asserted green.
+
+
+### 2026-11-05 — Single moving-bar architecture replacement
+
+The previously reported Play pop-in was reproduced in source: `present_flow` admitted
+a new source copy only after the backend published `running`, using the current
+frame as `world_origin`. The native view also retained a source-local READY
+camera, an ambient barline camera, source-loop/recovery variants, and a fallback
+placement routine. These paths were removed, not retained as fallbacks.
+
+Current contract (one production score projection):
+- `ContinuousScoreFlow` is the single monotonic forward presentation axis,
+  independent of graded MIDI time; `_project_stream` is the only native frame
+  score-placement routine. Play does not change the visual origin.
+- READY prepositions the original fully engraved source beyond the right
+  viewport, including its authentic clef/key/meter header. Play only *arms*
+  an existing reservation. The backend uses its future onset for MIDI
+  assessment; a late stage handoff fails closed rather than seeking.
+- Retained source and semantic-rest windows start hidden and are revealed
+  only after the world transform and crop have been installed. A new clip
+  cannot appear for a single frame at (0,0).
+- Automatic same-score successors are pre-engraved and queued during the
+  preceding take, with an explicit score reading horizon. The existing
+  backend `next_at` rest is preserved, and only missing lead time is added
+  to the graded deadline. Automatic successors are accepted only when their
+  world onset agrees with the new backend clock; a mismatched repeat is not
+  redrawn at the playhead.
+- The next-stage preloader sends source-header plus view-width/IPC lead to
+  the authoritative backend. After course progression it promotes only an
+  already cached native score, bound to the exact future graded onset;
+  the old renderer's retained clips continue to scroll left. There is no
+  stage-specific source-local camera or duplicate scrolling animation.
+- Obsolete idle-preview, measure-light and source-copy visibility modules and
+  their tests were deleted. The canonical source painter no longer selects
+  repeat/recovery variants or masks content based on an old loop history.
+- Architectural regression guards assert the legacy pathways stay absent;
+  Godot acceptance exercises READY→Play, pause/resume, future placement,
+  clipping and real retained-note projection.
+
+**Open and not certified:** physical MIDI timing and a signed production
+Beethoven screenshot after this change; full real-score framebuffer/pixel
+tests and extended instructional-recovery checks still have independent
+failures. Auto-remediation that changes passage/hand/tempo must still be
+verified end-to-end; its visual queue intentionally does not fabricate a
+new on-screen copy if the engine's revised deadline does not match the
+prepared source.

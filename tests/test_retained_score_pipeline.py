@@ -86,3 +86,23 @@ def test_single_score_renderer_has_no_legacy_execution_selector():
     assert "_place_retained_score" not in source
     assert "displayed_scroll_beat" not in source
     assert 'variant == "recovery"' not in (ROOT/"godot/notation/native/source_pass_painter.gd").read_text()
+
+
+def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
+    view = (ROOT/"godot/notation/native/view.gd").read_text()
+    coordinator = (ROOT/"godot/practice_frame_coordinator.gd").read_text()
+    runway = (ROOT/"godot/score_runway.gd").read_text()
+    source = (ROOT/"godot/notation/native/source_pass_painter.gd").read_text()
+    for path in ("idle_preview.gd", "measure_light.gd", "source_visibility.gd"):
+        assert not (ROOT/"godot/notation/native"/path).exists()
+    assert "present_ambient" not in coordinator
+    assert "_place_retained_score" not in view
+    assert "stream_enabled" not in view
+    assert "present_clock(" not in runway
+    assert "SourcePassPainter.paint(self,canvas)" in view
+    assert '"autopending"' in view
+    assert "ScoreStreamAdmission" not in view
+    assert 'variant == "recovery"' not in source
+    assert 'frame.score_loop_enabled' not in source
+    assert "clip.visible = false" in view
+    assert "clip.visible = segment.compiled" in view
