@@ -113,6 +113,7 @@ func _ready() -> void:
     playhead_glow.visible = false
     score_frame.add_child(playhead_glow)
     renderer = NativeNotation.new()
+    renderer.stream_enabled = true
     renderer.external_backdrop = true
     renderer.compact_inactive_staff = true
     renderer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
