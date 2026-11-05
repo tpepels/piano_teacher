@@ -69,13 +69,19 @@ func run() -> void:
     await process_frame
     var paints: Array = score.glyphs.paints
     check(paints.any(func(p): return p.name == "head_black" and
-        p.x == 100.0 and p.tone == design.MINT),
+        p.x == 100.0 and p.tone.r == design.MINT.r and
+        p.tone.g == design.MINT.g and p.tone.b == design.MINT.b and
+        p.tone.a > 0.0),
         "Immediate played quarter-note head fills mint")
     check(paints.any(func(p): return p.name == "head_half" and
-        p.x == 170.0 and p.tone == design.CORAL),
+        p.x == 170.0 and p.tone.r == design.CORAL.r and
+        p.tone.g == design.CORAL.g and p.tone.b == design.CORAL.b and
+        p.tone.a > .5),
         "Graded missed half-note head takes authentic red contour")
     check(paints.any(func(p): return p.name == "head_whole" and
-        p.x == 225.0 and p.tone == design.AMBER),
+        p.x == 225.0 and p.tone.r == design.AMBER.r and
+        p.tone.g == design.AMBER.g and p.tone.b == design.AMBER.b and
+        p.tone.a > .5),
         "Mistimed whole-note head retains its hollow amber contour")
     check(paints.all(func(p): return bool(p.centered) and p.gap == 16.0),
         "Tint uses exact source head centers and original Verovio staff scale")
