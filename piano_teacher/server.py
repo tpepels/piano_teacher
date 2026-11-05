@@ -205,6 +205,7 @@ class PracticeEngine:
         self.future_score = FutureScore(data_dir / "preprocessed")
         self._future_stage_ready: tuple[str, int] | None = None
         self._future_stage_lead_beats = 0.0
+        self._continuous_horizon_beats = 0.0
         self._prepared_stage_published = False
         # Global musical origin of a delayed, pre-engraved next stage.
         self._stage_handoff_visual_beat: float | None = None
@@ -1818,6 +1819,22 @@ class PracticeEngine:
             if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
                 self.measurement.assistance_used = True
 
+    def _update_continuous_horizon(self, value) -> None:
+        if value is None:
+            return
+        horizon = float(value)
+        if not math.isfinite(horizon) or not 0.0 <= horizon <= 64.0:
+            raise ValueError("Invalid continuous score reading horizon")
+        self._continuous_horizon_beats = horizon
+
+    def _automatic_stream_deadline(self, deadline: float) -> float:
+        # The semantic printed rest is already counted in the engine's
+        # automatic next_at. Add only the missing offscreen reading lead
+        # before the SAME MIDI-graded run_at is scheduled.
+        gap = self.visual_transport.visual_gap_beats
+        missing = max(0.0, self._continuous_horizon_beats-gap)
+        return scheduled_offscreen_start(deadline, missing, self.plan.bpm)
+
     def _control_transport(self, action: str, kwargs: dict) -> None:
         if action == "practice":
             self._prepare_practice()
@@ -1831,11 +1848,13 @@ class PracticeEngine:
             self.feedback = "Stopped"
             self.next_action = "Start when you are ready."
         elif action in ("start", "restart"):
+            self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._start_or_restart(action, presentation_lead_seconds=float(
                 kwargs.get("presentation_lead_seconds",0.0)))
         elif action == "pause":
             self._pause_current_session()
         elif action == "resume":
+            self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._resume_current_session(presentation_lead_seconds=float(
                 kwargs.get("presentation_lead_seconds",0.0)))
 
@@ -2199,7 +2218,9 @@ class PracticeEngine:
                         "practice_timeline"]["stride_beats"]
                 target = (self.visual_transport.practice_preparation["source_from_beat"]
                           if self.visual_transport._retry_previous_pass and self.visual_transport.practice_preparation else 0.0)
-                self._continue_at(deadline, from_beat=target)
+                self._continue_at(
+                    self._automatic_stream_deadline(deadline) if self.auto else deadline,
+                    from_beat=target)
             else:
                 self.visual_transport.next_at = 0
                 self.auto = False
