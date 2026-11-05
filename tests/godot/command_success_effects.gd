@@ -11,6 +11,8 @@ class Presenter:
         events.append("present:" + str(decision["kind"]))
     func present_source_picker(_opened: Dictionary) -> void:
         events.append("picker")
+    func present_resume_choice(_opened: Dictionary, allow_measure: bool) -> void:
+        events.append("resume:" + str(allow_measure))
 
 var events: Array = []
 
@@ -51,6 +53,10 @@ func _initialize() -> void:
             ["present:library_open","navigate:practice","score"]],
         ["library.open","",false,{"warmup":false},
             ["present:library_open","picker"]],
+        ["library.open","",true,{"warmup":false,"lesson_step":8},
+            ["present:library_open","navigate:practice","state:37","score","resume:false"]],
+        ["library.open","",false,{"warmup":false,"lesson_step":8},
+            ["present:library_open","navigate:practice","state:37","score","resume:true"]],
         ["settings.update","",false,null,
             ["present:settings","settings","library"]],
         ["midi.device.select","",false,null,

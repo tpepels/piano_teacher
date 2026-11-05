@@ -13,6 +13,12 @@ class Practice:
     extends RefCounted
     var picker_calls := 0
     var selected: Dictionary = {}
+    var resume_calls := 0
+    var measure_allowed := false
+    func show_resume_prompt(value: Dictionary, allowed: bool) -> void:
+        resume_calls += 1
+        selected = value
+        measure_allowed = allowed
     func show_source_picker(value: Dictionary) -> void:
         picker_calls += 1
         selected = value
@@ -41,8 +47,9 @@ func _initialize() -> void:
         failures += 1
     presenter.present_accepted({"kind":"library_open"})
     presenter.present_source_picker({"title":"MIDI"})
+    presenter.present_resume_choice({"lesson_step":9},true)
     if library.last_open != "" or library.open_calls != 1 or \
-            practice.picker_calls != 1 or practice.selected.get("title") != "MIDI":
+            practice.picker_calls != 1 or practice.resume_calls != 1 or not practice.measure_allowed or practice.selected.get("lesson_step") != 9:
         failures += 1
     presenter.present_accepted({"kind":"settings"})
     if settings.message != "Settings saved" or lessons.invalidated != 1:

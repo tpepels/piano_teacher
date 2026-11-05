@@ -64,7 +64,7 @@ for fixture in continuous_score_flow command_success_effects command_request_sta
   timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/$fixture.gd"
 done
 # Run the real Practice UI in the headless Godot harness after parsing.
-for scenario in captions signals score_gate intro_markers source_picker midi_guard layout; do
+for scenario in captions signals score_gate intro_markers source_picker resume_choice midi_guard layout; do
   echo "Checking Practice UI: $scenario"
   timeout 15s "$binary" --headless --path godot \
     --script "$PWD/tests/godot/practice_screen.gd" -- "$scenario"
