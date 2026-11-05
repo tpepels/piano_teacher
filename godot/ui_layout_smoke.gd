@@ -1,4 +1,5 @@
 extends SceneTree
+const ScoreView := preload("res://notation/shared/view_base.gd")
 
 # Actual Godot container geometry smoke, without a backend or piano.
 # Re-run at 1536x960, 1024x768 and 800x600. Reject clipped transport
@@ -156,7 +157,7 @@ func _run() -> void:
         "Practice needs a single seamless full-viewport background")
     _check(scene.practice_view.stage.renderer.external_backdrop,
         "Native score must not paint an opaque rectangular stage")
-    _check(absf(scene.practice_view.stage.renderer.PLAYHEAD_FRACTION-.33) < .001,
+    _check(absf(ScoreView.PLAYHEAD_FRACTION-.33) < .001,
         "The fixed playhead matches the left-of-center reference")
     var illuminated: Control = scene.practice_view.stage.effects
     var streak_meter: Control = scene.practice_view.game_streak
