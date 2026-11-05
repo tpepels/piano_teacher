@@ -32,6 +32,12 @@ signal exit_requested
 var ui_scale := 1.0
 var default_font: Font
 var settings_grid: GridContainer
+var midi_calibration_body: VBoxContainer
+var practice_strategy_body: VBoxContainer
+var history_actions_body: VBoxContainer
+var midi_calibration_toggle: Button
+var practice_strategy_toggle: Button
+var history_toggle: Button
 var device_button: Button
 var input_activity_label: Label
 var midi_range_label: Label
@@ -106,6 +112,20 @@ func _section(value: String) -> VBoxContainer:
     control.add_child(_label(value, 17, INK, true))
     return control
 
+func _disclosure(parent: VBoxContainer, title: String,
+        content: VBoxContainer) -> Button:
+    var toggle := _button("▸ " + title, func(): pass,false,"secondary")
+    toggle.name = title.replace(" ","") + "Disclosure"
+    toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    content.visible = false
+    parent.add_child(toggle)
+    parent.add_child(content)
+    toggle.pressed.connect(func():
+        content.visible = not content.visible
+        toggle.text = ("▾ " if content.visible else "▸ ") + title)
+    return toggle
+
+
 func _card() -> PanelContainer:
     var control := PanelContainer.new()
     control.add_theme_stylebox_override("panel", Design.card_surface())
@@ -143,6 +163,7 @@ func _ready() -> void:
     add_child(content)
     content.add_child(_label("PIANO & PREFERENCES", 14, ACCENT, true))
     content.add_child(_title("Your piano & practice", 32))
+    content.add_child(_label("Keyboard and practice essentials first. Detailed tools are available when needed.", 14, MUTED))
 
     settings_grid = GridContainer.new()
     settings_grid.columns = 1
@@ -175,9 +196,11 @@ func _ready() -> void:
     keyboard_range_row.add_child(midi_range_cancel_button)
     midi_range_label = _label("Connect your piano to set its lowest and highest keys.",14,MUTED)
     midi.add_child(midi_range_label)
+    midi_calibration_body = _stack(10)
+    midi_calibration_toggle = _disclosure(midi,"MIDI timing calibration",midi_calibration_body)
     var calibration_row := HFlowContainer.new()
     calibration_row.add_theme_constant_override("h_separation", 8)
-    midi.add_child(calibration_row)
+    midi_calibration_body.add_child(calibration_row)
     calibration_row.add_child(_button("Calibrate MIDI timing", func():
         calibration_requested.emit("calibration_start"), false, "settings"))
     calibration_apply_button = _button("Apply offset", func():
@@ -190,25 +213,25 @@ func _ready() -> void:
         calibration_requested.emit("calibration_cancel"), false, "utility"))
     calibration_count_label = _label("4 · 3 · 2 · 1 → PLAY", 28, INK, true)
     calibration_count_label.visible = false
-    midi.add_child(calibration_count_label)
+    midi_calibration_body.add_child(calibration_count_label)
     calibration_beat_pulse = preload("res://calibration_beat_pulse.gd").new()
-    midi.add_child(calibration_beat_pulse)
+    midi_calibration_body.add_child(calibration_beat_pulse)
     calibration_progress = ProgressBar.new()
     calibration_progress.min_value = 0
     calibration_progress.max_value = 100
     calibration_progress.show_percentage = false
     calibration_progress.custom_minimum_size.y = 16
     calibration_progress.visible = false
-    midi.add_child(calibration_progress)
+    midi_calibration_body.add_child(calibration_progress)
     var rounds_row := HFlowContainer.new()
     rounds_row.add_theme_constant_override("h_separation", 16)
-    midi.add_child(rounds_row)
+    midi_calibration_body.add_child(rounds_row)
     for number in range(1, 6):
         var round_label := _label("Round %d/5" % number, 14, MUTED)
         calibration_round_labels.append(round_label)
         rounds_row.add_child(round_label)
     calibration_label = _label("One 4-beat count-in, then 5 continuous rounds of 8 taps.", 14, MUTED)
-    midi.add_child(calibration_label)
+    midi_calibration_body.add_child(calibration_label)
 
     var music := _section("Music library")
     var music_panel := _card()
@@ -233,7 +256,7 @@ func _ready() -> void:
     folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
     folder_actions.add_child(_button("Save folder", func(): save_folder_requested.emit(folder_edit.text.strip_edges()), false, "secondary"))
     music.add_child(_label("MIDI files in this folder and its subfolders.", 13, MUTED))
-    _build_learning_controls(music)
+    # History is a full-width secondary section, not part of folder setup.
 
     var practice := _section("Practice tempo")
     var practice_panel := _card()
@@ -264,43 +287,45 @@ func _ready() -> void:
     metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
     metronome_toggle.toggled.connect(func(enabled: bool): metronome_requested.emit(enabled))
     practice.add_child(metronome_toggle)
-    practice.add_child(_label("Exercise generation", 14, MUTED))
+    practice_strategy_body = _stack(10)
+    practice_strategy_toggle = _disclosure(practice,"Advanced exercise settings",practice_strategy_body)
+    practice_strategy_body.add_child(_label("Exercise generation", 14, MUTED))
     strategy_picker = OptionButton.new()
     strategy_picker.custom_minimum_size = Vector2(260, 40)
     strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     strategy_picker.tooltip_text = "Select which rule-based exercise planner to compare."
     strategy_picker.item_selected.connect(func(index: int):
         strategy_requested.emit(str(strategy_picker.get_item_metadata(index))))
-    practice.add_child(strategy_picker)
-    practice.add_child(_label("Rhythm exercise", 14, MUTED))
+    practice_strategy_body.add_child(strategy_picker)
+    practice_strategy_body.add_child(_label("Rhythm exercise", 14, MUTED))
     timing_strategy_picker = OptionButton.new()
     timing_strategy_picker.custom_minimum_size = Vector2(260, 40)
     timing_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     timing_strategy_picker.item_selected.connect(func(index: int):
         timing_strategy_requested.emit(str(timing_strategy_picker.get_item_metadata(index))))
-    practice.add_child(timing_strategy_picker)
-    practice.add_child(_label("Tempo pattern", 14, MUTED))
+    practice_strategy_body.add_child(timing_strategy_picker)
+    practice_strategy_body.add_child(_label("Tempo pattern", 14, MUTED))
     tempo_strategy_picker = OptionButton.new()
     tempo_strategy_picker.custom_minimum_size = Vector2(260, 40)
     tempo_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     tempo_strategy_picker.item_selected.connect(func(index: int):
         tempo_strategy_requested.emit(str(tempo_strategy_picker.get_item_metadata(index))))
-    practice.add_child(tempo_strategy_picker)
-    practice.add_child(_label("Error assessment", 14, MUTED))
+    practice_strategy_body.add_child(tempo_strategy_picker)
+    practice_strategy_body.add_child(_label("Error assessment", 14, MUTED))
     diagnosis_strategy_picker = OptionButton.new()
     diagnosis_strategy_picker.custom_minimum_size = Vector2(260, 40)
     diagnosis_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     diagnosis_strategy_picker.item_selected.connect(func(index: int):
         diagnosis_strategy_requested.emit(str(diagnosis_strategy_picker.get_item_metadata(index))))
-    practice.add_child(diagnosis_strategy_picker)
-    practice.add_child(_label("Learner recommendation", 14, MUTED))
+    practice_strategy_body.add_child(diagnosis_strategy_picker)
+    practice_strategy_body.add_child(_label("Learner recommendation", 14, MUTED))
     learner_strategy_picker = OptionButton.new()
     learner_strategy_picker.custom_minimum_size = Vector2(260, 40)
     learner_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     learner_strategy_picker.item_selected.connect(func(index: int):
         learner_strategy_requested.emit(str(learner_strategy_picker.get_item_metadata(index))))
-    practice.add_child(learner_strategy_picker)
-    practice.add_child(_label("When a note is wrong", 14, MUTED))
+    practice_strategy_body.add_child(learner_strategy_picker)
+    practice_strategy_body.add_child(_label("When a note is wrong", 14, MUTED))
     mistake_response_picker = OptionButton.new()
     mistake_response_picker.custom_minimum_size = Vector2(260,40)
     mistake_response_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -310,13 +335,13 @@ func _ready() -> void:
     mistake_response_picker.item_selected.connect(func(index: int):
         mistake_response_requested.emit(
             str(mistake_response_picker.get_item_metadata(index))))
-    practice.add_child(mistake_response_picker)
-    practice.add_child(_label(
+    practice_strategy_body.add_child(mistake_response_picker)
+    practice_strategy_body.add_child(_label(
         "Exercise, rhythm and tempo generation changes restart practice. "
         + "Mistake responses can be changed without resetting your progress.",
         12, MUTED))
 
-    var audio := _section("Listen audio")
+    var audio := _section("Listening & display")
     var audio_panel := _card()
     audio_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     settings_grid.add_child(audio_panel)
@@ -349,10 +374,17 @@ func _ready() -> void:
     fullscreen_toggle.button_pressed = true
     fullscreen_toggle.toggled.connect(func(enabled: bool): fullscreen_requested.emit(enabled))
     audio.add_child(fullscreen_toggle)
-    var exit_button := _button("Exit application", func(): exit_requested.emit(), false, "utility")
-    exit_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    content.add_child(exit_button)
+    # Put the highest-priority controls (MIDI and tempo) in the first row.
+    # Folder configuration and listening occupy the second row.
+    settings_grid.move_child(practice_panel,1)
+    var history_panel := _card()
+    history_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    content.add_child(history_panel)
+    var history := _section("Learning history")
+    _card_body(history_panel,18).add_child(history)
+    _build_learning_controls(history)
     settings_message = _label("", 14, MUTED)
+    settings_message.visible = false
     content.add_child(settings_message)
     folder_dialog = FileDialog.new()
     folder_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -367,13 +399,15 @@ func _ready() -> void:
     add_child(device_menu)
 
 func _build_learning_controls(parent: VBoxContainer) -> void:
-    parent.add_child(_label("Local learning history", 17, INK, true))
+    history_actions_body.add_child(_label("Saved practice results", 14, MUTED))
     history_summary_label = _label("Loading local learning history…", 13, MUTED)
     parent.add_child(history_summary_label)
+    history_actions_body = _stack(10)
+    history_toggle = _disclosure(parent,"Retention, export and deletion",history_actions_body)
     var retention_row := HFlowContainer.new()
     retention_row.add_theme_constant_override("h_separation", 10)
     retention_row.add_theme_constant_override("v_separation", 6)
-    parent.add_child(retention_row)
+    history_actions_body.add_child(retention_row)
     evidence_days_setting = SpinBox.new()
     evidence_days_setting.min_value = 7
     evidence_days_setting.max_value = 3650
@@ -396,18 +430,18 @@ func _build_learning_controls(parent: VBoxContainer) -> void:
         retention_save_requested.emit(int(evidence_days_setting.value),
             int(evidence_budget_setting.value)), false, "settings")
     retention_row.add_child(retention_save_button)
-    parent.add_child(_label(
+    history_actions_body.add_child(_label(
         "Limits apply to note detail at the next safe transition. Compact summaries " +
         "remain until deletion. The MiB budget measures detail payload, not database file size.",
         13, MUTED))
     export_detail_toggle = CheckButton.new()
     export_detail_toggle.text = "Include detailed note observations in export"
     export_detail_toggle.button_pressed = false
-    parent.add_child(export_detail_toggle)
+    history_actions_body.add_child(export_detail_toggle)
     var actions := HFlowContainer.new()
     actions.add_theme_constant_override("h_separation", 10)
     actions.add_theme_constant_override("v_separation", 6)
-    parent.add_child(actions)
+    history_actions_body.add_child(actions)
     export_history_button = _button("Export history…", _browse_history_export, false, "secondary")
     actions.add_child(export_history_button)
     delete_piece_button = _button("Delete current piece history…", _confirm_piece_history_delete, false, "utility")
@@ -416,7 +450,7 @@ func _build_learning_controls(parent: VBoxContainer) -> void:
     delete_learner_button = _button("Delete all learner history…", func():
         delete_learner_dialog.popup_centered(), false, "utility")
     actions.add_child(delete_learner_button)
-    parent.add_child(_label(
+    history_actions_body.add_child(_label(
         "Reset Lesson restarts lesson progress and preserves learning history. " +
         "Permanent deletion also removes saved learning progress. Exported files " +
         "remain wherever you saved them. Source MIDI and device settings are preserved.",
@@ -674,6 +708,7 @@ func present_window_mode(fullscreen: bool) -> void:
 
 func present_message(message: String) -> void:
     settings_message.text = message
+    settings_message.visible = not message.is_empty()
 
 func apply_viewport(view_size: Vector2, scale: float) -> void:
     ui_scale = scale
