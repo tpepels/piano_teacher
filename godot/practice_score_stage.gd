@@ -88,15 +88,9 @@ func _ready() -> void:
     fingering_status_label.clip_text = true
     fingering_status_label.custom_minimum_size.x = 180
     fingering_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    # Reserve a separate caption row. Fingering warnings must not steal
-    # width from the hand ribbon and make it reflow during a transport.
-    var fingering_slot := Control.new()
-    fingering_slot.name = "FingeringStatusCaption"
-    fingering_slot.custom_minimum_size.y = 18.0
-    fingering_slot.clip_contents = true
-    score_region.add_child(fingering_slot)
-    fingering_slot.add_child(fingering_status_label)
-    fingering_status_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    # PracticeScreen moves this label into its More popup. A permanent
+    # warning/caption slot takes space from the engraving even when hidden.
+    score_region.add_child(fingering_status_label)
     fingering_status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     fingering_status_label.max_lines_visible = 1
     var score_area := Control.new()
@@ -279,7 +273,7 @@ func pulse_hand_unlock() -> void:
 func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     _view_size = view_size
     keyboard.set_ui_scale(scale)
-    fingering_status_label.get_parent().custom_minimum_size.y = ceilf(
+    fingering_status_label.custom_minimum_size.y = ceilf(
         fingering_status_label.get_theme_font("font").get_height(fingering_status_label.get_theme_font_size("font_size")))
     # Update widths even if the hand state itself has not changed.
     presented_hand_stages.clear()
