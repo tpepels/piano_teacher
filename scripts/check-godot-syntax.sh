@@ -13,6 +13,7 @@ else
   exit 1
 fi
 for script in \
+  res://notation/native/view.gd \
   res://main.gd \
   res://practice_screen.gd \
   res://practice_score_stage.gd \
@@ -32,7 +33,6 @@ for script in \
   res://command_request_state.gd \
   res://navigation_policy.gd \
   res://live_midi_feedback.gd \
-  res://notation/native/view.gd \
   res://inprocess_bus.gd \
   res://native_bridge_smoke.gd \
   res://production_ui_smoke.gd \
