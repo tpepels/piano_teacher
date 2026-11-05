@@ -52,6 +52,14 @@ jobs:
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
         run: bash scripts/check-godot-syntax.sh
+      - name: Verify future-only score admissions and bounded retained projection
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          timeout 15s "$GODOT_BIN" --headless --path godot \
+            --script "$PWD/tests/godot/score_stream_admission.gd"
+          timeout 15s "$GODOT_BIN" --headless --path godot \
+            --script "$PWD/tests/godot/retained_note_projection.gd"
       - name: Assert constant visual velocity across a delayed rest handoff
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
