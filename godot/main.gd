@@ -13,6 +13,7 @@ const GameBackdrop := preload("res://game_backdrop.gd")
 const UI := preload("res://ui_factory.gd")
 const LibraryScreen := preload("res://library_screen.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
+const ContinuousScoreFlow := preload("res://continuous_score_flow.gd")
 const TempoTimeline := preload("res://tempo_timeline.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SourceMeasurePicker := preload("res://source_measure_picker.gd")
@@ -114,6 +115,7 @@ var rendered_revision: int:
 var last_state: Dictionary = {}
 var last_state_tick := 0
 var visual_transport_clock = VisualTransportClock.new()
+var score_flow = ContinuousScoreFlow.new()
 var metronome_frame
 # The native compositor is the sole production score view.
 var timeline_model_request
@@ -334,13 +336,9 @@ func _unrolled_score_beat(transport_clock: float) -> float:
     return _unrolled_score_beat_at(transport_clock,Time.get_ticks_msec())
 
 func _unrolled_score_beat_at(transport_clock: float, at_ms: int) -> float:
-    # One presentation clock owns scrolling, reversal, retry count-in
-    # and resumed playback; there is no independent retry camera.
-    if visual_transport_clock.initialized and last_state.has("visual_offset_beats"):
-        return visual_transport_clock.visual_beat(at_ms)
-    if not last_state.has("visual_offset_beats"):
-        return NAN
-    return float(last_state.get("visual_scroll_beat", transport_clock))
+    # The renderer's position is never a transport seek. The hardware
+    # grading clock remains in _transport_beat_at; this one always advances.
+    return score_flow.project(at_ms)
 
 
 func _raw_click(accent: bool) -> void:
@@ -463,22 +461,13 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
     # An idle screen or paused lesson does not need the same redraw budget
     # as a scrolling score. This never changes Python-owned audio, tempo
     # or MIDI grading, only how often the Godot display is presented.
-    var transitioning: bool = (str(state.get("phase", "")) in ["feedback", "preview_gap"]
-        and (bool(state.get("auto", false)) or bool(state.get("preview_only", false))))
-    # An automatic rest is still a moving transport, including the few
-    # frames after the scheduled downbeat but before Python acknowledges
-    # the next attempt. Never drop Godot into 30 FPS / low-power mode there.
-    var active: bool = (bool(state.get("running", false)) or transitioning \
-        or absf(float(state.get("visual_scroll_speed", 0.0))) > .000001) \
-        and not bool(state.get("paused", false)) \
-        and current_screen == "practice"
-    var ambient_moving: bool = (current_screen == "practice" and
-        bool(state.get("loaded",false)) and
-        str(state.get("phase","")) in ["ready","paused","guided_complete",
-            "performance_complete"])
+    # Every loaded Practice phase has the same forward-moving stage.
+    # This includes ordinary pauses, completed takes, manual retries,
+    # waiting for MIDI, and a missing physical keyboard.
+    var active: bool = current_screen == "practice" and bool(state.get("loaded",false))
     var calibrating := current_screen == "settings" and bool(
         state.get("midi_calibration", {}).get("active", false))
-    active = active or calibrating or ambient_moving
+    active = active or calibrating
     var target_fps: int = 60 if active else 30
     # Interactive transport retains its full 60 FPS camera. Idle score,
     # settings and library redraw only on user input or changed content.
@@ -888,6 +877,7 @@ func _process(_delta: float) -> void:
         _request_library()
     var ticks: int = Time.get_ticks_msec()
     var beat: float = _transport_beat_at(ticks)
+    score_flow.sample(ticks,float(last_state.get("bpm",40.0)))
     score_effects.prune_expired(ticks)
     _read_live_midi()
     _update_count_in(beat,ticks)
