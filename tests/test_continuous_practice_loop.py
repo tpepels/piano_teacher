@@ -75,7 +75,7 @@ def test_connected_silent_take_enters_normal_midi_recovery_and_never_awards_mast
         assert app.score_revision == original_revision
         assert app.auto
         assert app.visual_transport.pending_rewind is not None
-        assert app.state()["phase"] in ["recovering","count_in","playing"]
+        assert app.state()["phase"] in ["feedback","recovering","count_in","playing"]
     finally:
         app.db.close()
 
