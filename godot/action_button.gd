@@ -44,7 +44,7 @@ func set_selected(selected: bool) -> void:
 	queue_redraw()
 
 func _accent() -> Color:
-	return Design.MINT if action_role == "header_play" else Design.role_accent(action_role)
+	return Design.FOCUS if action_role == "header_play" else Design.role_accent(action_role)
 
 
 func _background() -> Color:
@@ -68,13 +68,14 @@ func _skin() -> void:
 	normal.bg_color = background
 	normal.set_corner_radius_all(23 if action_role == "header_play" else Design.RADIUS_INPUT)
 	normal.set_border_width_all(1)
-	normal.border_color = Color(accent, .66) if important else Color(Design.BORDER, .5)
+	normal.border_color = (Color(Design.MINT,.60) if action_role in ["header_play","practice_tempo"]
+		else Color(accent,.66) if important else Color(Design.BORDER,.5))
 	normal.content_margin_left = 0 if icon_only else 36 if _has_symbol() else 14
 	normal.content_margin_right = 0 if icon_only else 14
 	normal.content_margin_top = 8
 	normal.content_margin_bottom = 8
 	normal.shadow_color = Color(Design.MINT,.25) if action_role == "header_play" else Color(Design.MINT,.36) if important else Color(Design.NIGHT,.22)
-	normal.shadow_size = 15 if important else 2
+	normal.shadow_size = 15 if important else 5 if action_role == "header_play" else 2
 	normal.shadow_offset = Vector2(0,2)
 	add_theme_stylebox_override("normal", normal)
 	var hover := normal.duplicate() as StyleBoxFlat
