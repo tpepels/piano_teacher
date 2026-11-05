@@ -130,7 +130,6 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
             "Future score lacks authentic layout or semantic model")
         return
     _future = NativeView.new()
-    _future.stream_enabled = true
     # A future stage must use the same staff presentation and background
     # as the active stage before its retained note ink is pre-engraved.
     if is_instance_valid(stage.renderer):

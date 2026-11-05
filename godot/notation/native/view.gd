@@ -88,7 +88,6 @@ var selected_density := 0.0
 var external_backdrop := false
 var compact_inactive_staff := false
 # One infinite front-of-house camera. Grading never reads this axis.
-var stream_enabled := false
 var stream_world_beat := 0.0
 var stream_passes: Array = []
 var _stream_last_take := ""
@@ -647,8 +646,6 @@ func _stream_prune_expired() -> void:
 
 func present_flow(world_beat: float, state: Dictionary,
         graded_beat: float, allow_admission: bool = true) -> void:
-    if not stream_enabled:
-        return
     stream_world_beat = maxf(stream_world_beat,world_beat)
     _stream_prune_expired()
     if not native_ready or not retained_ready():

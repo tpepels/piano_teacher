@@ -73,3 +73,16 @@ def test_fingering_overlay_has_bounded_source_window():
     assert "for index in range(low,fingering_layout.size()):" in source
     assert "for item in fingering_layout:" not in source.split(
         "func paint(",1)[1].split("\nfunc ",1)[0]
+
+
+def test_single_score_renderer_has_no_legacy_execution_selector():
+    source = (ROOT/"godot/notation/native/view.gd").read_text()
+    stage = (ROOT/"godot/practice_score_stage.gd").read_text()
+    runway = (ROOT/"godot/score_runway.gd").read_text()
+    assert "stream_enabled" not in source
+    assert "stream_enabled" not in stage
+    assert "stream_enabled" not in runway
+    assert "present_ambient" not in source
+    assert "_place_retained_score" not in source
+    assert "displayed_scroll_beat" not in source
+    assert 'variant == "recovery"' not in (ROOT/"godot/notation/native/source_pass_painter.gd").read_text()

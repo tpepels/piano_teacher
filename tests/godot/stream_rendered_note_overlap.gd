@@ -38,7 +38,6 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void:
     var v := InstrumentedView.new()
     v.size = Vector2(800,440)
-    v.stream_enabled = true
     v.native_ready = true
     v.timeline.duration_beats = 8
     v.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
