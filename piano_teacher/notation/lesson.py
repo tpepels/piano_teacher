@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from fractions import Fraction
 from collections import defaultdict
+from bisect import bisect_left
 from copy import deepcopy
 from functools import lru_cache
 import hashlib
@@ -571,6 +572,7 @@ def infer_midi_clef_plan(notes, boundaries) -> dict[int, dict[str, dict]]:
     right = sorted(
         (note for note in notes if note.hand == "right"),
         key=lambda note: note.start)
+    starts = [note.start for note in right]
     fallback = infer_piece_clefs(notes)["right"]
     current = fallback.copy()
     pending = ""
@@ -579,8 +581,11 @@ def infer_midi_clef_plan(notes, boundaries) -> dict[int, dict[str, dict]]:
     for index in range(len(boundaries) - 1):
         start = boundaries[index]
         horizon = boundaries[min(index + 2, len(boundaries) - 1)]
-        pitches = [note.pitch for note in right
-                   if start <= note.start < horizon]
+        # Binary bounds keep long piano scores O(N log N + B log N)
+        # rather than rescanning every MIDI note for every bar.
+        lo = bisect_left(starts, start)
+        hi = bisect_left(starts, horizon)
+        pitches = [note.pitch for note in right[lo:hi]]
         candidate = ""
         if len(pitches) >= 2:
             # Positive advantage favours bass, negative favours treble.
