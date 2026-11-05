@@ -540,13 +540,15 @@ def infer_piece_clefs(notes) -> dict:
     piece-wide choice keeps one predictable reading system throughout the
     practice route. Explicit source MusicXML clef changes still take priority.
     """
+    # MIDI stores sounding pitches, not printed clefs. Choose each hand's
+    # clef from its complete register, then reuse it for every lesson slice.
+    # Forcing right-hand G causes bass-register passages to acquire multiple
+    # ledger lines below the staff, even when F is the readable choice.
+    # Actual MusicXML clef changes still override these inferred defaults.
     return {
-        # MIDI has no clef metadata. Keep the upper staff in treble clef;
-        # guessing bass from one part's register produces the wrong icon
-        # in right-hand exercises and makes the score inconsistent.
-        "right": {"sign": "G", "line": 2, "octave_change": 0},
-        "left": _readable_clef(
-            [n for n in notes if n.hand == "left"], None, "left"),
+        hand: _readable_clef(
+            [note for note in notes if note.hand == hand], None, hand)
+        for hand in ("right", "left")
     }
 
 
