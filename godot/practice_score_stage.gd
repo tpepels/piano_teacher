@@ -130,6 +130,7 @@ void fragment() {
     score_frame.add_child(effects)
     renderer = NativeNotation.new()
     renderer.external_backdrop = true
+    renderer.compact_inactive_staff = true
     renderer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     renderer.visible = false
     score_frame.add_child(renderer)
