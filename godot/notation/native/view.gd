@@ -90,6 +90,10 @@ var compact_inactive_staff := false
 # One infinite front-of-house camera. Grading never reads this axis.
 var stream_world_beat := 0.0
 var stream_passes: Array = []
+# Immutable source event index for cursor ink clearance. The painter may
+# temporarily suppress one glyph for framebuffer controls; that must not
+# change the fixed timing line or alter unrelated image pixels.
+var _cursor_engraved_events: Array = []
 var _stream_last_take := ""
 var _stream_was_paused := false
 var _stream_paused_source := 0.0
@@ -160,6 +164,7 @@ func clear_score() -> void:
     native_ready = false
     failure_reason = ""
     _clear_retained_segments()
+    _cursor_engraved_events.clear()
     layout.clear()
 
 func set_density(value: float) -> bool:
@@ -355,6 +360,7 @@ func _prepare_static_geometry() -> void:
         glyphs.bounds)
     layout.cached_offsets_gap = prepared_gap
     layout.prepare_event_positions(prepared_gap)
+    _cursor_engraved_events = layout.ordered_events.duplicate(true)
     connector_geometry.clear_cache()
     connector_geometry.prewarm_tie_clearances(prepared_gap)
     connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
@@ -900,7 +906,7 @@ func _cursor_ink_clearances(gap: float) -> Array:
     # full-score traversal, renderer variant, or new camera exists.
     var exclusions: Array = []
     var density: float = maxf(1.0,timeline.pixels_per_beat)
-    var events: Array = layout.ordered_events
+    var events: Array = _cursor_engraved_events
     if events.is_empty():
         return exclusions
     var guard: float = gap*1.7/density
