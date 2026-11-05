@@ -95,26 +95,8 @@ func _ready() -> void:
     score_region.add_child(score_area)
     score_frame = score_area
     score_frame.clip_contents = true
-    # Static dark-teal vignette fills the full notation viewport; native
-    # notation, the exact playhead and feedback remain on separate layers.
-    var backdrop := ColorRect.new()
-    backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    backdrop.color = Color.WHITE
-    var backdrop_shader := Shader.new()
-    backdrop_shader.code = """shader_type canvas_item;
-void fragment() {
-    vec2 coordinate = (UV - vec2(0.5,0.48))*vec2(1.25,1.1);
-    float vignette = smoothstep(0.14,0.82,length(coordinate));
-    vec3 center_color = vec3(0.009,0.124,0.108);
-    vec3 edge_color = vec3(0.001,0.059,0.055);
-    COLOR = vec4(mix(center_color,edge_color,vignette*0.92),1.0);
-}
-"""
-    var backdrop_material := ShaderMaterial.new()
-    backdrop_material.shader = backdrop_shader
-    backdrop.material = backdrop_material
-    score_frame.add_child(backdrop)
+    # Background is owned by the full Practice page. Keeping another
+    # opaque backdrop inside the score creates the visible hard-edged box.
     effects = GameStage.new()
     effects.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_frame.add_child(effects)
