@@ -25,6 +25,7 @@ def lesson(tmp_path, monkeypatch):
         e = PracticeEngine(tmp_path / str(len(engines)), enable_midi=False)
         engines.append(e)
         e.plan = LearningPlan(piece, consolidate=True)
+        e.fingerprint = "instructional-recovery-fixture-%d" % len(engines)
         e.plan.set_bpm(bpm)
         if connected:
             e.midi.port = object()

@@ -236,3 +236,34 @@ def test_three_four_count_in_retains_meter_for_click_accents(harness):
     assert 'posmod(tick,bar) == 0' in clicks
     assert 'practice_view.stage.count_in.present(beat,bar,true,paused)' in clicks
     assert 'metronome_frame.update(last_state,last_state_tick,sampled_beat,now_ms)' in main
+
+
+def test_explicit_renderer_reading_lead_keeps_midi_on_authoritative_resume_clock(harness):
+    e, t = harness
+    e.start()
+    t[0] = e.visual_transport.run_at + 1.25
+    before = e.state()["clock_beat"]
+    e.control("pause")
+    t[0] += 2.0
+    e.control("resume", presentation_lead_seconds=5.5)
+    resumed = e.state()
+    assert resumed["phase"] == "count_in"
+    assert resumed["transport_id"] == 1
+    assert e._resume_grading_after == pytest.approx(t[0]+6.0)
+    t[0] += 5.0
+    assert e.state()["phase"] == "count_in"
+    assert e.recorder is not None and len(e.recorder.presses) == 0
+    t[0] += 1.0
+    assert e.state()["phase"] == "playing"
+    assert e.state()["clock_beat"] == pytest.approx(before)
+    assert e.state()["transport_id"] == 1
+
+
+def test_requested_future_lead_delays_first_source_without_shifting_its_notes(harness):
+    e, t = harness
+    e.start(presentation_lead_seconds=8.0)
+    assert e.visual_transport.run_at == pytest.approx(108.0)
+    assert e.state()["phase"] == "count_in"
+    t[0] = 108.0
+    assert e.state()["clock_beat"] == pytest.approx(0.0)
+    assert e.state()["phase"] == "playing"

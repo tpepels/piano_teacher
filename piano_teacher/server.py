@@ -1965,22 +1965,31 @@ class PracticeEngine:
         if (shift_run_at and self.running and self.plan is not None
                 and self.mode in ("practice", "perform")
                 and self.pause_context in ("playing", "count_in")):
-            # At every resume (including a silent MIDI preview), existing
-            # pre-engraved notes must leave before the next scheduled source
-            # can enter. An explicit client lead may extend this window.
-            # This moves the graded deadline too, without re-anchoring the
-            # always-moving Godot presentation axis.
-            base_beats = max(4.0,min(5.0,self.count_in_bar_beats+1.0))
-            lead_seconds = max(base_beats*60.0/self.plan.bpm,
-                               min(30.0,max(0.0,presentation_lead_seconds)))
-            already_waiting = max(0.0,self._resume_grading_after-now)
-            additional = max(0.0,lead_seconds-already_waiting)
-            if additional > 0:
-                self.visual_transport.run_at += additional
-            self._resume_grading_after = now + max(lead_seconds,already_waiting)
-            self.count_in_beats = max(
-                self.count_in_beats,
-                (self._resume_grading_after-now)*self.plan.bpm/60)
+            if presentation_lead_seconds > 0.0:
+                # The always-scrolling renderer reserves a future empty gap
+                # after any visible old ink, then requests an engine-owned
+                # reading lead. The same delay controls actual MIDI grading.
+                lead_seconds = max(4.0*60.0/self.plan.bpm,
+                    min(30.0,presentation_lead_seconds))
+                already_waiting = max(0.0,self._resume_grading_after-now)
+                additional = max(0.0,lead_seconds-already_waiting)
+                if additional > 0:
+                    self.visual_transport.run_at += additional
+                self._resume_grading_after = now + max(
+                    lead_seconds,already_waiting)
+                self.count_in_beats = max(self.count_in_beats,
+                    (self._resume_grading_after-now)*self.plan.bpm/60)
+            elif (self.midi.connected and not self.preview_only
+                  and self.pause_context == "playing"
+                  and not had_reading_lead
+                  and self.visual_transport.run_at <= now):
+                # Preserve the established direct-MIDI transport contract;
+                # it does not have a connected renderer's reservations.
+                lead_beats = max(1.0,min(4.0,self.count_in_bar_beats))
+                lead_seconds = lead_beats*60.0/self.plan.bpm
+                self.visual_transport.run_at += lead_seconds
+                self._resume_grading_after = now+lead_seconds
+                self.count_in_beats = lead_beats
         self.measurement.event("timeline_resume", {
             "scheduled_origin_before": previous_origin-self.measurement.origin,
             "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,
