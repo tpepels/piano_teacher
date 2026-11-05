@@ -30,6 +30,20 @@ func run() -> void:
             "captions":
                 var values := state()
                 view.present(values,true)
+                check(view.stage.hand_cue_panel.visible and
+                    view.stage.hand_cue_label.text == "Right hand",
+                    "A new right-hand passage briefly announces the active hand")
+                var cue_tween: Tween = view.stage._hand_cue_tween
+                view.present(values,true)
+                check(view.stage._hand_cue_tween == cue_tween,
+                    "Repeated state polling must not restart the hand cue")
+                var left_hand := values.duplicate(true)
+                left_hand.hand = "left"
+                view.present(left_hand,true)
+                check(view.stage.hand_cue_label.text == "Left hand" and
+                    view.stage.hand_cue_panel.visible,
+                    "A hand change replaces the cue without adding permanent HUD text")
+                view.present(values,true)
                 values.title = "mutated"
                 view.present_busy(true)
                 check(view.title_label.text == "A real piece" and view.speed_label.text == "♪ 72 BPM ▾" and view.speed_label.tooltip_text.contains("target 80 BPM"),"Practice captures title and tempo values")
