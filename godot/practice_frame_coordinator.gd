@@ -74,6 +74,8 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
     if stage.renderer != null and bool(state.get("loaded",false)):
         stage.renderer.present_clock(beat,visual_beat -
             float(stage.renderer.runway_origin_beat))
+        if stage.has_method("present_playhead_glow"):
+            stage.present_playhead_glow(score_ready and screen == "practice")
         # Only the ink visibility and empty barline projection change.
         # The backend clock, source grade and note buffers remain untouched.
         var blank_staff: bool = (screen == "practice" and score_ready and
