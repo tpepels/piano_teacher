@@ -537,13 +537,12 @@ def _readable_clef(notes, explicit, hand):
 
 
 def infer_piece_clefs(notes) -> dict:
-    """Choose stable piano clefs using the *whole piece*, not a lesson slice.
+    """Choose whole-piece register defaults, before per-measure MIDI planning.
 
-    Imported MIDI normally contains notes, not clefs. The left hand of Ala
-    plays C4-G4 in the opening exercise but spends much of the piece below
-    middle C; a per-phrase guess incorrectly switches it to treble. A single
-    piece-wide choice keeps one predictable reading system throughout the
-    practice route. Explicit source MusicXML clef changes still take priority.
+    The left hand of Ala starts higher than its overall register; its stable
+    whole-piece bass default must not jump between lesson slices. For a right
+    hand spanning low and high registers, infer_midi_clef_plan supplies
+    conservative per-measure changes. Authored MusicXML clefs take priority.
     """
     # MIDI stores sounding pitches, not printed clefs. Choose each hand's
     # clef from its complete register, then reuse it for every lesson slice.
@@ -898,9 +897,10 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             active_key = next((key for key in reversed(keys) if key.beat <= source_beat+1e-7),None)
             active_clef = next((clef for clef in reversed(clefs) if clef.beat <= source_beat+1e-7),None)
             key_value = (active_key.fifths,active_key.mode) if active_key else None
-            # A short practice phrase can sit in a different register from
-            # the rest of the piano part. Reuse the piece-wide MIDI default
-            # instead of jumping clefs between lessons. Source clefs override.
+            # Original source clefs take precedence; otherwise use the
+            # register-based MIDI plan shared by every exercise of this piece.
+            # Without a plan, retain the whole-piece default rather than
+            # inferring independently from a simplified practice variant.
             midi_bar_clefs = (
                 inferred_clefs.get(phrase.first_bar + b, {})
                 if inferred_clefs is not None and not source_musicxml else {})
