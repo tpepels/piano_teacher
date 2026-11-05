@@ -129,17 +129,18 @@ func _ready() -> void:
     add_child(tempo_popup)
     var tempo_margin := MarginContainer.new()
     for side in ["left","right","top","bottom"]:
-        tempo_margin.add_theme_constant_override("margin_"+side,9)
+        tempo_margin.add_theme_constant_override("margin_"+side,7)
     tempo_popup.add_child(tempo_margin)
     var tempo_body := VBoxContainer.new()
-    tempo_body.add_theme_constant_override("separation",10)
+    tempo_body.add_theme_constant_override("separation",5)
     tempo_margin.add_child(tempo_body)
-    tempo_name_label = UI.label("Tempo",20,INK,true)
+    tempo_name_label = UI.label("Tempo",15,INK,true)
     tempo_body.add_child(tempo_name_label)
-    tempo_value_label = UI.label("-- BPM · steps of 5 BPM",13,MUTED)
+    tempo_value_label = UI.label("-- BPM · steps of 5 BPM",12,MUTED)
+    tempo_value_label.visible = false
     tempo_body.add_child(tempo_value_label)
     var tempo_actions := HBoxContainer.new()
-    tempo_actions.add_theme_constant_override("separation",10)
+    tempo_actions.add_theme_constant_override("separation",6)
     tempo_body.add_child(tempo_actions)
     game_input_indicator = GameInputIndicator.new()
     lesson_info_label = UI.label("", 14, MUTED)
@@ -374,7 +375,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var selected_bpm: float = float(parsed.get("bpm", 0))
     var effective_bpm: float = float(parsed.get("effective_bpm", selected_bpm))
     speed_label.text = TempoVocabulary.display(selected_bpm) + " ▾"
-    tempo_name_label.text = TempoVocabulary.name_for_bpm(selected_bpm)
+    tempo_name_label.text = TempoVocabulary.display(selected_bpm)
     tempo_value_label.text = "%d BPM · adjust by %d BPM" % [
         roundi(selected_bpm),int(parsed.get("manual_tempo_step_bpm",5))]
     speed_label.disabled = not bool(parsed.get("loaded",false))
@@ -626,9 +627,9 @@ func _toggle_tempo_popup() -> void:
         return
     var origin := Vector2i(speed_label.get_screen_position())
     origin.y += roundi(speed_label.size.y) + 5
-    var width := 236
+    var width := 190
     origin.x = clampi(origin.x,8,maxi(8,roundi(get_viewport_rect().size.x)-width-8))
-    tempo_popup.popup(Rect2i(origin,Vector2i(width,140)))
+    tempo_popup.popup(Rect2i(origin,Vector2i(width,98)))
 
 
 func present_busy(busy: bool) -> void:
@@ -787,7 +788,7 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
     var compact_steps: bool = width < 1250.0
     progress_label.visible = true
     for bpm_button in [tempo_down_button, tempo_up_button]:
-        bpm_button.custom_minimum_size = Vector2(72.0 if compact_steps else 82.0,42.0)
+        bpm_button.custom_minimum_size = Vector2(58.0 if compact_steps else 66.0,34.0)
         bpm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_header.add_theme_constant_override("separation",8 if width < 950.0 else 16)
     practice_navigation.add_theme_constant_override("separation", 7 if width >= 1000.0 else 4)

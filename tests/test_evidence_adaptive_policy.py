@@ -57,14 +57,14 @@ def test_persistent_timing_load_uses_native_difficulty_and_actual_independent_er
     assert choose(*attempts, density=3.).bpm == 90
 
 
-def test_two_failed_focused_attempts_slow_and_two_failures_at_slow_setting_offer_guidance():
+def test_two_failed_focused_attempts_slow_and_later_failures_keep_rhythmic_loop():
     focused = (trial(wrong=(4.,), start=4., end=7., action="isolate"),
                trial(missed=(5.,), start=4., end=7.))
     assert choose(*focused, start=4.).action == "slow"
     slow = (trial(wrong=(4.,), start=4., end=7., bpm=90, action="slow"),
             trial(missed=(5.,), start=4., end=7., bpm=90))
     result = choose(*slow, bpm=90, start=4.)
-    assert result.action == "guided" and result.guided and result.bpm == 90
+    assert result.action == "repeat" and not result.guided and result.bpm == 90
 
 
 def test_guidance_success_requires_unsupported_timed_retry_before_reintegration():
@@ -179,7 +179,7 @@ def test_complete_graduated_episode_reaches_unsupported_original_target_within_a
         if response.action != "continue":
             actions.append(response.action)
         stage = dict(start=response.restart_beat, end=response.end_beat, bpm=response.bpm, action=response.action)
-    assert actions == ["repeat", "isolate", "repeat", "slow", "repeat", "guided",
+    assert actions == ["repeat", "isolate", "repeat", "slow", "repeat", "repeat",
                        "isolate", "repeat", "reintegrate", "repeat", "reintegrate"]
     assert response.action == "continue"
     assert (stage["start"], stage["end"], stage["bpm"]) == (0., 15., 100)

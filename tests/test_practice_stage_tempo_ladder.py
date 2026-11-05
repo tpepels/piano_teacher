@@ -63,6 +63,37 @@ def test_manual_down_and_up_preserve_target_and_stage_identity():
     assert SETTINGS.minimum_bpm < p.bpm <= SETTINGS.start_tempo_bpm
 
 
+def test_tempo_up_can_exceed_original_target_without_overwriting_per_song_progress(tmp_path):
+    fingerprint = "manual-faster-target"
+    first = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        first.plan = LearningPlan(song(30))
+        first.fingerprint = fingerprint
+        first._save()
+        assert first.state()["bpm"] == first.state()["target_bpm"] == 30
+        assert first.state()["can_increase_tempo"]
+        first.control("tempo_up")
+        first.control("tempo_up")
+        assert first.plan.bpm == 40
+        assert first.plan.target_bpm == 30
+        assert first.state()["can_increase_tempo"]
+        first._save()
+    finally:
+        first.db.close()
+    reopened = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        reopened.plan = LearningPlan(song(30))
+        reopened.fingerprint = fingerprint
+        reopened._restore()
+        assert reopened.plan.bpm == 40
+        assert reopened.plan.target_bpm == 30
+        assert reopened.state()["can_decrease_tempo"]
+        reopened.control("tempo_down")
+        assert reopened.plan.bpm == 35
+    finally:
+        reopened.db.close()
+
+
 def test_any_step_can_be_selected_in_both_directions_with_own_tempo():
     p = LearningPlan(song(110))
     assert len(p.lesson_steps) >= 3
