@@ -326,6 +326,11 @@ func _ready() -> void:
 func present(parsed: Dictionary, ready: bool, busy := false, audio_error := false) -> void:
     _previous_state = _state
     _state = parsed.duplicate(true)
+    if is_resume_prompt_open() and (bool(parsed.get("running",false)) or
+            str(parsed.get("mode","")) == "listen" or
+            int(parsed.get("lesson_step",-1)) != int(
+                _resume_open_state.get("lesson_step",-1))):
+        _dismiss_resume_hint()
     performance_metrics.present(parsed)
     _score_ready = ready
     _audio_error = audio_error

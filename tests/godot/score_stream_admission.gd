@@ -69,13 +69,20 @@ func _initialize() -> void:
     check(Admission.reading_lead_seconds(take,origin,60.0)>0.0,
         "next transport deadline has a bounded reading lead")
     var bounds: Vector2 = Admission.engraved_clip_bounds(
-        0.0,4.0,96.0,24.0)
+        0.0,4.0,96.0,24.0,4.0)
     check(bounds.x <= -300.0 and bounds.y >= 432.0,
         "first measure clip preserves negative Verovio clef/key/meter ink and terminal noteheads")
     var later: Vector2 = Admission.engraved_clip_bounds(
-        2.0,4.0,96.0,24.0)
+        2.0,4.0,96.0,24.0,4.0)
     check(later.x < 192.0 and later.x > 140.0,
         "resumed source reveals full first notehead without a second opening header")
+    var interior: Vector2 = Admission.engraved_clip_bounds(
+        0.0,4.0,96.0,24.0,8.0)
+    check(is_equal_approx(interior.y,384.0),
+        "internal measure crop does not leak the next measure's first note")
+    check(Admission.reading_lead_seconds(take,4.0,60.0,4.0) >
+          Admission.reading_lead_seconds(take,4.0,60.0),
+        "new opening context reserves room after previously exposed ink")
     var wide := Admission.window(-2.5,0.0,8.0,0.0,[],11.0)
     check(wide["admit"] and is_equal_approx(wide["ceiling"],8.0),
         "responsive visible source runs beyond the former 3.5-beat clip")

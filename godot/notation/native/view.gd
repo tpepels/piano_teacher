@@ -751,7 +751,7 @@ func _project_stream(playhead_x: float) -> void:
         var ceiling_x: float = float(item["source_ceiling"])*density
         var bounds: Vector2 = StreamAdmission.engraved_clip_bounds(
             float(item["source_floor"]),float(item["source_ceiling"]),
-            density,staff_gap())
+            density,staff_gap(),timeline.duration_beats)
         # Physical crop extends beyond semantic attacks. The extra prefix
         # contains the real initial clef/key/meter; the extra suffix contains
         # full noteheads and barline ink. Grading and hit-tests stay bounded
@@ -1153,11 +1153,11 @@ func _draw() -> void:
                     for item in stream_passes:
                         var source_left: float = playhead_x + (
                             float(item["world_origin"])-stream_world_beat)*density
-                        var visible_start: float = source_left + (
-                            float(item["source_floor"])*density)
-                        var source_right: float = source_left + (
-                            timeline.duration_beats*density)
-                        if x >= visible_start and x <= source_right:
+                        var bounds: Vector2 = StreamAdmission.engraved_clip_bounds(
+                            float(item["source_floor"]),
+                            float(item["source_ceiling"]),
+                            density,gap,timeline.duration_beats)
+                        if x >= source_left+bounds.x and x <= source_left+bounds.y:
                             inside_source = true
                             break
                 if not inside_source:
