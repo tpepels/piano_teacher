@@ -525,7 +525,12 @@ class LearningPlan:
         counts towards its target, but never awards a clean run or a new step.
         """
         if self.bpm < SETTINGS.maximum_bpm:
-            self.bpm = min(SETTINGS.maximum_bpm, self.bpm + SETTINGS.manual_tempo_step_bpm)
+            # Below the musical target, land exactly on it. A further +
+            # deliberately allows faster-than-original practice without
+            # changing the piece-wide target or historic mastery.
+            ceiling = (self.target_bpm if self.bpm < self.target_bpm
+                       else SETTINGS.maximum_bpm)
+            self.bpm = min(ceiling, self.bpm + SETTINGS.manual_tempo_step_bpm)
             self.streak = 0
             self.failures = 0
             self.stage_tempos[self.identity] = self.bpm

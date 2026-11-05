@@ -55,30 +55,27 @@ def test_preview_continues_after_one_empty_measure_without_reloading(tmp_path):
         app.db.close()
 
 
-def test_connected_silent_take_repeats_without_false_misses_or_mastery(tmp_path):
+def test_connected_silent_take_enters_normal_midi_recovery_and_never_awards_mastery(tmp_path):
     app = engine(tmp_path)
     try:
         app.midi.port = object()
         app.start()
         assert app.auto and not app.preview_only
-        original_bpm = app.plan.bpm
         original_stage = app.plan.identity
         original_revision = app.score_revision
-        original_transport = app.transport_id
+        # A connected instrument's silence is still actual grading evidence:
+        # once the source reaches its first recovery boundary, the engine
+        # schedules the same passage again with its recovery rest.
         duration_beats = app.plan.active_phrase.end-app.plan.active_phrase.start
-        app.visual_transport.run_at = (time.monotonic() -
-            (duration_beats + 1) * 60.0 / original_bpm)
+        app.visual_transport.run_at = (
+            time.monotonic()-(duration_beats+1)*60.0/app.plan.bpm)
         app._update()
-        assert not app.running and app.visual_transport._preview_loop_pending
-        assert app.pending_result is None and not app.plan.mastered
-        assert app.plan.bpm == original_bpm and app.plan.identity == original_stage
-        assert app.visual_transport.next_at > time.monotonic()
-        app.visual_transport.next_at = time.monotonic() - .001
-        app._update()
-        assert app.running and app.auto and not app.preview_only
-        assert app.transport_id > original_transport
+        assert not app.plan.mastered
+        assert app.plan.identity == original_stage
         assert app.score_revision == original_revision
-        assert app.plan.bpm == original_bpm
+        assert app.auto
+        assert app.visual_transport.pending_rewind is not None
+        assert app.state()["phase"] in ["recovering","count_in","playing"]
     finally:
         app.db.close()
 

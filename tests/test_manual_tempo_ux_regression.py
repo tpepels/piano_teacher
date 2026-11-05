@@ -321,8 +321,9 @@ def test_typed_manual_buttons_respect_bounds_and_survive_invalid_selection(tmp_p
             assert status == 0
             assert state["bpm"] == min(state["target_bpm"], before + 5)
         assert state["target_bpm"] == 113
-        assert not state["can_increase_tempo"] and state["can_decrease_tempo"]
-        assert request("practice.command", {"action": "tempo_up"})[1]["bpm"] == 113
+        assert state["can_increase_tempo"] and state["can_decrease_tempo"]
+        assert request("practice.command", {"action": "tempo_up"})[1]["bpm"] == 118
+        assert request("practice.command", {"action": "tempo_down"})[1]["bpm"] == 113
         assert request("practice.command", {"action": "tempo_down"})[1]["bpm"] == 108
         assert request("lesson.overview")[1]["completed_steps"] == 0
         assert state["lesson_step"] == 1 and state["streak"] == 0
