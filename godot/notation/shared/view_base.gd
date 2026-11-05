@@ -9,7 +9,7 @@ const FOREGROUND := Color("#E5F2EA")
 const HIGHLIGHT := Color("#84EDD3")
 const MUTED := Color("#819F9A")
 const LEFT_TONE := Color("#9FB4DC")
-const PLAYHEAD_FRACTION := .42
+const PLAYHEAD_FRACTION := .33
 
 var timeline = Timeline.new()
 var clock_beat := 0.0
