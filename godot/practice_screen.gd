@@ -89,6 +89,8 @@ func _ready() -> void:
     var heading := UI.stack(0)
     heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    heading.custom_minimum_size.x = 0.0
+    heading.clip_contents = true
     practice_header.add_child(heading)
     title_label = UI.title("Choose your music",30)
     title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -98,12 +100,14 @@ func _ready() -> void:
     var context := HBoxContainer.new()
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(context)
-    practice_navigation = HFlowContainer.new()
-    practice_navigation.alignment = FlowContainer.ALIGNMENT_END
-    practice_navigation.add_theme_constant_override("h_separation",12)
+    # Do not wrap Play and Settings beneath BPM when a long title is loaded.
+    # The title ellipsizes; transport stays on a single compact header row.
+    practice_navigation = HBoxContainer.new()
+    practice_navigation.alignment = BoxContainer.ALIGNMENT_END
+    practice_navigation.add_theme_constant_override("separation",8)
     context.add_child(practice_navigation)
     speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"secondary")
-    speed_label.custom_minimum_size = Vector2(138,46)
+    speed_label.custom_minimum_size = Vector2(112,40)
     speed_label.tooltip_text = "Adjust tempo"
     practice_navigation.add_child(speed_label)
     header_play_button = _button("Play",func(): play_requested.emit(),false,"header_play")
@@ -158,6 +162,9 @@ func _ready() -> void:
     # Reuse the existing RH/LH/Together stage indicators in More, not above
     # the score; state updates and unlock animations remain wired.
     stage.practice_stage_bar.reparent(details_panel,false)
+    # Fingering diagnostics remain available in More without permanently
+    # occupying a caption row or shrinking the engraving viewport.
+    stage.fingering_status_label.reparent(details_panel,false)
     var details_header := HBoxContainer.new()
     details_header.add_theme_constant_override("separation",10)
     details_panel.add_child(details_header)
@@ -247,7 +254,7 @@ func _ready() -> void:
     practice_controls = controls
     controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     controls.alignment = FlowContainer.ALIGNMENT_CENTER
-    controls.add_theme_constant_override("h_separation", 12)
+    controls.add_theme_constant_override("h_separation", 8)
     controls.add_theme_constant_override("v_separation", 8)
     practice_layout.add_child(controls)
     practice_retry_button = _transport_button("Retry", func(): retry_requested.emit(), "retry")
@@ -723,20 +730,19 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
     for bpm_button in [tempo_down_button, tempo_up_button]:
         bpm_button.custom_minimum_size = Vector2(42.0 if compact_steps else 46.0,38.0)
     practice_header.add_theme_constant_override("separation",8 if width < 950.0 else 16)
-    practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
-    practice_navigation.add_theme_constant_override("v_separation", 4)
+    practice_navigation.add_theme_constant_override("separation", 7 if width >= 1000.0 else 4)
     for child in practice_navigation.get_children():
         if child is Button:
             var button := child as Button
             button.add_theme_font_size_override("font_size",_ui_font(14))
             if bool(button.get("icon_only")):
-                button.custom_minimum_size = Vector2(46,46)
+                button.custom_minimum_size = Vector2(40,40)
                 button.clip_text = true
             else:
-                button.custom_minimum_size = Vector2(134 if width >= 950.0 else 112,46)
-    practice_music_button.custom_minimum_size = Vector2(46,46)
+                button.custom_minimum_size = Vector2(120 if width >= 950.0 else 108,40)
+    practice_music_button.custom_minimum_size = Vector2(40,40)
     if practice_controls != null:
-        practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
+        practice_layout_box.add_theme_constant_override("separation", 4 if compact else 6)
         # The expanding score panel gets all remaining vertical space.
         # A window-relative minimum ignored the keyboard/status heights and
         # pushed the transport below the screen when those became visible.
@@ -747,14 +753,14 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
                 button.add_theme_font_size_override("font_size",_ui_font(18 if central else 15))
                 if central:
                     button.custom_minimum_size = Vector2(
-                        minf(270.0,maxf(185.0,width*.19)),66.0 if not compact else 55.0)
+                        minf(205.0,maxf(170.0,width*.15)),54.0 if not compact else 48.0)
                 elif button == practice_details_button:
-                    button.custom_minimum_size = Vector2(64.0,54.0 if not compact else 48.0)
+                    button.custom_minimum_size = Vector2(48.0,46.0 if not compact else 42.0)
                 else:
-                    button.custom_minimum_size = Vector2(78.0,54.0 if not compact else 48.0)
+                    button.custom_minimum_size = Vector2(56.0,46.0 if not compact else 42.0)
                 button.clip_text = not central
         title_label.add_theme_font_size_override("font_size",_ui_font(
-            22 if width < 1024.0 else 31 if width >= 1400.0 else 27))
+            19 if width < 1024.0 else 23 if width >= 1400.0 else 21))
         speed_label.add_theme_font_size_override("font_size", _ui_font(14))
         progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
