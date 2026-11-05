@@ -676,6 +676,8 @@ func _build_settings_screen() -> void:
         _send_command("learning.delete_learner", {"confirm": true}))
     settings_view.calibration_requested.connect(func(action: String):
         _send_action({"action": action}))
+    settings_view.midi_range_requested.connect(func(action: String):
+        _send_action({"action": action}))
     settings_view.volume_changed.connect(_on_listen_volume_changed)
     settings_view.fullscreen_requested.connect(_on_fullscreen_toggle)
     settings_view.exit_requested.connect(_exit_app)
@@ -933,6 +935,8 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         practice_view.suppress_piano_input(parsed)
         return
     last_state = parsed
+    settings_view.present_midi_key_range(
+        parsed.get("midi_key_range",{}) if parsed.get("midi_key_range") is Dictionary else {})
     _update_visual_frame_rate(parsed)
     score_effects.transition_mode(parsed,practice_view.stage)
     var received_ms: int = Time.get_ticks_msec()
