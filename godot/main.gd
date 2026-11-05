@@ -472,9 +472,13 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
         or absf(float(state.get("visual_scroll_speed", 0.0))) > .000001) \
         and not bool(state.get("paused", false)) \
         and current_screen == "practice"
+    var ambient_moving: bool = current_screen == "practice" and
+        bool(state.get("loaded",false)) and
+        str(state.get("phase","")) in ["ready","paused","guided_complete",
+            "performance_complete"]
     var calibrating := current_screen == "settings" and bool(
         state.get("midi_calibration", {}).get("active", false))
-    active = active or calibrating
+    active = active or calibrating or ambient_moving
     var target_fps: int = 60 if active else 30
     # Interactive transport retains its full 60 FPS camera. Idle score,
     # settings and library redraw only on user input or changed content.
