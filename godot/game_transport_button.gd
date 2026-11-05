@@ -28,7 +28,7 @@ func _ready() -> void:
     set_process(false)
     primary_glow = GlowField.new()
     primary_glow.name = "TransportBloom"
-    primary_glow.configure(1,1.28,Color("#49F6B4"))
+    primary_glow.configure(1,1.05,Color("#187FBB"))
     primary_glow.show_behind_parent = true
     primary_glow.visible = action_kind in ["play","pause"]
     add_child(primary_glow)
