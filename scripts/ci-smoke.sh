@@ -99,7 +99,10 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_midi_connection.py \
   tests/test_rolling_recovery_transition.py \
   tests/test_mistake_responses.py \
+  tests/test_evidence_adaptive_policy.py \
+  tests/test_continuous_practice_loop.py::test_connected_silent_take_enters_normal_midi_recovery_and_never_awards_mastery \
   tests/test_continuous_practice_loop.py::test_coda_practice_finishes_before_adaptive_retry_or_guided_switch \
+  tests/test_practice_stage_tempo_ladder.py::test_tempo_up_can_exceed_original_target_without_overwriting_per_song_progress \
   tests/test_assessment_service.py \
   tests/test_state_projection.py \
   tests/test_exercise_contracts.py \
