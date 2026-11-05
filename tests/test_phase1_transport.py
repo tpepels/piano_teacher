@@ -267,3 +267,26 @@ def test_requested_future_lead_delays_first_source_without_shifting_its_notes(ha
     t[0] = 108.0
     assert e.state()["clock_beat"] == pytest.approx(0.0)
     assert e.state()["phase"] == "playing"
+
+
+def test_worker_resume_command_reserves_future_note_deadline(harness):
+    import json
+    from piano_teacher.inprocess import EngineCommands
+
+    engine, now = harness
+    engine.start()
+    now[0] = engine.visual_transport.run_at + 1.5
+    engine.control("pause")
+    now[0] += 2.0
+    clock_before = engine.state()["clock_beat"]
+    status, payload = EngineCommands(engine=engine).request(
+        "practice.command",
+        json.dumps({"action":"resume","presentation_lead_seconds":7.0}))
+    assert status == 0, payload
+    published = json.loads(payload)
+    assert published["phase"] == "count_in"
+    assert published["transport_id"] == 1
+    assert engine._resume_grading_after == pytest.approx(now[0]+7.0)
+    now[0] += 7.0
+    assert engine.state()["clock_beat"] == pytest.approx(clock_before)
+    assert engine.state()["phase"] == "playing"
