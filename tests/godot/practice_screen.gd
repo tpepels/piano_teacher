@@ -45,8 +45,8 @@ func run() -> void:
                     view.practice_skip_button.disabled and view.practice_previous_button.disabled,
                     "Busy state updates every immediate Practice control")
                 view.present(state("playing"),true)
-                check(not view.details_panel.visible and view.stage.practice_stage_bar.visible == false,
-                    "Practice keeps repeated learning HUD hidden")
+                check(not view.details_panel.visible and view.stage.practice_stage_bar.get_parent() == view.details_panel,
+                    "Practice keeps hand progression accessible in More, outside the score")
                 check(view.title_label.tooltip_text == "Learn · Measure 2 of 4" and view.start_button.text == "Pause","Live source-bar and transport captions are backend-derived")
                 check(not view.feedback_label.visible and not view.lesson_info_label.visible,"Graded music keeps ordinary coaching outside the score")
                 var learn := state("guided_complete")
