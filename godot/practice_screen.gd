@@ -65,6 +65,7 @@ var _score_status: Dictionary = {"ready":false,"visible":true,
     "browse_visible":true}
 var _busy := false
 var _audio_error := false
+var _audio_banner_active := false
 var _active := true
 var _hand_unlock_message := ""
 var _hand_unlock_until_ms := 0
@@ -526,6 +527,13 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     # Secondary information is available on demand. Normal playing does not
     # shrink the music or repeat state already conveyed by score and controls.
     details_panel.visible = _details_open
+    if _audio_error:
+        stage.practice_playback_banner.text = feedback_text
+        stage.practice_playback_banner.visible = true
+        _audio_banner_active = true
+    elif _audio_banner_active:
+        stage.practice_playback_banner.visible = false
+        _audio_banner_active = false
     # During graded playback, notation and MIDI note reactions provide the
     # information. Preserve warnings for ungraded previews and audio errors.
     var busy_music: bool = phase in ["playing", "count_in"] and not learning
@@ -613,7 +621,13 @@ func present_score(status: Dictionary) -> void:
 
 func present_message(message: String, reveal := false) -> void:
     feedback_label.text = message
-    if reveal: feedback_label.visible = true
+    feedback_label.tooltip_text = message
+    if reveal:
+        feedback_label.visible = true
+        # Keep exceptional command/status errors legible without restoring
+        # permanent coaching panels around the notation.
+        stage.practice_playback_banner.text = message
+        stage.practice_playback_banner.visible = true
 
 func begin_action(requested: String, pending := "") -> void:
     if not pending.is_empty():
