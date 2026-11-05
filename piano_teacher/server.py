@@ -1902,6 +1902,7 @@ class PracticeEngine:
         # and no note is required during the visual reading lead-in.
         if (shift_run_at and self.running and self.plan is not None
                 and self.mode in ("practice", "perform")
+                and self.midi.connected and not self.preview_only
                 and self.visual_transport.run_at <= now):
             lead_beats = max(1.0, min(4.0, self.count_in_bar_beats))
             self.visual_transport.run_at += lead_beats * 60.0 / self.plan.bpm
