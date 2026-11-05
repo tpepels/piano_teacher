@@ -89,10 +89,39 @@ def test_actual_practice_engine_delivers_stable_clefs_to_verovio(tmp_path):
     assert model["measures"][0]["clefs"]["left"]["sign"] == "F"
 
 
-def test_unannotated_midi_right_hand_uses_standard_treble_not_bass():
-    # A low right-hand register must not make the upper piano staff switch
-    # clef merely because the imported MIDI lacks written notation.
+def test_unannotated_midi_right_hand_uses_bass_in_bass_register():
+    # The Beethoven Op. 13 Adagio opening plays in the bass register with
+    # the right hand. MIDI lacks a printed clef; forcing treble places
+    # several unnecessary ledger lines below the five-line staff.
     notes = (Note(0, 1, 48, 0, 0, "right"),
              Note(1, 2, 53, 0, 0, "right"))
+    defaults = infer_piece_clefs(notes)
+    assert defaults["right"] == {
+        "sign": "F", "line": 4, "octave_change": 0}
+    phrase = Phrase(1, 1, 1, 0.0, 4.0, notes)
+    lesson = build_lesson_score(
+        phrase, boundaries=(0.0, 4.0),
+        default_clefs=defaults)
+    assert _opening_clefs(lesson)["RH"] == ("F", 4)
+
+
+def test_unannotated_midi_right_hand_keeps_treble_in_treble_register():
+    notes = (Note(0, 1, 72, 0, 0, "right"),
+             Note(1, 2, 76, 0, 0, "right"))
     assert infer_piece_clefs(notes)["right"] == {
         "sign": "G", "line": 2, "octave_change": 0}
+
+
+def test_authored_right_hand_treble_survives_conflicting_bass_register():
+    # An actual MusicXML clef is authoritative, regardless of inferred MIDI
+    # preference. This also protects mid-piece authored clef changes.
+    notes = (Note(0, 2, 36, 0, 0, "right"),
+             Note(2, 4, 40, 0, 0, "right"))
+    phrase = Phrase(1, 1, 1, 0.0, 4.0, notes)
+    defaults = infer_piece_clefs(notes)
+    assert defaults["right"]["sign"] == "F"
+    lesson = build_lesson_score(
+        phrase, boundaries=(0.0, 4.0),
+        clef_changes=(ClefChange(0.0, "G", 2, hand="right"),),
+        default_clefs=defaults)
+    assert _opening_clefs(lesson)["RH"] == ("G", 2)
