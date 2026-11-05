@@ -518,7 +518,7 @@ func set_focused_staff(hand: String) -> bool:
 
 func staff_center(hand: String) -> float:
     if hand == focused_staff:
-        return size.y*.51
+        return size.y*.41
     return size.y*(.36 if hand == "right" else .69)
 
 func visible_staves() -> Array:
