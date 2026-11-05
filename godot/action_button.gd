@@ -48,7 +48,7 @@ func _accent() -> Color:
 
 
 func _background() -> Color:
-	return Design.role_fill(action_role, is_selected)
+	return Design.MINT if action_role == "utility" and is_selected else Design.role_fill(action_role, is_selected)
 
 
 func _has_symbol() -> bool:
@@ -63,7 +63,7 @@ func _skin() -> void:
 	var accent: Color = _accent()
 	var background: Color = _background()
 	var flat := action_role in ["navigation", "utility", "library"]
-	var important := action_role == "primary" or (action_role == "choice" and is_selected)
+	var important := action_role == "primary" or (is_selected and action_role in ["choice", "utility"])
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = background
 	normal.set_corner_radius_all(Design.RADIUS_INPUT)
@@ -126,7 +126,7 @@ func _draw() -> void:
 	var accent: Color = _accent()
 	var alpha := 1.0 if action_role == "choice" and is_selected else .32 if disabled else 1.0
 	accent.a *= alpha
-	if (action_role == "choice" and is_selected) or action_role == "primary":
+	if (is_selected and action_role in ["choice", "utility"]) or action_role == "primary":
 		accent = Color(Design.NIGHT,alpha)
 	elif is_hovered() and not disabled:
 		accent = Design.MINT
