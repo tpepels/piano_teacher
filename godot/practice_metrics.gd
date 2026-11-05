@@ -64,7 +64,7 @@ func _draw() -> void:
     var text_x := 110.0
     var text_width := maxf(1.0,size.x-text_x-12.0)
     _text("Accuracy",Vector2(text_x,25),16,Design.STONE,text_width)
-    _text("%d / %d clean passes" % [accepted_passes,required],
+    _text("%d / %d accepted passes" % [accepted_passes,required],
         Vector2(text_x,46),13,Design.SECONDARY_INK,text_width)
     var details := ("%d of %d notes correct" % [int(result.get("correct",0)),total]
         if total > 0 else "Listen/preview · not graded"

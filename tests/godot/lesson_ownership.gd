@@ -37,7 +37,7 @@ func test_screen(view: Control, scenario: String) -> void:
         "overview":
             check(view.piece_title.text == "A real song", "Lesson owns its selected piece title")
             check(view.summary.text == "Step 2 of 3 · 1 mastered" and
-                view.description.text.contains("4 clean performances"),
+                view.description.text.contains("4 accepted takes"),
                 "Learner sees current position, mastery and actionable clean-run goal")
             check(view.stage_labels.skeleton.visible and not view.stage_labels.outline.visible and
                 view.stage_labels.original.text == "2. Original notes",

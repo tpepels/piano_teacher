@@ -310,7 +310,7 @@ func present_overview(values: Dictionary) -> void:
     var needed: int = int(_context.get("clean_runs_required",3))
     var clean: int = int(_context.get("streak",0))
     summary.text = "Step %d of %d · %d mastered" % [current_step,total_steps,completed]
-    description.text = "Goal: %d clean performances at your target tempo · %d currently earned" % [needed,clean]
+    description.text = "Goal: %d accepted takes at your target tempo · %d currently earned" % [needed,clean]
     var hand_label: String = ("Both hands" if str(current.get("hand","")) == "both"
         else str(current.get("hand","right")).capitalize() + " hand")
     passage_summary.text = "%s · %s · measures %d–%d" % [hand_label,
