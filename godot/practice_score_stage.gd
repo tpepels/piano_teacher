@@ -76,13 +76,9 @@ func _ready() -> void:
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
     score_margin.add_child(score_region)
-    # Reserve a stable header row so navigation clears high notes and staves.
-    var score_header := HBoxContainer.new()
-    score_header.alignment = BoxContainer.ALIGNMENT_END
-    score_header.add_theme_constant_override("separation", 8)
-    score_region.add_child(score_header)
-    practice_stage_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    score_header.add_child(practice_stage_bar)
+    # The stage markers are reparented into More by PracticeScreen.
+    # Do not leave an empty score header behind after that move.
+    score_region.add_child(practice_stage_bar)
     fingering_status_label = UI.label("",12,Design.SECONDARY_INK)
     fingering_status_label.visible = false
     fingering_status_label.clip_text = true
