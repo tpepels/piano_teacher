@@ -628,3 +628,60 @@ def test_five_error_recovery_animates_backward_on_same_score(lesson):
     assert repeated["visual_scroll_beat"] == pytest.approx(grid[2], abs=.1)
     assert repeated["revision"] == revision
     assert repeated["count_in_beats"] == 0
+
+
+
+@pytest.mark.parametrize("mixed", (False, True))
+def test_reserving_manual_retry_counts_source_meter_rest_once(lesson, mixed):
+    e, now, _ = lesson(80, mixed=mixed)
+    initial_attempt = e.measurement.attempt_id
+    requested_lead = 24.0
+    e.control("restart", presentation_lead_seconds=requested_lead)
+    preparation = e.state()["practice_preparation"]
+    rest_beats = float(preparation["measure"]["duration_beats"])
+    assert preparation["phase"] == "reverse"
+    assert e.visual_transport.next_at == pytest.approx(now[0] + requested_lead)
+    assert e.visual_transport._visual_rewind_seconds == pytest.approx(
+        requested_lead - rest_beats*60/e.plan.bpm)
+    assert e.measurement.attempt_id != initial_attempt
+
+
+def test_invalid_manual_retry_reservation_keeps_current_take_intact(lesson):
+    e, now, _ = lesson(80)
+    original_id = e.measurement.attempt_id
+    original_run_at = e.visual_transport.run_at
+    with pytest.raises(ValueError, match="future|retry|rest"):
+        e.control("restart", presentation_lead_seconds=1.0)
+    assert e.measurement.attempt_id == original_id
+    assert e.visual_transport.run_at == original_run_at
+    assert not e.visual_transport._preparation_pending
+    assert e.state()["running"]
+
+
+def test_unplayed_count_in_resume_reuses_exact_future_downbeat(lesson):
+    e, now, _ = lesson(80)
+    now[0] = e.visual_transport.run_at - 2.0*60/e.plan.bpm
+    assert e.state()["phase"] == "count_in"
+    e.control("pause")
+    now[0] += 5.0
+    e.control("resume", presentation_lead_seconds=12.0,
+              reuse_pending_score=True)
+    assert e.visual_transport.run_at == pytest.approx(now[0]+12.0)
+    assert e.state()["phase"] == "count_in"
+    assert not e.visual_transport.paused
+
+
+def test_invalid_reuse_of_already_playing_score_remains_paused(lesson):
+    e, now, _ = lesson(80)
+    now[0] = e.visual_transport.run_at + 1.0*60/e.plan.bpm
+    assert e.state()["phase"] == "playing"
+    e.control("pause")
+    original_origin = e.visual_transport.run_at
+    original_attempt = e.measurement.attempt_id
+    now[0] += 3.0
+    with pytest.raises(ValueError, match="Cannot reuse"):
+        e.control("resume", presentation_lead_seconds=12.0,
+                  reuse_pending_score=True)
+    assert e.visual_transport.paused
+    assert e.visual_transport.run_at == original_origin
+    assert e.measurement.attempt_id == original_attempt

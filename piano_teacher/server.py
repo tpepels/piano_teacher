@@ -1928,23 +1928,12 @@ class PracticeEngine:
             return
         if route == "rewind":
             sampled = time.monotonic()
-            self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
             visual_now = self.visual_transport.paused_at if self.visual_transport.paused else sampled
             position, _, _ = self._visual_motion(visual_now)
             target = (self.visual_transport.pending_rewind if self.visual_transport.pending_rewind is not None
                       else self.visual_transport.play_from_beat)
-            self.visual_transport.paused = False
-            self.visual_transport.paused_at = 0.0
-            self.pause_context = None
-            self._deferred_score_ack = None
-            self.awaiting_score_revision = None
-            self.pending_result = None
-            self._policy_retry = None
-            self._pending_assessed_bpm = None
-            self.visual_transport._retry_previous_pass = False
-            self._guided_recovery_pending = False
-            self._resume_grading_after = 0.0
-            self._resume_ignored_pitches.clear()
+            # Validate the complete future musical deadline before
+            # interrupting the current graded take or clearing pause state.
             reverse_seconds = self.feedback_seconds
             if presentation_lead_seconds > 0:
                 source = self._source_model()
@@ -1968,6 +1957,19 @@ class PracticeEngine:
                     reading_lead_seconds=presentation_lead_seconds,
                     semantic_rest_seconds=rest_beats * 60.0 / self.plan.bpm,
                     minimum_rewind_seconds=self.feedback_seconds)
+            self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
+            self.visual_transport.paused = False
+            self.visual_transport.paused_at = 0.0
+            self.pause_context = None
+            self._deferred_score_ack = None
+            self.awaiting_score_revision = None
+            self.pending_result = None
+            self._policy_retry = None
+            self._pending_assessed_bpm = None
+            self.visual_transport._retry_previous_pass = False
+            self._guided_recovery_pending = False
+            self._resume_grading_after = 0.0
+            self._resume_ignored_pitches.clear()
             self._schedule_preparation(target, now=sampled, from_visual=position,
                                        reverse_seconds=reverse_seconds)
             self.feedback = "Get ready to retry"
@@ -1998,6 +2000,16 @@ class PracticeEngine:
             automatic_feedback=self.pending_result is not None and self.auto)
         now = time.monotonic()
         paused_at = self.visual_transport.paused_at
+        if reuse_pending_score and (
+                presentation_lead_seconds <= 0.0 or
+                not (shift_run_at and self.running and
+                     self.mode in ("practice", "perform")) or
+                self.pause_context != "count_in" or
+                self.visual_transport.run_at <= paused_at):
+            # Reuse is permitted only for a count-in that never reached the
+            # first attack. Reject before mutable transport.resume(): an
+            # invalid command must preserve the paused take unchanged.
+            raise ValueError("Cannot reuse a passage after graded notes began")
         previous_origin = self.visual_transport.run_at
         had_reading_lead = self._resume_grading_after > paused_at
         if learning:
@@ -2017,9 +2029,6 @@ class PracticeEngine:
                 # Restore the graded downbeat to that exact unchanged future
                 # world position. Earlier graded keys cannot exist yet.
                 if reuse_pending_score:
-                    if (self.pause_context != "count_in" or \
-                            self.visual_transport.run_at <= paused_at):
-                        raise ValueError("Cannot reuse a passage after graded notes began")
                     self.visual_transport.run_at = now + presentation_lead_seconds
                     self._resume_grading_after = self.visual_transport.run_at
                     self.count_in_beats = max(self.count_in_beats,
