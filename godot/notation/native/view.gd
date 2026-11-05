@@ -92,6 +92,21 @@ var drawn_note_instances: Array = []
 var preparation_history: Dictionary = {}
 var selected_density := 0.0
 var external_backdrop := false
+var compact_inactive_staff := false
+
+func _focused_staff_for_score() -> String:
+    if not compact_inactive_staff or active_hand not in ["right","left"]:
+        return ""
+    # Preserve the grand staff whenever the performing hand has authentic
+    # cross-staff notes. Only an entirely unused opposite staff is collapsed.
+    for event in timeline.model.get("notation_events",[]):
+        if not event is Dictionary or str(event.get("kind","")) != "note":
+            continue
+        var owner := str(event.get("hand",event.get("staff","")))
+        if owner == active_hand and str(event.get("staff","")) != active_hand:
+            return ""
+    return active_hand
+
 var staff_gap_limit := MAX_STAFF_GAP
 var configured_density: float = Timeline.DEFAULT_PIXELS_PER_BEAT
 # Immutable musical structure is indexed ONCE when a passage changes.
@@ -245,6 +260,7 @@ func load_score(candidate: Dictionary) -> bool:
     selected_density = density
     layout.set_viewport(size)
     layout.rebuild_index()
+    layout.set_focused_staff(_focused_staff_for_score())
     failure_reason = _missing_source_engraving()
     if not failure_reason.is_empty():
         notice = failure_reason
@@ -513,8 +529,14 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
         return
     # The genuine Verovio brace belongs ABOVE scrolling source ink at the
     # fixed left-hand edge, not inside the translated source segments.
-    var staff_top: float = layout.staff_center("right")-2.0*gap
-    var staff_bottom: float = layout.staff_center("left")+2.0*gap
+    var staff_top: float = layout.barline_top(gap)
+    var staff_bottom: float = layout.barline_bottom(gap)
+    if not layout.focused_staff.is_empty():
+        # One practiced staff has no grand-staff brace. Keep a thin source
+        # system boundary without inventing or transposing notation.
+        canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
+            Color(NOTE_INK,.48),1.0,true)
+        return
     canvas.draw_rect(Rect2(0,staff_top-gap,29,
         staff_bottom-staff_top+gap*2),Design.STAGE)
     if glyphs.textures.has("brace"):
@@ -552,8 +574,10 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
             "paused":paused,
             "phase":str(state.get("phase",""))
         }))
-    if old_hand != active_hand:
+    var focus_changed := layout.set_focused_staff(_focused_staff_for_score())
+    if old_hand != active_hand or focus_changed:
         _invalidate_retained_segments()
+        queue_redraw()
     if score_loop_enabled:
         _prune_preparation_history()
         _remember_preparation()
@@ -808,6 +832,11 @@ func _draw() -> void:
     # A quiet pool of light marks the strike without hiding any engraved ink.
     var top: float = layout.staff_center("right")-gap*3.8
     var bottom: float = layout.staff_center("left")+gap*3.7
+    if not layout.focused_staff.is_empty():
+        var center: float = layout.staff_center(layout.focused_staff)
+        var playhead_half := maxf(gap*7.0,size.y*.27)
+        top = center-playhead_half
+        bottom = center+playhead_half
     var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
     if transport_overlay_enabled and not runway_overlay:
         var displayed_beat := displayed_scroll_beat() if score_loop_enabled else camera_clock+play_from_beat
@@ -822,7 +851,7 @@ func _draw() -> void:
             draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
                 Color(PREVIEW_LIGHT, .045+breath*.012))
     # Always draw ten native rules; no copied or stitched raster systems.
-    for staff in (["right","left"] if not runway_overlay else []):
+    for staff in (layout.visible_staves() if not runway_overlay else []):
         var center: float = layout.staff_center(staff)
         var selected: bool = active_hand == "both" or active_hand == staff
         var ink: Color = NOTE_INK if selected else Color(DIM_INK,.46)
@@ -835,11 +864,9 @@ func _draw() -> void:
     # flagged stems and noteheads, preventing independent contour recovery.
     # Engraving is always painted later; the transport clock is unchanged.
     if transport_overlay_enabled and not runway_overlay:
-        draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
-            Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
+        draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
             Design.HIGHLIGHT,2.2,true)
-        draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
-            Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
+        draw_line(Vector2(playhead_x,top),Vector2(playhead_x,bottom),
             Color(Design.STONE,.50),.8,true)
         # Beat breathing is an accent on the fixed playhead, not a moving
         # alternate clock. Music, retry preparation and calibration each
@@ -882,6 +909,7 @@ func _new_paint_frame(clock: float, playhead_x: float, gap: float,
     layout.set_viewport(size)
     return RenderPass.new({"clock":clock,"playhead_x":playhead_x,"gap":gap,
         "play_from_beat":play_from_beat,"active_hand":active_hand,
+        "focused_staff":layout.focused_staff,
         "score_loop_enabled":score_loop_enabled,"pass_index":pass_index,
         "pass_start":pass_start,"preparation_history":preparation_history,
         "visual_scroll_beat":visual_scroll_beat})
