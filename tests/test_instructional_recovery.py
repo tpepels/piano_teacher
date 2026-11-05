@@ -74,6 +74,25 @@ def after_break(e, now):
     return e.state()
 
 
+def open_saved_guided_trouble(e, start_beat):
+    """A learner can opt into note-finding help without blocking auto practice.
+
+    Guided review selects the same persisted, source-bound canonical idea
+    and returns to the rhythm stage after completing it. No auto mistake
+    policy silently starts an indefinite key-wait session.
+    """
+    stage = e.plan.identity
+    e.control("revisit_trouble", stage_key=stage, start_beat=start_beat)
+    loading = e.state()
+    assert loading["phase"] == "loading" and loading["mode"] == "learn"
+    e.geometry()
+    e.control("score_ready", revision=loading["revision"])
+    guided = e.state()
+    assert guided["mode"] == "learn" and guided["phase"] == "guided_wait"
+    assert guided["guided_recovery"]
+    return guided
+
+
 def fail_later_chunk(e, now, grid):
     play(e, now, before=grid[2], jitter=True)
     assert boundary(e, now, grid[2])['phase'] == 'playing'
@@ -120,10 +139,12 @@ def test_repeated_failed_chunk_reuses_native_score_then_teaches_exact_source(les
     assert retry['count_in_beats'] == 0 and retry['awaiting_score_revision'] is None
     assert retry['revision'] == first['revision']
     second = boundary(e, now, grid[-1])
-    assert second['phase'] == 'recovering' and second['guided_recovery']
-    assert 'Learn bars 3-4' in second['next_action']
-    guided = after_break(e, now)
-    assert guided['mode'] == 'learn' and guided['phase'] == 'guided_wait'
+    assert second['phase'] == 'recovering' and not second['guided_recovery']
+    assert e._trouble_count == 2
+    assert 'Retry bars 3-4' in second['next_action']
+    # Automatic retries stay on the moving score; the recorded trouble
+    # remains available for an explicit human choice of guided repair.
+    guided = open_saved_guided_trouble(e, grid[2])
     assert guided['teaching']['fragment'] == expected_range
     assert guided['first_bar'] == 3 and guided['last_bar'] == 4
     assert guided['required_notes'] == grid[-1]-grid[2]
@@ -331,8 +352,9 @@ def test_entire_recovery_restores_chosen_tempo_then_three_full_takes_reveal_chor
     stage = e.plan.identity
     fail_later_chunk(e, now, grid)
     after_break(e, now)
-    boundary(e, now, grid[-1])
-    after_break(e, now)
+    twice = boundary(e, now, grid[-1])
+    assert twice["phase"] == "recovering" and not twice["guided_recovery"]
+    open_saved_guided_trouble(e, grid[2])
     complete_guidance(e, now)
     assert e.visual_transport.play_from_beat == 8 and e.plan.bpm == 65 and e.plan.target_bpm == 80
     assert finish_take(e, now, 16)['phase'] == 'recovering'
@@ -453,11 +475,13 @@ def test_rolling_errors_cross_chunk_boundary_but_retry_current_canonical_idea(le
     assert trouble[0]['first_bar'] == 3 and trouble[0]['errors'] == 2
     assert after_break(e, now)['play_from_beat'] == grid[2]
 
-    # A subsequent failure of this canonical idea still opens exact Learn help.
+    # A second automatic failure remains timed and never waits indefinitely
+    # for note finding. The exact saved difficult idea can be reviewed by
+    # explicit user request without changing the original stage identity.
     second = boundary(e, now, grid[-1])
-    assert second['guided_recovery'] and second['phase'] == 'recovering'
-    guided = after_break(e, now)
-    assert guided['mode'] == 'learn' and guided['phase'] == 'guided_wait'
+    assert not second['guided_recovery'] and second['phase'] == 'recovering'
+    assert e._trouble_count == 2
+    guided = open_saved_guided_trouble(e, grid[2])
     assert (guided['first_bar'], guided['last_bar']) == (3, 4)
     assert not e.plan.mastered and e.plan.streak == 0
 
