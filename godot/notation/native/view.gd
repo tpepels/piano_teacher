@@ -583,13 +583,27 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     return _stream_serial
 
 
-func arm_stream_take(world: float, opening: float) -> Dictionary:
-    # Bound before the in-process command: only previously placed note ink
-    # may become the next graded take, and its world_origin never changes.
-    if not stream_enabled or not native_ready or not retained_ready():
+func arm_stream_take(world: float, opening: float,
+        planned_start_world: float = NAN) -> Dictionary:
+    # Normal Play selects a previously engraved READY copy. A preloaded
+    # different stage may carry an exact authoritative future graded onset.
+    # It must be offscreen before activation; a stale deadline fails closed.
+    if not native_ready or not retained_ready():
         return {}
     stream_world_beat = maxf(stream_world_beat,world)
-    var serial: int = _stream_reserve_ready(stream_world_beat,opening)
+    var serial := -1
+    if is_finite(planned_start_world):
+        var safe_start: float = StreamAdmission.future_start(
+            stream_passes,stream_world_beat,_stream_right_beats(),
+            _stream_header_beats(opening))
+        if planned_start_world < safe_start-.0001:
+            return {}
+        _stream_add_take(opening,planned_start_world,opening,
+            _stream_complete_measure(opening+_stream_right_beats()+1.0),
+            "prepared")
+        serial = _stream_serial
+    else:
+        serial = _stream_reserve_ready(stream_world_beat,opening)
     for item in stream_passes:
         if serial >= 0 and int(item["serial"]) == serial:
             item["pending"] = false

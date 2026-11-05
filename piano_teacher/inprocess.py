@@ -81,7 +81,9 @@ class EngineCommands:
                 return OK, engine.next_stage_score()
             if operation == "score.stage_ready":
                 return self._reply(OK, engine.acknowledge_preloaded_stage(
-                    stage_key=values["stage_key"], revision=values["revision"]))
+                    stage_key=values["stage_key"], revision=values["revision"],
+                    presentation_lead_beats=float(
+                        values.get("presentation_lead_beats",0.0))))
             if operation == "score.stage_failed":
                 return self._reply(OK, engine.report_preload_failure(
                     fingerprint=values["fingerprint"],

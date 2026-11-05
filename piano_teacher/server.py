@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import threading
 import time
+import math
 
 from .learning import LearningPlan
 from .sqlite_transaction import sqlite_atomic
@@ -202,6 +203,7 @@ class PracticeEngine:
         self.score_artifacts = ScoreArtifacts(self.preprocessing)
         self.future_score = FutureScore(data_dir / "preprocessed")
         self._future_stage_ready: tuple[str, int] | None = None
+        self._future_stage_lead_beats = 0.0
         self._prepared_stage_published = False
         # Global musical origin of a delayed, pre-engraved next stage.
         self._stage_handoff_visual_beat: float | None = None
@@ -2160,7 +2162,14 @@ class PracticeEngine:
                     (self.plan.identity, self.score_revision)):
                 self._future_stage_ready = None
                 self._prepared_stage_published = False
-                self._continue_at(deadline)
+                lead_beats = self._future_stage_lead_beats
+                self._future_stage_lead_beats = 0.0
+                # A visual stage must be completely outside the right edge
+                # when the next graded clock starts counting down. Extend
+                # that SAME Python deadline; no second frontend clock.
+                next_deadline = deadline + lead_beats*60.0/self.plan.bpm
+                self._continue_at(next_deadline)
+                self.count_in_beats = max(self.count_in_beats,lead_beats)
                 return
             self._prepared_stage_published = False
             selected_retry = self._policy_retry
@@ -2920,7 +2929,8 @@ class PracticeEngine:
             return {"accepted": True, "revision": revision, "step_number": number}
 
     def acknowledge_preloaded_stage(self, *, stage_key: str,
-                                    revision: int) -> dict:
+                                    revision: int,
+                                    presentation_lead_beats: float = 0.0) -> dict:
         """Only a fully compiled and exact source-bound future ink may advance."""
         with self.lock:
             planned = self._next_stage_selection()
@@ -2931,7 +2941,11 @@ class PracticeEngine:
                 raise ValueError("Preloaded step no longer matches the active course")
             if not self.future_score.ready(selection):
                 raise ValueError("Next lesson notation is not yet prepared")
+            if not 0.0 <= presentation_lead_beats <= 64.0 or not math.isfinite(
+                    presentation_lead_beats):
+                raise ValueError("Invalid future notation reading lead")
             self._future_stage_ready = (stage_key, revision)
+            self._future_stage_lead_beats = presentation_lead_beats
             # If the future ink became ready during the existing rest gap,
             # schedule its exact delayed start immediately. Waiting for the
             # old full-bar deadline would show native ink on a false origin.
