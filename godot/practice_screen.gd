@@ -753,14 +753,14 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
                 button.add_theme_font_size_override("font_size",_ui_font(18 if central else 15))
                 if central:
                     button.custom_minimum_size = Vector2(
-                        minf(205.0,maxf(170.0,width*.15)),54.0 if not compact else 48.0)
+                        minf(225.0,maxf(170.0,width*.16)),58.0 if not compact else 48.0)
                 elif button == practice_details_button:
                     button.custom_minimum_size = Vector2(48.0,46.0 if not compact else 42.0)
                 else:
                     button.custom_minimum_size = Vector2(56.0,46.0 if not compact else 42.0)
                 button.clip_text = not central
         title_label.add_theme_font_size_override("font_size",_ui_font(
-            19 if width < 1024.0 else 23 if width >= 1400.0 else 21))
+            20 if width < 1024.0 else 28 if width >= 1400.0 else 24))
         speed_label.add_theme_font_size_override("font_size", _ui_font(14))
         progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
@@ -788,15 +788,15 @@ func _game_button(button: Button, central := false) -> void:
     var kind: String = str(button.get("action_kind"))
     var role: String = "play" if central else kind
     var accent: Color = Design.role_accent(role)
-    normal.bg_color = Design.MINT if central else Design.role_fill(role)
+    normal.bg_color = Color("#62F0BE") if central else Design.role_fill(role)
     button.set_meta("ui_button_role",
         "transport_primary" if central else "transport_retry" if kind == "retry" else "transport_listen")
     normal.set_corner_radius_all(7)
     normal.set_content_margin_all(12)
     normal.set_border_width_all(1)
     normal.border_color = Color(accent, .7 if central else .22)
-    normal.shadow_color = Color(Design.MINT, .26) if central else Color.TRANSPARENT
-    normal.shadow_size = 14 if central else 0
+    normal.shadow_color = Color("#56FFC4", .48) if central else Color.TRANSPARENT
+    normal.shadow_size = 24 if central else 0
     button.add_theme_stylebox_override("normal", normal)
     var hover := normal.duplicate() as StyleBoxFlat
     hover.bg_color = normal.bg_color.lightened(.16)
