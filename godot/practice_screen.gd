@@ -106,7 +106,7 @@ func _ready() -> void:
     practice_navigation.alignment = BoxContainer.ALIGNMENT_END
     practice_navigation.add_theme_constant_override("separation",8)
     context.add_child(practice_navigation)
-    speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"secondary")
+    speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"practice_tempo")
     speed_label.custom_minimum_size = Vector2(112,40)
     speed_label.tooltip_text = "Adjust tempo"
     practice_navigation.add_child(speed_label)
