@@ -727,6 +727,7 @@ class PracticeEngine:
             if message.type in ("note_on", "note_off"):
                 expected = frozenset(
                     note.pitch for note in self.plan.active_phrase.notes
+                    if self.plan.hand == "both" or note.hand == self.plan.hand
                 ) if self.plan is not None else frozenset()
                 decision = self.midi_key_shortcuts.accept(
                     message, device=self.midi.device,
