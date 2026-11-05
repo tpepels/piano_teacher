@@ -30,7 +30,10 @@ func _initialize() -> void:
         "New speed applies only to future visual time")
     check(is_equal_approx(flow.sample(6500,30.0),5.75),
         "Current beat is preserved at tempo change")
-    check(flow.sample(7500,30.0) > flow.sample(7200,30.0),
+    var at_7200: float = flow.sample(7200,30.0)
+    var at_7500: float = flow.sample(7500,30.0)
+    check(at_7500 > at_7200,"Time advances after tempo changes")
+    check(flow.sample(7300,30.0) >= at_7500,
         "Out-of-order frame timestamps cannot rewind the visual bar")
     check(flow.project(8500) >= flow.sample(8500,30.0),
         "Projection is monotonic even during irregular polling")
