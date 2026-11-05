@@ -12,7 +12,7 @@ from pathlib import Path
 from .pixel_context import clef_at, ledger_context_rows
 from .pixel_ink import bright
 from .pixel_motion import horizontal_dice
-from .pixel_proof import detect_staff_lines, expected_y
+from .pixel_proof import PLAYHEAD_FRACTION, detect_staff_lines, expected_y
 from .proof import read_written_score
 from .raster_matching import match_glyph as _match_glyph, glyph_search_components, match_glyphs_joint, photographed_playhead_columns
 from .reference_font import reference_glyphs
@@ -159,7 +159,7 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
             continue
         raster=bright(image)
         occlusion_columns=photographed_playhead_columns(image)
-        xpos=round(image.width*.33)
+        xpos=round(image.width*PLAYHEAD_FRACTION)
         requests=[]
         for staff,notes in hands.items():
             try:

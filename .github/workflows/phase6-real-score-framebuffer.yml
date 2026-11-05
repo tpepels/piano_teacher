@@ -13,6 +13,9 @@ on:
       - 'tests/godot/native_verovio_overlay.gd'
       - 'piano_teacher/application/score_preparation.py'
       - 'piano_teacher/notation/phase3_pixels.py'
+      - 'piano_teacher/notation/pixel_proof.py'
+      - 'piano_teacher/notation/rest_intervention.py'
+      - 'piano_teacher/notation/rest_placement_pixels.py'
       - 'godot/notation/native/**'
       - 'godot/notation/shared/**'
 
