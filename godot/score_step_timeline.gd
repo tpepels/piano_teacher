@@ -7,6 +7,7 @@ const FUTURE := Design.SECONDARY_INK
 var _loaded := false
 var _step := 0
 var _total := 0
+var _phase := "ready"
 var _label := ""
 var _next_label := ""
 var _current_start := 0.0
@@ -61,12 +62,14 @@ func present(state: Dictionary, visual_beat: float,
         current_visual_beat: float = NAN) -> void:
     var current_camera: float = current_visual_beat if is_finite(current_visual_beat) else visual_beat
     var upcoming_density: float = next_density if is_finite(next_density) and next_density > 0.0 else _density
+    var next_phase: String = str(state.get("phase","ready"))
     var presented_label: String = "%s · %s" % [
         str(state.get("hand","both")).capitalize(),
         str(state.get("stage_label",""))]
     var changed: bool = (_loaded != bool(state.get("loaded",false)) or \
             _step != int(state.get("lesson_step",0)) or \
             _total != int(state.get("lesson_steps",0)) or \
+            _phase != next_phase or \
             _label != presented_label or \
             _next_label != next_label or \
             absf(_next_density-upcoming_density) > .001 or \
@@ -77,6 +80,7 @@ func present(state: Dictionary, visual_beat: float,
     _loaded = bool(state.get("loaded",false))
     _step = int(state.get("lesson_step",0))
     _total = int(state.get("lesson_steps",0))
+    _phase = next_phase
     _label = presented_label
     _next_label = next_label
     _next_density = upcoming_density
@@ -124,8 +128,10 @@ func _draw() -> void:
     var next_x := marker_x(_next_start,_beat,_next_density,size.x) if is_finite(_next_start) else INF
     var current_visible := is_finite(current_x) and current_x >= -10.0 and current_x < size.x-10.0
     if current_visible:
-        var now_label := ("NOW · %d/%d" if _current_beat >= _current_start
-            else "STEP · %d/%d") % [_step,_total]
+        var now_label := (
+            "NOW PLAYING · %d" % _step if _phase == "playing"
+            else "READY · %d/%d" % [_step,_total] if _phase == "ready"
+            else "STEP · %d/%d" % [_step,_total])
         _marker(_current_start,now_label,INK,_density,_current_beat)
     # A preloaded next stage can project directly onto the current marker.
     # Its note ink remains visible; only the duplicate caption is suppressed.

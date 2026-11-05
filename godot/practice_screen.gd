@@ -505,7 +505,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     passage_label.text = passage_text
     progress_label.text = progress_text
     lesson_info_label.text = instruction_text
-    feedback_label.text = feedback_text
+    # The transport action is Play. Do not show the engine's obsolete
+    # "Start" caption when presenting that same action.
+    feedback_label.text = ("Press Play to practice"
+        if phase == "ready" and feedback_text == "Press Start to practice"
+        else feedback_text)
     if progress_label.get_theme_color("font_color") != progress_tone:
         progress_label.add_theme_color_override("font_color", progress_tone)
     if lesson_info_label.get_theme_color("font_color") != instruction_tone:
