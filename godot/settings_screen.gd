@@ -20,6 +20,7 @@ signal learner_strategy_requested(strategy: String)
 signal mistake_response_requested(strategy: String)
 signal metronome_requested(enabled: bool)
 signal calibration_requested(action: String)
+signal midi_range_requested(action: String)
 signal volume_changed(db: float)
 signal fullscreen_requested(enabled: bool)
 signal retention_save_requested(days: int, budget_mib: int)
@@ -33,6 +34,9 @@ var default_font: Font
 var settings_grid: GridContainer
 var device_button: Button
 var input_activity_label: Label
+var midi_range_label: Label
+var midi_range_start_button: Button
+var midi_range_cancel_button: Button
 var calibration_label: Label
 var calibration_count_label: Label
 var calibration_beat_pulse: Control
@@ -159,6 +163,18 @@ func _ready() -> void:
     device_row.add_child(_button("Refresh devices", func(): refresh_devices_requested.emit(), false, "utility"))
     input_activity_label = _label("Connect your piano, then play a note to check input.", 14, MUTED)
     midi.add_child(input_activity_label)
+    var keyboard_range_row := HFlowContainer.new()
+    keyboard_range_row.add_theme_constant_override("h_separation",8)
+    midi.add_child(keyboard_range_row)
+    midi_range_start_button = _button("Set keyboard key range",func():
+        midi_range_requested.emit("midi_range_start"),false,"settings")
+    keyboard_range_row.add_child(midi_range_start_button)
+    midi_range_cancel_button = _button("Cancel range setup",func():
+        midi_range_requested.emit("midi_range_cancel"),false,"utility")
+    midi_range_cancel_button.visible = false
+    keyboard_range_row.add_child(midi_range_cancel_button)
+    midi_range_label = _label("Connect your piano to set its lowest and highest keys.",14,MUTED)
+    midi.add_child(midi_range_label)
     var calibration_row := HFlowContainer.new()
     calibration_row.add_theme_constant_override("h_separation", 8)
     midi.add_child(calibration_row)
@@ -470,6 +486,27 @@ func animate_calibration_beat(beat: float, active: bool,
     if calibration_beat_pulse != null:
         calibration_beat_pulse.call(
             "present_beat", beat, active, round_beats, preparation)
+
+func present_midi_key_range(state: Dictionary) -> void:
+    if midi_range_label == null:
+        return
+    var device: String = str(state.get("device",""))
+    var active: bool = bool(state.get("active",false))
+    midi_range_start_button.disabled = device.is_empty() or active
+    midi_range_cancel_button.visible = active
+    if active:
+        midi_range_label.text = ("Press the keyboard's LOWEST physical key."
+            if str(state.get("step","")) == "lowest"
+            else "Now press the HIGHEST physical key (higher than the lowest).")
+    elif bool(state.get("configured",false)):
+        midi_range_label.text = ("Shortcuts: lowest key %d = Pause/Resume; "
+            + "highest key %d = Restart with count-in. Notes in this exercise take priority.") % [
+                int(state.get("low",0)),int(state.get("high",127))]
+    elif device.is_empty():
+        midi_range_label.text = "Connect a MIDI piano, then teach its lowest and highest keys."
+    else:
+        midi_range_label.text = "Teach this piano's two end keys once; the range is saved per device."
+
 
 func present_calibration(state: Dictionary, offset_ms: int) -> void:
     if calibration_label == null:
