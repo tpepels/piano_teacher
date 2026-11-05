@@ -265,7 +265,8 @@ func paint_volta_endings(canvas, frame: RenderPass, left: float, right: float, c
 
 func practice_barline(canvas, frame: RenderPass, x: float, mark: Dictionary, gap: float) -> void:
     paint_barline(canvas,frame,{"x":x,"style":mark.get("style","regular"),"repeat":mark.get("repeat",""),
-        "segments":[{"top":score_layout.staff_center("right")-gap*2.0,"bottom":score_layout.staff_center("left")+gap*2.0}]},gap)
+        "segments":[{"top":score_layout.barline_top(gap),
+            "bottom":score_layout.barline_bottom(gap)}]},gap)
 
 
 func barline_left_limit(x: float, mark: Dictionary, gap: float) -> float:
@@ -297,7 +298,7 @@ func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_meas
     var header_scale: float = gap/17.0
     var header_shift: float = 76.0*header_scale if opening else 0.0
     var crowded_meter: bool = meter_is_crowded(measure,previous_measure,gap)
-    for staff in ["right","left"]:
+    for staff in score_layout.visible_staves():
         var center: float = score_layout.staff_center(staff)
         var clef: Dictionary = score_layout.clef_for(staff,measure)
         var signatures: Dictionary = measure.get("keys",{})
