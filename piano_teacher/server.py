@@ -717,6 +717,8 @@ class PracticeEngine:
         now = time.monotonic() if received_at is None else received_at
         with self.lock:
             if self.midi_calibration.active:
+                if not deferred:
+                    self.midi.observe(message, now=now)
                 if message.type == "note_on" and message.velocity > 0:
                     self.midi_calibration.observe(now)
                 return
