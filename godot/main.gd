@@ -150,6 +150,7 @@ var device_pending: bool:
         midi_devices.pending = value
 var demo_player: Node
 var ui_scale := 1.0
+var practice_backdrop: ColorRect
 var last_seen_midi_visual_sequence := 0
 var live_midi_feedback = LiveMidiFeedback.new()
 var state_poll_timer: Timer
@@ -493,6 +494,8 @@ func _navigate(screen: String) -> void:
     if bool(decision["pause"]):
         _send_action({"action":"pause"})
     current_screen = screen
+    if practice_backdrop != null:
+        practice_backdrop.visible = screen == "practice"
     _update_visual_frame_rate(last_state)
     navigation_drawer.present(screen, previous_screen)
     if practice_view != null:
@@ -530,6 +533,28 @@ func _build_interface() -> void:
     var background := GameBackdrop.new()
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(background)
+    # The practice score is one seamless, edge-to-edge reading surface.
+    # Keep the other application pages' background unchanged.
+    practice_backdrop = ColorRect.new()
+    practice_backdrop.name = "PracticeBackdrop"
+    practice_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    practice_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    practice_backdrop.color = Color.WHITE
+    practice_backdrop.visible = false
+    var backdrop_shader := Shader.new()
+    backdrop_shader.code = """shader_type canvas_item;
+void fragment() {
+    vec2 offset = (UV - vec2(0.46,0.47)) * vec2(1.14,0.98);
+    float vignette = smoothstep(0.10,0.86,length(offset));
+    vec3 center = vec3(0.004,0.120,0.111);
+    vec3 edge = vec3(0.002,0.062,0.059);
+    COLOR = vec4(mix(center,edge,vignette),1.0);
+}
+"""
+    var backdrop_material := ShaderMaterial.new()
+    backdrop_material.shader = backdrop_shader
+    practice_backdrop.material = backdrop_material
+    add_child(practice_backdrop)
 
     _build_home_screen()
     _build_library_screen()
@@ -600,10 +625,13 @@ func _update_responsive_layout() -> void:
     # Margins are not multiplied twice by UI scale.
     var margin: int = 26 if width >= 1100.0 else 14
     for panel in page_margins:
+        var is_practice: bool = screens.has("practice") and panel == screens["practice"]
         panel.add_theme_constant_override("margin_left", margin)
         panel.add_theme_constant_override("margin_right", margin)
         panel.add_theme_constant_override("margin_top", 14 if compact else 19)
-        panel.add_theme_constant_override("margin_bottom", 14 if compact else 19)
+        # Reserve a little room below the transport, as in the reference.
+        panel.add_theme_constant_override("margin_bottom",
+            (22 if compact else 48) if is_practice else (14 if compact else 19))
     if home_view != null:
         home_view.apply_viewport(size, ui_scale)
     _resize_overlay_drawer()
