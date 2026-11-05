@@ -150,6 +150,14 @@ func _run() -> void:
         "Transitions belong to a single small on-stage cue")
     _check(_in_viewport(cue, viewport), "Transition cue clips outside the stage")
     _check(_in_viewport(score, viewport), "Notation panel extends outside window")
+    var practice_backdrop: ColorRect = scene.practice_backdrop
+    _check(practice_backdrop != null and practice_backdrop.visible and
+        practice_backdrop.get_global_rect().size.is_equal_approx(viewport),
+        "Practice needs a single seamless full-viewport background")
+    _check(scene.practice_view.stage.renderer.external_backdrop,
+        "Native score must not paint an opaque rectangular stage")
+    _check(absf(scene.practice_view.stage.renderer.PLAYHEAD_FRACTION-.33) < .001,
+        "The fixed playhead matches the left-of-center reference")
     var illuminated: Control = scene.practice_view.stage.effects
     var streak_meter: Control = scene.practice_view.game_streak
     _check(illuminated != null and illuminated.get_parent() == score,
