@@ -63,12 +63,19 @@ func _ready() -> void:
     piece_title.clip_text = true
     piece_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     content.add_child(piece_title)
-    var stages := HBoxContainer.new()
-    stages.add_theme_constant_override("separation", 0)
+    # Coda can expose more than three generated levels. Wrap complete
+    # labels rather than letting a horizontal row overflow the drawer.
+    var stages := HFlowContainer.new()
+    stages.add_theme_constant_override("h_separation", 6)
+    stages.add_theme_constant_override("v_separation", 6)
     content.add_child(stages)
     for stage in ["skeleton", "outline", "original"]:
         var label := UI.label("%d. %s" % [stage_labels.size() + 1, stage.capitalize()], 15, MUTED)
         label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        label.autowrap_mode = TextServer.AUTOWRAP_OFF
+        label.clip_text = true
+        label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+        label.custom_minimum_size = Vector2(152,36)
         label.tooltip_text = "The current simplification level; available stages depend on this passage."
         label.visible = false
         stages.add_child(label)
@@ -277,6 +284,10 @@ func present_overview(values: Dictionary) -> void:
         if not stage_labels.has(level):
             var extra := UI.label(str(level).replace("-", " ").capitalize(), 15, MUTED)
             extra.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            extra.autowrap_mode = TextServer.AUTOWRAP_OFF
+            extra.clip_text = true
+            extra.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+            extra.custom_minimum_size = Vector2(152,36)
             extra.tooltip_text = "A complete, contiguous section of the phrase."
             stage_row.add_child(extra)
             stage_labels[level] = extra
