@@ -2,6 +2,7 @@ extends SceneTree
 ## One endless score timeline. No MIDI hardware, rendering switch or
 ## source transport state may reverse it, pause it, or cause a re-anchor.
 const Flow := preload("res://continuous_score_flow.gd")
+const Tempo := preload("res://tempo_timeline.gd")
 
 var failures := 0
 
@@ -39,5 +40,20 @@ func _initialize() -> void:
         "Projection is monotonic even during irregular polling")
     check(flow.project(15000) > flow.project(8500),
         "Indefinite idle period keeps scrolling forever")
+    var map: Array = [
+        {"start_beat":0.0,"end_beat":2.0,"bpm":48.0},
+        {"start_beat":2.0,"end_beat":4.0,"bpm":96.0},
+        {"start_beat":4.0,"end_beat":6.0,"bpm":60.0}]
+    check(is_equal_approx(Tempo.bpm_at_beat(-1.0,40.0,map),40.0)
+        and is_equal_approx(Tempo.bpm_at_beat(1.9,40.0,map),48.0)
+        and is_equal_approx(Tempo.bpm_at_beat(2.0,40.0,map),96.0)
+        and is_equal_approx(Tempo.bpm_at_beat(5.0,40.0,map),60.0),
+        "Streaming velocity tracks authored variable-tempo sections exactly")
+    var varying := Flow.new()
+    varying.sample(1000,Tempo.bpm_at_beat(-2.0,40.0,map))
+    varying.sample(2000,Tempo.bpm_at_beat(0.0,40.0,map))
+    varying.sample(3000,Tempo.bpm_at_beat(2.0,40.0,map))
+    check(is_equal_approx(varying.project(4000),40.0/60.0+48.0/60.0+96.0/60.0),
+        "Tempo changes modify only forward velocity, never the world origin")
     print("CONTINUOUS_SCORE_FLOW_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

@@ -1098,7 +1098,7 @@ func _draw() -> void:
         # Beat breathing is an accent on the fixed playhead, not a moving
         # alternate clock. Music, retry preparation and calibration each
         # retain the application's single beat axis.
-        var rhythmic: bool = (running and not paused) or (
+        var rhythmic: bool = stream_enabled or (running and not paused) or (
             score_loop_enabled and not practice_preparation.is_empty() and not paused)
         if rhythmic:
             var beat_axis := (stream_world_beat if stream_enabled else

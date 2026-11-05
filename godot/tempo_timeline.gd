@@ -26,6 +26,26 @@ static func seconds_at_beat(beat: float, nominal_bpm: float, segments: Array) ->
     return elapsed + (beat - final_beat) * 60.0 / final_bpm
 
 
+# Current source velocity. Keep the perpetual score stream faithful to
+# authored variable tempo while its position remains independent of seeks.
+static func bpm_at_beat(beat: float, nominal_bpm: float,
+        segments: Array) -> float:
+    var selected: float = maxf(1.0, nominal_bpm)
+    if beat < 0.0 or segments.is_empty():
+        return selected
+    for raw in segments:
+        var segment: Dictionary = raw
+        var start: float = float(segment.get("start_beat",0.0))
+        var end: float = float(segment.get("end_beat",start))
+        var speed: float = maxf(1.0,float(segment.get("bpm",selected)))
+        if beat < start:
+            return selected
+        selected = speed
+        if beat < end:
+            return selected
+    return selected
+
+
 static func beat_at_seconds(seconds: float, nominal_bpm: float, segments: Array) -> float:
     var nominal: float = maxf(1.0, nominal_bpm)
     if segments.is_empty() or seconds <= 0.0:

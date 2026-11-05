@@ -877,7 +877,11 @@ func _process(_delta: float) -> void:
         _request_library()
     var ticks: int = Time.get_ticks_msec()
     var beat: float = _transport_beat_at(ticks)
-    score_flow.sample(ticks,float(last_state.get("bpm",40.0)))
+    var source_bpm: float = float(last_state.get("bpm",40.0))
+    if bool(last_state.get("running",false)) or bool(last_state.get("paused",false)):
+        source_bpm = TempoTimeline.bpm_at_beat(beat,source_bpm,
+            last_state.get("tempo_segments",[]))
+    score_flow.sample(ticks,source_bpm)
     score_effects.prune_expired(ticks)
     _read_live_midi()
     _update_count_in(beat,ticks)
