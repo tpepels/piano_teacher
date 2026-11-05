@@ -125,6 +125,10 @@ func _draw() -> void:
     # Future preloaded steps still retain their on-score markers below.
     # A preloaded next stage can project directly onto the current marker.
     # Its note ink remains visible; only the duplicate caption is suppressed.
-    if is_finite(next_x) and next_x >= -10.0 and next_x < size.x-10.0 and (
+    # Keep future-stage pins off the fixed playhead. A pin projected only a
+    # few pixels from the glowing strike looked like a stray dot above it.
+    var playhead_x: float = size.x * ScoreView.PLAYHEAD_FRACTION
+    if is_finite(next_x) and next_x >= playhead_x + 110.0 and (
+            next_x < size.x - 10.0) and (
             not current_visible or markers_separated(current_x,next_x)):
         _marker(_next_start,FUTURE,_next_density,_beat)
