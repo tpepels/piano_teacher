@@ -8,6 +8,7 @@ const StepTimeline := preload("res://score_step_timeline.gd")
 class MockView:
     extends Control
     signal retained_ink_compiled
+    var stream_enabled := false
     var native_ready := true
     var runway_origin_beat := 0.0
     var runway_cutoff_beat := INF
