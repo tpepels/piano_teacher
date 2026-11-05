@@ -44,6 +44,12 @@ func _initialize() -> void:
     view.clear_score()
     if not is_same(view.timeline,view.layout.timeline):
         failures += 1
+    # Regression for the observed one-frame jump/pop: a new retained score
+    # pass is hidden until its first placement on the moving world timeline.
+    view._stream_add_take(0.0,14.0,0.0,4.0,"prepared")
+    if view.stream_passes.is_empty() or \
+            bool(view.stream_passes[0]["clip"].visible):
+        failures += 1
     view.free()
     print("SCORE_LAYOUT_FAILURES:",failures)
     quit(0 if failures==0 else 1)

@@ -532,6 +532,9 @@ func _stream_add_take(source_beat: float, start_world: float,
         retained_repeat_segments.append(choice)
     var clip := Control.new()
     clip.name = "StreamPassWindow"
+    # A CanvasItem must NEVER render once at (0,0) while its retained ink
+    # is being reparented. Publication follows the computed world transform.
+    clip.visible = false
     clip.clip_contents = true
     clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
     clip.focus_mode = Control.FOCUS_NONE
@@ -563,6 +566,7 @@ func _stream_add_rest(world: float, duration: float, owner_serial: int) -> void:
     var rest = _new_retained_segment("rest")
     var window := Control.new()
     window.name = "StreamSemanticRest"
+    window.visible = false
     window.clip_contents = true
     window.mouse_filter = Control.MOUSE_FILTER_IGNORE
     window.focus_mode = Control.FOCUS_NONE
@@ -801,6 +805,8 @@ func _project_stream(playhead_x: float) -> void:
         clip.position = Vector2(position+bounds.x,0.0)
         clip.size = Vector2(maxf(1.0,bounds.y-bounds.x),size.y)
         segment.position = Vector2(-bounds.x,0.0)
+        # Unhide ONLY after both parent crop and source translation exist.
+        clip.visible = segment.compiled
         if segment.compiled:
             used[segment] = true
             var count: int = RetainedNoteProjection.append_visible(
