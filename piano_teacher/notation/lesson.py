@@ -521,13 +521,17 @@ def _readable_clef(notes, explicit, hand):
     if not pitches:
         best = 'G' if hand == 'right' else 'F'
     if explicit is not None:
+        # Notation-authored clefs are authoritative even when the sounding
+        # register is unusual. Never silently replace an explicit F/G/C
+        # with a MIDI heuristic: it shifts every engraved note vertically.
         if explicit.sign not in ('G','F','C'):
             raise ValueError(f'Unsupported source clef {explicit.sign}')
-        if explicit.sign in ('G','F') and explicit.line == (2 if explicit.sign == 'G' else 4):
-            if explicit.octave_change not in (-1,0,1):
-                raise ValueError('Unsupported clef octave change')
-            if not pitches or cost(explicit.sign, explicit.octave_change) <= cost(best)+12:
-                return {'sign':explicit.sign,'line':explicit.line,'octave_change':explicit.octave_change}
+        if not 1 <= explicit.line <= 5:
+            raise ValueError(f'Unsupported source clef line {explicit.line}')
+        if explicit.octave_change not in (-1,0,1):
+            raise ValueError('Unsupported clef octave change')
+        return {'sign':explicit.sign,'line':explicit.line,
+                'octave_change':explicit.octave_change}
     return {'sign':best,'line':2 if best == 'G' else 4,'octave_change':0}
 
 
