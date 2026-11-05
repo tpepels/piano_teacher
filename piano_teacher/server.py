@@ -1959,11 +1959,13 @@ class PracticeEngine:
             "scheduled_origin_before": previous_origin-self.measurement.origin,
             "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,
             "shift_run_at": shift_run_at})
+        resumed_count_in = self.running and (
+            now < self.visual_transport.run_at or now < self._resume_grading_after)
         self.measurement.phase_changed("guided" if learning else
-            "count_in" if self.running and now < self.visual_transport.run_at else "active", now)
+            "count_in" if resumed_count_in else "active", now)
         self.pause_context = None
         if self.running:
-            self.feedback = "Count in" if now < self.visual_transport.run_at else "Playing"
+            self.feedback = "Count in" if resumed_count_in else "Playing"
         if self._deferred_score_ack is not None:
             revision = self._deferred_score_ack
             self._deferred_score_ack = None
