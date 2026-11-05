@@ -202,8 +202,8 @@ func run() -> void:
     markers.set_density(97.0)
     markers.present({"loaded":true,"lesson_step":2,"lesson_steps":3},
         overlay_beat,12.17,24.0,"Next source",160.0)
-    # Native future score: .42*width + (first_attack-(global - origin))*future_density
-    var future_note_x: float = 900.0*.42 + (2.25-(overlay_beat-21.75))*160.0
+    # Native future score: .33*width + (first_attack-(global - origin))*future_density
+    var future_note_x: float = 900.0*.33 + (2.25-(overlay_beat-21.75))*160.0
     check(absf(StepTimeline.marker_x(markers._next_start,overlay_beat,
             markers._next_density,markers.size.x)-future_note_x) < .0001 and
           markers._density == 97.0 and markers._next_density == 160.0,
