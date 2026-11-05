@@ -139,7 +139,9 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     if is_instance_valid(stage.renderer):
         _future.external_backdrop = stage.renderer.external_backdrop
         _future.compact_inactive_staff = stage.renderer.compact_inactive_staff
-        _future.active_hand = stage.renderer.active_hand
+        # Use the NEXT stage's published hand, not the current stage's hand.
+        # Pre-engraving must already occupy the eventual single-staff lane.
+        _future.active_hand = str(value.get("hand","both"))
     # Preserve the active learner's horizontal density setting across
     # precompiled stages; retain native collision fitting if it needs more.
     if is_instance_valid(stage.renderer):
