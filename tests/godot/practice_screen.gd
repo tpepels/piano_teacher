@@ -220,22 +220,30 @@ func run() -> void:
                 view.show_resume_prompt(previous,true)
                 check(view.is_resume_prompt_open() and view.resume_measure_button.visible,
                     "Reopening a saved song offers contextual overlap and a measure chooser")
-                check(view.resume_prompt.dialog_text.contains("14 of 639"),
-                    "Review choice shows the exact saved step")
-                view.resume_prompt.confirmed.emit()
-                check(intents.back() == {"action":"select_step","number":12},
-                    "Review returns two steps without clearing mastery or changing the source")
-                view.resume_prompt.hide()
+                check(view.resume_banner_message.text.contains("14 of 639"),
+                    "Inline review displays the saved step")
+                check(not view.handle_source_input(InputEventKey.new()),
+                    "Inline review cannot intercept keyboard transport")
+                view.resume_review_button.pressed.emit()
+                check(intents.back() == {"action":"select_step","number":12}
+                    and not view.is_resume_prompt_open(),
+                    "Inline review chooses two steps back without changing mastery")
                 intents.clear()
                 view.show_resume_prompt(previous,false)
                 check(view.is_resume_prompt_open() and not view.resume_measure_button.visible,
-                    "Recent-song Continue keeps the saved source; measure choice is optional")
-                view.resume_prompt.canceled.emit()
-                view.resume_prompt.hide()
-                check(intents == ["practice"] and view._resume_open_state.is_empty(),
-                    "Continue keeps the saved position without a navigation command")
+                    "Continue keeps the saved source; measure choice is optional")
+                view.resume_continue_button.pressed.emit()
+                check(intents == ["practice"] and view._resume_open_state.is_empty()
+                    and not view.is_resume_prompt_open(),
+                    "Keep my place dismisses without an engine command")
+                view.show_resume_prompt(previous,false)
+                var play_count := 0
+                view.play_requested.connect(func(): play_count += 1)
+                view.start_button.pressed.emit()
+                check(play_count == 1 and not view.is_resume_prompt_open(),
+                    "Normal Play dismisses inline review and actually starts")
                 view.show_resume_prompt(previous,true)
-                view.resume_prompt.custom_action.emit("measure")
+                view.resume_measure_button.pressed.emit()
                 check(view.is_source_picker_open() and not view.is_resume_prompt_open(),
                     "Alternate starting measure reuses the existing source picker")
                 view.cancel_source_picker()

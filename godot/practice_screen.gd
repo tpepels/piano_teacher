@@ -57,7 +57,10 @@ var practice_settings_button: Button
 var open_picker: Control
 var pause_sheet: Control
 var review_sheet: AcceptDialog
-var resume_prompt: ConfirmationDialog
+var resume_banner: PanelContainer
+var resume_banner_message: Label
+var resume_review_button: Button
+var resume_continue_button: Button
 var resume_measure_button: Button
 var _resume_open_state: Dictionary = {}
 var advanced_pause_open := false
@@ -145,6 +148,29 @@ func _ready() -> void:
     game_input_indicator = GameInputIndicator.new()
     lesson_info_label = UI.label("", 14, MUTED)
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    # Saved progress offers an unobtrusive, non-modal inline choice. It does
+    # not intercept the transport, keyboard shortcuts or score input.
+    resume_banner = PanelContainer.new()
+    resume_banner.name = "ResumePracticeChoice"
+    resume_banner.visible = false
+    resume_banner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    resume_banner.add_theme_stylebox_override("panel",
+        Design.bordered_surface(Design.CHARCOAL,6,.32))
+    add_child(resume_banner)
+    var resume_row := HBoxContainer.new()
+    resume_row.add_theme_constant_override("separation",8)
+    resume_banner.add_child(resume_row)
+    resume_banner_message = UI.label("",13,MUTED)
+    resume_banner_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    resume_banner_message.clip_text = true
+    resume_banner_message.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    resume_row.add_child(resume_banner_message)
+    resume_review_button = _button("Review 2 steps",_review_previous_steps,false,"secondary")
+    resume_row.add_child(resume_review_button)
+    resume_continue_button = _button("Keep my place",_dismiss_resume_hint,false,"utility")
+    resume_row.add_child(resume_continue_button)
+    resume_measure_button = _button("Choose measure",_resume_choose_measure,false,"utility")
+    resume_row.add_child(resume_measure_button)
     stage = ScoreStage.new()
     add_child(stage)
     stage.navigation_requested.connect(func(destination: String): navigation_requested.emit(destination))
@@ -267,7 +293,9 @@ func _ready() -> void:
     practice_retry_button = _transport_button("Retry", func(): retry_requested.emit(), "retry")
     practice_retry_button.tooltip_text = "Repeat the current passage · R"
     controls.add_child(practice_retry_button)
-    start_button = _transport_button("Play", func(): play_requested.emit(), "play", true)
+    start_button = _transport_button("Play", func():
+        _dismiss_resume_hint()
+        play_requested.emit(), "play", true)
     controls.add_child(start_button)
     listen_button = _transport_button("Listen", func(): listen_requested.emit(), "listen")
     listen_button.tooltip_text = "Hear this passage, or return to practice · L"
@@ -288,20 +316,7 @@ func _ready() -> void:
             command_requested.emit({"action":"stop"})
             navigation_requested.emit("library")
         else: command_requested.emit(command))
-    # A remembered song offers a short overlap before the saved position.
-    # Nothing in the modal can award mastery or erase stored progress.
-    resume_prompt = ConfirmationDialog.new()
-    resume_prompt.name = "ResumePracticeChoice"
-    resume_prompt.title = "Continue your practice"
-    resume_prompt.ok_button_text = "Review previous 2 steps"
-    resume_prompt.cancel_button_text = "Continue where I left off"
-    resume_prompt.confirmed.connect(_review_previous_steps)
-    resume_prompt.canceled.connect(func(): _resume_open_state.clear())
-    resume_prompt.close_requested.connect(func(): _resume_open_state.clear())
-    resume_measure_button = resume_prompt.add_button(
-        "Choose another measure", false, "measure")
-    resume_prompt.custom_action.connect(_on_resume_custom_action)
-    add_child(resume_prompt)
+    # The resume choice above is inline, never a blocking Window.
     review_sheet = preload("res://review_sheet.gd").new()
     modal_layer.add_child(review_sheet)
     review_sheet.retry_requested.connect(func(first_bar: int, last_bar: int):
@@ -705,7 +720,13 @@ func is_source_picker_open() -> bool:
 
 
 func is_resume_prompt_open() -> bool:
-    return resume_prompt != null and resume_prompt.visible
+    return resume_banner != null and resume_banner.visible
+
+
+func _dismiss_resume_hint() -> void:
+    if resume_banner != null:
+        resume_banner.hide()
+    _resume_open_state.clear()
 
 
 func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
@@ -718,32 +739,31 @@ func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
     suppress_piano_input(state)
     _resume_open_state = state.duplicate(true)
     resume_measure_button.visible = allow_measure
-    resume_prompt.dialog_text = ("Last time you reached step %d of %d. "
-        + "Review the previous two exercises before continuing, "
-        + "or resume the saved step. Your earlier progress is preserved.") % [
-            step, int(state.get("lesson_steps",step))]
-    resume_prompt.popup_centered(Vector2i(460,190))
+    resume_banner_message.text = "Saved at step %d of %d · Review the previous two?" % [
+        step,int(state.get("lesson_steps",step))]
+    resume_banner_message.tooltip_text = "Your earlier progress is preserved. Play to continue the saved step."
+    resume_banner.show()
 
 
 func _review_previous_steps() -> void:
     if _resume_open_state.is_empty():
         return
     var step: int = int(_resume_open_state.get("lesson_step",1))
-    _resume_open_state.clear()
+    _dismiss_resume_hint()
     command_requested.emit({"action":"select_step","number":maxi(1,step-2)})
 
 
-func _on_resume_custom_action(action: String) -> void:
-    if action != "measure" or _resume_open_state.is_empty():
+func _resume_choose_measure() -> void:
+    if _resume_open_state.is_empty():
         return
     var state := _resume_open_state.duplicate(true)
-    _resume_open_state.clear()
-    resume_prompt.hide()
+    _dismiss_resume_hint()
     show_source_picker(state)
 
 func show_source_picker(state: Dictionary) -> void:
     navigation_requested.emit("practice")
     suppress_piano_input(state)
+    _dismiss_resume_hint()
     open_picker.show_piece(state)
 
 func cancel_source_picker() -> void:
@@ -767,7 +787,7 @@ func consider_piano_start(polled: bool, active: bool) -> void:
     _fresh_piano_key = false
     var phase: String = str(_state.get("phase",""))
     if (not fresh or not polled or not active or _busy or not _score_ready or
-            is_source_picker_open() or is_resume_prompt_open()
+            is_source_picker_open()
             or int(_previous_state.get("revision",-1)) != int(_state.get("revision",-1))
             or str(_previous_state.get("phase","")) != phase or str(_state.get("device","")).is_empty()): return
     if phase in ["ready","performance_complete","guided_complete"] or (phase == "feedback" and str(_state.get("mode","")) == "practice" and not bool(_state.get("auto",false))):
@@ -919,8 +939,6 @@ func _button(caption: String, action: Callable, primary := false, role := "") ->
     return button
 
 func handle_source_input(event: InputEvent) -> bool:
-    if is_resume_prompt_open():
-        return event is InputEventKey
     if not is_source_picker_open(): return false
     if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_ESCAPE:

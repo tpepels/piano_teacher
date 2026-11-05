@@ -618,6 +618,27 @@ func _stream_add_take(source_beat: float, start_world: float,
     })
 
 
+func _stream_lookahead_beats() -> float:
+    # Fill the visible right-hand staff, including dense slow-tempo music.
+    # The old fixed 3.5-beat horizon exposed the next clipped notehead
+    # inside the viewport, then grew its stem a few pixels every frame.
+    return maxf(StreamAdmission.LOOKAHEAD_BEATS,
+        size.x*(1.0-PLAYHEAD_FRACTION)/
+        maxf(1.0,timeline.pixels_per_beat)+1.0)
+
+
+func _stream_complete_measure(requested: float) -> float:
+    # Never cut the right edge of retained ink in the middle of a beamed
+    # figure. The registered interval includes the whole last measure;
+    # admission never injects partial glyphs at a moving horizon.
+    var result: float = minf(timeline.duration_beats,requested)
+    for measure in timeline.measures:
+        var ending: float = float(measure.get("end_beat",0.0))
+        if ending >= result-.0001:
+            return minf(timeline.duration_beats,ending)
+    return timeline.duration_beats
+
+
 func _stream_prune_expired() -> void:
     # Scene-tree mutations belong to the frame coordinator, never _draw().
     # The GPU command-list pass only translates retained CanvasItems.
@@ -680,8 +701,8 @@ func present_flow(world_beat: float, state: Dictionary,
                 if int(item["serial"]) == _stream_live_serial:
                     # A retained score copy never crosses the next separately
                     # reserved copy on the global timeline.
-                    var extension: float = minf(timeline.duration_beats,
-                        source + StreamAdmission.LOOKAHEAD_BEATS)
+                    var extension: float = _stream_complete_measure(
+                        source+_stream_lookahead_beats())
                     for other in stream_passes:
                         if int(other["serial"]) == _stream_live_serial:
                             continue
@@ -701,10 +722,11 @@ func present_flow(world_beat: float, state: Dictionary,
         if _stream_live_serial < 0:
             var admission: Dictionary = StreamAdmission.window(
                 source,opening,timeline.duration_beats,
-                stream_world_beat,stream_passes)
+                stream_world_beat,stream_passes,_stream_lookahead_beats())
             if bool(admission["admit"]):
                 _stream_add_take(source,stream_world_beat,
-                    float(admission["floor"]),float(admission["ceiling"]),key)
+                    float(admission["floor"]),
+                    _stream_complete_measure(float(admission["ceiling"])),key)
                 _stream_last_take = key
                 _stream_was_paused = false
     elif not paused_now:
@@ -727,10 +749,16 @@ func _project_stream(playhead_x: float) -> void:
             float(item["world_origin"])-stream_world_beat)*density
         var floor_x: float = float(item["source_floor"])*density
         var ceiling_x: float = float(item["source_ceiling"])*density
-        var clip_x: float = position+floor_x
-        clip.position = Vector2(clip_x,0.0)
-        clip.size = Vector2(maxf(1.0,ceiling_x-floor_x),size.y)
-        segment.position = Vector2(-floor_x,0.0)
+        var bounds: Vector2 = StreamAdmission.engraved_clip_bounds(
+            float(item["source_floor"]),float(item["source_ceiling"]),
+            density,staff_gap())
+        # Physical crop extends beyond semantic attacks. The extra prefix
+        # contains the real initial clef/key/meter; the extra suffix contains
+        # full noteheads and barline ink. Grading and hit-tests stay bounded
+        # by source_floor/source_ceiling, never by the padding.
+        clip.position = Vector2(position+bounds.x,0.0)
+        clip.size = Vector2(maxf(1.0,bounds.y-bounds.x),size.y)
+        segment.position = Vector2(-bounds.x,0.0)
         if segment.compiled:
             used[segment] = true
             var count: int = RetainedNoteProjection.append_visible(

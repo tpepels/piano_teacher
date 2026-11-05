@@ -32,7 +32,8 @@ static func reading_lead_seconds(passes: Array, world: float, bpm: float) -> flo
     return minf(MAX_READING_SECONDS,beats*60.0/maxf(1.0,bpm))
 
 static func window(source: float, opening: float, duration: float,
-        world: float, passes: Array = []) -> Dictionary:
+        world: float, passes: Array = [],
+        lookahead_beats: float = LOOKAHEAD_BEATS) -> Dictionary:
     if not is_finite(source) or not is_finite(opening) or \
             not is_finite(duration) or not is_finite(world):
         return {"admit":false, "floor":0.0, "ceiling":0.0}
@@ -42,9 +43,20 @@ static func window(source: float, opening: float, duration: float,
     var origin: float = world-source
     var floor: float = maxf(maxf(0.0,opening),
         next_safe_world(passes,world)-origin)
-    var ceiling: float = minf(duration,source+LOOKAHEAD_BEATS)
+    var ceiling: float = minf(duration,source+maxf(LOOKAHEAD_BEATS,lookahead_beats))
     return {"admit":ceiling > floor+.0001,
         "floor":floor, "ceiling":ceiling}
+
+static func engraved_clip_bounds(floor: float, ceiling: float,
+        pixels_per_beat: float, staff_gap: float) -> Vector2:
+    # Verovio prints the first clef, key and time signature LEFT of source
+    # beat zero. Cropping a source copy at beat zero discards the whole header
+    # and half of the first notehead. Nonopening boundaries also need space
+    # for shifted noteheads/accidentals; the end needs its engraved barline.
+    var leading: float = staff_gap * (15.0 if floor <= .0001 else 1.6)
+    var trailing: float = staff_gap * 2.2
+    return Vector2(floor*pixels_per_beat-leading,
+        ceiling*pixels_per_beat+trailing)
 
 static func collision_pairs(passes: Array, notes: Array,
         world: float, pixels_per_beat: float, tolerance_px: float = 12.0) -> Array:
