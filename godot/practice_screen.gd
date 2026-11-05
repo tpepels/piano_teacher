@@ -12,6 +12,7 @@ const GameStreak := preload("res://game_streak.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
 const PerformanceReviewStrip := preload("res://performance_review_strip.gd")
 const ScoreStage := preload("res://practice_score_stage.gd")
+const ObjectiveGlyph := preload("res://practice_objective_glyph.gd")
 signal navigation_requested(destination: String)
 signal command_requested(command: Dictionary)
 signal play_requested
@@ -210,7 +211,13 @@ func _ready() -> void:
     detail_row.add_child(objective_panel)
     var objective := UI.stack(4)
     UI.card_body(objective_panel,0).add_child(objective)
-    objective.add_child(UI.title("Current exercise",16))
+    var objective_heading := HBoxContainer.new()
+    objective_heading.add_theme_constant_override("separation",10)
+    objective.add_child(objective_heading)
+    objective_heading.add_child(ObjectiveGlyph.new())
+    var objective_title := UI.title("Current exercise",16)
+    objective_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    objective_heading.add_child(objective_title)
     objective.add_child(_caption_slot(lesson_info_label, 1))
     objective.add_child(_caption_slot(feedback_label, 1))
     performance_metrics = preload("res://practice_metrics.gd").new()
@@ -285,8 +292,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         return
     title_label.text = str(parsed.get("title", "Piano Teacher")).replace("_", " ")
     var kind := str(parsed.get("kind", "learn")).capitalize()
-    var passage_text: String = ("%s · Measures %d–%d" % [
-        kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))])
+    var first_bar := int(parsed.get("first_bar",0))
+    var last_bar := int(parsed.get("last_bar",0))
+    var passage_text: String = ("%s · Measure %d" % [kind,first_bar]
+        if first_bar == last_bar
+        else "%s · Measures %d–%d" % [kind,first_bar,last_bar])
     if bool(parsed.get("warmup", false)):
         var hand_step: int = (["left", "right", "both"].find(str(parsed.get("hand", "left"))) + 1)
         passage_text = "WARM-UP %d/3 · %s · Measures %d–%d" % [
@@ -714,8 +724,8 @@ func _game_button(button: Button, central := false) -> void:
     normal.set_content_margin_all(12)
     normal.set_border_width_all(1)
     normal.border_color = Color(accent, .7 if central else .22)
-    normal.shadow_color = Color(Design.MINT, .10) if central else Color.TRANSPARENT
-    normal.shadow_size = 10 if central else 0
+    normal.shadow_color = Color(Design.MINT, .26) if central else Color.TRANSPARENT
+    normal.shadow_size = 14 if central else 0
     button.add_theme_stylebox_override("normal", normal)
     var hover := normal.duplicate() as StyleBoxFlat
     hover.bg_color = normal.bg_color.lightened(.16)

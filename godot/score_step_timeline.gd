@@ -124,8 +124,9 @@ func _draw() -> void:
     var next_x := marker_x(_next_start,_beat,_next_density,size.x) if is_finite(_next_start) else INF
     var current_visible := is_finite(current_x) and current_x >= -10.0 and current_x < size.x-10.0
     if current_visible:
-        _marker(_current_start,"STEP %d/%d" % [_step,_total],
-            INK,_density,_current_beat)
+        var now_label := ("NOW · %d/%d" if _current_beat >= _current_start
+            else "STEP · %d/%d") % [_step,_total]
+        _marker(_current_start,now_label,INK,_density,_current_beat)
     # A preloaded next stage can project directly onto the current marker.
     # Its note ink remains visible; only the duplicate caption is suppressed.
     if is_finite(next_x) and next_x >= -10.0 and next_x < size.x-10.0 and (

@@ -260,24 +260,27 @@ func _draw() -> void:
         var filled: float = clampf((played-left_beat) / maxf(.001, right_beat-left_beat), 0.0, 1.0)
         var current: bool = measure_boundaries.size() >= 2 and (
             played >= left_beat-.001 and played < right_beat-.001)
-        if current:
-            # Distinguish selected from completed. The glow marks the measure
-            # being played; only the filled fraction represents earned time.
-            draw_rect(Rect2(segment_x-2.0,track_y-4.0,segment_width+4.0,15.0),
-                Color(Design.MINT,.13),true)
-        draw_rect(Rect2(segment_x,track_y,segment_width,7.0),
-            Color(Design.SAGE,.43),true)
+        draw_rect(Rect2(segment_x,track_y,segment_width,6.0),
+            Color(Design.SAGE,.37),true)
         if filled > 0.0:
-            draw_rect(Rect2(segment_x,track_y,segment_width*filled,7.0),
-                Color(fill_tone,.92),true)
+            draw_rect(Rect2(segment_x,track_y,segment_width*filled,6.0),
+                Color(fill_tone,.94),true)
         if current:
-            draw_rect(Rect2(segment_x,track_y,segment_width,7.0),
-                Color(Design.HIGHLIGHT,.82),false,1.3)
+            # For a one-measure exercise, lighting its entire full-width
+            # rail looked like a border. Keep the cue at the real play point.
             var played_x := clampf(segment_x+segment_width*filled,
                 segment_x,segment_x+segment_width)
-            draw_circle(Vector2(played_x,track_y+3.5),6.0,Color(Design.MINT,.18))
-            draw_circle(Vector2(played_x,track_y+3.5),3.2,Design.HIGHLIGHT)
+            var halo_width := minf(segment_width,78.0)
+            var halo_left := clampf(played_x-halo_width*.5,segment_x,
+                segment_x+segment_width-halo_width)
+            draw_rect(Rect2(halo_left,track_y-3.0,halo_width,12.0),
+                Color(Design.MINT,.11),true)
+            draw_circle(Vector2(played_x,track_y+3.0),6.0,
+                Color(Design.MINT,.23))
+            draw_circle(Vector2(played_x,track_y+3.0),3.2,Design.HIGHLIGHT)
         if segment_width >= 18.0:
-            var marker := Vector2(segment_x+segment_width*.5,track_y+3.5)
-            draw_circle(marker,4.6,fill_tone if filled >= 1.0 else Design.HIGHLIGHT if current else Design.SAGE)
+            var marker := Vector2(segment_x+segment_width*.5,track_y+3.0)
+            draw_circle(marker,4.4,
+                fill_tone if filled >= 1.0 else
+                Design.MINT if current else Design.SAGE)
             draw_circle(marker,2.0,Design.STAGE)
