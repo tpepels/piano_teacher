@@ -41,6 +41,7 @@ def test_invalid_review_does_not_interrupt_running_take(tmp_path):
     app = PracticeEngine(tmp_path, enable_midi=False)
     try:
         app.plan = LearningPlan(piece)
+        app.fingerprint = "invalid-remedial-review-fixture"
         app.start()
         before = (app.running, app.transport_id, app.visual_transport.run_at, app.mode)
         assignment = SimpleNamespace(
