@@ -69,6 +69,16 @@ for scenario in captions signals score_gate intro_markers source_picker midi_gua
   timeout 15s "$binary" --headless --path godot \
     --script "$PWD/tests/godot/practice_screen.gd" -- "$scenario"
 done
+for scenario in preferences tempo_draft signals pickers layout; do
+  echo "Checking Settings: $scenario"
+  timeout 15s "$binary" --headless --path godot \
+    --script "$PWD/tests/godot/settings_ownership.gd" -- "$scenario"
+done
+for scenario in overview choices reset layout; do
+  echo "Checking Lesson Path: $scenario"
+  timeout 15s "$binary" --headless --path godot \
+    --script "$PWD/tests/godot/lesson_ownership.gd" -- "$scenario"
+done
 for contract in publication stale retry failure native; do
   echo "Checking Godot score-session contract: $contract"
   timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/score_asset_session.gd" -- "$contract"
