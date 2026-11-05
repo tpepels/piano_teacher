@@ -127,6 +127,8 @@ static func role_fill(role: String, selected: bool = false) -> Color:
             return PANEL_RECESSED
         "secondary":
             return PANEL_RAISED
+        "practice_tempo":
+            return Color("#0A2925")
         _:
             return Color(PANEL_RECESSED, .25)
 
