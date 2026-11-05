@@ -2,6 +2,8 @@ extends Control
 # Presentation only. Python owns assessment; the native compositor owns every
 # notehead position. This layer never uses legacy page coordinates or grades.
 const Design := preload("res://practice_theme.gd")
+const ScoreView := preload("res://notation/shared/view_base.gd")
+const GlowField := preload("res://mint_glow_field.gd")
 const MAX_PULSES := 24
 # Only confirmed assessment states persist for the current transport take.
 # Provisional MIDI onsets are brief pulses and never count as graded success.
@@ -20,10 +22,20 @@ var last_sequence := 0
 var moving := false
 var acknowledged_until_ms := 0
 var acknowledged_sequence := 0
+var note_glow: ColorRect
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_process(false)
+
+func _ready() -> void:
+    note_glow = GlowField.new()
+    note_glow.name = "NoteReactionBloom"
+    note_glow.show_behind_parent = true
+    note_glow.configure(2,1.52,Design.MINT)
+    note_glow.visible = false
+    add_child(note_glow)
+
 
 func bind_score(renderer: Control, revision: int) -> void:
     if is_instance_valid(score) and score.draw.is_connected(_score_repainted):
@@ -40,6 +52,8 @@ func bind_score(renderer: Control, revision: int) -> void:
     pulses.clear()
     acknowledged_until_ms = 0
     acknowledged_sequence = 0
+    if note_glow != null:
+        note_glow.visible = false
     for event in renderer.layout.ordered_events:
         var id := str(event.get("id", ""))
         if id.is_empty() or str(event.get("kind","note")) != "note":
@@ -184,18 +198,23 @@ func _paint_head(id: String, point: Vector2, gap: float,
 
 func _draw() -> void:
     if not is_instance_valid(score) or not score.is_visible_in_tree():
+        if note_glow != null:
+            note_glow.visible = false
         return
     var gap: float = score.staff_gap()
+    var flare_position := Vector2.INF
+    var flare_tone := Design.MINT
     # The fixed playhead itself acknowledges accepted MIDI attacks in mint.
     # The cue is immediate and provisional; held-duration grading is later.
     var ack_left: int = acknowledged_until_ms - Time.get_ticks_msec()
     if ack_left > 0:
         var life := clampf(float(ack_left)/230.0, 0.0, 1.0)
-        var cursor_x := size.x * .42
-        draw_line(Vector2(cursor_x, size.y*.16),
-            Vector2(cursor_x, size.y*.83),
+        var cursor_x := size.x * ScoreView.PLAYHEAD_FRACTION
+        var line: Rect2 = score.playhead_region()
+        draw_line(Vector2(cursor_x,line.position.y),
+            Vector2(cursor_x,line.end.y),
             Color(Design.MINT, .85*life), 4.0, true)
-        draw_circle(Vector2(cursor_x, size.y*.16), 5.0+life*3.0,
+        draw_circle(Vector2(cursor_x,line.position.y), 5.0+life*3.0,
             Color(Design.MINT, life))
     # Bound work to the compositor's visible window, even on long lessons.
     for id in score.drawn_noteheads:
@@ -227,3 +246,13 @@ func _draw() -> void:
         draw_arc(p,gap*.87,0,TAU,40,Color(tone,life*.95),2.0,true)
         if not markers.has(str(pulse.id)):
             _paint_head(str(pulse.id),p,gap,tone,life*.94)
+        if life > .03:
+            flare_position = p
+            flare_tone = tone
+    if note_glow != null:
+        var light_on: bool = is_finite(flare_position.x)
+        note_glow.visible = light_on
+        if light_on:
+            note_glow.position = flare_position-Vector2(43.0,35.0)
+            note_glow.size = Vector2(86.0,70.0)
+            note_glow.configure(2,1.52,flare_tone)
