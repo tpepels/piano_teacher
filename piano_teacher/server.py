@@ -160,6 +160,9 @@ class PracticeEngine:
         self.performance_summary: dict | None = None
         self.review_stage_identity: str | None = None
         self.review_end_beat: float | None = None
+        # Automatic remedial sections are timed source reviews, never an
+        # input-blocking lesson. A partial review never awards mastery.
+        self._automatic_remedial_review = False
         self.review_session_complete = False
         self.course_guided = False
         self._guided_prepared = False
@@ -1037,6 +1040,7 @@ class PracticeEngine:
         self.performance_summary=None
         self.review_stage_identity=None
         self.review_end_beat=None
+        self._automatic_remedial_review=False
         self.review_session_complete=False
         self._guided_prepared=False
         self._remediation_pending = None
@@ -2135,7 +2139,7 @@ class PracticeEngine:
                 self._apply_policy_response(selected_retry[1], now=now, deadline=deadline)
                 return
             if route == "remediation":
-                self._start_remedial_assignment(assignment)
+                self._start_remedial_assignment(assignment,deadline=deadline)
                 return
             if route == "guided_stage":
                 self._begin_course_stage()
@@ -2160,13 +2164,32 @@ class PracticeEngine:
                 self.feedback = message or self.feedback
         return
 
-    def _start_remedial_assignment(self, assignment: RemedialAssignment) -> None:
-        """Enter a source-bound remedial take, with no mastery from partial work."""
+    def _start_remedial_assignment(self, assignment: RemedialAssignment,
+                                   *, deadline: float | None = None) -> None:
+        """Present an automatic remedial range without ever waiting for a key.
+
+        A manually chosen guided lesson keeps the existing note-finding flow.
+        An automatic rhythmic session always gets a scored, meter-bounded
+        section that returns to the full passage after its recovery rest.
+        """
         if self.plan is None or assignment.stage_key != self.plan.identity:
             return
-        # A malformed interval must not cancel the current session.
-        review = (None if assignment.guided else plan_timed_remedial_review(
-            assignment, self.plan.active_phrase, self.plan.piece.bar_boundaries))
+        automatic = deadline is not None and self.auto and self.mode == "practice"
+        # Validate the authored source grid before mutating any clock.
+        review = (None if assignment.guided and not automatic else
+                  plan_timed_remedial_review(
+                      assignment,self.plan.active_phrase,self.plan.piece.bar_boundaries))
+        if automatic:
+            self._automatic_remedial_review = True
+            self.open_from_beat = review.start_beat
+            full_end = self.plan.active_phrase.end-self.plan.active_phrase.start
+            self.review_end_beat = (review.end_beat if
+                review.end_beat < full_end-1e-7 else None)
+            self.retry_range = review.retry_range
+            self.feedback = f"Retrying {assignment.focus} with the music still moving"
+            self.next_action = "Play this section, then return to the complete passage."
+            self._continue_at(deadline,from_beat=review.start_beat)
+            return
         if assignment.guided:
             self._begin_learn(
                 from_beat=assignment.start_beat, recovery=True,
@@ -2310,6 +2333,8 @@ class PracticeEngine:
             layout_for_feedback=lambda: self.engraving().layout)
         result = assessed.result
         route = completion_route(self.mode, self.review_end_beat, self.visual_transport.play_from_beat)
+        if self._automatic_remedial_review and route == "section_review":
+            route = "partial_recovery"
         self.measurement.seal(self.recorder.presses if self.recorder else (),
             state="completed", reason=route, result=result,
             eligible=(route == "full_passage" and self.mode == "practice"
@@ -2400,6 +2425,10 @@ class PracticeEngine:
     def _finish_partial_recovery(self, result, now: float):
         """Complete finish partial recovery after a scored take."""
         # A clean *partial* recovery cannot confer full passage mastery.
+        # Clear the bounded review before the scheduled full-pass retry.
+        self.review_end_beat = None
+        self._automatic_remedial_review = False
+        self.open_from_beat = 0.0
         self._schedule_preparation(0.0, now=now,
             from_visual=self.visual_transport.visual_offset_beats + self.visual_transport.play_from_beat
                 + self._elapsed_beat(now-self.visual_transport.run_at),
