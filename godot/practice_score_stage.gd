@@ -7,6 +7,7 @@ const MUTED := Design.SECONDARY_INK
 const ACCENT := Design.TEAL
 const GameStage := preload("res://game_stage.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
+const GlowField := preload("res://mint_glow_field.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameImpactCallout := preload("res://game_impact_callout.gd")
 const GameCountIn := preload("res://game_countin.gd")
@@ -22,6 +23,7 @@ var fingering_status_label: Label
 var score_margin_box: MarginContainer
 var score_frame: Control
 var renderer: Control
+var playhead_glow: ColorRect
 var runway_steps: Control
 var feedback: Control
 var effects: Control
@@ -105,6 +107,11 @@ func _ready() -> void:
     effects = GameStage.new()
     effects.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_frame.add_child(effects)
+    playhead_glow = GlowField.new()
+    playhead_glow.name = "PlayheadBloom"
+    playhead_glow.configure(0,1.35,Color("#54F9B7"))
+    playhead_glow.visible = false
+    score_frame.add_child(playhead_glow)
     renderer = NativeNotation.new()
     renderer.external_backdrop = true
     renderer.compact_inactive_staff = true
@@ -227,6 +234,22 @@ func _ready() -> void:
     practice_note_feedback_panel.add_child(practice_note_feedback_label)
     keyboard = HintKeyboard.new()
     score_region.add_child(keyboard)
+
+
+func present_playhead_glow(score_ready: bool) -> void:
+    if playhead_glow == null or renderer == null or not is_instance_valid(renderer):
+        return
+    var display: bool = score_ready and renderer.visible and renderer.native_ready
+    playhead_glow.visible = display
+    if not display:
+        return
+    var line: Rect2 = renderer.playhead_region()
+    var desired_position := Vector2(line.position.x-94.0,line.position.y-38.0)
+    var desired_size := Vector2(188.0,line.size.y+76.0)
+    if playhead_glow.position != desired_position:
+        playhead_glow.position = desired_position
+    if playhead_glow.size != desired_size:
+        playhead_glow.size = desired_size
 
 
 func present_runway_steps(state: Dictionary, global_visual: float,
