@@ -629,8 +629,13 @@ func present_flow(world_beat: float, state: Dictionary,
         _stream_was_paused = true
     if allow_admission and running_now and phase in ["count_in","playing",
             "guided_wait"] and (key != _stream_last_take or _stream_was_paused):
-        _stream_add_take(source,stream_world_beat,
-            _stream_resume_floor if _stream_was_paused and key == _stream_last_take else 0.0)
+        # Source openings and resume markers are both clip boundaries.
+        # Never reveal measures prior to the learner's selected opening.
+        var opening: float = maxf(0.0,
+            float(state.get("play_from_beat",0.0)))
+        if _stream_was_paused and key == _stream_last_take:
+            opening = maxf(opening,_stream_resume_floor)
+        _stream_add_take(source,stream_world_beat,opening)
         _stream_last_take = key
         _stream_was_paused = false
     queue_redraw()
