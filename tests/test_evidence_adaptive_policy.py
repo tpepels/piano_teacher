@@ -90,9 +90,10 @@ def test_foreign_identity_tempo_or_assisted_history_cannot_trigger_focus():
         assert result.action == "repeat"
 
 
-def test_twelve_corrective_actions_pause_with_no_extra_slowdown():
+def test_twelve_corrective_actions_keep_music_repeating_without_extra_slowdown():
     result = choose(trial(wrong=(4., 5.)), trial(missed=(6.,)), count=12)
-    assert result.action == "pause" and result.bpm == 100 and not result.guided
+    assert result.action == "repeat" and result.bpm == 100 and not result.guided
+    assert result.reason == "automatic_intervention_limit"
 
 
 def test_rolling_inadequate_evidence_continues_without_a_tempo_change():

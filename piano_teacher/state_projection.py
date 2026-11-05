@@ -303,7 +303,7 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "tempo_rungs": list(tempo.rungs), "can_decrease_tempo": tempo.bpm > tempo.minimum_bpm,
         "piece_fingerprint": lesson.fingerprint,
         "minimum_bpm": tempo.minimum_bpm, "maximum_bpm": tempo.maximum_bpm,
-        "can_increase_tempo": tempo.bpm < tempo.target_bpm,
+        "can_increase_tempo": tempo.bpm < tempo.maximum_bpm,
         "mastered": len(lesson.mastered), "phase": snapshot.phase, "auto": timing.auto,
         "take_result": _payload(timing.take_result) if snapshot.mode == "practice" else None,
         "countdown": max(0, -elapsed) if timing.running else 0,

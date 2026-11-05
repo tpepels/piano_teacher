@@ -2199,7 +2199,9 @@ class PracticeEngine:
             decision, identity=self.plan.identity, bpm=self.plan.bpm,
             previous_key=self._trouble_key, previous_count=self._trouble_count,
             grid=grid, first_bar=phrase.first_bar, now=now,
-            allow_guided=self.plan.exercise_strategy.name != "coda-part",
+            # Automatic rhythmic playback never enters a note-by-note lesson
+            # that waits indefinitely for input. Learn remains user-selectable.
+            allow_guided=not self.auto,
             strategy=self.library.settings["mistake_response_strategy"],
             context=(self._retry_context(assessed, end_beat=decision.end_beat)
                 if resolve_mistake_policy(self.library.settings["mistake_response_strategy"]).rolling_handler is not None else None))
@@ -2280,20 +2282,28 @@ class PracticeEngine:
         This method is called from the locked _update loop. Assessment and
         grading are calculated only after a completed non-preview take.
         """
-        if self.preview_only:
-            # A preview loops visually just like graded practice, but never
-            # invents notes, clean runs, mastery or a MIDI recording.
-            self.measurement.seal((), state="completed", reason="preview")
+        silent_take = (self.mode == "practice" and self.auto
+                       and self.recorder is not None and not self.recorder.presses)
+        if self.preview_only or silent_take:
+            # No physical attack is an idle exposure, not a failed performance.
+            # Loop after the same authentic rest without manufacturing misses
+            # or mutating BPM/mastery, even with a connected MIDI piano.
+            self.measurement.seal((), state="completed",
+                                  reason="preview" if self.preview_only else "no_input")
             with self.measurement.atomic():
                 self.measurement.persist()
             self.measurement.finish()
             self.running = False
+            self.recorder = None
             self.visual_transport._preview_loop_pending = True
             self.visual_transport.next_at = repeat_deadline(
                 run_at=self.visual_transport.run_at, duration=duration,
                 gap_beats=self.visual_transport.visual_gap_beats, bpm=self.plan.bpm)
-            self.feedback = "Timing preview - repeating after one empty measure"
-            self.next_action = "Connect your MIDI piano to earn clean runs."
+            self.feedback = ("Timing preview" if self.preview_only else
+                             "Waiting for your notes") + " - repeating after one empty measure"
+            self.next_action = ("Connect your MIDI piano to earn progress."
+                                if self.preview_only else
+                                "Play along when you are ready.")
             if now >= self.visual_transport.next_at:
                 self._update()
             return
@@ -2506,6 +2516,11 @@ class PracticeEngine:
             self.feedback = "Could not save the recording checkpoint"
             self.next_action = "Check storage, then Resume to retry this boundary."
             raise
+        # A silent keyboard must not accumulate fictitious missing notes or
+        # trigger rolling recovery; the entire pass will simply cycle.
+        if (self.mode == "practice" and self.auto and self.recorder is not None
+                and not self.recorder.presses):
+            return None
         if not resolve_mistake_policy(
                 self.library.settings["mistake_response_strategy"]).interrupt_rolling:
             return None

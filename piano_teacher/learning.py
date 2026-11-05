@@ -524,8 +524,8 @@ class LearningPlan:
         A manual increase is persisted for this source unit/hand/variant and
         counts towards its target, but never awards a clean run or a new step.
         """
-        if self.bpm < self.target_bpm:
-            self.bpm = min(self.target_bpm, self.bpm + SETTINGS.manual_tempo_step_bpm)
+        if self.bpm < SETTINGS.maximum_bpm:
+            self.bpm = min(SETTINGS.maximum_bpm, self.bpm + SETTINGS.manual_tempo_step_bpm)
             self.streak = 0
             self.failures = 0
             self.stage_tempos[self.identity] = self.bpm

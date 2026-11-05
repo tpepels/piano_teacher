@@ -396,7 +396,9 @@ def _evidence_whole(facts: WholeEvidence) -> WholeResponse:
     original_end = context.original_end_beat if context.original_end_beat is not None else facts.grid[-1]
     focused = (current.start_beat, current.end_beat) != (original_start, original_end)
     if context.episode_action_count >= _AUTOMATIC_ACTION_LIMIT:
-        return response("pause", "automatic_action_limit", start=current.start_beat, end=current.end_beat)
+        # Bound *new interventions*, not the ongoing musical presentation.
+        # An exhausted adaptation budget keeps offering the same passage.
+        return response("repeat", "automatic_intervention_limit", start=current.start_beat, end=current.end_beat)
     if current.assisted:
         return response("isolate" if focused else "repeat", "guidance_requires_unsupported_retry",
                         start=current.start_beat, end=current.end_beat)
@@ -420,8 +422,10 @@ def _evidence_whole(facts: WholeEvidence) -> WholeResponse:
     if len(failures) < 2:
         return response("repeat", "new_failure_after_success", start=current.start_beat, end=current.end_beat)
     if any(a.action == "slow" for a in comparable) and len(failures) >= 2:
-        return response("guided", "two_failures_at_slower_setting", start=current.start_beat,
-                        end=current.end_beat, guided=True)
+        # No automatically entered guided wait during perpetual score flow.
+        # The learner can still select Learn from the lesson controls.
+        return response("repeat", "two_failures_at_slower_setting", start=current.start_beat,
+                        end=current.end_beat)
     if focused:
         return response("slow", "persistent_focused_failures", start=current.start_beat,
             end=current.end_beat, bpm=_scaled_bpm(facts.bpm, facts.minimum_bpm, .9))
@@ -454,7 +458,7 @@ def _evidence_rolling(facts: RollingEvidence) -> RollingResponse:
     action, reason = "continue", "insufficient_comparable_evidence"
     if current is not None and context.identity == facts.identity:
         if context.episode_action_count >= _AUTOMATIC_ACTION_LIMIT:
-            action, reason = "pause", "automatic_action_limit"
+            action, reason = "continue", "automatic_intervention_limit"
         elif not current.assisted and current.accepted is False:
             prior = next((a for a in reversed(context.attempts[:-1])
                 if a.identity == context.identity and a.bpm == current.bpm
@@ -476,6 +480,6 @@ def _evidence_rolling(facts: RollingEvidence) -> RollingResponse:
 
 register_mistake_policy(MistakePolicy(
     _EVIDENCE_POLICY, "Evidence-guided recovery",
-    "Use source-bound error patterns and comparable retry outcomes to repeat, isolate, slow, guide and reintegrate; pause after twelve automatic actions.",
+    "Use source-bound errors to repeat, isolate, slow and reintegrate; after twelve interventions, continue repeating without new automatic interventions.",
     True, 1., 1., 1, None, rolling_handler=_evidence_rolling, whole_handler=_evidence_whole,
     version=EVIDENCE_ADAPTIVE_VERSION))

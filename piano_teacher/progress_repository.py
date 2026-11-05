@@ -113,8 +113,10 @@ class ProgressRepository:
             (fingerprint,),
         ):
             if key in current:
+                # Learners may deliberately practise faster than the song's
+                # source tempo; preserve that manual choice per stage.
                 p.stage_tempos[key] = max(SETTINGS.minimum_bpm, min(
-                    p.target_bpm, int(bpm)))
+                    SETTINGS.maximum_bpm, int(bpm)))
         for (key,) in self.db.execute(
             "SELECT stage_key FROM repeat_tempo_credit WHERE fingerprint=?",
             (fingerprint,),
@@ -132,7 +134,7 @@ class ProgressRepository:
             # A matching, current-version source stage may safely restore its
             # deliberate BPM and clean-pass streak; no other row may.
             p.bpm = max(SETTINGS.minimum_bpm, min(
-                p.target_bpm, int(row[6])))
+                SETTINGS.maximum_bpm, int(row[6])))
             p.streak = min(SETTINGS.clean_runs_to_master - 1,
                            max(0, int(row[7])))
             p.stage_tempos[p.identity] = p.bpm
