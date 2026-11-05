@@ -67,7 +67,9 @@ func _ready_score() -> bool:
         return false
     if int(app.last_state.get("revision",-1)) != app.score_session.rendered_revision:
         return false
-    return view.stream_enabled and view.retained_ready()
+    # There is no alternate legacy/native renderer selector. Practice,
+    # Listen and the preloaded stage use the same retained world-time view.
+    return view.retained_ready()
 
 func _press(button: Button, action: String) -> bool:
     if app.command_state.pending:

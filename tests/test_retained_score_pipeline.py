@@ -120,3 +120,10 @@ def test_real_score_framebuffer_uses_production_world_axis():
     rest = (ROOT/"piano_teacher/notation/rest_intervention.py").read_text()
     assert "shape[1]*PLAYHEAD_FRACTION" in rest
     assert "PLAYHEAD_FRACTION := .33" in native
+
+
+def test_production_journey_does_not_depend_on_removed_camera_switch():
+    scenario = (ROOT/"godot/production_session_journey.gd").read_text()
+    assert "stream_enabled" not in scenario
+    assert "retained_ready()" in scenario
+    assert "stream_world_beat" in scenario
