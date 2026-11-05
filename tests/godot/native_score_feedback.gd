@@ -1,10 +1,24 @@
 extends SceneTree
 
+class GlyphRecorder extends RefCounted:
+    var paints: Array = []
+    func paint(_canvas: CanvasItem, name: String, x: float, y: float,
+            gap: float, tone: Color, centered: bool = false) -> bool:
+        paints.append({"name":name,"x":x,"y":y,"gap":gap,
+            "tone":tone,"centered":centered})
+        return true
+
 class Score extends Control:
-    var drawn_noteheads := {"attack-a":Vector2(100,80), "attack-b":Vector2(170,80)}
+    var glyphs := GlyphRecorder.new()
+    var drawn_noteheads := {"attack-a":Vector2(100,80),
+        "attack-b":Vector2(170,80),"attack-c":Vector2(225,80)}
     var layout := {"ordered_events":[
-        {"id":"attack-a", "source_id":"source-a", "is_attack":true},
-        {"id":"attack-b", "source_id":"source-b", "is_attack":true}]}
+        {"id":"attack-a","kind":"note","note_type":"quarter",
+            "source_id":"source-a","is_attack":true},
+        {"id":"attack-b","kind":"note","note_type":"half",
+            "source_id":"source-b","is_attack":true},
+        {"id":"attack-c","kind":"note","note_type":"whole",
+            "source_id":"source-c","is_attack":true}]}
     func staff_gap() -> float:
         return 16.0
 
@@ -24,8 +38,10 @@ func run() -> void:
         return
     var score := Score.new()
     root.add_child(score)
+    score.size = Vector2(300,160)
     var feedback = script.new()
     root.add_child(feedback)
+    feedback.size = Vector2(300,160)
     feedback.bind_score(score, 7)
     var design = load("res://practice_theme.gd")
     for status in ["assisted", "short", "long", "early", "late"]:
@@ -33,7 +49,9 @@ func run() -> void:
     check(feedback._tone("wrong") == design.CORAL, "Wrong pitch remains distinct from assisted success")
     var state := {"revision":7, "mode":"practice", "phase":"playing",
         "running":true, "transport_id":8, "preview_only":false,
-        "feedback_marks":[{"note_id":"attack-b", "status":"missed"}],
+        "feedback_marks":[{"note_id":"attack-b", "status":"missed"},
+            {"note_id":"attack-c", "status":"early"},
+            {"note_id":"missing", "status":"correct", "estimated":true}],
         "midi_visual_events":[{"sequence":1, "source_id":"source-a",
             "transport_id":8, "status":"on_time", "age":.02}]}
     feedback.present(state)
@@ -42,6 +60,37 @@ func run() -> void:
         "Physical note targets its own source identity despite repeated pitch")
     feedback.present(state)
     check(feedback.pulses.size() == 1, "Repeated polling cannot repeat a MIDI reward")
+    check(not feedback.markers.has("missing"),
+        "Estimated/unmapped feedback cannot falsely color a note")
+    # The feedback layer actually draws native Verovio HEAD glyph masks, not
+    # merely halos around the still-white source heads.
+    feedback.queue_redraw()
+    await process_frame
+    await process_frame
+    var paints: Array = score.glyphs.paints
+    check(paints.any(func(p): return p.name == "head_black" and
+        p.x == 100.0 and p.tone == design.MINT),
+        "Immediate played quarter-note head fills mint")
+    check(paints.any(func(p): return p.name == "head_half" and
+        p.x == 170.0 and p.tone == design.CORAL),
+        "Graded missed half-note head takes authentic red contour")
+    check(paints.any(func(p): return p.name == "head_whole" and
+        p.x == 225.0 and p.tone == design.AMBER),
+        "Mistimed whole-note head retains its hollow amber contour")
+    check(paints.all(func(p): return bool(p.centered) and p.gap == 16.0),
+        "Tint uses exact source head centers and original Verovio staff scale")
+    state.feedback_marks = []
+    feedback.present(state)
+    check(feedback.markers.has("attack-b") and
+        feedback.markers.has("attack-c"),
+        "Previously assessed note colors remain during the same attempt")
+    var next_take := state.duplicate(true)
+    next_take.transport_id = 9
+    next_take.midi_visual_events = []
+    feedback.present(next_take)
+    check(feedback.markers.is_empty(),
+        "A new transport take cannot inherit past colored noteheads")
+    feedback.present(state)
     check(feedback.note_position("attack-a") == Vector2(100,80), "Uses painted native coordinate")
     score.drawn_noteheads["attack-a"] = Vector2(45,80)
     check(feedback.note_position("attack-a") == Vector2(45,80), "Feedback follows scrolling note")
