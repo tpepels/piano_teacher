@@ -12,6 +12,7 @@ on:
       - 'scripts/check-godot-syntax.sh'
       - 'tests/godot/score_asset_lifecycle.gd'
       - 'tests/godot/native_score_feedback.gd'
+      - 'tests/godot/practice_screen.gd'
       - '.github/workflows/godot-startup-check.yml'
   pull_request:
     paths:
