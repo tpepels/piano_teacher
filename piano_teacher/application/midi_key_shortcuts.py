@@ -87,10 +87,10 @@ class MidiKeyShortcuts:
                 self.suppressed_releases.add(pitch)
                 return KeyDecision(consumed=True,
                     action="resume" if paused else "pause" if can_pause else "")
-            return KeyDecision(consumed=True)
+            return KeyDecision()
         if pitch == saved[1]:
             if on:
                 self.suppressed_releases.add(pitch)
                 return KeyDecision(consumed=True, action="restart")
-            return KeyDecision(consumed=True)
+            return KeyDecision()
         return KeyDecision()
