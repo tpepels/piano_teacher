@@ -29,6 +29,10 @@ var reset_confirmation: VBoxContainer
 var _reset_fingerprint := ""
 var _context: Dictionary = {}
 var _busy := false
+var more_options: VBoxContainer
+var more_toggle: Button
+var passage_summary: Label
+var _path_groups: Array = []
 
 func _ready() -> void:
     name = "LessonScreen"
@@ -54,7 +58,10 @@ func _ready() -> void:
     add_child(content)
     content.add_child(UI.label("YOUR NEXT STEPS", 14, ACCENT, true))
     content.add_child(UI.title("Lesson path", 32))
-    piece_title = UI.title("Choose music to begin", 25)
+    piece_title = UI.title("Choose music to begin", 22)
+    piece_title.autowrap_mode = TextServer.AUTOWRAP_OFF
+    piece_title.clip_text = true
+    piece_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     content.add_child(piece_title)
     var stages := HBoxContainer.new()
     stages.add_theme_constant_override("separation", 0)
@@ -71,7 +78,7 @@ func _ready() -> void:
     description = UI.label("", 14, MUTED)
     content.add_child(description)
     columns = BoxContainer.new()
-    columns.vertical = get_viewport_rect().size.x < 1280.0
+    columns.vertical = true
     columns.add_theme_constant_override("separation", 24)
     content.add_child(columns)
     rows = UI.stack(10)
@@ -85,7 +92,9 @@ func _ready() -> void:
     columns.add_child(options_panel)
     var path_options := UI.stack(14)
     UI.card_body(options_panel, 18).add_child(path_options)
-    path_options.add_child(UI.label("Practice choices", 17, INK, true))
+    path_options.add_child(UI.label("Practice this passage", 20, INK, true))
+    passage_summary = UI.label("Select a passage to begin.",14,MUTED)
+    path_options.add_child(passage_summary)
     # Manual jumps remain available in Lesson Path, away from the
     # continually scrolling score. A jump never grants mastery.
     steps = PracticeStepSelector.new()
@@ -139,9 +148,17 @@ func _ready() -> void:
         button.configure("choice")
         hand_buttons[hand] = button
         hand_row.add_child(button)
+    more_options = UI.stack(10)
+    more_options.visible = false
+    more_toggle = _button("More lesson options ▸",func():
+        more_options.visible = not more_options.visible
+        more_toggle.text = ("More lesson options ▾" if more_options.visible
+            else "More lesson options ▸"),false,"secondary")
+    path_options.add_child(more_toggle)
+    path_options.add_child(more_options)
     var course_choices := HFlowContainer.new()
     course_choices.add_theme_constant_override("separation", 8)
-    path_options.add_child(course_choices)
+    more_options.add_child(course_choices)
     skip_button = _button("Skip this step · no mastery", func(): command_requested.emit({"action": "skip_stage", "reason": "Learner chose to skip this step"}), false, "review")
     skip_button.custom_minimum_size.x = 220
     course_choices.add_child(skip_button)
@@ -151,7 +168,7 @@ func _ready() -> void:
     # has zero minimum height inside it, hiding every lesson stage.
     var advanced := _button("Advanced practice controls", func(): advanced_requested.emit(), false, "settings")
     advanced.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    path_options.add_child(advanced)
+    more_options.add_child(advanced)
     # Reset lives in the full Lesson Path drawer, not alongside the three
     # everyday Play / Retry / Listen buttons. It requires a second click.
     reset_button = _button("Reset this song's lesson path…",
@@ -159,11 +176,11 @@ func _ready() -> void:
     reset_button.disabled = true
     reset_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     reset_button.tooltip_text = "Erase saved mastery, tempo, skipped steps and trouble spots for this song only"
-    path_options.add_child(reset_button)
+    more_options.add_child(reset_button)
     reset_confirmation = UI.stack(8)
     reset_confirmation.name = "ResetPathConfirmation"
     reset_confirmation.visible = false
-    path_options.add_child(reset_confirmation)
+    more_options.add_child(reset_confirmation)
     var reset_warning := UI.label(
         "Reset this song to step 1? All saved tempos, mastery, completed notes and skipped steps for this song will be erased. Other songs are unaffected.",
         15, INK)
@@ -270,16 +287,24 @@ func present_overview(values: Dictionary) -> void:
         var label: Label = stage_labels[level]
         stage_row.move_child(label, position)
         label.visible = true
-        label.text = "%d. %s" % [position + 1, level.replace("-", " ").capitalize()]
+        label.text = "%d. %s" % [position + 1, _stage_for_reader(level)]
         var selected: bool = str(_context.get("lesson_level", "")) == level
         label.add_theme_color_override("font_color", Design.NIGHT if selected else MUTED)
         var face := Design.bordered_surface(Design.MINT if selected else Design.PANEL_RECESSED, 6, .6 if selected else .25)
         face.border_color = Design.TEAL if selected else Color(Design.SAGE, .3)
         label.add_theme_stylebox_override("normal", face)
-    summary.text = "%d of %d stages completed · %d clean performances at your target tempo" % [
-        int(parsed.get("completed_steps", 0)), int(parsed.get("total_steps", 0)),
-        int(_context.get("clean_runs_required", 3))]
-    description.text = "Learn the notes. Bring the hands together. Make it music."
+    var total_steps: int = int(parsed.get("total_steps",0))
+    var completed: int = int(parsed.get("completed_steps",0))
+    var current_step: int = int(parsed.get("current_step",0))
+    var needed: int = int(_context.get("clean_runs_required",3))
+    var clean: int = int(_context.get("streak",0))
+    summary.text = "Step %d of %d · %d mastered" % [current_step,total_steps,completed]
+    description.text = "Goal: %d clean performances at your target tempo · %d currently earned" % [needed,clean]
+    var hand_label: String = ("Both hands" if str(current.get("hand","")) == "both"
+        else str(current.get("hand","right")).capitalize() + " hand")
+    passage_summary.text = "%s · %s · measures %d–%d" % [hand_label,
+        _stage_for_reader(str(current.get("stage_label",current.get("level","")))),
+        int(current.get("first_bar",1)),int(current.get("last_bar",1))]
     for child in rows.get_children():
         rows.remove_child(child)
         child.queue_free()
@@ -307,7 +332,21 @@ func present_overview(values: Dictionary) -> void:
         if str(step.get("skip_status", "active")) in ["skipped", "placed"] and not bool(step.get("completed", false)):
             detail += " (%s; not mastered)" % str(step["skip_status"])
         group["labels"].append(detail)
-    for key in groups:
+    # A 600-step course must not draw hundreds of mostly identical panels.
+    # Expose the active passage and a short before/after window; the exact
+    # step selector still reaches every stage in the underlying course.
+    var group_keys: Array = groups.keys()
+    var active_index: int = 0
+    for idx in range(group_keys.size()):
+        if bool(groups[group_keys[idx]].get("current",false)):
+            active_index = idx
+            break
+    var first_visible: int = maxi(0,active_index-1)
+    var last_visible: int = mini(group_keys.size(),active_index+6)
+    if first_visible > 0:
+        rows.add_child(UI.label("%d earlier passages · use the step selector to visit them" % first_visible,14,MUTED))
+    for idx in range(first_visible,last_visible):
+        var key = group_keys[idx]
         var group: Dictionary = groups[key]
         var chapter := PanelContainer.new()
         var chapter_style := Design.surface(Color(Design.PINE,.32) if bool(group["current"]) else Color.TRANSPARENT, 6)
@@ -317,18 +356,37 @@ func present_overview(values: Dictionary) -> void:
         chapter.add_theme_stylebox_override("panel", chapter_style)
         var row := UI.stack(4)
         chapter.add_child(row)
-        var status := "Completed" if bool(group["complete"]) else "Current passage" if bool(group["current"]) else str(group["kind"]).capitalize()
+        var status := "Mastered" if bool(group["complete"]) else "Now" if bool(group["current"]) else "Upcoming"
         row.add_child(UI.label("%s · Measures %d–%d" % [status, int(group["first"]), int(group["last"])], 18,
             ACCENT if bool(group["current"]) else INK, bool(group["current"])))
-        var detail: String = " → ".join(group["labels"])
+        var detail: String = " · ".join(group["labels"])
         row.tooltip_text = detail
         if bool(group["current"]):
-            row.add_child(UI.label(detail, 14, MUTED))
+            row.add_child(UI.label("%s · %s" % [hand_label,
+                _stage_for_reader(str(current.get("stage_label",current.get("level",""))))],14,MUTED))
         rows.add_child(chapter)
+    if last_visible < group_keys.size():
+        rows.add_child(UI.label("%d later passages available from the step selector" % (group_keys.size()-last_visible),14,MUTED))
+
+func _stage_for_reader(source: String) -> String:
+    var phrase := source.replace("-"," ").strip_edges()
+    var normalized := phrase.to_lower()
+    if normalized.begins_with("coda chord"):
+        return "Chord notes"
+    if normalized.contains("slowdown x 4"):
+        return "Quarter-speed notes"
+    if normalized.contains("slowdown x 2"):
+        return "Half-speed notes"
+    if normalized == "original":
+        return "Original notes"
+    return phrase.capitalize()
+
 
 func apply_viewport(view_size: Vector2, scale: float) -> void:
     steps.apply_viewport(view_size,scale)
-    columns.vertical = view_size.x < 1280.0
+    # The drawer removes ~260 logical pixels; use available CONTENT width.
+    # Two columns at a 1536-wide desktop squeezed the right-hand controls.
+    columns.vertical = view_size.x < 1850.0
     columns.move_child(options,0 if columns.vertical else 1)
     for control in find_children("*","Control",true,false):
         if control.has_meta("ui_font_base"):
