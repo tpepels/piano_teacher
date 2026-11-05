@@ -106,3 +106,15 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert 'frame.score_loop_enabled' not in source
     assert "clip.visible = false" in view
     assert "clip.visible = segment.compiled" in view
+
+
+def test_real_score_framebuffer_uses_production_world_axis():
+    harness = (ROOT/"tests/godot/native_verovio_overlay.gd").read_text()
+    oracle = (ROOT/"piano_teacher/notation/pixel_proof.py").read_text()
+    phase3 = (ROOT/"piano_teacher/notation/phase3_pixels.py").read_text()
+    native = (ROOT/"godot/notation/shared/view_base.gd").read_text()
+    assert "renderer._stream_add_take(0.0,0.0,0.0," in harness
+    assert "renderer.present_flow(at,snapshot,at)" in harness
+    assert "PLAYHEAD_FRACTION = 0.33" in oracle
+    assert "image.width*.33" in phase3
+    assert "PLAYHEAD_FRACTION := .33" in native

@@ -19,7 +19,7 @@ from PIL import Image
 from piano_teacher.notation.proof import read_written_score
 
 DIATONIC = {letter: i for i, letter in enumerate("CDEFGAB")}
-PLAYHEAD_FRACTION = 0.42  # Public fixed-playhead interaction requirement.
+PLAYHEAD_FRACTION = 0.33  # Production fixed timing line, shared by the moving-bar renderer.
 
 
 @dataclass(frozen=True)

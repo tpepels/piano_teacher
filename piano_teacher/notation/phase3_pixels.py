@@ -159,7 +159,7 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
             continue
         raster=bright(image)
         occlusion_columns=photographed_playhead_columns(image)
-        xpos=round(image.width*.42)
+        xpos=round(image.width*.33)
         requests=[]
         for staff,notes in hands.items():
             try:

@@ -17,8 +17,10 @@ func _recompile_retained_source(renderer) -> void:
         return
     source.compiled = false
     source.queue_redraw()
-    await process_frame
-    await process_frame
+    for attempt in range(8):
+        await process_frame
+        if source.compiled:
+            break
     if not source.compiled:
         failures.append("Source retained ink did not recompile after intervention")
         return
@@ -103,6 +105,18 @@ func _audit() -> void:
         push_error("Native source-backed layout rejected: " + renderer.failure_reason)
         quit(1)
         return
+    # Capture the authentic retained source under the SAME world-time
+    # projection used by the application, not a retired source-local camera.
+    for warm_frame in range(8):
+        if renderer.retained_ready():
+            break
+        await process_frame
+    if not renderer.retained_ready():
+        push_error("Canonical source did not pre-engrave for framebuffer audit")
+        quit(1)
+        return
+    renderer._stream_add_take(0.0,0.0,0.0,
+        renderer.timeline.duration_beats,"framebuffer-audit")
     var result := {
         "capture_config": config.duplicate(true),
         "density": renderer.timeline.pixels_per_beat,
@@ -130,12 +144,13 @@ func _audit() -> void:
         result["extra_symbol_schedule"] = diagnostics
     for point in samples:
         var at: float = float(point)
-        renderer.present({
-            "running": true, "paused": not bool(fixture.get("phase3_full",false)),
+        var snapshot: Dictionary = {
+            "running": true, "paused": false,
             "bpm": 40.0, "hand": str(fixture.get("hand","both")),
             "transport_id": 19, "count_in_beats": 0.0,
-            "play_from_beat": 0.0
-        }, at)
+            "play_from_beat": 0.0, "phase":"playing"}
+        renderer.present(snapshot,at)
+        renderer.present_flow(at,snapshot,at)
         await process_frame
         await process_frame
         await RenderingServer.frame_post_draw
@@ -249,7 +264,7 @@ func _audit() -> void:
             var xy: Vector2 = renderer.drawn_noteheads[identifier]
             heads[str(identifier)] = [xy.x, xy.y]
         var rests: Array = []
-        var camera_x: float = renderer.size.x*.42
+        var camera_x: float = renderer.size.x*.33
         var expected_heads: Dictionary = {}
         for event in renderer.layout.ordered_events:
             if str(event.get("kind", "")) != "note":
