@@ -546,7 +546,7 @@ func _stream_add_take(source_beat: float, start_world: float,
         "source_floor":maxf(0.0,from_beat),
         "source_ceiling":through_beat,
         "take_key":take_key,
-        "pending":take_key == "prepared",
+        "pending":take_key in ["prepared","autopending"],
         "serial":_stream_serial,
         "kind":"source",
     })
@@ -713,6 +713,22 @@ func present_flow(world_beat: float, state: Dictionary,
                         _stream_last_take = key
                         break
                 _stream_armed_serial = -1
+            elif key != _stream_last_take and mode == "practice":
+                # Automatic repeats consume an already pre-positioned copy.
+                # Transport polling must never instantiate a note at Play.
+                var expected_start: float = stream_world_beat-graded_beat
+                for item in stream_passes:
+                    if str(item.get("take_key","")) != "autopending" or \
+                            not bool(item.get("pending",false)):
+                        continue
+                    if absf(float(item["world_origin"])+opening -
+                            expected_start) > .75:
+                        continue
+                    item["pending"] = false
+                    item["take_key"] = key
+                    _stream_live_serial = int(item["serial"])
+                    _stream_last_take = key
+                    break
             elif key == _stream_last_take and not _stream_was_paused:
                 for item in stream_passes:
                     if str(item.get("take_key","")) == key:
@@ -722,6 +738,33 @@ func present_flow(world_beat: float, state: Dictionary,
             for item in stream_passes:
                 if int(item["serial"]) == _stream_live_serial:
                     _stream_extend_offscreen(item)
+                    var final_mastery: bool = bool(state.get("auto",false)) and \
+                        int(state.get("streak",0))+1 >= \
+                        int(state.get("clean_runs_required",3)) and \
+                        float(state.get("bpm",0.0)) >= \
+                        float(state.get("target_bpm",INF)) and \
+                        int(state.get("lesson_step",0)) < \
+                        int(state.get("lesson_steps",0))
+                    if (mode == "practice" and \
+                            bool(state.get("auto",false)) and \
+                            not bool(item.get("successor_reserved",false)) and \
+                            not final_mastery):
+                        # Prepared while the previous attempt is still
+                        # moving. The printed semantic rest and the extra
+                        # lead are included in the one world-time queue.
+                        var gap_info: Dictionary = practice_timeline.get("gap",{})
+                        var horizon: float = maxf(
+                            float(gap_info.get("duration_beats",4.0)),
+                            _stream_right_beats()+
+                            _stream_header_beats(0.0)+1.5)
+                        var next_world: float = float(item["world_origin"]) + \
+                            timeline.duration_beats+horizon
+                        item["successor_reserved"] = true
+                        var live: int = _stream_live_serial
+                        _stream_add_take(0.0,next_world,0.0,
+                            _stream_complete_measure(
+                                _stream_right_beats()+1.0),"autopending")
+                        _stream_live_serial = live
                     break
         # An unreserved start CANNOT create note ink in the current frame.
         # This fails closed rather than silently taking the old camera path.
