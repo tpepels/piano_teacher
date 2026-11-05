@@ -91,6 +91,7 @@ var drawn_noteheads: Dictionary = {}
 var drawn_note_instances: Array = []
 var preparation_history: Dictionary = {}
 var selected_density := 0.0
+var external_backdrop := false
 var staff_gap_limit := MAX_STAFF_GAP
 var configured_density: float = Timeline.DEFAULT_PIXELS_PER_BEAT
 # Immutable musical structure is indexed ONCE when a passage changes.
@@ -787,8 +788,10 @@ func _draw() -> void:
     fingering_pass_clocks.clear()
     if size.x < 100.0 or size.y < 100.0:
         return
-    # The Practice stage owns the full-bleed vignette. Opaque local fills
-    # previously covered that background and made the score look like a card.
+    # The Practice stage supplies its vignette; stand-alone notation tests
+    # and other native score consumers still receive the original dark ink.
+    if not runway_overlay and not external_backdrop:
+        draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
     var font: Font = ThemeDB.fallback_font
     if not native_ready or not timeline.has_score():
         draw_string(font,Vector2(20.0,size.y*.5),
