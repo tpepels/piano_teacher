@@ -31,7 +31,13 @@ def test_application_entrypoint_uses_only_unified_presentation_clock():
     assert "RetryCameraClock" not in source
     assert "retry_camera_clock" not in source
     assert "visual_transport_clock.score_beat(" in source
-    assert "visual_transport_clock.visual_beat(" in source
+    assert 'preload("res://continuous_score_flow.gd")' in source
+    assert "score_flow = ContinuousScoreFlow.new()" in source
+    assert "score_flow.sample(" in source
+    assert "score_flow.project(" in source
+    assert "visual_transport_clock.visual_beat(" not in source
+    assert "visual_transport_clock.retry_preparing(" not in source
+    assert "visual_transport_clock.score_beat(" in source
     assert 'preload("res://metronome_frame_coordinator.gd")' in source
     assert "metronome_frame.update(" in source
     metronome = (ROOT / "metronome_frame_coordinator.gd").read_text(encoding="utf-8")
