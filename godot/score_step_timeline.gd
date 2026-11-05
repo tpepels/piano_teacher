@@ -3,7 +3,6 @@ extends Control
 ## being presented as replacement pages or interrupting score movement.
 const Design := preload("res://practice_theme.gd")
 const ScoreView := preload("res://notation/shared/view_base.gd")
-const INK := Design.HIGHLIGHT
 const FUTURE := Design.SECONDARY_INK
 var _loaded := false
 var _step := 0
@@ -103,7 +102,7 @@ func set_density(pixels: float) -> void:
 static func markers_separated(current_x: float, next_x: float) -> bool:
     return not is_finite(current_x) or next_x >= current_x + 168.0
 
-func _marker(at: float, label: String, tint: Color, density: float,
+func _marker(at: float, tint: Color, density: float,
         visual_beat: float) -> void:
     if not is_finite(at):
         return
@@ -128,5 +127,4 @@ func _draw() -> void:
     # Its note ink remains visible; only the duplicate caption is suppressed.
     if is_finite(next_x) and next_x >= -10.0 and next_x < size.x-10.0 and (
             not current_visible or markers_separated(current_x,next_x)):
-        _marker(_next_start,"NEXT %d/%d" % [_step+1,_total],
-            FUTURE,_next_density,_beat)
+        _marker(_next_start,FUTURE,_next_density,_beat)
