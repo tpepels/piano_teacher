@@ -3,10 +3,18 @@ extends Control
 # notehead position. This layer never uses legacy page coordinates or grades.
 const Design := preload("res://practice_theme.gd")
 const MAX_PULSES := 24
+# Only confirmed assessment states persist for the current transport take.
+# Provisional MIDI onsets are brief pulses and never count as graded success.
+const ASSESSED := ["correct", "missed", "wrong", "extra", "early", "late",
+    "short", "long", "assisted"]
 var score: Control
 var score_revision := -1
 var source_to_id: Dictionary = {}
+var head_glyphs: Dictionary = {}
 var markers: Dictionary = {}
+var settled_markers: Dictionary = {}
+var marker_transport_id := -1
+var previous_phase := ""
 var pulses: Array = []
 var last_sequence := 0
 var moving := false
@@ -24,13 +32,23 @@ func bind_score(renderer: Control, revision: int) -> void:
     score.draw.connect(_score_repainted)
     score_revision = revision
     source_to_id.clear()
+    head_glyphs.clear()
     markers.clear()
+    settled_markers.clear()
+    marker_transport_id = -1
+    previous_phase = ""
     pulses.clear()
     acknowledged_until_ms = 0
     acknowledged_sequence = 0
     for event in renderer.layout.ordered_events:
+        var id := str(event.get("id", ""))
+        if id.is_empty() or str(event.get("kind","note")) != "note":
+            continue
+        var note_type := str(event.get("note_type", "quarter"))
+        head_glyphs[id] = ("head_whole" if note_type == "whole" else
+            "head_half" if note_type == "half" else "head_black")
         if bool(event.get("is_attack", false)) and event.get("source_id") != null:
-            source_to_id[str(event.source_id)] = str(event.id)
+            source_to_id[str(event.source_id)] = id
     queue_redraw()
 
 func _score_repainted() -> void:
@@ -71,8 +89,17 @@ func present(state: Dictionary) -> void:
     var previous_markers: Dictionary = markers
     var previous_moving: bool = moving
     var had_pulses: bool = not pulses.is_empty()
+    var phase := str(state.get("phase",""))
+    var transport := int(state.get("transport_id",-1))
+    if transport != marker_transport_id or (
+            phase == "ready" and previous_phase in
+            ["feedback","recovering","review","performance_complete"]):
+        settled_markers.clear()
+    marker_transport_id = transport
+    previous_phase = phase
     markers = {}
     if ungraded or int(state.get("revision", -2)) != score_revision:
+        settled_markers.clear()
         for event in state.get("midi_visual_events", []):
             last_sequence = maxi(last_sequence, int(event.get("sequence", 0)))
         pulses.clear()
@@ -86,8 +113,12 @@ func present(state: Dictionary) -> void:
         var id: String = str(mark.get("note_id", mark.get("id", "")))
         if id.is_empty():
             id = str(source_to_id.get(str(mark.get("source_id", "")), ""))
-        if not id.is_empty() and not bool(mark.get("estimated", false)):
-            markers[id] = str(mark.get("status", ""))
+        var status := str(mark.get("status",""))
+        if not id.is_empty() and not bool(mark.get("estimated", false)) and                 status in ASSESSED:
+            settled_markers[id] = status
+    # Live state publishes a sliding assessment window. Keep already assessed
+    # colors while that same take scrolls; transport/revision changes clear it.
+    markers = settled_markers.duplicate()
     moving = bool(state.get("running", false)) and not bool(state.get("paused", false))
     var now: int = Time.get_ticks_msec()
     var fresh_pulse := false
@@ -137,6 +168,20 @@ func _tone(status: String) -> Color:
         return Design.MINT
     return Design.AMBER if status in ["early", "late", "expected", "assisted", "short", "long"] else Design.CORAL
 
+# Draw ONLY the authentic Verovio notehead mask, centered at the compositor's
+# exact note position. The retained stems, beams, ledger lines, notehead
+# geometry and sound timeline remain untouched.
+func _paint_head(id: String, point: Vector2, gap: float,
+        tone: Color, opacity: float) -> bool:
+    if not head_glyphs.has(id):
+        return false
+    var atlas: Variant = score.get("glyphs")
+    if atlas == null or not atlas.has_method("paint"):
+        return false
+    return bool(atlas.paint(self,str(head_glyphs[id]),point.x,point.y,
+        gap,Color(tone,clampf(opacity,0.0,1.0)),true))
+
+
 func _draw() -> void:
     if not is_instance_valid(score) or not score.is_visible_in_tree():
         return
@@ -161,8 +206,9 @@ func _draw() -> void:
             continue
         var status: String = markers[id]
         var tone := _tone(status)
-        draw_arc(p, gap*.92, 0, TAU, 40, Color(tone,.12), 7.0, true)
-        draw_arc(p, gap*.84, 0, TAU, 40, Color(tone,.92), 1.8, true)
+        draw_arc(p,gap*1.08,0,TAU,40,Color(tone,.11),7.0,true)
+        draw_arc(p,gap*.91,0,TAU,40,Color(tone,.67),1.4,true)
+        _paint_head(str(id),p,gap,tone,.90 if moving else .76)
         if status in ["missed", "wrong", "extra"]:
             var badge := p+Vector2(gap,-gap)
             draw_line(badge-Vector2(2.5,2.5),badge+Vector2(2.5,2.5),tone,1.6,true)
@@ -174,8 +220,10 @@ func _draw() -> void:
             continue
         var life: float = clampf(float(int(pulse.until)-now)/320.0,0.0,1.0)
         var tone: Color = _tone(str(pulse.status))
-        # Concentric light surrounds the authentic head; no particles or
-        # painted substitute pitch. The central notation stays untouched.
+        # Light follows the exact glyph. A provisional live hit colors the
+        # head briefly; a settled grade always takes precedence over it.
         for radius in [1.35,1.1]:
             draw_arc(p,gap*radius,0,TAU,40,Color(tone,life*.15),5.0,true)
         draw_arc(p,gap*.87,0,TAU,40,Color(tone,life*.95),2.0,true)
+        if not markers.has(str(pulse.id)):
+            _paint_head(str(pulse.id),p,gap,tone,life*.94)
