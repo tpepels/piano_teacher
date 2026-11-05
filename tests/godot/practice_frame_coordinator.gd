@@ -88,5 +88,16 @@ func _initialize() -> void:
             practice.stage.effects.last_beat != 1.25 or \
             coordinator.last_strike_beat != 1.25 or session.checks != 3:
         failures += 1
+    var paused_state := state.duplicate(true)
+    paused_state["phase"] = "paused"
+    paused_state["paused"] = true
+    coordinator.advance(paused_state,1.25,9.25,1048,.016,
+        false,"practice",true,[])
+    if not practice.stage.renderer.ambient_blank:
+        failures += 1
+    coordinator.advance(state,1.25,9.25,1064,.016,
+        false,"practice",true,[])
+    if practice.stage.renderer.ambient_blank:
+        failures += 1
     print("PRACTICE_FRAME_COORDINATOR_FAILURES:",failures)
     quit(0 if failures==0 else 1)
