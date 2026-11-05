@@ -13,6 +13,7 @@ var playhead_x: float
 var gap: float
 var play_from_beat: float
 var active_hand: String
+var focused_staff: String
 var score_loop_enabled: bool
 var pass_index: int
 var pass_start: float
@@ -32,6 +33,7 @@ func _init(context: Dictionary = {}) -> void:
     gap = float(context.get("gap",0.0))
     play_from_beat = float(context.get("play_from_beat",0.0))
     active_hand = str(context.get("active_hand","both"))
+    focused_staff = str(context.get("focused_staff",""))
     score_loop_enabled = bool(context.get("score_loop_enabled",false))
     pass_index = int(context.get("pass_index",0))
     pass_start = float(context.get("pass_start",0.0))
@@ -53,6 +55,8 @@ static func intervals_overlap(first: Dictionary, second: Dictionary) -> bool:
     return SourceVisibility.intervals_overlap(first,second)
 
 func ink(hand: String) -> Color:
+    if not focused_staff.is_empty() and hand != focused_staff:
+        return Color.TRANSPARENT
     var selected: bool = active_hand == "both" or active_hand == hand
     return Design.SCORE_INK if selected else Color(Design.STAFF_MUTED,.46)
 
