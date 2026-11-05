@@ -3,6 +3,7 @@ extends VBoxContainer
 const UI := preload("res://ui_factory.gd")
 const CaptionLayout := preload("res://practice_caption_layout.gd")
 const Design := preload("res://practice_theme.gd")
+const TempoVocabulary := preload("res://tempo_vocabulary.gd")
 const INK := Design.STONE
 const MUTED := Design.SECONDARY_INK
 const ACCENT := Design.TEAL
@@ -23,13 +24,14 @@ var stage: ScoreStage
 var practice_layout_box: VBoxContainer
 var practice_header: HBoxContainer
 var practice_navigation: HBoxContainer
-var header_play_button: Button
 var details_popup: PopupPanel
 var details_scroll: ScrollContainer
 var details_caption: Label
 var title_label: Label
 var speed_label: Button
 var tempo_popup: PopupPanel
+var tempo_name_label: Label
+var tempo_value_label: Label
 var practice_details_button: Button
 var details_panel: VBoxContainer
 var _details_open := false
@@ -100,20 +102,16 @@ func _ready() -> void:
     var context := HBoxContainer.new()
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(context)
-    # Do not wrap Play and Settings beneath BPM when a long title is loaded.
-    # The title ellipsizes; transport stays on a single compact header row.
+    # Only BPM and Settings belong in the header. Play/Pause lives in the
+    # single large transport control beneath the music.
     practice_navigation = HBoxContainer.new()
     practice_navigation.alignment = BoxContainer.ALIGNMENT_END
     practice_navigation.add_theme_constant_override("separation",8)
     context.add_child(practice_navigation)
-    speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"practice_tempo")
-    speed_label.custom_minimum_size = Vector2(112,40)
+    speed_label = _button("-- BPM ▾",_toggle_tempo_popup,false,"practice_tempo")
+    speed_label.custom_minimum_size = Vector2(182,40)
     speed_label.tooltip_text = "Adjust tempo"
     practice_navigation.add_child(speed_label)
-    header_play_button = _button("Play",func(): play_requested.emit(),false,"header_play")
-    header_play_button.tooltip_text = "Play or pause · Space"
-    header_play_button.call("set_icon_only",true)
-    practice_navigation.add_child(header_play_button)
     practice_settings_button = _button("Settings",
         func(): navigation_requested.emit("settings"),false,"settings")
     practice_settings_button.tooltip_text = "Settings"
@@ -130,9 +128,16 @@ func _ready() -> void:
     for side in ["left","right","top","bottom"]:
         tempo_margin.add_theme_constant_override("margin_"+side,9)
     tempo_popup.add_child(tempo_margin)
+    var tempo_body := VBoxContainer.new()
+    tempo_body.add_theme_constant_override("separation",10)
+    tempo_margin.add_child(tempo_body)
+    tempo_name_label = UI.label("Tempo",20,INK,true)
+    tempo_body.add_child(tempo_name_label)
+    tempo_value_label = UI.label("-- BPM · steps of 5 BPM",13,MUTED)
+    tempo_body.add_child(tempo_value_label)
     var tempo_actions := HBoxContainer.new()
-    tempo_actions.add_theme_constant_override("separation",8)
-    tempo_margin.add_child(tempo_actions)
+    tempo_actions.add_theme_constant_override("separation",10)
+    tempo_body.add_child(tempo_actions)
     game_input_indicator = GameInputIndicator.new()
     lesson_info_label = UI.label("", 14, MUTED)
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -183,15 +188,13 @@ func _ready() -> void:
     challenge_bar.add_child(progress_label)
     # Keep navigation separate from both notation ink and the progress/tempo
     # row, whose combined minimum width would clip an 800x600 practice window.
-    tempo_down_button = _button("-5 BPM", func(): command_requested.emit({"action":"tempo_down"}),
-        false, "tempo_down")
-    tempo_down_button.tooltip_text = "Decrease by 5 BPM · Keeps the song target"
-    tempo_down_button.call("set_icon_only",true)
+    tempo_down_button = _button("−", func(): command_requested.emit({"action":"tempo_down"}),
+        false, "secondary")
+    tempo_down_button.tooltip_text = "Decrease tempo · Keeps the song target"
     tempo_actions.add_child(tempo_down_button)
-    tempo_up_button = _button("+5 BPM", func(): command_requested.emit({"action":"tempo_up"}),
-        false, "tempo_up")
-    tempo_up_button.tooltip_text = "Increase by 5 BPM · No mastery credit"
-    tempo_up_button.call("set_icon_only",true)
+    tempo_up_button = _button("+", func(): command_requested.emit({"action":"tempo_up"}),
+        false, "secondary")
+    tempo_up_button.tooltip_text = "Increase tempo · No mastery credit"
     tempo_up_button.size_flags_horizontal = Control.SIZE_SHRINK_END
     tempo_actions.add_child(tempo_up_button)
     game_streak = GameStreak.new()
@@ -342,18 +345,21 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         else:
             passage_text = "%s · %s" % [kind, bar_text]
     if tempo_down_button != null:
-        tempo_down_button.text = "-%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
+        tempo_down_button.text = "−"
         tempo_down_button.tooltip_text = "Decrease by %d BPM · Keeps the song target" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_down_button.disabled = (_busy or not bool(parsed.get("can_decrease_tempo", false))
             or str(parsed.get("phase", "")) in ["count_in", "playing", "loading"])
     if tempo_up_button != null:
-        tempo_up_button.text = "+%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
+        tempo_up_button.text = "+"
         tempo_up_button.tooltip_text = "Increase by %d BPM · No mastery credit" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_up_button.disabled = (_busy or not bool(parsed.get("can_increase_tempo",false))
             or str(parsed.get("phase","")) in ["count_in","playing","loading"])
     var selected_bpm: float = float(parsed.get("bpm", 0))
     var effective_bpm: float = float(parsed.get("effective_bpm", selected_bpm))
-    speed_label.text = "♪ %d BPM ▾" % int(roundf(selected_bpm))
+    speed_label.text = TempoVocabulary.display(selected_bpm) + " ▾"
+    tempo_name_label.text = TempoVocabulary.name_for_bpm(selected_bpm)
+    tempo_value_label.text = "%d BPM · adjust by %d BPM" % [
+        roundi(selected_bpm),int(parsed.get("manual_tempo_step_bpm",5))]
     speed_label.disabled = not bool(parsed.get("loaded",false))
     var recovery_notice: Variant = parsed.get("recovery_notice")
     speed_label.tooltip_text = ("Selected tempo %.1f BPM; effective first-segment tempo %.1f BPM; target %d BPM" %
@@ -567,10 +573,6 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     start_button.disabled = not active_transport and (not _score_ready)
     start_button.call("configure", "pause" if start_button.text == "Pause" else "play",
         active_transport and not bool(parsed.get("paused", false)))
-    header_play_button.text = "Pause" if start_button.text == "Pause" else "Play"
-    header_play_button.disabled = start_button.disabled
-    header_play_button.tooltip_text = start_button.text + " · Space"
-    header_play_button.queue_redraw()
     listen_button.call("configure", "practice" if str(parsed.get("mode", "")) == "listen" else "listen",
         str(parsed.get("mode", "")) == "listen")
 
@@ -607,7 +609,9 @@ func _toggle_tempo_popup() -> void:
         return
     var origin := Vector2i(speed_label.get_screen_position())
     origin.y += roundi(speed_label.size.y) + 5
-    tempo_popup.popup(Rect2i(origin,Vector2i(122,62)))
+    var width := 236
+    origin.x = clampi(origin.x,8,maxi(8,roundi(get_viewport_rect().size.x)-width-8))
+    tempo_popup.popup(Rect2i(origin,Vector2i(width,140)))
 
 
 func present_busy(busy: bool) -> void:
@@ -623,7 +627,6 @@ func present_score(status: Dictionary) -> void:
     _score_ready = bool(status.get("ready",false))
     stage.present_score_status(status)
     start_button.disabled = not _active_transport(_state) and not _score_ready
-    header_play_button.disabled = start_button.disabled
     practice_retry_button.disabled = not bool(_state.get("loaded",false)) or not _score_ready
 
 func present_message(message: String, reveal := false) -> void:
@@ -728,7 +731,8 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
     var compact_steps: bool = width < 1250.0
     progress_label.visible = true
     for bpm_button in [tempo_down_button, tempo_up_button]:
-        bpm_button.custom_minimum_size = Vector2(42.0 if compact_steps else 46.0,38.0)
+        bpm_button.custom_minimum_size = Vector2(72.0 if compact_steps else 82.0,42.0)
+        bpm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_header.add_theme_constant_override("separation",8 if width < 950.0 else 16)
     practice_navigation.add_theme_constant_override("separation", 7 if width >= 1000.0 else 4)
     for child in practice_navigation.get_children():
@@ -739,7 +743,9 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
                 button.custom_minimum_size = Vector2(40,40)
                 button.clip_text = true
             else:
-                button.custom_minimum_size = Vector2(120 if width >= 950.0 else 108,40)
+                button.custom_minimum_size = Vector2(
+                    192 if button == speed_label and width >= 1050.0
+                    else 174 if button == speed_label else 120,40)
     practice_music_button.custom_minimum_size = Vector2(40,40)
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 4 if compact else 6)
