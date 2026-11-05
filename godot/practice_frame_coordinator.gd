@@ -76,10 +76,12 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
             float(stage.renderer.runway_origin_beat))
         # Only the ink visibility and empty barline projection change.
         # The backend clock, source grade and note buffers remain untouched.
-        stage.renderer.present_ambient(
-            screen == "practice" and score_ready and
+        var blank_staff: bool = (screen == "practice" and score_ready and
             str(state.get("phase","")) in ["ready","paused","guided_complete",
-                "performance_complete"],ticks)
+                "performance_complete"])
+        stage.renderer.present_ambient(blank_staff,ticks)
+        if stage.runway_steps != null:
+            stage.runway_steps.visible = not blank_staff
     if stage.effects != null and moving:
         stage.effects.sync_beat(
             beat,maxi(1,int(round(float(state.get("count_in_bar_beats",4))))),
