@@ -3,6 +3,7 @@ extends RefCounted
 ## Collaborators are injected once; each frame receives only immutable
 ## state, one sampled beat, and the already projected visual position.
 const LivingScore := preload("res://living_score.gd")
+const ScoreView := preload("res://notation/shared/view_base.gd")
 
 var practice_view
 var settings_view
@@ -73,6 +74,12 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
     if stage.renderer != null and bool(state.get("loaded",false)):
         stage.renderer.present_clock(beat,visual_beat -
             float(stage.renderer.runway_origin_beat))
+        # Only the ink visibility and empty barline projection change.
+        # The backend clock, source grade and note buffers remain untouched.
+        stage.renderer.present_ambient(
+            screen == "practice" and score_ready and
+            str(state.get("phase","")) in ["ready","paused","guided_complete",
+                "performance_complete"],ticks)
     if stage.effects != null and moving:
         stage.effects.sync_beat(
             beat,maxi(1,int(round(float(state.get("count_in_bar_beats",4))))),
@@ -94,7 +101,7 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
 
     if smoke:
         var tick: int = int(floor(beat*4.0))
-        var playhead: float = stage.renderer.size.x*.42
+        var playhead: float = stage.renderer.size.x*ScoreView.PLAYHEAD_FRACTION
         var content_x: float = -stage.renderer.clock_beat*stage.renderer.timeline.pixels_per_beat
         if beat < 0.0 and tick != last_lead_tick:
             last_lead_tick = tick
