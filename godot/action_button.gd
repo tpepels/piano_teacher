@@ -44,7 +44,7 @@ func set_selected(selected: bool) -> void:
 	queue_redraw()
 
 func _accent() -> Color:
-	return Design.role_accent(action_role)
+	return Design.MINT if action_role == "header_play" else Design.role_accent(action_role)
 
 
 func _background() -> Color:
@@ -57,7 +57,7 @@ func _has_symbol() -> bool:
 	if action_role == "navigation" and text in ["‹", "›", "←", "→"]:
 		return false
 	return action_role in ["navigation", "utility", "listen", "settings", "review",
-		"danger", "library", "tempo_down", "tempo_up"]
+		"danger", "library", "tempo_down", "tempo_up", "header_play"]
 
 func _skin() -> void:
 	var accent: Color = _accent()
@@ -66,14 +66,14 @@ func _skin() -> void:
 	var important := action_role == "primary" or (is_selected and action_role in ["choice", "utility"])
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = background
-	normal.set_corner_radius_all(Design.RADIUS_INPUT)
+	normal.set_corner_radius_all(23 if action_role == "header_play" else Design.RADIUS_INPUT)
 	normal.set_border_width_all(1)
 	normal.border_color = Color(accent, .66) if important else Color(Design.BORDER, .5)
 	normal.content_margin_left = 0 if icon_only else 36 if _has_symbol() else 14
 	normal.content_margin_right = 0 if icon_only else 14
 	normal.content_margin_top = 8
 	normal.content_margin_bottom = 8
-	normal.shadow_color = Color(Design.MINT,.36) if important else Color(Design.NIGHT,.22)
+	normal.shadow_color = Color(Design.MINT,.25) if action_role == "header_play" else Color(Design.MINT,.36) if important else Color(Design.NIGHT,.22)
 	normal.shadow_size = 15 if important else 2
 	normal.shadow_offset = Vector2(0,2)
 	add_theme_stylebox_override("normal", normal)
@@ -145,6 +145,14 @@ func _draw() -> void:
 		"utility":
 			for x in [-5.0, 0.0, 5.0]:
 				draw_circle(center+Vector2(x,0),1.65,accent)
+		"header_play":
+			if text == "Pause":
+				draw_rect(Rect2(center.x-6.0,center.y-7.0,4.0,14.0),accent)
+				draw_rect(Rect2(center.x+2.0,center.y-7.0,4.0,14.0),accent)
+			else:
+				draw_colored_polygon(PackedVector2Array([
+				center+Vector2(-4.5,-8),center+Vector2(8,0),
+				center+Vector2(-4.5,8)]),accent)
 		"tempo_down", "tempo_up":
 			draw_circle(center+Vector2(-4,3),3.0,accent)
 			draw_line(center+Vector2(-1,3),center+Vector2(-1,-8),accent,1.8,true)
