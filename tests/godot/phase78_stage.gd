@@ -142,7 +142,11 @@ func run() -> void:
     check(not OS.low_processor_usage_mode, "Moving score requires continuous frames")
     app._update_visual_frame_rate({"running":true, "paused":true})
     check(Engine.max_fps == 30, "Pausing reduces visual CPU usage")
-    check(OS.low_processor_usage_mode, "Paused score returns to low CPU mode")
+    check(OS.low_processor_usage_mode, "An unloaded paused screen remains idle")
+    app._update_visual_frame_rate({"loaded":true,"running":true,
+        "paused":true,"phase":"paused"})
+    check(Engine.max_fps == 60 and not OS.low_processor_usage_mode,
+        "Loaded paused music keeps the empty staff scrolling smoothly")
     app.last_state = {"loaded":true, "running":true, "paused":false,
         "phase":"count_in", "mode":"practice", "preview_only":true,
         "clock_beat":-1.5, "bpm":60.0, "count_in_bar_beats":3,
@@ -159,7 +163,7 @@ func run() -> void:
     app._process(1.0 / 60.0)
     check(not app.practice_view.stage.effects.transport_active and not app.practice_view.stage.count_in.visible,
         "The UI freezes both the score and countdown on pause")
-    check(app.practice_view.practice_controls.get_child_count() == 3,
-        "Performance lighting cannot add menus or transport controls")
+    check(app.practice_view.practice_controls.get_child_count() == 4,
+        "Compact transport keeps Retry, Play/Pause, Listen, and More")
     print("PHASE78_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
