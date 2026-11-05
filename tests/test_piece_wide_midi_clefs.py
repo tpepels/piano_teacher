@@ -11,6 +11,7 @@ from piano_teacher.notation.lesson import (
     _readable_clef,
     build_lesson_score,
     infer_piece_clefs,
+    infer_midi_clef_plan,
 )
 from piano_teacher.music import ClefChange, Note, Phrase
 from piano_teacher.importing.pieces import import_piece
@@ -125,3 +126,34 @@ def test_authored_right_hand_treble_survives_conflicting_bass_register():
         clef_changes=(ClefChange(0.0, "G", 2, hand="right"),),
         default_clefs=defaults)
     assert _opening_clefs(lesson)["RH"] == ("G", 2)
+
+
+
+def test_midi_bass_opening_is_not_overwritten_by_later_treble_register():
+    # The global RH average is treble, but the first two bars sit clearly
+    # in bass clef. A lesson that begins there must not inherit the average.
+    notes = tuple(
+        Note(float(bar * 4 + step), float(bar * 4 + step + 1), pitch,
+             0, 0, "right")
+        for bar in range(5)
+        for step, pitch in enumerate(
+            (48, 52, 55) if bar < 2 else (72, 76, 79)))
+    boundaries = (0.0, 4.0, 8.0, 12.0, 16.0, 20.0)
+    defaults = infer_piece_clefs(notes)
+    plan = infer_midi_clef_plan(notes, boundaries)
+    assert defaults["right"]["sign"] == "G"
+    assert plan[1]["right"]["sign"] == "F"
+    assert plan[2]["right"]["sign"] == "F"
+    assert plan[5]["right"]["sign"] == "G"
+    opening = Phrase(1, 1, 1, 0.0, 4.0,
+                     tuple(n for n in notes if n.start < 4.0))
+    later = Phrase(5, 5, 5, 16.0, 20.0,
+                   tuple(n for n in notes if n.start >= 16.0))
+    first_score = build_lesson_score(
+        opening, boundaries=boundaries, default_clefs=defaults,
+        inferred_clefs=plan)
+    last_score = build_lesson_score(
+        later, boundaries=boundaries, default_clefs=defaults,
+        inferred_clefs=plan)
+    assert _opening_clefs(first_score)["RH"] == ("F", 4)
+    assert _opening_clefs(last_score)["RH"] == ("G", 2)
