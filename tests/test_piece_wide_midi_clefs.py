@@ -87,3 +87,12 @@ def test_actual_practice_engine_delivers_stable_clefs_to_verovio(tmp_path):
     # The semantic timeline and visual engraver must agree on their clefs.
     model = engine.semantic_score()
     assert model["measures"][0]["clefs"]["left"]["sign"] == "F"
+
+
+def test_unannotated_midi_right_hand_uses_standard_treble_not_bass():
+    # A low right-hand register must not make the upper piano staff switch
+    # clef merely because the imported MIDI lacks written notation.
+    notes = (Note(0, 1, 48, 0, 0, "right"),
+             Note(1, 2, 53, 0, 0, "right"))
+    assert infer_piece_clefs(notes)["right"] == {
+        "sign": "G", "line": 2, "octave_change": 0}

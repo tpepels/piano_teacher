@@ -25,9 +25,12 @@ var practice_header: HBoxContainer
 var practice_navigation: HFlowContainer
 var game_brand: Label
 var title_label: Label
-var passage_label: Label
-var speed_label: Label
-var hand_label: Label
+var speed_label: Button
+var tempo_popup: PopupPanel
+var practice_details_button: Button
+var details_panel: VBoxContainer
+var _details_open := false
+var _last_import_notice := ""
 var game_input_indicator: Control
 var lesson_info_label: Label
 var practice_progress: ProgressBar
@@ -87,11 +90,6 @@ func _ready() -> void:
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(title_label)
-    passage_label = UI.label("A little practice. A little progress.", 14, MUTED)
-    passage_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    passage_label.clip_text = true
-    passage_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    heading.add_child(passage_label)
     var context := UI.stack(6)
     context.custom_minimum_size.x = 250
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -114,25 +112,33 @@ func _ready() -> void:
     practice_settings_button = _button("Settings", func(): navigation_requested.emit("settings"), false, "settings")
     practice_settings_button.call("set_icon_only",true)
     practice_navigation.add_child(practice_settings_button)
+    practice_details_button = _button("Details",_toggle_details,false,"utility")
+    practice_details_button.tooltip_text = "Show exercise details and performance"
+    practice_details_button.call("set_icon_only",true)
+    practice_navigation.add_child(practice_details_button)
     var details := HBoxContainer.new()
     details.add_theme_constant_override("separation", 14)
     details.alignment = BoxContainer.ALIGNMENT_END
     context.add_child(details)
-    speed_label = UI.label("-- BPM", 14, INK)
-    speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"secondary")
+    speed_label.custom_minimum_size = Vector2(124,36)
     speed_label.size_flags_horizontal = Control.SIZE_SHRINK_END
     var tempo_face := Design.bordered_surface(Design.PANEL_RECESSED,7,.62)
-    tempo_face.set_content_margin_all(7)
+    tempo_face.set_content_margin_all(8)
     speed_label.add_theme_stylebox_override("normal",tempo_face)
+    speed_label.tooltip_text = "Tempo settings"
     details.add_child(speed_label)
-    hand_label = UI.label("", 14, ACCENT)
-    hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    hand_label.size_flags_horizontal = Control.SIZE_SHRINK_END
-    var hand_face := Design.bordered_surface(Design.PANEL_RECESSED,7,.62)
-    hand_face.set_content_margin_all(7)
-    hand_face.border_color = Color(Design.MINT,.48)
-    hand_label.add_theme_stylebox_override("normal",hand_face)
-    details.add_child(hand_label)
+    tempo_popup = PopupPanel.new()
+    tempo_popup.name = "TempoAdjustment"
+    tempo_popup.add_theme_stylebox_override("panel",Design.card_surface())
+    add_child(tempo_popup)
+    var tempo_margin := MarginContainer.new()
+    for side in ["left","right","top","bottom"]:
+        tempo_margin.add_theme_constant_override("margin_"+side,8)
+    tempo_popup.add_child(tempo_margin)
+    var tempo_actions := HBoxContainer.new()
+    tempo_actions.add_theme_constant_override("separation",8)
+    tempo_margin.add_child(tempo_actions)
     game_input_indicator = GameInputIndicator.new()
     details.add_child(game_input_indicator)
     lesson_info_label = UI.label("", 14, MUTED)
@@ -154,12 +160,14 @@ func _ready() -> void:
     # Progress already appears as a single thin rail *inside* GameStage.
     # A second full-width bar below the notation made this a dashboard.
     practice_progress.visible = false
-    var information := VBoxContainer.new()
-    information.add_theme_constant_override("separation", 4)
-    practice_layout.add_child(information)
+    details_panel = VBoxContainer.new()
+    details_panel.name = "PracticeDetails"
+    details_panel.visible = false
+    details_panel.add_theme_constant_override("separation", 4)
+    practice_layout.add_child(details_panel)
     var challenge_bar := HBoxContainer.new()
     challenge_bar.add_theme_constant_override("separation", 18)
-    information.add_child(challenge_bar)
+    details_panel.add_child(challenge_bar)
     progress_label = UI.label("", 14, MUTED)
     progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     progress_label.clip_text = true
@@ -172,13 +180,13 @@ func _ready() -> void:
         false, "tempo_down")
     tempo_down_button.tooltip_text = "Decrease by 5 BPM · Keeps the song target"
     tempo_down_button.call("set_icon_only",true)
-    challenge_bar.add_child(tempo_down_button)
+    tempo_actions.add_child(tempo_down_button)
     tempo_up_button = _button("+5 BPM", func(): command_requested.emit({"action":"tempo_up"}),
         false, "tempo_up")
     tempo_up_button.tooltip_text = "Increase by 5 BPM · No mastery credit"
     tempo_up_button.call("set_icon_only",true)
     tempo_up_button.size_flags_horizontal = Control.SIZE_SHRINK_END
-    challenge_bar.add_child(tempo_up_button)
+    tempo_actions.add_child(tempo_up_button)
     game_streak = GameStreak.new()
     challenge_bar.add_child(game_streak)
     # Direct backward navigation does not award mastery or traverse the
@@ -205,7 +213,7 @@ func _ready() -> void:
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var detail_row := HBoxContainer.new()
     detail_row.add_theme_constant_override("separation",12)
-    information.add_child(detail_row)
+    details_panel.add_child(detail_row)
     objective_panel = UI.card()
     objective_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     detail_row.add_child(objective_panel)
@@ -227,7 +235,7 @@ func _ready() -> void:
     performance_review.review_requested.connect(func(summary: Dictionary):
         if review_sheet != null:
             review_sheet.call("open_review", summary))
-    information.add_child(performance_review)
+    details_panel.add_child(performance_review)
     # Flow containers wrap whole readable buttons instead of clipping labels
     # when the practice window is narrow or the user uses larger UI fonts.
     var controls := HFlowContainer.new()
@@ -332,16 +340,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             or str(parsed.get("phase","")) in ["count_in","playing","loading"])
     var selected_bpm: float = float(parsed.get("bpm", 0))
     var effective_bpm: float = float(parsed.get("effective_bpm", selected_bpm))
-    var speed_text := "♪ %d BPM" % int(roundf(selected_bpm))
-    if absf(effective_bpm-selected_bpm) >= .1:
-        speed_text += " · effective %.1f" % effective_bpm
-    speed_label.text = speed_text
+    speed_label.text = "♪ %d BPM ▾" % int(roundf(selected_bpm))
+    speed_label.disabled = not bool(parsed.get("loaded",false))
     var recovery_notice: Variant = parsed.get("recovery_notice")
     speed_label.tooltip_text = ("Selected tempo %.1f BPM; effective first-segment tempo %.1f BPM; target %d BPM" %
         [selected_bpm, effective_bpm, int(parsed.get("target_bpm", 0))])
-    hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
-    hand_label.tooltip_text = "Current hand of the backend lesson"
-    game_input_indicator.present(parsed)
     var stage: String = str(parsed.get("lesson_level", "original"))
     var explanations := {"skeleton": "Find the main notes first.",
         "outline": "Add the chord notes while keeping the pulse.",
@@ -353,9 +356,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         instruction_text = "Play this complete section smoothly, then continue to the next."
     var instruction_tone: Color = INK
     var import_warnings: Array = parsed.get("import_warnings", [])
-    if not import_warnings.is_empty() and str(parsed.get("phase", "")) in ["ready", "feedback", "performance_complete"]:
-        instruction_text = "MIDI imported with repairs: " + "  ".join(import_warnings)
-        instruction_tone = Color("#F1C67D")
+    if not import_warnings.is_empty():
+        var import_notice := "MIDI imported with repairs: " + "  ".join(import_warnings)
+        if import_notice != _last_import_notice:
+            _last_import_notice = import_notice
+            push_warning(import_notice)
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
     var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
@@ -501,8 +506,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         var transformation: String = str(parsed.get("stage_label", ""))
         if not transformation.is_empty():
             passage_text += " · " + transformation
-        passage_label.tooltip_text = passage_text
-    passage_label.text = passage_text
+    title_label.tooltip_text = passage_text
     progress_label.text = progress_text
     lesson_info_label.text = instruction_text
     # The transport action is Play. Do not show the engine's obsolete
@@ -514,6 +518,9 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         progress_label.add_theme_color_override("font_color", progress_tone)
     if lesson_info_label.get_theme_color("font_color") != instruction_tone:
         lesson_info_label.add_theme_color_override("font_color", instruction_tone)
+    # Secondary information is available on demand. Normal playing does not
+    # shrink the music or repeat state already conveyed by score and controls.
+    details_panel.visible = _details_open or _audio_error
     # During graded playback, notation and MIDI note reactions provide the
     # information. Preserve warnings for ungraded previews and audio errors.
     var busy_music: bool = phase in ["playing", "count_in"] and not learning
@@ -542,6 +549,26 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         active_transport and not bool(parsed.get("paused", false)))
     listen_button.call("configure", "practice" if str(parsed.get("mode", "")) == "listen" else "listen",
         str(parsed.get("mode", "")) == "listen")
+
+func _toggle_details() -> void:
+    _details_open = not _details_open
+    details_panel.visible = _details_open or _audio_error
+    practice_details_button.tooltip_text = (
+        "Hide exercise details and performance" if _details_open
+        else "Show exercise details and performance")
+    practice_details_button.call("set_selected",_details_open)
+
+
+func _toggle_tempo_popup() -> void:
+    if tempo_popup.visible:
+        tempo_popup.hide()
+        return
+    if speed_label.disabled:
+        return
+    var origin := Vector2i(speed_label.get_screen_position())
+    origin.y += roundi(speed_label.size.y) + 5
+    tempo_popup.popup(Rect2i(origin,Vector2i(122,62)))
+
 
 func present_busy(busy: bool) -> void:
     _busy = busy
@@ -692,9 +719,7 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
                     54.0)
                 button.clip_text = false
         title_label.add_theme_font_size_override("font_size", _ui_font(24))
-        passage_label.add_theme_font_size_override("font_size", _ui_font(15))
         speed_label.add_theme_font_size_override("font_size", _ui_font(14))
-        hand_label.add_theme_font_size_override("font_size", _ui_font(14))
         progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
         game_input_indicator.custom_minimum_size.y = 22

@@ -8,9 +8,6 @@ const Design := preload("res://practice_theme.gd")
 const READY := Design.MINT
 const QUIET := Design.SLATE
 const MISSING := Design.AMBER
-const FONT_SIZE := 13
-const TEXT_LEFT := 29.0
-const TEXT_RIGHT := 3.0
 
 var connected := false
 var is_preview := false
@@ -20,18 +17,14 @@ var previous_count := -1
 var previous_device := ""
 
 func _init() -> void:
-    mouse_filter = Control.MOUSE_FILTER_IGNORE
+    mouse_filter = Control.MOUSE_FILTER_PASS
     focus_mode = Control.FOCUS_NONE
-    custom_minimum_size = Vector2(0, 29)
+    custom_minimum_size = Vector2(26, 26)
     size_flags_horizontal = Control.SIZE_SHRINK_END
     size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 func _get_minimum_size() -> Vector2:
-    # Reserve the longest status even when disconnected so connection and
-    # activity updates never shift the header. Respect the installed font.
-    var width: float = get_theme_font("font").get_string_size(
-        "MIDI CONNECTED", HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
-    return Vector2(TEXT_LEFT + ceilf(width) + TEXT_RIGHT, 0)
+    return Vector2(26,26)
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_THEME_CHANGED:
@@ -64,6 +57,7 @@ func present(state: Dictionary) -> void:
         connected = current_connected
         is_preview = preview
         label = next_label
+        tooltip_text = next_label + (" · " + current_device if current_connected else " · Connect a keyboard in Settings")
         queue_redraw()
 
 func _process(delta: float) -> void:
@@ -87,10 +81,3 @@ func _draw() -> void:
     draw_circle(center, 6.0, Design.PANEL_RECESSED)
     draw_arc(center, 6.4, 0, TAU, 32, Color(tone, .64), 1.25, true)
     draw_circle(center, 3.4 + flash * 2.0, Color(tone, .66 + flash * .34))
-    var font: Font = get_theme_font("font")
-    var available: float = maxf(0.0, size.x - TEXT_LEFT - TEXT_RIGHT)
-    var baseline: float = y + (font.get_ascent(FONT_SIZE)
-        - font.get_descent(FONT_SIZE)) * .5
-    draw_string(font, Vector2(TEXT_LEFT, baseline), label,
-        HORIZONTAL_ALIGNMENT_LEFT, available, FONT_SIZE,
-        Color("#E4F6EB") if connected and not is_preview else Color("#AFC7BC"))

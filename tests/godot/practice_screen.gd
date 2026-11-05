@@ -32,20 +32,22 @@ func run() -> void:
                 view.present(values,true)
                 values.title = "mutated"
                 view.present_busy(true)
-                check(view.title_label.text == "A real piece" and view.speed_label.text == "♪ 72 BPM" and view.speed_label.tooltip_text.contains("target 80 BPM"),"Practice captures title and tempo values")
+                check(view.title_label.text == "A real piece" and view.speed_label.text == "♪ 72 BPM ▾" and view.speed_label.tooltip_text.contains("target 80 BPM"),"Practice captures title and tempo values")
                 var named_source := state()
                 named_source.exercise_strategy = "coda-fukuda-midi"
                 named_source.stage_label = "Melody outline"
                 view.present(named_source,true)
-                check("Coda" not in view.passage_label.text and
-                    "Melody outline" in view.passage_label.text,
+                check("Coda" not in view.title_label.tooltip_text and
+                    "Melody outline" in view.title_label.tooltip_text,
                     "Practice introduces music without internal generator labels")
                 view.present_busy(true)
                 check(view.tempo_up_button.disabled and view.tempo_down_button.disabled and
                     view.practice_skip_button.disabled and view.practice_previous_button.disabled,
                     "Busy state updates every immediate Practice control")
                 view.present(state("playing"),true)
-                check(view.passage_label.text == "Learn · Measure 2 of 4" and view.start_button.text == "Pause","Live source-bar and transport captions are backend-derived")
+                check(not view.details_panel.visible and view.stage.practice_stage_bar.visible == false,
+                    "Practice keeps repeated learning HUD hidden")
+                check(view.title_label.tooltip_text == "Learn · Measure 2 of 4" and view.start_button.text == "Pause","Live source-bar and transport captions are backend-derived")
                 check(not view.feedback_label.visible and not view.lesson_info_label.visible,"Graded music keeps ordinary coaching outside the score")
                 var learn := state("guided_complete")
                 learn.mode = "learn"
@@ -65,6 +67,9 @@ func run() -> void:
                 view.listen_requested.connect(func(): intent.append("listen"))
                 view.command_requested.connect(func(command: Dictionary): intent.append(command))
                 view.present(state(),true)
+                view._toggle_tempo_popup()
+                check(view.tempo_popup.visible,"BPM button reveals tempo controls")
+                view.tempo_popup.hide()
                 view.practice_music_button.pressed.emit()
                 view.practice_settings_button.pressed.emit()
                 view.start_button.pressed.emit()

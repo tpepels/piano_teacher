@@ -541,8 +541,12 @@ def infer_piece_clefs(notes) -> dict:
     practice route. Explicit source MusicXML clef changes still take priority.
     """
     return {
-        hand: _readable_clef([n for n in notes if n.hand == hand], None, hand)
-        for hand in ("right", "left")
+        # MIDI has no clef metadata. Keep the upper staff in treble clef;
+        # guessing bass from one part's register produces the wrong icon
+        # in right-hand exercises and makes the score inconsistent.
+        "right": {"sign": "G", "line": 2, "octave_change": 0},
+        "left": _readable_clef(
+            [n for n in notes if n.hand == "left"], None, "left"),
     }
 
 
