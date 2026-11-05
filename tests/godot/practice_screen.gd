@@ -51,12 +51,12 @@ func run() -> void:
                 slow.bpm = 31
                 view.present(slow,true)
                 check(view.speed_label.text == "Grave · 31 BPM ▾" and
-                    view.tempo_name_label.text == "Grave",
+                    view.tempo_name_label.text == "Grave · 31 BPM",
                     "Slow practice displays an approximate Italian tempo name")
                 var faster := state()
                 faster.bpm = 96
                 view.present(faster,true)
-                check(view.tempo_name_label.text == "Andante",
+                check(view.tempo_name_label.text == "Andante · 96 BPM",
                     "Tempo category responds to the actual selected BPM")
                 var transport_bloom: ColorRect = view.start_button.get_node_or_null(
                     "TransportBloom")
@@ -76,7 +76,7 @@ func run() -> void:
                     "Melody outline" in view.title_label.tooltip_text,
                     "Practice introduces music without internal generator labels")
                 view.present_busy(true)
-                check(view.tempo_name_label.text == "Adagio" and
+                check(view.tempo_name_label.text == "Adagio · 72 BPM" and
                     view.tempo_value_label.text.contains("4 BPM") and
                     view.tempo_up_button.text == "+" and view.tempo_down_button.text == "−",
                     "Tempo dropdown presents an Italian name with legible +/- controls")
@@ -208,6 +208,37 @@ func run() -> void:
                 view.show_source_picker(values)
                 view.cancel_source_picker()
                 check(not view.is_source_picker_open() and intent.back() == "library","Cancel returns to the music drawer")
+            "resume_choice":
+                var intents: Array = []
+                view.command_requested.connect(func(command: Dictionary): intents.append(command))
+                view.navigation_requested.connect(func(destination: String): intents.append(destination))
+                var previous := state()
+                previous.lesson_step = 14
+                previous.lesson_steps = 639
+                previous.piece_last_bar = 80
+                view.present(previous,true)
+                view.show_resume_prompt(previous,true)
+                check(view.is_resume_prompt_open() and view.resume_measure_button.visible,
+                    "Reopening a saved song offers contextual overlap and a measure chooser")
+                check(view.resume_prompt.dialog_text.contains("14 of 639"),
+                    "Review choice shows the exact saved step")
+                view.resume_prompt.confirmed.emit()
+                check(intents.back() == {"action":"select_step","number":12},
+                    "Review returns two steps without clearing mastery or changing the source")
+                view.resume_prompt.hide()
+                intents.clear()
+                view.show_resume_prompt(previous,false)
+                check(view.is_resume_prompt_open() and not view.resume_measure_button.visible,
+                    "Recent-song Continue keeps the saved source; measure choice is optional")
+                view.resume_prompt.canceled.emit()
+                view.resume_prompt.hide()
+                check(intents == ["practice"] and view._resume_open_state.is_empty(),
+                    "Continue keeps the saved position without a navigation command")
+                view.show_resume_prompt(previous,true)
+                view.resume_prompt.custom_action.emit("measure")
+                check(view.is_source_picker_open() and not view.is_resume_prompt_open(),
+                    "Alternate starting measure reuses the existing source picker")
+                view.cancel_source_picker()
             "midi_guard":
                 var commands: Array = []
                 view.command_requested.connect(func(command: Dictionary): commands.append(command))
