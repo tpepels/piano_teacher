@@ -18,6 +18,7 @@ from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.future_score import FutureScore
 from .application.midi_connection import MidiConnection, MidiNotice
+from .application.midi_key_shortcuts import MidiKeyShortcuts
 from .application.listen_session import ListenSelection, ListenSession
 from .practice import Recorder
 from .importing.pieces import import_piece
@@ -181,6 +182,7 @@ class PracticeEngine:
         self.assessment = AssessmentService()
         self.assessment_policies = PracticeAssessmentPolicies.defaults(self.assessment)
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
+        self.midi_key_shortcuts = MidiKeyShortcuts(self.library.settings["midi_key_ranges"])
         self.library_health = LibraryHealth(self.library)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -222,6 +224,7 @@ class PracticeEngine:
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
         """Cancel session state after detachment and before closing the input."""
         with self.midi.disconnected(reason) as notice:
+            self.midi_key_shortcuts.cancel_capture()
             self.live_input.clear_device()
             self._stop(reason=reason)
             if self.teaching is not None:
@@ -256,6 +259,7 @@ class PracticeEngine:
         with self.lock:
             try:
                 with self.midi.selecting(name, callback=self._receive) as selected:
+                    self.midi_key_shortcuts.cancel_capture()
                     self.live_input.clear_device()
                     self._stop(reason="device_changed")
             except RuntimeError as exc:
@@ -607,6 +611,8 @@ class PracticeEngine:
                 self.feedback = "Retry strategy changed"
                 self.next_action = "Press Play to start a new attempt."
             updated = self.library.update(**changes)
+            if "midi_key_ranges" in changes:
+                self.midi_key_shortcuts.configure(updated["midi_key_ranges"])
             self.measurement.event("settings_applied", {"intent_id": intent, "changes": changes})
             if {"evidence_retention_days", "evidence_budget_mib"} & changes.keys():
                 if self.running and not self.visual_transport.paused:
@@ -716,6 +722,28 @@ class PracticeEngine:
                 if message.type == "note_on" and message.velocity > 0:
                     self.midi_calibration.observe(now)
                 return
+            # Hardware shortcuts are resolved before activity, grading,
+            # count-in auto-start, guided capture, or live MIDI feedback.
+            if message.type in ("note_on", "note_off"):
+                expected = frozenset(
+                    note.pitch for note in self.plan.active_phrase.notes
+                ) if self.plan is not None else frozenset()
+                decision = self.midi_key_shortcuts.accept(
+                    message, device=self.midi.device,
+                    exercise_pitches=expected,
+                    can_pause=self.running or (self.mode == "learn" and
+                        self.teaching is not None),
+                    paused=self.visual_transport.paused)
+                if decision.completed_range is not None:
+                    ranges = self.library.settings["midi_key_ranges"].copy()
+                    ranges[self.midi.device] = list(decision.completed_range)
+                    self.set_preferences(midi_key_ranges=ranges)
+                if decision.action:
+                    action = ("learn_retry" if decision.action == "restart"
+                              and self.mode == "learn" else decision.action)
+                    self.control(action)
+                if decision.consumed:
+                    return
             corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
                             if corrected_at is None else corrected_at)
             # A key can reach the next attempt's musical deadline before the
@@ -1635,6 +1663,16 @@ class PracticeEngine:
             route = ControlDispatcher.route(action)
             if route == "calibration":
                 return self.midi_calibration_action(action)
+            if route == "device_range":
+                if action == "midi_range_cancel":
+                    self.midi_key_shortcuts.cancel_capture()
+                else:
+                    if not self.midi.connected:
+                        raise ValueError("Connect a MIDI piano before setting its key range")
+                    if self.running and not self.visual_transport.paused:
+                        self._pause_current_session()
+                    self.midi_key_shortcuts.begin_capture(self.midi.device)
+                return
             if route == "reset":
                 return self._reset_current_path(
                     fingerprint=kwargs.get("fingerprint"),
@@ -1859,6 +1897,15 @@ class PracticeEngine:
         if learning:
             self.teaching.resume(now=now)
         self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
+        # A paused passage returns with a short genuine count-in. Its
+        # authoritative run_at moves, so MIDI grading and source ink agree
+        # and no note is required during the visual reading lead-in.
+        if (shift_run_at and self.running and self.plan is not None
+                and self.mode in ("practice", "perform")
+                and self.visual_transport.run_at <= now):
+            lead_beats = max(1.0, min(4.0, self.count_in_bar_beats))
+            self.visual_transport.run_at += lead_beats * 60.0 / self.plan.bpm
+            self.count_in_beats = lead_beats
         self.measurement.event("timeline_resume", {
             "scheduled_origin_before": previous_origin-self.measurement.origin,
             "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,
@@ -2610,6 +2657,7 @@ class PracticeEngine:
             calibration_sample_at = time.monotonic()
             state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
+            state["midi_key_range"] = self.midi_key_shortcuts.status(self.midi.device)
             state["midi_calibration"] = self.midi_calibration.snapshot(
                 calibration_sample_at)
             return state
