@@ -486,8 +486,7 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     var playhead_x: float = size.x*PLAYHEAD_FRACTION
     for annotation_pass in fingering_pass_clocks:
         var context := {
-            "active_hand":active_hand,"play_from_beat":play_from_beat,
-            "score_loop_enabled":false}
+            "active_hand":active_hand,"play_from_beat":play_from_beat}
         if annotation_pass.has("stream_floor"):
             context["stream_floor"] = annotation_pass["stream_floor"]
             context["stream_ceiling"] = annotation_pass["stream_ceiling"]

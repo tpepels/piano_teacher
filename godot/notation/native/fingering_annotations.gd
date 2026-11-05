@@ -5,7 +5,6 @@ const Design := preload("res://practice_theme.gd")
 const FingeringPlacement := preload("res://notation/native/fingering_placement.gd")
 const FingeringSpatialLayout := preload("res://notation/native/fingering_spatial_layout.gd")
 const FingeringObstacles := preload("res://notation/native/fingering_obstacles.gd")
-const SourceVisibility := preload("res://notation/native/source_visibility.gd")
 const FINGERING_FONT_SIZE := 16
 
 signal fingering_change_requested(source_id: String, finger: Variant)
@@ -118,7 +117,7 @@ func metrics(font_size: int) -> Dictionary:
     return value
 
 
-## Context: active_hand, play_from_beat, score_loop_enabled, preparation_history.
+## Context: active_hand, play_from_beat, future-only stream_floor/ceiling.
 ## The canvas is used only for drawing; no canvas/view reference is retained.
 func paint(canvas, clock: float, playhead_x: float, gap: float,
         pass_index: int = 0, pass_start: float = 0.0, context: Dictionary = {}) -> void:
@@ -143,10 +142,6 @@ func paint(canvas, clock: float, playhead_x: float, gap: float,
             break
         var source_note: Dictionary = score_layout.expression_note_index.get(
             str(item["event_ids"][0]),{})
-        if not SourceVisibility.event_visible(source_note,
-                pass_start,bool(context.get("score_loop_enabled",false)),
-                context.get("preparation_history",{})):
-            continue
         if context.has("stream_floor"):
             var onset: float = float(source_note.get("beat",-INF))
             if onset < float(context["stream_floor"]) or \
