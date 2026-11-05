@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from ..fingering.projection import authored_projection_sources, project_model
 from ..lesson_validation import require_lesson_alignment
 from ..music import Phrase, Piece
-from ..notation.lesson import LessonScore, build_lesson_score, infer_piece_clefs
+from ..notation.lesson import (LessonScore, build_lesson_score,
+                               infer_piece_clefs, infer_midi_clef_plan)
 from ..notation.model import build_score_model
 from ..preprocessing_cache import PreprocessingCache
 from ..engraving.engraving import EngravedScore, render_layout
@@ -67,6 +68,8 @@ class ScoreArtifacts:
                 key_signatures=piece.key_signatures,
                 clef_changes=piece.clef_changes,
                 default_clefs=infer_piece_clefs(piece.notes),
+                inferred_clefs=(infer_midi_clef_plan(piece.notes, piece.bar_boundaries)
+                                if not piece.source_musicxml else None),
                 barlines=piece.barlines,
                 # Source slurs/rests use the original event clock. Retimed
                 # drills must engrave their actual durations instead.
