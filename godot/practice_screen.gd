@@ -528,11 +528,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     # shrink the music or repeat state already conveyed by score and controls.
     details_panel.visible = _details_open
     if _audio_error:
-        stage.practice_playback_banner.text = feedback_text
-        stage.practice_playback_banner.visible = true
+        self.stage.practice_playback_banner.text = feedback_text
+        self.stage.practice_playback_banner.visible = true
         _audio_banner_active = true
     elif _audio_banner_active:
-        stage.practice_playback_banner.visible = false
+        self.stage.practice_playback_banner.visible = false
         _audio_banner_active = false
     # During graded playback, notation and MIDI note reactions provide the
     # information. Preserve warnings for ungraded previews and audio errors.
