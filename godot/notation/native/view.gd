@@ -46,7 +46,7 @@ var glyphs = VerovioGlyphs.new():
 var layout = ScoreLayout.new(timeline,glyphs):
     set(value):
         layout = value
-            layout.set_viewport(size)
+        layout.set_viewport(size)
         if ink_geometry != null:
             ink_geometry.score = value
             ink_geometry.clear_cache()
