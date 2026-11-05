@@ -264,6 +264,48 @@ failures for sampled Peace Piece rests and Chopin/Moonlight note contours.
 Those are not waived by a successful UI runtime, and target-GPU/real-MIDI
 acceptance remains open.
 
+### 2026-11-05 — Continuous repetition, saved-song overlap and tempo controls
+
+- The fixed playhead is a forward-only Godot presentation world. READY,
+  Pause, Retry, transport recovery, score loading and next-stage preparation
+  never intentionally stop or reverse its motion. Pausing prevents admission
+  of *new* retained note clips; existing visible clips keep drifting out.
+  Retry and automatic restarts admit new clips after the engine's meter-aware
+  preparation gap. The backend's source timing remains independent for
+  grading, audio, and evidence.
+- No MIDI device: a preview repeats after one empty measure and cannot earn
+  mastery. A connected but silent keyboard: the authoritative grader records
+  missing notes, applies source-bound recovery and replays after the rest.
+  Incorrect attacks use the same registered response policy. Evidence-guided
+  practice stops introducing new automatic interventions after twelve actions
+  but keeps repeating; it no longer automatically diverts rhythmic practice
+  into a note-finding state that could wait indefinitely. An explicit learner
+  Pause still suppresses new score admissions. Irrecoverable score errors
+  prevent fresh *graded notes* from being admitted but not visual world time.
+- Source fingerprints isolate persisted piece/course positions, learned
+  tempos and mastery. On opening a saved piece past its first lesson step,
+  including the startup's last-opened piece, Practice offers three paths:
+  restore the exact step, review two earlier exercise steps, or select a
+  source measure (when opened from the full Library). Earlier mastery remains
+  stored. Review uses ordinary lesson steps and assessment, not an invented
+  mastery credit; returning to the previous saved step is via normal course
+  progression or manual selection.
+- The tempo popover is a compact 190×98 panel with an Italian tempo name
+  and symmetric five-BPM controls. Manually increasing beyond the imported
+  song's original BPM is supported up to the configured application maximum,
+  without rewriting its musical target or discarding stage-specific saved BPM.
+- Coda and Fukuda contribute actual source-safe musical transformations and
+  can incorporate graded source-note feedback. The separate registered
+  mistake-response policy determines repeat, isolate, slow and reintegrate;
+  `LearningPlan` sets tempo ladder and accepted-take mastery; `PracticeEngine`
+  schedules transitions. They do **not** presently own retry policy, the entire
+  tempo ladder or all transport decisions. Full authority would require a
+  separate, explicit contract/architecture revision; do not claim it now.
+- Bounded software verification is distinct from the independent real-score
+  framebuffer oracle, physical MIDI/target GPU tests, full package audit and
+  long-session failure handling. Only checks actually run for the matching
+  revision can certify their specific gates.
+
 ## Immediate order of work
 
 **Learning measurement and adaptive teaching continuation (2026-11-04):**
