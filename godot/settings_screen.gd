@@ -399,7 +399,7 @@ func _ready() -> void:
     add_child(device_menu)
 
 func _build_learning_controls(parent: VBoxContainer) -> void:
-    history_actions_body.add_child(_label("Saved practice results", 14, MUTED))
+    parent.add_child(_label("Saved practice results", 14, MUTED))
     history_summary_label = _label("Loading local learning history…", 13, MUTED)
     parent.add_child(history_summary_label)
     history_actions_body = _stack(10)
