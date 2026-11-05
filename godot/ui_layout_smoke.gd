@@ -154,15 +154,12 @@ func _run() -> void:
     var streak_meter: Control = scene.practice_view.game_streak
     _check(illuminated != null and illuminated.get_parent() == score,
         "The musical stage must be behind the real score, not a separate game simulation")
-    _check(streak_meter != null and streak_meter.custom_minimum_size.x >= 120,
-        "Three clean-pass indicators need a readable dedicated space")
-    _check(streak_meter.size.y >= 20.0,
-        "Clean-run indicators collapsed to an invisible line")
-    _check(_in_viewport(streak_meter, viewport),
-        "Game clean-run indicators leave the visible window")
+    _check(streak_meter != null and
+        scene.practice_view.details_panel.is_ancestor_of(streak_meter),
+        "Clean-pass indicators must live in More, outside the score")
     var three: Control = scene.practice_view.practice_controls
-    _check(three.get_child_count() == 3,
-        "The game must have only Retry, Play/Pause and Listen as transport controls")
+    _check(three.get_child_count() == 4,
+        "Compact transport must have Retry, Play/Pause, Listen and More")
     _check((scene.practice_view.start_button as Button).get_theme_stylebox("normal") is StyleBoxFlat,
         "Primary piano control must have a tactile custom skin")
     var retry: Button = scene.practice_view.practice_retry_button
@@ -170,8 +167,8 @@ func _run() -> void:
     var listen: Button = scene.practice_view.listen_button
     _check(primary.size.y >= retry.size.y and primary.size.y >= listen.size.y,
         "Play is visually dominant, not another website-sized button")
-    _check(retry.size.x >= 145.0 and listen.size.x >= 145.0,
-        "Secondary game keys need real hit targets")
+    _check(retry.size.x >= 42.0 and listen.size.x >= 42.0,
+        "Compact secondary game keys need usable hit targets")
     _check(str(retry.get_meta("ui_button_role", "")) == "transport_retry" and
         str(primary.get_meta("ui_button_role", "")) == "transport_primary" and
         str(listen.get_meta("ui_button_role", "")) == "transport_listen",
@@ -190,11 +187,15 @@ func _run() -> void:
         "Settings navigation stays neutral while Play holds the accent")
     _check((scene.practice_view.practice_settings_button as Button).focus_mode ==
         Control.FOCUS_ALL, "Navigation must stay keyboard accessible")
-    _check(not (scene.practice_view.practice_progress as ProgressBar).visible,
-        "A duplicate progress bar below the score must not compete with the stage rail")
-    var brand: Label = scene.practice_view.game_brand
-    _check(not brand.visible,
-        "Practice keeps the piece title above music without a competing brand row")
+    _check(scene.practice_view.stage.runway_steps != null,
+        "The score must own its progress markers")
+    _check(scene.practice_view.title_label.is_visible_in_tree(),
+        "The piece title must be visible above notation")
+    _check(scene.practice_view.practice_header.size.y <= 56.0,
+        "Practice header must not wrap into two rows")
+    _check(scene.practice_view.stage.fingering_status_label.get_parent() ==
+        scene.practice_view.details_panel,
+        "Fingering issues belong in More rather than a permanent score row")
     var count_in: Control = scene.practice_view.stage.count_in
     count_in.present(-2.5, 3, true, false)
     _check(count_in.visible and int(count_in.get("count")) == 3,
