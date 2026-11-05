@@ -905,12 +905,15 @@ func _draw() -> void:
     # and used to look like an orphaned vertical rule in the score.
     # One semantic practice timeline owns both source-copy placement and
     # preparation silence. No independently inferred final-bar duration.
+    # All phases use the exact same absolute world-axis projection.
+    # Play/Pause/Retry cannot switch cameras or reconstruct source ink.
+    _project_stream(playhead_x)
     if retained_annotations != null:
         retained_annotations.queue_redraw()
-    # Never put engineering telemetry on top of the actual lesson.
     if OS.get_environment("PIANO_TEACHER_NATIVE_DIAGNOSTICS") == "1":
-        var phase: String = "COUNT-IN" if camera_clock < 0.0 and running else \
-            "PAUSED" if paused else "PLAYING" if running else "READY"
+        var phase: String = "PAUSED" if paused else \
+            "COUNT-IN" if clock_beat < 0.0 and running else \
+            "PLAYING" if running else "READY"
         draw_string(font,Vector2(14.0,22.0),
             "NATIVE · %s · %.0f px/beat · %.0f BPM · %d events" % [
                 phase,timeline.pixels_per_beat,bpm,frame_scanned_events],
