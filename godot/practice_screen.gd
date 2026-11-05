@@ -801,8 +801,10 @@ func _game_button(button: Button, central := false) -> void:
     normal.set_content_margin_all(12)
     normal.set_border_width_all(1)
     normal.border_color = Color(accent, .7 if central else .22)
-    normal.shadow_color = Color("#56FFC4", .48) if central else Color.TRANSPARENT
-    normal.shadow_size = 24 if central else 0
+    # Primary bloom is now GPU-drawn behind GameTransportButton. A
+    # StyleBox shadow here produced a solid rectangular halo.
+    normal.shadow_color = Color.TRANSPARENT
+    normal.shadow_size = 0
     button.add_theme_stylebox_override("normal", normal)
     var hover := normal.duplicate() as StyleBoxFlat
     hover.bg_color = normal.bg_color.lightened(.16)
