@@ -237,10 +237,10 @@ func run() -> void:
                     and not view.is_resume_prompt_open(),
                     "Keep my place dismisses without an engine command")
                 view.show_resume_prompt(previous,false)
-                var play_count := 0
-                view.play_requested.connect(func(): play_count += 1)
+                var play_events: Array = []
+                view.play_requested.connect(func(): play_events.append("play"))
                 view.start_button.pressed.emit()
-                check(play_count == 1 and not view.is_resume_prompt_open(),
+                check(play_events == ["play"] and not view.is_resume_prompt_open(),
                     "Normal Play dismisses inline review and actually starts")
                 view.show_resume_prompt(previous,true)
                 view.resume_measure_button.pressed.emit()
