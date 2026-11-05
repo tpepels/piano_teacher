@@ -1025,7 +1025,8 @@ func _send_action(command: Dictionary) -> void:
         var opening: float = maxf(0.0,float(last_state.get("play_from_beat",0.0)))
         if requested == "resume":
             opening = maxf(opening,opening+_transport_beat_at(Time.get_ticks_msec()))
-        var reserved: Dictionary = renderer.arm_stream_take(visual_now,opening)
+        var reserved: Dictionary = renderer.arm_stream_take(
+            visual_now,opening,NAN,requested == "resume")
         if reserved.is_empty():
             practice_view.present_message("Score is not ready for continuous playback")
             practice_view.finish_action()
@@ -1033,6 +1034,8 @@ func _send_action(command: Dictionary) -> void:
         command = command.duplicate(true)
         command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
             float(reserved["start_world"]),visual_now,score_flow.bpm)
+        if requested == "resume":
+            command["reuse_pending_score"] = bool(reserved.get("reused",false))
         command["continuous_horizon_beats"] = maxf(4.0,
             renderer._stream_right_beats()+
             renderer._stream_header_beats(0.0)+1.5)

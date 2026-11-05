@@ -62,6 +62,17 @@ func _initialize() -> void:
     v.present_flow(world,state,-float(prepared["start_world"]))
     check(v.admissions.size()==count,
         "the actual Play state transition cannot add notes")
+    state["paused"]=true
+    state["phase"]="paused"
+    v.present_flow(world+.1,state,-float(prepared["start_world"]))
+    var live_count: int = v.admissions.size()
+    var unchanged: Dictionary = v.arm_stream_take(world+.1,0.0,NAN,true)
+    check(bool(unchanged.get("reused",false)) and
+            v.admissions.size()==live_count,
+        "Pause before the first source note must not create a duplicate")
+    state["paused"]=false
+    state["phase"]="count_in"
+    v.present_flow(world+.1,state,-float(prepared["start_world"]))
     check(is_equal_approx(float(v.stream_passes[0]["world_origin"]),initial_origin),
         "the Play state transition cannot seek or move the score")
     var previous_x := INF

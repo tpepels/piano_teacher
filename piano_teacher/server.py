@@ -1856,7 +1856,8 @@ class PracticeEngine:
         elif action == "resume":
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._resume_current_session(presentation_lead_seconds=float(
-                kwargs.get("presentation_lead_seconds",0.0)))
+                kwargs.get("presentation_lead_seconds",0.0)),
+                reuse_pending_score=kwargs.get("reuse_pending_score",False) is True)
 
     def _open_selected_measure(self, kwargs: dict):
         """Open a source measure using the existing lesson navigation policy."""
@@ -1965,7 +1966,8 @@ class PracticeEngine:
             self.teaching.pause(now=now)
         return
 
-    def _resume_current_session(self, *, presentation_lead_seconds: float = 0.0):
+    def _resume_current_session(self, *, presentation_lead_seconds: float = 0.0,
+                                reuse_pending_score: bool = False):
         """Resume grading after future-only visual notes have reading space."""
         learning = self.mode == "learn" and self.teaching is not None
         shift_run_at = resume_timeline(
@@ -1988,19 +1990,29 @@ class PracticeEngine:
                 and self.mode in ("practice", "perform")
                 and self.pause_context in ("playing", "count_in")):
             if presentation_lead_seconds > 0.0:
-                # The always-scrolling renderer reserves a future empty gap
-                # after any visible old ink, then requests an engine-owned
-                # reading lead. The same delay controls actual MIDI grading.
-                lead_seconds = max(4.0*60.0/self.plan.bpm,
-                    presentation_lead_seconds)
-                already_waiting = max(0.0,self._resume_grading_after-now)
-                additional = max(0.0,lead_seconds-already_waiting)
-                if additional > 0:
-                    self.visual_transport.run_at += additional
-                self._resume_grading_after = now + max(
-                    lead_seconds,already_waiting)
-                self.count_in_beats = max(self.count_in_beats,
-                    (self._resume_grading_after-now)*self.plan.bpm/60)
+                # With an original source copy still ahead of the playhead,
+                # never double-add a full reading lead to the old count-in.
+                # Restore the graded downbeat to that exact unchanged future
+                # world position. Earlier graded keys cannot exist yet.
+                if reuse_pending_score:
+                    if (self.pause_context != "count_in" or \
+                            self.visual_transport.run_at <= paused_at):
+                        raise ValueError("Cannot reuse a passage after graded notes began")
+                    self.visual_transport.run_at = now + presentation_lead_seconds
+                    self._resume_grading_after = self.visual_transport.run_at
+                    self.count_in_beats = max(self.count_in_beats,
+                        presentation_lead_seconds*self.plan.bpm/60.0)
+                else:
+                    lead_seconds = max(4.0*60.0/self.plan.bpm,
+                        presentation_lead_seconds)
+                    already_waiting = max(0.0,self._resume_grading_after-now)
+                    additional = max(0.0,lead_seconds-already_waiting)
+                    if additional > 0:
+                        self.visual_transport.run_at += additional
+                    self._resume_grading_after = now + max(
+                        lead_seconds,already_waiting)
+                    self.count_in_beats = max(self.count_in_beats,
+                        (self._resume_grading_after-now)*self.plan.bpm/60)
             elif (self.midi.connected and not self.preview_only
                   and self.pause_context == "playing"
                   and not had_reading_lead

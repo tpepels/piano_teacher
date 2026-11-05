@@ -30,6 +30,7 @@ static func pending_index(passes: Array, opening: float, world: float) -> int:
         var item: Dictionary = passes[index]
         var start: float = float(item["world_origin"]) + opening
         if not bool(item.get("pending",false)) or \
+                str(item.get("take_key","prepared")) != "prepared" or \
                 absf(float(item["source_floor"])-opening) > .00001 or \
                 start < world + MIN_READING_BEATS or start >= first_world:
             continue
@@ -47,3 +48,25 @@ static func engraved_clip_bounds(floor: float, ceiling: float,
     var trailing := staff_gap*2.2 if ceiling >= source_end-.0001 else 0.0
     return Vector2(floor*pixels_per_beat-leading,
         ceiling*pixels_per_beat+trailing)
+
+
+static func paused_unplayed_index(passes: Array, take_key: String,
+        opening: float, world: float) -> int:
+    # A pause before the first graded note should reuse its already visible
+    # (or still offscreen) source, rather than duplicate the same score.
+    # Once any attack reached the playhead, the remaining passage needs
+    # its own later-world reservation; old ink must continue drifting out.
+    var best := -1
+    var soonest := INF
+    for index in range(passes.size()):
+        var item: Dictionary = passes[index]
+        if str(item.get("kind","source")) != "source" or \
+                str(item.get("take_key","")) != take_key or \
+                absf(float(item.get("source_floor",-INF))-opening) > .00001:
+            continue
+        var onset: float = float(item["world_origin"])+opening
+        if onset < world+MIN_READING_BEATS or onset>=soonest:
+            continue
+        best=index
+        soonest=onset
+    return best

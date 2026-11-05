@@ -620,7 +620,8 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
 
 
 func arm_stream_take(world: float, opening: float,
-        planned_start_world: float = NAN) -> Dictionary:
+        planned_start_world: float = NAN,
+        resuming_paused: bool = false) -> Dictionary:
     # Normal Play selects a previously engraved READY copy. A preloaded
     # different stage may carry an exact authoritative future graded onset.
     # It must be offscreen before activation; a stale deadline fails closed.
@@ -628,7 +629,17 @@ func arm_stream_take(world: float, opening: float,
         return {}
     stream_world_beat = maxf(stream_world_beat,world)
     var serial := -1
-    if is_finite(planned_start_world):
+    var reused := false
+    if resuming_paused and _stream_was_paused and \
+            absf(opening-_stream_paused_source) < .0001:
+        var old_index: int = StreamAdmission.paused_unplayed_index(
+            stream_passes,_stream_last_take,opening,stream_world_beat)
+        if old_index >= 0:
+            serial = int(stream_passes[old_index]["serial"])
+            reused = true
+    if serial >= 0:
+        pass # Existing unplayed original notes retain their world origin.
+    elif is_finite(planned_start_world):
         var safe_start: float = StreamAdmission.future_start(
             stream_passes,stream_world_beat,_stream_right_beats(),
             _stream_header_beats(opening))
@@ -646,7 +657,7 @@ func arm_stream_take(world: float, opening: float,
             item["armed"] = true
             _stream_armed_serial = serial
             return {"start_world":float(item["world_origin"])+opening,
-                "opening":opening}
+                "opening":opening,"reused":reused}
     return {}
 
 

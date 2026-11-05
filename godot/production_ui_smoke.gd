@@ -246,20 +246,25 @@ func _process(_delta: float) -> bool:
     if beat_advance <= .04:
         _fail("Resume froze or reset the continuously moving staff")
         return true
-    if renderer._stream_serial < paused_pass_serial+1:
-        _fail("Resume failed to preposition a fresh future passage")
-        return true
-    var resumed_future := false
+    var reused_original := false
+    var future_only := true
+    var new_copy := false
     for item in renderer.stream_passes:
+        if int(item["serial"]) == ready_pass_serial and \
+                is_equal_approx(float(item["world_origin"]),ready_world_origin):
+            reused_original = float(item["world_origin"]) + \
+                float(item["source_floor"]) > renderer.stream_world_beat + 2.0
         if int(item["serial"]) > paused_pass_serial and \
                 str(item.get("kind","source")) == "source":
-            var x: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
+            new_copy = true
+            var ink_start: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
                 (float(item["world_origin"])+float(item["source_floor"])-
-                renderer.stream_world_beat)*renderer.timeline.pixels_per_beat
-            if x > renderer.size.x:
-                resumed_future = true
-    if not resumed_future:
-        _fail("Resume inserted a new source in the viewport rather than offscreen")
+                renderer.stream_world_beat)*renderer.timeline.pixels_per_beat - \
+                renderer._stream_header_beats(float(item["source_floor"]))* \
+                renderer.timeline.pixels_per_beat
+            future_only = future_only and ink_start > renderer.size.x
+    if not (reused_original or new_copy and future_only):
+        _fail("Resume moved the unplayed passage or inserted a copy onscreen")
         return true
     if not is_equal_approx(renderer.timeline.pixels_per_beat,
             renderer.configured_density) and renderer.timeline.pixels_per_beat < 1.0:

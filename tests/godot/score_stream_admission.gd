@@ -15,6 +15,16 @@ func _initialize() -> void:
         "world_origin":first,"source_floor":0.0,"source_ceiling":6.0})
     check(Admission.pending_index(passes,0.0,world)==0,
         "Play selects already reserved original source")
+    passes[0]["take_key"] = "take-1"
+    passes[0]["pending"] = false
+    check(Admission.paused_unplayed_index(passes,"take-1",0.0,world)==0,
+        "Pause before source onset reuses existing future note ink")
+    check(Admission.paused_unplayed_index(passes,"take-1",0.0,first+1.0)==-1,
+        "Passed notes cannot be reused as a future resume")
+    passes.append({"serial":2,"pending":true,"take_key":"autopending",
+        "world_origin":first+12.0,"source_floor":0.0,"source_ceiling":6.0})
+    check(Admission.pending_index(passes,0.0,world)==-1,
+        "Manual Resume cannot steal the automatic retry reservation")
     check(Admission.future_start(passes,world,11.0,3.5) >=
         first+6.0+Admission.REST_GAP_BEATS+3.5,
         "upcoming repeat cannot collide with still-moving first copy")
