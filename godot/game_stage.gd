@@ -2,6 +2,7 @@ extends Control
 
 const Design := preload("res://practice_theme.gd")
 const ScoreView := preload("res://notation/shared/view_base.gd")
+const GlowField := preload("res://mint_glow_field.gd")
 
 # A quiet score canvas and five-part musical progress rail. All state comes
 # from the existing transport; preview never creates graded feedback.
@@ -49,10 +50,20 @@ var result_tone := Design.SCORE_ACCENT
 const AMBIENT_REDRAW_SECONDS := 1.0 / 20.0
 var ambient_redraw_elapsed := 0.0
 var surface_visible := true
+var rail_glow: ColorRect
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     focus_mode = Control.FOCUS_NONE
+
+func _ready() -> void:
+    rail_glow = GlowField.new()
+    rail_glow.name = "ProgressBloom"
+    rail_glow.configure(2,1.16,Color("#4DFBB3"))
+    rail_glow.show_behind_parent = true
+    rail_glow.visible = false
+    add_child(rail_glow)
+
 
 func set_staff_band(first_line_fraction: float, last_line_fraction: float) -> void:
     var top: float = clampf(first_line_fraction, .06, .90)
@@ -255,6 +266,7 @@ func _draw() -> void:
     var total_gaps: float = gap * float(count-1)
     var usable: float = maxf(1.0, rail_width-total_gaps)
     var played: float = play_from_beat + shown_progress * (progress_end_beat - play_from_beat)
+    var progress_light_position := Vector2.INF
     for i in range(count):
         var left_beat: float = float(measure_boundaries[i]) if measure_boundaries.size() >= 2 else 0.0
         var right_beat: float = float(measure_boundaries[i+1]) if measure_boundaries.size() >= 2 else 1.0
@@ -281,9 +293,16 @@ func _draw() -> void:
             draw_circle(Vector2(played_x,track_y+2.5),6.0,
                 Color(Design.MINT,.20))
             draw_circle(Vector2(played_x,track_y+2.5),3.0,Design.HIGHLIGHT)
+            progress_light_position = Vector2(played_x,track_y+2.5)
         if segment_width >= 18.0:
             var marker := Vector2(segment_x+segment_width*.5,track_y+3.0)
             draw_circle(marker,4.4,
                 fill_tone if filled >= 1.0 else
                 Design.MINT if current else Design.SAGE)
             draw_circle(marker,2.0,Design.STAGE)
+    if rail_glow != null:
+        var illuminate: bool = is_finite(progress_light_position.x)
+        rail_glow.visible = illuminate
+        if illuminate:
+            rail_glow.position = progress_light_position-Vector2(46.0,25.0)
+            rail_glow.size = Vector2(92.0,50.0)
