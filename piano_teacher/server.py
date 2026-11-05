@@ -1635,6 +1635,7 @@ class PracticeEngine:
             self.visual_transport.run_at = (scheduled.run_at if scheduled_deadline is None
                                             else scheduled_deadline)
             scope = ("preview" if self.preview_only else "perform" if mode == "perform" else
+                     "partial" if self._automatic_remedial_review else
                      "section_review" if self.review_end_beat is not None else
                      "partial" if scheduled.from_beat > 1e-7 else "full")
             try:
@@ -2180,9 +2181,10 @@ class PracticeEngine:
                   plan_timed_remedial_review(
                       assignment,self.plan.active_phrase,self.plan.piece.bar_boundaries))
         if automatic:
-            self._automatic_remedial_review = True
             self.open_from_beat = review.start_beat
             full_end = self.plan.active_phrase.end-self.plan.active_phrase.start
+            self._automatic_remedial_review = (
+                review.start_beat > 1e-7 or review.end_beat < full_end-1e-7)
             self.review_end_beat = (review.end_beat if
                 review.end_beat < full_end-1e-7 else None)
             self.retry_range = review.retry_range
