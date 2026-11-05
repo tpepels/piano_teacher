@@ -11,6 +11,7 @@ on:
       - 'tests/godot/settings_ownership.gd'
       - 'scripts/check-godot-syntax.sh'
       - 'tests/godot/score_asset_lifecycle.gd'
+      - 'tests/godot/native_score_feedback.gd'
       - '.github/workflows/godot-startup-check.yml'
   pull_request:
     paths:
@@ -21,6 +22,7 @@ on:
       - 'tests/godot/settings_ownership.gd'
       - 'scripts/check-godot-syntax.sh'
       - 'tests/godot/score_asset_lifecycle.gd'
+      - 'tests/godot/native_score_feedback.gd'
       - '.github/workflows/godot-startup-check.yml'
 
 permissions:
