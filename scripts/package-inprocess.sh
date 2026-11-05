@@ -26,7 +26,19 @@ mkdir -p "$STAGE/runtime" "$STAGE/bin"
 cp -a godot "$STAGE/godot"
 cp -a piano_teacher "$STAGE/piano_teacher"
 # Imported test/repertoire MIDI files are development data, not redistributable app assets.
-cp -a "$PIANO_BUNDLED_PYTHON_HOME" "$STAGE/runtime/python"
+# Stage only the actual Python runtime. Copying the complete hosted-toolcache
+# prefix also copies developer tools, headers and caches; its audit timed out.
+mkdir -p "$STAGE/runtime/python/bin" "$STAGE/runtime/python/lib"
+cp -L "$PIANO_BUNDLED_PYTHON_HOME/bin/python3" "$STAGE/runtime/python/bin/python3"
+chmod +x "$STAGE/runtime/python/bin/python3"
+for library in "$PY_LIB_DIR"/*.so*; do
+  [[ -e "$library" ]] || continue
+  cp -a "$library" "$STAGE/runtime/python/lib/"
+done
+tar -C "$PY_LIB_DIR" \
+  --exclude='*/__pycache__' --exclude='*.pyc' \
+  --exclude='*/tests/*' --exclude='*/test/*' \
+  -cf - "python$PY_VERSION" | tar -C "$STAGE/runtime/python/lib" -xf -
 cp "$PIANO_GODOT_BINARY" "$STAGE/bin/godot"
 cp "$PIANO_BUNDLED_NODE" "$STAGE/bin/node"
 find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
@@ -62,6 +74,12 @@ for fixture in native_bridge_smoke production_ui_smoke production_session_journe
   rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
 done
 python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
+# Validate imports through the assembled prefix, not the builder environment.
+env PYTHONHOME="$STAGE/runtime/python" \
+  PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \
+  LD_LIBRARY_PATH="$STAGE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  "$STAGE/runtime/python/bin/python3" -c \
+  'import piano_teacher, mido, rtmidi, verovio, music21, cairosvg, PIL'
 # Phase 5 gates the assembled real runtime. Creating and clean-machine
 # executing the compressed distributable is a separate Phase 7 release gate.
 if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then
