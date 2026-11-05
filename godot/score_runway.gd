@@ -6,7 +6,6 @@ const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
-const ScoreView := preload("res://notation/shared/view_base.gd")
 const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
@@ -20,8 +19,6 @@ var _future
 # Last lesson's authentic ink remains visible behind the playhead until its
 # final bar has left the viewport; no score-page flash at promotion.
 var _tail
-var _tail_origin := 0.0
-var _tail_end := 0.0
 var _bundle: Dictionary = {}
 var _layout: Dictionary = {}
 var _source_fingerprint := ""
@@ -83,8 +80,6 @@ func _clear_tail() -> void:
     if _tail != null and is_instance_valid(_tail):
         _tail.queue_free()
     _tail = null
-    _tail_origin = 0.0
-    _tail_end = 0.0
 
 func _advance_tail(global_beat: float) -> void:
     if _tail == null:
@@ -92,17 +87,10 @@ func _advance_tail(global_beat: float) -> void:
     if not is_instance_valid(_tail):
         _tail = null
         return
-    if _tail.stream_enabled:
-        # The previous stage's already-admitted notes drift off the same
-        # uninterrupted world axis. No rewind, reposition or fresh source.
-        _tail.present_flow(global_beat,{},0.0,false)
-        if _tail.stream_passes.is_empty():
-            _clear_tail()
-        return
-    _tail.present_clock(global_beat-_tail_origin,global_beat-_tail_origin)
-    var density: float = maxf(1.0,float(_tail.timeline.pixels_per_beat))
-    var left_visible: float = global_beat-_tail.size.x*ScoreView.PLAYHEAD_FRACTION/density
-    if left_visible > _tail_end+.01:
+    # The departing stage uses the identical forward-only source projection.
+    # It never receives a camera seek or another source admission.
+    _tail.present_flow(global_beat,{},0.0,false)
+    if _tail.stream_passes.is_empty():
         _clear_tail()
 
 func _on_future_reply(code: int, body: PackedByteArray) -> void:
@@ -252,93 +240,26 @@ func update_state(state: Dictionary, now_ms: int) -> void:
         return
     _request_if_needed(state,now_ms)
 
-func present_frame(state: Dictionary, global_beat: float) -> void:
+func present_frame(_state: Dictionary, global_beat: float) -> void:
     _visual_beat = global_beat
     _advance_tail(global_beat)
-    if stage != null and stage.renderer != null and stage.renderer.stream_enabled:
-        # Future ink remains pre-engraved/invisible until its exact source
-        # revision becomes active. No current/next page jumps on this axis.
-        if _future != null and is_instance_valid(_future):
-            _future.modulate.a = .001
-            if _future.retained_ready() and not _acknowledged and not _ack_waiting and (
-                    not _terminal_preload_failure) and Time.get_ticks_msec() >= _next_poll_ms:
-                _ack_waiting = _ack.request("score.stage_ready",{
-                    "stage_key":_bundle["stage_key"],
-                    "revision":_bundle["revision"]}) == OK
+    # A future source is pre-ENGRAVED, but no source-local animation, ghost
+    # score, or second camera is permitted. Its source clip is positioned
+    # beyond the right edge once the engine authorizes promotion.
+    if _future == null or not is_instance_valid(_future):
         return
-    # An idle or paused score contains no notes, including the departing
-    # stage and the asynchronously pre-engraved upcoming stage.
-    var ambient_blank: bool = (bool(state.get("loaded",false)) and
-        str(state.get("phase","")) in ["ready","paused","guided_complete",
-            "performance_complete"])
-    if _tail != null and is_instance_valid(_tail):
-        _tail.visible = not ambient_blank
-    if _future != null and is_instance_valid(_future):
-        _future.visible = not ambient_blank
-    if _future == null or not is_instance_valid(_future) or _bundle.is_empty():
-        if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
-            var last_clean: bool = \
-                str(state.get("mode","")) == "practice" and \
-                int(state.get("lesson_step",0)) < int(state.get("lesson_steps",0)) and \
-                int(state.get("streak",0)) >= int(state.get("clean_runs_required",3)) - 1 and \
-                float(state.get("bpm",0)) >= float(state.get("target_bpm",INF)) and \
-                str(state.get("phase","")) in ["playing","count_in","feedback","preview_gap"]
-            if last_clean:
-                var current_end: float = (float(state.get("visual_offset_beats",0.0)) +
-                    float(state.get("duration_beats",0.0)) +
-                    .20 * float(state.get("bpm",60.0)) / 60.0)
-                # Suppress stale repeating notes where the next real score is
-                # still missing. The old ink keeps moving offscreen naturally.
-                stage.renderer.runway_cutoff_beat = current_end - \
-                    float(stage.renderer.runway_origin_beat)
-            else:
-                stage.renderer.runway_cutoff_beat = INF
-            if stage.has_method("present_runway_steps"):
-                stage.present_runway_steps(state,global_beat)
-        return
-    var stride: float = float(state.get("practice_timeline",{}).get("stride_beats",0.0))
-    if stride <= 0.0:
-        return
-    # A delayed, exact-score handoff extends the empty scrolling runway.
-    # The backend publishes the same global beat it adopts as the new
-    # renderer's origin; no second clock or reset is introduced here.
-    var natural_start: float = (float(state.get("visual_offset_beats",0.0)) +
-        float(state.get("duration_beats",0.0)) +
-        .20 * float(state.get("bpm",60.0)) / 60.0)
-    var next_start: float = float(state.get("next_stage_start_beat", natural_start))
-    var local_beat: float = global_beat - next_start
-    _future.present_clock(local_beat,local_beat)
-    if _future.retained_ready() and not _acknowledged and not _ack_waiting \
-            and not _terminal_preload_failure and \
+    _future.modulate.a = .001
+    if _future.retained_ready() and not _acknowledged and not _ack_waiting and \
+            not _terminal_preload_failure and \
             Time.get_ticks_msec() >= _next_poll_ms:
+        var lead: float = maxf(3.0,
+            _future._stream_right_beats()+
+            _future._stream_header_beats(0.0)+.65)
         _ack_waiting = _ack.request("score.stage_ready",{
             "stage_key":_bundle["stage_key"],
-            "revision":_bundle["revision"]}) == OK
-    var last_clean: bool = int(state.get("streak",0)) >= \
-            int(state.get("clean_runs_required",3)) - 1 and \
-            float(state.get("bpm",0)) >= float(state.get("target_bpm",INF))
-    var active_phase: bool = str(state.get("phase","")) in \
-        ["playing","count_in","feedback","preview_gap"]
-    # A late acknowledgement must not flash notation at a stale origin.
-    # Reveal it only after the backend publishes the actual global start.
-    var origin_confirmed: bool = state.has("next_stage_start_beat") or \
-        global_beat <= natural_start + .01
-    var display: bool = _acknowledged and last_clean and \
-        active_phase and origin_confirmed
-    _future.modulate.a = 1.0 if display else 0.001
-    if is_instance_valid(stage.renderer):
-        # Partially compiled but unacknowledged future ink must not expose
-        # stale repeating current-stage notes. Keep its natural endpoint
-        # clipped until the complete next renderer can be shown.
-        var end_beat: float = next_start if display else \
-            (natural_start if last_clean and active_phase else INF)
-        stage.renderer.runway_cutoff_beat = end_beat - \
-            float(stage.renderer.runway_origin_beat) if is_finite(end_beat) else INF
-    if stage.has_method("present_runway_steps"):
-        stage.present_runway_steps(state,global_beat,
-            next_start + _future_intro_offset if _acknowledged and origin_confirmed else INF,
-            str(_bundle.get("stage_label",_bundle.get("level","Next step"))),
-            float(_future.timeline.pixels_per_beat))
+            "revision":_bundle["revision"],
+            "presentation_lead_beats":lead}) == OK
+
 
 func promote_if_ready(state: Dictionary) -> bool:
     if _future == null or not is_instance_valid(_future) or \
@@ -349,7 +270,6 @@ func promote_if_ready(state: Dictionary) -> bool:
             int(state.get("lesson_step",0)) != int(_bundle.get("step_number",-1)):
         return false
     var old = stage.renderer
-    var former_origin: float = float(old.runway_origin_beat)
     var new_renderer = _future
     _future = null
     new_renderer.modulate.a = 1.0
@@ -359,7 +279,14 @@ func promote_if_ready(state: Dictionary) -> bool:
     # Repaint that one small layer at promotion, never all score segments.
     if is_instance_valid(new_renderer.retained_annotations):
         new_renderer.retained_annotations.queue_redraw()
-    new_renderer.runway_origin_beat = float(state.get("visual_offset_beats",0.0))
+    # The engine publishes a real future graded onset (negative clock_beat).
+    # Preposition that same absolute source onset on the moving world axis.
+    # If the deadline was lost, arm a new offscreen copy rather than seek.
+    var graded: float = float(state.get("clock_beat",-INF))
+    var intended_world: float = _visual_beat - graded \
+        if is_finite(graded) and graded < 0.0 else NAN
+    new_renderer.arm_stream_take(_visual_beat,0.0,intended_world)
+    new_renderer.runway_origin_beat = 0.0
     new_renderer.runway_cutoff_beat = INF
     new_renderer.set_transport_overlay_enabled(true)
     stage.renderer = new_renderer
@@ -370,15 +297,12 @@ func promote_if_ready(state: Dictionary) -> bool:
         old.runway_overlay = true
         if is_instance_valid(old.retained_annotations):
             old.retained_annotations.queue_redraw()
-        old.runway_cutoff_beat = (float(state.get("visual_offset_beats",0.0)) -
-            former_origin)
+        old.runway_cutoff_beat = INF
         old.set_transport_overlay_enabled(false)
         old.mouse_filter = Control.MOUSE_FILTER_IGNORE
         old.queue_redraw()
         stage.score_frame.move_child(old,stage.score_frame.get_child_count()-1)
         _tail = old
-        _tail_origin = former_origin
-        _tail_end = float(state.get("visual_offset_beats",0.0))
     _bundle.clear()
     _layout.clear()
     _future_intro_offset = 0.0
