@@ -92,6 +92,13 @@ func _advance_tail(global_beat: float) -> void:
     if not is_instance_valid(_tail):
         _tail = null
         return
+    if _tail.stream_enabled:
+        # The previous stage's already-admitted notes drift off the same
+        # uninterrupted world axis. No rewind, reposition or fresh source.
+        _tail.present_flow(global_beat,{},0.0,false)
+        if _tail.stream_passes.is_empty():
+            _clear_tail()
+        return
     _tail.present_clock(global_beat-_tail_origin,global_beat-_tail_origin)
     var density: float = maxf(1.0,float(_tail.timeline.pixels_per_beat))
     var left_visible: float = global_beat-_tail.size.x*ScoreView.PLAYHEAD_FRACTION/density
@@ -135,6 +142,7 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
             "Future score lacks authentic layout or semantic model")
         return
     _future = NativeView.new()
+    _future.stream_enabled = true
     # A future stage must use the same staff presentation and background
     # as the active stage before its retained note ink is pre-engraved.
     if is_instance_valid(stage.renderer):
@@ -247,6 +255,17 @@ func update_state(state: Dictionary, now_ms: int) -> void:
 func present_frame(state: Dictionary, global_beat: float) -> void:
     _visual_beat = global_beat
     _advance_tail(global_beat)
+    if stage != null and stage.renderer != null and stage.renderer.stream_enabled:
+        # Future ink remains pre-engraved/invisible until its exact source
+        # revision becomes active. No current/next page jumps on this axis.
+        if _future != null and is_instance_valid(_future):
+            _future.modulate.a = .001
+            if _future.retained_ready() and not _acknowledged and not _ack_waiting and (
+                    not _terminal_preload_failure) and Time.get_ticks_msec() >= _next_poll_ms:
+                _ack_waiting = _ack.request("score.stage_ready",{
+                    "stage_key":_bundle["stage_key"],
+                    "revision":_bundle["revision"]}) == OK
+        return
     # An idle or paused score contains no notes, including the departing
     # stage and the asynchronously pre-engraved upcoming stage.
     var ambient_blank: bool = (bool(state.get("loaded",false)) and
