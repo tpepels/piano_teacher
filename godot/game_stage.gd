@@ -1,6 +1,7 @@
 extends Control
 
 const Design := preload("res://practice_theme.gd")
+const ScoreView := preload("res://notation/shared/view_base.gd")
 
 # A quiet score canvas and five-part musical progress rail. All state comes
 # from the existing transport; preview never creates graded feedback.
@@ -227,7 +228,7 @@ func _draw() -> void:
     if surface_visible:
         draw_rect(Rect2(0, 0, w, h), Design.STAGE)
     if transport_active or phase == "paused":
-        var x: float = w * .42
+        var x: float = w * ScoreView.PLAYHEAD_FRACTION
         var top: float = maxf(8.0, staff_band_top * h - 18.0)
         var bottom: float = minf(h - 32.0, staff_band_bottom * h + 18.0)
         # The only timing line is drawn by score_overlay.gd at the exact
