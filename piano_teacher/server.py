@@ -183,6 +183,8 @@ class PracticeEngine:
         self.assessment_policies = PracticeAssessmentPolicies.defaults(self.assessment)
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         self.midi_key_shortcuts = MidiKeyShortcuts(self.library.settings["midi_key_ranges"])
+        self._shortcut_pitch_key: tuple = ()
+        self._shortcut_pitches: frozenset[int] = frozenset()
         self.library_health = LibraryHealth(self.library)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -725,13 +727,23 @@ class PracticeEngine:
             # Hardware shortcuts are resolved before activity, grading,
             # count-in auto-start, guided capture, or live MIDI feedback.
             if message.type in ("note_on", "note_off"):
-                expected = frozenset(
-                    note.pitch for note in self.plan.active_phrase.notes
-                    if self.plan.hand == "both" or note.hand == self.plan.hand
-                ) if self.plan is not None else frozenset()
+                # MIDI callbacks must not rescan an 8-measure exercise on
+                # every attack/release. Regenerate this tiny pitch set only
+                # when the selected score, source or practice hand changes.
+                if self.plan is not None:
+                    key = (self.fingerprint,self.score_revision,
+                           self.plan.identity,self.plan.hand)
+                    if key != self._shortcut_pitch_key:
+                        self._shortcut_pitch_key = key
+                        self._shortcut_pitches = frozenset(
+                            note.pitch for note in self.plan.active_phrase.notes
+                            if self.plan.hand == "both" or note.hand == self.plan.hand)
+                else:
+                    self._shortcut_pitch_key = ()
+                    self._shortcut_pitches = frozenset()
                 decision = self.midi_key_shortcuts.accept(
                     message, device=self.midi.device,
-                    exercise_pitches=expected,
+                    exercise_pitches=self._shortcut_pitches,
                     can_pause=self.running or (self.mode == "learn" and
                         self.teaching is not None),
                     paused=self.visual_transport.paused)
