@@ -86,13 +86,12 @@ func _process(_delta: float) -> bool:
             _fail("Loaded a different MIDI from the requested real score")
             return true
         var chrome = app.practice_view
-        # The title must yield width to a single-line transport header.
-        # The previous flowing header wrapped BPM above Play/Settings and
-        # consumed nearly twice the intended vertical space.
+        # One bottom Play/Pause control. Only BPM and Settings occupy the
+        # header, on the same row, even for long titles.
         if not (chrome.practice_navigation is HBoxContainer) or (
                 absf(chrome.speed_label.get_global_rect().get_center().y
-                    - chrome.header_play_button.get_global_rect().get_center().y) > 2.0):
-            _fail("Practice header controls wrapped onto different rows")
+                    - chrome.practice_settings_button.get_global_rect().get_center().y) > 2.0):
+            _fail("Practice BPM and Settings wrapped onto different rows")
             return true
         if chrome.practice_header.size.y > 56.0 or chrome.start_button.size.y > 60.0:
             _fail("Practice chrome is too tall and crowds out the score")
