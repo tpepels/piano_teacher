@@ -500,8 +500,35 @@ func chord_dot_anchors(notes: Array, centers: Array, gap: float) -> Dictionary:
             Geometry.note_y(target,staff_center(staff)+gap*2.0,gap)+gap*.24)
     return result
 
+# Focused presentation never changes the source, note binding or MIDI hand.
+var focused_staff := ""
+
+func set_focused_staff(hand: String) -> bool:
+    if focused_staff == hand:
+        return false
+    focused_staff = hand
+    cached_staff_gap = -1.0
+    cached_offsets_gap = -1.0
+    cached_gap_height = -1.0
+    prepared_geometry_gap = -1.0
+    prepared_event_y.clear()
+    prepared_event_steps.clear()
+    prepared_rest_y.clear()
+    return true
+
 func staff_center(hand: String) -> float:
+    if hand == focused_staff:
+        return size.y*.51
     return size.y*(.36 if hand == "right" else .69)
+
+func visible_staves() -> Array:
+    return [focused_staff] if not focused_staff.is_empty() else ["right","left"]
+
+func barline_top(gap: float) -> float:
+    return staff_center(focused_staff if not focused_staff.is_empty() else "right")-2.0*gap
+
+func barline_bottom(gap: float) -> float:
+    return staff_center(focused_staff if not focused_staff.is_empty() else "left")+2.0*gap
 
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 
@@ -509,8 +536,8 @@ func barline_geometry(measure: Dictionary, clock: float,
         playhead_x: float, gap: float, play_from_beat: float = 0.0) -> Dictionary:
     var info: Dictionary = BarlineLayout.boundary(timeline.measures, measure, timeline,
         clock, playhead_x, play_from_beat, gap,
-        staff_center("right")-2.0*gap,
-        staff_center("left")+2.0*gap)
+        barline_top(gap),
+        barline_bottom(gap))
     if not info.is_empty():
         info["segments"] = barline_segments(str(info.get("style","regular")),gap)
     return info
@@ -519,8 +546,8 @@ func terminal_barline_geometry(clock: float,
         playhead_x: float, gap: float, play_from_beat: float = 0.0) -> Dictionary:
     var info: Dictionary = BarlineLayout.terminal(timeline.measures, timeline,
         clock, playhead_x, play_from_beat, gap,
-        staff_center("right")-2.0*gap,
-        staff_center("left")+2.0*gap)
+        barline_top(gap),
+        barline_bottom(gap))
     if not info.is_empty():
         info["segments"] = barline_segments(str(info.get("style","regular")),gap)
     return info
@@ -528,14 +555,13 @@ func terminal_barline_geometry(clock: float,
 func barline_segments(style: String, gap: float) -> Array:
     if style in ["tick","short"]:
         var segments: Array = []
-        for staff in ["right","left"]:
+        for staff in visible_staves():
             var center: float = staff_center(staff)
             segments.append({
                 "top":center-gap*(2.5 if style == "tick" else 1.0),
                 "bottom":center-gap*1.5 if style == "tick" else center+gap})
         return segments
-    return [{"top":staff_center("right")-2.0*gap,
-        "bottom":staff_center("left")+2.0*gap}]
+    return [{"top":barline_top(gap),"bottom":barline_bottom(gap)}]
 
 func barline_strokes(style: String, gap: float) -> Array:
     return BarlineLayout.strokes(style, gap)
