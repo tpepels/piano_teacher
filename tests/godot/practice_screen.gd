@@ -169,7 +169,10 @@ func run() -> void:
                 }
                 check(view.stage.renderer.timeline.load_model(model),
                     "Native marker fixture uses an authentic contiguous source beat axis")
-                view.stage.renderer.runway_origin_beat = 20.0
+                view.stage.renderer.stream_passes = [{
+                    "world_origin":20.0,"source_floor":0.0,
+                    "source_ceiling":8.0,"pending":true,"serial":1
+                }]
                 var heading := state()
                 heading.hand = "right"
                 view.stage.present_runway_steps(heading,20.0)

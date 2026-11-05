@@ -271,12 +271,15 @@ func present_runway_steps(state: Dictionary, global_visual: float,
         _marker_hand = hand
         var model: Dictionary = renderer.timeline.model if renderer.timeline.model is Dictionary else {}
         _first_attack_offset = StepTimeline.first_playable_beat(model,hand)
-    var displayed_visual: float = global_visual
-    if not renderer.running and not renderer.paused:
-        displayed_visual = float(renderer.runway_origin_beat) + renderer.displayed_scroll_beat()
-    runway_steps.present(state,global_visual,
-        float(renderer.runway_origin_beat) + _first_attack_offset,
-        next_start,next_label,next_density,displayed_visual)
+    # A step title is attached to an already reserved source copy, never
+    # positioned from a READY-only camera or backend scroll offset.
+    var current_start := INF
+    for item in renderer.stream_passes:
+        var onset: float = float(item["world_origin"])+_first_attack_offset
+        if onset >= global_visual-.001:
+            current_start = minf(current_start,onset)
+    runway_steps.present(state,global_visual,current_start,
+        next_start,next_label,next_density,global_visual)
 
 func present(state: Dictionary, busy: bool) -> void:
     _state = state.duplicate(true)
