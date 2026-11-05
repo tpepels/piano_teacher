@@ -787,8 +787,8 @@ func _draw() -> void:
     fingering_pass_clocks.clear()
     if size.x < 100.0 or size.y < 100.0:
         return
-    if not runway_overlay:
-        draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
+    # The Practice stage owns the full-bleed vignette. Opaque local fills
+    # previously covered that background and made the score look like a card.
     var font: Font = ThemeDB.fallback_font
     if not native_ready or not timeline.has_score():
         draw_string(font,Vector2(20.0,size.y*.5),
