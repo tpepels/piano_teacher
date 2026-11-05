@@ -162,6 +162,7 @@ func _process(_delta: float) -> bool:
             " revision=",app.score_session.rendered_revision)
         return false
     if not transport_seen:
+        var renderer = app.practice_view.stage.renderer
         if not bool(app.last_state.get("running",false)):
             var awaiting: Variant = app.last_state.get("awaiting_score_revision",null)
             if not start_requested and not app.command_state.pending and \
