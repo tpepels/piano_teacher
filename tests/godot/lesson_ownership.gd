@@ -36,9 +36,16 @@ func test_screen(view: Control, scenario: String) -> void:
     match scenario:
         "overview":
             check(view.piece_title.text == "A real song", "Lesson owns its selected piece title")
-            check(view.summary.text == "1 of 3 stages completed · 4 clean performances at your target tempo", "Completion and mastery requirement remain explicit")
-            check(view.stage_labels.skeleton.visible and not view.stage_labels.outline.visible and view.stage_labels.original.text == "2. Original", "Only actual levels in this hand/passage are numbered")
-            check("skipped; not mastered" in texts(view.rows) and "Current passage" in texts(view.rows), "Skipped work never claims mastery")
+            check(view.summary.text == "Step 2 of 3 · 1 mastered" and
+                view.description.text.contains("4 clean performances"),
+                "Learner sees current position, mastery and actionable clean-run goal")
+            check(view.stage_labels.skeleton.visible and not view.stage_labels.outline.visible and
+                view.stage_labels.original.text == "2. Original notes",
+                "Only real stages have reader-facing labels")
+            check("Now · Measures 1–4" in texts(view.rows) and
+                "skipped; not mastered" not in texts(view.rows) and
+                view.passage_summary.text.contains("Right hand"),
+                "Current passage has human-readable context without debug chains")
             press(view,"Revisit bars 3–4")
             check(commands == [{"action":"revisit_trouble","stage_key":"source-unit","start_beat":8.0}], "Trouble rows capture source identity as values")
             var changed := overview()
@@ -87,8 +94,8 @@ func test_screen(view: Control, scenario: String) -> void:
                 root.size = dimensions
                 view.apply_viewport(Vector2(dimensions),1.0)
                 for frame in range(6): await process_frame
-                check(view.columns.vertical == (dimensions.x < 1280), "Lesson owns its responsive column breakpoint")
-                check(view.columns.get_child(0) == (view.options if dimensions.x < 1280 else view.rows), "Compact path puts choices before progression")
+                check(view.columns.vertical == (dimensions.x < 1850), "Lesson layout accounts for the navigation drawer")
+                check(view.columns.get_child(0) == (view.options if dimensions.x < 1850 else view.rows), "Choices appear before the course on a conventional desktop")
                 check(view.rows.size.y > 100 and view.get_combined_minimum_size().x <= dimensions.x, "All stages remain in one reachable outer scroll")
 func test_selector(view: Control) -> void:
     var commands: Array = []
