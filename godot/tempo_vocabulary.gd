@@ -2,7 +2,7 @@ extends RefCounted
 ## Approximate traditional tempo names for the CURRENT exercise BPM.
 ## These labels are descriptive, not changes to the score's own tempo text.
 ## Historical markings do not have universal numerical boundaries.
-const BANDS: Array = [
+const BANDS = [
     [40, "Grave"],
     [60, "Largo"],
     [66, "Larghetto"],
