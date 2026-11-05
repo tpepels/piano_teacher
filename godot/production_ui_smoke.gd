@@ -114,16 +114,14 @@ func _process(_delta: float) -> bool:
                 not bool(app.last_state.get("loaded",false)):
             _fail("Startup did not navigate to the loaded practice screen")
             return true
-        # A model with several notes and a compiled atlas can still render
-        # a blank viewport if positioning or the retained pool is broken.
-        if _first_visible_head(renderer).is_empty():
-            if ready_visible_since_ms < 0:
-                ready_visible_since_ms = Time.get_ticks_msec()
-            if Time.get_ticks_msec() - ready_visible_since_ms >= 3000:
-                _fail("Published score has no actual notehead within the viewport")
-                return true
+        # Ready intentionally shows a continuously moving EMPTY staff. The
+        # original retained note atlas must still be compiled before Play.
+        if not renderer.ambient_blank:
             return false
-        var forward_beats: float = renderer.size.x*.58 / renderer.timeline.pixels_per_beat
+        if not renderer.drawn_noteheads.is_empty():
+            _fail("Ready screen revealed exercise noteheads before transport")
+            return true
+        var forward_beats: float = renderer.size.x*(1.0-renderer.PLAYHEAD_FRACTION) / renderer.timeline.pixels_per_beat
         if forward_beats < 2.0:
             _fail("Engraving leaves under two beats visible ahead of playhead")
             return true
