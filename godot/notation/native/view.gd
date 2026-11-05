@@ -84,7 +84,6 @@ var failure_reason := ""
 var visible_symbols := 0
 var drawn_noteheads: Dictionary = {}
 var drawn_note_instances: Array = []
-var preparation_history: Dictionary = {}
 var selected_density := 0.0
 var external_backdrop := false
 var compact_inactive_staff := false
@@ -222,7 +221,6 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
 func load_score(candidate: Dictionary) -> bool:
     connector_geometry.clear_cache()
     annotations.clear()
-    preparation_history.clear()
     drawn_note_instances.clear()
     native_ready = false
     _clear_retained_segments()
@@ -394,19 +392,18 @@ func _clear_retained_segments() -> void:
     retained_repeat_segments.clear()
     retained_all_segments.clear()
 
-func _new_retained_segment(kind: String, variant: String,
-        context: Dictionary = {}):
+func _new_retained_segment(kind: String):
     var segment = RetainedSegment.new()
     add_child(segment)
     retained_all_segments.append(segment)
-    segment.call("configure",self,kind,variant,context)
+    segment.configure(self,kind)
     return segment
 
 func _install_retained_segments() -> void:
     _clear_retained_segments()
     clip_contents = true
     retained_ink_published = false
-    retained_first_once = _new_retained_segment("source","once")
+    retained_first_once = _new_retained_segment("source")
     _resize_retained_pool()
     retained_annotations = RetainedAnnotationOverlay.new()
     retained_annotations.set("owner_view",self)
@@ -419,7 +416,7 @@ func _resize_retained_pool() -> void:
         return
     # Single authentic source model and reusable offscreen copies.
     while retained_repeat_segments.size() < 4:
-        retained_repeat_segments.append(_new_retained_segment("source","once"))
+        retained_repeat_segments.append(_new_retained_segment("source"))
 
 
 func retained_ready() -> bool:
@@ -462,28 +459,22 @@ func _invalidate_retained_segments() -> void:
         segment.queue_redraw()
     _hide_retained_segments()
 
-func paint_retained_source(canvas: CanvasItem, variant: String,
-        context: Dictionary = {}) -> RenderPass:
-    return SourcePassPainter.paint(self,canvas,variant,context)
+func paint_retained_source(canvas: CanvasItem) -> RenderPass:
+    return SourcePassPainter.paint(self,canvas)
 
-func paint_retained_rest(canvas: CanvasItem, context: Dictionary = {}) -> void:
+func paint_retained_rest(canvas: CanvasItem) -> void:
     if practice_timeline.is_empty() or timeline.measures.is_empty():
         return
     var gap: float = staff_gap()
-    var silence: Dictionary = (context["measure"].duplicate(true)
-        if context.has("measure") else practice_timeline["gap"].duplicate(true))
-    if context.is_empty():
-        # Only ordinary between-take silence inherits the previous source
-        # ending. Recovery rest descriptors carry their own authored context.
-        silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
-        var incoming: Variant = timeline.measures[0].get("left_barline")
-        if incoming is Dictionary:
-            silence["right_barline"] = incoming
+    var silence: Dictionary = practice_timeline["gap"].duplicate(true)
+    silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
+    var incoming: Variant = timeline.measures[0].get("left_barline")
+    if incoming is Dictionary:
+        silence["right_barline"] = incoming
     var frame: RenderPass = _new_paint_frame(0.0,0.0,gap,0,0.0)
     frame.visual_scroll_beat = float(silence["start_beat"])
-    var previous: Dictionary = context.get("previous",timeline.measures[-1])
     context_painter.paint_preparation_measure(canvas,frame,
-        silence,previous,gap,0.0,previous.is_empty())
+        silence,timeline.measures[-1],gap,0.0,false)
 
 func paint_retained_annotations(canvas: CanvasItem) -> void:
     if not native_ready:
@@ -493,8 +484,7 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     for annotation_pass in fingering_pass_clocks:
         var context := {
             "active_hand":active_hand,"play_from_beat":play_from_beat,
-            "score_loop_enabled":score_loop_enabled,
-            "preparation_history":preparation_history}
+            "score_loop_enabled":false}
         if annotation_pass.has("stream_floor"):
             context["stream_floor"] = annotation_pass["stream_floor"]
             context["stream_ceiling"] = annotation_pass["stream_ceiling"]
@@ -536,7 +526,7 @@ func _stream_add_take(source_beat: float, start_world: float,
     if choice == null:
         # Very rapid manual retries can overlap more than the precompiled
         # visible copies. Compile one more source ONCE, then reuse its ink.
-        choice = _new_retained_segment("source","once")
+        choice = _new_retained_segment("source")
         retained_repeat_segments.append(choice)
     var clip := Control.new()
     clip.name = "StreamPassWindow"
@@ -926,5 +916,5 @@ func _new_paint_frame(clock: float, playhead_x: float, gap: float,
         "play_from_beat":play_from_beat,"active_hand":active_hand,
         "focused_staff":layout.focused_staff,
         "score_loop_enabled":score_loop_enabled,"pass_index":pass_index,
-        "pass_start":pass_start,"preparation_history":preparation_history,
-        "visual_scroll_beat":visual_scroll_beat})
+        "pass_start":pass_start,"preparation_history":{},
+        "visual_scroll_beat":0.0})

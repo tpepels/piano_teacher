@@ -4,19 +4,14 @@ extends Node2D
 ## subsequently changes position/visibility, never queue_redraw on each beat.
 var owner_view
 var kind := "source"
-var variant := "first"
-var recovery_context: Dictionary = {}
 var note_instances: Array = []
 var symbols_drawn := 0
 var beam_groups_drawn := 0
 var compiled := false
 
-func configure(view: Control, segment_kind: String, segment_variant: String,
-        context: Dictionary = {}) -> void:
+func configure(view: Control, segment_kind: String) -> void:
     owner_view = view
     kind = segment_kind
-    variant = segment_variant
-    recovery_context = context.duplicate(true)
     compiled = false
     queue_redraw()
 
@@ -27,7 +22,7 @@ func _draw() -> void:
             owner_view.size.x < 100.0 or owner_view.size.y < 100.0:
         return
     if kind == "source":
-        var frame = owner_view.paint_retained_source(self,variant,recovery_context)
+        var frame = owner_view.paint_retained_source(self)
         if frame == null:
             return
         note_instances = frame.drawn_note_instances.duplicate(true)
@@ -38,7 +33,7 @@ func _draw() -> void:
         symbols_drawn = frame.visible_symbols
         beam_groups_drawn = frame.visible_beam_groups
     else:
-        owner_view.paint_retained_rest(self,recovery_context)
+        owner_view.paint_retained_rest(self)
     compiled = true
     # The parent may already have projected this frame before our first draw.
     # Update notehead hit regions on the next frame, once, without rebuilding ink.

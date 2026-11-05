@@ -16,19 +16,23 @@ def test_frame_path_never_reassembles_source_or_preparation_ink():
     assert "_paint_source_pass(" not in draw
     assert "symbols.paint_" not in draw
     assert "context_painter.paint_" not in draw
-    assert "_place_retained_score(" in draw
+    assert "_project_stream(playhead_x)" in draw
+    assert "_place_retained_score" not in view
+    assert "present_ambient" not in view
+    assert "displayed_scroll_beat" not in view
     assert "retained_annotations.queue_redraw()" in draw
     assert "RetainedNoteProjection.append_visible(" in view
     assert "retained_ready()" in view
     assert 'call_deferred("emit_signal","retained_ink_compiled")' in view
-    assert "SourcePassPainter.paint(self,canvas,variant,context)" in view
+    assert "SourcePassPainter.paint(self,canvas)" in view
     source = (ROOT/"godot/notation/native/source_pass_painter.gd").read_text()
-    assert 'if variant == "recovery"' in source
+    assert 'variant == "recovery"' not in source
+    assert "_practice_context_before" not in source
     assert "symbols.paint_beams(" in source
     assert "symbols.paint_beams(" not in draw
     assert "_paint_source_pass" not in view
     assert "RETAINED_POOL_SIZE" not in view
-    assert "_required_repeat_copies()" in view
+    assert "_required_repeat_copies()" not in view
     session = (ROOT/"godot/score_asset_session.gd").read_text()
     assert 'renderer.connect("retained_ink_compiled",_finish_native_score)' in session
     assert 'not _renderer.retained_ready()' in session

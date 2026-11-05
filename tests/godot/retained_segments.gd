@@ -12,8 +12,7 @@ class FakeView extends Control:
     var rest_draws := 0
     var finished := 0
 
-    func paint_retained_source(canvas: CanvasItem, _variant: String,
-            _context: Dictionary = {}) -> RefCounted:
+    func paint_retained_source(canvas: CanvasItem) -> RefCounted:
         source_draws += 1
         canvas.draw_rect(Rect2(10,10,20,12),Color.WHITE)
         var frame = load("res://notation/native/render_pass.gd").new()
@@ -22,7 +21,7 @@ class FakeView extends Control:
         frame.visible_symbols = 1
         return frame
 
-    func paint_retained_rest(canvas: CanvasItem, _context: Dictionary = {}) -> void:
+    func paint_retained_rest(canvas: CanvasItem) -> void:
         rest_draws += 1
         canvas.draw_rect(Rect2(10,10,20,12),Color.WHITE)
 
@@ -40,10 +39,10 @@ func _exercise() -> void:
     root.add_child(view)
     var source := Segment.new()
     view.add_child(source)
-    source.configure(view,"source","once")
+    source.configure(view,"source")
     var rest := Segment.new()
     view.add_child(rest)
-    rest.configure(view,"rest","normal")
+    rest.configure(view,"rest")
     await process_frame
     await process_frame
     if not source.compiled or not rest.compiled or \
@@ -78,19 +77,11 @@ func _exercise() -> void:
     if service.rendered_revision != 3 or not service.is_ready():
         failures += 1
     view.free()
-    # Pool capacity grows with screen horizon and shrinks for long excerpts,
-    # rather than hard-coding five copies regardless of score length.
     var renderer = load("res://notation/native/view.gd").new()
     renderer.size = Vector2(800,400)
-    renderer.practice_timeline = {"stride_beats":8.0}
-    var long_passage_capacity: int = renderer._required_repeat_copies()
-    renderer.practice_timeline = {"stride_beats":1.0}
-    var short_passage_capacity: int = renderer._required_repeat_copies()
-    renderer.size = Vector2(1400,400)
-    var wider_capacity: int = renderer._required_repeat_copies()
-    if long_passage_capacity >= short_passage_capacity or \
-            wider_capacity <= short_passage_capacity or \
-            long_passage_capacity < 1:
+    if renderer.has_method("_required_repeat_copies") or \
+            renderer.has_method("_place_retained_score") or \
+            renderer.has_method("present_ambient"):
         failures += 1
     renderer.free()
     print("RETAINED_SEGMENT_FAILURES:",failures)
