@@ -102,6 +102,7 @@ var _stream_last_take := ""
 var _stream_was_paused := false
 var _stream_paused_source := 0.0
 var _stream_live_serial := -1
+var _stream_armed_serial := -1
 var _stream_serial := 0
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
@@ -391,6 +392,7 @@ func _stream_release_all() -> void:
     _stream_was_paused = false
     _stream_paused_source = 0.0
     _stream_live_serial = -1
+    _stream_armed_serial = -1
 
 
 func _clear_retained_segments() -> void:
@@ -614,29 +616,69 @@ func _stream_add_take(source_beat: float, start_world: float,
         "source_floor":maxf(0.0,from_beat),
         "source_ceiling":through_beat,
         "take_key":take_key,
+        "pending":take_key == "prepared",
         "serial":_stream_serial,
     })
 
 
-func _stream_lookahead_beats() -> float:
-    # Fill the visible right-hand staff, including dense slow-tempo music.
-    # The old fixed 3.5-beat horizon exposed the next clipped notehead
-    # inside the viewport, then grew its stem a few pixels every frame.
-    return maxf(StreamAdmission.LOOKAHEAD_BEATS,
-        size.x*(1.0-PLAYHEAD_FRACTION)/
-        maxf(1.0,timeline.pixels_per_beat)+1.0)
+func _stream_right_beats() -> float:
+    return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
+
+
+func _stream_header_beats(opening: float) -> float:
+    return (15.0 if opening <= .0001 else 1.6)*staff_gap()/ \
+        maxf(1.0,timeline.pixels_per_beat)
 
 
 func _stream_complete_measure(requested: float) -> float:
-    # Never cut the right edge of retained ink in the middle of a beamed
-    # figure. The registered interval includes the whole last measure;
-    # admission never injects partial glyphs at a moving horizon.
-    var result: float = minf(timeline.duration_beats,requested)
+    var extent: float = minf(timeline.duration_beats,requested)
     for measure in timeline.measures:
         var ending: float = float(measure.get("end_beat",0.0))
-        if ending >= result-.0001:
+        if ending >= extent-.0001:
             return minf(timeline.duration_beats,ending)
     return timeline.duration_beats
+
+
+func _stream_reserve_ready(world: float, opening: float) -> int:
+    if not native_ready or not retained_ready() or \
+            opening >= timeline.duration_beats:
+        return -1
+    var index: int = StreamAdmission.pending_index(
+        stream_passes,opening,world)
+    if index >= 0:
+        return int(stream_passes[index]["serial"])
+    var onset: float = StreamAdmission.future_start(
+        stream_passes,world,_stream_right_beats(),_stream_header_beats(opening))
+    _stream_add_take(opening,onset,opening,_stream_complete_measure(
+        opening+_stream_right_beats()+1.0),"prepared")
+    _stream_live_serial = -1
+    return _stream_serial
+
+
+func arm_stream_take(world: float, opening: float) -> Dictionary:
+    # Bound before the in-process command: only previously placed note ink
+    # may become the next graded take, and its world_origin never changes.
+    if not stream_enabled or not native_ready or not retained_ready():
+        return {}
+    stream_world_beat = maxf(stream_world_beat,world)
+    var serial: int = _stream_reserve_ready(stream_world_beat,opening)
+    for item in stream_passes:
+        if serial >= 0 and int(item["serial"]) == serial:
+            item["pending"] = false
+            item["armed"] = true
+            _stream_armed_serial = serial
+            return {"start_world":float(item["world_origin"])+opening,
+                "opening":opening}
+    return {}
+
+
+func _stream_extend_offscreen(item: Dictionary) -> void:
+    # The cached score never repaints. The clip widens only beyond the
+    # viewport's right edge, not at the moving timing line.
+    var horizon: float = stream_world_beat - \
+        float(item["world_origin"])+_stream_right_beats()+1.0
+    item["source_ceiling"] = maxf(float(item["source_ceiling"]),
+        _stream_complete_measure(horizon))
 
 
 func _stream_prune_expired() -> void:
@@ -672,65 +714,50 @@ func present_flow(world_beat: float, state: Dictionary,
         return
     var phase: String = str(state.get("phase",""))
     var mode: String = str(state.get("mode","practice"))
-    var source: float = float(state.get("play_from_beat",0.0)) + graded_beat
+    var opening: float = maxf(0.0,float(state.get("play_from_beat",0.0)))
     var key: String = "%s|%d|%d|%s" % [
         str(state.get("piece_fingerprint","")),
         int(state.get("revision",-1)),
         int(state.get("transport_id",-1)),mode]
     var paused_now: bool = bool(state.get("paused",false))
     var running_now: bool = bool(state.get("running",false)) and not paused_now
+    if allow_admission and phase == "ready" and not running_now and \
+            not paused_now and mode in ["practice","perform"]:
+        # Prepare outside the visible viewport, long before the Play button.
+        _stream_reserve_ready(stream_world_beat,opening)
     if paused_now:
-        # Already admitted notes continue past the playhead. No new ink is
-        # admitted during a pause, and the source position remains available
-        # when a fresh reading lead-in is scheduled.
         if not _stream_was_paused:
-            _stream_paused_source = maxf(0.0,source)
+            _stream_paused_source = maxf(opening,opening+graded_beat)
         _stream_was_paused = true
         _stream_live_serial = -1
-    elif allow_admission and running_now and phase in ["count_in","playing",
-            "guided_wait"]:
+    elif allow_admission and running_now and phase in [
+            "count_in","playing","guided_wait"]:
         if key != _stream_last_take or _stream_was_paused:
             _stream_live_serial = -1
-        var opening: float = maxf(0.0,
-            float(state.get("play_from_beat",0.0)))
-        if _stream_was_paused and key == _stream_last_take:
-            opening = maxf(opening,_stream_paused_source)
+            if _stream_armed_serial >= 0:
+                for item in stream_passes:
+                    if int(item["serial"]) == _stream_armed_serial:
+                        item["take_key"] = key
+                        item["armed"] = false
+                        item["pending"] = false
+                        _stream_live_serial = _stream_armed_serial
+                        _stream_last_take = key
+                        break
+                _stream_armed_serial = -1
+            elif key == _stream_last_take and not _stream_was_paused:
+                for item in stream_passes:
+                    if str(item.get("take_key","")) == key:
+                        _stream_live_serial = int(item["serial"])
+                        break
         if _stream_live_serial >= 0:
-            var extended := false
             for item in stream_passes:
                 if int(item["serial"]) == _stream_live_serial:
-                    # A retained score copy never crosses the next separately
-                    # reserved copy on the global timeline.
-                    var extension: float = _stream_complete_measure(
-                        source+_stream_lookahead_beats())
-                    for other in stream_passes:
-                        if int(other["serial"]) == _stream_live_serial:
-                            continue
-                        var next_start: float = float(other["world_origin"]) + \
-                            float(other["source_floor"])
-                        if next_start > float(item["world_origin"]) + \
-                                float(item["source_floor"]):
-                            extension = minf(extension,next_start -
-                                StreamAdmission.REST_GAP_BEATS -
-                                float(item["world_origin"]))
-                    item["source_ceiling"] = maxf(
-                        float(item["source_ceiling"]),extension)
-                    extended = true
+                    _stream_extend_offscreen(item)
                     break
-            if not extended:
-                _stream_live_serial = -1
-        if _stream_live_serial < 0:
-            var admission: Dictionary = StreamAdmission.window(
-                source,opening,timeline.duration_beats,
-                stream_world_beat,stream_passes,_stream_lookahead_beats())
-            if bool(admission["admit"]):
-                _stream_add_take(source,stream_world_beat,
-                    float(admission["floor"]),
-                    _stream_complete_measure(float(admission["ceiling"])),key)
-                _stream_last_take = key
-                _stream_was_paused = false
+        # An unreserved start CANNOT create note ink in the current frame.
+        # This fails closed rather than silently taking the old camera path.
+        _stream_was_paused = false
     elif not paused_now:
-        # Feedback, Ready and gaps cannot produce new note copies.
         _stream_live_serial = -1
     queue_redraw()
 

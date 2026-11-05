@@ -1638,7 +1638,7 @@ class PracticeEngine:
             if scheduled_deadline is None and presentation_lead_seconds > 0:
                 self.visual_transport.run_at = max(
                     self.visual_transport.run_at,
-                    time.monotonic() + min(30.0, presentation_lead_seconds))
+                    time.monotonic() + presentation_lead_seconds)
                 self.count_in_beats = max(
                     self.count_in_beats,
                     (self.visual_transport.run_at-time.monotonic())*self.plan.bpm/60)
@@ -1970,7 +1970,7 @@ class PracticeEngine:
                 # after any visible old ink, then requests an engine-owned
                 # reading lead. The same delay controls actual MIDI grading.
                 lead_seconds = max(4.0*60.0/self.plan.bpm,
-                    min(30.0,presentation_lead_seconds))
+                    presentation_lead_seconds)
                 already_waiting = max(0.0,self._resume_grading_after-now)
                 additional = max(0.0,lead_seconds-already_waiting)
                 if additional > 0:

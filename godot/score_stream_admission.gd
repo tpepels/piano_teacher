@@ -1,98 +1,49 @@
 extends RefCounted
-## One collision-free future reservation policy for the perpetual practice bar.
-## A passage owns a finite global-time interval. Pause freezes admissions;
-## retry and resume may create new intervals only after all older visible ink.
-## The backend retains the authority over MIDI assessment and run_at deadlines.
-const LOOKAHEAD_BEATS := 3.5
-const FUTURE_GUARD_BEATS := 1.0
-const REST_GAP_BEATS := 0.65
-const MAX_READING_SECONDS := 30.0
+## Single, forward-only source reservation contract. A Play/Resume action
+## selects already pre-engraved, offscreen ink. It never creates a notehead
+## at or ahead of the moving playhead by reconstructing the current source.
+const MIN_READING_BEATS := 3.0
+const OFFSCREEN_MARGIN_BEATS := 0.65
+const REST_GAP_BEATS := 1.0
 
-static func furthest_occupied_world(passes: Array, now: float) -> float:
-    var furthest := -INF
+static func occupied_end(passes: Array, world: float) -> float:
+    var last := -INF
     for item in passes:
-        var finish: float = float(item.get("world_origin",0.0)) + \
-            float(item.get("source_ceiling",0.0))
-        if is_finite(finish) and finish > now:
-            furthest = maxf(furthest,finish)
-    return furthest
+        var finish: float = float(item["world_origin"]) + float(item["source_ceiling"])
+        if finish > world:
+            last = maxf(last,finish)
+    return last
 
-static func next_safe_world(passes: Array, world: float) -> float:
-    var earliest: float = world + FUTURE_GUARD_BEATS
-    var occupied: float = furthest_occupied_world(passes,world)
+static func future_start(passes: Array, world: float,
+        right_beats: float, header_beats: float) -> float:
+    var start: float = world + maxf(MIN_READING_BEATS,
+        right_beats + header_beats + OFFSCREEN_MARGIN_BEATS)
+    var occupied: float = occupied_end(passes,world)
     if is_finite(occupied):
-        earliest = maxf(earliest,occupied+REST_GAP_BEATS)
-    return earliest
+        start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
+    return start
 
-static func reading_lead_seconds(passes: Array, world: float, bpm: float,
-        opening_context_beats: float = 0.0) -> float:
-    # UI informs the authoritative engine how far ahead its next deadline
-    # must lie to avoid the not-yet-departed score. Only when old copies are
-    # still visible must the next authentic clef/meter prelude also clear them.
-    var occupied: float = furthest_occupied_world(passes,world)
-    var context: float = maxf(0.0,opening_context_beats) if is_finite(occupied) else 0.0
-    var beats: float = maxf(LOOKAHEAD_BEATS,
-        next_safe_world(passes,world)-world+context)
-    return minf(MAX_READING_SECONDS,beats*60.0/maxf(1.0,bpm))
+static func pending_index(passes: Array, opening: float, world: float) -> int:
+    var chosen := -1
+    var first_world := INF
+    for index in range(passes.size()):
+        var item: Dictionary = passes[index]
+        var start: float = float(item["world_origin"]) + opening
+        if not bool(item.get("pending",false)) or \
+                absf(float(item["source_floor"])-opening) > .00001 or \
+                start < world + MIN_READING_BEATS or start >= first_world:
+            continue
+        chosen = index
+        first_world = start
+    return chosen
 
-static func window(source: float, opening: float, duration: float,
-        world: float, passes: Array = [],
-        lookahead_beats: float = LOOKAHEAD_BEATS) -> Dictionary:
-    if not is_finite(source) or not is_finite(opening) or \
-            not is_finite(duration) or not is_finite(world):
-        return {"admit":false, "floor":0.0, "ceiling":0.0}
-    # Each unmodified retained source copy uses origin = world - source.
-    # Do not create a clip over other pending ink, and never place its
-    # earliest note on/behind the playhead.
-    var origin: float = world-source
-    var floor: float = maxf(maxf(0.0,opening),
-        next_safe_world(passes,world)-origin)
-    var ceiling: float = minf(duration,source+maxf(LOOKAHEAD_BEATS,lookahead_beats))
-    return {"admit":ceiling > floor+.0001,
-        "floor":floor, "ceiling":ceiling}
+static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
+    return maxf(0.0,start_world-world)*60.0/maxf(1.0,bpm)
 
 static func engraved_clip_bounds(floor: float, ceiling: float,
         pixels_per_beat: float, staff_gap: float,
         source_end: float = INF) -> Vector2:
-    # Verovio prints the first clef, key and time signature LEFT of source
-    # beat zero. Cropping a source copy at beat zero discards the whole header
-    # and half of the first notehead. Nonopening boundaries also need space
-    # for shifted noteheads/accidentals; the end needs its engraved barline.
-    var leading: float = staff_gap * (15.0 if floor <= .0001 else 1.6)
-    # Internal boundaries end exactly at the next measure's first onset.
-    # Padding that boundary exposes half of the NEXT note, which can then
-    # be shown twice when another retained copy is admitted.
-    var trailing: float = staff_gap * 2.2 if ceiling >= source_end-.0001 else 0.0
+    var leading := staff_gap*(15.0 if floor <= .0001 else 1.6)
+    var trailing := staff_gap*2.2 if ceiling >= source_end-.0001 else 0.0
     return Vector2(floor*pixels_per_beat-leading,
         ceiling*pixels_per_beat+trailing)
-
-static func collision_pairs(passes: Array, notes: Array,
-        world: float, pixels_per_beat: float, tolerance_px: float = 12.0) -> Array:
-    # The same-pitch notes of legitimate chords belong to ONE pass and are
-    # deliberately excluded. Only two different moving score copies can
-    # generate the duplicate-note glitch described by the player.
-    var heads: Array = []
-    for item in passes:
-        var floor: float = float(item["source_floor"])
-        var ceiling: float = float(item["source_ceiling"])
-        var origin: float = float(item["world_origin"])
-        var identity: int = int(item["serial"])
-        for raw in notes:
-            var note: Dictionary = raw
-            var source: float = float(note["beat"])
-            if source < floor or source >= ceiling:
-                continue
-            var x: float = (origin+source-world)*pixels_per_beat
-            if x < -tolerance_px or x > 1600.0+tolerance_px:
-                continue
-            heads.append({"serial":identity,"x":x,
-                "pitch":int(note["pitch"])})
-    var duplicates: Array = []
-    for i in range(heads.size()):
-        for j in range(i+1,heads.size()):
-            if heads[i]["serial"] == heads[j]["serial"]:
-                continue
-            if heads[i]["pitch"] == heads[j]["pitch"] and \
-                    absf(float(heads[i]["x"])-float(heads[j]["x"])) < tolerance_px:
-                duplicates.append([heads[i],heads[j]])
-    return duplicates

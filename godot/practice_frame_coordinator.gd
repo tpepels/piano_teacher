@@ -79,18 +79,9 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
         # Musical assessment follows beat; score rendering follows one
         # global, uninterruptible forward world coordinate. Old ink leaves
         # the stage naturally while a new take is admitted to the right.
-        if stage.renderer.stream_enabled:
-            stage.renderer.present_flow(visual_beat,state,beat)
-            if stage.runway_steps != null:
-                stage.runway_steps.visible = false
-        else:
-            # Standalone notation fixtures still use source-local projection.
-            stage.renderer.present_ambient(
-                screen == "practice" and score_ready and
-                str(state.get("phase","")) in ["ready","paused",
-                    "guided_complete","performance_complete"],ticks)
-            if stage.runway_steps != null:
-                stage.runway_steps.visible = true
+        stage.renderer.present_flow(visual_beat,state,beat)
+        if stage.runway_steps != null:
+            stage.runway_steps.visible = false
     if stage.effects != null and moving:
         stage.effects.sync_beat(
             beat,maxi(1,int(round(float(state.get("count_in_bar_beats",4))))),

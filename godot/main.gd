@@ -1022,13 +1022,17 @@ func _send_action(command: Dictionary) -> void:
         # applies this lead to MIDI grading and count-in.
         var visual_now: float = score_flow.project(Time.get_ticks_msec())
         var renderer = practice_view.stage.renderer
-        var header_beats: float = 15.0*renderer.staff_gap()/ \
-            maxf(1.0,renderer.timeline.pixels_per_beat)
-        var requested_lead: float = StreamAdmission.reading_lead_seconds(
-            renderer.stream_passes,visual_now,
-            maxf(1.0,float(last_state.get("bpm",40.0))),header_beats)
+        var opening: float = maxf(0.0,float(last_state.get("play_from_beat",0.0)))
+        if requested == "resume":
+            opening = maxf(opening,opening+_transport_beat_at(Time.get_ticks_msec()))
+        var reserved: Dictionary = renderer.arm_stream_take(visual_now,opening)
+        if reserved.is_empty():
+            practice_view.present_message("Score is not ready for continuous playback")
+            practice_view.finish_action()
+            return
         command = command.duplicate(true)
-        command["presentation_lead_seconds"] = requested_lead
+        command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
+            float(reserved["start_world"]),visual_now,score_flow.bpm)
     _send_command("practice.command", command)
 
 
