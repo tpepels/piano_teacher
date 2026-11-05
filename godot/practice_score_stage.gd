@@ -26,6 +26,11 @@ var runway_steps: Control
 var feedback: Control
 var effects: Control
 var phase_cue: Control
+var hand_cue_panel: PanelContainer
+var hand_cue_label: Label
+var _hand_cue_tween: Tween
+var _hand_cue_identity := ""
+var _hand_cue_previous_phase := ""
 var impact_callout: Control
 var count_in: Control
 var keyboard: Control
@@ -153,6 +158,25 @@ func _ready() -> void:
     phase_cue.offset_top = 46.0
     phase_cue.offset_bottom = 88.0
     score_frame.add_child(phase_cue)
+    # One unobtrusive, transient hand cue on passage/hand change and retries.
+    # Do not allocate a persistent header row or overlay any notation ink.
+    hand_cue_panel = PanelContainer.new()
+    hand_cue_panel.name = "HandCue"
+    hand_cue_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hand_cue_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+    hand_cue_panel.position = Vector2(24, 46)
+    hand_cue_panel.custom_minimum_size = Vector2(124, 32)
+    var hand_style := Design.bordered_surface(Color("#174239", .91), 16, .34)
+    hand_style.border_color = Color(Design.HIGHLIGHT, .36)
+    hand_style.set_content_margin_all(9)
+    hand_cue_panel.add_theme_stylebox_override("panel",hand_style)
+    hand_cue_label = UI.label("", 14, Design.HIGHLIGHT)
+    hand_cue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hand_cue_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    hand_cue_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hand_cue_panel.add_child(hand_cue_label)
+    hand_cue_panel.visible = false
+    score_frame.add_child(hand_cue_panel)
     # Short earned-judgment coaching, placed below the notes on the right.
     # No preview note may create one of these success/correction labels.
     impact_callout = GameImpactCallout.new()
@@ -232,6 +256,7 @@ func present_runway_steps(state: Dictionary, global_visual: float,
 
 func present(state: Dictionary, busy: bool) -> void:
     _state = state.duplicate(true)
+    _present_hand_cue(state)
     effects.present(state)
     feedback.present(state)
     phase_cue.present(state)
@@ -244,6 +269,40 @@ func present(state: Dictionary, busy: bool) -> void:
     else:
         keyboard.update_live(state.get("midi_next_pitches",[]),state.get("midi_held_pitches",[]),state.get("midi_visual_events",[]),
             not str(state.get("device","")).is_empty() and str(state.get("mode","")) in ["practice","perform"])
+
+func _present_hand_cue(state: Dictionary) -> void:
+    if not bool(state.get("loaded",false)):
+        _hand_cue_identity = ""
+        _hand_cue_previous_phase = ""
+        if _hand_cue_tween != null and _hand_cue_tween.is_running():
+            _hand_cue_tween.kill()
+        hand_cue_panel.visible = false
+        return
+    var hand: String = str(state.get("hand","both"))
+    if hand not in ["right","left","both"]:
+        return
+    var identity: String = "%s|%s|%s|%s|%s" % [
+        str(state.get("piece_fingerprint","")),
+        str(state.get("lesson_step",-1)),hand,
+        str(state.get("first_bar",-1)),str(state.get("stage_label",""))]
+    var phase: String = str(state.get("phase",""))
+    var fresh_count_in: bool = phase == "count_in" and _hand_cue_previous_phase != "count_in"
+    _hand_cue_previous_phase = phase
+    if identity == _hand_cue_identity and not fresh_count_in:
+        return
+    _hand_cue_identity = identity
+    hand_cue_label.text = ("Right hand" if hand == "right"
+        else "Left hand" if hand == "left" else "Both hands")
+    if _hand_cue_tween != null and _hand_cue_tween.is_running():
+        _hand_cue_tween.kill()
+    hand_cue_panel.visible = true
+    hand_cue_panel.modulate.a = 0.0
+    _hand_cue_tween = create_tween()
+    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",1.0,.18)
+    _hand_cue_tween.tween_interval(1.35)
+    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",0.0,.42)
+    _hand_cue_tween.tween_callback(func(): hand_cue_panel.visible = false)
+
 
 func pulse_hand_unlock() -> void:
     call_deferred("_pulse_hand_stage")
