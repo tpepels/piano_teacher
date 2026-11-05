@@ -131,5 +131,37 @@ func _initialize() -> void:
     check(retained_origin,
         "repurposed source preserves world position and hides earlier noteheads")
     v.free()
+    # READY remains empty indefinitely: the first offscreen retained
+    # source is recycled, rather than accumulating ghost notes after idle.
+    var idle := InstrumentedView.new()
+    idle.size = Vector2(800,440)
+    idle.native_ready = true
+    idle.timeline.duration_beats = 8.0
+    idle.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    idle.timeline.pixels_per_beat = 96.0
+    var ready_state: Dictionary = {"running":false,"paused":false,
+        "phase":"ready","mode":"practice","piece_fingerprint":"idle",
+        "revision":2,"transport_id":0,"play_from_beat":0.0}
+    for tick in range(350):
+        var idle_world: float = tick*.12
+        idle.present_flow(idle_world,ready_state,0)
+        idle.drawn_note_instances.clear()
+        idle.drawn_noteheads.clear()
+        idle.fingering_pass_clocks.clear()
+        idle._project_stream(idle.size.x*.33)
+        check(idle.admissions.size()==1,
+            "READY cannot add a new source copy while the bar moves")
+        check(idle.drawn_noteheads.is_empty(),
+            "READY must not display idle noteheads without Play")
+        var reserve: Dictionary = idle.stream_passes[0]
+        var threshold: float = idle_world+idle._stream_right_beats()+ \
+            idle._stream_header_beats(0.0)
+        check(float(reserve["world_origin"]) > threshold,
+            "READY must reposition hidden source before its header enters view")
+    var idle_armed: Dictionary = idle.arm_stream_take(idle.stream_world_beat,0)
+    check(not idle_armed.is_empty() and idle.admissions.size()==1,
+        "Play must claim the single already engraved idle reservation")
+    idle.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)

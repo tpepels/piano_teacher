@@ -607,14 +607,37 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     if not native_ready or not retained_ready() or \
             opening >= timeline.duration_beats:
         return -1
+    var right: float = _stream_right_beats()
+    var header: float = _stream_header_beats(opening)
     var index: int = StreamAdmission.pending_index(
-        stream_passes,opening,world)
+        stream_passes,opening,world,right,header)
     if index >= 0:
         return int(stream_passes[index]["serial"])
+    var stale_index: int = StreamAdmission.idle_reservation_index(
+        stream_passes,opening)
+    var others: Array = []
+    var old_serial := 0
+    if stale_index >= 0:
+        old_serial = int(stream_passes[stale_index]["serial"])
+    for item in stream_passes:
+        if stale_index >= 0 and abs(int(item["serial"])) == old_serial:
+            continue
+        others.append(item)
     var onset: float = StreamAdmission.future_start(
-        stream_passes,world,_stream_right_beats(),_stream_header_beats(opening))
+        others,world,right,header)
+    if stale_index >= 0:
+        # The existing score has never entered the audible/visible timeline.
+        # Reposition the same hidden reservation, including its semantic
+        # rest. No repeated Verovio compilation, no duplicate source copy.
+        var existing: Dictionary = stream_passes[stale_index]
+        existing["world_origin"] = onset-opening
+        for item in stream_passes:
+            if int(item["serial"]) == -old_serial and \
+                    str(item.get("kind","")) == "rest":
+                item["world_origin"] = onset-opening+timeline.duration_beats
+        return old_serial
     _stream_add_take(opening,onset,opening,_stream_complete_measure(
-        opening+_stream_right_beats()+1.0),"prepared")
+        opening+right+1.0),"prepared")
     _stream_live_serial = -1
     return _stream_serial
 
@@ -853,6 +876,13 @@ func _project_stream(playhead_x: float) -> void:
         # contains the real initial clef/key/meter; the extra suffix contains
         # full noteheads and barline ink. Grading and hit-tests stay bounded
         # by source_floor/source_ceiling, never by the padding.
+        # READY is an EMPTY moving staff. Its one silent prepared source is
+        # retained offscreen until Play, never revealed by elapsed idle time.
+        if not is_rest and str(item.get("take_key","")) == "prepared" and \
+                bool(item.get("pending",false)) and \
+                not bool(item.get("armed",false)):
+            clip.visible = false
+            continue
         clip.position = Vector2(position+bounds.x,0.0)
         clip.size = Vector2(maxf(1.0,bounds.y-bounds.x),size.y)
         segment.position = Vector2(-bounds.x,0.0)

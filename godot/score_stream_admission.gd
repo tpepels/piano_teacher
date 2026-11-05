@@ -23,7 +23,13 @@ static func future_start(passes: Array, world: float,
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
     return start
 
-static func pending_index(passes: Array, opening: float, world: float) -> int:
+static func pending_index(passes: Array, opening: float, world: float,
+        right_beats: float = 0.0, header_beats: float = 0.0) -> int:
+    # Visible ink begins before the first note at the real clef/key header.
+    # A READY item with only 3 beats before its first note is not safe to
+    # arm if its header has already scrolled into the viewport.
+    var earliest: float = world + maxf(MIN_READING_BEATS,
+        right_beats + header_beats + OFFSCREEN_MARGIN_BEATS)
     var chosen := -1
     var first_world := INF
     for index in range(passes.size()):
@@ -32,7 +38,7 @@ static func pending_index(passes: Array, opening: float, world: float) -> int:
         if not bool(item.get("pending",false)) or \
                 str(item.get("take_key","prepared")) != "prepared" or \
                 absf(float(item["source_floor"])-opening) > .00001 or \
-                start < world + MIN_READING_BEATS or start >= first_world:
+                start < earliest or start >= first_world:
             continue
         chosen = index
         first_world = start
@@ -70,3 +76,18 @@ static func paused_unplayed_index(passes: Array, take_key: String,
         best=index
         soonest=onset
     return best
+
+
+static func idle_reservation_index(passes: Array, opening: float) -> int:
+    # One invisible, pre-engraved idle score is reused until Play. Retiming
+    # this UNPUBLISHED reservation is safe; a sounding/armed score is never
+    # moved. Avoid allocating a new CanvasItem every few idle seconds.
+    for index in range(passes.size()):
+        var item: Dictionary = passes[index]
+        if str(item.get("kind","source")) == "source" and \
+                str(item.get("take_key","")) == "prepared" and \
+                bool(item.get("pending",false)) and \
+                not bool(item.get("armed",false)) and \
+                absf(float(item.get("source_floor",-INF))-opening) < .00001:
+            return index
+    return -1
