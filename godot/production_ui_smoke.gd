@@ -88,7 +88,7 @@ func _process(_delta: float) -> bool:
         # The title must yield width to a single-line transport header.
         # The previous flowing header wrapped BPM above Play/Settings and
         # consumed nearly twice the intended vertical space.
-        if not chrome.practice_navigation is HBoxContainer or (
+        if not (chrome.practice_navigation is HBoxContainer) or (
                 absf(chrome.speed_label.get_global_rect().get_center().y
                     - chrome.header_play_button.get_global_rect().get_center().y) > 2.0):
             _fail("Practice header controls wrapped onto different rows")
