@@ -65,7 +65,11 @@ func _ready() -> void:
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var score_panel: PanelContainer = self
     # One continuous performance stage, not another grey website card.
-    score_panel.add_theme_stylebox_override("panel", Design.stage_surface())
+    # Practice is one continuous score canvas, without a framed card.
+    var seamless_panel := StyleBoxFlat.new()
+    seamless_panel.bg_color = Color.TRANSPARENT
+    seamless_panel.set_content_margin_all(0)
+    score_panel.add_theme_stylebox_override("panel",seamless_panel)
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     var score_margin := UI.card_body(score_panel, 10)
     score_margin_box = score_margin
@@ -101,6 +105,26 @@ func _ready() -> void:
     score_region.add_child(score_area)
     score_frame = score_area
     score_frame.clip_contents = true
+    # Static dark-teal vignette fills the full notation viewport; native
+    # notation, the exact playhead and feedback remain on separate layers.
+    var backdrop := ColorRect.new()
+    backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    backdrop.color = Color.WHITE
+    var backdrop_shader := Shader.new()
+    backdrop_shader.code = """shader_type canvas_item;
+void fragment() {
+    vec2 coordinate = (UV - vec2(0.5,0.48))*vec2(1.25,1.1);
+    float vignette = smoothstep(0.14,0.82,length(coordinate));
+    vec3 center_color = vec3(0.009,0.124,0.108);
+    vec3 edge_color = vec3(0.001,0.059,0.055);
+    COLOR = vec4(mix(center_color,edge_color,vignette*0.92),1.0);
+}
+"""
+    var backdrop_material := ShaderMaterial.new()
+    backdrop_material.shader = backdrop_shader
+    backdrop.material = backdrop_material
+    score_frame.add_child(backdrop)
     effects = GameStage.new()
     effects.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_frame.add_child(effects)
