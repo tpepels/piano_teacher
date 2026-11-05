@@ -2555,7 +2555,20 @@ class PracticeEngine:
                 from_visual=visual_from,
                 reverse_seconds=decision.rewind_seconds)
         if decision.failed:
-            self.plan.streak = 0
+            # An abandoned failed take cannot leave a previously clean
+            # streak durable in SQLite. Settle this monotone invalidation
+            # immediately; the later assessment transaction still owns
+            # feedback, remediation and any new mastery awards.
+            if self.plan.streak != 0:
+                previous_streak = self.plan.streak
+                self.plan.streak = 0
+                try:
+                    self._save()
+                except Exception:
+                    self.plan.streak = previous_streak
+                    raise
+            else:
+                self.plan.streak = 0
         if decision.stop_auto:
             self.auto = False
             self.visual_transport.cancel_preparation()
