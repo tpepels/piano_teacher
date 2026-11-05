@@ -10,7 +10,7 @@ from collections import defaultdict
 from pathlib import Path
 from .pixel_context import rectangular_rest_orientation
 from .pixel_ink import bright
-from .pixel_proof import detect_staff_lines
+from .pixel_proof import PLAYHEAD_FRACTION, detect_staff_lines
 from .proof import read_written_score
 from .reference_font import reference_glyphs
 from .rest_contours import compare_isolated_masks, partition_rest_body_dots, rest_delta_parts, rest_dot_evidence, rest_template_mask
@@ -129,7 +129,7 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                 added = suppressed_ink & ~original_ink
                 if np.count_nonzero(added & delta):
                     raise ValueError("suppression added unrelated ink; contaminated control")
-                xpos = round(original.shape[1]*.42)
+                xpos = round(original.shape[1]*PLAYHEAD_FRACTION)
                 if xs.min() < xpos-80 or xs.max() >= xpos+80:
                     raise ValueError("intervention changed pixels outside the rest onset region")
                 if xs.max()-xs.min() > gap*4 or ys.max()-ys.min() > gap*9:
