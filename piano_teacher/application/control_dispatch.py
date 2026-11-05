@@ -10,7 +10,7 @@ from typing import Literal
 
 ControlRoute = Literal[
     "calibration", "reset", "acknowledgement", "listening",
-    "learning", "transport", "stage"
+    "learning", "transport", "device_range", "stage"
 ]
 
 
@@ -18,6 +18,7 @@ class ControlDispatcher:
     CALIBRATION = frozenset((
         "calibration_start", "calibration_cancel",
         "calibration_apply", "calibration_reset"))
+    DEVICE_RANGE = frozenset(("midi_range_start", "midi_range_cancel"))
     ACKNOWLEDGEMENT = frozenset(("score_ready", "demo_ready"))
     LISTENING = frozenset((
         "listen", "perform", "practice_weak", "review_retry", "seek"))
@@ -31,6 +32,8 @@ class ControlDispatcher:
     def route(cls, action: str) -> ControlRoute:
         if action in cls.CALIBRATION:
             return "calibration"
+        if action in cls.DEVICE_RANGE:
+            return "device_range"
         if action == "reset_path":
             return "reset"
         if action in cls.ACKNOWLEDGEMENT:
