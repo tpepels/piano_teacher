@@ -143,9 +143,10 @@ def test_real_midi_pause_shortcut_resumes_after_count_in_without_restarting_take
         assert engine.transport_id == old_id
         assert engine.state()["phase"] == "count_in"
         assert engine.visual_transport.run_at > old_origin + 7.0
-        lead_end = engine.visual_transport.run_at
+        resume_at = clock[0]
+        lead_seconds = engine.count_in_beats * 60.0 / engine.plan.bpm
         engine._receive(released(21))
-        clock[0] = lead_end
+        clock[0] = resume_at + lead_seconds
         assert engine.state()["clock_beat"] == pytest.approx(frozen)
         assert engine.midi.input_count == 0
     finally:
