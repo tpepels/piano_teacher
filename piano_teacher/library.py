@@ -41,7 +41,7 @@ class ScoreLibrary:
         self.config_dir = Path(config_dir) if config_dir is not None else default_config_dir()
         self.settings_path = self.config_dir / 'settings.json'
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
-                         'last_piece': '', 'midi_device': '', 'metronome': True,
+                         'last_piece': '', 'midi_device': '', 'midi_key_ranges': {}, 'metronome': True,
                          'midi_offset_ms': 0,
                          'exercise_strategy': 'coda-fukuda-midi', 'timing_strategy': 'original-timing',
                          'tempo_strategy': 'constant-tempo',
@@ -97,6 +97,11 @@ class ScoreLibrary:
                 self.settings['midi_offset_ms'])
         except ValueError:
             self.settings['midi_offset_ms'] = 0
+        try:
+            self.settings['midi_key_ranges'] = self._validate_key_ranges(
+                self.settings['midi_key_ranges'])
+        except ValueError:
+            self.settings['midi_key_ranges'] = {}
         for key, (default, _lower, _upper) in EVIDENCE_PREFERENCES.items():
             try:
                 self.settings[key] = self._validate_evidence_preference(key, self.settings[key])
@@ -121,6 +126,22 @@ class ScoreLibrary:
         return offset
 
     @staticmethod
+    def _validate_key_ranges(ranges: object) -> dict:
+        if type(ranges) is not dict or len(ranges) > 128:
+            raise ValueError("MIDI keyboard ranges must be a device-to-range mapping")
+        result = {}
+        for device, value in ranges.items():
+            if (type(device) is not str or not device or len(device) > 256
+                    or not isinstance(value, (list, tuple)) or len(value) != 2
+                    or any(type(p) is not int for p in value)):
+                raise ValueError("Invalid MIDI keyboard device or key range")
+            low, high = value
+            if not 0 <= low < high <= 127:
+                raise ValueError("Keyboard range must contain two ordered MIDI pitches")
+            result[device] = [low, high]
+        return result
+
+    @staticmethod
     def _validate_evidence_preference(key: str, value: object) -> int:
         _default, lower, upper = EVIDENCE_PREFERENCES[key]
         if type(value) is not int or not lower <= value <= upper:
@@ -134,7 +155,7 @@ class ScoreLibrary:
         Lesson preparation can now fail before a strategy switch commits
         settings or changes the active transport.
         """
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'midi_key_ranges', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
         allowed.update(EVIDENCE_PREFERENCES)
         unknown = set(changes) - allowed
         if unknown:
@@ -153,6 +174,8 @@ class ScoreLibrary:
             if not isinstance(changes['midi_device'], str):
                 raise ValueError('Invalid MIDI device')
             new['midi_device'] = changes['midi_device']
+        if 'midi_key_ranges' in changes:
+            new['midi_key_ranges'] = self._validate_key_ranges(changes['midi_key_ranges'])
         if 'metronome' in changes:
             if not isinstance(changes['metronome'], bool):
                 raise ValueError('Metronome must be true or false')
