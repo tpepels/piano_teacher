@@ -47,6 +47,7 @@ cat > "$STAGE/PianoTeacher" <<'LAUNCH'
 set -Eeuo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export PIANO_TEACHER_PYTHON_HOME="$HERE/runtime/python"
+export PYTHONHOME="$HERE/runtime/python"
 export LD_LIBRARY_PATH="$HERE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 PY_VER="$("$HERE/runtime/python/bin/python3" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 export PYTHONPATH="$HERE:$HERE/runtime/python/lib/python$PY_VER/site-packages"
