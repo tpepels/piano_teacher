@@ -13,6 +13,8 @@ var initial_transport := -1
 var restarted_transport := -1
 var paused_ms := 0
 var paused_clock := NAN
+var paused_serial := -1
+var retry_world_start := NAN
 var paused_head_id := ""
 var paused_head_x := NAN
 var retry_reversed := false
@@ -65,7 +67,7 @@ func _ready_score() -> bool:
         return false
     if int(app.last_state.get("revision",-1)) != app.score_session.rendered_revision:
         return false
-    return not _visible_source_head().is_empty()
+    return view.stream_enabled and view.retained_ready()
 
 func _press(button: Button, action: String) -> bool:
     if app.command_state.pending:
@@ -129,17 +131,13 @@ func _process(_delta: float) -> bool:
                 return false
             if paused_ms == 0:
                 paused_ms = now
-                paused_clock = view.visual_scroll_beat
-                paused_head_id = _visible_source_head()
-                if paused_head_id.is_empty():
-                    _fail("Pausing removed the original source heads")
-                    return true
-                paused_head_x = float(view.drawn_noteheads[paused_head_id].x)
+                paused_clock = view.stream_world_beat
+                paused_serial = view._stream_serial
                 return false
             if now-paused_ms < 350:
                 return false
-            if not view.drawn_noteheads.has(paused_head_id) or                     absf(float(view.drawn_noteheads[paused_head_id].x)-paused_head_x) > 1.5 or                     absf(view.visual_scroll_beat-paused_clock) > .001:
-                _fail("Paused real Moonlight notation moved")
+            if view.stream_world_beat <= paused_clock or view._stream_serial != paused_serial:
+                _fail("Paused score stopped moving or admitted new notes")
                 return true
             if not _press(app.practice_view.start_button,"Resume"):
                 return false
@@ -152,21 +150,22 @@ func _process(_delta: float) -> bool:
                 return true
             if not _press(app.practice_view.practice_retry_button,"Retry"):
                 return false
+            retry_world_start = view.stream_world_beat
             _advance("retry_reverse")
         "retry_reverse":
             var prep: Variant = state.get("practice_preparation")
             if prep is Dictionary and str(prep.get("phase",""))=="reverse":
                 retry_reversed = true
-                if float(state.get("visual_scroll_speed",0.0)) >= 0.0:
-                    _fail("Retry did not move backward to its preparation rest")
+                if view.stream_world_beat < retry_world_start:
+                    _fail("Retry reversed the display rather than scheduling new ink")
                     return true
             if retry_reversed and prep is Dictionary and                     str(prep.get("phase",""))=="preparing":
                 retry_prepared = true
                 _advance("retry_rest")
         "retry_rest":
             if str(state.get("phase","")) in ["recovering","feedback"] and                     not bool(state.get("paused",false)):
-                if float(state.get("visual_scroll_speed",0.0)) <= 0:
-                    _fail("Retry rest froze before the next downbeat")
+                if view.stream_world_beat < retry_world_start:
+                    _fail("Retry rest reversed the perpetual display")
                     return true
                 if app.visual_transport_clock.retry_preparing(now) and                         not app.practice_view.stage.count_in.visible:
                     _fail("Retry rest has no visible count-in")
@@ -177,8 +176,8 @@ func _process(_delta: float) -> bool:
             if restarted_transport <= initial_transport or not retry_prepared or                     int(state.get("revision",-1)) != initial_revision:
                 _fail("Retry changed the score or skipped the full rest")
                 return true
-            if not _ready_score():
-                _fail("Retry began before native score was visible")
+            if not _ready_score() or view._stream_serial <= paused_serial:
+                _fail("Retry did not admit fresh pre-engraved notes")
                 return true
             if not _press(app.practice_view.listen_button,"Listen"):
                 return false
