@@ -2,6 +2,7 @@ extends Control
 ## Small music-axis markers. Lesson steps advance along the score rather than
 ## being presented as replacement pages or interrupting score movement.
 const Design := preload("res://practice_theme.gd")
+const ScoreView := preload("res://notation/shared/view_base.gd")
 const INK := Design.HIGHLIGHT
 const FUTURE := Design.SECONDARY_INK
 var _loaded := false
@@ -54,7 +55,7 @@ static func first_playable_beat(model: Dictionary, hand: String = "both") -> flo
 # Project a marker with the SAME pixels/beat as its owner renderer.
 static func marker_x(at: float, visual_beat: float,
         density: float, width: float) -> float:
-    return width*.42 + (at-visual_beat)*density
+    return width*ScoreView.PLAYHEAD_FRACTION + (at-visual_beat)*density
 
 func present(state: Dictionary, visual_beat: float,
         current_origin: float, next_origin: float = INF,
