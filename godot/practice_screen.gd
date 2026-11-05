@@ -27,7 +27,6 @@ var header_play_button: Button
 var details_popup: PopupPanel
 var details_scroll: ScrollContainer
 var details_caption: Label
-var game_brand: Label
 var title_label: Label
 var speed_label: Button
 var tempo_popup: PopupPanel
@@ -37,7 +36,6 @@ var _details_open := false
 var _last_import_notice := ""
 var game_input_indicator: Control
 var lesson_info_label: Label
-var practice_progress: ProgressBar
 var progress_label: Label
 var tempo_down_button: Button
 var tempo_up_button: Button
@@ -103,9 +101,6 @@ func _ready() -> void:
     practice_navigation.alignment = FlowContainer.ALIGNMENT_END
     practice_navigation.add_theme_constant_override("h_separation",12)
     context.add_child(practice_navigation)
-    game_brand = UI.title("Piano Teacher",18)
-    game_brand.visible = false
-    practice_navigation.add_child(game_brand)
     speed_label = _button("♪ -- BPM ▾",_toggle_tempo_popup,false,"secondary")
     speed_label.custom_minimum_size = Vector2(138,46)
     speed_label.tooltip_text = "Adjust tempo"
@@ -141,18 +136,6 @@ func _ready() -> void:
     stage.navigation_requested.connect(func(destination: String): navigation_requested.emit(destination))
     stage.command_requested.connect(func(command: Dictionary): command_requested.emit(command))
     stage.score_retry_requested.connect(func(): score_retry_requested.emit())
-    practice_progress = ProgressBar.new()
-    practice_progress.show_percentage = false
-    practice_progress.max_value = 1.0
-    practice_progress.custom_minimum_size = Vector2(0, 4)
-    practice_progress.add_theme_stylebox_override("background", Design.surface(Color("#25443E"), 3))
-    practice_progress.add_theme_stylebox_override("fill", Design.surface(Color("#70E5BF"), 3))
-    (practice_progress.get_theme_stylebox("background") as StyleBoxFlat).set_content_margin_all(0)
-    (practice_progress.get_theme_stylebox("fill") as StyleBoxFlat).set_content_margin_all(0)
-    practice_layout.add_child(practice_progress)
-    # Progress already appears as a single thin rail *inside* GameStage.
-    # A second full-width bar below the notation made this a dashboard.
-    practice_progress.visible = false
     details_popup = PopupPanel.new()
     details_popup.name = "PracticeOptions"
     details_popup.add_theme_stylebox_override("panel",Design.modal_surface())
@@ -171,6 +154,9 @@ func _ready() -> void:
     details_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     details_panel.add_theme_constant_override("separation",10)
     details_scroll.add_child(details_panel)
+    # Reuse the existing RH/LH/Together stage indicators in More, not above
+    # the score; state updates and unlock animations remain wired.
+    stage.practice_stage_bar.reparent(details_panel)
     var details_header := HBoxContainer.new()
     details_header.add_theme_constant_override("separation",10)
     details_panel.add_child(details_header)
@@ -397,7 +383,6 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             var unit_number: int = int(learner.get("unit_number", 0))
             var context: String = "Idea %d of %d" % [unit_number, int(learner.get("total_units", 1))] if unit_number > 0 else "Selected bars %d–%d" % [int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 1))]
             progress_text = "%s · Notes found %d of %d" % [context, int(teaching.get("target_index", 0)), targets]
-    practice_progress.value = float(parsed.get("progress", 0.0))
     var phase: String = str(parsed.get("phase", "ready"))
     if not bool(parsed.get("paused",false)): advanced_pause_open = false
     _present_pause()
@@ -724,7 +709,6 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
     for bpm_button in [tempo_down_button, tempo_up_button]:
         bpm_button.custom_minimum_size = Vector2(42.0 if compact_steps else 46.0,38.0)
     practice_header.add_theme_constant_override("separation",8 if width < 950.0 else 16)
-    game_brand.visible = false
     practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
     practice_navigation.add_theme_constant_override("v_separation", 4)
     for child in practice_navigation.get_children():
