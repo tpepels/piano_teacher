@@ -237,15 +237,6 @@ func paint_volta_endings(canvas, frame: RenderPass, left: float, right: float, c
         var last: float = float(ending["end"])
         if first > right+.5 or last < left-.5 or last <= first:
             continue
-        var replaced := false
-        if frame.score_loop_enabled:
-            var interval := {"start_beat":frame.pass_start+first,"end_beat":frame.pass_start+last}
-            for preparation in frame.preparation_history.values():
-                if frame.intervals_overlap(interval,preparation["measure"]):
-                    replaced = true
-                    break
-        if replaced:
-            continue
         var x0: float = score_layout.timeline.screen_x(first,clock,playhead_x,frame.play_from_beat)
         var x1: float = score_layout.timeline.screen_x(last,clock,playhead_x,frame.play_from_beat)
         var start_x: float = maxf(-gap,x0)

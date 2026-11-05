@@ -160,17 +160,17 @@ func run_contract() -> void:
     finish()
 
 func check_frame() -> void:
-    var history := {8.0:{"measure":{"start_beat":10.0,"end_beat":12.0}}}
     var frame = Pass.new({"clock":1.0,"playhead_x":400.0,"gap":20.0,
-        "play_from_beat":2.0,"active_hand":"left","score_loop_enabled":true,
-        "pass_index":3,"pass_start":8.0,"preparation_history":history,"visual_scroll_beat":17.0})
+        "play_from_beat":2.0,"active_hand":"left",
+        "pass_index":3,"pass_start":8.0,"visual_scroll_beat":17.0})
     var axis := Axis.new()
     axis.pixels_per_beat = 100.0
     check(frame.screen_x(axis,3.0) == 400.0,"one linear source-axis projection")
-    check(not frame.event_visible({"beat":2.0}) and frame.event_visible({"beat":4.0}),"half-open recovery event bounds")
-    check(not frame.span_visible({"beat":1.0},{"beat":2.0}),"spans touching silence start hidden")
+    check(frame.event_visible({"beat":2.0}) and frame.event_visible({"beat":4.0}),
+        "canonical source engraves all valid events without legacy rest overlays")
+    check(frame.span_visible({"beat":1.0},{"beat":2.0}),
+        "source spans cannot be hidden by discarded recovery renderers")
     check(not frame.intervals_overlap({"start_beat":0.0,"end_beat":2.0},{"start_beat":2.0,"end_beat":4.0}),"touching recovery intervals stay distinct")
-    check(frame.current_preparation == history[8.0],"per-pass preparation selection")
     check(frame.ink("left") == Design.SCORE_INK and frame.ink("right") == Color(Design.STAFF_MUTED,.46),"performer hand fade")
     var event := note("a")
     frame.record_notehead(event,Vector2(600,220),1000.0)
@@ -229,12 +229,10 @@ func check_symbols() -> void:
     painter.paint_tuplet_brackets(canvas,frame,0.0,100.0,20.0)
     check(score.glyphs.calls[-1][0] == "tuplet:a|b","visible source tuplet painted")
     var count: int = score.glyphs.calls.size()
-    var hidden = Pass.new({"score_loop_enabled":true,"pass_start":8.0,"preparation_history":{8.0:{"measure":{"start_beat":8.0,"end_beat":11.0}}}})
-    painter.paint_tuplet_brackets(canvas,hidden,0.0,100.0,20.0)
-    painter.paint_ties(canvas,hidden,100.0,0.0,20.0)
-    painter.paint_slurs(canvas,hidden,100.0,0.0,20.0)
-    check(score.glyphs.calls.size() == count and canvas.textures.size() == 1 and \
-        canvas.polygons.size() == 1,"recovery hides cached connectors and tuplets consistently")
+    var retained = Pass.new({})
+    painter.paint_tuplet_brackets(canvas,retained,0.0,100.0,20.0)
+    check(score.glyphs.calls.size() > count,
+        "one source painter retains original tuplets on every source copy")
     score.attached_grace_notes = [{"before_note_id":"b","measure":1,"staff":"right","note_type":"eighth","spelling":{"step":"E","octave":4}}]
     painter.paint_grace_notes(canvas,frame,20.0)
     check(score.glyphs.calls[-1][1] == Vector2(281,220) and is_equal_approx(score.glyphs.calls[-1][2],13.2),"grace uses recorded actual target head and uniform scale")

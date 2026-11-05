@@ -3,7 +3,6 @@ extends SceneTree
 const NavigationDrawer := preload("res://navigation_drawer.gd")
 const ActionButton := preload("res://action_button.gd")
 const EventWindow := preload("res://notation/native/event_window.gd")
-const SourceVisibility := preload("res://notation/native/source_visibility.gd")
 const EngravingReadiness := preload("res://notation/native/engraving_readiness.gd")
 const CaptionLayout := preload("res://practice_caption_layout.gd")
 const RestLanePlanning := preload("res://notation/native/rest_lane_planning.gd")
@@ -91,17 +90,6 @@ func _initialize() -> void:
         {"id":"d", "beat":3.0}]
     var visible: Array = EventWindow.visible(events, .9, 2.0, TestFrame.new())
     if visible.size() != 1 or visible[0]["id"] != "c":
-        failures += 1
-    var gap := {"duration_beats":1.0,"start_beat":3.0,"end_beat":4.0}
-    var measures: Array = [{"start_beat":0.0,"end_beat":4.0},
-        {"start_beat":4.0,"end_beat":8.0}]
-    var previous: Dictionary = SourceVisibility.practice_context_before(
-        8.0, 8.0, measures, gap)
-    if previous.get("start_beat") != 7.0 or gap["start_beat"] != 3.0:
-        failures += 1
-    var copied: Dictionary = SourceVisibility.practice_context_before(
-        10.0, 8.0, measures, gap)
-    if copied.get("start_beat") != 8.0 or copied.get("end_beat") != 12.0:
         failures += 1
 
     var glyphs := MockGlyphs.new()

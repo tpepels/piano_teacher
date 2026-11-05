@@ -22,7 +22,6 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
         (timeline.duration_beats+1.0)*timeline.pixels_per_beat+view.size.x)
     var frame: RenderPass = view._new_paint_frame(
         camera_clock,playhead_x,gap,0,0.0)
-    frame.score_loop_enabled = false
     layout.set_viewport(Vector2(retained_width,view.size.y))
     var font: Font = ThemeDB.fallback_font
     var left := 0.0
