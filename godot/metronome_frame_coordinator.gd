@@ -77,6 +77,23 @@ func update(state: Dictionary, state_tick_ms: int,
                     retry_first_click_sent = true
             recovery_click_tick = tick
         return
+    var resume_value: Variant = state.get("resume_count_in_beat")
+    if resume_value != null and bool(state.get("running",false)) and (
+            not bool(state.get("paused",false))):
+        # The backend supplies the remaining reading lead-in. The source
+        # transport's positive beat is intentionally not rewound for the
+        # count-in display: show/click the actual ungraded lead-in instead.
+        var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
+        var countdown: float = float(resume_value) + (
+            maxf(0.0,float(now_ms-state_tick_ms))*bpm/60000.0)
+        if countdown < 0.0:
+            var meter := maxi(1,int(round(float(state.get("count_in_bar_beats",4)))))
+            practice_view.stage.count_in.present(countdown,meter,true,false)
+            var tick := floori(countdown+.00001)
+            if tick != count_tick_index:
+                count_tick_index = tick
+                raw_click.call(posmod(tick,meter) == 0)
+            return
     if state.is_empty() or not bool(state.get("running",false)):
         recovery_click_tick = -999
         practice_view.stage.count_in.present(0.0,4,false,false)
