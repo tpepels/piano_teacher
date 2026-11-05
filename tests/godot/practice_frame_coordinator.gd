@@ -15,13 +15,15 @@ class Effects:
 
 class Renderer:
     extends RefCounted
-    var stream_enabled := false
     var runway_origin_beat := 0.0
     var last_beat := NAN
     var last_visual := NAN
-    var ambient_blank := false
-    func present_ambient(blank: bool, _ticks: int) -> void:
-        ambient_blank = blank
+    var flow_world := NAN
+    var flow_calls := 0
+    func present_flow(world: float, _state: Dictionary,
+            _beat: float) -> void:
+        flow_calls += 1
+        flow_world = world
     func present_clock(beat: float, visual: float) -> void:
         last_beat = beat
         last_visual = visual
@@ -83,7 +85,8 @@ func _initialize() -> void:
     if settings.calls != 2 or practice.calls != 2 or lesson.calls != 2:
         failures += 1
     if demo.synchronized != 1.25 or demo.kept != 1.25 or \
-            practice.stage.renderer.ambient_blank or \
+            practice.stage.renderer.flow_calls != 2 or \
+            practice.stage.renderer.flow_world != 9.25 or \
             practice.stage.renderer.last_beat != 1.25 or \
             practice.stage.renderer.last_visual != 9.25 or \
             practice.stage.effects.last_beat != 1.25 or \
@@ -94,11 +97,13 @@ func _initialize() -> void:
     paused_state["paused"] = true
     coordinator.advance(paused_state,1.25,9.25,1048,.016,
         false,"practice",true,[])
-    if not practice.stage.renderer.ambient_blank:
+    if practice.stage.renderer.flow_calls != 3 or \
+            practice.stage.renderer.flow_world != 9.25:
         failures += 1
-    coordinator.advance(state,1.25,9.25,1064,.016,
+    coordinator.advance(state,1.25,10.25,1064,.016,
         false,"practice",true,[])
-    if practice.stage.renderer.ambient_blank:
+    if practice.stage.renderer.flow_calls != 4 or \
+            practice.stage.renderer.flow_world != 10.25:
         failures += 1
     print("PRACTICE_FRAME_COORDINATOR_FAILURES:",failures)
     quit(0 if failures==0 else 1)
