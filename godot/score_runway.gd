@@ -271,21 +271,24 @@ func promote_if_ready(state: Dictionary) -> bool:
         return false
     var old = stage.renderer
     var new_renderer = _future
+    # The new source can enter ONLY at the backend's already-scheduled
+    # future downbeat. Do not promote a renderer with missing/late timing,
+    # and never calculate a replacement onset in the current frame.
+    var graded: float = float(state.get("clock_beat",-INF))
+    if not is_finite(graded) or graded >= 0.0:
+        return false
+    var intended_world: float = _visual_beat - graded
+    var armed: Dictionary = new_renderer.arm_stream_take(
+        _visual_beat,0.0,intended_world)
+    if armed.is_empty():
+        return false
     _future = null
     new_renderer.modulate.a = 1.0
     new_renderer.runway_overlay = false
-    # Retained note ink is unchanged; its fixed brace and annotation canvas
-    # was intentionally omitted while this was a transparent future layer.
-    # Repaint that one small layer at promotion, never all score segments.
+    # The same retained source ink survives this promotion. Only the
+    # annotation overlay and ownership change; no camera transform resets.
     if is_instance_valid(new_renderer.retained_annotations):
         new_renderer.retained_annotations.queue_redraw()
-    # The engine publishes a real future graded onset (negative clock_beat).
-    # Preposition that same absolute source onset on the moving world axis.
-    # If the deadline was lost, arm a new offscreen copy rather than seek.
-    var graded: float = float(state.get("clock_beat",-INF))
-    var intended_world: float = _visual_beat - graded \
-        if is_finite(graded) and graded < 0.0 else NAN
-    new_renderer.arm_stream_take(_visual_beat,0.0,intended_world)
     new_renderer.runway_origin_beat = 0.0
     new_renderer.runway_cutoff_beat = INF
     new_renderer.set_transport_overlay_enabled(true)
