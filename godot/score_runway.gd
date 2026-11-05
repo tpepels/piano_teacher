@@ -6,6 +6,7 @@ const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
+const ScoreView := preload("res://notation/shared/view_base.gd")
 const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
@@ -93,7 +94,7 @@ func _advance_tail(global_beat: float) -> void:
         return
     _tail.present_clock(global_beat-_tail_origin,global_beat-_tail_origin)
     var density: float = maxf(1.0,float(_tail.timeline.pixels_per_beat))
-    var left_visible: float = global_beat-_tail.size.x*.42/density
+    var left_visible: float = global_beat-_tail.size.x*ScoreView.PLAYHEAD_FRACTION/density
     if left_visible > _tail_end+.01:
         _clear_tail()
 
@@ -246,6 +247,15 @@ func update_state(state: Dictionary, now_ms: int) -> void:
 func present_frame(state: Dictionary, global_beat: float) -> void:
     _visual_beat = global_beat
     _advance_tail(global_beat)
+    # An idle or paused score contains no notes, including the departing
+    # stage and the asynchronously pre-engraved upcoming stage.
+    var ambient_blank: bool = (bool(state.get("loaded",false)) and
+        str(state.get("phase","")) in ["ready","paused","guided_complete",
+            "performance_complete"])
+    if _tail != null and is_instance_valid(_tail):
+        _tail.visible = not ambient_blank
+    if _future != null and is_instance_valid(_future):
+        _future.visible = not ambient_blank
     if _future == null or not is_instance_valid(_future) or _bundle.is_empty():
         if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
             var last_clean: bool = \
