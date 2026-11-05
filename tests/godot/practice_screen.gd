@@ -47,6 +47,27 @@ func run() -> void:
                 values.title = "mutated"
                 view.present_busy(true)
                 check(view.title_label.text == "A real piece" and view.speed_label.text == "Adagio · 72 BPM ▾" and view.speed_label.tooltip_text.contains("target 80 BPM"),"Practice captures title and tempo values")
+                var slow := state()
+                slow.bpm = 31
+                view.present(slow,true)
+                check(view.speed_label.text == "Grave · 31 BPM ▾" and
+                    view.tempo_name_label.text == "Grave",
+                    "Slow practice displays an approximate Italian tempo name")
+                var faster := state()
+                faster.bpm = 96
+                view.present(faster,true)
+                check(view.tempo_name_label.text == "Andante",
+                    "Tempo category responds to the actual selected BPM")
+                var transport_bloom: ColorRect = view.start_button.get_node_or_null(
+                    "TransportBloom")
+                check(transport_bloom != null and
+                    transport_bloom.material is ShaderMaterial and
+                    transport_bloom.show_behind_parent,
+                    "Main Play/Pause uses behind-text GPU bloom instead of a StyleBox shadow")
+                check(view.stage.playhead_glow != null and
+                    view.stage.playhead_glow.material is ShaderMaterial and
+                    view.stage.effects.rail_glow.material is ShaderMaterial,
+                    "Playhead and progress share the shader-based glow vocabulary")
                 var named_source := state()
                 named_source.exercise_strategy = "coda-fukuda-midi"
                 named_source.stage_label = "Melody outline"
