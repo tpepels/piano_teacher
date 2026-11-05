@@ -74,14 +74,14 @@ func _skin() -> void:
 	normal.content_margin_right = 0 if icon_only else 14
 	normal.content_margin_top = 8
 	normal.content_margin_bottom = 8
-	normal.shadow_color = Color(Design.MINT,.36) if important else Color(Design.NIGHT,.22)
+	normal.shadow_color = Color("#1F78AD",.34) if important else Color(Design.NIGHT,.22)
 	normal.shadow_size = 15 if important else 2
 	normal.shadow_offset = Vector2(0,2)
 	add_theme_stylebox_override("normal", normal)
 	var hover := normal.duplicate() as StyleBoxFlat
 	hover.bg_color = background.lightened(.09)
 	hover.border_color = Color(Design.HIGHLIGHT,.92) if important else Color(Design.MINT,.70)
-	hover.shadow_color = Color(Design.MINT,.24)
+	hover.shadow_color = Color("#247BAE",.23)
 	hover.shadow_size = 9
 	add_theme_stylebox_override("hover", hover)
 	var pressed := normal.duplicate() as StyleBoxFlat
