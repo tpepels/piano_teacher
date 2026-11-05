@@ -1,4 +1,5 @@
 extends SceneTree
+const ScoreView := preload("res://notation/shared/view_base.gd")
 ## Actual production scene -> embedded Python -> MIDI -> Verovio -> retained
 ## notation -> practice transport. No synthetic score-session doubles.
 const DEFAULT_FIXTURE := "phase6_native_fixture.mid"
@@ -121,7 +122,7 @@ func _process(_delta: float) -> bool:
         if not renderer.drawn_noteheads.is_empty():
             _fail("Ready screen revealed exercise noteheads before transport")
             return true
-        var forward_beats: float = renderer.size.x*(1.0-renderer.PLAYHEAD_FRACTION) / renderer.timeline.pixels_per_beat
+        var forward_beats: float = renderer.size.x*(1.0-ScoreView.PLAYHEAD_FRACTION) / renderer.timeline.pixels_per_beat
         if forward_beats < 2.0:
             _fail("Engraving leaves under two beats visible ahead of playhead")
             return true
