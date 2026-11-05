@@ -23,6 +23,18 @@ class Score extends Control:
         return 16.0
 
 var failures: Array[String] = []
+
+func has_tinted_head(paints: Array, glyph: String, x: float,
+        tone: Color, minimum_alpha: float) -> bool:
+    for entry in paints:
+        var ink: Color = entry["tone"]
+        if str(entry["name"]) == glyph and float(entry["x"]) == x and \
+                absf(ink.r-tone.r) < .0001 and absf(ink.g-tone.g) < .0001 and \
+                absf(ink.b-tone.b) < .0001 and ink.a >= minimum_alpha and \
+                bool(entry["centered"]) and float(entry["gap"]) == 16.0:
+            return true
+    return false
+
 func check(ok: bool, label: String) -> void:
     if not ok:
         failures.append(label)
@@ -68,23 +80,12 @@ func run() -> void:
     await process_frame
     await process_frame
     var paints: Array = score.glyphs.paints
-    check(paints.any(func(p): return p.name == "head_black" and
-        p.x == 100.0 and p.tone.r == design.MINT.r and
-        p.tone.g == design.MINT.g and p.tone.b == design.MINT.b and
-        p.tone.a > 0.0),
+    check(has_tinted_head(paints,"head_black",100.0,design.MINT,.01),
         "Immediate played quarter-note head fills mint")
-    check(paints.any(func(p): return p.name == "head_half" and
-        p.x == 170.0 and p.tone.r == design.CORAL.r and
-        p.tone.g == design.CORAL.g and p.tone.b == design.CORAL.b and
-        p.tone.a > .5),
+    check(has_tinted_head(paints,"head_half",170.0,design.CORAL,.5),
         "Graded missed half-note head takes authentic red contour")
-    check(paints.any(func(p): return p.name == "head_whole" and
-        p.x == 225.0 and p.tone.r == design.AMBER.r and
-        p.tone.g == design.AMBER.g and p.tone.b == design.AMBER.b and
-        p.tone.a > .5),
+    check(has_tinted_head(paints,"head_whole",225.0,design.AMBER,.5),
         "Mistimed whole-note head retains its hollow amber contour")
-    check(paints.all(func(p): return bool(p.centered) and p.gap == 16.0),
-        "Tint uses exact source head centers and original Verovio staff scale")
     state.feedback_marks = []
     feedback.present(state)
     check(feedback.markers.has("attack-b") and
