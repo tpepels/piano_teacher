@@ -1048,9 +1048,26 @@ func _draw() -> void:
         for index in range(-1,ceili(size.x/bar_width)+3):
             var x: float = playhead_x-offset+float(index)*bar_width
             if x >= 0.0 and x <= size.x:
-                draw_line(Vector2(x,barline_top_y),
-                    Vector2(x,barline_bottom_y),
-                    Color(NOTE_INK,.20 if stream_enabled else .33),1.0,true)
+                var inside_source := false
+                if stream_enabled:
+                    # The source's authentic MusicXML barlines are already
+                    # engraved in the moving clip. Do not draw speculative
+                    # ambient barlines on top of them.
+                    var density: float = maxf(1.0,timeline.pixels_per_beat)
+                    for item in stream_passes:
+                        var source_left: float = playhead_x + (
+                            float(item["world_origin"])-stream_world_beat)*density
+                        var visible_start: float = source_left + (
+                            float(item["source_floor"])*density)
+                        var source_right: float = source_left + (
+                            timeline.duration_beats*density)
+                        if x >= visible_start and x <= source_right:
+                            inside_source = true
+                            break
+                if not inside_source:
+                    draw_line(Vector2(x,barline_top_y),
+                        Vector2(x,barline_bottom_y),
+                        Color(NOTE_INK,.20 if stream_enabled else .33),1.0,true)
     # Keep the fixed playhead visible but BEHIND source ink. At exact
     # onset a foreground cursor previously covered small eighth-rest dots,
     # flagged stems and noteheads, preventing independent contour recovery.
