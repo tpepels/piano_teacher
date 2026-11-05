@@ -109,14 +109,14 @@ func _draw() -> void:
         pointer_inside = is_hovered()
         _wake_motion()
     _was_disabled = disabled
-    if size.x < 100 or size.y < 35:
+    if size.x < 42 or size.y < 35:
         return
     var primary: bool = action_kind in ["play", "pause"]
     var ink: Color = DIM if disabled else Design.NIGHT if primary else Design.FOCUS
     var font: Font = get_theme_font("font")
     var font_size: int = clampi(get_theme_font_size("font_size"), 12, 24)
     var key_size: int = 11 if size.x < 190.0 else clampi(font_size - 4, 11, 13)
-    var key_label: String = _shortcut_label()
+    var key_label: String = _shortcut_label() if primary else ""
     var padding: float = 12.0 if size.x < 190.0 else 18.0
     var key_width: float = maxf(24.0, ceilf(font.get_string_size(key_label,
         HORIZONTAL_ALIGNMENT_LEFT, -1, key_size).x) + 12.0) if not key_label.is_empty() else 0.0
@@ -139,7 +139,7 @@ func _draw() -> void:
         HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
     var group_x: float = padding + maxf(0.0, (group_space - label_offset - label_width) * .5)
     var lift: float = -hover_phase + 2.0 * press_phase - .8 * sin(release_flash * PI)
-    var mid := Vector2(group_x + 10.0, size.y * .5 + lift)
+    var mid := Vector2(group_x + 10.0, size.y * .5 + lift) if primary else Vector2(size.x*.5,size.y*.5+lift)
     match action_kind:
         "pause":
             draw_rect(Rect2(mid.x - 5.5, mid.y - 7, 4.0, 14), ink)
@@ -165,6 +165,10 @@ func _draw() -> void:
             draw_colored_polygon(PackedVector2Array([
                 mid + Vector2(-4, -7), mid + Vector2(8, 0),
                 mid + Vector2(-4, 7)]), ink)
+    # Secondary transport keys are single, centered symbols. Their full
+    # action and keyboard shortcut remain in Button.text and the tooltip.
+    if not primary:
+        return
     var baseline: float = (size.y + font.get_ascent(font_size)
         - font.get_descent(font_size)) * .5 + lift
     draw_string(font, Vector2(group_x + label_offset, baseline), label,
