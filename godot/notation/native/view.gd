@@ -608,6 +608,7 @@ func arm_stream_take(world: float, opening: float,
         return {}
     stream_world_beat = maxf(stream_world_beat,world)
     var old_live: int = _stream_live_serial
+    var serial_before: int = _stream_serial
     var serial := -1
     var reused := false
     var reused_auto := false
@@ -658,6 +659,7 @@ func arm_stream_take(world: float, opening: float,
     _stream_armed_serial = serial
     _stream_arm_rollback = {
         "owner_serial":serial,"source_snapshot":snapshot,
+        "newly_allocated":_stream_serial > serial_before,
         "old_live_serial":old_live}
     for item in stream_passes:
         if int(item.get("serial",-1)) == serial:
@@ -677,8 +679,13 @@ func cancel_stream_arm() -> bool:
     if _stream_armed_serial != owner_serial:
         _stream_arm_rollback.clear()
         return false
-    var restored: bool = StreamLifecycle.restore_owner(stream_passes,
-        owner_serial,_stream_arm_rollback["source_snapshot"])
+    var restored: bool = false
+    if bool(_stream_arm_rollback.get("newly_allocated",false)):
+        restored = StreamLifecycle.discard_owner(
+            self,stream_passes,owner_serial) > 0
+    else:
+        restored = StreamLifecycle.restore_owner(stream_passes,
+            owner_serial,_stream_arm_rollback["source_snapshot"])
     _stream_live_serial = int(_stream_arm_rollback["old_live_serial"])
     _stream_armed_serial = -1
     _stream_arm_rollback.clear()
