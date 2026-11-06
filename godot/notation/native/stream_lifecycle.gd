@@ -15,7 +15,7 @@ static func _offstage(segment: Node2D) -> void:
 
 # Each attempt owns one source slot and, when the score has an authored
 # gap, one rest slot. These slots are never independently inserted.
-static func admit(owner: Control, passes: Array, specs: Array,
+static func _admit(owner: Control, passes: Array, specs: Array,
         source_pool: Array, rest_pool: Array, first_source: Node2D) -> bool:
     var used: Dictionary = {}
     var identities: Dictionary = {}
@@ -100,36 +100,6 @@ static func admit(owner: Control, passes: Array, specs: Array,
     return true
 
 
-static func reposition(passes: Array, owner_serial: int,
-        new_origin: float) -> bool:
-    # Only a never-published READY reservation may be repositioned. Its
-    # dependent written rest gets exactly the same world-axis translation.
-    if not is_finite(new_origin):
-        return false
-    var source: Dictionary = {}
-    for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == \
-                owner_serial and str(item.get("kind","source")) == "source":
-            source = item
-            break
-    if source.is_empty() or str(source.get("take_key","")) != "prepared" or \
-            not bool(source.get("pending",false)) or \
-            bool(source.get("armed",false)):
-        return false
-    var previous: float = float(source["world_origin"])
-    if new_origin < previous-.00001:
-        return false
-    var movement: float = new_origin-previous
-    for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
-            if not bool(item.get("hidden_until_armed",false)):
-                return false
-    for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
-            item["world_origin"] = float(item["world_origin"])+movement
-    return true
-
-
 static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
     # Preserve the exact visible/pending state before dispatching a control.
     # A rejected or timed-out command must never leave ghost armed notes.
@@ -143,9 +113,9 @@ static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
             "pending":item.get("pending",false),
             "armed":item.get("armed",false),
             "hidden_until_armed":item.get("hidden_until_armed",false),
-            "source_floor":item.get("source_floor",0.0),
-            "source_ceiling":item.get("source_ceiling",0.0),
-            "world_origin":item.get("world_origin",0.0)}
+            # Coordinates and musical source span are write-once at
+            # enqueue, never included in mutable transport-state rollback.
+            "status_only":true}
     return result
 
 
@@ -202,20 +172,6 @@ static func activate(passes: Array, owner_serial: int, key: String,
             item["pending"] = false
             item["armed"] = armed
     return true
-
-
-static func widen_source(passes: Array, owner_serial: int,
-        floor: float, ceiling: float) -> bool:
-    # A claimed automatic copy can clip previous events, and a running
-    # copy can enlarge its future window. Both use the same role identity.
-    for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != \
-                owner_serial or str(item.get("kind","source")) != "source":
-            continue
-        item["source_floor"] = maxf(float(item["source_floor"]),floor)
-        item["source_ceiling"] = maxf(float(item["source_ceiling"]),ceiling)
-        return true
-    return false
 
 
 static func screen_bounds(item: Dictionary, density: float,
@@ -357,27 +313,6 @@ static func retire(owner: Control, item: Dictionary) -> void:
     if clip != null and is_instance_valid(clip):
         clip.queue_free()
 
-static func discard_owner(owner: Control, passes: Array,
-        owner_serial: int) -> int:
-    # A failed action that just allocated new offscreen ink must remove
-    # BOTH clip roles. Retiring by owner prevents a stranded rest or source
-    # from extending the occupied-world horizon on subsequent Play actions.
-    var removed := 0
-    for index in range(passes.size()-1,-1,-1):
-        var item: Dictionary = passes[index]
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
-            continue
-        retire(owner,item)
-        passes.remove_at(index)
-        removed += 1
-    return removed
-
-
-static func release_all(owner: Control, passes: Array) -> void:
-    for item in passes:
-        retire(owner,item)
-    passes.clear()
-
 static func expired(item: Dictionary, world: float, density: float,
         playhead_x: float, staff_gap: float, score_duration: float) -> bool:
     var right: float = screen_bounds(
@@ -385,36 +320,3 @@ static func expired(item: Dictionary, world: float, density: float,
     var origin_x: float = playhead_x + \
         (float(item["world_origin"])-world)*density
     return origin_x+right < -EXIT_MARGIN_PIXELS
-
-static func prune(owner: Control, passes: Array, world: float, density: float,
-        playhead_x: float, staff_gap: float, score_duration: float) -> Array[int]:
-    var removed: Array[int] = []
-    # If a source CanvasItem or clip has been invalidated externally, its
-    # dependent rest is also invalid. Normal expiration is independent:
-    # source ink may leave earlier than its authentic printed rest.
-    var invalid_owners: Dictionary = {}
-    for item in passes:
-        if str(item.get("kind","source")) != "source":
-            continue
-        var segment = item.get("segment")
-        var clip = item.get("clip")
-        if segment == null or not is_instance_valid(segment) or \
-                clip == null or not is_instance_valid(clip):
-            invalid_owners[int(item.get("owner_serial",
-                abs(int(item.get("serial",0)))))] = true
-    for index in range(passes.size()-1,-1,-1):
-        var item: Dictionary = passes[index]
-        var segment = item.get("segment")
-        var clip = item.get("clip")
-        var owner_serial: int = int(item.get("owner_serial",
-            abs(int(item.get("serial",0)))))
-        var invalid: bool = invalid_owners.has(owner_serial) or \
-            segment == null or not is_instance_valid(segment) or \
-            clip == null or not is_instance_valid(clip)
-        if not invalid and not expired(item,world,density,playhead_x,
-                staff_gap,score_duration):
-            continue
-        removed.append(int(item.get("serial",0)))
-        retire(owner,item)
-        passes.remove_at(index)
-    return removed
