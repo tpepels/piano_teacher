@@ -218,8 +218,8 @@ func _initialize() -> void:
         "running":false,"paused":false,"phase":"ready","mode":"practice",
         "piece_fingerprint":"collision","revision":1,"transport_id":0,
         "play_from_beat":0.0},0.0)
-    collision.stream_passes[0]["take_key"] = "armed:2"
-    collision.stream_passes[0]["pending"] = false
+    collision._stream_queue.online[0]["take_key"] = "armed:2"
+    collision._stream_queue.online[0]["pending"] = false
     var collided: Dictionary = collision.arm_stream_take(.2,0.0)
     check(collided.is_empty() and collision.stream_passes.size()==1 and
         int(collision.stream_passes[0]["serial"])==1 and
