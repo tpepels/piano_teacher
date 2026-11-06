@@ -105,8 +105,25 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert 'variant == "recovery"' not in source
     assert 'frame.score_loop_enabled' not in source
     lifecycle = (ROOT/"godot/notation/native/stream_lifecycle.gd").read_text()
-    assert "StreamLifecycle.create(self,choice" in view
-    assert "StreamLifecycle.create(self,rest" in view
+    assert "StreamLifecycle.admit(self,stream_passes,specs" in view
+    assert "StreamLifecycle.reposition(" in view
+    assert "StreamLifecycle.activate(" in view
+    assert "StreamLifecycle.widen_source(" in view
+    assert "StreamAdmission.position(" in view
+    assert "StreamAdmission.select(" in view
+    assert "func _stream_add_rest(" not in view
+    assert "StreamLifecycle.create(" not in view
+    assert "func _stream_claim_pending_auto(" in view
+    assert "static func admit(" in lifecycle
+    assert "static func activate(" in lifecycle
+    assert "static func reposition(" in lifecycle
+    assert "static func screen_bounds(" in lifecycle
+    admission = (ROOT/"godot/score_stream_admission.gd").read_text()
+    assert "static func select(" in admission
+    assert "static func position(" in admission
+    assert "static func pending_index(" not in admission
+    assert "static func paused_unplayed_index(" not in admission
+    assert "static func idle_reservation_index(" not in admission
     assert "StreamLifecycle.prune(self,stream_passes" in view
     assert "StreamLifecycle.release_all(self,stream_passes)" in view
     assert "StreamLifecycle.attach_compiled(stream_passes)" in view
