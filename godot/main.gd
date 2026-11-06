@@ -38,6 +38,7 @@ const CommandSuccessEffects := preload("res://command_success_effects.gd")
 const PracticeControlPolicy := preload("res://practice_control_policy.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
+const CountInVoicePlayer := preload("res://countin_voice_player.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
@@ -187,6 +188,13 @@ func _ready() -> void:
     _configure_ui_scaling()
     ui_scale = _readable_ui_scale()
     _build_interface()
+    # Audio has one root-owned lifetime, including score revisions, Pause,
+    # source selection and renderer replacement. The visual countdown merely
+    # delegates speech to this service.
+    var spoken_countin := CountInVoicePlayer.new()
+    spoken_countin.name = "CountInVoicePlayer"
+    add_child(spoken_countin)
+    practice_view.bind_countin_voice_player(spoken_countin)
     demo_player = preload("res://demo_player.gd").new()
     demo_player.call("configure", inprocess_bus)
     add_child(demo_player)
