@@ -137,7 +137,12 @@ audit_package() {
   fi
   mkdir -p "$bundled/bin" "$bundled/lib" "$workspace"
   cp -L "$PYTHON" "$bundled/bin/python3"
-  cp -L "$libpython" "$bundled/lib/libpython$python_version.so"
+  # Preserve both the linker alias and runtime SONAME in the package.
+  # A lone .so alias could otherwise hide a dependency on system libpython.
+  for python_library in "$PY_LIB"/libpython"$python_version".so*; do
+    [[ -f "$python_library" ]] || continue
+    cp -L "$python_library" "$bundled/lib/$(basename "$python_library")"
+  done
   cp -a "$stdlib" "$bundled/lib/python$python_version"
   mkdir -p "$bundled/lib/python$python_version/site-packages"
   cp -a "$PY_SITE/." "$bundled/lib/python$python_version/site-packages/"
