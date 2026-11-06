@@ -610,14 +610,13 @@ func _stream_add_take(source_beat: float, start_world: float,
             # If admission fails partway through the immutable take,
             # unwind ONLY the new right-hand strip suffix, preserving the
             # old on-screen prefix and archiving every removed owner.
-            for rollback_index in range(added):
-                var removed: Array[int] = _stream_queue.withdraw_tail(
-                    self,stream_world_beat,density,gap_pixels,
+            if added > 0:
+                _stream_queue.withdraw_take_tail(self,first_serial,
+                    stream_world_beat,density,gap_pixels,
                     timeline.duration_beats,size.x,
-                    size.x*PLAYHEAD_FRACTION,"failed_take_batch",true)
-                if removed.is_empty():
+                    size.x*PLAYHEAD_FRACTION,"failed_take_batch")
+                if _stream_queue.has_take(first_serial):
                     push_error("Cannot safely roll back incomplete streamed take")
-                    break
             push_error("Refused immutable score strip admission %d" % serial)
             return
         added += 1
@@ -682,9 +681,9 @@ func _reject_stream_candidate(owner_serial: int, before_serial: int,
     # A failed pre-commit reservation must not leave a speculative future
     # source/rest pair occupying the musical axis.
     if owner_serial > before_serial:
-        _stream_queue.withdraw_tail(self,stream_world_beat,
+        _stream_queue.withdraw_take_tail(self,owner_serial,stream_world_beat,
             timeline.pixels_per_beat,staff_gap(),timeline.duration_beats,
-            size.x,size.x*PLAYHEAD_FRACTION,"rejected_admission",true)
+            size.x,size.x*PLAYHEAD_FRACTION,"rejected_admission")
     elif not snapshot.is_empty():
         StreamLifecycle.restore_owner(_stream_queue.online,owner_serial,snapshot)
     _stream_live_serial = old_live_serial
@@ -780,10 +779,11 @@ func cancel_stream_arm() -> bool:
         return false
     var restored: bool = false
     if bool(_stream_arm_rollback.get("newly_allocated",false)):
-        restored = not _stream_queue.withdraw_tail(
-            self,stream_world_beat,timeline.pixels_per_beat,
+        _stream_queue.withdraw_take_tail(
+            self,owner_serial,stream_world_beat,timeline.pixels_per_beat,
             staff_gap(),timeline.duration_beats,size.x,
-            size.x*PLAYHEAD_FRACTION,"failed_command",true).is_empty()
+            size.x*PLAYHEAD_FRACTION,"failed_command")
+        restored = not _stream_queue.has_take(owner_serial)
     else:
         restored = StreamLifecycle.restore_owner(_stream_queue.online,
             owner_serial,_stream_arm_rollback["source_snapshot"])
