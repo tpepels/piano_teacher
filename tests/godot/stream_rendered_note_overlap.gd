@@ -221,10 +221,18 @@ func _initialize() -> void:
     collision._stream_queue.online[0]["take_key"] = "armed:2"
     collision._stream_queue.online[0]["pending"] = false
     var collided: Dictionary = collision.arm_stream_take(.2,0.0)
-    check(collided.is_empty() and collision.stream_passes.size()==1 and
+    var collision_valid := (
+        collided.is_empty() and collision.stream_passes.size()==1 and
         int(collision.stream_passes[0]["serial"])==1 and
-        collision._stream_live_serial == -1,
-        "failed owner uniqueness must remove newly inserted future ink")
+        collision._stream_live_serial == -1)
+    check(collision_valid,
+        "failed owner uniqueness must remove newly inserted future ink %s" % [
+            JSON.stringify({"result":collided,"size":collision.stream_passes.size(),
+                "serial":collision._stream_serial,
+                "live":collision._stream_live_serial,
+                "sources":collision.stream_passes.map(
+                    func(e): return {"serial":e["serial"],
+                        "key":e["take_key"],"pending":e["pending"]})})])
     collision.free()
     # The backend's absolute retry deadline chooses the new future owner.
     # An already-prepared successor for beat zero is not reused for a
