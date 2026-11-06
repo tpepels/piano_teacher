@@ -53,7 +53,14 @@ func _initialize() -> void:
         0.0,0.0,"",second_world+1.0)==-1,
         "backend deadlines cannot bind a different automatic passage")
     check(Admission.select(passes,"bound",0.0,world,0.0,0.0,
-        "transport-one")==0,"one backend identity selects its single source")
+        "transport-one")==0,"first backend attempt selects its bound source")
+    passes.append({"serial":3,"owner_serial":3,"kind":"source",
+        "pending":false,"take_key":"transport-one",
+        "world_origin":second_world+10.0,
+        "source_floor":2.0,"source_ceiling":6.0})
+    check(Admission.select(passes,"bound",0.0,world,0.0,0.0,
+        "transport-one")==3,
+        "same backend transport chooses the latest disjoint Resume interval")
     check(Admission.position(passes,world,11.0,3.5) >=
         second_world+6.0+Admission.REST_GAP_BEATS+3.5,
         "future passage must clear all existing note and rest extents")
