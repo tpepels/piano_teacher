@@ -112,10 +112,7 @@ static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
             "take_key":item.get("take_key",""),
             "pending":item.get("pending",false),
             "armed":item.get("armed",false),
-            "hidden_until_armed":item.get("hidden_until_armed",false),
-            # Coordinates and musical source span are write-once at
-            # enqueue, never included in mutable transport-state rollback.
-            "status_only":true}
+            "hidden_until_armed":item.get("hidden_until_armed",false)}
     return result
 
 
