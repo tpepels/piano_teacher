@@ -1,25 +1,66 @@
 extends Control
+## Beat-locked visual preparation and optional Japanese voice. The backend
+## owns the beat; this control never starts a timer or moves the score.
+const VOICE_NAMES := ["ichi", "ni", "san", "shi"]
+const SPOKEN_SETTINGS := "user://countin_voice.cfg"
 
-# Phase 7.8: an easily readable preparation count without covering the
-# moving score. Every numeral is derived from the backend's negative beat
-# coordinate; no secondary timer can drift from the musical clock.
 var count := 4
 var current := -1
 var beats_left := 0
 var beat_fraction := 0.0
+var spoken_enabled := true
+var _voice_player: AudioStreamPlayer
+var _voice_streams: Array[AudioStream] = []
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     focus_mode = Control.FOCUS_NONE
+    var saved := ConfigFile.new()
+    if saved.load(SPOKEN_SETTINGS) == OK:
+        spoken_enabled = bool(saved.get_value("audio", "spoken", true))
+
+func _ready() -> void:
+    _voice_player = AudioStreamPlayer.new()
+    _voice_player.volume_db = -3.0
+    add_child(_voice_player)
+    for name in VOICE_NAMES:
+        var path: String = "res://assets/countin/%s.ogg" % name
+        var sound: AudioStream = load(path) if ResourceLoader.exists(path) else null
+        _voice_streams.append(sound)
+
+func set_spoken_enabled(enabled: bool) -> void:
+    spoken_enabled = enabled
+    if not enabled and _voice_player != null:
+        _voice_player.stop()
+    var config := ConfigFile.new()
+    config.set_value("audio", "spoken", enabled)
+    var status: Error = config.save(SPOKEN_SETTINGS)
+    if status != OK:
+        push_warning("Could not save spoken count-in preference: %s" % status)
+
+func speak_beat(number: int) -> bool:
+    # Return false when there is no local voice; the caller then plays the
+    # existing metronome tick. This is never allowed to delay the transport.
+    if not spoken_enabled or _voice_player == null or             number < 1 or number > _voice_streams.size():
+        return false
+    var sound: AudioStream = _voice_streams[number-1]
+    if sound == null:
+        return false
+    _voice_player.stop()
+    _voice_player.stream = sound
+    # The public-domain recordings have ~0.25 s of leading silence.
+    # Starting at the first phoneme keeps the spoken attack on the beat.
+    _voice_player.play(minf(.21,maxf(0.0,sound.get_length()-.1)))
+    return true
 
 func present(beat: float, beats_per_bar: int, running: bool, paused: bool) -> void:
     var show: bool = running and not paused and is_finite(beat) and beat < 0.0
-    var next_count: int = clampi(beats_per_bar, 1, 12)
-    var step: int = posmod(int(floor(beat + .00001)), next_count) if show else -1
-    var fraction: float = fposmod(beat, 1.0) if show else 0.0
-    var remaining: int = maxi(1, int(ceil(-beat - .00001))) if show else 0
+    var next_count: int = clampi(beats_per_bar,1,12)
+    var step: int = posmod(int(floor(beat+.00001)),next_count) if show else -1
+    var fraction: float = fposmod(beat,1.0) if show else 0.0
+    var remaining: int = maxi(1,int(ceil(-beat-.00001))) if show else 0
     if (visible != show or count != next_count or current != step
-            or beats_left != remaining or (show and absf(beat_fraction - fraction) > .012)):
+            or beats_left != remaining or (show and absf(beat_fraction-fraction)>.012)):
         visible = show
         count = next_count
         current = step
@@ -28,37 +69,45 @@ func present(beat: float, beats_per_bar: int, running: bool, paused: bool) -> vo
         queue_redraw()
 
 func _draw() -> void:
-    if not visible or size.x < 70.0 or size.y < 20.0:
+    if not visible or size.x < 110.0 or size.y < 45.0:
         return
-    var y: float = size.y * .5
-    var pulse: float = pow(1.0 - beat_fraction, 3.0)
-    var numeral: String = str(beats_left)
+    var n: int = mini(count,12)
+    var gap: float = minf(50.0,(size.x-28.0)/float(maxi(1,n)))
+    var first_x: float = size.x*.5 - gap*float(n-1)*.5
+    var center_y: float = size.y*.38
+    var radius: float = 19.0 if n <= 6 else 13.5
+    var pulse: float = pow(1.0-beat_fraction,3.0)
     var font: Font = ThemeDB.fallback_font
-    var font_size := 23
-    var x: float = 21.0
-    # The restrained halo makes the beat readable without covering
-    # noteheads or implying that the learner earned a correct hit.
-    draw_circle(Vector2(x, y), 18.0, Color("#58B58F", .10 + .12 * pulse))
-    draw_arc(Vector2(x, y), 17.0, -.5 * PI,
-        -.5 * PI + TAU * beat_fraction, 36,
-        Color("#25866C", .78), 2.0, true)
-    var numeral_width: float = font.get_string_size(
-        numeral, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-    var baseline: float = y + (
-        font.get_ascent(font_size) - font.get_descent(font_size)) * .5
-    draw_string(font, Vector2(x - numeral_width * .5, baseline),
-        numeral, HORIZONTAL_ALIGNMENT_LEFT, -1,
-        font_size, Color("#EAF4ED"))
-    var space: float = maxf(6.0, (size.x - 64.0) / float(maxi(1, count)))
-    var gap: float = minf(19.0, space)
-    for i in range(count):
-        var p: Vector2 = Vector2(56.0 + gap * i, y)
-        draw_circle(p, 5.3, Color("#54756F", .86))
-        draw_arc(p, 5.5, 0, TAU, 24,
-            Color("#B2CFC0", .74), 1.0, true)
-        if i == current:
-            draw_circle(p, 7.0 + 3.0 * beat_fraction,
-                Color("#48A87F", .12 + .24 * pulse))
-            draw_circle(p, 3.9 + 1.1 * pulse, Color("#7BE8C0"))
-        elif i < current:
-            draw_circle(p, 2.8, Color("#4C9175"))
+    var font_size: int = 17 if n <= 6 else 13
+    var caption_size: int = 11
+    var syllables: Array[String] = ["Ichi", "Ni", "San", "Shi"]
+    for i in range(n):
+        var center := Vector2(first_x+gap*float(i),center_y)
+        var active: bool = i == current
+        var old: bool = i < current
+        if active:
+            draw_circle(center,radius+6.0+4.0*pulse,
+                Color("#55F5C3",.09+.18*pulse))
+        draw_circle(center,radius,
+            Color("#53E9B6",.88) if active else
+            Color("#23433E",.94) if old else Color("#15332F",.85))
+        draw_arc(center,radius,-PI*.5,
+            -PI*.5+TAU*(beat_fraction if active else 1.0 if old else 0.0),
+            40,Color("#B9FFE4",.92) if active else
+            Color("#467D6C",.65),2.1,true)
+        var numeral: String = str(i+1)
+        var ink: Color = Color("#052F28") if active else Color("#D0E9DD")
+        var text_width: float = font.get_string_size(
+            numeral,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+        var baseline: float = center.y+(
+            font.get_ascent(font_size)-font.get_descent(font_size))*.5
+        draw_string(font,Vector2(center.x-text_width*.5,baseline),
+            numeral,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
+        if n <= 6:
+            var caption: String = syllables[i] if i < 4 else str(i+1)
+            var caption_width: float = font.get_string_size(
+                caption,HORIZONTAL_ALIGNMENT_LEFT,-1,caption_size).x
+            draw_string(font,Vector2(center.x-caption_width*.5,
+                center.y+radius+16.0),caption,
+                HORIZONTAL_ALIGNMENT_LEFT,-1,caption_size,
+                Color("#B3D8C9",.92) if active else Color("#6F988D",.78))
