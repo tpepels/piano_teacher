@@ -63,7 +63,8 @@ static func select(passes: Array, purpose: String, opening: float,
                 matches = key == identity and not pending
         if not matches:
             continue
-        if purpose not in ["idle","bound"] and onset < earliest-.00001:
+        if purpose not in ["idle","bound","automatic_due"] and \
+                onset < earliest-.00001:
             continue
         if purpose == "automatic_due" and (not is_finite(expected_world) or \
                 absf(onset-expected_world)>.75):
