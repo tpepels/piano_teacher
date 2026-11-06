@@ -193,7 +193,10 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "StreamLifecycle.prune(self,stream_passes" not in view
     assert "StreamLifecycle.release_all(self,stream_passes)" not in view
     assert "_stream_queue.reset(self)" in view
-    assert "StreamLifecycle.attach_compiled(stream_passes)" in view
+    assert "StreamLifecycle.attach_compiled(_stream_queue.online)" in view
+    assert "return _stream_queue.online.duplicate(true)" in view
+    assert "return _archive.pending.duplicate(true)" in queue
+    assert "return _archive.history.duplicate(true)" in queue
     assert "StreamLifecycle.project(item,stream_world_beat" in view
     assert "StreamLifecycle.present_pool(retained_all_segments" in view
     assert "func _hide_retained_segments(" not in view
