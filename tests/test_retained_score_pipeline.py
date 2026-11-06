@@ -112,7 +112,20 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "_stream_queue.withdraw_tail(" in view
     assert "offline_stream_queue: Array:" in view
     assert "var online: Array = []" in queue
-    assert "var offline: Array = []" in queue
+    assert "var offline: Array:" in queue
+    assert "return _archive.pending" in queue
+    assert "var history: Array:" in queue
+    assert "_archive.materialize(matching,specs)" in queue
+    assert 'not _archive.record("withdrawn"' in queue
+    archive = (ROOT/"godot/score_stream_archive.gd").read_text()
+    assert "func bind_score(" in archive
+    assert "func compatible(" in archive
+    assert "func materialize(" in archive
+    assert "func original_plan(" in archive
+    assert "payload.sha256_text()" in archive
+    assert "FileAccess.open(" in archive
+    runway = (ROOT/"godot/score_runway.gd").read_text()
+    assert "offline_history" not in runway
     assert "Lifecycle._admit(owner,online,specs" in queue
     assert "online.pop_front()" in queue
     assert "online.pop_back()" in queue
