@@ -185,6 +185,9 @@ func _initialize() -> void:
     check(is_equal_approx(float(quick.stream_passes[0]["world_origin"]),
         quick_first_world),
         "rapid Retry never moves the previous attempt on the staff")
+    check(quick.cancel_stream_arm() and quick.stream_passes.size()==1 and
+        int(quick.stream_passes[0]["serial"])==1,
+        "failed rapid Retry removes its entire newly inserted source owner")
     quick.free()
     # READY remains empty indefinitely: the first offscreen retained
     # source is recycled, rather than accumulating ghost notes after idle.
