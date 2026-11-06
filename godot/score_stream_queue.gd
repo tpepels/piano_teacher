@@ -75,8 +75,9 @@ func _is_safe_tail(owner_serial: int, world: float, density: float,
             return false
         if str(item.get("kind","")) == "source":
             source = item
-        if not bool(item.get("hidden_until_armed",false)) and \
-                not force_unacknowledged:
+        if not bool(item.get("hidden_until_armed",false)):
+            # Even a rejected provisional control cannot retract ink that
+            # might already be visible before the next render callback.
             var bounds: Vector2 = Admission.clip_bounds(
                 item,density,gap,duration)
             var first_x: float = playhead_x + \
