@@ -156,8 +156,9 @@ func _draw() -> void:
     # True physical instances are essential: if the same source note is on
     # the moving bar twice, only the graded take receives the colored head.
     # This does not recolor the next (unplayed) copy.
-    var physical: Array = score.get("drawn_note_instances")
-    if physical is Array and not physical.is_empty():
+    var projected: Variant = score.get("drawn_note_instances")
+    var physical: Array = projected if projected is Array else []
+    if not physical.is_empty():
         for occurrence in physical:
             var id: String = str(occurrence.get("event_id",""))
             if not head_glyphs.has(id):
