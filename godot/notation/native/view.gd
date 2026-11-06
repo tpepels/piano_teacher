@@ -671,6 +671,13 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     var onset: float = StreamAdmission.position(_stream_queue.online,world,right,
         header,NAN,StreamAdmission.READY_TRAVEL_BEATS,
         timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+    # A new stage may be ready while prior lesson ink is still moving.
+    # Choose a later offscreen origin instead of repeatedly rejecting Play.
+    var peer_floor: float = _stream_queue.minimum_peer_opening(
+        timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION)
+    if is_finite(peer_floor):
+        onset = maxf(onset,peer_floor+header+
+            StreamAdmission.REST_GAP_BEATS)
     if not is_finite(onset):
         return -1
     var old_serial := _stream_serial
