@@ -299,11 +299,17 @@ func _initialize() -> void:
     check(racing._stream_queue.has_take(racing._stream_last_admitted),
         "fixture includes a genuinely speculative future take")
     racing.trim_resume_speculation(.24,3.0)
-    check(racing._stream_queue.has_take(1) and
-        racing.stream_passes.size()==2 and
-        not racing.stream_passes.any(func(item: Dictionary) -> bool:
-            return int(item.get("serial",-1))==race_future),
-        "different-opening Resume removes only the speculative future suffix")
+    check(racing.stream_passes.is_empty() and
+        not racing._stream_queue.has_take(1) and
+        not racing._stream_queue.has_take(race_future),
+        "changed-opening Resume withdraws all safe, still-unseen old music")
+    var archived_paused := false
+    for event in racing._stream_queue.history:
+        if int(event.get("owner_serial",-1)) == 1 and
+                str(event.get("event","")) == "withdrawn":
+            archived_paused = true
+    check(archived_paused,
+        "retracted acknowledged music is retained offline instead of lost")
     racing.free()
     # Regression for real Pause -> Resume -> immediate Retry. The old code
     # treated Restart like Resume and reused its already armed source,
