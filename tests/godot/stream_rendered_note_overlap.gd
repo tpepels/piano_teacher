@@ -11,28 +11,26 @@ class InstrumentedView:
     var admissions: Array = []
     func retained_ready() -> bool:
         return true
-    func _stream_add_take(source_beat: float, start_world: float,
-            from_beat: float, through_beat: float, take_key: String) -> void:
-        var clip := Control.new()
-        clip.clip_contents = true
-        add_child(clip)
+    func _new_retained_segment(kind: String):
         var segment := FakeSegment.new()
-        clip.add_child(segment)
-        for i in range(8):
-            segment.note_instances.append({
-                "event_id":"attack-%d" % i,
-                "source_id":"source-%d" % i,
-                "position":Vector2(float(i)*96.0,200.0)})
-        _stream_serial += 1
-        admissions.append({"world":start_world,"serial":_stream_serial})
-        stream_passes.append({"segment":segment,"clip":clip,
-            "world_origin":start_world-source_beat,
-            "source_floor":from_beat,"source_ceiling":through_beat,
-            "take_key":take_key,"pending":take_key in ["prepared","autopending"],
-            "hidden_until_armed":take_key == "prepared",
-            "owner_serial":_stream_serial,
-            "slot_id":"%d:source" % _stream_serial,
-            "serial":_stream_serial})
+        add_child(segment)
+        retained_all_segments.append(segment)
+        if kind == "source":
+            for i in range(8):
+                segment.note_instances.append({
+                    "event_id":"attack-%d" % i,
+                    "source_id":"source-%d" % i,
+                    "position":Vector2(float(i)*96.0,200.0)})
+        return segment
+    func _stream_add_take(source_beat: float, start_world: float,
+            from_beat: float, take_key: String) -> void:
+        var before: int = _stream_serial
+        # Test the REAL online/offline queue. Only immutable retained DRAW
+        # buffers are replaced by in-memory dummy glyphs.
+        super._stream_add_take(source_beat,start_world,from_beat,take_key)
+        if _stream_serial > before:
+            admissions.append({"world":start_world,"serial":_stream_serial})
+
 var failures := 0
 func check(ok: bool, message: String) -> void:
     if not ok:
@@ -141,7 +139,7 @@ func _initialize() -> void:
     # A later manual Resume or Retry consumes any still-offscreen automatic
     # passage instead of stacking another future duplicate.
     var future_world: float = world+65.0
-    v._stream_add_take(0.0,future_world,0.0,8.0,"autopending")
+    v._stream_add_take(0.0,future_world,0.0,"autopending")
     var auto_serial: int = v._stream_serial
     var previous_count: int = v.admissions.size()
     var reused: Dictionary = v.arm_stream_take(world,3.0,NAN,true)
