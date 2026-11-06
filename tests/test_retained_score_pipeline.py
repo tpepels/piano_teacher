@@ -271,3 +271,25 @@ def test_transport_and_voice_have_no_parallel_production_owners():
     assert "AudioStreamPlayer.new()" not in visuals
     assert "AudioStreamPlayer.new()" in voice
     assert "practice_view.bind_countin_voice_player(spoken_countin)" in main
+
+
+def test_note_status_feedback_has_one_owner_and_no_detached_glow():
+    """Guard against restoring the rings, particles and mutable note colors."""
+    score = (ROOT / "godot/native_score_feedback.gd").read_text()
+    registry = (ROOT / "godot/note_status_registry.gd").read_text()
+    ink = (ROOT / "godot/note_status_ink.gd").read_text()
+    native = (ROOT / "godot/notation/native/view.gd").read_text()
+    assert 'var statuses := Statuses.new()' in score
+    assert 'Statuses.take_key(state)' in score
+    assert 'pass_index' in score and 'take_by_strip' in score
+    assert 'statuses.status(key,id)' in score
+    assert 'NoteInk.paint(' in score
+    assert 'draw_arc(' not in score and 'draw_circle(' not in score
+    assert 'GlowField' not in score and 'note_glow' not in score
+    assert 'func record(' in registry and 'func prune(' in registry
+    assert 'EARLY_RELEASE := "early_release"' in registry
+    assert 'EARLY_ONSET := "early_onset"' in registry
+    assert 'return false' in ink and 'if status == Status.UNPLAYED' in ink
+    assert 'OUTER_GLOW_ALPHA := 0.045' in ink
+    assert 'glyphs.paint(' in ink and 'draw_arc(' not in ink
+    assert '_project_stream(playhead_x)' in native
