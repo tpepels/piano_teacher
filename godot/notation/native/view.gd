@@ -667,13 +667,14 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     if _stream_serial == old_serial:
         return -1
     _stream_live_serial = -1
-    return _stream_serial
+    return _stream_last_admitted
 
 
 func _stream_claim_pending_auto(world: float, opening: float) -> int:
     var index: int = StreamAdmission.select(_stream_queue.online,"automatic",
         opening,world,_stream_right_beats(),_stream_header_beats(opening))
-    return int(_stream_queue.online[index]["serial"]) if index >= 0 else -1
+    return int(_stream_queue.online[index].get("take_owner",
+        _stream_queue.online[index]["serial"])) if index >= 0 else -1
 
 
 func _reject_stream_candidate(owner_serial: int, before_serial: int,
@@ -709,7 +710,8 @@ func arm_stream_take(world: float, opening: float,
         var paused_index: int = StreamAdmission.select(_stream_queue.online,"paused",
             opening,stream_world_beat,0.0,0.0,_stream_last_take)
         if paused_index >= 0:
-            serial = int(_stream_queue.online[paused_index]["serial"])
+            serial = int(_stream_queue.online[paused_index].get("take_owner",
+                _stream_queue.online[paused_index]["serial"]))
             reused = true
             reused_unplayed = true
     if serial < 0 and (resuming_paused or retrying):
@@ -727,7 +729,7 @@ func arm_stream_take(world: float, opening: float,
         _stream_add_take(opening,checked,opening,"prepared")
         if _stream_serial == previous_serial:
             return {}
-        serial = _stream_serial
+        serial = _stream_last_admitted
     elif serial < 0:
         serial = _stream_reserve_ready(stream_world_beat,opening)
     if serial < 0:
@@ -802,20 +804,8 @@ func trim_future_queue(reason: String) -> Array[int]:
         staff_gap(),timeline.duration_beats,size.x,
         size.x*PLAYHEAD_FRACTION,reason)
     if not removed.is_empty():
-        # successor_reserved is scheduling metadata, not music geometry.
-        # A withdrawn speculative successor may be scheduled again later.
-        for item in _stream_queue.online:
-            if str(item.get("kind","source")) == "source" and \
-                    bool(item.get("successor_reserved",false)):
-                var still_queued := false
-                for candidate in _stream_queue.online:
-                    if str(candidate.get("take_key","")) == "autopending" and \
-                            str(candidate.get("kind","")) == "source":
-                        still_queued = true
-                        break
-                if not still_queued:
-                    item["successor_reserved"] = false
-        if removed.has(_stream_live_serial):
+        if _stream_live_serial >= 0 and \
+                not _stream_queue.has_take(_stream_live_serial):
             _stream_live_serial = -1
         queue_redraw()
     return removed
@@ -859,9 +849,11 @@ func _stream_prune_expired() -> void:
     var retired: Array[int] = _stream_queue.expire_front(
         self,stream_world_beat,maxf(1.0,timeline.pixels_per_beat),
         staff_gap(),timeline.duration_beats,size.x*PLAYHEAD_FRACTION)
-    if retired.has(_stream_live_serial):
+    if retired.has(_stream_live_serial) and \
+            not _stream_queue.has_take(_stream_live_serial):
         _stream_live_serial = -1
-    if retired.has(_stream_armed_serial):
+    if retired.has(_stream_armed_serial) and \
+            not _stream_queue.has_take(_stream_armed_serial):
         _stream_armed_serial = -1
         _stream_arm_acknowledged = false
         _stream_arm_rollback.clear()
@@ -943,7 +935,8 @@ func present_flow(world_beat: float, state: Dictionary,
                     "automatic_due",opening,stream_world_beat,
                     0.0,0.0,"",expected)
                 if candidate >= 0:
-                    var claimed: int = int(_stream_queue.online[candidate]["serial"])
+                    var claimed: int = int(_stream_queue.online[candidate].get(
+                        "take_owner",_stream_queue.online[candidate]["serial"]))
                     if StreamLifecycle.activate(
                             _stream_queue.online,claimed,key,false):
                         _stream_live_serial = claimed
@@ -952,47 +945,11 @@ func present_flow(world_beat: float, state: Dictionary,
                 var owned: int = StreamAdmission.select(_stream_queue.online,
                     "bound",opening,stream_world_beat,0.0,0.0,key)
                 if owned >= 0:
-                    _stream_live_serial = int(_stream_queue.online[owned]["serial"])
-        if _stream_live_serial >= 0:
-            for item in _stream_queue.online:
-                if int(item["serial"]) == _stream_live_serial:
-                    var final_mastery: bool = bool(state.get("auto",false)) and \
-                        int(state.get("streak",0))+1 >= \
-                        int(state.get("clean_runs_required",3)) and \
-                        float(state.get("bpm",0.0)) >= \
-                        float(state.get("target_bpm",INF)) and \
-                        int(state.get("lesson_step",0)) < \
-                        int(state.get("lesson_steps",0))
-                    var repeat_enabled: bool = bool(state.get("auto",false)) or \
-                        bool(state.get("preview_only",false))
-                    if (mode == "practice" and repeat_enabled and \
-                            not bool(item.get("successor_reserved",false)) and \
-                            not final_mastery):
-                        # Preview and graded automatic repeats use the exact
-                        # same future-only admission policy and semantic rest.
-                        # The backend receives this same horizon at Start;
-                        # silently shifting a visual copy would break grading.
-                        var gap: float = float(practice_timeline.get(
-                            "gap",{}).get("duration_beats",0.0))
-                        var horizon: float = StreamAdmission.automatic_horizon(
-                            gap,_stream_right_beats(),_stream_header_beats(0.0))
-                        var intended: float = float(item["world_origin"]) + \
-                            timeline.duration_beats+horizon
-                        var checked: float = StreamAdmission.position(
-                            _stream_queue.online,stream_world_beat,
-                            _stream_right_beats(),_stream_header_beats(0.0),
-                            intended,0.0,timeline.pixels_per_beat,
-                            staff_gap(),timeline.duration_beats)
-                        if not is_finite(checked):
-                            item["successor_reserved"] = true
-                            push_error("Automatic successor would overlap the existing moving score")
-                        else:
-                            var live: int = _stream_live_serial
-                            var before: int = _stream_serial
-                            _stream_add_take(0.0,checked,0.0,"autopending")
-                            item["successor_reserved"] = _stream_serial > before
-                            _stream_live_serial = live
-                    break
+                    _stream_live_serial = int(_stream_queue.online[owned].get(
+                        "take_owner",_stream_queue.online[owned]["serial"]))
+        # Future music is enqueued only from an explicit Python practice
+        # preparation with its authoritative graded deadline. The renderer
+        # must never infer mastery, tempo or repeat policy from HUD state.
         # An unreserved start CANNOT create note ink in the current frame.
         # This fails closed rather than silently taking the old camera path.
         _stream_was_paused = false
