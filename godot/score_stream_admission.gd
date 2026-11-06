@@ -40,7 +40,7 @@ static func select(passes: Array, purpose: String, opening: float,
     if purpose == "paused":
         earliest = world+MIN_READING_BEATS
     var chosen := -1
-    var closest := INF
+    var closest := -INF if purpose == "bound" else INF
     for index in range(passes.size()):
         var item: Dictionary = passes[index]
         if str(item.get("kind","source")) != "source":
@@ -69,7 +69,11 @@ static func select(passes: Array, purpose: String, opening: float,
         if purpose == "automatic_due" and (not is_finite(expected_world) or \
                 absf(onset-expected_world)>.75):
             continue
-        if onset < closest:
+        # Active transport resumes may have two different source windows
+        # attached to the same transport ID. Prefer the newest continuation;
+        # other purposes always select the earliest future reservation.
+        if (purpose == "bound" and onset > closest) or \
+                (purpose != "bound" and onset < closest):
             closest = onset
             chosen = index
     return chosen
