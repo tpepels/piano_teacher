@@ -37,6 +37,7 @@ def test_wrong_early_late_short_and_missed_are_at_real_glyph_coordinates():
     assert projected['unmapped']==0
     assert [m['status'] for m in projected['marks']] == ['wrong','early','late','short','missed','correct']
     assert [m['note_id'] for m in projected['marks']] == list('abcdef')
+    assert projected['marks'][3]['release_unobserved'] is False
     assert projected['marks'][0]['x']==0.12
     assert projected['marks'][4]['y']==160/600
 
