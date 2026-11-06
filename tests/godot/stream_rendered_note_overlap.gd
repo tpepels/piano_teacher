@@ -53,9 +53,20 @@ func _initialize() -> void:
     var initial_origin: float = float(v.stream_passes[0]["world_origin"])
     check(initial_origin > v._stream_right_beats()+v._stream_header_beats(0.0),
         "initial source/clef begin completely outside the viewport")
-    var prepared: Dictionary = v.arm_stream_take(world,0.0)
+    # An idle reservation must remain fixed over ordinary animation frames;
+    # it may be safely retimed only after approaching the offscreen boundary.
+    v.present_flow(world+.2,state,0)
+    check(is_equal_approx(float(v.stream_passes[0]["world_origin"]),initial_origin),
+        "READY notes must travel rather than being retimed on every frame")
+    var prepared: Dictionary = v.arm_stream_take(world+.2,0.0)
     check(not prepared.is_empty(),"user Play binds the reserved source")
     var count := v.admissions.size()
+    # The last READY snapshot remains active while the command is in flight.
+    # That frame may not generate a duplicate future passage.
+    v.present_flow(world+.2,state,0)
+    check(v.admissions.size()==count and
+        is_equal_approx(float(v.stream_passes[0]["world_origin"]),initial_origin),
+        "an armed Play cannot create a second READY score or move its ink")
     state["phase"]="count_in"
     state["running"]=true
     state["transport_id"]=1
