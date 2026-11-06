@@ -119,19 +119,22 @@ func active_revision_published(_revision: int) -> void:
 
 
 func _advance_tails(global_beat: float) -> void:
-    # A previous step may still have visible noteheads while the NEXT
-    # step is itself handed off. Keep all outgoing layers on the same axis.
-    for index in range(_tails.size()-1,-1,-1):
-        var tail = _tails[index]
-        if tail == null or not is_instance_valid(tail):
-            _tails.remove_at(index)
+    # The renderer layers are ONE ordered FIFO of successive score sources.
+    # Every layer projects on the same global clock; a later renderer can
+    # never be freed ahead of an older layer still displaying notation.
+    for tail in _tails:
+        if tail != null and is_instance_valid(tail):
+            tail.present_flow(global_beat,{},0.0,false)
+    while not _tails.is_empty():
+        var first = _tails[0]
+        if first == null or not is_instance_valid(first):
+            _tails.pop_front()
             continue
-        tail.present_flow(global_beat,{},0.0,false)
-        if tail.stream_passes.is_empty() and tail != _manual_staff_tail:
-            # StreamQueue has already journaled its retired/withdrawn
-            # content. Do not maintain a parallel legacy history here.
-            tail.queue_free()
-            _tails.remove_at(index)
+        if first == _manual_staff_tail or not first.stream_passes.is_empty():
+            break
+        # The source queue has already journaled all withdrawn/expired ink.
+        first.queue_free()
+        _tails.pop_front()
 
 
 func _on_future_reply(code: int, body: PackedByteArray) -> void:
