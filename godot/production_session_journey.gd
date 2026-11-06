@@ -48,13 +48,14 @@ func _advance(next: String) -> void:
 
 func _fail(message: String) -> void:
     var state: Dictionary = app.last_state if app != null else {}
+    var prep: Variant = state.get("practice_preparation")
     var witness := {"phase":state.get("phase"),
         "running":state.get("running"),"revision":state.get("revision"),
         "transport_id":state.get("transport_id"),
         "play_from_beat":state.get("play_from_beat"),
         "clock_beat":state.get("clock_beat"),
         "bpm":state.get("bpm"),
-        "preparation":(state.get("practice_preparation",{}) as Dictionary).get("phase")}
+        "preparation":prep.get("phase") if prep is Dictionary else null}
     if app != null and app.practice_view != null:
         var renderer = app.practice_view.stage.renderer
         var passages: Array = []
