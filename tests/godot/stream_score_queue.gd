@@ -14,6 +14,12 @@ class Owner:
         var part := FakeSegment.new()
         add_child(part)
         return part
+class PeerOwner:
+    extends Owner
+    var _stream_queue
+    var timeline := {"pixels_per_beat":100.0,"duration_beats":4.0}
+    func staff_gap() -> float:
+        return 20.0
 
 var failures := 0
 func check(ok: bool, why: String) -> void:
@@ -290,6 +296,74 @@ func _run() -> void:
         cold_layer.offline[0]["plan"].size()==2 and
         cold_layer.offline[1]["plan"].size()==2,
         "both independently queued overlapping source plans survive a cold restart")
+    # Measure strips are independently immutable. After the first
+    # source strip enters the viewport, all unseen successors (including
+    # a semantic rest) must still be withdrawn from the RIGHT.
+    var strip_owner := Owner.new()
+    root.add_child(strip_owner)
+    strip_owner.size = owner.size
+    var strip_queue := Queue.new()
+    check(strip_queue.bind_score(score_key+"-strip",folder),
+        "source-strip journal is initialized")
+    var first_strip: Array = [{
+        "kind":"source","owner_serial":1,"take_owner":1,
+        "world_origin":14.0,"source_floor":0.0,"source_ceiling":4.0,
+        "clip_floor":-2.0,"clip_ceiling":4.0,
+        "piece_duration":8.0,"take_key":"prepared","pending":true}]
+    var next_strip: Array = [{
+        "kind":"source","owner_serial":2,"take_owner":1,
+        "world_origin":14.0,"source_floor":4.0,"source_ceiling":8.0,
+        "clip_floor":4.0,"clip_ceiling":8.2,
+        "piece_duration":8.0,"take_key":"prepared","pending":true},
+        {"kind":"rest","owner_serial":2,"take_owner":1,
+        "world_origin":22.0,"source_floor":0.0,
+        "source_ceiling":4.0,"take_key":"rest"}]
+    check(strip_queue.enqueue(strip_owner,first_strip,[],[],null,
+        0.0,800.0,playhead,density,gap,8.0) and
+        strip_queue.enqueue(strip_owner,next_strip,[],[],null,
+        0.0,800.0,playhead,density,gap,8.0) and
+        strip_queue.online.size()==3,
+        "source strips are contiguous, ordered and admitted as one take")
+    check(Lifecycle.activate(strip_queue.online,1,"engine-transport",false) and
+        str(strip_queue.online[1]["take_key"])=="engine-transport",
+        "engine transport binds both source strips without changing geometry")
+    Lifecycle.project(strip_queue.online[0],11.0,playhead,density,gap,
+        strip_owner.size,8.0)
+    check(bool(strip_queue.online[0].get("ever_visible",false)) and
+        not bool(strip_queue.online[1].get("ever_visible",false)),
+        "the first measure locks while the future measure remains unseen")
+    var strip_removed: Array[int] = strip_queue.withdraw_tail(
+        strip_owner,11.0,density,gap,8.0,800.0,playhead,"failed_lesson")
+    check(strip_removed.has(2) and strip_removed.has(-2) and
+        strip_queue.online.size()==1 and
+        is_equal_approx(float(strip_queue.online[0]["world_origin"]),14.0) and
+        strip_queue.offline.size()==1,
+        "failed lesson preserves visible measure and archives maximal invisible suffix")
+    strip_queue.reset(strip_owner)
+
+    # A newly promoted lesson must check all still-live preceding layers.
+    var peer := PeerOwner.new()
+    root.add_child(peer)
+    peer.size = owner.size
+    peer._stream_queue = Queue.new()
+    check(peer._stream_queue.bind_score(score_key+"-peer",folder) and
+        peer._stream_queue.enqueue(peer,passage(1,10.0,"prepared",true),
+        [],[],null,0.0,800.0,playhead,density,gap,4.0),
+        "an outgoing renderer owns future ink before lesson transition")
+    var incoming := Queue.new()
+    check(incoming.bind_score(score_key+"-incoming",folder),
+        "new renderer has a distinct source archive")
+    incoming.register_peer(peer)
+    check(not incoming.enqueue(strip_owner,passage(1,15.0,"prepared",true),
+        [],[],null,0.0,800.0,playhead,density,gap,4.0),
+        "new lesson cannot overlap older renderer's moving notes and rest")
+    check(incoming.enqueue(strip_owner,passage(1,24.0,"prepared",true),
+        [],[],null,0.0,800.0,playhead,density,gap,4.0),
+        "new lesson can append immediately after all older ink")
+    incoming.reset(strip_owner)
+    peer._stream_queue.reset(peer)
+    peer.queue_free()
+    strip_owner.queue_free()
     interrupted_owner.queue_free()
     owner.queue_free()
     other_owner.queue_free()
