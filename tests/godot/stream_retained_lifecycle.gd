@@ -163,11 +163,13 @@ func _exercise() -> void:
         source_pool,rest_pool,note,49.0,800.0,264.0,90.0,20.0,4.0) and
         passes.size()==4,
         "another unique future owner uses the same general path")
-    check(not Lifecycle.activate(passes,3,"piece|1|2|practice",false),
-        "same transport ID and source opening cannot create duplicate notation")
     check(Lifecycle.activate(passes,3,"piece|1|2|practice",false) and
         absf(float(passes[2]["source_floor"])-2.0)<.00001,
         "Resume can bind a distinct immutable later source interval")
+    var fixed_origin: float = float(passes[2]["world_origin"])
+    check(Lifecycle.activate(passes,3,"piece|1|2|practice",false) and
+        is_equal_approx(float(passes[2]["world_origin"]),fixed_origin),
+        "repeated acknowledgement cannot mutate an admitted source position")
     var orphan: Array = [specs(4,104.0,"prepared",true)[1]]
     check(not queue.enqueue(owner,orphan,
         source_pool,rest_pool,note,49.0,800.0,264.0,90.0,20.0,4.0) and
