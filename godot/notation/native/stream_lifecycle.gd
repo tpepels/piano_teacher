@@ -28,16 +28,27 @@ static func admit(owner: Control, passes: Array, specs: Array,
         identities[existing] = true
         if item.has("segment"):
             used[item["segment"]] = true
+    # Every admission is one complete passage: exactly one source and
+    # zero or one dependent rest. A rest-only insertion is forbidden.
+    if specs.is_empty():
+        return false
+    var batch_owner: int = int(specs[0].get("owner_serial",0))
+    var has_source := false
     # Preflight identity collisions before creating ANY CanvasItem.
     for spec in specs:
         var role: String = str(spec.get("kind",""))
         var owner_serial: int = int(spec.get("owner_serial",0))
-        if role not in ["source","rest"] or owner_serial <= 0:
+        if role not in ["source","rest"] or owner_serial <= 0 or \
+                owner_serial != batch_owner:
             return false
+        if role == "source":
+            has_source = true
         var identifier: String = "%d:%s" % [owner_serial,role]
         if identities.has(identifier):
             return false
         identities[identifier] = true
+    if not has_source:
+        return false
     for spec in specs:
         var role: String = str(spec["kind"])
         var pool: Array = source_pool if role == "source" else rest_pool
@@ -59,7 +70,7 @@ static func admit(owner: Control, passes: Array, specs: Array,
         used[choice] = true
         var owner_serial: int = int(spec["owner_serial"])
         var serial: int = owner_serial if role == "source" else -owner_serial
-        passes.append(create(owner,choice,role,
+        passes.append(_create(owner,choice,role,
             float(spec["world_origin"]),float(spec["source_floor"]),
             float(spec["source_ceiling"]),str(spec["take_key"]),serial,
             bool(spec.get("pending",false)),owner_serial,
@@ -151,7 +162,7 @@ static func screen_bounds(item: Dictionary, density: float,
         density,gap,score_duration)
 
 
-static func create(owner: Control, segment: Node2D, kind: String,
+static func _create(owner: Control, segment: Node2D, kind: String,
         world_origin: float, source_floor: float, source_ceiling: float,
         take_key: String, serial: int, pending: bool,
         owner_serial: int = 0, hidden_until_armed: bool = false) -> Dictionary:
@@ -281,11 +292,27 @@ static func expired(item: Dictionary, world: float, density: float,
 static func prune(owner: Control, passes: Array, world: float, density: float,
         playhead_x: float, staff_gap: float, score_duration: float) -> Array[int]:
     var removed: Array[int] = []
+    # If a source CanvasItem or clip has been invalidated externally, its
+    # dependent rest is also invalid. Normal expiration is independent:
+    # source ink may leave earlier than its authentic printed rest.
+    var invalid_owners: Dictionary = {}
+    for item in passes:
+        if str(item.get("kind","source")) != "source":
+            continue
+        var segment = item.get("segment")
+        var clip = item.get("clip")
+        if segment == null or not is_instance_valid(segment) or \
+                clip == null or not is_instance_valid(clip):
+            invalid_owners[int(item.get("owner_serial",
+                abs(int(item.get("serial",0)))))] = true
     for index in range(passes.size()-1,-1,-1):
         var item: Dictionary = passes[index]
         var segment = item.get("segment")
         var clip = item.get("clip")
-        var invalid: bool = segment == null or not is_instance_valid(segment) or \
+        var owner_serial: int = int(item.get("owner_serial",
+            abs(int(item.get("serial",0)))))
+        var invalid: bool = invalid_owners.has(owner_serial) or \
+            segment == null or not is_instance_valid(segment) or \
             clip == null or not is_instance_valid(clip)
         if not invalid and not expired(item,world,density,playhead_x,
                 staff_gap,score_duration):
