@@ -88,6 +88,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_coordination_boundaries.py::test_successful_command_route_has_no_application_dependency \
   tests/test_attempt_progression.py::test_authoritative_tick_caches_source_grid_until_phrase_changes \
   tests/test_retained_score_pipeline.py::test_frame_path_never_reassembles_source_or_preparation_ink \
+  tests/test_retained_score_pipeline.py::test_legacy_ambience_source_cameras_and_recovery_variants_are_absent \
   tests/test_retained_score_pipeline.py::test_fingering_overlay_has_bounded_source_window \
   tests/test_midi_polyphonic_stems.py \
   tests/test_midi_visual_fast_path.py \
@@ -102,6 +103,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_evidence_adaptive_policy.py \
   tests/test_remedial_review.py \
   tests/test_continuous_practice_loop.py::test_connected_silent_take_enters_normal_midi_recovery_and_never_awards_mastery \
+  tests/test_continuous_practice_loop.py::test_recovery_queue_has_immutable_reading_lead_after_actual_authored_rest \
   tests/test_continuous_practice_loop.py::test_coda_practice_finishes_before_adaptive_retry_or_guided_switch \
   tests/test_practice_stage_tempo_ladder.py::test_tempo_up_can_exceed_original_target_without_overwriting_per_song_progress \
   tests/test_assessment_service.py \
