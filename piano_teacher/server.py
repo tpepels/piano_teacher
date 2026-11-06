@@ -1681,10 +1681,12 @@ class PracticeEngine:
         # Its newly queued source must have the SAME offscreen reading lead
         # as a normal automatic repeat, after the authentic printed rest.
         # The backend moves the graded deadline; Godot never moves old ink.
+        upcoming_rest = float(
+            self.visual_transport.practice_preparation["measure"][
+                "duration_beats"])
         missing = max(
             0.0,
-            self._continuous_horizon_beats
-            - self.visual_transport.visual_gap_beats,
+            self._continuous_horizon_beats - upcoming_rest,
         )
         self.visual_transport.next_at += missing * 60.0 / self.plan.bpm
         self.running = False
