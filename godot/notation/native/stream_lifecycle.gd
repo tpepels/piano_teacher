@@ -334,6 +334,11 @@ static func project(item: Dictionary, world: float, playhead_x: float,
     segment.position = Vector2(-bounds.x,0.0)
     segment.visible = true
     clip.visible = true
+    # This flag is monotonic. Once any authentic glyph of a queue entry
+    # reaches the viewport, its owner can never be removed from the tail.
+    if clip.position.x < viewport.x and \
+            clip.position.x+clip.size.x > 0.0:
+        item["ever_visible"] = true
     return true
 
 static func retire(owner: Control, item: Dictionary) -> void:
