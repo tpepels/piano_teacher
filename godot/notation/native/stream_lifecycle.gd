@@ -336,6 +336,22 @@ static func retire(owner: Control, item: Dictionary) -> void:
     if clip != null and is_instance_valid(clip):
         clip.queue_free()
 
+static func discard_owner(owner: Control, passes: Array,
+        owner_serial: int) -> int:
+    # A failed action that just allocated new offscreen ink must remove
+    # BOTH clip roles. Retiring by owner prevents a stranded rest or source
+    # from extending the occupied-world horizon on subsequent Play actions.
+    var removed := 0
+    for index in range(passes.size()-1,-1,-1):
+        var item: Dictionary = passes[index]
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+            continue
+        retire(owner,item)
+        passes.remove_at(index)
+        removed += 1
+    return removed
+
+
 static func release_all(owner: Control, passes: Array) -> void:
     for item in passes:
         retire(owner,item)
