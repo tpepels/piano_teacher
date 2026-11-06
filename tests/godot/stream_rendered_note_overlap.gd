@@ -181,6 +181,76 @@ func _initialize() -> void:
             return int(item.get("serial",0)) == next_owner),
         "failed new Resume is withdrawn atomically without changing history")
     v.free()
+    # Pause can arrive after backend Play but BEFORE the first running
+    # snapshot binds its source to the transport key. The two queued measure
+    # strips still belong to the current attempt and are NEVER speculative.
+    var racing := InstrumentedView.new()
+    racing.size = Vector2(800,440)
+    racing.native_ready = true
+    racing.timeline.duration_beats = 8.0
+    racing.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    racing.timeline.pixels_per_beat = 96.0
+    var race_state: Dictionary = {
+        "running":false,"paused":false,"phase":"ready",
+        "mode":"practice","piece_fingerprint":"race","revision":1,
+        "transport_id":0,"play_from_beat":0.0}
+    racing.present_flow(0.0,race_state,0.0)
+    check(racing.stream_passes.size()==2,
+        "READY preloads the entire logical take as two immutable strips")
+    var race_origin: float = float(racing.stream_passes[0]["world_origin"])
+    var race_arm: Dictionary = racing.arm_stream_take(.01,0.0)
+    check(not race_arm.is_empty(),"Play arms one full logical take")
+    race_state["running"] = true
+    race_state["phase"] = "count_in"
+    race_state["transport_id"] = 1
+    racing.present_flow(.10,race_state,0.0)
+    check(racing._stream_live_serial == -1 and
+        racing._stream_armed_serial > 0,
+        "unacknowledged backend Play has an armed but not yet live take")
+    race_state["paused"] = true
+    race_state["phase"] = "paused"
+    racing.present_flow(.20,race_state,0.0)
+    check(racing.stream_passes.size()==2 and
+        racing._stream_paused_owner==1 and
+        racing.stream_passes.all(func(item: Dictionary) -> bool:
+            return int(item.get("take_owner",-1))==1 and
+                is_equal_approx(float(item["world_origin"]),race_origin)),
+        "Pause cannot retract the in-flight, unexposed source strips")
+    racing.trim_resume_speculation(.21,0.0)
+    check(racing.stream_passes.size()==2 and
+        racing._stream_queue.has_take(1),
+        "Resume must not treat the paused take as an incompatible successor")
+    check(racing.acknowledge_stream_arm(),
+        "late Play acknowledgement can still bind its retained source")
+    race_state["paused"] = false
+    race_state["phase"] = "count_in"
+    racing.present_flow(.22,race_state,0.0)
+    check(racing._stream_live_serial==1 and
+        racing.stream_passes.size()==2 and
+        racing.stream_passes.all(func(item: Dictionary) -> bool:
+            return str(item.get("take_key",""))=="race|1|1|practice"),
+        "late-acknowledged Resume preserves and binds all original strips")
+    # A later paused snapshot can lose its transient _stream_live_serial.
+    # The committed transport ID remains sufficient to protect its ink.
+    racing._stream_live_serial = -1
+    race_state["paused"] = true
+    race_state["phase"] = "paused"
+    racing.present_flow(.23,race_state,0.0)
+    check(racing._stream_paused_owner==1 and
+        racing._stream_queue.has_take(1),
+        "Pause resolves an existing source from its bound transport key")
+    racing._stream_add_take(0.0,40.0,0.0,"autopending")
+    var race_future: int = racing._stream_serial
+    check(racing._stream_queue.has_take(racing._stream_last_admitted),
+        "fixture includes a genuinely speculative future take")
+    racing.trim_resume_speculation(.24,3.0)
+    check(racing._stream_queue.has_take(1) and
+        racing.stream_passes.size()==2 and
+        not racing.stream_passes.any(func(item: Dictionary) -> bool:
+            return int(item.get("serial",-1))==race_future),
+        "different-opening Resume removes only the speculative future suffix")
+    racing.free()
     # Regression for real Pause -> Resume -> immediate Retry. The old code
     # treated Restart like Resume and reused its already armed source,
     # giving the new graded attempt a deadline in the past.
