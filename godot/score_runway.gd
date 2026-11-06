@@ -16,9 +16,9 @@ var _fetch: Node
 var _ack: Node
 var _report: Node
 var _future
-# Last lesson's authentic ink remains visible behind the playhead until its
-# final bar has left the viewport; no score-page flash at promotion.
-var _tail
+# Every outgoing score owns its retained ink until its last clip leaves.
+# Two quick lesson changes may overlap: there is no single-tail shortcut.
+var _tails: Array = []
 var _bundle: Dictionary = {}
 var _layout: Dictionary = {}
 var _source_fingerprint := ""
@@ -57,7 +57,7 @@ func configure(host: Node, practice_stage, session, bus: Node) -> void:
 func _discard() -> void:
     if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
         stage.renderer.runway_cutoff_beat = INF
-    _clear_tail()
+    # Preload invalidation never retires music already moving offscreen.
     _fetch.cancel_request()
     _ack.cancel_request()
     _report.cancel_request()
@@ -76,22 +76,34 @@ func _discard() -> void:
     _terminal_preload_failure = false
     _report_accepted = false
 
-func _clear_tail() -> void:
-    if _tail != null and is_instance_valid(_tail):
-        _tail.queue_free()
-    _tail = null
+func _retain_tail(old) -> void:
+    if old == null or not is_instance_valid(old):
+        return
+    old.runway_overlay = true
+    if is_instance_valid(old.retained_annotations):
+        old.retained_annotations.queue_redraw()
+    old.runway_cutoff_beat = INF
+    old.set_transport_overlay_enabled(false)
+    old.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    old.queue_redraw()
+    if old.get_parent() == stage.score_frame:
+        stage.score_frame.move_child(old,stage.score_frame.get_child_count()-1)
+    _tails.append(old)
 
-func _advance_tail(global_beat: float) -> void:
-    if _tail == null:
-        return
-    if not is_instance_valid(_tail):
-        _tail = null
-        return
-    # The departing stage uses the identical forward-only source projection.
-    # It never receives a camera seek or another source admission.
-    _tail.present_flow(global_beat,{},0.0,false)
-    if _tail.stream_passes.is_empty():
-        _clear_tail()
+
+func _advance_tails(global_beat: float) -> void:
+    # A previous step may still have visible noteheads while the NEXT
+    # step is itself handed off. Keep all outgoing layers on the same axis.
+    for index in range(_tails.size()-1,-1,-1):
+        var tail = _tails[index]
+        if tail == null or not is_instance_valid(tail):
+            _tails.remove_at(index)
+            continue
+        tail.present_flow(global_beat,{},0.0,false)
+        if tail.stream_passes.is_empty():
+            tail.queue_free()
+            _tails.remove_at(index)
+
 
 func _on_future_reply(code: int, body: PackedByteArray) -> void:
     if code != 0:
@@ -241,7 +253,7 @@ func update_state(state: Dictionary, now_ms: int) -> void:
 
 func present_frame(_state: Dictionary, global_beat: float) -> void:
     _visual_beat = global_beat
-    _advance_tail(global_beat)
+    _advance_tails(global_beat)
     # A future source is pre-ENGRAVED, but no source-local animation, ghost
     # score, or second camera is permitted. Its source clip is positioned
     # beyond the right edge once the engine authorizes promotion.
@@ -298,16 +310,7 @@ func promote_if_ready(state: Dictionary) -> bool:
     score_session.adopt_prepared(state,new_renderer,_layout)
     renderer_promoted.emit(new_renderer)
     if old != null and is_instance_valid(old):
-        _clear_tail()
-        old.runway_overlay = true
-        if is_instance_valid(old.retained_annotations):
-            old.retained_annotations.queue_redraw()
-        old.runway_cutoff_beat = INF
-        old.set_transport_overlay_enabled(false)
-        old.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        old.queue_redraw()
-        stage.score_frame.move_child(old,stage.score_frame.get_child_count()-1)
-        _tail = old
+        _retain_tail(old)
     _bundle.clear()
     _layout.clear()
     _future_intro_offset = 0.0
