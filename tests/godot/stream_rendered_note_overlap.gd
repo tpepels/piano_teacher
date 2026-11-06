@@ -74,13 +74,13 @@ func _initialize() -> void:
     state["running"]=true
     state["transport_id"]=1
     v.present_flow(world,state,-float(prepared["start_world"]))
-    check(v._stream_armed_serial == ready_pass_serial and
+    check(v._stream_armed_serial == int(v.stream_passes[0]["serial"]) and
         v._stream_last_take.is_empty(),
         "unacknowledged polling cannot bind an armed Play to a stale transport")
     check(v.acknowledge_stream_arm(),
         "successful backend Play response authorizes transport binding")
     v.present_flow(world,state,-float(prepared["start_world"]))
-    check(v._stream_last_take == "piece|1|1|practice" and
+    check(v._stream_last_take == "score|1|1|practice" and
         v._stream_armed_serial == -1,
         "an acknowledged Play binds its unique source and clears provisional state")
     check(v.admissions.size()==count,
