@@ -16,6 +16,12 @@ static func clip_bounds(item: Dictionary, density: float,
     # retirement. Source and rest differ only in geometry data, not policy.
     if str(item.get("kind","source")) == "rest":
         return Vector2(0.0,float(item["source_ceiling"])*density)
+    # Measure-sized immutable source strips partition a single engraved
+    # passage. Exactly adjoining clip cuts share one printed world axis,
+    # so even a beam crossing a boundary is neither duplicated nor lost.
+    if item.has("clip_floor") and item.has("clip_ceiling"):
+        return Vector2(float(item["clip_floor"])*density,
+            float(item["clip_ceiling"])*density)
     return engraved_clip_bounds(
         float(item["source_floor"]),float(item["source_ceiling"]),
         density,gap,score_duration)
