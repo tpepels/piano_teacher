@@ -153,6 +153,11 @@ func run() -> void:
         "early release has independent lavender status from Python short grade")
     check(_assert_ink(score.glyphs.paints,"head_black",310,Status.EARLY_ONSET),
         "early onset is not mislabeled as an early key release")
+    state.feedback_marks = [{"note_id":"f","status":"short",
+        "release_unobserved":true}]
+    feedback.present(state)
+    check(feedback.status_for(a,"f")==Status.LATE,
+        "an unreleased held note must never be shown as an early release")
     state.feedback_marks = []
     feedback.present(state)
     check(feedback.status_for(a,"b")==Status.MISSED,
