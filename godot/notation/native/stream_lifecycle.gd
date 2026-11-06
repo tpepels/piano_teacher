@@ -58,12 +58,17 @@ static func validate_batch(passes: Array, specs: Array) -> bool:
             source_spec = spec
         else:
             rest_spec = spec
+    var source_length: float = float(source_spec.get("piece_duration",
+        source_spec["source_ceiling"]))
+    # The source window cannot extend beyond its own declared passage.
+    # Otherwise the paired rest begins while source ink is still musical
+    # content, defeating chronological FIFO admission.
+    if not is_finite(source_length) or source_length <= 0.0 or \
+            float(source_spec["source_ceiling"]) > source_length+.00001:
+        return false
     if not rest_spec.is_empty():
-        var source_length: float = float(source_spec.get("piece_duration",
-            source_spec["source_ceiling"]))
-        if not is_finite(source_length) or source_length <= 0.0 or \
-                absf(float(rest_spec["world_origin"])-(
-                    float(source_spec["world_origin"])+source_length)) > .00001:
+        if absf(float(rest_spec["world_origin"])-(
+                float(source_spec["world_origin"])+source_length)) > .00001:
             # Even though source and rest use separate retained CanvasItems,
             # their relative musical position is controlled by ONE batch.
             return false
