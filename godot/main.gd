@@ -957,9 +957,15 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         score_runway.update_state(parsed,received_ms)
     if bool(parsed.get("loaded",false)) and practice_view.stage.renderer != null:
         var beat: float = _transport_beat_at(received_ms)
+        var world: float = _unrolled_score_beat_at(beat,received_ms)
         practice_view.stage.renderer.present(
-            parsed,beat,_unrolled_score_beat_at(beat,received_ms) -
+            parsed,beat,world -
             float(practice_view.stage.renderer.runway_origin_beat))
+        # Atomically bind an acknowledged transport ID to the already armed
+        # source BEFORE publishing the new backend state. Otherwise the UI
+        # may observe a running Retry while its note copy still has the
+        # prepared key until the next animation frame.
+        practice_view.stage.renderer.present_flow(world,parsed,beat)
     state_presenter.present(
         parsed,current_screen,command_state.pending,_native_score_ready(),
         fingering_save_error,
