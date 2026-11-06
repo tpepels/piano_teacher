@@ -360,6 +360,22 @@ func _run() -> void:
     check(incoming.enqueue(strip_owner,passage(1,24.0,"prepared",true),
         [],[],null,0.0,800.0,playhead,density,gap,4.0),
         "new lesson can append immediately after all older ink")
+    var peer_bound: float = incoming.minimum_peer_opening(
+        density,800.0,playhead)
+    check(peer_bound >= 18.0-.00001,
+        "READY derives the chronological predecessor boundary once")
+    var fast_density_queue := Queue.new()
+    check(fast_density_queue.bind_score(score_key+"-mixed-density",folder),
+        "mixed-density renderer journal is initialized")
+    fast_density_queue.register_peer(peer)
+    check(not fast_density_queue.enqueue(strip_owner,
+        passage(1,24.0,"prepared",true),[],[],null,
+        0.0,800.0,playhead,160.0,gap,4.0) and
+        fast_density_queue.enqueue(strip_owner,
+        passage(1,30.0,"prepared",true),[],[],null,
+        0.0,800.0,playhead,160.0,gap,4.0),
+        "different score densities require screen-space exit clearance")
+    fast_density_queue.reset(strip_owner)
     incoming.reset(strip_owner)
     peer._stream_queue.reset(peer)
     peer.queue_free()
