@@ -575,7 +575,8 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     var reused_serial: int = (
         int(stream_passes[stale_index]["serial"]) if stale_index >= 0 else -1)
     var onset: float = StreamAdmission.position(stream_passes,world,right,
-        header,NAN,reused_serial,StreamAdmission.READY_TRAVEL_BEATS)
+        header,NAN,reused_serial,StreamAdmission.READY_TRAVEL_BEATS,
+        timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
     if not is_finite(onset):
         return -1
     if reused_serial >= 0:
@@ -630,7 +631,8 @@ func arm_stream_take(world: float, opening: float,
     if serial < 0 and is_finite(planned_start_world):
         var checked: float = StreamAdmission.position(stream_passes,
             stream_world_beat,_stream_right_beats(),
-            _stream_header_beats(opening),planned_start_world)
+            _stream_header_beats(opening),planned_start_world,-1,0.0,
+            timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
         if not is_finite(checked):
             return {}
         var previous_serial := _stream_serial
@@ -824,7 +826,8 @@ func present_flow(world_beat: float, state: Dictionary,
                         var checked: float = StreamAdmission.position(
                             stream_passes,stream_world_beat,
                             _stream_right_beats(),_stream_header_beats(0.0),
-                            intended)
+                            intended,-1,0.0,timeline.pixels_per_beat,
+                            staff_gap(),timeline.duration_beats)
                         if not is_finite(checked):
                             item["successor_reserved"] = true
                             push_error("Automatic successor would overlap the existing moving score")
