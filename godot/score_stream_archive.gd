@@ -133,10 +133,14 @@ func record(kind: String, owner_serial: int, plan: Array,
             last_error = "Cannot flush offline source queue (%d)" % failure
             return false
     _next_id += 1
-    history.append(event)
+    # JSON may normalize numeric subtypes when reloaded. Store the SAME
+    # canonical value in memory that a subsequent process reads from disk,
+    # so a withdrawn source plan has identical data before/after reopening.
+    var canonical: Dictionary = JSON.parse_string(JSON.stringify(event))
+    history.append(canonical)
     # Keep in-memory pending material only if it actually leaves the score.
     if kind in ["withdrawn","score_reset"]:
-        pending.append(event)
+        pending.append(canonical)
     elif kind == "enqueued" and from_id > 0:
         for i in range(pending.size()-1,-1,-1):
             if int(pending[i].get("id",0)) == from_id:
