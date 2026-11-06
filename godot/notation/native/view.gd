@@ -235,6 +235,20 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
     failure_reason = ""
     return true
 
+func _archive_source_identity(candidate: Dictionary) -> String:
+    # The journal is keyed by immutable MUSICAL SOURCE, not transient
+    # backend revision or transport ID. Reopening the same actual score
+    # can therefore recover its withdrawn material without mixing songs.
+    var source: Dictionary = {}
+    for key in ["schema","duration_beats","notes","notation_events",
+            "measures","time_signatures","key_signatures","clefs",
+            "beam_groups","tie_groups","slur_pairs","tuplets",
+            "tempo_changes","hand"]:
+        if candidate.has(key):
+            source[key] = candidate[key]
+    return JSON.stringify(source).sha256_text()
+
+
 func load_score(candidate: Dictionary) -> bool:
     connector_geometry.clear_cache()
     annotations.clear()
@@ -251,6 +265,11 @@ func load_score(candidate: Dictionary) -> bool:
         return false
     if not super.load_score(candidate):
         failure_reason = notice
+        return false
+    if not _stream_queue.bind_score(_archive_source_identity(candidate)):
+        failure_reason = "Cannot recover offline score material: " + \
+            _stream_queue.last_error
+        notice = failure_reason
         return false
     # The older rhythm-only heuristic reserved >=25 px for *every* short
     # source interval, even if those notes are in different registers or
