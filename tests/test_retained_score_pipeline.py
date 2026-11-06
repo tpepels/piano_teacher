@@ -106,6 +106,14 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert 'frame.score_loop_enabled' not in source
     lifecycle = (ROOT/"godot/notation/native/stream_lifecycle.gd").read_text()
     assert "StreamLifecycle.admit(self,stream_passes,specs" in view
+    assert "StreamAdmission.automatic_horizon(" in view
+    assert 'state.get("preview_only",false)' in view
+    app = (ROOT/"godot/main.gd").read_text()
+    backend = (ROOT/"piano_teacher/server.py").read_text()
+    assert "StreamAdmission.automatic_horizon(" in app
+    assert "self._automatic_stream_deadline(" in backend
+    assert "repeat_deadline(" in backend
+    assert app.count("_cancel_pending_stream_arm()") >= 3
     assert "StreamLifecycle.reposition(" in view
     assert "StreamLifecycle.activate(" in view
     assert "StreamLifecycle.widen_source(" in view
