@@ -182,6 +182,14 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     for index in range(prepared.size()):
         online[before+index]["piece_duration"] = float(
             prepared[index].get("piece_duration",source_duration))
+        # Runtime-only proof of future-only admission. This timestamp is the
+        # forward world axis at commit; it does not change immutable music,
+        # and must not be recycled from an archived source plan.
+        online[before+index]["admitted_world"] = world
+        online[before+index]["admitted_viewport_width"] = viewport_width
+        online[before+index]["admitted_playhead_x"] = playhead_x
+        online[before+index]["admitted_density"] = density
+        online[before+index]["admitted_staff_gap"] = gap
     var id: int = int(matching.get("id",0))
     if not _archive.record("enqueued",int(prepared[0]["owner_serial"]),
             plan,"offline_reuse" if id > 0 else "new",id,
