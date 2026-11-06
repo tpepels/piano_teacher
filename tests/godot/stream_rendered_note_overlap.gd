@@ -308,8 +308,12 @@ func _initialize() -> void:
         idle.drawn_noteheads.clear()
         idle.fingering_pass_clocks.clear()
         idle._project_stream(idle.size.x*.33)
-        check(idle.stream_passes.size()==1,
-            "READY keeps exactly one online future owner")
+        check(idle.stream_passes.size()==2 and \
+            int(idle.stream_passes[0]["take_owner"]) ==
+            int(idle.stream_passes[1]["take_owner"]) and \
+            is_equal_approx(float(idle.stream_passes[0]["clip_ceiling"]),
+                float(idle.stream_passes[1]["clip_floor"])),
+            "READY keeps one logical take as adjoining immutable measure strips")
         # The offline FIFO is a work queue: a withdrawn READY source may
         # be immediately consumed by the next immutable enqueue. The
         # append-only journal, however, must preserve every withdrawal.
@@ -334,8 +338,10 @@ func _initialize() -> void:
     var idle_before_play: int = idle.admissions.size()
     check(not idle_armed.is_empty() and
         idle.admissions.size()==idle_before_play and
-        idle.stream_passes.size()==1,
-        "Play must claim the last queued READY source without adding ink")
+        idle.stream_passes.size()==2 and \
+        idle.stream_passes.all(func(item: Dictionary) -> bool:
+            return bool(item.get("armed",false))),
+        "Play claims every strip of the READY take without adding ink")
     var idle_origin: float = float(idle.stream_passes[0]["world_origin"])
     check(idle.cancel_stream_arm() and
         str(idle.stream_passes[0].get("take_key",""))=="prepared" and
@@ -346,9 +352,13 @@ func _initialize() -> void:
     idle.drawn_note_instances.clear()
     idle.drawn_noteheads.clear()
     idle._project_stream(idle.size.x*.33)
-    check(idle.stream_passes.size()==1 and idle.drawn_noteheads.is_empty() and
-        is_equal_approx(float(idle.stream_passes[0]["world_origin"]),idle_origin),
-        "failed Play retains the single hidden READY owner without ghost notes")
+    check(idle.stream_passes.size()==2 and idle.drawn_noteheads.is_empty() and
+        is_equal_approx(float(idle.stream_passes[0]["world_origin"]),idle_origin) and \
+        idle.stream_passes.all(func(item: Dictionary) -> bool:
+            return bool(item.get("pending",false)) and \
+                bool(item.get("hidden_until_armed",false)) and \
+                not bool(item.get("armed",false))),
+        "failed Play restores all immutable READY strips without ghost notes")
     idle.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
