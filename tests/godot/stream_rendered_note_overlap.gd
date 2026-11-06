@@ -169,9 +169,12 @@ func _initialize() -> void:
     check(not resumed.is_empty() and
         v.admissions.size() == prior_admissions+1,
         "Resume appends one new immutable source after withdrawing old future")
-    var next_owner: int = v._stream_serial
-    check(next_owner > old_auto and
-        absf(float(v.stream_passes[-1]["source_floor"])-3.0)<.00001,
+    var next_owner: int = v._stream_last_admitted
+    var next_opening_found: bool = v.stream_passes.any(
+        func(item: Dictionary) -> bool:
+            return int(item.get("take_owner",-1))==next_owner and \
+                absf(float(item.get("source_floor",-1))-3.0)<.00001)
+    check(next_owner > old_auto and next_opening_found,
         "new Resume owner has the correct source opening")
     check(v.cancel_stream_arm() and
         not v.stream_passes.any(func(item: Dictionary) -> bool:
@@ -205,9 +208,10 @@ func _initialize() -> void:
     check(is_equal_approx(float(quick.stream_passes[0]["world_origin"]),
         quick_first_world),
         "rapid Retry never moves the previous attempt on the staff")
-    check(quick.cancel_stream_arm() and quick.stream_passes.size()==1 and
-        int(quick.stream_passes[0]["serial"])==1,
-        "failed rapid Retry removes its entire newly inserted source owner")
+    check(quick.cancel_stream_arm() and quick.stream_passes.size()==2 and
+        quick.stream_passes.all(func(item: Dictionary) -> bool:
+            return int(item.get("take_owner",-1))==1),
+        "failed rapid Retry removes all new strips while retaining original take")
     quick.free()
     # An internal identity collision must roll back admission itself, even
     # before any request can be sent. Otherwise hidden source/rest clips
@@ -224,12 +228,14 @@ func _initialize() -> void:
         "running":false,"paused":false,"phase":"ready","mode":"practice",
         "piece_fingerprint":"collision","revision":1,"transport_id":0,
         "play_from_beat":0.0},0.0)
-    collision._stream_queue.online[0]["take_key"] = "armed:2"
+    collision._stream_queue.online[0]["take_key"] = "armed:%d" % (
+        collision._stream_serial+1)
     collision._stream_queue.online[0]["pending"] = false
     var collided: Dictionary = collision.arm_stream_take(.2,0.0)
     var collision_valid := (
-        collided.is_empty() and collision.stream_passes.size()==1 and
-        int(collision.stream_passes[0]["serial"])==1 and
+        collided.is_empty() and collision.stream_passes.size()==2 and
+        collision.stream_passes.all(func(item: Dictionary) -> bool:
+            return int(item.get("take_owner",-1))==1) and
         collision._stream_live_serial == -1)
     check(collision_valid,
         "failed owner uniqueness must remove newly inserted future ink %s" % [
@@ -267,7 +273,8 @@ func _initialize() -> void:
     var new_future: int = recovery._stream_serial
     var score_recovery: Dictionary = {}
     for item in recovery.stream_passes:
-        if int(item.get("serial",-1)) == new_future:
+        if int(item.get("take_owner",-1)) == recovery._stream_last_admitted and \
+                absf(float(item.get("source_floor",-1))-2.0)<.00001:
             score_recovery = item
     check(new_future>old_future and not score_recovery.is_empty() and
         is_equal_approx(
@@ -280,11 +287,11 @@ func _initialize() -> void:
         int(recovery.stream_passes[0]["serial"])==first_owner,
         "failure cannot move or replace the already acknowledged prefix")
     var preserved := false
-    for event in recovery.offline_stream_queue:
+    for event in recovery._stream_queue.history:
         if int(event.get("owner_serial",-1)) == old_future and \
                 str(event.get("event",""))=="withdrawn":
             preserved = true
-    check(preserved,"withdrawn future score stays in the offline queue")
+    check(preserved,"withdrawn future score remains in the journal even after reuse")
     check(recovery.enqueue_recovery_queue(4.0,2.0,65.0) and
         recovery._stream_serial==new_future,
         "repeated recovery snapshots cannot duplicate a scheduled passage")
