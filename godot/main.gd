@@ -1150,6 +1150,12 @@ func _on_action(code: int, body: PackedByteArray) -> void:
         fingering_save_error = ""
     elif str(decision["kind"]) == "library_open":
         score_error = ""
+    if operation == "practice.command" and \
+            _pending_stream_renderer != null and \
+            is_instance_valid(_pending_stream_renderer):
+        # Commit the provisional source owner only after successful backend
+        # acknowledgement, before the response publishes its transport ID.
+        _pending_stream_renderer.acknowledge_stream_arm()
     command_success_effects.apply(decision,opened,
         code,body,int(completed["started_ms"]))
     if operation == "practice.command":
