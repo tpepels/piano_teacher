@@ -23,10 +23,10 @@ func _init() -> void:
 var _archive = Archive.new()
 var offline: Array:
     get:
-        return _archive.pending
+        return _archive.pending.duplicate(true)
 var history: Array:
     get:
-        return _archive.history
+        return _archive.history.duplicate(true)
 var last_error: String:
     get:
         return _archive.last_error
