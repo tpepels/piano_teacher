@@ -172,6 +172,16 @@ func _exercise() -> void:
     check(not Lifecycle.admit(owner,passes,mixed,
         source_pool,rest_pool,note) and passes.size()==4,
         "one admission cannot combine notes and rests from different takes")
+    var misplaced: Array = specs(4,70.0,"prepared",true)
+    misplaced[1]["world_origin"] = 71.0
+    check(not Lifecycle.admit(owner,passes,misplaced,
+        source_pool,rest_pool,note) and passes.size()==4,
+        "a rest may never select an independent source-relative placement")
+    var nonfinite: Array = specs(4,70.0,"prepared",true)
+    nonfinite[0]["world_origin"] = NAN
+    check(not Lifecycle.admit(owner,passes,nonfinite,
+        source_pool,rest_pool,note) and passes.size()==4,
+        "malformed source coordinates cannot create orphan retained graphics")
     var invalid: Array = specs(4,70.0,"prepared",true)
     check(Lifecycle.admit(owner,passes,invalid,
         source_pool,rest_pool,note) and passes.size()==6,
