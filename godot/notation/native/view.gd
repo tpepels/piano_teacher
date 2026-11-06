@@ -607,6 +607,14 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     if not native_ready or not retained_ready() or \
             opening >= timeline.duration_beats:
         return -1
+    # A command can be armed while the last backend snapshot still says
+    # READY. Never allocate another score during that acknowledgement gap.
+    if _stream_armed_serial >= 0:
+        for item in stream_passes:
+            if int(item.get("serial",-1)) == _stream_armed_serial and \
+                    bool(item.get("armed",false)):
+                return _stream_armed_serial
+        _stream_armed_serial = -1
     var right: float = _stream_right_beats()
     var header: float = _stream_header_beats(opening)
     var index: int = StreamAdmission.pending_index(
@@ -624,7 +632,7 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
             continue
         others.append(item)
     var onset: float = StreamAdmission.future_start(
-        others,world,right,header)
+        others,world,right,header) + StreamAdmission.READY_TRAVEL_BEATS
     if stale_index >= 0:
         # The existing score has never entered the audible/visible timeline.
         # Reposition the same hidden reservation, including its semantic
