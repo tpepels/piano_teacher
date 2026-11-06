@@ -17,8 +17,8 @@ build/
 # Godot regenerates these editor/import/shader caches per machine.
 godot/.godot/
 
-# Public-domain count-in voice assets are cached by the launcher.
-godot/assets/countin/*.ogg
+# Download scratch files are never packaged; the four real Ogg recordings
+# themselves are tracked, checked in, and required by the startup test.
 godot/assets/countin/*.ogg.part
 
 # Ignore newly generated GDScript resource UIDs in local working trees.
