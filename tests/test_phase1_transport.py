@@ -211,9 +211,12 @@ def test_godot_uses_single_transport_sample_for_music_and_metronome():
     assert '_update_count_in(beat,ticks)' in main
     assert 'func _toggle_pause() -> void:' in main
     assert 'func _restart_practice() -> void:' in main
+    cue_timeline = (root / 'countin_cue_timeline.gd').read_text()
     assert 'if paused:' in click_owner
-    assert 'count_tick_index = int(floor(beat + .00001))' in click_owner
-    assert 'count_click.call(posmod(tick,bar) == 0,beat)' in click_owner
+    assert '_cues.hold(token,beat)' in click_owner
+    assert '_dispatch_cue(token,beat,bar,false)' in click_owner
+    assert 'var tick := floori(beat + .00001)' in cue_timeline
+    assert '"accent":posmod(tick,meter) == 0' in cue_timeline
 
 
 def test_three_four_count_in_retains_meter_for_click_accents(harness):
@@ -233,7 +236,9 @@ def test_three_four_count_in_retains_meter_for_click_accents(harness):
     clicks = (root / 'metronome_frame_coordinator.gd').read_text()
     main = (root / 'main.gd').read_text()
     assert 'state.get("count_in_bar_beats",4)' in clicks
-    assert 'posmod(tick,bar) == 0' in clicks
+    assert 'CueTimeline.new()' in clicks
+    assert '"accent":posmod(tick,meter) == 0' in (
+        root / 'countin_cue_timeline.gd').read_text()
     assert 'practice_view.stage.count_in.present(beat,bar,true,paused)' in clicks
     assert 'metronome_frame.update(last_state,last_state_tick,sampled_beat,now_ms)' in main
 
