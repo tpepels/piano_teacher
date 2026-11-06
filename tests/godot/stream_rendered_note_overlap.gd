@@ -214,7 +214,7 @@ func _initialize() -> void:
     check(racing.stream_passes.size()==2 and
         racing._stream_paused_owner==1 and
         racing.stream_passes.all(func(item: Dictionary) -> bool:
-            return int(item.get("take_owner",-1))==1 and
+            return int(item.get("take_owner",-1))==1 and \
                 is_equal_approx(float(item["world_origin"]),race_origin)),
         "Pause cannot retract the in-flight, unexposed source strips")
     racing.trim_resume_speculation(.21,0.0)
