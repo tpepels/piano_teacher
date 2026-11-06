@@ -29,6 +29,9 @@ class InstrumentedView:
             "world_origin":start_world-source_beat,
             "source_floor":from_beat,"source_ceiling":through_beat,
             "take_key":take_key,"pending":take_key in ["prepared","autopending"],
+            "hidden_until_armed":take_key == "prepared",
+            "owner_serial":_stream_serial,
+            "slot_id":"%d:source" % _stream_serial,
             "serial":_stream_serial})
 var failures := 0
 func check(ok: bool, message: String) -> void:
