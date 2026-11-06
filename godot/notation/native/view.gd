@@ -601,6 +601,17 @@ func _stream_claim_pending_auto(world: float, opening: float) -> int:
     return int(stream_passes[index]["serial"]) if index >= 0 else -1
 
 
+func _reject_stream_candidate(owner_serial: int, before_serial: int,
+        old_live_serial: int, snapshot: Dictionary) -> void:
+    # A failed pre-commit reservation must not leave a speculative future
+    # source/rest pair occupying the musical axis.
+    if owner_serial > before_serial:
+        StreamLifecycle.discard_owner(self,stream_passes,owner_serial)
+    elif not snapshot.is_empty():
+        StreamLifecycle.restore_owner(stream_passes,owner_serial,snapshot)
+    _stream_live_serial = old_live_serial
+
+
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false) -> Dictionary:
@@ -649,16 +660,17 @@ func arm_stream_take(world: float, opening: float,
     var snapshot: Dictionary = StreamLifecycle.snapshot_owner(
         stream_passes,serial)
     if snapshot.is_empty():
+        _reject_stream_candidate(serial,serial_before,old_live,{})
         return {}
     if reused_auto and not StreamLifecycle.widen_source(
             stream_passes,serial,opening,
             _stream_complete_measure(opening+_stream_right_beats()+1.0)):
-        StreamLifecycle.restore_owner(stream_passes,serial,snapshot)
+        _reject_stream_candidate(serial,serial_before,old_live,snapshot)
         return {}
     # Every unacknowledged control has a unique owner-scoped identity.
     if not StreamLifecycle.activate(
             stream_passes,serial,"armed:%d" % serial,true):
-        StreamLifecycle.restore_owner(stream_passes,serial,snapshot)
+        _reject_stream_candidate(serial,serial_before,old_live,snapshot)
         return {}
     _stream_armed_serial = serial
     _stream_arm_acknowledged = false
