@@ -169,10 +169,13 @@ func run() -> void:
                 }
                 check(view.stage.renderer.timeline.load_model(model),
                     "Native marker fixture uses an authentic contiguous source beat axis")
-                view.stage.renderer.stream_passes = [{
+                # This fixture injects an explicit already-queued score
+                # owner; production admission is exercised in queue tests.
+                view.stage.renderer._stream_queue.online.append({
                     "world_origin":20.0,"source_floor":0.0,
-                    "source_ceiling":8.0,"pending":true,"serial":1
-                }]
+                    "source_ceiling":8.0,"pending":true,"serial":1,
+                    "owner_serial":1,"kind":"source"
+                })
                 var heading := state()
                 heading.hand = "right"
                 view.stage.present_runway_steps(heading,20.0)
