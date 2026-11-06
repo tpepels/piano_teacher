@@ -47,8 +47,30 @@ func _advance(next: String) -> void:
     print("PHASE6_REAL_SCORE_STEP:",phase)
 
 func _fail(message: String) -> void:
+    var state: Dictionary = app.last_state if app != null else {}
+    var witness := {"phase":state.get("phase"),
+        "running":state.get("running"),"revision":state.get("revision"),
+        "transport_id":state.get("transport_id"),
+        "play_from_beat":state.get("play_from_beat"),
+        "clock_beat":state.get("clock_beat"),
+        "bpm":state.get("bpm"),
+        "preparation":(state.get("practice_preparation",{}) as Dictionary).get("phase")}
+    if app != null and app.practice_view != null:
+        var renderer = app.practice_view.stage.renderer
+        var passages: Array = []
+        for item in renderer.stream_passes:
+            passages.append({"serial":item.get("serial"),
+                "take":item.get("take_key"),"kind":item.get("kind"),
+                "origin":item.get("world_origin"),
+                "floor":item.get("source_floor"),
+                "pending":item.get("pending"),"armed":item.get("armed")})
+        witness["stream"] = {"world":renderer.stream_world_beat,
+            "live":renderer._stream_live_serial,
+            "armed":renderer._stream_armed_serial,
+            "last_take":renderer._stream_last_take,
+            "passes":passages}
     printerr("PHASE6_REAL_SCORE_FAILED: ", phase, ": ", message,
-        " backend=", JSON.stringify(app.last_state if app != null else {}))
+        " witness=", JSON.stringify(witness))
     quit(1)
 
 func _visible_source_head() -> String:
