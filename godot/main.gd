@@ -989,7 +989,9 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
                 not bool(parsed.get("paused",false)) and \
                 not promoted_this_snapshot and \
                 renderer._stream_armed_serial < 0 and \
-                renderer._stream_last_take != transport_key and \
+                (renderer._stream_last_take != transport_key or \
+                    str(parsed.get("phase","")) in [
+                        "feedback","recovering","preview_gap"]) and \
                 next_plan.has("deadline_at_ms") and \
                 next_plan.has("source_from_beat") and \
                 next_plan.has("plan_id"):
