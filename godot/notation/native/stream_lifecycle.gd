@@ -198,14 +198,8 @@ static func widen_source(passes: Array, owner_serial: int,
 
 static func screen_bounds(item: Dictionary, density: float,
         gap: float, score_duration: float) -> Vector2:
-    # Identical rightmost-ink calculation governs presentation and expiry.
-    # Rest ink and source ink have different contours, but NO separate
-    # placement or removal algorithms.
-    if str(item.get("kind","source")) == "rest":
-        return Vector2(0.0,float(item["source_ceiling"])*density)
-    return Admission.engraved_clip_bounds(
-        float(item["source_floor"]),float(item["source_ceiling"]),
-        density,gap,score_duration)
+    # Admission and retirement use this same canonical printed geometry.
+    return Admission.clip_bounds(item,density,gap,score_duration)
 
 
 static func _create(owner: Control, segment: Node2D, kind: String,
