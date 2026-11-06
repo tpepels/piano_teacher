@@ -1084,23 +1084,16 @@ func _send_action(command: Dictionary) -> void:
         var opening: float = maxf(0.0,float(last_state.get("play_from_beat",0.0)))
         if requested == "resume":
             opening = maxf(opening,opening+_transport_beat_at(Time.get_ticks_msec()))
-        if requested == "restart":
-            # Explicit Retry invalidates speculative next attempts. Withdraw
-            # only the never-exposed suffix, leave all visible notes moving,
-            # and retain withdrawn plans in the renderer's offline queue.
-            renderer.trim_future_queue("explicit_retry")
-        elif requested == "resume":
-            # The paused transport owns an immutable existing take, even
-            # during Play-ACK/state-poll races. Withdraw only incompatible
-            # speculative successors; never remove the source that Resume
-            # may need to bind. The queue layer selects its protected owner.
-            renderer.trim_resume_speculation(visual_now,opening)
-        var reserved: Dictionary = renderer.arm_stream_take(
-            visual_now,opening,NAN,requested == "resume",
-            requested == "restart")
+        # One preflighted transaction plans the maximal retractable suffix,
+        # verifies a future admission, then commits it with one graded deadline.
+        # Failure cannot mutate the online queue before a valid plan exists.
+        var reserved: Dictionary = renderer.reserve_transport_action(
+            requested,visual_now,opening)
         if reserved.is_empty():
-            practice_view.present_message("Score is not ready for continuous playback")
+            command_state.abort_action()
             practice_view.finish_action()
+            practice_view.present_message(
+                "Score reservation failed · see SCORE_TRANSPORT diagnostic")
             return
         _pending_stream_renderer = renderer
         command = command.duplicate(true)
