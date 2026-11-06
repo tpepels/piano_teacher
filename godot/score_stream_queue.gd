@@ -13,6 +13,13 @@ const Archive := preload("res://score_stream_archive.gd")
 static var _shared_archives: Dictionary = {}
 
 var online: Array = []
+# Source owner serials belong to ONE renderer; another renderer can also
+# have serial 1. A stable per-renderer journal scope prevents collisions.
+var _writer_id := ""
+
+func _init() -> void:
+    _writer_id = str(get_instance_id())
+
 var _archive = Archive.new()
 var offline: Array:
     get:
@@ -112,7 +119,8 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
             prepared[index].get("piece_duration",source_duration))
     var id: int = int(matching.get("id",0))
     if not _archive.record("enqueued",int(prepared[0]["owner_serial"]),
-            plan,"offline_reuse" if id > 0 else "new",id):
+            plan,"offline_reuse" if id > 0 else "new",id,
+            _writer_id):
         # An unjournaled passage must not become live or consume its
         # preceding offline copy. Roll back its entire newly created suffix.
         while online.size() > before:
@@ -167,7 +175,8 @@ func withdraw_tail(owner: Control, world: float, density: float,
             snapshot.push_front(_record(online[i]))
         # Journal BEFORE releasing graphics or removing an entry. The
         # complete source/rest pair can then be recovered after a crash.
-        if not _archive.record("withdrawn",last_owner,snapshot,reason):
+        if not _archive.record("withdrawn",last_owner,snapshot,reason,0,
+                _writer_id):
             return withdrawn
         while not online.is_empty() and owner_id(online[-1]) == last_owner:
             var item: Dictionary = online.pop_back()
@@ -207,7 +216,8 @@ func expire_front(owner: Control, world: float, density: float,
             owner_id(online[1]) != owner_id(item))
         if last_of_owner and not _archive.record("completed",
                 owner_id(item),[_record(item)],
-                "invalid" if invalid else "expired"):
+                "invalid" if invalid else "expired",0,
+                _writer_id):
             break
         removed.append(int(item.get("serial",0)))
         Lifecycle.retire(owner,item)
@@ -229,11 +239,12 @@ func reset(owner: Control) -> void:
         # Preserve the complete batch without popping non-existent entries
         # or consuming the first slot of the NEXT owner.
         var remaining_count: int = specs.size()
-        var complete: Array = _archive.original_plan(first_owner)
+        var complete: Array = _archive.original_plan(
+            first_owner,_writer_id)
         if not complete.is_empty():
             specs = complete
         if not _archive.record("score_reset",first_owner,specs,
-                "score_unload"):
+                "score_unload",0,_writer_id):
             push_error("Score plan preservation failed: "+last_error)
             return
         for i in range(remaining_count):
