@@ -61,7 +61,7 @@ static func owner_id(item: Dictionary) -> int:
 static func _record(item: Dictionary) -> Dictionary:
     # A source plan is plain JSON-compatible metadata; never archive Nodes,
     # clipping controls, CanvasItem resources or mutable draw buffers.
-    return {
+    var stored: Dictionary = {
         "kind":str(item.get("kind","source")),
         "owner_serial":owner_id(item),
         "world_origin":float(item["world_origin"]),
@@ -72,9 +72,11 @@ static func _record(item: Dictionary) -> Dictionary:
         "take_key":str(item.get("take_key","")),
         "slot_id":str(item.get("slot_id","")),
         "take_owner":int(item.get("take_owner",owner_id(item))),
-        "clip_floor":float(item.get("clip_floor",NAN)),
-        "clip_ceiling":float(item.get("clip_ceiling",NAN)),
     }
+    if item.has("clip_floor") and item.has("clip_ceiling"):
+        stored["clip_floor"] = float(item["clip_floor"])
+        stored["clip_ceiling"] = float(item["clip_ceiling"])
+    return stored
 
 func enqueue(owner: Control, specs: Array, source_pool: Array,
         rest_pool: Array, first_source: Node2D, world: float,
