@@ -27,6 +27,71 @@ static func future_start(passes: Array, world: float,
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
     return start
 
+# All reservation claims (ready, paused, automatic, active and auto due)
+# use one identity-checked traversal. Type-specific callers must not scan
+# stream_passes or calculate a different on-screen placement policy.
+static func select(passes: Array, purpose: String, opening: float,
+        world: float, right_beats: float = 0.0,
+        header_beats: float = 0.0, identity: String = "",
+        expected_world: float = NAN) -> int:
+    assert(purpose in ["ready","idle","paused","automatic","automatic_due","bound"])
+    var earliest: float = world + maxf(MIN_READING_BEATS,
+        right_beats+header_beats+OFFSCREEN_MARGIN_BEATS)
+    if purpose == "paused":
+        earliest = world+MIN_READING_BEATS
+    var chosen := -1
+    var closest := INF
+    for index in range(passes.size()):
+        var item: Dictionary = passes[index]
+        if str(item.get("kind","source")) != "source":
+            continue
+        var key: String = str(item.get("take_key",""))
+        var pending: bool = bool(item.get("pending",false))
+        var armed: bool = bool(item.get("armed",false))
+        var onset: float = float(item.get("world_origin",INF))+opening
+        var matches: bool = false
+        match purpose:
+            "ready","idle":
+                matches = pending and not armed and key == "prepared" and \
+                    absf(float(item.get("source_floor",-INF))-opening)<.00001
+            "paused":
+                matches = key == identity and not pending and \
+                    absf(float(item.get("source_floor",-INF))-opening)<.00001
+            "automatic","automatic_due":
+                matches = pending and not armed and key == "autopending"
+            "bound":
+                matches = key == identity and not pending
+        if not matches:
+            continue
+        if purpose not in ["idle","bound"] and onset < earliest-.00001:
+            continue
+        if purpose == "automatic_due" and (not is_finite(expected_world) or \
+                absf(onset-expected_world)>.75):
+            continue
+        if onset < closest:
+            closest = onset
+            chosen = index
+    return chosen
+
+
+static func position(passes: Array, world: float, right_beats: float,
+        header_beats: float, intended: float = NAN,
+        excluded_owner: int = -1, travel_beats: float = 0.0) -> float:
+    # One common admission boundary for READY, Retry, automatic repeats and
+    # exact preloaded stages. Exclusions apply to both source and its rest.
+    var remaining: Array = []
+    for item in passes:
+        if excluded_owner >= 0 and \
+                int(item.get("owner_serial",abs(int(item.get("serial",0))))) == excluded_owner:
+            continue
+        remaining.append(item)
+    var minimum: float = future_start(
+        remaining,world,right_beats,header_beats)+travel_beats
+    if is_finite(intended):
+        return intended if intended >= minimum-.0001 else NAN
+    return minimum
+
+
 static func pending_index(passes: Array, opening: float, world: float,
         right_beats: float = 0.0, header_beats: float = 0.0) -> int:
     # Visible ink begins before the first note at the real clef/key header.
