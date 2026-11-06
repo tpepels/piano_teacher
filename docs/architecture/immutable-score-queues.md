@@ -21,8 +21,13 @@ Fresh READY ink remains outside the right viewport edge, including
 the exact clef/key/time-signature clip geometry. The additional offscreen
 margin is 0.12 beat and the READY travel cushion is 0.30 beat. At 31 BPM
 this adds about 0.81 seconds until the first printed ink reaches the screen
-edge; a larger arbitrary travel allowance must not be reintroduced. Remaining
-musical lookahead and already committed older ink can still take longer.
+edge; a larger arbitrary travel allowance must not be reintroduced. While
+idle, a hidden READY reservation is **not** continuously replaced just because
+it approaches the right edge. Its physical world origin remains immutable; on
+Play, an expired reservation is withdrawn and replaced once with an equally
+offscreen slot, using the pre-engraved source. This avoids subsecond idle
+re-enqueue loops. Remaining musical lookahead and already committed older ink
+can still take longer.
 Voice sample acquisition is strictly non-blocking; optional network access
 must never delay Godot startup.
 
