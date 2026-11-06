@@ -88,6 +88,22 @@ def test_single_score_renderer_has_no_legacy_execution_selector():
     assert 'variant == "recovery"' not in (ROOT/"godot/notation/native/source_pass_painter.gd").read_text()
 
 
+def test_superseded_svg_score_renderer_and_preview_pipelines_are_removed():
+    obsolete = {
+        "score_overlay.gd", "notehead_ink.gd", "note_reactions.gd",
+        "staff_continuity.gd", "preview_motion.gd",
+    }
+    assert all(not (ROOT/"godot"/name).exists() for name in obsolete)
+    assert not (ROOT/"tests/test_score_overlay.py").exists()
+    # No production scene, compositor or helper may preload deleted
+    # legacy script resources to resurrect an alternate score camera.
+    for source_file in (ROOT/"godot").rglob("*.gd"):
+        if "addons" in source_file.parts:
+            continue
+        contents = source_file.read_text()
+        assert not any(("res://"+name) in contents for name in obsolete), source_file
+
+
 def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     view = (ROOT/"godot/notation/native/view.gd").read_text()
     coordinator = (ROOT/"godot/practice_frame_coordinator.gd").read_text()
