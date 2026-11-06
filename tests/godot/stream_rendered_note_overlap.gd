@@ -296,8 +296,11 @@ func _initialize() -> void:
         idle._project_stream(idle.size.x*.33)
         check(idle.stream_passes.size()==1,
             "READY keeps exactly one online future owner")
-        check(idle.offline_stream_queue.size()>=1,
-            "every displaced READY passage remains in offline history")
+        # The offline FIFO is a work queue: a withdrawn READY source may
+        # be immediately consumed by the next immutable enqueue. The
+        # append-only journal, however, must preserve every withdrawal.
+        check(idle._stream_queue.history.size() >= idle.admissions.size(),
+            "READY replacements are all represented in the event journal")
         check(idle.drawn_noteheads.is_empty(),
             "READY must not display idle noteheads without Play")
         var reserve: Dictionary = idle.stream_passes[0]
@@ -305,6 +308,14 @@ func _initialize() -> void:
             idle._stream_header_beats(0.0)
         check(float(reserve["world_origin"]) > threshold,
             "READY replaces offscreen source rather than shifting an existing origin")
+    var recorded_withdrawals := 0
+    for event in idle._stream_queue.history:
+        if str(event.get("event","")) == "withdrawn":
+            recorded_withdrawals += 1
+    check(recorded_withdrawals > 0 and
+        idle._stream_queue.history.size() >= idle.admissions.size() +
+            recorded_withdrawals,
+        "all displaced READY source plans remain recoverable from the journal")
     var idle_armed: Dictionary = idle.arm_stream_take(idle.stream_world_beat,0)
     var idle_before_play: int = idle.admissions.size()
     check(not idle_armed.is_empty() and
