@@ -12,6 +12,13 @@ var recovery_click_tick := -999
 var retry_first_click_sent := false
 var count_tick_index := -1
 var last_audio_transport_id := -1
+var _resume_voice_active := false
+
+func _speak_preparation(tick: int, bar: int) -> bool:
+    var counter = practice_view.stage.count_in
+    if counter != null and counter.has_method("speak_beat"):
+        return bool(counter.speak_beat(posmod(tick,bar)+1))
+    return false
 
 func _init(settings, practice, visual_clock, at_beat: Callable,
         on_count: Callable, on_raw: Callable) -> void:
@@ -72,7 +79,8 @@ func update(state: Dictionary, state_tick_ms: int,
         var tick := floori(count_beat + .00001)
         if tick != recovery_click_tick:
             if count_beat < .10 and count_beat >= -float(bar):
-                raw_click.call(posmod(tick,bar) == 0)
+                if tick >= 0 or not _speak_preparation(tick,bar):
+                    raw_click.call(posmod(tick,bar) == 0)
                 if tick == 0:
                     retry_first_click_sent = true
             recovery_click_tick = tick
@@ -87,13 +95,18 @@ func update(state: Dictionary, state_tick_ms: int,
         var countdown: float = float(resume_value) + (
             maxf(0.0,float(now_ms-state_tick_ms))*bpm/60000.0)
         if countdown < 0.0:
+            if not _resume_voice_active:
+                count_tick_index = -999
+            _resume_voice_active = true
             var meter := maxi(1,int(round(float(state.get("count_in_bar_beats",4)))))
             practice_view.stage.count_in.present(countdown,meter,true,false)
             var tick := floori(countdown+.00001)
             if tick != count_tick_index:
                 count_tick_index = tick
-                raw_click.call(posmod(tick,meter) == 0)
+                if not _speak_preparation(tick,meter):
+                    raw_click.call(posmod(tick,meter) == 0)
             return
+    _resume_voice_active = false
     if state.is_empty() or not bool(state.get("running",false)):
         recovery_click_tick = -999
         practice_view.stage.count_in.present(0.0,4,false,false)
@@ -116,6 +129,7 @@ func update(state: Dictionary, state_tick_ms: int,
     if tick != count_tick_index:
         count_tick_index = tick
         if not (tick == 0 and retry_first_click_sent):
-            count_click.call(posmod(tick,bar) == 0,beat)
+            if tick >= 0 or not _speak_preparation(tick,bar):
+                count_click.call(posmod(tick,bar) == 0,beat)
         if tick >= 0:
             retry_first_click_sent = false
