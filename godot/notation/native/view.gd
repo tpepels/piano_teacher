@@ -74,6 +74,7 @@ const ContextPainter := preload("res://notation/native/context_painter.gd")
 const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
+const TransportReservation := preload("res://score_transport_reservation.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
@@ -709,6 +710,48 @@ func _reject_stream_candidate(owner_serial: int, before_serial: int,
     elif not snapshot.is_empty():
         StreamLifecycle.restore_owner(_stream_queue.online,owner_serial,snapshot)
     _stream_live_serial = old_live_serial
+
+
+func reserve_transport_action(action: String, world: float,
+        opening: float) -> Dictionary:
+    # The ONLY user-command route. First compute both the future slot and
+    # safe suffix on immutable previews; failed preflight cannot withdraw
+    # any source or start the backend transport.
+    var planned: Dictionary = TransportReservation.plan(
+        self,action,world,opening)
+    if not bool(planned.get("ok",false)):
+        push_error("SCORE_TRANSPORT_PREFLIGHT: %s action=%s opening=%.3f" % [
+            str(planned.get("reason","unknown")),action,opening])
+        return {}
+    stream_world_beat = maxf(stream_world_beat,world)
+    var mode: String = str(planned["mode"])
+    if mode == "reuse":
+        if action == "resume":
+            # Preserve the matched source; only trim incompatible successors.
+            trim_resume_speculation(world,opening)
+        var existing: Dictionary = arm_stream_take(
+            world,opening,NAN,action == "resume",false)
+        if existing.is_empty():
+            push_error("SCORE_TRANSPORT_COMMIT: preflight reusable owner vanished")
+        return existing
+    # The preflight and actual withdrawal share Queue.preview_tail_withdrawal
+    # and the SAME world coordinate. Do not recalculate a different
+    # placement after removing the unseen suffix.
+    var intended: float = float(planned["start_world"])
+    trim_future_queue("user_"+action+"_replace_unseen")
+    if _stream_queue.online.size() != int(planned["remaining_count"]):
+        push_error("SCORE_TRANSPORT_COMMIT: online queue changed during preflight")
+        return {}
+    var admitted: Dictionary = arm_stream_take(
+        world,opening,intended,false,false)
+    if admitted.is_empty():
+        push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")
+        return {}
+    if absf(float(admitted.get("start_world",NAN))-intended) > .0001:
+        push_error("SCORE_TRANSPORT_COMMIT: grading and score deadlines diverged")
+        cancel_stream_arm()
+        return {}
+    return admitted
 
 
 func arm_stream_take(world: float, opening: float,
