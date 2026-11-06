@@ -57,6 +57,7 @@ func _exercise() -> void:
     check(note.compiled and rest.compiled and owner.source_draws > 0 and
         owner.rest_draws > 0,
         "source and semantic rest both compile before entering a hidden clip")
+    Lifecycle.attach_compiled(passes)
     check(Lifecycle.project(source_pass,19.0,264.0,90.0,20.0,
         owner.size,4.0),"compiled note can be projected")
     check(Lifecycle.project(rest_pass,19.0,264.0,90.0,20.0,
@@ -83,6 +84,7 @@ func _exercise() -> void:
         owner.source_draws > initial_source_draws and
         owner.rest_draws > initial_rest_draws,
         "source and rest must both re-engrave after a viewport change")
+    Lifecycle.attach_compiled(passes)
     check(Lifecycle.project(source_pass,25.0,264.0,90.0,20.0,
         owner.size,4.0),"recompiled note is reusable")
     check(Lifecycle.project(rest_pass,25.0,264.0,90.0,20.0,
