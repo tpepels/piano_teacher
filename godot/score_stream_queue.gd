@@ -7,6 +7,11 @@ const Admission := preload("res://score_stream_admission.gd")
 const Lifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const Archive := preload("res://score_stream_archive.gd")
 
+# A lesson transition can briefly keep two NativeViews alive for the
+# SAME musical source. Share one journal writer/sequence in that process.
+# Weak references do not retain histories after their last renderer exits.
+static var _shared_archives: Dictionary = {}
+
 var online: Array = []
 var _archive = Archive.new()
 var offline: Array:
@@ -19,10 +24,29 @@ var last_error: String:
     get:
         return _archive.last_error
 
-func bind_score(score_key: String, directory: String = Archive.DEFAULT_DIR) -> bool:
+func bind_score(score_key: String, directory: String = Archive.DEFAULT_DIR,
+        independent_recovery: bool = false) -> bool:
     if not online.is_empty():
         return false
-    return _archive.bind_score(score_key,directory)
+    if independent_recovery:
+        # Only independent process/restart tests bypass the live shared
+        # archive. Production readers must always use the single writer.
+        _archive = Archive.new()
+        return _archive.bind_score(score_key,directory)
+    var identity: String = directory.path_join(score_key.sha256_text())
+    var weak: Variant = _shared_archives.get(identity)
+    if weak is WeakRef:
+        var shared = weak.get_ref()
+        if shared != null and shared.last_error.is_empty():
+            _archive = shared
+            return true
+    var next = Archive.new()
+    if not next.bind_score(score_key,directory):
+        _archive = next
+        return false
+    _archive = next
+    _shared_archives[identity] = weakref(next)
+    return true
 
 static func owner_id(item: Dictionary) -> int:
     return int(item.get("owner_serial",abs(int(item.get("serial",0)))))
