@@ -1,5 +1,6 @@
 extends SceneTree
 const ScoreView := preload("res://notation/shared/view_base.gd")
+const Admission := preload("res://score_stream_admission.gd")
 ## Actual production scene -> embedded Python -> MIDI -> Verovio -> retained
 ## notation -> practice transport. No synthetic score-session doubles.
 const DEFAULT_FIXTURE := "phase6_native_fixture.mid"
@@ -163,7 +164,7 @@ func _process(_delta: float) -> bool:
             ready_world_origin = float(prepared["world_origin"])
             ready_pass_serial = int(prepared["serial"])
             ready_take_owner = int(prepared.get("take_owner",prepared["serial"]))
-            var first_bounds: Vector2 = renderer._stream_queue.Admission.clip_bounds(
+            var first_bounds: Vector2 = Admission.clip_bounds(
                 prepared,density,renderer.staff_gap(),renderer.timeline.duration_beats)
             ready_first_expiry_world = ready_world_origin + \
                 first_bounds.y/density + \
@@ -340,7 +341,7 @@ func _process(_delta: float) -> bool:
                     is_finite(world_at_enqueue) and \
                     is_finite(playhead_at_enqueue) and \
                     is_finite(viewport_at_enqueue) and density_at_enqueue > 0:
-                var bounds: Vector2 = renderer._stream_queue.Admission.clip_bounds(
+                var bounds: Vector2 = Admission.clip_bounds(
                     item,density_at_enqueue,gap_at_enqueue,
                     renderer.timeline.duration_beats)
                 var earliest_x: float = playhead_at_enqueue + \
