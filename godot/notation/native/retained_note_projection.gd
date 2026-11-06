@@ -20,6 +20,7 @@ static func append_visible(notes: Array, shift_x: float, viewport_width: float,
     if maximum <= minimum:
         return 0
     var count := 0
+    var placed: Dictionary = {}
     for index in range(low,notes.size()):
         var original: Dictionary = notes[index]
         var point: Vector2 = original["position"]
@@ -27,10 +28,20 @@ static func append_visible(notes: Array, shift_x: float, viewport_width: float,
             break
         var screen: Vector2 = point+Vector2(shift_x,0.0)
         var ident: String = str(original["event_id"])
+        # Multiple physical glyph positions can legitimately share one
+        # semantic event ID (chord/unison); an exact duplicate at the same
+        # source position must NEVER create a second interactive notehead.
+        # Use immutable source coordinates: identity stays stable while
+        # the world-time bar scrolls, even after Pause and Resume.
+        var placement_id: String = "%d:%s:%.5f:%.5f" % [
+            pass_index,ident,point.x,point.y]
+        if placed.has(placement_id):
+            continue
+        placed[placement_id] = true
         var copy: Dictionary = original.duplicate(false)
         copy["position"] = screen
         copy["pass_index"] = pass_index
-        copy["instance_id"] = "%d:%s" % [pass_index,ident]
+        copy["instance_id"] = placement_id
         instances.append(copy)
         if not nearest_heads.has(ident) or \
                 absf(screen.x-playhead_x)<absf(nearest_heads[ident].x-playhead_x):
