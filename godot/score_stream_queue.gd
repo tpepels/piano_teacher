@@ -201,13 +201,13 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         return false
     return true
 
-func _is_safe_tail(owner_serial: int, world: float, density: float,
-        gap: float, duration: float, viewport_width: float,
-        playhead_x: float, force_unacknowledged: bool) -> bool:
+func _is_safe_tail(passes: Array, owner_serial: int, world: float,
+        density: float, gap: float, duration: float,
+        viewport_width: float, playhead_x: float) -> bool:
     var found := false
     var source: Dictionary = {}
-    for index in range(online.size()-1,-1,-1):
-        var item: Dictionary = online[index]
+    for index in range(passes.size()-1,-1,-1):
+        var item: Dictionary = passes[index]
         if owner_id(item) != owner_serial:
             break
         found = true
@@ -230,6 +230,32 @@ func _is_safe_tail(owner_serial: int, world: float, density: float,
     # immutable full-passage owner that wrongly locks its invisible suffix.
     return found and not source.is_empty()
 
+func preview_tail_withdrawal(world: float, density: float,
+        gap: float, duration: float, viewport_width: float,
+        playhead_x: float, protected_take: int = -1,
+        just_one_owner: bool = false) -> Dictionary:
+    # Pure admission preview: the actual withdrawal and a preflight
+    # reservation use IDENTICAL pixel-exposure and protected-owner rules.
+    # No archive, scene tree, or live queue mutation occurs here.
+    var remaining: Array = online.duplicate()
+    var owners: Array[int] = []
+    while not remaining.is_empty():
+        var tail: Dictionary = remaining[-1]
+        if protected_take >= 0 and int(tail.get(
+                "take_owner",owner_id(tail))) == protected_take:
+            break
+        var owner_serial: int = owner_id(tail)
+        if not _is_safe_tail(remaining,owner_serial,world,density,gap,
+                duration,viewport_width,playhead_x):
+            break
+        owners.append(owner_serial)
+        while not remaining.is_empty() and owner_id(remaining[-1]) == owner_serial:
+            remaining.pop_back()
+        if just_one_owner:
+            break
+    return {"remaining":remaining,"owners":owners}
+
+
 func withdraw_tail(owner: Control, world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, reason: String,
@@ -238,27 +264,26 @@ func withdraw_tail(owner: Control, world: float, density: float,
     # The only permitted right-end dequeue operation. A visible/acknowledged
     # prefix is NEVER changed, even when future musical decisions differ.
     var withdrawn: Array[int] = []
-    while not online.is_empty():
-        # Pausing preserves the already-selected running take, even if
-        # a later measure has not entered the viewport yet. Withdraw only
-        # speculative successors behind it.
-        if protected_take >= 0 and int(online[-1].get(
-                "take_owner",owner_id(online[-1]))) == protected_take:
-            break
-        var last_owner: int = owner_id(online[-1])
-        if not _is_safe_tail(last_owner,world,density,gap,duration,
-                viewport_width,playhead_x,force_unacknowledged):
+    var preview: Dictionary = preview_tail_withdrawal(
+        world,density,gap,duration,viewport_width,playhead_x,
+        protected_take,force_unacknowledged)
+    for serial in preview["owners"]:
+        if online.is_empty() or owner_id(online[-1]) != int(serial):
+            push_error("Queue tail changed between preflight and withdrawal")
             break
         var snapshot: Array = []
         for i in range(online.size()-1,-1,-1):
-            if owner_id(online[i]) != last_owner:
+            if owner_id(online[i]) != int(serial):
                 break
             snapshot.push_front(_record(online[i]))
-        # Journal BEFORE releasing graphics or removing an entry. The
-        # complete source/rest pair can then be recovered after a crash.
-        if not _archive.record("withdrawn",last_owner,snapshot,reason,0,
+        if not _archive.record("withdrawn",int(serial),snapshot,reason,0,
                 _writer_id):
-            return withdrawn
+            break
+        while not online.is_empty() and owner_id(online[-1]) == int(serial):
+            var item: Dictionary = online.pop_back()
+            withdrawn.append(int(item.get("serial",0)))
+            Lifecycle.retire(owner,item)
+    return withdrawn
         while not online.is_empty() and owner_id(online[-1]) == last_owner:
             var item: Dictionary = online.pop_back()
             withdrawn.append(int(item.get("serial",0)))
