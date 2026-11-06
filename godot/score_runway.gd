@@ -237,6 +237,39 @@ func _request_if_needed(state: Dictionary, now_ms: int) -> void:
     if _fetch.request("score.next_stage") != OK:
         _next_poll_ms = now_ms + 1000
 
+func preserve_unprepared_revision(state: Dictionary) -> bool:
+    # Manual stage navigation, score reopening and other non-preloaded
+    # revisions still use the same forward-only stream. Swap the asset
+    # destination BEFORE ScoreAssetSession.update_context() resets it.
+    # Otherwise reset_assets() clears still-visible outgoing noteheads.
+    if not bool(state.get("loaded",false)) or stage == null or \
+            not score_session.is_ready() or not is_instance_valid(stage.renderer):
+        return false
+    var next_revision: int = int(state.get("revision",-1))
+    var next_fingerprint: String = str(state.get("piece_fingerprint",""))
+    if next_revision == score_session.revision and \
+            next_fingerprint == score_session._fingerprint:
+        return false
+    var outgoing = stage.renderer
+    var incoming = NativeView.new()
+    incoming.external_backdrop = outgoing.external_backdrop
+    incoming.compact_inactive_staff = outgoing.compact_inactive_staff
+    incoming.active_hand = str(state.get("hand","both"))
+    incoming.set_density(float(outgoing.configured_density))
+    incoming.set_transport_overlay_enabled(true)
+    stage.score_frame.add_child(incoming)
+    incoming.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    incoming.visible = false
+    stage.renderer = incoming
+    score_session.replace_renderer(incoming)
+    renderer_promoted.emit(incoming)
+    if outgoing.stream_passes.is_empty():
+        outgoing.queue_free()
+    else:
+        _retain_tail(outgoing)
+    return true
+
+
 func update_state(state: Dictionary, now_ms: int) -> void:
     var fingerprint: String = str(state.get("piece_fingerprint",""))
     var revision: int = int(state.get("revision",-1))
