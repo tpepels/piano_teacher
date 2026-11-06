@@ -814,6 +814,59 @@ func cancel_stream_arm() -> bool:
     return restored
 
 
+func _stream_transport_owner(opening: float,
+        may_be_provisional: bool) -> int:
+    # A backend Pause can arrive before its Play acknowledgement has been
+    # projected into a running frame. The current musical take must therefore
+    # be resolved from ALL transport identities, not just _stream_live_serial.
+    # Losing that one transient field must never delete its unplayed music.
+    for candidate in [
+            _stream_paused_owner,_stream_live_serial,_stream_armed_serial]:
+        var owner_serial: int = int(candidate)
+        if owner_serial >= 0 and _stream_queue.has_take(owner_serial):
+            return owner_serial
+    if not _stream_last_take.is_empty():
+        var bound_index: int = StreamAdmission.select(
+            _stream_queue.online,"bound",opening,stream_world_beat,
+            0.0,0.0,_stream_last_take)
+        if bound_index >= 0:
+            return int(_stream_queue.online[bound_index].get("take_owner",
+                _stream_queue.online[bound_index]["serial"]))
+    if may_be_provisional:
+        # In-flight Play/Resume can leave only a prepared or armed source.
+        # Prefer the oldest source take; autopending is a speculative
+        # successor and must never impersonate the active attempt.
+        for item in _stream_queue.online:
+            if str(item.get("kind","source")) != "source":
+                continue
+            var key: String = str(item.get("take_key",""))
+            if key == "prepared" or key.begins_with("armed:"):
+                return int(item.get("take_owner",item["serial"]))
+    return -1
+
+
+func trim_resume_speculation(world: float, opening: float) -> Array[int]:
+    # Resume first protects the paused graded take. Only speculative
+    # successors are reclaimable. The prior implementation called
+    # trim_future_queue() without a protected owner, deleting the still-
+    # offscreen current exercise in the gap between Pause and Resume.
+    stream_world_beat = maxf(stream_world_beat,world)
+    var future: int = StreamAdmission.select(
+        _stream_queue.online,"automatic",opening,stream_world_beat,
+        _stream_right_beats(),_stream_header_beats(opening))
+    if future >= 0:
+        return []
+    var current_take: int = _stream_transport_owner(opening,true)
+    if current_take >= 0:
+        return trim_future_queue("resume_different_opening",current_take)
+    for item in _stream_queue.online:
+        if str(item.get("kind","source")) == "source" and \
+                str(item.get("take_key","")) != "autopending":
+            # An unresolved current source cannot be safely retracted.
+            return []
+    return trim_future_queue("resume_different_opening")
+
+
 func trim_future_queue(reason: String,
         protected_take: int = -1) -> Array[int]:
     # The moving staff has one exit policy. This is the ONLY retractable
@@ -915,9 +968,17 @@ func present_flow(world_beat: float, state: Dictionary,
     if paused_now:
         if not _stream_was_paused:
             _stream_paused_source = maxf(opening,opening+graded_beat)
-            _stream_paused_owner = _stream_live_serial
+            _stream_paused_owner = _stream_transport_owner(
+                opening,bool(state.get("running",false)))
         if allow_admission:
-            trim_future_queue("pause",_stream_paused_owner)
+            if _stream_paused_owner >= 0:
+                trim_future_queue("pause",_stream_paused_owner)
+            elif not bool(state.get("running",false)):
+                # A paused non-running feedback state has no graded source
+                # to protect; its unexposed future copies are retractable.
+                trim_future_queue("pause")
+            # If a running transport's owner remains unresolved, preserve
+            # all ink until it can be reconciled. Deletion is irreversible.
         _stream_was_paused = true
         _stream_live_serial = -1
     elif allow_admission and not running_now and phase in [
