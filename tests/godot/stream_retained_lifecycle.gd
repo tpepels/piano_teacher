@@ -1,6 +1,6 @@
 extends SceneTree
-## Real CanvasItem lifecycle: uncompiled source/rest graphics must compile
-## without ever appearing at the world origin, then travel, retire and reuse.
+## One retained-score lifecycle, shared by source notes, semantic rests,
+## fast retries and score reloads. Real CanvasItems verify compiled ink.
 const Lifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const Segment := preload("res://notation/native/retained_segment.gd")
 const RenderPass := preload("res://notation/native/render_pass.gd")
@@ -10,6 +10,11 @@ class InkOwner extends Control:
     var source_draws := 0
     var rest_draws := 0
     var compiled_events := 0
+    func _new_retained_segment(kind: String):
+        var part := Segment.new()
+        add_child(part)
+        part.configure(self,kind)
+        return part
     func paint_retained_source(canvas: CanvasItem) -> RefCounted:
         source_draws += 1
         canvas.draw_rect(Rect2(5,5,30,20),Color.WHITE)
@@ -31,91 +36,136 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void:
     call_deferred("_exercise")
 
+func specs(serial: int, first: float, key: String,
+        hidden: bool = false) -> Array:
+    return [
+        {"kind":"source","owner_serial":serial,"world_origin":first,
+            "source_floor":0.0,"source_ceiling":4.0,
+            "take_key":key,"pending":hidden,
+            "hidden_until_armed":hidden},
+        {"kind":"rest","owner_serial":serial,"world_origin":first+4.0,
+            "source_floor":0.0,"source_ceiling":4.0,"take_key":"rest",
+            "pending":false,"hidden_until_armed":hidden}
+    ]
+
 func _exercise() -> void:
     var owner := InkOwner.new()
     owner.size = Vector2(800,420)
     root.add_child(owner)
-    var note := Segment.new()
-    owner.add_child(note)
-    note.configure(owner,"source")
-    var rest := Segment.new()
-    owner.add_child(rest)
-    rest.configure(owner,"rest")
-    var source_pass: Dictionary = Lifecycle.create(
-        owner,note,"source",20.0,0.0,4.0,"active",1,false)
-    var rest_pass: Dictionary = Lifecycle.create(
-        owner,rest,"rest",24.0,0.0,4.0,"rest",-1,false)
-    var passes: Array = [source_pass,rest_pass]
+    var note = owner._new_retained_segment("source")
+    var rest = owner._new_retained_segment("rest")
+    var source_pool: Array = []
+    var rest_pool: Array = [rest]
+    var passes: Array = []
+    var initial: Array = specs(1,20.0,"prepared",true)
+    check(Lifecycle.admit(owner,passes,initial,
+        source_pool,rest_pool,note) and passes.size() == 2,
+        "one admission creates exactly one source and its paired rest")
+    var source_pass: Dictionary = passes[0]
+    var rest_pass: Dictionary = passes[1]
+    check(source_pass["slot_id"] == "1:source" and
+        rest_pass["slot_id"] == "1:rest" and
+        source_pass["segment"] == note and rest_pass["segment"] == rest,
+        "both content roles share one unique owner ID and their retained pool")
+    check(not Lifecycle.admit(owner,passes,initial,
+        source_pool,rest_pool,note) and passes.size() == 2,
+        "repeating the same owner admission cannot add a duplicate clip")
     check(not source_pass["clip"].visible and
-        not rest_pass["clip"].visible,
-        "newly allocated clips must remain hidden before retained compilation")
-    check(note.get_parent() == owner and rest.get_parent() == owner,
-        "uncompiled source AND rest must stay attached to visible owner")
+        not rest_pass["clip"].visible and
+        note.get_parent() == owner and rest.get_parent() == owner,
+        "uncompiled source and rest remain offscreen with hidden windows")
     await process_frame
     await process_frame
     RenderingServer.force_draw()
-    check(note.compiled and rest.compiled and owner.source_draws > 0 and
-        owner.rest_draws > 0,
-        "source and semantic rest both compile before entering a hidden clip")
+    check(note.compiled and rest.compiled and
+        owner.source_draws == 1 and owner.rest_draws == 1,
+        "both content roles compile before a clipping window is visible")
     Lifecycle.attach_compiled(passes)
+    check(not Lifecycle.project(source_pass,19.0,264.0,90.0,20.0,
+        owner.size,4.0) and not Lifecycle.project(rest_pass,
+        19.0,264.0,90.0,20.0,owner.size,4.0),
+        "READY must hide BOTH original noteheads and semantic rests")
+    check(Lifecycle.reposition(passes,1,21.0) and
+        float(source_pass["world_origin"]) == 21.0 and
+        float(rest_pass["world_origin"]) == 25.0,
+        "retiming an unplayed source moves its paired rest exactly once")
+    check(not Lifecycle.reposition(passes,1,20.0),
+        "unpublished reservation cannot jump backwards")
+    check(Lifecycle.activate(passes,1,"piece|1|1|practice",true) and
+        not Lifecycle.reposition(passes,1,22.0),
+        "armed source/rest cannot change world positions")
     check(Lifecycle.project(source_pass,19.0,264.0,90.0,20.0,
-        owner.size,4.0),"compiled note can be projected")
-    check(Lifecycle.project(rest_pass,19.0,264.0,90.0,20.0,
-        owner.size,4.0),"compiled rest can be projected")
+        owner.size,4.0) and Lifecycle.project(rest_pass,19.0,264.0,
+        90.0,20.0,owner.size,4.0),
+        "Play reveals already-compiled source and rest without re-engraving")
     check(note.get_parent() == source_pass["clip"] and
         rest.get_parent() == rest_pass["clip"] and
         source_pass["clip"].visible and rest_pass["clip"].visible,
-        "one lifecycle owner attaches and reveals both classes of ink")
-    var initial_source_draws := owner.source_draws
-    var initial_rest_draws := owner.rest_draws
-    # A hand change/resize invalidates BOTH kinds of printed ink. Every
-    # retained segment must leave its clip before Godot can compile again.
+        "one lifecycle attaches both clip roles")
+    check(Lifecycle.activate(passes,1,"piece|1|1|practice",false),
+        "transport acknowledgement binds the same owner without new ink")
+    var draws_source: int = owner.source_draws
+    var draws_rest: int = owner.rest_draws
     Lifecycle.prepare_recompile(owner,passes)
     for segment in [note,rest]:
         segment.compiled = false
         segment.queue_redraw()
     check(note.get_parent() == owner and rest.get_parent() == owner and
         not source_pass["clip"].visible and not rest_pass["clip"].visible,
-        "invalidation detaches both segments from hidden clip parents")
+        "invalidation unclips both content roles before redraw")
     await process_frame
     await process_frame
     RenderingServer.force_draw()
     check(note.compiled and rest.compiled and
-        owner.source_draws > initial_source_draws and
-        owner.rest_draws > initial_rest_draws,
-        "source and rest must both re-engrave after a viewport change")
+        owner.source_draws == draws_source+1 and
+        owner.rest_draws == draws_rest+1,
+        "both kinds of ink recompile after a real viewport change")
     Lifecycle.attach_compiled(passes)
     check(Lifecycle.project(source_pass,25.0,264.0,90.0,20.0,
-        owner.size,4.0),"recompiled note is reusable")
-    check(Lifecycle.project(rest_pass,25.0,264.0,90.0,20.0,
-        owner.size,4.0),"recompiled rest is reusable")
+        owner.size,4.0) and Lifecycle.project(rest_pass,25.0,264.0,
+        90.0,20.0,owner.size,4.0),
+        "recompiled source and rest project from their original owner")
     check(not Lifecycle.expired(source_pass,27.0,90.0,264.0,20.0,4.0),
-        "trailing printed note ink must be retained until it is fully offscreen")
+        "source is not removed before its final engraved pixels leave")
     var removed: Array[int] = Lifecycle.prune(
-        owner,passes,29.0,90.0,264.0,20.0,4.0)
+        owner,passes,30.0,90.0,264.0,20.0,4.0)
     check(removed == [1] and passes.size()==1 and
         note.get_parent() == owner and not note.visible,
-        "expired source returns to the precompiled pool, rest stays present")
-    removed = Lifecycle.prune(owner,passes,34.0,90.0,264.0,20.0,4.0)
+        "source retires into its pool while its printed rest remains")
+    removed = Lifecycle.prune(owner,passes,35.0,90.0,264.0,20.0,4.0)
     check(removed == [-1] and passes.is_empty() and
         rest.get_parent() == owner and not rest.visible,
-        "printed semantic rest retires through the same lifecycle")
-    var source_reuse: Dictionary = Lifecycle.create(
-        owner,note,"source",40.0,0.0,4.0,"retry",2,false)
-    var rest_reuse: Dictionary = Lifecycle.create(
-        owner,rest,"rest",44.0,0.0,4.0,"rest",-2,false)
-    var reused: Array = [source_reuse,rest_reuse]
-    check(Lifecycle.project(source_reuse,34.0,264.0,90.0,20.0,
-        owner.size,4.0) and Lifecycle.project(rest_reuse,34.0,
-        264.0,90.0,20.0,owner.size,4.0),
-        "retired retained ink is reusable without recompilation")
-    check(owner.source_draws == initial_source_draws+1 and
-        owner.rest_draws == initial_rest_draws+1,
-        "moving/reusing segments cannot repaint source or rest")
-    Lifecycle.release_all(owner,reused)
-    check(reused.is_empty() and note.get_parent()==owner and
+        "rest expires using the same world-axis retirement boundary")
+    var repeated: Array = specs(2,40.0,"retry")
+    check(Lifecycle.admit(owner,passes,repeated,
+        source_pool,rest_pool,note) and passes.size()==2,
+        "Retry admits a different owner and a single paired rest")
+    check(passes[0]["segment"] == note and passes[1]["segment"] == rest,
+        "retired source and rest buffers are reused, not re-created")
+    check(Lifecycle.activate(passes,2,"piece|1|2|practice",false),
+        "retry owner binds exactly one backend transport identity")
+    check(Lifecycle.project(passes[0],34.0,264.0,90.0,20.0,
+        owner.size,4.0) and Lifecycle.project(passes[1],
+        34.0,264.0,90.0,20.0,owner.size,4.0),
+        "reused ink scrolls normally")
+    check(owner.source_draws == draws_source+1 and
+        owner.rest_draws == draws_rest+1,
+        "reusing printed ink cannot re-engrave source or rest")
+    check(not Lifecycle.admit(owner,passes,repeated,
+        source_pool,rest_pool,note) and passes.size()==2,
+        "Retry may not install the same passage twice")
+    var third: Array = specs(3,55.0,"prepared",true)
+    check(Lifecycle.admit(owner,passes,third,
+        source_pool,rest_pool,note) and passes.size()==4,
+        "another unique future owner uses the same general path")
+    check(not Lifecycle.activate(passes,3,"piece|1|2|practice",false),
+        "two retained owners can never claim the same transport identity")
+    check(Lifecycle.activate(passes,3,"piece|1|3|practice",false),
+        "new owner may bind its own transport ID")
+    Lifecycle.release_all(owner,passes)
+    check(passes.is_empty() and note.get_parent()==owner and
         rest.get_parent()==owner and not note.visible and not rest.visible,
-        "reload releases all source and rest windows and retains cached ink")
+        "score reload releases every source and rest through one path")
     owner.queue_free()
     print("STREAM_LIFECYCLE_FAILURES:",failures)
     quit(0 if failures==0 else 1)
