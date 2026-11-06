@@ -10,19 +10,36 @@ const OFFSCREEN_MARGIN_BEATS := 0.65
 const READY_TRAVEL_BEATS := 2.0
 const REST_GAP_BEATS := 1.0
 
-static func _occupied_end(passes: Array, world: float) -> float:
+static func clip_bounds(item: Dictionary, density: float,
+        gap: float, score_duration: float) -> Vector2:
+    # The EXACT printed ink extent is shared by placement, projection and
+    # retirement. Source and rest differ only in geometry data, not policy.
+    if str(item.get("kind","source")) == "rest":
+        return Vector2(0.0,float(item["source_ceiling"])*density)
+    return engraved_clip_bounds(
+        float(item["source_floor"]),float(item["source_ceiling"]),
+        density,gap,score_duration)
+
+
+static func _occupied_end(passes: Array, world: float,
+        density: float, gap: float, score_duration: float) -> float:
     var last := -INF
     for item in passes:
-        var finish: float = float(item["world_origin"]) + float(item["source_ceiling"])
+        var bounds: Vector2 = clip_bounds(
+            item,density,gap,score_duration)
+        var finish: float = float(item["world_origin"]) + bounds.y/density
         if finish > world:
             last = maxf(last,finish)
     return last
 
+
 static func _future_start(passes: Array, world: float,
-        right_beats: float, header_beats: float) -> float:
+        right_beats: float, header_beats: float,
+        density: float, gap: float, score_duration: float) -> float:
     var start: float = world + maxf(MIN_READING_BEATS,
         right_beats + header_beats + OFFSCREEN_MARGIN_BEATS)
-    var occupied: float = _occupied_end(passes,world)
+    var occupied: float = _occupied_end(
+        passes,world,density,gap,score_duration)
     if is_finite(occupied):
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
     return start
@@ -81,7 +98,9 @@ static func select(passes: Array, purpose: String, opening: float,
 
 static func position(passes: Array, world: float, right_beats: float,
         header_beats: float, intended: float = NAN,
-        excluded_owner: int = -1, travel_beats: float = 0.0) -> float:
+        excluded_owner: int = -1, travel_beats: float = 0.0,
+        density: float = 96.0, gap: float = 24.0,
+        score_duration: float = INF) -> float:
     # One common admission boundary for READY, Retry, automatic repeats and
     # exact preloaded stages. Exclusions apply to both source and its rest.
     var remaining: Array = []
@@ -91,7 +110,8 @@ static func position(passes: Array, world: float, right_beats: float,
             continue
         remaining.append(item)
     var minimum: float = _future_start(
-        remaining,world,right_beats,header_beats)+travel_beats
+        remaining,world,right_beats,header_beats,
+        maxf(1.0,density),gap,score_duration)+travel_beats
     if is_finite(intended):
         return intended if intended >= minimum-.0001 else NAN
     return minimum
