@@ -1053,9 +1053,11 @@ func _send_action(command: Dictionary) -> void:
         if requested == "resume":
             command["reuse_pending_score"] = bool(
                 reserved.get("reused_unplayed_count_in",false))
-        command["continuous_horizon_beats"] = maxf(4.0,
-            renderer._stream_right_beats()+
-            renderer._stream_header_beats(0.0)+1.5)
+        var written_rest: float = float(renderer.practice_timeline.get(
+            "gap",{}).get("duration_beats",0.0))
+        command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(
+            written_rest,renderer._stream_right_beats(),
+            renderer._stream_header_beats(0.0))
     _send_command("practice.command", command)
 
 
