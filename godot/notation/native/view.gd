@@ -712,6 +712,39 @@ func _reject_stream_candidate(owner_serial: int, before_serial: int,
     _stream_live_serial = old_live_serial
 
 
+func _transport_admission_receipt(planned: Dictionary,
+        reserved: Dictionary, world: float, opening: float) -> Dictionary:
+    if reserved.is_empty():
+        return {}
+    # A bounded, externally inspectable receipt for every accepted user
+    # transport. This is the SAME deadline later sent to the backend.
+    var entry_seconds: float = maxf(0.0,
+        (float(reserved["start_world"])-opening+
+            StreamAdmission.clip_bounds({
+                "kind":"source","source_floor":opening,
+                "source_ceiling":timeline.duration_beats,
+                "clip_floor":opening,
+                "clip_ceiling":timeline.duration_beats,
+                "clip_leading_spaces":15.0 if opening <= .0001 else 1.6
+            },timeline.pixels_per_beat,staff_gap(),
+                timeline.duration_beats).x/
+                    maxf(1.0,timeline.pixels_per_beat) -
+            stream_world_beat-_stream_right_beats()) *
+            60.0/maxf(1.0,bpm))
+    var receipt: Dictionary = {"action":str(planned["action"]),
+        "mode":str(planned["mode"]),
+        "start_world":float(reserved["start_world"]),
+        "source_opening":opening,"at_world":world,
+        "lead_seconds":StreamAdmission.lead_seconds(
+            float(reserved["start_world"]),world,bpm),
+        "first_ink_delay_seconds":entry_seconds,
+        "online_strips":_stream_queue.online.size()}
+    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+        print("SCORE_TRANSPORT_RECEIPT:",JSON.stringify(receipt))
+    reserved["admission_receipt"] = receipt
+    return reserved
+
+
 func reserve_transport_action(action: String, world: float,
         opening: float) -> Dictionary:
     # The ONLY user-command route. First compute both the future slot and
@@ -733,7 +766,7 @@ func reserve_transport_action(action: String, world: float,
             world,opening,NAN,action == "resume",false)
         if existing.is_empty():
             push_error("SCORE_TRANSPORT_COMMIT: preflight reusable owner vanished")
-        return existing
+        return _transport_admission_receipt(planned,existing,world,opening)
     # The preflight and actual withdrawal share Queue.preview_tail_withdrawal
     # and the SAME world coordinate. Do not recalculate a different
     # placement after removing the unseen suffix.
@@ -751,7 +784,7 @@ func reserve_transport_action(action: String, world: float,
         push_error("SCORE_TRANSPORT_COMMIT: grading and score deadlines diverged")
         cancel_stream_arm()
         return {}
-    return admitted
+    return _transport_admission_receipt(planned,admitted,world,opening)
 
 
 func arm_stream_take(world: float, opening: float,
