@@ -227,6 +227,7 @@ func materialize(entry: Dictionary, requested: Array) -> Array:
         var spec: Dictionary = stored[i].duplicate(true)
         var replacement: Dictionary = requested[i]
         spec["owner_serial"] = int(replacement["owner_serial"])
+        spec["take_owner"] = int(replacement.get("take_owner",replacement["owner_serial"]))
         spec["world_origin"] = float(stored[i]["world_origin"])+delta
         spec["take_key"] = str(replacement.get("take_key","prepared"))
         spec["pending"] = bool(replacement.get("pending",false))
