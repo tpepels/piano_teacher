@@ -1,74 +1,38 @@
 extends Control
-## Beat-locked visual preparation and optional Japanese voice. The backend
-## owns the beat; this control never starts a timer or moves the score.
-const VOICE_NAMES := ["ichi", "ni", "san", "shi"]
-const SPOKEN_SETTINGS := "user://countin_voice.cfg"
-
+## Score-overlay visuals only. No audio player, external IO, or independent
+## clock is allowed here. A persistent root-owned voice service handles sound.
 var count := 4
 var current := -1
 var beats_left := 0
 var beat_fraction := 0.0
-var spoken_enabled := true
-var _voice_player: AudioStreamPlayer
-var _voice_streams: Array[AudioStream] = []
+var _voice_service: Node
+
+var spoken_enabled: bool:
+    get:
+        if _voice_service != null:
+            return bool(_voice_service.get("spoken_enabled"))
+        return true
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     focus_mode = Control.FOCUS_NONE
-    var saved := ConfigFile.new()
-    if saved.load(SPOKEN_SETTINGS) == OK:
-        spoken_enabled = bool(saved.get_value("audio", "spoken", true))
 
-func _ready() -> void:
-    _voice_player = AudioStreamPlayer.new()
-    _voice_player.volume_db = -3.0
-    add_child(_voice_player)
-    # The optional downloader may still be running when Godot starts.
-    # Runtime Ogg loading avoids relying on the editor's import cache.
-    for i in range(VOICE_NAMES.size()):
-        _voice_streams.append(null)
-        _load_voice_sample(i)
-
-func _load_voice_sample(index: int) -> void:
-    if index < 0 or index >= VOICE_NAMES.size() or             _voice_streams[index] != null:
-        return
-    var path: String = "res://assets/countin/%s.ogg" % VOICE_NAMES[index]
-    # ResourceLoader resolves Godot's imported asset in exported builds.
-    # Direct Ogg loading also works in a fresh checkout before import.
-    if ResourceLoader.exists(path):
-        var resource: Resource = ResourceLoader.load(path)
-        if resource is AudioStream:
-            _voice_streams[index] = resource
-    if _voice_streams[index] == null and FileAccess.file_exists(path):
-        _voice_streams[index] = AudioStreamOggVorbis.load_from_file(path)
-    if _voice_streams[index] == null:
-        push_warning("Missing bundled spoken count-in recording: " + path)
+func attach_voice_service(service: Node) -> void:
+    assert(service != null and service.has_method("speak_beat") and
+        service.has_method("set_spoken_enabled"))
+    _voice_service = service
 
 func set_spoken_enabled(enabled: bool) -> void:
-    spoken_enabled = enabled
-    if not enabled and _voice_player != null:
-        _voice_player.stop()
-    var config := ConfigFile.new()
-    config.set_value("audio", "spoken", enabled)
-    var status: Error = config.save(SPOKEN_SETTINGS)
-    if status != OK:
-        push_warning("Could not save spoken count-in preference: %s" % status)
+    if _voice_service != null:
+        _voice_service.set_spoken_enabled(enabled)
+
+func voice_status() -> Dictionary:
+    return _voice_service.status() if _voice_service != null else {
+        "enabled":spoken_enabled,"available":false,
+        "missing":["audio_service_not_attached"]}
 
 func speak_beat(number: int) -> bool:
-    # Return false when there is no local voice; the caller then plays the
-    # existing metronome tick. This is never allowed to delay the transport.
-    if not spoken_enabled or _voice_player == null or             number < 1 or number > _voice_streams.size():
-        return false
-    _load_voice_sample(number-1)
-    var sound: AudioStream = _voice_streams[number-1]
-    if sound == null:
-        return false
-    _voice_player.stop()
-    _voice_player.stream = sound
-    # The public-domain recordings have ~0.25 s of leading silence.
-    # Starting at the first phoneme keeps the spoken attack on the beat.
-    _voice_player.play(minf(.21,maxf(0.0,sound.get_length()-.1)))
-    return true
+    return bool(_voice_service.speak_beat(number)) if _voice_service != null else false
 
 func present(beat: float, beats_per_bar: int, running: bool, paused: bool) -> void:
     var show: bool = running and not paused and is_finite(beat) and beat < 0.0
