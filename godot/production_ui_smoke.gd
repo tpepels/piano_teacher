@@ -25,6 +25,7 @@ var ready_pass_serial := -1
 var ready_take_owner := -1
 var ready_world_origin := NAN
 var ready_world_beat := NAN
+var ready_first_expiry_world := NAN
 var resumed_sample_ms := -1
 var resumed_world_beat := NAN
 var resumed_pass_serial := -1
@@ -162,6 +163,11 @@ func _process(_delta: float) -> bool:
             ready_world_origin = float(prepared["world_origin"])
             ready_pass_serial = int(prepared["serial"])
             ready_take_owner = int(prepared.get("take_owner",prepared["serial"]))
+            var first_bounds: Vector2 = renderer._stream_queue.Admission.clip_bounds(
+                prepared,density,renderer.staff_gap(),renderer.timeline.duration_beats)
+            ready_first_expiry_world = ready_world_origin + \
+                first_bounds.y/density + \
+                renderer.size.x*ScoreView.PLAYHEAD_FRACTION/density
             return false
         if Time.get_ticks_msec()-ready_visible_since_ms < 250:
             return false
@@ -290,25 +296,91 @@ func _process(_delta: float) -> bool:
     if beat_advance <= .04:
         _fail("Resume froze or reset the continuously moving staff")
         return true
-    var reused_original := false
-    var future_only := true
-    var new_copy := false
+    # After Resume, the staff must CONTINUE moving. A source inserted
+    # outside the right edge may legitimately cross INTO the viewport in the
+    # next 450 ms. Checking its current x coordinate would reject correct
+    # scrolling. Verify the immutable admission location instead.
+    var original_present := false
+    var original_unchanged := true
+    var copies := 0
+    var future_only_at_enqueue := true
+    var has_transport_binding := false
+    var active_key: String = "%s|%d|%d|%s" % [
+        str(app.last_state.get("piece_fingerprint","")),
+        int(app.last_state.get("revision",-1)),
+        initial_transport,str(app.last_state.get("mode","practice"))]
+    var diagnostics: Array = []
     for item in renderer.stream_passes:
-        if int(item["serial"]) == ready_pass_serial and \
-                is_equal_approx(float(item["world_origin"]),ready_world_origin):
-            reused_original = float(item["world_origin"]) + \
-                float(item["source_floor"]) > renderer.stream_world_beat + 2.0
-        if int(item["serial"]) > paused_pass_serial and \
-                str(item.get("kind","source")) == "source":
-            new_copy = true
-            var ink_start: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
-                (float(item["world_origin"])+float(item["source_floor"])-
-                renderer.stream_world_beat)*renderer.timeline.pixels_per_beat - \
-                renderer._stream_header_beats(float(item["source_floor"]))* \
-                renderer.timeline.pixels_per_beat
-            future_only = future_only and ink_start > renderer.size.x
-    if not (reused_original or new_copy and future_only):
-        _fail("Resume moved the unplayed passage or inserted a copy onscreen")
+        if str(item.get("kind","source")) != "source":
+            continue
+        var serial: int = int(item["serial"])
+        var take_owner: int = int(item.get("take_owner",serial))
+        if take_owner == ready_take_owner:
+            original_present = true
+            original_unchanged = original_unchanged and \
+                is_equal_approx(float(item["world_origin"]),ready_world_origin)
+        if str(item.get("take_key","")) == active_key and \
+                not bool(item.get("pending",false)):
+            has_transport_binding = true
+        if serial > paused_pass_serial:
+            copies += 1
+            var density_at_enqueue: float = float(item.get(
+                "admitted_density",NAN))
+            var gap_at_enqueue: float = float(item.get(
+                "admitted_staff_gap",NAN))
+            var world_at_enqueue: float = float(item.get(
+                "admitted_world",NAN))
+            var playhead_at_enqueue: float = float(item.get(
+                "admitted_playhead_x",NAN))
+            var viewport_at_enqueue: float = float(item.get(
+                "admitted_viewport_width",NAN))
+            var admitted_outside: bool = false
+            if is_finite(density_at_enqueue) and \
+                    is_finite(gap_at_enqueue) and \
+                    is_finite(world_at_enqueue) and \
+                    is_finite(playhead_at_enqueue) and \
+                    is_finite(viewport_at_enqueue) and density_at_enqueue > 0:
+                var bounds: Vector2 = renderer._stream_queue.Admission.clip_bounds(
+                    item,density_at_enqueue,gap_at_enqueue,
+                    renderer.timeline.duration_beats)
+                var earliest_x: float = playhead_at_enqueue + \
+                    (float(item["world_origin"])-world_at_enqueue)*density_at_enqueue + \
+                    bounds.x
+                admitted_outside = earliest_x > viewport_at_enqueue
+            future_only_at_enqueue = future_only_at_enqueue and admitted_outside
+        diagnostics.append({
+            "serial":serial,"take_owner":take_owner,
+            "kind":str(item.get("kind","")),
+            "key":str(item.get("take_key","")),
+            "origin":float(item.get("world_origin",NAN)),
+            "floor":float(item.get("source_floor",NAN)),
+            "admitted_world":float(item.get("admitted_world",NAN)),
+            "pending":bool(item.get("pending",false)),
+            "visible":bool(item.get("ever_visible",false))})
+    # The head may disappear only after its last printed pixel has left
+    # the viewport. An exposed remainder of the same logical take keeps
+    # the original musical placement; no new take can silently replace it.
+    var original_legitimately_retired: bool = \
+        not original_present and \
+        renderer.stream_world_beat >= ready_first_expiry_world-.00001
+    if not original_unchanged or \
+            not (original_present or original_legitimately_retired) or \
+            not future_only_at_enqueue or not has_transport_binding:
+        printerr("PHASE6_RESUME_STREAM_DIAGNOSTIC:",JSON.stringify({
+            "world":renderer.stream_world_beat,
+            "original_origin":ready_world_origin,
+            "original_take_owner":ready_take_owner,
+            "first_strip_expiry":ready_first_expiry_world,
+            "original_present":original_present,
+            "original_unchanged":original_unchanged,
+            "original_retired_safely":original_legitimately_retired,
+            "future_only_at_enqueue":future_only_at_enqueue,
+            "new_source_strips":copies,
+            "has_transport_binding":has_transport_binding,
+            "expected_transport":active_key,
+            "passes":diagnostics}))
+        _fail("Resume changed committed notation, lost a live take, " +
+            "or admitted new notes within the viewport")
         return true
     if not is_equal_approx(renderer.timeline.pixels_per_beat,
             renderer.configured_density) and renderer.timeline.pixels_per_beat < 1.0:
@@ -320,6 +392,7 @@ func _process(_delta: float) -> bool:
     print("PHASE6_PRODUCTION_CONTINUOUS_FLOW_OK beat_delta=",beat_advance,
         " admitted_before=",paused_pass_serial,
         " admitted_after=",renderer._stream_serial,
+        " new_source_strips=",copies,
         " selected_bpm=",app.last_state.get("bpm"))
     print("PHASE6_PRODUCTION_UI_WORKFLOW_OK")
     quit(0)
