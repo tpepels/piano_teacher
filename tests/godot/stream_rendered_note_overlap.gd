@@ -226,6 +226,55 @@ func _initialize() -> void:
         collision._stream_live_serial == -1,
         "failed owner uniqueness must remove newly inserted future ink")
     collision.free()
+    # The backend's absolute retry deadline chooses the new future owner.
+    # An already-prepared successor for beat zero is not reused for a
+    # recovery at beat two, and no earlier online ink is repositioned.
+    var recovery := InstrumentedView.new()
+    recovery.size = Vector2(800,440)
+    recovery.native_ready = true
+    recovery.timeline.duration_beats = 8.0
+    recovery.timeline.measures = [
+        {"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    recovery.timeline.pixels_per_beat = 96.0
+    recovery.present_flow(0.0,{
+        "running":false,"paused":false,"phase":"ready",
+        "mode":"practice","piece_fingerprint":"recovery",
+        "revision":1,"transport_id":0,"play_from_beat":0.0},0.0)
+    var first_origin: float = float(recovery.stream_passes[0]["world_origin"])
+    var first_owner: int = int(recovery.stream_passes[0]["serial"])
+    check(not recovery.arm_stream_take(0.0,0.0).is_empty() and
+        recovery.acknowledge_stream_arm(),
+        "recovery fixture has one acknowledged immutable first passage")
+    recovery._stream_add_take(0.0,40.0,0.0,"autopending")
+    var old_future: int = recovery._stream_serial
+    check(recovery.enqueue_recovery_queue(4.0,2.0,65.0),
+        "recovery engine can replace unexposed future ink at its deadline")
+    var new_future: int = recovery._stream_serial
+    var score_recovery: Dictionary = {}
+    for item in recovery.stream_passes:
+        if int(item.get("serial",-1)) == new_future:
+            score_recovery = item
+    check(new_future>old_future and not score_recovery.is_empty() and
+        is_equal_approx(
+            float(score_recovery["world_origin"])+
+            float(score_recovery["source_floor"]),65.0) and
+        is_equal_approx(float(score_recovery["source_floor"]),2.0),
+        "new retry begins at exact graded downbeat and correct source opening")
+    check(is_equal_approx(
+        float(recovery.stream_passes[0]["world_origin"]),first_origin) and
+        int(recovery.stream_passes[0]["serial"])==first_owner,
+        "failure cannot move or replace the already acknowledged prefix")
+    var preserved := false
+    for event in recovery.offline_stream_queue:
+        if int(event.get("owner_serial",-1)) == old_future and \
+                str(event.get("event",""))=="withdrawn":
+            preserved = true
+    check(preserved,"withdrawn future score stays in the offline queue")
+    check(recovery.enqueue_recovery_queue(4.0,2.0,65.0) and
+        recovery._stream_serial==new_future,
+        "repeated recovery snapshots cannot duplicate a scheduled passage")
+    recovery.free()
     # READY remains empty indefinitely: the first offscreen retained
     # source is recycled, rather than accumulating ghost notes after idle.
     var idle := InstrumentedView.new()
