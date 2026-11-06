@@ -565,15 +565,6 @@ func _stream_header_beats(opening: float) -> float:
         maxf(1.0,timeline.pixels_per_beat)
 
 
-func _stream_complete_measure(requested: float) -> float:
-    var extent: float = minf(timeline.duration_beats,requested)
-    for measure in timeline.measures:
-        var ending: float = float(measure.get("end_beat",0.0))
-        if ending >= extent-.0001:
-            return minf(timeline.duration_beats,ending)
-    return timeline.duration_beats
-
-
 func _stream_reserve_ready(world: float, opening: float) -> int:
     if not native_ready or not retained_ready() or \
             opening >= timeline.duration_beats:
