@@ -105,7 +105,22 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert 'variant == "recovery"' not in source
     assert 'frame.score_loop_enabled' not in source
     lifecycle = (ROOT/"godot/notation/native/stream_lifecycle.gd").read_text()
-    assert "StreamLifecycle.admit(self,stream_passes,specs" in view
+    queue = (ROOT/"godot/score_stream_queue.gd").read_text()
+    assert "_stream_queue.enqueue(self,specs" in view
+    assert "StreamQueue.new()" in view
+    assert "_stream_queue.expire_front(" in view
+    assert "_stream_queue.withdraw_tail(" in view
+    assert "offline_stream_queue: Array:" in view
+    assert "var online: Array = []" in queue
+    assert "var offline: Array = []" in queue
+    assert "Lifecycle._admit(owner,online,specs" in queue
+    assert "online.pop_front()" in queue
+    assert "online.pop_back()" in queue
+    assert "func expire_front(" in queue
+    assert "func withdraw_tail(" in queue
+    assert "ever_visible" in queue
+    assert "func _stream_extend_offscreen(" not in view
+    assert "func _stream_complete_measure(" not in view
     assert "StreamAdmission.automatic_horizon(" in view
     assert 'state.get("preview_only",false)' in view
     app = (ROOT/"godot/main.gd").read_text()
@@ -117,17 +132,21 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "last_published_control_started_ms" in app
     assert "state_request_started_ms <= last_published_control_started_ms" in app
     assert "_pending_stream_renderer.acknowledge_stream_arm()" in app
-    assert "StreamLifecycle.reposition(" in view
     assert "StreamLifecycle.activate(" in view
-    assert "StreamLifecycle.widen_source(" in view
+    assert "StreamLifecycle.reposition(" not in view
+    assert "StreamLifecycle.widen_source(" not in view
     assert "StreamAdmission.position(" in view
     assert "StreamAdmission.select(" in view
     assert "func _stream_add_rest(" not in view
     assert "StreamLifecycle.create(" not in view
     assert "func _stream_claim_pending_auto(" in view
-    assert "static func admit(" in lifecycle
+    assert "static func _admit(" in lifecycle
     assert "static func activate(" in lifecycle
-    assert "static func reposition(" in lifecycle
+    assert "static func reposition(" not in lifecycle
+    assert "static func widen_source(" not in lifecycle
+    assert "static func prune(" not in lifecycle
+    assert "static func release_all(" not in lifecycle
+    assert "static func discard_owner(" not in lifecycle
     assert "static func screen_bounds(" in lifecycle
     admission = (ROOT/"godot/score_stream_admission.gd").read_text()
     assert "static func select(" in admission
@@ -141,8 +160,9 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert 'item["world_origin"] =' not in view
     assert 'existing["world_origin"] =' not in view
     assert 'item["source_floor"] =' not in view
-    assert "StreamLifecycle.prune(self,stream_passes" in view
-    assert "StreamLifecycle.release_all(self,stream_passes)" in view
+    assert "StreamLifecycle.prune(self,stream_passes" not in view
+    assert "StreamLifecycle.release_all(self,stream_passes)" not in view
+    assert "_stream_queue.reset(self)" in view
     assert "StreamLifecycle.attach_compiled(stream_passes)" in view
     assert "StreamLifecycle.project(item,stream_world_beat" in view
     assert "StreamLifecycle.present_pool(retained_all_segments" in view
@@ -180,7 +200,7 @@ def test_production_journey_does_not_depend_on_removed_camera_switch():
     assert "stream_world_beat" in scenario
 
 
-def test_production_ready_smoke_accepts_hidden_future_reservation_retiming():
+def test_production_ready_smoke_accepts_hidden_offscreen_queue_replacement():
     script = (ROOT/"godot/production_ui_smoke.gd").read_text()
     assert "pending_count != 1" in script
     assert "ready_world_origin = float(prepared[\"world_origin\"])" in script
