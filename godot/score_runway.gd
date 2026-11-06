@@ -354,6 +354,10 @@ func promote_if_ready(state: Dictionary) -> bool:
         _visual_beat,0.0,intended_world)
     if armed.is_empty():
         return false
+    # The future stage has already been explicitly acknowledged by the
+    # backend (score.stage_ready), before its graded state appeared.
+    # No second HTTP/control request exists for this promotion.
+    new_renderer.acknowledge_stream_arm()
     _future = null
     new_renderer.modulate.a = 1.0
     new_renderer.runway_overlay = false
