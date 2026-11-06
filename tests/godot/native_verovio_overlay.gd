@@ -115,8 +115,11 @@ func _audit() -> void:
         push_error("Canonical source did not pre-engrave for framebuffer audit")
         quit(1)
         return
-    renderer._stream_add_take(0.0,0.0,0.0,
-        renderer.timeline.duration_beats,"framebuffer-audit")
+    # Set up the framebuffer reference as though its fixed-axis passage
+    # had been queued while still entirely offscreen. The production queue
+    # must never accept direct placement into the currently visible region.
+    renderer.stream_world_beat = -maxf(100.0,renderer.timeline.duration_beats+30.0)
+    renderer._stream_add_take(0.0,0.0,0.0,"framebuffer-audit")
     var result := {
         "capture_config": config.duplicate(true),
         "density": renderer.timeline.pixels_per_beat,
