@@ -13,6 +13,7 @@ var begun_ms := 0
 var requested := false
 var ready_seen := false
 var transport_seen := false
+var countin_audio_first_ms := -1
 var start_requested := false
 var pause_requested := false
 var pause_seen := false
@@ -102,6 +103,13 @@ func _process(_delta: float) -> bool:
             return true
         if chrome.stage.fingering_status_label.get_parent() != chrome.details_panel:
             _fail("Fingering diagnostics still occupy the notation stage")
+            return true
+        var voice = app.get_node_or_null("CountInVoicePlayer")
+        if voice == null or not voice.available():
+            _fail("Production scene does not own four playable offline voice recordings")
+            return true
+        if not chrome.stage.count_in.voice_status().get("available",false):
+            _fail("Visual countdown has not bound the persistent audio service")
             return true
         var renderer = chrome.stage.renderer
         var notes: int = renderer.timeline.notes.size()
@@ -202,6 +210,19 @@ func _process(_delta: float) -> bool:
             return false
         if not str(app.last_state.get("phase","")) in ["count_in","playing"]:
             return false
+        # This is the actual embedded Python transport, not a mocked
+        # countdown: the same negative musical beat must reach the root
+        # audio player before we accept the Play transition.
+        var voice = app.get_node_or_null("CountInVoicePlayer")
+        if str(app.last_state.get("phase","")) == "count_in" and \
+                app._transport_beat_now() < -0.01:
+            if int(voice.spoken_cues_total) <= 0:
+                if countin_audio_first_ms < 0:
+                    countin_audio_first_ms = Time.get_ticks_msec()
+                if Time.get_ticks_msec()-countin_audio_first_ms < 900:
+                    return false
+                _fail("Production countdown displayed without a spoken audio cue")
+                return true
         initial_transport = int(app.last_state.get("transport_id",-1))
         var original_survived := false
         var new_ink_offscreen := true
