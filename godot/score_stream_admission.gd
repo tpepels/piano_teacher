@@ -20,8 +20,11 @@ static func clip_bounds(item: Dictionary, density: float,
     # passage. Exactly adjoining clip cuts share one printed world axis,
     # so even a beam crossing a boundary is neither duplicated nor lost.
     if item.has("clip_floor") and item.has("clip_ceiling"):
-        return Vector2(float(item["clip_floor"])*density,
-            float(item["clip_ceiling"])*density)
+        return Vector2(
+            float(item["clip_floor"])*density -
+                float(item.get("clip_leading_spaces",0.0))*gap,
+            float(item["clip_ceiling"])*density +
+                float(item.get("clip_trailing_spaces",0.0))*gap)
     return engraved_clip_bounds(
         float(item["source_floor"]),float(item["source_ceiling"]),
         density,gap,score_duration)
