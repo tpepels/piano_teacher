@@ -1,17 +1,28 @@
 extends RefCounted
-## One online FIFO of immutable retained passages, and one offline FIFO of
-## immutable source plans. Only the head of online may expire. Only the
-## unexposed, unacknowledged suffix may be withdrawn. The offline ledger
-## preserves every plan ever queued or withdrawn, including its exact
-## authored source/rest geometry and the reason for withdrawal.
-##
-## The CanvasItem pool is an implementation detail of StreamLifecycle.
-## Ownership of queue order lives exclusively here.
+## Sole online FIFO owner. The separate offline FIFO holds withdrawn musical
+## source plans, and its append-only checked journal survives score reopening.
+## Committed positions are write-once; removal is allowed at the HEAD for
+## expired ink, or the maximal safe unexposed speculative TAIL.
 const Admission := preload("res://score_stream_admission.gd")
 const Lifecycle := preload("res://notation/native/stream_lifecycle.gd")
+const Archive := preload("res://score_stream_archive.gd")
 
 var online: Array = []
-var offline: Array = []
+var _archive = Archive.new()
+var offline: Array:
+    get:
+        return _archive.pending
+var history: Array:
+    get:
+        return _archive.history
+var last_error: String:
+    get:
+        return _archive.last_error
+
+func bind_score(score_key: String, directory: String = Archive.DEFAULT_DIR) -> bool:
+    if not online.is_empty():
+        return false
+    return _archive.bind_score(score_key,directory)
 
 static func owner_id(item: Dictionary) -> int:
     return int(item.get("owner_serial",abs(int(item.get("serial",0)))))
@@ -25,6 +36,8 @@ static func _record(item: Dictionary) -> Dictionary:
         "world_origin":float(item["world_origin"]),
         "source_floor":float(item["source_floor"]),
         "source_ceiling":float(item["source_ceiling"]),
+        "piece_duration":float(item.get("piece_duration",
+            item.get("source_ceiling",0.0))),
         "take_key":str(item.get("take_key","")),
         "slot_id":str(item.get("slot_id","")),
     }
@@ -51,14 +64,32 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
             end_beat = maxf(end_beat,float(item["world_origin"])+bounds.y/density)
         if opening_left < end_beat-.00001:
             return false
-    if not Lifecycle._admit(owner,online,specs,
+    var prepared: Array = specs
+    var matching: Dictionary = _archive.compatible(specs)
+    if not matching.is_empty():
+        # Materialize exact archived source content only after the admission
+        # boundary has already approved the new world-time location.
+        prepared = _archive.materialize(matching,specs)
+        if prepared.is_empty():
+            return false
+    var before: int = online.size()
+    if not Lifecycle._admit(owner,online,prepared,
             source_pool,rest_pool,first_source):
         return false
-    var frozen: Array = []
-    for item in specs:
-        frozen.append(_record(item))
-    offline.append({"owner_serial":owner_id(online[-1]),
-        "plan":frozen,"event":"enqueued"})
+    var plan: Array = []
+    for item in prepared:
+        plan.append(_record(item))
+    for index in range(prepared.size()):
+        online[before+index]["piece_duration"] = float(
+            prepared[index].get("piece_duration",source_duration))
+    var id: int = int(matching.get("id",0))
+    if not _archive.record("enqueued",int(prepared[0]["owner_serial"]),
+            plan,"offline_reuse" if id > 0 else "new",id):
+        # An unjournaled passage must not become live or consume its
+        # preceding offline copy. Roll back its entire newly created suffix.
+        while online.size() > before:
+            Lifecycle.retire(owner,online.pop_back())
+        return false
     return true
 
 func _is_safe_tail(owner_serial: int, world: float, density: float,
@@ -102,13 +133,18 @@ func withdraw_tail(owner: Control, world: float, density: float,
                 viewport_width,playhead_x,force_unacknowledged):
             break
         var snapshot: Array = []
+        for i in range(online.size()-1,-1,-1):
+            if owner_id(online[i]) != last_owner:
+                break
+            snapshot.push_front(_record(online[i]))
+        # Journal BEFORE releasing graphics or removing an entry. The
+        # complete source/rest pair can then be recovered after a crash.
+        if not _archive.record("withdrawn",last_owner,snapshot,reason):
+            return withdrawn
         while not online.is_empty() and owner_id(online[-1]) == last_owner:
             var item: Dictionary = online.pop_back()
-            snapshot.push_front(_record(item))
             withdrawn.append(int(item.get("serial",0)))
             Lifecycle.retire(owner,item)
-        offline.append({"owner_serial":last_owner,
-            "plan":snapshot,"event":"withdrawn","reason":reason})
         # Explicit abort removes only its own last owner. It must never
         # silently delete another reserved passage behind that owner.
         if force_unacknowledged:
@@ -139,21 +175,33 @@ func expire_front(owner: Control, world: float, density: float,
         if not invalid and not Lifecycle.expired(
                 item,world,density,playhead_x,gap,duration):
             break
+        var last_of_owner: bool = (online.size() == 1 or
+            owner_id(online[1]) != owner_id(item))
+        if last_of_owner and not _archive.record("completed",
+                owner_id(item),[_record(item)],
+                "invalid" if invalid else "expired"):
+            break
         removed.append(int(item.get("serial",0)))
-        offline.append({"owner_serial":owner_id(item),
-            "plan":[_record(item)],"event":"expired" if not invalid else "invalid"})
         Lifecycle.retire(owner,item)
         online.pop_front()
     return removed
 
 func reset(owner: Control) -> void:
-    # Whole-score teardown is the only operation that may clear all online
-    # entries irrespective of visibility. Keep the offline history intact.
+    # Score teardown archives each complete owner BEFORE freeing its clips.
+    # The offline FIFO remains available when this source is reopened.
     while not online.is_empty():
-        var item: Dictionary = online.pop_front()
-        offline.append({"owner_serial":owner_id(item),
-            "plan":[_record(item)],"event":"score_reset"})
-        Lifecycle.retire(owner,item)
+        var first_owner: int = owner_id(online[0])
+        var specs: Array = []
+        for item in online:
+            if owner_id(item) != first_owner:
+                break
+            specs.append(_record(item))
+        if not _archive.record("score_reset",first_owner,specs,
+                "score_unload"):
+            push_error("Score plan preservation failed: "+last_error)
+            return
+        for i in range(specs.size()):
+            Lifecycle.retire(owner,online.pop_front())
 
 func exposed_owner(owner_serial: int) -> bool:
     for item in online:
