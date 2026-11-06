@@ -781,31 +781,36 @@ func present_flow(world_beat: float, state: Dictionary,
                         float(state.get("target_bpm",INF)) and \
                         int(state.get("lesson_step",0)) < \
                         int(state.get("lesson_steps",0))
-                    if (mode == "practice" and \
-                            bool(state.get("auto",false)) and \
+                    var repeat_enabled: bool = bool(state.get("auto",false)) or \
+                        bool(state.get("preview_only",false))
+                    if (mode == "practice" and repeat_enabled and \
                             not bool(item.get("successor_reserved",false)) and \
                             not final_mastery):
-                        # Prepared while the previous attempt is still
-                        # moving. The printed semantic rest and the extra
-                        # lead are included in the one world-time queue.
-                        var gap_info: Dictionary = practice_timeline.get("gap",{})
-                        var horizon: float = maxf(
-                            float(gap_info.get("duration_beats",4.0)),
-                            _stream_right_beats()+
-                            _stream_header_beats(0.0)+1.5)
+                        # Preview and graded automatic repeats use the exact
+                        # same future-only admission policy and semantic rest.
+                        # The backend receives this same horizon at Start;
+                        # silently shifting a visual copy would break grading.
+                        var gap: float = float(practice_timeline.get(
+                            "gap",{}).get("duration_beats",0.0))
+                        var horizon: float = StreamAdmission.automatic_horizon(
+                            gap,_stream_right_beats(),_stream_header_beats(0.0))
                         var intended: float = float(item["world_origin"]) + \
                             timeline.duration_beats+horizon
-                        var minimum: float = StreamAdmission.position(
+                        var checked: float = StreamAdmission.position(
                             stream_passes,stream_world_beat,
-                            _stream_right_beats(),_stream_header_beats(0.0))
-                        var next_world: float = maxf(intended,minimum)
-                        var live: int = _stream_live_serial
-                        var before: int = _stream_serial
-                        _stream_add_take(0.0,next_world,0.0,
-                            _stream_complete_measure(
-                                _stream_right_beats()+1.0),"autopending")
-                        item["successor_reserved"] = _stream_serial > before
-                        _stream_live_serial = live
+                            _stream_right_beats(),_stream_header_beats(0.0),
+                            intended)
+                        if not is_finite(checked):
+                            item["successor_reserved"] = true
+                            push_error("Automatic successor would overlap the existing moving score")
+                        else:
+                            var live: int = _stream_live_serial
+                            var before: int = _stream_serial
+                            _stream_add_take(0.0,checked,0.0,
+                                _stream_complete_measure(
+                                    _stream_right_beats()+1.0),"autopending")
+                            item["successor_reserved"] = _stream_serial > before
+                            _stream_live_serial = live
                     break
         # An unreserved start CANNOT create note ink in the current frame.
         # This fails closed rather than silently taking the old camera path.
