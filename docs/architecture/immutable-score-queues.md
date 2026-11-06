@@ -5,12 +5,16 @@ There is **one forward-only presentation clock**. The fixed playhead, note
 assessment, MIDI grading, rendered ink and lesson decisions share absolute
 musical deadlines but never seek the visual clock. Coda/Fukuda decides musical
 progression; the queue decides which already-engraved passage can be shown.
+The integrated Play/Pause/Resume/Retry and spoken-cue ownership contract is
+specified in [transport-and-countin](transport-and-voice-contract.md).
 
 ## Ownership and invariant boundaries
 
 | Layer | Allowed responsibilities | Forbidden operations |
 | --- | --- | --- |
 | `ContinuousScoreFlow` | Monotonic visual world time | Seeking backward to retry or pause |
+| `ScoreTransportReservation` | Pure validation and planning of the next user-command admission against a preview of retractable queue suffix | Changing live queue, score pixels or backend grading |
+| `NativeView.reserve_transport_action` | One preflighted commit for Play/Resume/Retry, verifying identical remaining queue and exact future world deadline | Independent preparation fallback or unplanned withdrawal |
 | `ScoreStreamAdmission` | Calculate the next completely offscreen start using actual printed ink bounds; identify a candidate without modifying it | Overlap, independent source/rest timing, excluding an existing owner to make space |
 | `ScoreStreamQueue` | Append a complete source/rest owner, retract maximal safe future suffix, expire from front, whole-score teardown | Inserting in the middle, changing committed world origins, out-of-order expiration, silently dropping content |
 | `ScoreStreamArchive` | Durable offline FIFO, append-only checked journal, musical source reuse at a newly assigned location | Replacing original source content, consuming a plan before successful enqueue, cross-score reuse |
@@ -28,8 +32,11 @@ Play, an expired reservation is withdrawn and replaced once with an equally
 offscreen slot, using the pre-engraved source. This avoids subsecond idle
 re-enqueue loops. Remaining musical lookahead and already committed older ink
 can still take longer.
-Voice sample acquisition is strictly non-blocking; optional network access
-must never delay Godot startup.
+All four original Japanese spoken Ogg clips are tracked repository
+assets. Runtime practice and startup perform **no network acquisition**.
+`CountInVoicePlayer` is owned by the application root and survives score and
+countdown UI changes; `CountInCueTimeline` deduplicates all voice/click
+preparation events against the same authoritative beat.
 
 The online queue is ordered by **physical world time**, not by when the
 backend returned a request. `enqueue()` rejects content that starts inside the
@@ -57,7 +64,11 @@ presentation order without transferring live CanvasItems between owners.
    source/rest entries. A later entry may be expired but remains queued until
    the older head has gone. A corrupt source and its paired rest are retired
    together when they reach the front, never from the interior.
-2. **Withdraw from the back.** `withdraw_tail()` works on complete **strip
+2. **Withdraw from the back.** `preview_tail_withdrawal()` and
+   `withdraw_tail()` use an identical predicate for exposure and protected
+   owners. A user command preflights its full replacement before any mutation;
+   the queued owner count and exact deadline are checked at commit.
+   `withdraw_tail()` works on complete **strip
    owners**, newest first. It stops at the first strip whose ink has entered
    the viewport, even when that strip belongs to the same logical attempt as
    later, still-invisible measures. Once any printed ink is visible,
@@ -137,6 +148,12 @@ layers and retire those layers chronologically, from the front.
 
 ## Verification gates
 
+- `tests/godot/transport_reservation_integration.gd`: native command
+  preflight without side effects, Play/Pause/Resume and future-only binding
+- `tests/godot/countin_cue_timeline.gd`: one audio cue per authored beat
+  across changed phase epochs and delayed snapshots
+- `tests/godot/countin_voice_assets.gd`: actual four Oggs, persistent root
+  audio service, playback and frame-coordinator-to-speaker scheduling
 - `tests/godot/stream_score_queue.gd`: real CanvasItems, offscreen placement,
   unique owner, safe tail withdrawal, head-only expiry, durable offline replay,
   source isolation, reload and score teardown
