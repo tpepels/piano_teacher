@@ -125,6 +125,20 @@ static func activate(passes: Array, owner_serial: int, key: String,
     return true
 
 
+static func widen_source(passes: Array, owner_serial: int,
+        floor: float, ceiling: float) -> bool:
+    # A claimed automatic copy can clip previous events, and a running
+    # copy can enlarge its future window. Both use the same role identity.
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != \
+                owner_serial or str(item.get("kind","source")) != "source":
+            continue
+        item["source_floor"] = maxf(float(item["source_floor"]),floor)
+        item["source_ceiling"] = maxf(float(item["source_ceiling"]),ceiling)
+        return true
+    return false
+
+
 static func screen_bounds(item: Dictionary, density: float,
         gap: float, score_duration: float) -> Vector2:
     # Identical rightmost-ink calculation governs presentation and expiry.
