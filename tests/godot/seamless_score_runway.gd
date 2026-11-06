@@ -23,6 +23,15 @@ class MockView:
         return true
     var timeline := {"pixels_per_beat": 100.0}
     var stream_passes: Array = []
+    var offline_stream_queue: Array = []
+    func trim_future_queue(_reason: String) -> Array[int]:
+        var removed: Array[int] = []
+        while not stream_passes.is_empty() and \
+                bool(stream_passes[-1].get("pending",false)):
+            var candidate: Dictionary = stream_passes.pop_back()
+            removed.append(int(candidate.get("serial",-1)))
+            offline_stream_queue.append(candidate.duplicate(true))
+        return removed
     var last_world := -INF
     var arm_calls := 0
     var ack_calls := 0
