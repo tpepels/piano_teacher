@@ -117,13 +117,24 @@ func withdraw_tail(owner: Control, world: float, density: float,
 func expire_front(owner: Control, world: float, density: float,
         gap: float, duration: float, playhead_x: float) -> Array[int]:
     var removed: Array[int] = []
+    var corrupt_owners: Dictionary = {}
+    for entry in online:
+        if str(entry.get("kind","source")) != "source":
+            continue
+        var source = entry.get("segment")
+        var source_clip = entry.get("clip")
+        if source == null or not is_instance_valid(source) or \
+                source_clip == null or not is_instance_valid(source_clip):
+            corrupt_owners[owner_id(entry)] = true
+    # Work exclusively from the head. A corrupt source marks its paired
+    # rest for removal, but neither may bypass a preceding visible entry.
     while not online.is_empty():
         var item: Dictionary = online[0]
         var segment = item.get("segment")
         var clip = item.get("clip")
-        var invalid: bool = segment == null or \
-            not is_instance_valid(segment) or clip == null or \
-            not is_instance_valid(clip)
+        var invalid: bool = corrupt_owners.has(owner_id(item)) or \
+            segment == null or not is_instance_valid(segment) or \
+            clip == null or not is_instance_valid(clip)
         if not invalid and not Lifecycle.expired(
                 item,world,density,playhead_x,gap,duration):
             break
