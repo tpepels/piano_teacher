@@ -260,6 +260,7 @@ def test_transport_and_voice_have_no_parallel_production_owners():
     assert "renderer.trim_resume_speculation(" not in main
     assert "renderer.trim_future_queue(" not in main
     assert "TransportReservation.plan(" in view
+    assert "func trim_resume_speculation(" not in view
     assert "preview_tail_withdrawal(" in queue
     assert "preview_tail_withdrawal(" in planner
     assert 'planned["protected_take"]' in view
