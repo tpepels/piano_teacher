@@ -57,6 +57,22 @@ static func prepare_recompile(owner: Control, passes: Array) -> void:
         _offstage(segment)
         segment.visible = true
 
+static func attach_compiled(passes: Array) -> void:
+    # Scene-tree changes belong to the frame coordinator, never _draw().
+    # Only completed retained buffers are allowed into their presentation
+    # clips; the next projection frame positions the clip before revealing.
+    for item in passes:
+        var segment = item.get("segment")
+        var clip = item.get("clip")
+        if segment == null or not is_instance_valid(segment) or \
+                clip == null or not is_instance_valid(clip) or \
+                not bool(segment.get("compiled")):
+            continue
+        if segment.get_parent() != clip:
+            segment.visible = false
+            segment.reparent(clip,false)
+            clip.visible = false
+
 static func project(item: Dictionary, world: float, playhead_x: float,
         density: float, staff_gap: float, viewport: Vector2,
         score_duration: float) -> bool:
@@ -84,10 +100,11 @@ static func project(item: Dictionary, world: float, playhead_x: float,
             density,staff_gap,score_duration))
     var position: float = playhead_x + \
         (float(item["world_origin"])-world)*density
-    # The parent clip is positioned BEFORE the compiled segment is exposed.
+    # Reparenting is forbidden during CanvasItem._draw(). The frame owner
+    # attached a fully compiled source earlier, or it remains hidden.
     if segment.get_parent() != clip:
-        segment.visible = false
-        segment.reparent(clip,false)
+        clip.visible = false
+        return false
     clip.position = Vector2(position+bounds.x,0.0)
     clip.size = Vector2(maxf(1.0,bounds.y-bounds.x),viewport.y)
     segment.position = Vector2(-bounds.x,0.0)
