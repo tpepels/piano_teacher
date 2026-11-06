@@ -110,21 +110,29 @@ static func reposition(passes: Array, owner_serial: int,
 
 static func activate(passes: Array, owner_serial: int, key: String,
         armed: bool) -> bool:
-    # One source may bind to each backend transport identity. The paired
-    # semantic rest gets published in the same atomic transition.
+    # Exactly one owner per source interval and transport identity. Resume
+    # after the first attack legitimately introduces a NEW future clip of a
+    # LATER interval while the previous clip (same transport ID) scrolls out.
+    # Reject same-key/same-opening duplicates but retain disjoint resumes.
     if owner_serial <= 0 or key.is_empty():
         return false
     var target: Dictionary = {}
     for item in passes:
-        if str(item.get("kind","source")) != "source":
-            continue
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
+        if str(item.get("kind","source")) == "source" and \
+                int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
             target = item
-        elif str(item.get("take_key","")) == key and \
-                not bool(item.get("pending",false)):
-            return false
+            break
     if target.is_empty():
         return false
+    var target_floor: float = float(target.get("source_floor",-INF))
+    for item in passes:
+        if str(item.get("kind","source")) != "source" or \
+                int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
+            continue
+        if str(item.get("take_key","")) == key and \
+                not bool(item.get("pending",false)) and \
+                absf(float(item.get("source_floor",-INF))-target_floor) < .00001:
+            return false
     for item in passes:
         if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
             continue
