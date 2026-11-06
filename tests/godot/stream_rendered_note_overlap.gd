@@ -201,6 +201,29 @@ func _initialize() -> void:
         int(quick.stream_passes[0]["serial"])==1,
         "failed rapid Retry removes its entire newly inserted source owner")
     quick.free()
+    # An internal identity collision must roll back admission itself, even
+    # before any request can be sent. Otherwise hidden source/rest clips
+    # remain in occupied_end and progressively push every attempt rightward.
+    var collision := InstrumentedView.new()
+    collision.size = Vector2(800,440)
+    collision.native_ready = true
+    collision.timeline.duration_beats = 8.0
+    collision.timeline.measures = [
+        {"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    collision.timeline.pixels_per_beat = 96.0
+    collision.present_flow(0.0,{
+        "running":false,"paused":false,"phase":"ready","mode":"practice",
+        "piece_fingerprint":"collision","revision":1,"transport_id":0,
+        "play_from_beat":0.0},0.0)
+    collision.stream_passes[0]["take_key"] = "armed:2"
+    collision.stream_passes[0]["pending"] = false
+    var collided: Dictionary = collision.arm_stream_take(.2,0.0)
+    check(collided.is_empty() and collision.stream_passes.size()==1 and
+        int(collision.stream_passes[0]["serial"])==1 and
+        collision._stream_live_serial == -1,
+        "failed owner uniqueness must remove newly inserted future ink")
+    collision.free()
     # READY remains empty indefinitely: the first offscreen retained
     # source is recycled, rather than accumulating ghost notes after idle.
     var idle := InstrumentedView.new()
