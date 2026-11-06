@@ -1082,14 +1082,11 @@ func _send_action(command: Dictionary) -> void:
             # and retain withdrawn plans in the renderer's offline queue.
             renderer.trim_future_queue("explicit_retry")
         elif requested == "resume":
-            # A different source opening must not steal the old preloaded
-            # attempt. If it cannot be withdrawn, enqueue after its end.
-            var future: int = StreamAdmission.select(
-                renderer.stream_passes,"automatic",opening,visual_now,
-                renderer._stream_right_beats(),
-                renderer._stream_header_beats(opening))
-            if future < 0:
-                renderer.trim_future_queue("resume_different_opening")
+            # The paused transport owns an immutable existing take, even
+            # during Play-ACK/state-poll races. Withdraw only incompatible
+            # speculative successors; never remove the source that Resume
+            # may need to bind. The queue layer selects its protected owner.
+            renderer.trim_resume_speculation(visual_now,opening)
         var reserved: Dictionary = renderer.arm_stream_take(
             visual_now,opening,NAN,requested == "resume",
             requested == "restart")
