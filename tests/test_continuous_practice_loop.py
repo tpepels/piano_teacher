@@ -367,6 +367,23 @@ def test_backend_authored_preview_queue_plan_survives_restart(clocked_engine):
     assert repeated["score_queue_next"]["plan_id"] == plan["plan_id"]
 
 
+def test_backend_recovery_queue_plan_keeps_identical_midi_deadline(clocked_engine):
+    app, now = clocked_engine(connected=True)
+    app.start()
+    now[0] = app.visual_transport.run_at + 8*60/80 + .21
+    recovering = app.state()
+    assert recovering["phase"] in ("feedback", "recovering")
+    plan = recovering["score_queue_next"]
+    assert plan["deadline_at_ms"] == pytest.approx(
+        recovering["visual_preparation_schedule"]["deadline_at_ms"])
+    assert plan["source_from_beat"] == pytest.approx(
+        recovering["practice_preparation"]["source_from_beat"])
+    now[0] = app.visual_transport.next_at + .01
+    repeated = app.state()
+    assert repeated["running"]
+    assert repeated["score_queue_next"]["plan_id"] == plan["plan_id"]
+
+
 def record_clean(app):
     phrase = app.plan.active_phrase
     app.recorder.presses = [
