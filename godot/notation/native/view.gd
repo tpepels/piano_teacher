@@ -94,9 +94,12 @@ var stream_world_beat := 0.0
 var _stream_queue = StreamQueue.new()
 # Compatibility getter for the read-only renderer/test interface. Only
 # StreamQueue may structurally mutate the underlying online FIFO.
+# External UI, HUD and diagnostics receive a snapshot. They cannot
+# mutate the actual online queue or an admitted note's immutable geometry.
+# All internal rendering/transport code uses _stream_queue.online directly.
 var stream_passes: Array:
     get:
-        return _stream_queue.online
+        return _stream_queue.online.duplicate(true)
 var offline_stream_queue: Array:
     get:
         return _stream_queue.offline
@@ -476,7 +479,7 @@ func _invalidate_retained_segments() -> void:
     # Every source/rest pass is owned by StreamLifecycle, including those
     # currently clipped. Unstage BEFORE invalidation: a CanvasItem cannot
     # rebuild its command buffer under an invisible clipping parent.
-    StreamLifecycle.prepare_recompile(self,stream_passes)
+    StreamLifecycle.prepare_recompile(self,_stream_queue.online)
     for segment in [retained_first_once] + \
             retained_repeat_segments + retained_rest_segments:
         if segment != null and is_instance_valid(segment):
@@ -591,23 +594,23 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     var right: float = _stream_right_beats()
     var header: float = _stream_header_beats(opening)
     var index: int = StreamAdmission.select(
-        stream_passes,"ready",opening,world,right,header)
+        _stream_queue.online,"ready",opening,world,right,header)
     if index >= 0:
-        return int(stream_passes[index]["serial"])
+        return int(_stream_queue.online[index]["serial"])
     # READY never edits an existing placement. If its hidden source has
     # approached the display, withdraw the still-unexposed tail into the
     # offline queue, then append a fresh immutable future reservation.
     var stale: int = StreamAdmission.select(
-        stream_passes,"idle",opening,world)
+        _stream_queue.online,"idle",opening,world)
     if stale >= 0:
-        var stale_serial: int = int(stream_passes[stale]["serial"])
+        var stale_serial: int = int(_stream_queue.online[stale]["serial"])
         var removed: Array[int] = _stream_queue.withdraw_tail(
             self,world,timeline.pixels_per_beat,staff_gap(),
             timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION,
             "idle_expired")
         if not removed.has(stale_serial):
             return -1
-    var onset: float = StreamAdmission.position(stream_passes,world,right,
+    var onset: float = StreamAdmission.position(_stream_queue.online,world,right,
         header,NAN,StreamAdmission.READY_TRAVEL_BEATS,
         timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
     if not is_finite(onset):
@@ -621,9 +624,9 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
 
 
 func _stream_claim_pending_auto(world: float, opening: float) -> int:
-    var index: int = StreamAdmission.select(stream_passes,"automatic",
+    var index: int = StreamAdmission.select(_stream_queue.online,"automatic",
         opening,world,_stream_right_beats(),_stream_header_beats(opening))
-    return int(stream_passes[index]["serial"]) if index >= 0 else -1
+    return int(_stream_queue.online[index]["serial"]) if index >= 0 else -1
 
 
 func _reject_stream_candidate(owner_serial: int, before_serial: int,
@@ -635,7 +638,7 @@ func _reject_stream_candidate(owner_serial: int, before_serial: int,
             timeline.pixels_per_beat,staff_gap(),timeline.duration_beats,
             size.x,size.x*PLAYHEAD_FRACTION,"rejected_admission",true)
     elif not snapshot.is_empty():
-        StreamLifecycle.restore_owner(stream_passes,owner_serial,snapshot)
+        StreamLifecycle.restore_owner(_stream_queue.online,owner_serial,snapshot)
     _stream_live_serial = old_live_serial
 
 
@@ -656,10 +659,10 @@ func arm_stream_take(world: float, opening: float,
     var reused_unplayed := false
     if resuming_paused and _stream_was_paused and \
             absf(opening-_stream_paused_source) < .0001:
-        var paused_index: int = StreamAdmission.select(stream_passes,"paused",
+        var paused_index: int = StreamAdmission.select(_stream_queue.online,"paused",
             opening,stream_world_beat,0.0,0.0,_stream_last_take)
         if paused_index >= 0:
-            serial = int(stream_passes[paused_index]["serial"])
+            serial = int(_stream_queue.online[paused_index]["serial"])
             reused = true
             reused_unplayed = true
     if serial < 0 and (resuming_paused or retrying):
@@ -667,7 +670,7 @@ func arm_stream_take(world: float, opening: float,
         reused_auto = serial >= 0
         reused = reused_auto
     if serial < 0 and is_finite(planned_start_world):
-        var checked: float = StreamAdmission.position(stream_passes,
+        var checked: float = StreamAdmission.position(_stream_queue.online,
             stream_world_beat,_stream_right_beats(),
             _stream_header_beats(opening),planned_start_world,0.0,
             timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
@@ -683,13 +686,13 @@ func arm_stream_take(world: float, opening: float,
     if serial < 0:
         return {}
     var snapshot: Dictionary = StreamLifecycle.snapshot_owner(
-        stream_passes,serial)
+        _stream_queue.online,serial)
     if snapshot.is_empty():
         _reject_stream_candidate(serial,serial_before,old_live,{})
         return {}
     # Every unacknowledged control has a unique owner-scoped identity.
     if not StreamLifecycle.activate(
-            stream_passes,serial,"armed:%d" % serial,true):
+            _stream_queue.online,serial,"armed:%d" % serial,true):
         _reject_stream_candidate(serial,serial_before,old_live,snapshot)
         return {}
     _stream_armed_serial = serial
@@ -698,7 +701,7 @@ func arm_stream_take(world: float, opening: float,
         "owner_serial":serial,"source_snapshot":snapshot,
         "newly_allocated":_stream_serial > serial_before,
         "old_live_serial":old_live}
-    for item in stream_passes:
+    for item in _stream_queue.online:
         if int(item.get("serial",-1)) == serial:
             return {"start_world":float(item["world_origin"])+opening,
                 "opening":opening,"reused":reused,
@@ -733,7 +736,7 @@ func cancel_stream_arm() -> bool:
             staff_gap(),timeline.duration_beats,size.x,
             size.x*PLAYHEAD_FRACTION,"failed_command",true).is_empty()
     else:
-        restored = StreamLifecycle.restore_owner(stream_passes,
+        restored = StreamLifecycle.restore_owner(_stream_queue.online,
             owner_serial,_stream_arm_rollback["source_snapshot"])
     _stream_live_serial = int(_stream_arm_rollback["old_live_serial"])
     _stream_armed_serial = -1
@@ -754,11 +757,11 @@ func trim_future_queue(reason: String) -> Array[int]:
     if not removed.is_empty():
         # successor_reserved is scheduling metadata, not music geometry.
         # A withdrawn speculative successor may be scheduled again later.
-        for item in stream_passes:
+        for item in _stream_queue.online:
             if str(item.get("kind","source")) == "source" and \
                     bool(item.get("successor_reserved",false)):
                 var still_queued := false
-                for candidate in stream_passes:
+                for candidate in _stream_queue.online:
                     if str(candidate.get("take_key","")) == "autopending" and \
                             str(candidate.get("kind","")) == "source":
                         still_queued = true
@@ -783,13 +786,13 @@ func enqueue_recovery_queue(world: float, source_opening: float,
             source_opening < 0.0 or source_opening >= timeline.duration_beats:
         return false
     stream_world_beat = maxf(stream_world_beat,world)
-    var existing: int = StreamAdmission.select(stream_passes,
+    var existing: int = StreamAdmission.select(_stream_queue.online,
         "automatic_due",source_opening,stream_world_beat,
         0.0,0.0,"",graded_deadline_world)
     if existing >= 0:
         return true
     trim_future_queue("recovery_replan")
-    var checked: float = StreamAdmission.position(stream_passes,
+    var checked: float = StreamAdmission.position(_stream_queue.online,
         stream_world_beat,_stream_right_beats(),
         _stream_header_beats(source_opening),
         graded_deadline_world,0.0,timeline.pixels_per_beat,
@@ -859,7 +862,7 @@ func present_flow(world_beat: float, state: Dictionary,
         var keep_auto: bool = bool(state.get("auto",false)) or \
             bool(state.get("preview_only",false)) or prep is Dictionary
         if keep_auto and prep is Dictionary:
-            for item in stream_passes:
+            for item in _stream_queue.online:
                 if str(item.get("take_key","")) == "autopending" and \
                         absf(float(item.get("source_floor",-1.0))-
                             next_opening) > .00001:
@@ -877,7 +880,7 @@ func present_flow(world_beat: float, state: Dictionary,
                 # transport identity remains provisional until control ACK.
                 if _stream_arm_acknowledged:
                     if StreamLifecycle.activate(
-                            stream_passes,_stream_armed_serial,key,false):
+                            _stream_queue.online,_stream_armed_serial,key,false):
                         _stream_live_serial = _stream_armed_serial
                         _stream_last_take = key
                         _stream_arm_rollback.clear()
@@ -889,22 +892,22 @@ func present_flow(world_beat: float, state: Dictionary,
                 # Polling can bind only an already-present automatic owner
                 # whose world-time onset matches the graded backend deadline.
                 var expected: float = stream_world_beat-graded_beat
-                var candidate: int = StreamAdmission.select(stream_passes,
+                var candidate: int = StreamAdmission.select(_stream_queue.online,
                     "automatic_due",opening,stream_world_beat,
                     0.0,0.0,"",expected)
                 if candidate >= 0:
-                    var claimed: int = int(stream_passes[candidate]["serial"])
+                    var claimed: int = int(_stream_queue.online[candidate]["serial"])
                     if StreamLifecycle.activate(
-                            stream_passes,claimed,key,false):
+                            _stream_queue.online,claimed,key,false):
                         _stream_live_serial = claimed
                         _stream_last_take = key
             elif key == _stream_last_take and not _stream_was_paused:
-                var owned: int = StreamAdmission.select(stream_passes,
+                var owned: int = StreamAdmission.select(_stream_queue.online,
                     "bound",opening,stream_world_beat,0.0,0.0,key)
                 if owned >= 0:
-                    _stream_live_serial = int(stream_passes[owned]["serial"])
+                    _stream_live_serial = int(_stream_queue.online[owned]["serial"])
         if _stream_live_serial >= 0:
-            for item in stream_passes:
+            for item in _stream_queue.online:
                 if int(item["serial"]) == _stream_live_serial:
                     var final_mastery: bool = bool(state.get("auto",false)) and \
                         int(state.get("streak",0))+1 >= \
@@ -929,7 +932,7 @@ func present_flow(world_beat: float, state: Dictionary,
                         var intended: float = float(item["world_origin"]) + \
                             timeline.duration_beats+horizon
                         var checked: float = StreamAdmission.position(
-                            stream_passes,stream_world_beat,
+                            _stream_queue.online,stream_world_beat,
                             _stream_right_beats(),_stream_header_beats(0.0),
                             intended,0.0,timeline.pixels_per_beat,
                             staff_gap(),timeline.duration_beats)
@@ -951,14 +954,14 @@ func present_flow(world_beat: float, state: Dictionary,
     # Retained compilation may have finished since the previous frame.
     # Clip attachment happens here, before CanvasItem._draw() projects
     # positions. No scene-tree modification is permitted in _draw().
-    StreamLifecycle.attach_compiled(stream_passes)
+    StreamLifecycle.attach_compiled(_stream_queue.online)
     queue_redraw()
 
 
 func _project_stream(playhead_x: float) -> void:
     var density: float = maxf(1.0,timeline.pixels_per_beat)
     var used: Dictionary = {}
-    for item in stream_passes:
+    for item in _stream_queue.online:
         var segment = item.get("segment")
         var clip = item.get("clip")
         # Invalid records are retired by present_flow(), never mutated or
@@ -1061,7 +1064,7 @@ func _cursor_ink_clearances(gap: float) -> Array:
     if events.is_empty():
         return exclusions
     var guard: float = gap*1.7/density
-    for item in stream_passes:
+    for item in _stream_queue.online:
         if str(item.get("kind","source")) != "source":
             continue
         var source_at_line: float = stream_world_beat - float(item["world_origin"])
@@ -1176,7 +1179,7 @@ func _draw() -> void:
             if x >= 0.0 and x <= size.x:
                 var inside_source := false
                 var density: float = maxf(1.0,timeline.pixels_per_beat)
-                for item in stream_passes:
+                for item in _stream_queue.online:
                     var source_left: float = playhead_x + (
                         float(item["world_origin"])-stream_world_beat)*density
                     var bounds: Vector2 = StreamAdmission.engraved_clip_bounds(
