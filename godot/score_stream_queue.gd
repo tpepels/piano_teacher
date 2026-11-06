@@ -16,6 +16,54 @@ var online: Array = []
 # Source owner serials belong to ONE renderer; another renderer can also
 # have serial 1. A stable per-renderer journal scope prevents collisions.
 var _writer_id := ""
+# Existing lesson layers remain independent CanvasItem owners, but they
+# share one physical screen. Weak peer references enforce global admission
+# against every still-live outgoing layer (including rapid lesson changes).
+var _peer_views: Array[WeakRef] = []
+
+func register_peer(view: Control) -> void:
+    if view == null or not is_instance_valid(view):
+        return
+    for ref in _peer_views:
+        if ref.get_ref() == view:
+            return
+    _peer_views.append(weakref(view))
+
+func _clears_prior_layers(opening_left: float, density: float,
+        viewport_width: float, playhead_x: float) -> bool:
+    for ref in _peer_views:
+        var view = ref.get_ref()
+        if view == null or not is_instance_valid(view):
+            continue
+        var peer_queue = view.get("_stream_queue")
+        if peer_queue == null or peer_queue == self:
+            continue
+        var peer_density: float = maxf(1.0,
+            float(view.timeline.pixels_per_beat))
+        var peer_gap: float = float(view.staff_gap())
+        var peer_duration: float = float(view.timeline.duration_beats)
+        var peer_playhead: float = view.size.x*.33
+        for item in peer_queue.online:
+            var peer_bounds: Vector2 = Admission.clip_bounds(
+                item,peer_density,peer_gap,peer_duration)
+            var peer_end: float = float(item["world_origin"]) + \
+                peer_bounds.y/peer_density
+            if absf(density-peer_density) < .0001:
+                # Identical scales allow seamless adjoining physical ink,
+                # even while old and new lessons share the viewport.
+                if opening_left < peer_end-.00001:
+                    return false
+            else:
+                # Different scales move at different pixel velocities.
+                # Require old ink to leave LEFT before new ink enters RIGHT;
+                # checking world endpoints alone would permit collisions.
+                var new_entry: float = opening_left - \
+                    (viewport_width-playhead_x)/density
+                var peer_exit: float = peer_end + \
+                    (peer_playhead+60.0)/peer_density
+                if new_entry < peer_exit-.00001:
+                    return false
+    return true
 
 func _init() -> void:
     _writer_id = str(get_instance_id())
@@ -94,7 +142,9 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     # A new passage must be completely outside the viewport, and behind
     # everything already physically written into the online queue.
     if not is_finite(opening_left) or \
-            playhead_x + (opening_left-world)*density <= viewport_width:
+            playhead_x + (opening_left-world)*density <= viewport_width or \
+            not _clears_prior_layers(opening_left,density,
+                viewport_width,playhead_x):
         return false
     if not online.is_empty():
         var end_beat := -INF
