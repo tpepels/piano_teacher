@@ -62,6 +62,8 @@ var resume_banner_message: Label
 var resume_review_button: Button
 var resume_continue_button: Button
 var resume_measure_button: Button
+var spoken_countin_toggle: CheckButton
+var spoken_countin_status: Label
 var _resume_open_state: Dictionary = {}
 var advanced_pause_open := false
 var ui_scale := 1.0
@@ -195,13 +197,17 @@ func _ready() -> void:
     details_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     details_panel.add_theme_constant_override("separation",10)
     details_scroll.add_child(details_panel)
-    var voice_toggle := CheckButton.new()
-    voice_toggle.text = "Spoken count-in · Ichi, Ni, San, Shi"
-    voice_toggle.tooltip_text = "Use local Japanese voice samples instead of metronome clicks during preparation"
-    voice_toggle.button_pressed = stage.count_in.spoken_enabled
-    voice_toggle.toggled.connect(func(enabled: bool):
-        stage.count_in.set_spoken_enabled(enabled))
-    details_panel.add_child(voice_toggle)
+    spoken_countin_toggle = CheckButton.new()
+    spoken_countin_toggle.text = "Spoken count-in · Ichi, Ni, San, Shi"
+    spoken_countin_toggle.tooltip_text = "Play the four bundled Japanese words on preparation beats"
+    spoken_countin_toggle.set_pressed_no_signal(true)
+    spoken_countin_toggle.toggled.connect(func(enabled: bool):
+        stage.count_in.set_spoken_enabled(enabled)
+        _present_countin_audio_status())
+    details_panel.add_child(spoken_countin_toggle)
+    spoken_countin_status = UI.label("",12,MUTED)
+    spoken_countin_status.visible = false
+    details_panel.add_child(spoken_countin_status)
     # Reuse the existing RH/LH/Together stage indicators in More, not above
     # the score; state updates and unlock animations remain wired.
     stage.practice_stage_bar.reparent(details_panel,false)
@@ -732,6 +738,25 @@ func _previous_lesson() -> void:
 func _skip_lesson() -> void:
     if not _busy and bool(_state.get("skip_available",false)):
         command_requested.emit({"action":"skip_stage","reason":"Learner skipped to the next lesson from the practice screen"})
+
+## Bind the persistent audio service once, after PracticeScreen _ready().
+## The status stays in More; no new warning strip overlaps the moving score.
+func bind_countin_voice_player(service: Node) -> void:
+    stage.count_in.attach_voice_service(service)
+    spoken_countin_toggle.set_pressed_no_signal(
+        bool(service.get("spoken_enabled")))
+    _present_countin_audio_status()
+
+func _present_countin_audio_status() -> void:
+    if spoken_countin_status == null:
+        return
+    var status: Dictionary = stage.count_in.voice_status()
+    var unavailable: bool = not bool(status.get("available",false))
+    spoken_countin_status.visible = unavailable
+    spoken_countin_status.text = (
+        "Spoken count-in files unavailable · metronome clicks used"
+        if unavailable else "")
+
 
 func is_source_picker_open() -> bool:
     return open_picker != null and open_picker.visible
