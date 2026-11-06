@@ -892,7 +892,9 @@ func _process(_delta: float) -> void:
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
         score_effects.record_preview(arrivals,practice_view.stage,ticks)
-    if score_runway != null and bool(last_state.get("loaded",false)):
+    if score_runway != null:
+        # Old score clips continue exiting even during a revision load or
+        # a source-picker transition with no currently loaded piece.
         score_runway.present_frame(last_state,_unrolled_score_beat_at(beat,ticks))
 
 func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
@@ -944,7 +946,10 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     last_state_tick = int((started_ms+received_ms)/2.0)
     visual_transport_clock.accept(parsed,last_state_tick,received_ms)
     if score_runway != null:
-        score_runway.promote_if_ready(parsed)
+        if not score_runway.promote_if_ready(parsed):
+            # A manual, unprepared lesson change must replace the active
+            # renderer BEFORE asset reset, preserving its moving notes.
+            score_runway.preserve_unprepared_revision(parsed)
     if demo_player != null and bool(parsed.get("loaded",false)):
         demo_player.synchronize(parsed,_transport_beat_at(received_ms))
     score_session.update_context(parsed,received_ms)
