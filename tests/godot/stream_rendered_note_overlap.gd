@@ -231,8 +231,8 @@ func _initialize() -> void:
     check(not mid_resume.is_empty() and middle.admissions.size() == earlier_count+1,
         "Resume in the middle of a measure enqueues a distinct future source")
     check(middle.stream_passes.any(func(item: Dictionary) -> bool:
-        return str(item.get("kind",""))=="source" and
-            absf(float(item.get("source_floor",-1.0))-3.25)<.00001),
+        return (str(item.get("kind",""))=="source" and
+            absf(float(item.get("source_floor",-1.0))-3.25)<.00001)),
         "the new passage begins at the exact resumed musical position")
     middle.free()
     # Pause can arrive after backend Play but BEFORE the first running
