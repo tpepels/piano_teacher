@@ -607,14 +607,6 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     if not native_ready or not retained_ready() or \
             opening >= timeline.duration_beats:
         return -1
-    # A command can be armed while the last backend snapshot still says
-    # READY. Never allocate another score during that acknowledgement gap.
-    if _stream_armed_serial >= 0:
-        for item in stream_passes:
-            if int(item.get("serial",-1)) == _stream_armed_serial and \
-                    bool(item.get("armed",false)):
-                return _stream_armed_serial
-        _stream_armed_serial = -1
     var right: float = _stream_right_beats()
     var header: float = _stream_header_beats(opening)
     var index: int = StreamAdmission.pending_index(
@@ -680,7 +672,7 @@ func _stream_claim_pending_auto(world: float, opening: float) -> int:
 
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
-        resuming_paused: bool = false) -> Dictionary:
+        resuming_paused: bool = false, retrying: bool = false) -> Dictionary:
     # Normal Play selects a previously engraved READY copy. A preloaded
     # different stage may carry an exact authoritative future graded onset.
     # It must be offscreen before activation; a stale deadline fails closed.
@@ -698,7 +690,10 @@ func arm_stream_take(world: float, opening: float,
             serial = int(stream_passes[old_index]["serial"])
             reused = true
             reused_unplayed = true
-    if serial < 0 and resuming_paused:
+    if serial < 0 and (resuming_paused or retrying):
+        # Retry may reuse an unplayed automatic successor, but never the
+        # current take's unplayed/pause reservation. It needs a new grading
+        # deadline in the future, even when Resume is still being acknowledged.
         serial = _stream_claim_pending_auto(stream_world_beat,opening)
         reused = serial >= 0
     if serial >= 0:
@@ -779,7 +774,11 @@ func present_flow(world_beat: float, state: Dictionary,
     if allow_admission and phase == "ready" and not running_now and \
             not paused_now and mode in ["practice","perform"]:
         # Prepare outside the visible viewport, long before the Play button.
-        _stream_reserve_ready(stream_world_beat,opening)
+        # READY frames can arrive after Play was armed but before the
+        # backend confirms it. Only presentation frames skip admission;
+        # explicit Retry still needs to reserve its own future score.
+        if _stream_armed_serial < 0:
+            _stream_reserve_ready(stream_world_beat,opening)
     if paused_now:
         if not _stream_was_paused:
             _stream_paused_source = maxf(opening,opening+graded_beat)
