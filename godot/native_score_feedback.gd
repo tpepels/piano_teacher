@@ -45,7 +45,7 @@ func bind_score(renderer: Control, revision: int) -> void:
     queue_redraw()
 
 func _score_repainted() -> void:
-    if not statuses.snapshot().is_empty() and not _suppress_graded_ink:
+    if statuses.has_any() and not _suppress_graded_ink:
         queue_redraw()
 
 func _event_id(source_id: String) -> String:
@@ -77,8 +77,7 @@ func accept_live_event(event: Dictionary, state: Dictionary) -> void:
     _suppress_graded_ink = bool(state.get("preview_only",false)) or \
         str(state.get("mode","")) == "listen"
     if _accept_live(event,state):
-        markers = (statuses.snapshot().get(Statuses.take_key(state),{})
-            as Dictionary).duplicate()
+        markers = statuses.statuses_for_take(Statuses.take_key(state))
         queue_redraw()
 
 func present(state: Dictionary) -> void:
@@ -126,7 +125,7 @@ func present(state: Dictionary) -> void:
             if str(strip.get("kind","source")) == "source":
                 physical_keys.append(str(strip.get("take_key","")))
     statuses.prune(physical_keys,take)
-    var next: Dictionary = statuses.snapshot().get(take,{})
+    var next: Dictionary = statuses.statuses_for_take(take)
     if changed or next != markers or previous_take != take or previous_suppress:
         markers = next.duplicate()
         queue_redraw()
