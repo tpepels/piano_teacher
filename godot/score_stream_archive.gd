@@ -89,9 +89,20 @@ func _fold(event: Dictionary, active: Dictionary,
         str(event.get("owner_serial",0))
     var from_id: int = int(event.get("from_id",0))
     if kind == "enqueued":
-        active[owner] = event
         if from_id > 0:
             waiting.erase(from_id)
+            # A recovered interrupted source still appears in the journal
+            # as an old, unclosed online owner. Replaying it consumes that
+            # owner as well as its offline availability. Otherwise a SECOND
+            # restart resurrects the same source again (duplicate music).
+            var consumed_active: String = ""
+            for key in active:
+                if int(active[key].get("id",0)) == from_id:
+                    consumed_active = str(key)
+                    break
+            if not consumed_active.is_empty():
+                active.erase(consumed_active)
+        active[owner] = event
     elif kind in ["withdrawn","score_reset"]:
         active.erase(owner)
         waiting[int(event["id"])] = event
