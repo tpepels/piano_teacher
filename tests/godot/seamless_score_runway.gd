@@ -16,6 +16,7 @@ class MockView:
     var external_backdrop := true
     var compact_inactive_staff := true
     var configured_density := 100.0
+    var transport_overlay_enabled := true
     var cleared := 0
     func set_density(value: float) -> bool:
         configured_density = value
@@ -51,8 +52,8 @@ class MockView:
         return true
     func clear_score() -> void:
         cleared += 1
-    func set_transport_overlay_enabled(_enabled: bool) -> void:
-        pass
+    func set_transport_overlay_enabled(enabled: bool) -> void:
+        transport_overlay_enabled = enabled
 
 class MockStage:
     extends Node
@@ -231,7 +232,16 @@ func run() -> void:
     check(runway._tails.has(outgoing) and outgoing.last_world >= 37.0,
         "manual departure continues moving behind the next lesson")
     runway._advance_tails(44.0)
+    check(runway._tails.has(outgoing) and
+        runway._manual_staff_tail == outgoing and
+        not outgoing.runway_overlay and outgoing.transport_overlay_enabled,
+        "the last outgoing staff and cursor persist throughout score preparation")
+    runway.active_revision_published(3)
+    check(outgoing.runway_overlay and not outgoing.transport_overlay_enabled and
+        runway._manual_staff_tail == null,
+        "published engraving atomically takes staff/cursor ownership")
+    runway._advance_tails(44.0)
     check(not runway._tails.has(outgoing),
-        "manual departure retires only after its own last note exits")
+        "outgoing renderer retires only after all its notes exit and new staff exists")
     print("SEAMLESS_SCORE_RUNWAY_FAILURES:",failures)
     quit(0 if failures==0 else 1)
