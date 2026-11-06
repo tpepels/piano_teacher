@@ -587,17 +587,22 @@ func _stream_add_take(source_beat: float, start_world: float,
         var is_first: bool = index == 0
         var is_last: bool = index == windows.size()-1
         var serial: int = first_serial+index
-        var clip_floor: float = bounds.x - (
-            (15.0 if bounds.x <= .0001 else 1.6)*gap_pixels/density
-            if is_first else 0.0)
-        var clip_ceiling: float = bounds.y + (
-            2.2*gap_pixels/density if is_last else 0.0)
+        # The cut points are musical beats. Extra contextual ink is
+        # measured in staff spaces at projection time, so resizing cannot
+        # shift a committed source boundary or crop the initial clef.
+        var clip_floor: float = bounds.x
+        var clip_ceiling: float = bounds.y
+        var leading_spaces: float = (
+            15.0 if bounds.x <= .0001 else 1.6) if is_first else 0.0
+        var trailing_spaces: float = 2.2 if is_last else 0.0
         var specs: Array = [{
             "kind":"source","owner_serial":serial,
             "take_owner":first_serial,
             "world_origin":original_origin,
             "source_floor":bounds.x,"source_ceiling":bounds.y,
             "clip_floor":clip_floor,"clip_ceiling":clip_ceiling,
+            "clip_leading_spaces":leading_spaces,
+            "clip_trailing_spaces":trailing_spaces,
             "piece_duration":timeline.duration_beats,"take_key":take_key,
             "pending":take_key in ["prepared","autopending"],
             "hidden_until_armed":hidden}]
