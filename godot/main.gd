@@ -1026,7 +1026,8 @@ func _send_action(command: Dictionary) -> void:
         if requested == "resume":
             opening = maxf(opening,opening+_transport_beat_at(Time.get_ticks_msec()))
         var reserved: Dictionary = renderer.arm_stream_take(
-            visual_now,opening,NAN,requested in ["resume","restart"])
+            visual_now,opening,NAN,requested == "resume",
+            requested == "restart")
         if reserved.is_empty():
             practice_view.present_message("Score is not ready for continuous playback")
             practice_view.finish_action()
