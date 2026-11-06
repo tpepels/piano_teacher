@@ -13,9 +13,134 @@ const EXIT_MARGIN_PIXELS := 60.0
 static func _offstage(segment: Node2D) -> void:
     segment.position = Vector2(STAGING_X,0.0)
 
+# Each attempt owns one source slot and, when the score has an authored
+# gap, one rest slot. These slots are never independently inserted.
+static func admit(owner: Control, passes: Array, specs: Array,
+        source_pool: Array, rest_pool: Array, first_source: Node2D) -> bool:
+    var used: Dictionary = {}
+    var identities: Dictionary = {}
+    for item in passes:
+        var existing: String = str(item.get("slot_id",
+            "%d:%s" % [int(item.get("owner_serial",abs(int(item.get("serial",0))))),
+                str(item.get("kind","source"))]))
+        if identities.has(existing):
+            return false
+        identities[existing] = true
+        if item.has("segment"):
+            used[item["segment"]] = true
+    # Preflight identity collisions before creating ANY CanvasItem.
+    for spec in specs:
+        var role: String = str(spec.get("kind",""))
+        var owner_serial: int = int(spec.get("owner_serial",0))
+        if role not in ["source","rest"] or owner_serial <= 0:
+            return false
+        var identifier: String = "%d:%s" % [owner_serial,role]
+        if identities.has(identifier):
+            return false
+        identities[identifier] = true
+    for spec in specs:
+        var role: String = str(spec["kind"])
+        var pool: Array = source_pool if role == "source" else rest_pool
+        var choice: Node2D = null
+        if role == "source" and first_source != null and \
+                is_instance_valid(first_source) and not used.has(first_source):
+            choice = first_source
+        if choice == null:
+            for segment in pool:
+                if segment != null and is_instance_valid(segment) and \
+                        not used.has(segment):
+                    choice = segment
+                    break
+        if choice == null:
+            # Overflow always uses the same lifecycle and pre-compilation
+            # contract, regardless of whether the content is notes or rests.
+            choice = owner._new_retained_segment(role)
+            pool.append(choice)
+        used[choice] = true
+        var owner_serial: int = int(spec["owner_serial"])
+        var serial: int = owner_serial if role == "source" else -owner_serial
+        passes.append(create(owner,choice,role,
+            float(spec["world_origin"]),float(spec["source_floor"]),
+            float(spec["source_ceiling"]),str(spec["take_key"]),serial,
+            bool(spec.get("pending",false)),owner_serial,
+            bool(spec.get("hidden_until_armed",false))))
+    return true
+
+
+static func reposition(passes: Array, owner_serial: int,
+        new_origin: float) -> bool:
+    # Only a never-published READY reservation may be repositioned. Its
+    # dependent written rest gets exactly the same world-axis translation.
+    if not is_finite(new_origin):
+        return false
+    var source: Dictionary = {}
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == \
+                owner_serial and str(item.get("kind","source")) == "source":
+            source = item
+            break
+    if source.is_empty() or str(source.get("take_key","")) != "prepared" or \
+            not bool(source.get("pending",false)) or \
+            bool(source.get("armed",false)):
+        return false
+    var previous: float = float(source["world_origin"])
+    if new_origin < previous-.00001:
+        return false
+    var movement: float = new_origin-previous
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
+            if not bool(item.get("hidden_until_armed",false)):
+                return false
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
+            item["world_origin"] = float(item["world_origin"])+movement
+    return true
+
+
+static func activate(passes: Array, owner_serial: int, key: String,
+        armed: bool) -> bool:
+    # One source may bind to each backend transport identity. The paired
+    # semantic rest gets published in the same atomic transition.
+    if owner_serial <= 0 or key.is_empty():
+        return false
+    var target: Dictionary = {}
+    for item in passes:
+        if str(item.get("kind","source")) != "source":
+            continue
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
+            target = item
+        elif str(item.get("take_key","")) == key and \
+                not bool(item.get("pending",false)):
+            return false
+    if target.is_empty():
+        return false
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+            continue
+        item["hidden_until_armed"] = false
+        if str(item.get("kind","source")) == "source":
+            item["take_key"] = key
+            item["pending"] = false
+            item["armed"] = armed
+    return true
+
+
+static func screen_bounds(item: Dictionary, density: float,
+        gap: float, score_duration: float) -> Vector2:
+    # Identical rightmost-ink calculation governs presentation and expiry.
+    # Rest ink and source ink have different contours, but NO separate
+    # placement or removal algorithms.
+    if str(item.get("kind","source")) == "rest":
+        return Vector2(0.0,float(item["source_ceiling"])*density)
+    return Admission.engraved_clip_bounds(
+        float(item["source_floor"]),float(item["source_ceiling"]),
+        density,gap,score_duration)
+
+
 static func create(owner: Control, segment: Node2D, kind: String,
         world_origin: float, source_floor: float, source_ceiling: float,
-        take_key: String, serial: int, pending: bool) -> Dictionary:
+        take_key: String, serial: int, pending: bool,
+        owner_serial: int = 0, hidden_until_armed: bool = false) -> Dictionary:
     assert(is_instance_valid(owner) and is_instance_valid(segment))
     assert(kind in ["source","rest"])
     var clip := Control.new()
@@ -39,7 +164,11 @@ static func create(owner: Control, segment: Node2D, kind: String,
         "world_origin":world_origin,
         "source_floor":source_floor,"source_ceiling":source_ceiling,
         "take_key":take_key,"pending":pending,
-        "serial":serial,"kind":kind}
+        "serial":serial,"kind":kind,
+        "owner_serial":owner_serial if owner_serial > 0 else abs(serial),
+        "slot_id":"%d:%s" % [
+            owner_serial if owner_serial > 0 else abs(serial),kind],
+        "hidden_until_armed":hidden_until_armed}
 
 static func prepare_recompile(owner: Control, passes: Array) -> void:
     # A viewport/hand change invalidates both source and printed rest ink.
@@ -86,18 +215,12 @@ static func project(item: Dictionary, world: float, playhead_x: float,
         # A fresh segment is still attached to its owner to compile; a
         # recompiled one is detached by prepare_recompile().
         return false
-    if str(item.get("kind","source")) == "source" and \
-            str(item.get("take_key","")) == "prepared" and \
-            bool(item.get("pending",false)) and \
+    if bool(item.get("hidden_until_armed",false)) and \
             not bool(item.get("armed",false)):
         clip.visible = false
         return false
-    var is_rest: bool = str(item.get("kind","source")) == "rest"
-    var bounds: Vector2 = (Vector2(0.0,
-        float(item["source_ceiling"])*density)
-        if is_rest else Admission.engraved_clip_bounds(
-            float(item["source_floor"]),float(item["source_ceiling"]),
-            density,staff_gap,score_duration))
+    var bounds: Vector2 = screen_bounds(
+        item,density,staff_gap,score_duration)
     var position: float = playhead_x + \
         (float(item["world_origin"])-world)*density
     # Reparenting is forbidden during CanvasItem._draw(). The frame owner
@@ -135,11 +258,8 @@ static func release_all(owner: Control, passes: Array) -> void:
 
 static func expired(item: Dictionary, world: float, density: float,
         playhead_x: float, staff_gap: float, score_duration: float) -> bool:
-    var is_rest: bool = str(item.get("kind","source")) == "rest"
-    var right: float = (float(item["source_ceiling"])*density
-        if is_rest else Admission.engraved_clip_bounds(
-            float(item["source_floor"]),float(item["source_ceiling"]),
-            density,staff_gap,score_duration).y)
+    var right: float = screen_bounds(
+        item,density,staff_gap,score_duration).y
     var origin_x: float = playhead_x + \
         (float(item["world_origin"])-world)*density
     return origin_x+right < -EXIT_MARGIN_PIXELS
