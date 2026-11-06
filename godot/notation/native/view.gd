@@ -515,50 +515,36 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 
 func _stream_add_take(source_beat: float, start_world: float,
         from_beat: float, through_beat: float, take_key: String) -> void:
-    var used: Dictionary = {}
-    for item in stream_passes:
-        used[item["segment"]] = true
-    var choice = null
-    for segment in [retained_first_once] + retained_repeat_segments:
-        if segment != null and is_instance_valid(segment) and not used.has(segment):
-            choice = segment
-            break
-    if choice == null:
-        # Excessive rapid retries are still placed strictly in the future.
-        # StreamLifecycle keeps the new segment visible to Godot for
-        # offscreen compilation, then attaches it to the hidden clip only
-        # once the retained source has compiled.
-        choice = _new_retained_segment("source")
-        retained_repeat_segments.append(choice)
-    _stream_serial += 1
-    _stream_live_serial = _stream_serial
-    stream_passes.append(StreamLifecycle.create(self,choice,"source",
-        start_world-source_beat,maxf(0.0,from_beat),through_beat,
-        take_key,_stream_serial,take_key in ["prepared","autopending"]))
-    # The written full-measure rest shares this pass's immutable world
-    # origin. It is a pooled, precompiled segment, never a second camera.
-    var silence: Dictionary = practice_timeline.get("gap",{})
-    var gap: float = float(silence.get("duration_beats",0.0))
+    # Every musical attempt is admitted as ONE atomic batch. Its notes and
+    # written rest are two clip roles of the same owner/identity, sharing an
+    # immutable source origin and the same insertion/retirement machinery.
+    var owner_serial: int = _stream_serial+1
+    var original_origin: float = start_world-source_beat
+    var hidden: bool = take_key == "prepared"
+    var specs: Array = [{
+        "kind":"source","owner_serial":owner_serial,
+        "world_origin":original_origin,
+        "source_floor":maxf(0.0,from_beat),
+        "source_ceiling":through_beat,"take_key":take_key,
+        "pending":take_key in ["prepared","autopending"],
+        "hidden_until_armed":hidden}]
+    var gap: float = float(practice_timeline.get("gap",{}).get(
+        "duration_beats",0.0))
     if gap > .0001:
-        _stream_add_rest(start_world-source_beat+timeline.duration_beats,
-            gap,_stream_serial)
-
-
-func _stream_add_rest(world: float, duration: float, owner_serial: int) -> void:
-    var used: Dictionary = {}
-    for item in stream_passes:
-        used[item["segment"]] = true
-    var rest = null
-    for segment in retained_rest_segments:
-        if segment != null and is_instance_valid(segment) and not used.has(segment):
-            rest = segment
-            break
-    if rest == null:
-        # Compile any overflow rest offscreen BEFORE revealing its clip.
-        rest = _new_retained_segment("rest")
-        retained_rest_segments.append(rest)
-    stream_passes.append(StreamLifecycle.create(self,rest,"rest",
-        world,0.0,duration,"rest",-owner_serial,false))
+        specs.append({
+            "kind":"rest","owner_serial":owner_serial,
+            "world_origin":original_origin+timeline.duration_beats,
+            "source_floor":0.0,"source_ceiling":gap,
+            "take_key":"rest","pending":false,
+            "hidden_until_armed":hidden})
+    if not StreamLifecycle.admit(self,stream_passes,specs,
+            retained_repeat_segments,retained_rest_segments,
+            retained_first_once):
+        push_error("Refused duplicate source/rest stream owner %d" %
+            owner_serial)
+        return
+    _stream_serial = owner_serial
+    _stream_live_serial = owner_serial
 
 func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
@@ -584,73 +570,50 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
         return -1
     var right: float = _stream_right_beats()
     var header: float = _stream_header_beats(opening)
-    var index: int = StreamAdmission.pending_index(
-        stream_passes,opening,world,right,header)
+    var index: int = StreamAdmission.select(
+        stream_passes,"ready",opening,world,right,header)
     if index >= 0:
         return int(stream_passes[index]["serial"])
-    var stale_index: int = StreamAdmission.idle_reservation_index(
-        stream_passes,opening)
-    var others: Array = []
-    var old_serial := 0
-    if stale_index >= 0:
-        old_serial = int(stream_passes[stale_index]["serial"])
-    for item in stream_passes:
-        if stale_index >= 0 and abs(int(item["serial"])) == old_serial:
-            continue
-        others.append(item)
-    var onset: float = StreamAdmission.future_start(
-        others,world,right,header) + StreamAdmission.READY_TRAVEL_BEATS
-    if stale_index >= 0:
-        # The existing score has never entered the audible/visible timeline.
-        # Reposition the same hidden reservation, including its semantic
-        # rest. No repeated Verovio compilation, no duplicate source copy.
-        var existing: Dictionary = stream_passes[stale_index]
-        existing["world_origin"] = onset-opening
-        for item in stream_passes:
-            if int(item["serial"]) == -old_serial and \
-                    str(item.get("kind","")) == "rest":
-                item["world_origin"] = onset-opening+timeline.duration_beats
-        return old_serial
+    var stale_index: int = StreamAdmission.select(
+        stream_passes,"idle",opening,world)
+    var reused_serial: int = (
+        int(stream_passes[stale_index]["serial"]) if stale_index >= 0 else -1)
+    var onset: float = StreamAdmission.position(stream_passes,world,right,
+        header,NAN,reused_serial,StreamAdmission.READY_TRAVEL_BEATS)
+    if not is_finite(onset):
+        return -1
+    if reused_serial >= 0:
+        # Only never-published notes may be retimed; the paired rest follows
+        # via the same owner identity, not via an independent placement path.
+        if StreamLifecycle.reposition(
+                stream_passes,reused_serial,onset-opening):
+            return reused_serial
+        return -1
+    var old_serial := _stream_serial
     _stream_add_take(opening,onset,opening,_stream_complete_measure(
         opening+right+1.0),"prepared")
+    if _stream_serial == old_serial:
+        return -1
     _stream_live_serial = -1
     return _stream_serial
 
 
 func _stream_claim_pending_auto(world: float, opening: float) -> int:
-    # Manual Resume/Retry supersedes a speculative automatic repeat.
-    # Reuse the existing offscreen CanvasItem and clip the earlier notes,
-    # instead of leaving an ungraded repeat and allocating a duplicate.
-    var edge: float = world+_stream_right_beats()+ \
-        _stream_header_beats(opening)+StreamAdmission.OFFSCREEN_MARGIN_BEATS
-    var chosen := -1
-    var closest := INF
-    for i in range(stream_passes.size()):
-        var item: Dictionary = stream_passes[i]
-        if str(item.get("take_key","")) != "autopending" or \
-                not bool(item.get("pending",false)) or \
-                str(item.get("kind","source")) != "source":
-            continue
-        var upcoming: float = float(item["world_origin"])+opening
-        if upcoming < edge or upcoming >= closest:
-            continue
-        chosen=i
-        closest=upcoming
-    if chosen >= 0:
-        var item: Dictionary = stream_passes[chosen]
-        item["source_floor"] = opening
-        item["source_ceiling"] = maxf(float(item["source_ceiling"]),
-            _stream_complete_measure(opening+_stream_right_beats()+1.0))
-        return int(item["serial"])
-    return -1
-
+    var index: int = StreamAdmission.select(stream_passes,"automatic",
+        opening,world,_stream_right_beats(),_stream_header_beats(opening))
+    if index < 0:
+        return -1
+    var owner_serial: int = int(stream_passes[index]["serial"])
+    if not StreamLifecycle.widen_source(stream_passes,owner_serial,opening,
+            _stream_complete_measure(opening+_stream_right_beats()+1.0)):
+        return -1
+    return owner_serial
 
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false) -> Dictionary:
-    # Normal Play selects a previously engraved READY copy. A preloaded
-    # different stage may carry an exact authoritative future graded onset.
-    # It must be offscreen before activation; a stale deadline fails closed.
+    # Every Play, Resume, Retry or stage handoff claims one future musical
+    # owner. An already printed source cannot be moved after publication.
     if not native_ready or not retained_ready():
         return {}
     stream_world_beat = maxf(stream_world_beat,world)
@@ -659,49 +622,52 @@ func arm_stream_take(world: float, opening: float,
     var reused_unplayed := false
     if resuming_paused and _stream_was_paused and \
             absf(opening-_stream_paused_source) < .0001:
-        var old_index: int = StreamAdmission.paused_unplayed_index(
-            stream_passes,_stream_last_take,opening,stream_world_beat)
-        if old_index >= 0:
-            serial = int(stream_passes[old_index]["serial"])
+        var paused_index: int = StreamAdmission.select(stream_passes,"paused",
+            opening,stream_world_beat,0.0,0.0,_stream_last_take)
+        if paused_index >= 0:
+            serial = int(stream_passes[paused_index]["serial"])
             reused = true
             reused_unplayed = true
     if serial < 0 and (resuming_paused or retrying):
-        # Retry may reuse an unplayed automatic successor, but never the
-        # current take's unplayed/pause reservation. It needs a new grading
-        # deadline in the future, even when Resume is still being acknowledged.
         serial = _stream_claim_pending_auto(stream_world_beat,opening)
         reused = serial >= 0
-    if serial >= 0:
-        pass # Reused source ink retains its world coordinate.
-    elif is_finite(planned_start_world):
-        var safe_start: float = StreamAdmission.future_start(
-            stream_passes,stream_world_beat,_stream_right_beats(),
-            _stream_header_beats(opening))
-        if planned_start_world < safe_start-.0001:
+    if serial < 0 and is_finite(planned_start_world):
+        var checked: float = StreamAdmission.position(stream_passes,
+            stream_world_beat,_stream_right_beats(),
+            _stream_header_beats(opening),planned_start_world)
+        if not is_finite(checked):
             return {}
-        _stream_add_take(opening,planned_start_world,opening,
+        var previous_serial := _stream_serial
+        _stream_add_take(opening,checked,opening,
             _stream_complete_measure(opening+_stream_right_beats()+1.0),
             "prepared")
+        if _stream_serial == previous_serial:
+            return {}
         serial = _stream_serial
-    else:
+    elif serial < 0:
         serial = _stream_reserve_ready(stream_world_beat,opening)
+    if serial < 0 or not StreamLifecycle.activate(
+            stream_passes,serial,"prepared" if not reused else "claimed",true):
+        return {}
+    _stream_armed_serial = serial
+    var index: int = StreamAdmission.select(
+        stream_passes,"bound",opening,stream_world_beat,0.0,0.0,
+        "prepared" if not reused else "claimed")
+    # The owner serial is authoritative even if its clipped opening changed.
     for item in stream_passes:
-        if serial >= 0 and int(item["serial"]) == serial:
-            item["pending"] = false
-            item["armed"] = true
-            _stream_armed_serial = serial
+        if int(item.get("serial",-1)) == serial:
             return {"start_world":float(item["world_origin"])+opening,
                 "opening":opening,"reused":reused,
                 "reused_unplayed_count_in":reused_unplayed}
     return {}
-
 
 func _stream_extend_offscreen(item: Dictionary) -> void:
     # The cached score never repaints. The clip widens only beyond the
     # viewport's right edge, not at the moving timing line.
     var horizon: float = stream_world_beat - \
         float(item["world_origin"])+_stream_right_beats()+1.0
-    item["source_ceiling"] = maxf(float(item["source_ceiling"]),
+    StreamLifecycle.widen_source(stream_passes,
+        int(item.get("serial",0)),float(item["source_floor"]),
         _stream_complete_measure(horizon))
 
 
@@ -750,36 +716,29 @@ func present_flow(world_beat: float, state: Dictionary,
         if key != _stream_last_take or _stream_was_paused:
             _stream_live_serial = -1
             if _stream_armed_serial >= 0:
-                for item in stream_passes:
-                    if int(item["serial"]) == _stream_armed_serial:
-                        item["take_key"] = key
-                        item["armed"] = false
-                        item["pending"] = false
-                        _stream_live_serial = _stream_armed_serial
-                        _stream_last_take = key
-                        break
+                if StreamLifecycle.activate(
+                        stream_passes,_stream_armed_serial,key,false):
+                    _stream_live_serial = _stream_armed_serial
+                    _stream_last_take = key
                 _stream_armed_serial = -1
             elif key != _stream_last_take and mode == "practice":
-                # Automatic repeats consume an already pre-positioned copy.
-                # Transport polling must never instantiate a note at Play.
-                var expected_start: float = stream_world_beat-graded_beat
-                for item in stream_passes:
-                    if str(item.get("take_key","")) != "autopending" or \
-                            not bool(item.get("pending",false)):
-                        continue
-                    if absf(float(item["world_origin"])+opening -
-                            expected_start) > .75:
-                        continue
-                    item["pending"] = false
-                    item["take_key"] = key
-                    _stream_live_serial = int(item["serial"])
-                    _stream_last_take = key
-                    break
+                # Polling can bind only an already-present automatic owner
+                # whose world-time onset matches the graded backend deadline.
+                var expected: float = stream_world_beat-graded_beat
+                var candidate: int = StreamAdmission.select(stream_passes,
+                    "automatic_due",opening,stream_world_beat,
+                    0.0,0.0,"",expected)
+                if candidate >= 0:
+                    var claimed: int = int(stream_passes[candidate]["serial"])
+                    if StreamLifecycle.activate(
+                            stream_passes,claimed,key,false):
+                        _stream_live_serial = claimed
+                        _stream_last_take = key
             elif key == _stream_last_take and not _stream_was_paused:
-                for item in stream_passes:
-                    if str(item.get("take_key","")) == key:
-                        _stream_live_serial = int(item["serial"])
-                        break
+                var owned: int = StreamAdmission.select(stream_passes,
+                    "bound",opening,stream_world_beat,0.0,0.0,key)
+                if owned >= 0:
+                    _stream_live_serial = int(stream_passes[owned]["serial"])
         if _stream_live_serial >= 0:
             for item in stream_passes:
                 if int(item["serial"]) == _stream_live_serial:
@@ -803,13 +762,18 @@ func present_flow(world_beat: float, state: Dictionary,
                             float(gap_info.get("duration_beats",4.0)),
                             _stream_right_beats()+
                             _stream_header_beats(0.0)+1.5)
-                        var next_world: float = float(item["world_origin"]) + \
+                        var intended: float = float(item["world_origin"]) + \
                             timeline.duration_beats+horizon
-                        item["successor_reserved"] = true
+                        var minimum: float = StreamAdmission.position(
+                            stream_passes,stream_world_beat,
+                            _stream_right_beats(),_stream_header_beats(0.0))
+                        var next_world: float = maxf(intended,minimum)
                         var live: int = _stream_live_serial
+                        var before: int = _stream_serial
                         _stream_add_take(0.0,next_world,0.0,
                             _stream_complete_measure(
                                 _stream_right_beats()+1.0),"autopending")
+                        item["successor_reserved"] = _stream_serial > before
                         _stream_live_serial = live
                     break
         # An unreserved start CANNOT create note ink in the current frame.
