@@ -941,47 +941,6 @@ func _stream_transport_owner(opening: float,
     return -1
 
 
-func trim_resume_speculation(world: float, opening: float) -> Array[int]:
-    # Resume first protects the paused graded take. Only speculative
-    # successors are reclaimable. The prior implementation called
-    # trim_future_queue() without a protected owner, deleting the still-
-    # offscreen current exercise in the gap between Pause and Resume.
-    stream_world_beat = maxf(stream_world_beat,world)
-    var future: int = StreamAdmission.select(
-        _stream_queue.online,"automatic",opening,stream_world_beat,
-        _stream_right_beats(),_stream_header_beats(opening))
-    if future >= 0:
-        return []
-    var current_take: int = _stream_transport_owner(opening,true)
-    if current_take >= 0:
-        # A paused source may be reused ONLY if its exact source interval
-        # still has sufficient future reading time. Preserve this take when
-        # it can really be bound; retract speculative successors instead.
-        var active_identity: String = _stream_last_take
-        if active_identity.is_empty():
-            # Pause may arrive before the Play acknowledgement was observed.
-            # The provisional armed owner must be protected equally.
-            for item in _stream_queue.online:
-                if str(item.get("kind","")) == "source" and int(item.get(
-                        "take_owner",-1)) == current_take:
-                    active_identity = str(item.get("take_key",""))
-                    break
-        var reusable: int = StreamAdmission.select(_stream_queue.online,
-            "paused",opening,stream_world_beat,0.0,0.0,active_identity)
-        if reusable >= 0 and int(_stream_queue.online[reusable].get(
-                "take_owner",-1)) == current_take:
-            return trim_future_queue("resume_same_opening",current_take)
-        # Otherwise a new graded source interval is required. Keeping all
-        # invisible measures of the former take made Resume wait until the
-        # entire old passage passed (sometimes tens of seconds at 31 BPM).
-        # The queue permits withdrawal of the MAXIMUM safe unexposed suffix
-        # even from an acknowledged take; visible ink is never modified.
-        return trim_future_queue("resume_changed_opening")
-    # With no authoritative paused owner, the same physical safety rule
-    # applies: only the contiguous never-exposed suffix can be withdrawn.
-    return trim_future_queue("resume_unresolved_opening")
-
-
 func trim_future_queue(reason: String,
         protected_take: int = -1) -> Array[int]:
     # The moving staff has one exit policy. This is the ONLY retractable
