@@ -162,6 +162,27 @@ func _exercise() -> void:
         "two retained owners can never claim the same transport identity")
     check(Lifecycle.activate(passes,3,"piece|1|3|practice",false),
         "new owner may bind its own transport ID")
+    var orphan: Array = [specs(4,70.0,"prepared",true)[1]]
+    check(not Lifecycle.admit(owner,passes,orphan,
+        source_pool,rest_pool,note) and passes.size()==4,
+        "a written rest may not be inserted without its source owner")
+    var mixed: Array = [specs(4,70.0,"prepared",true)[0],
+        specs(5,74.0,"prepared",true)[1]]
+    check(not Lifecycle.admit(owner,passes,mixed,
+        source_pool,rest_pool,note) and passes.size()==4,
+        "one admission cannot combine notes and rests from different takes")
+    var invalid: Array = specs(4,70.0,"prepared",true)
+    check(Lifecycle.admit(owner,passes,invalid,
+        source_pool,rest_pool,note) and passes.size()==6,
+        "a complete later passage is admitted atomically")
+    var damaged: Dictionary = passes[4]
+    var damaged_rest: Dictionary = passes[5]
+    damaged["segment"].free()
+    var dropped: Array[int] = Lifecycle.prune(
+        owner,passes,34.0,90.0,264.0,20.0,4.0)
+    check(dropped.has(4) and dropped.has(-4) and passes.size()==4 and
+        damaged_rest["segment"].get_parent() == owner,
+        "an invalid source must retire its dependent rest, never orphan it")
     Lifecycle.release_all(owner,passes)
     check(passes.is_empty() and note.get_parent()==owner and
         rest.get_parent()==owner and not note.visible and not rest.visible,
