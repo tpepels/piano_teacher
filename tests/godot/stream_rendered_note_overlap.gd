@@ -136,37 +136,41 @@ func _initialize() -> void:
                     continue
                 check(absf(float(a["position"].x)-float(b["position"].x))>=12.0,
                     "two source copies may never overlap a notehead")
-    # A later manual Resume or Retry consumes any still-offscreen automatic
-    # passage instead of stacking another future duplicate.
+    # A pre-engraved automatic attempt for beat zero cannot be reused
+    # for a Resume at beat three. Its immutable content is archived offline
+    # and a distinct source owner is appended after the locked prefix.
     var future_world: float = world+65.0
     v._stream_add_take(0.0,future_world,0.0,"autopending")
-    var auto_serial: int = v._stream_serial
-    var previous_count: int = v.admissions.size()
-    var reused: Dictionary = v.arm_stream_take(world,3.0,NAN,true)
-    check(bool(reused.get("reused",false)) and
-            v._stream_serial == auto_serial and
-            v.admissions.size() == previous_count,
-        "manual Resume reuses future auto ink rather than duplicating notes")
-    var retained_origin := false
-    for item in v.stream_passes:
-        if int(item["serial"]) == auto_serial:
-            retained_origin = is_equal_approx(float(item["source_floor"]),3.0) and \
-                is_equal_approx(float(item["world_origin"]),future_world)
-    check(retained_origin,
-        "repurposed source preserves world position and hides earlier noteheads")
-    check(v.cancel_stream_arm(),
-        "failed Resume restores the same prepositioned automatic owner")
-    var restored_auto: Dictionary = {}
-    for item in v.stream_passes:
-        if int(item.get("serial",-1)) == auto_serial:
-            restored_auto = item
-            break
-    check(not restored_auto.is_empty() and
-        str(restored_auto.get("take_key","")) == "autopending" and
-        bool(restored_auto.get("pending",false)) and
-        is_equal_approx(float(restored_auto.get("source_floor",-1.0)),0.0) and
-        v.admissions.size() == previous_count,
-        "failed Resume restores source clipping and pending status without new notes")
+    var old_auto: int = v._stream_serial
+    var original_auto_floor: float = float(v.stream_passes[-1]["source_floor"])
+    var withdrawn: Array[int] = v.trim_future_queue(
+        "resume_different_opening")
+    check(withdrawn.has(old_auto) and
+        not v.stream_passes.any(func(item: Dictionary) -> bool:
+            return int(item.get("serial",0)) == old_auto),
+        "incompatible future automatic copy leaves the online tail")
+    var archive_has_auto := false
+    for record in v.offline_stream_queue:
+        if int(record.get("owner_serial",-1)) == old_auto and \
+                str(record.get("event","")) == "withdrawn":
+            archive_has_auto = (
+                is_equal_approx(float(record["plan"][0]["source_floor"]),
+                    original_auto_floor))
+    check(archive_has_auto,
+        "withdrawn source is retained offline with unchanged authored notes")
+    var prior_admissions: int = v.admissions.size()
+    var resumed: Dictionary = v.arm_stream_take(world,3.0,NAN,true)
+    check(not resumed.is_empty() and
+        v.admissions.size() == prior_admissions+1,
+        "Resume appends one new immutable source after withdrawing old future")
+    var next_owner: int = v._stream_serial
+    check(next_owner > old_auto and
+        absf(float(v.stream_passes[-1]["source_floor"])-3.0)<.00001,
+        "new Resume owner has the correct source opening")
+    check(v.cancel_stream_arm() and
+        not v.stream_passes.any(func(item: Dictionary) -> bool:
+            return int(item.get("serial",0)) == next_owner),
+        "failed new Resume is withdrawn atomically without changing history")
     v.free()
     # Regression for real Pause -> Resume -> immediate Retry. The old code
     # treated Restart like Resume and reused its already armed source,
@@ -241,18 +245,23 @@ func _initialize() -> void:
         idle.drawn_noteheads.clear()
         idle.fingering_pass_clocks.clear()
         idle._project_stream(idle.size.x*.33)
-        check(idle.admissions.size()==1,
-            "READY cannot add a new source copy while the bar moves")
+        check(idle.stream_passes.size()==1,
+            "READY keeps exactly one online future owner")
+        check(idle.offline_stream_queue.size()>=1,
+            "every displaced READY passage remains in offline history")
         check(idle.drawn_noteheads.is_empty(),
             "READY must not display idle noteheads without Play")
         var reserve: Dictionary = idle.stream_passes[0]
         var threshold: float = idle_world+idle._stream_right_beats()+ \
             idle._stream_header_beats(0.0)
         check(float(reserve["world_origin"]) > threshold,
-            "READY must reposition hidden source before its header enters view")
+            "READY replaces offscreen source rather than shifting an existing origin")
     var idle_armed: Dictionary = idle.arm_stream_take(idle.stream_world_beat,0)
-    check(not idle_armed.is_empty() and idle.admissions.size()==1,
-        "Play must claim the single already engraved idle reservation")
+    var idle_before_play: int = idle.admissions.size()
+    check(not idle_armed.is_empty() and
+        idle.admissions.size()==idle_before_play and
+        idle.stream_passes.size()==1,
+        "Play must claim the last queued READY source without adding ink")
     var idle_origin: float = float(idle.stream_passes[0]["world_origin"])
     check(idle.cancel_stream_arm() and
         str(idle.stream_passes[0].get("take_key",""))=="prepared" and
@@ -263,9 +272,9 @@ func _initialize() -> void:
     idle.drawn_note_instances.clear()
     idle.drawn_noteheads.clear()
     idle._project_stream(idle.size.x*.33)
-    check(idle.admissions.size()==1 and idle.drawn_noteheads.is_empty() and
+    check(idle.stream_passes.size()==1 and idle.drawn_noteheads.is_empty() and
         is_equal_approx(float(idle.stream_passes[0]["world_origin"]),idle_origin),
-        "failed Play cannot leave ghost notes or a second placement behind")
+        "failed Play retains the single hidden READY owner without ghost notes")
     idle.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
