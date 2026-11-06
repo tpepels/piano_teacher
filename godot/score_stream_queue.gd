@@ -29,8 +29,12 @@ func register_peer(view: Control) -> void:
             return
     _peer_views.append(weakref(view))
 
-func _clears_prior_layers(opening_left: float, density: float,
-        viewport_width: float, playhead_x: float) -> bool:
+func minimum_peer_opening(density: float,
+        viewport_width: float, playhead_x: float) -> float:
+    # Earliest permitted world time for the first pixel of new ink.
+    # READY can schedule beyond this barrier; an engine-authored exact
+    # deadline must be rejected if it arrives earlier.
+    var earliest := -INF
     for ref in _peer_views:
         var view = ref.get_ref()
         if view == null or not is_instance_valid(view):
@@ -49,21 +53,23 @@ func _clears_prior_layers(opening_left: float, density: float,
             var peer_end: float = float(item["world_origin"]) + \
                 peer_bounds.y/peer_density
             if absf(density-peer_density) < .0001:
-                # Identical scales allow seamless adjoining physical ink,
-                # even while old and new lessons share the viewport.
-                if opening_left < peer_end-.00001:
-                    return false
+                earliest = maxf(earliest,peer_end)
             else:
-                # Different scales move at different pixel velocities.
-                # Require old ink to leave LEFT before new ink enters RIGHT;
-                # checking world endpoints alone would permit collisions.
-                var new_entry: float = opening_left - \
-                    (viewport_width-playhead_x)/density
+                # Different printed scales have different visual velocities.
+                # Wait until the old rightmost pixel has left the viewport
+                # before the new leftmost pixel may enter from the right.
                 var peer_exit: float = peer_end + \
                     (peer_playhead+60.0)/peer_density
-                if new_entry < peer_exit-.00001:
-                    return false
-    return true
+                earliest = maxf(earliest,peer_exit + \
+                    (viewport_width-playhead_x)/density)
+    return earliest
+
+
+func _clears_prior_layers(opening_left: float, density: float,
+        viewport_width: float, playhead_x: float) -> bool:
+    return opening_left >= minimum_peer_opening(
+        density,viewport_width,playhead_x)-.00001
+
 
 func _init() -> void:
     _writer_id = str(get_instance_id())
