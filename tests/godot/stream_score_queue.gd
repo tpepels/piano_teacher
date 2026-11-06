@@ -164,10 +164,60 @@ func _run() -> void:
         new_source_pool,new_rest_pool,null,
         23.0,800.0,playhead,density,gap,4.0),
         "a rest cannot independently choose its world-time coordinate")
+    # Interrupted sessions leave enqueued-but-never-finalized material in
+    # the checked journal. A new process recovers it as offline source data,
+    # with NO attempt to reuse the obsolete old screen coordinates.
+    var interrupted_key: String = score_key+"-interrupted"
+    var interrupted_writer := Queue.new()
+    check(interrupted_writer.bind_score(interrupted_key,folder),
+        "interrupted-score journal is initialized")
+    var interrupted_owner := Owner.new()
+    root.add_child(interrupted_owner)
+    interrupted_owner.size = owner.size
+    check(interrupted_writer.enqueue(interrupted_owner,
+        passage(1,11.0,"prepared",true),
+        [],[],null,0.0,800.0,playhead,density,gap,4.0),
+        "interrupted session journals its online source before exposure")
+    var interrupted_reader := Queue.new()
+    check(interrupted_reader.bind_score(interrupted_key,folder) and
+        interrupted_reader.offline.size()==1 and
+        str(interrupted_reader.offline[0]["event"])=="interrupted",
+        "unclosed online source is recovered as offline material on restart")
+    check(interrupted_reader.enqueue(other_owner,
+        passage(2,56.0,"prepared",true),[],[],null,
+        23.0,800.0,playhead,density,gap,4.0) and
+        interrupted_reader.offline.is_empty(),
+        "recovered interrupted source is reinserted at a NEW offscreen location")
+    # A fully finished source with a remaining written rest must archive
+    # its complete ORIGINAL passage on unload, never an orphan rest alone.
+    var trailing_key: String = score_key+"-rest"
+    var trailing_writer := Queue.new()
+    check(trailing_writer.bind_score(trailing_key,folder) and
+        trailing_writer.enqueue(other_owner,
+            passage(1,10.0,"prepared",true),[],[],null,
+            0.0,800.0,playhead,density,gap,4.0),
+        "rest-only teardown fixture admits complete source/rest pair")
+    var source_departed: Array[int] = trailing_writer.expire_front(
+        other_owner,19.0,density,gap,4.0,playhead)
+    check(source_departed == [1] and
+        trailing_writer.online.size()==1 and
+        trailing_writer.online[0]["kind"]=="rest",
+        "source departs while its written semantic rest remains")
+    trailing_writer.reset(other_owner)
+    check(trailing_writer.offline.size()==1 and
+        trailing_writer.offline[0]["plan"].size()==2,
+        "score unload saves original whole source even after source ink exits")
+    var rest_reader := Queue.new()
+    check(rest_reader.bind_score(trailing_key,folder) and
+        rest_reader.offline.size()==1 and
+        rest_reader.offline[0]["plan"].size()==2,
+        "trailing-only score teardown is recoverable after reopening")
+    interrupted_owner.queue_free()
     owner.queue_free()
     other_owner.queue_free()
     var absolute: String = ProjectSettings.globalize_path(folder)
-    DirAccess.remove_absolute(absolute.path_join(score_key.sha256_text()+".jsonl"))
+    for key in [score_key,interrupted_key,trailing_key]:
+        DirAccess.remove_absolute(absolute.path_join(key.sha256_text()+".jsonl"))
     DirAccess.remove_absolute(absolute)
     print("STREAM_SCORE_QUEUE_FAILURES:",failures)
     quit(0 if failures==0 else 1)
