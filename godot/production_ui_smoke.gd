@@ -199,6 +199,26 @@ func _process(_delta: float) -> bool:
                     renderer.timeline.pixels_per_beat
                 new_ink_offscreen = new_ink_offscreen and left > renderer.size.x
         if not original_survived or not new_ink_offscreen:
+            var diagnostic: Array = []
+            for item in renderer.stream_passes:
+                diagnostic.append({
+                    "serial":int(item.get("serial",-1)),
+                    "kind":str(item.get("kind","")),
+                    "take_key":str(item.get("take_key","")),
+                    "pending":bool(item.get("pending",false)),
+                    "armed":bool(item.get("armed",false)),
+                    "origin":float(item.get("world_origin",NAN)),
+                    "floor":float(item.get("source_floor",NAN))
+                })
+            printerr("PHASE6_PLAY_STREAM_DIAGNOSTIC:",JSON.stringify({
+                "ready_serial":ready_pass_serial,
+                "ready_origin":ready_world_origin,
+                "world_beat":renderer.stream_world_beat,
+                "state_phase":app.last_state.get("phase"),
+                "original_survived":original_survived,
+                "successors_offscreen":new_ink_offscreen,
+                "passes":diagnostic
+            }))
             _fail("Play shifted its existing world origin or admitted notes onscreen")
             return true
         transport_seen = true
