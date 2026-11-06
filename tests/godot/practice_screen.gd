@@ -220,7 +220,13 @@ func run() -> void:
                 previous.lesson_steps = 639
                 previous.piece_last_bar = 80
                 view.present(previous,true)
+                await process_frame
+                var staff_height_before: float = view.stage.score_frame.size.y
                 view.show_resume_prompt(previous,true)
+                await process_frame
+                check(view.resume_banner.get_parent() is CanvasLayer and
+                    is_equal_approx(view.stage.score_frame.size.y,staff_height_before),
+                    "Saved-progress prompt must not resize or re-engrave the moving score")
                 check(view.is_resume_prompt_open() and view.resume_measure_button.visible,
                     "Reopening a saved song offers contextual overlap and a measure chooser")
                 check(view.resume_banner_message.text.contains("14 of 639"),
@@ -243,6 +249,9 @@ func run() -> void:
                 var play_events: Array = []
                 view.play_requested.connect(func(): play_events.append("play"))
                 view.start_button.pressed.emit()
+                await process_frame
+                check(is_equal_approx(view.stage.score_frame.size.y,staff_height_before),
+                    "Dismissing saved-progress on Play must not move the staff")
                 check(play_events == ["play"] and not view.is_resume_prompt_open(),
                     "Normal Play dismisses inline review and actually starts")
                 view.show_resume_prompt(previous,true)
