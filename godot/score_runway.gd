@@ -19,6 +19,9 @@ var _future
 # Every outgoing score owns its retained ink until its last clip leaves.
 # Two quick lesson changes may overlap: there is no single-tail shortcut.
 var _tails: Array = []
+# Immutable offline plans survive the lifetime of each outgoing renderer.
+# Old scene nodes can be freed without discarding their queued source plan.
+var offline_history: Array = []
 # During an unprepared manual revision, this outgoing renderer temporarily
 # owns the visible staff and playhead until replacement ink is published.
 var _manual_staff_tail
@@ -65,6 +68,13 @@ func _discard() -> void:
     _ack.cancel_request()
     _report.cancel_request()
     if _future != null and is_instance_valid(_future):
+        if not _bundle.is_empty():
+            offline_history.append({
+                "event":"unselected_stage",
+                "stage_key":str(_bundle.get("stage_key","")),
+                "fingerprint":str(_bundle.get("fingerprint","")),
+                "revision":int(_bundle.get("revision",-1)),
+                "bundle":_bundle.duplicate(true)})
         _future.queue_free()
     _future = null
     _bundle.clear()
@@ -81,9 +91,10 @@ func _discard() -> void:
 
 func _retain_tail(old, keep_staff: bool = false) -> void:
     if old == null or not is_instance_valid(old) or _tails.has(old):
-        # Each outgoing renderer is registered exactly once. Duplicate
-        # handoff notifications cannot scroll/retire its notes twice.
         return
+    # Lesson changes retract the maximal never-seen future suffix before
+    # handing off the old renderer. Already-visible notes remain immutable.
+    old.trim_future_queue("lesson_handoff")
     old.runway_overlay = not keep_staff
     if is_instance_valid(old.retained_annotations):
         old.retained_annotations.queue_redraw()
@@ -124,6 +135,7 @@ func _advance_tails(global_beat: float) -> void:
             continue
         tail.present_flow(global_beat,{},0.0,false)
         if tail.stream_passes.is_empty() and tail != _manual_staff_tail:
+            offline_history.append_array(tail.offline_stream_queue.duplicate(true))
             tail.queue_free()
             _tails.remove_at(index)
 
