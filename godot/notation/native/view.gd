@@ -985,7 +985,14 @@ func present_flow(world_beat: float, state: Dictionary,
         # READY frames can arrive after Play was armed but before the
         # backend confirms it. Only presentation frames skip admission;
         # explicit Retry still needs to reserve its own future score.
-        if _stream_armed_serial < 0:
+        if _stream_armed_serial < 0 and StreamAdmission.select(
+                _stream_queue.online,"idle",opening,stream_world_beat) < 0:
+            # Precompile one hidden immutable READY take. Once it moves too
+            # close to the viewport, DO NOT re-enqueue it every few frames.
+            # It stays unseen; Play alone refreshes its offscreen placement.
+            # If its first source strip has fully expired, discard only the
+            # safe hidden remainder before preparing a new one.
+            trim_future_queue("ready_source_expired")
             _stream_reserve_ready(stream_world_beat,opening)
     if paused_now:
         if not _stream_was_paused:
