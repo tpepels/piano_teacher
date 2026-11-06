@@ -91,7 +91,8 @@ func _exercise() -> void:
         "READY must hide BOTH original noteheads and semantic rests")
     check(float(source_pass["world_origin"]) == 20.0 and
         float(rest_pass["world_origin"]) == 24.0 and
-        queue.offline[0]["plan"][0]["world_origin"] == 20.0,
+        queue.offline.is_empty() and
+        queue.history[0]["plan"][0]["world_origin"] == 20.0,
         "prepared source and rest retain their original immutable positions")
     check(Lifecycle.activate(passes,1,"piece|1|1|practice",true),
         "arming changes transport state without moving source geometry")
