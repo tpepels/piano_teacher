@@ -232,7 +232,8 @@ func run() -> void:
                     "Saved-progress prompt must not resize or re-engrave the moving score")
                 check(view.is_resume_prompt_open() and view.resume_measure_button.visible,
                     "Reopening a saved song offers contextual overlap and a measure chooser")
-                check(view.resume_banner_message.text.contains("14 of 639"),
+                check(view.resume_banner_message.text == "Continue at step 14?" and
+                    view.resume_banner.size.x <= 430.01,
                     "Inline review displays the saved step")
                 check(not view.handle_source_input(InputEventKey.new()),
                     "Inline review cannot intercept keyboard transport")
