@@ -408,7 +408,7 @@ func _install_retained_segments() -> void:
     retained_annotations.set("owner_view",self)
     retained_annotations.z_index = 5
     add_child(retained_annotations)
-    _hide_retained_segments()
+    StreamLifecycle.present_pool(retained_all_segments)
 
 func _resize_retained_pool() -> void:
     if retained_first_once == null:
@@ -439,14 +439,6 @@ func retained_segment_compiled() -> void:
         # inside a CanvasItem draw notification.
         call_deferred("emit_signal","retained_ink_compiled")
 
-func _hide_retained_segments() -> void:
-    # Newly installed segments compile before first entering the viewport.
-    for segment in retained_all_segments:
-        if segment.visible != not segment.compiled:
-            segment.visible = not segment.compiled
-        if not segment.compiled:
-            segment.position = Vector2(-1000000.0,0.0)
-
 func _invalidate_retained_segments() -> void:
     retained_ink_published = false
     # Every source/rest pass is owned by StreamLifecycle, including those
@@ -458,7 +450,7 @@ func _invalidate_retained_segments() -> void:
         if segment != null and is_instance_valid(segment):
             segment.compiled = false
             segment.queue_redraw()
-    _hide_retained_segments()
+    StreamLifecycle.present_pool(retained_all_segments)
 
 func paint_retained_source(canvas: CanvasItem) -> RenderPass:
     return SourcePassPainter.paint(self,canvas)
@@ -819,11 +811,7 @@ func _project_stream(playhead_x: float) -> void:
             "pass_index":0,"pass_start":0.0,
             "stream_floor":float(item["source_floor"]),
             "stream_ceiling":float(item["source_ceiling"])})
-    # Newly allocated/invalidated CanvasItems must remain visible to Godot
-    # while compiling offscreen; compiled unused pool items remain hidden.
-    for segment in retained_all_segments:
-        if segment != null and is_instance_valid(segment):
-            segment.visible = used.has(segment) or not segment.compiled
+    StreamLifecycle.present_pool(retained_all_segments,used)
 
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     var old_hand: String = active_hand
