@@ -275,6 +275,16 @@ func _process(_delta: float) -> bool:
         if renderer._stream_serial != paused_pass_serial:
             _fail("Pause spawned another exercise instead of letting previous notes leave")
             return true
+        var paused_original_preserved := false
+        for item in renderer.stream_passes:
+            if str(item.get("kind","source")) == "source" and \
+                    int(item.get("take_owner",item["serial"])) == ready_take_owner:
+                paused_original_preserved = paused_original_preserved or \
+                    is_equal_approx(float(item["world_origin"]),ready_world_origin)
+        if not paused_original_preserved and \
+                renderer.stream_world_beat < ready_first_expiry_world:
+            _fail("Pause withdrew the current unexpired source before Resume")
+            return true
         if app.command_state.pending:
             return false
         resume_requested = true
