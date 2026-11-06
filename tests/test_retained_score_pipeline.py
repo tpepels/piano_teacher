@@ -124,6 +124,12 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "static func pending_index(" not in admission
     assert "static func paused_unplayed_index(" not in admission
     assert "static func idle_reservation_index(" not in admission
+    assert "static func future_start(" not in admission
+    assert "static func occupied_end(" not in admission
+    assert "stream_passes.append(" not in view
+    assert 'item["world_origin"] =' not in view
+    assert 'existing["world_origin"] =' not in view
+    assert 'item["source_floor"] =' not in view
     assert "StreamLifecycle.prune(self,stream_passes" in view
     assert "StreamLifecycle.release_all(self,stream_passes)" in view
     assert "StreamLifecycle.attach_compiled(stream_passes)" in view
