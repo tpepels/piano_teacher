@@ -64,6 +64,7 @@ var resume_continue_button: Button
 var resume_measure_button: Button
 var spoken_countin_toggle: CheckButton
 var spoken_countin_status: Label
+var spoken_countin_test_button: Button
 var _resume_open_state: Dictionary = {}
 var advanced_pause_open := false
 var ui_scale := 1.0
@@ -205,6 +206,9 @@ func _ready() -> void:
         stage.count_in.set_spoken_enabled(enabled)
         _present_countin_audio_status())
     details_panel.add_child(spoken_countin_toggle)
+    spoken_countin_test_button = _button("Test voice",_test_countin_voice,false,"utility")
+    spoken_countin_test_button.tooltip_text = "Play the bundled Ichi recording now"
+    details_panel.add_child(spoken_countin_test_button)
     spoken_countin_status = UI.label("",12,MUTED)
     spoken_countin_status.visible = false
     details_panel.add_child(spoken_countin_status)
@@ -752,10 +756,26 @@ func _present_countin_audio_status() -> void:
         return
     var status: Dictionary = stage.count_in.voice_status()
     var unavailable: bool = not bool(status.get("available",false))
-    spoken_countin_status.visible = unavailable
+    var muted: bool = bool(status.get("master_muted",false))
+    spoken_countin_status.visible = unavailable or muted
     spoken_countin_status.text = (
         "Spoken count-in files unavailable · metronome clicks used"
-        if unavailable else "")
+        if unavailable else "Master audio bus is muted · unmute to hear speech"
+        if muted else "")
+
+func _test_countin_voice() -> void:
+    var status: Dictionary = stage.count_in.voice_status()
+    if not bool(status.get("enabled",false)):
+        spoken_countin_status.text = "Enable spoken count-in before testing"
+    elif not bool(status.get("available",false)):
+        spoken_countin_status.text = "Spoken count-in files unavailable"
+    elif bool(status.get("master_muted",false)):
+        spoken_countin_status.text = "Master audio bus is muted"
+    elif stage.count_in.speak_beat(1):
+        spoken_countin_status.text = "Playing Ichi on the Master audio bus"
+    else:
+        spoken_countin_status.text = "Audio playback failed · check terminal"
+    spoken_countin_status.visible = true
 
 
 func is_source_picker_open() -> bool:
