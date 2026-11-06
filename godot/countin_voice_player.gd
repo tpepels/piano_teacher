@@ -9,7 +9,8 @@ var spoken_enabled := true
 var _voice_player: AudioStreamPlayer
 var _streams: Array[AudioStream] = []
 var _missing: Array[String] = []
-var _reported_missing: Dictionary = {}
+var last_spoken_number := 0
+var spoken_cues_total := 0
 
 func _init() -> void:
     var saved := ConfigFile.new()
@@ -53,7 +54,10 @@ func status() -> Dictionary:
     return {"enabled":spoken_enabled,"available":available(),
         "missing":_missing.duplicate(),
         "audio_bus":_voice_player.bus if _voice_player != null else "",
-        "playing":_voice_player.playing if _voice_player != null else false}
+        "playing":_voice_player.playing if _voice_player != null else false,
+        "last_word":last_spoken_number,"spoken_cues_total":spoken_cues_total,
+        "master_muted":AudioServer.is_bus_mute(
+            AudioServer.get_bus_index("Master"))}
 
 func set_spoken_enabled(enabled: bool) -> void:
     spoken_enabled = enabled
@@ -75,4 +79,10 @@ func speak_beat(number: int) -> bool:
     _voice_player.stop()
     _voice_player.stream = sound
     _voice_player.play(SEEK_SECONDS)
-    return _voice_player.playing
+    if not _voice_player.playing:
+        push_warning("Count-in recording could not start: " +
+            VOICE_NAMES[number-1])
+        return false
+    last_spoken_number = number
+    spoken_cues_total += 1
+    return true
