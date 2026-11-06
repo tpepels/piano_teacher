@@ -52,6 +52,12 @@ func _initialize() -> void:
     check(v.admissions.size()==1,
         "Ready prepositions score without any Play event")
     var initial_origin: float = float(v.stream_passes[0]["world_origin"])
+    var outside_snapshot: Array = v.stream_passes
+    outside_snapshot[0]["world_origin"] = -999.0
+    outside_snapshot.clear()
+    check(v.stream_passes.size()>=1 and
+        is_equal_approx(float(v.stream_passes[0]["world_origin"]),initial_origin),
+        "external HUD or debug readers cannot mutate queued note positions or dequeue ink")
     check(initial_origin > v._stream_right_beats()+v._stream_header_beats(0.0),
         "initial source/clef begin completely outside the viewport")
     # An idle reservation must remain fixed over ordinary animation frames;
