@@ -86,6 +86,7 @@ func _fold(event: Dictionary, active: Dictionary,
         waiting: Dictionary) -> void:
     var kind: String = str(event.get("event",""))
     var owner: String = str(event.get("session","")) + ":" + \
+        str(event.get("writer_id","")) + ":" + \
         str(event.get("owner_serial",0))
     var from_id: int = int(event.get("from_id",0))
     if kind == "enqueued":
@@ -110,7 +111,8 @@ func _fold(event: Dictionary, active: Dictionary,
         active.erase(owner)
 
 func record(kind: String, owner_serial: int, plan: Array,
-        reason: String = "", from_id: int = 0) -> bool:
+        reason: String = "", from_id: int = 0,
+        writer_id: String = "") -> bool:
     if kind not in ["enqueued","withdrawn","score_reset","completed"]:
         last_error = "Unsupported offline queue event " + kind
         return false
@@ -119,8 +121,8 @@ func record(kind: String, owner_serial: int, plan: Array,
         return false
     var event: Dictionary = {
         "version":VERSION,"id":_next_id,"score_key":score_key,
-        "session":_session,"owner_serial":owner_serial,
-        "event":kind,"reason":reason,"from_id":from_id,
+        "session":_session,"writer_id":writer_id,
+        "owner_serial":owner_serial,"event":kind,"reason":reason,"from_id":from_id,
         "plan":plan.duplicate(true)}
     if not _path.is_empty():
         if not last_error.is_empty():
@@ -159,7 +161,7 @@ func record(kind: String, owner_serial: int, plan: Array,
                 break
     return true
 
-func original_plan(owner_serial: int) -> Array:
+func original_plan(owner_serial: int, writer_id: String = "") -> Array:
     # A score may be unloaded after its source has exited but its written
     # rest is still onscreen. Recover the entire originally admitted source
     # from the journal, not an unusable rest-only fragment.
@@ -167,6 +169,7 @@ func original_plan(owner_serial: int) -> Array:
         var event: Dictionary = history[index]
         if str(event.get("event","")) == "enqueued" and \
                 str(event.get("session","")) == _session and \
+                str(event.get("writer_id","")) == writer_id and \
                 int(event.get("owner_serial",-1)) == owner_serial:
             return (event.get("plan",[]) as Array).duplicate(true)
     return []
