@@ -234,16 +234,16 @@ func _draw() -> void:
     var h: float = size.y
     if w < 1 or h < 1:
         return
-    # Only ScoreOverlay paints the precise vertical timing line. The stage
-    # must not draw a second line behind it, especially during count-in.
+    # Only the native retained notation view paints the fixed timing line.
+    # The stage must not draw a duplicate behind it during count-in.
     if surface_visible:
         draw_rect(Rect2(0, 0, w, h), Design.STAGE)
     if transport_active or phase == "paused":
         var x: float = w * ScoreView.PLAYHEAD_FRACTION
         var top: float = maxf(8.0, staff_band_top * h - 18.0)
         var bottom: float = minf(h - 32.0, staff_band_bottom * h + 18.0)
-        # The only timing line is drawn by score_overlay.gd at the exact
-        # projected beat. Retain a small beat cue outside the staff instead.
+        # The native retained view owns the exact world-time playhead.
+        # Retain only this small beat cue outside the printed staff.
         if beat_ripple > .001:
             draw_circle(Vector2(x, maxf(8.0, top - 9.0)),
                 2.0 + beat_ripple * 3.0,
