@@ -760,8 +760,10 @@ func reserve_transport_action(action: String, world: float,
     var mode: String = str(planned["mode"])
     if mode == "reuse":
         if action == "resume":
-            # Preserve the matched source; only trim incompatible successors.
-            trim_resume_speculation(world,opening)
+            # The SAME preflight that chose this source identifies the
+            # protected owner. Never run a second, independent selection
+            # procedure against a partially modified queue.
+            trim_future_queue("resume_reuse",int(planned["protected_take"]))
         var existing: Dictionary = arm_stream_take(
             world,opening,NAN,action == "resume",false)
         if existing.is_empty():
