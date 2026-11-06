@@ -82,5 +82,12 @@ func prune(visible_takes: Array, current_take: String) -> void:
             _notes_by_take.erase(key)
             _settled_by_take.erase(key)
 
+func has_any() -> bool:
+    return not _notes_by_take.is_empty()
+
+func statuses_for_take(take: String) -> Dictionary:
+    return (_notes_by_take.get(take,{}) as Dictionary).duplicate()
+
 func snapshot() -> Dictionary:
+    # Debug/test snapshot only; drawing must not deep-copy the whole ledger.
     return _notes_by_take.duplicate(true)
