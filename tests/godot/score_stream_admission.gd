@@ -12,6 +12,18 @@ func _initialize() -> void:
     var first: float = Admission.position(passes,world,11.0,3.5)
     check(first > world+14.0,
         "one placement boundary keeps clef and source beyond viewport")
+    # With a low practice tempo, redundant blank travel used to exceed
+    # five seconds before the earliest glyph reached the viewport edge.
+    # Keep the real printed header offscreen yet show its first ink promptly.
+    var ready_start: float = Admission.position(
+        [],world,11.0,3.5,NAN,Admission.READY_TRAVEL_BEATS)
+    var offscreen_entry_beats: float = ready_start-world-11.0-3.5
+    var offscreen_entry_seconds: float = offscreen_entry_beats*60.0/31.0
+    check(offscreen_entry_beats > 0.0 and
+        offscreen_entry_seconds < 1.5,
+        "at 31 BPM the first clef enters from outside the screen within 1.5 seconds")
+    check(ready_start-world > 11.0+3.5,
+        "faster entry cannot position initial score ink inside the viewport")
     passes.append({"serial":1,"owner_serial":1,"kind":"source",
         "pending":true,"armed":false,"take_key":"prepared",
         "world_origin":first,"source_floor":0.0,"source_ceiling":6.0})
