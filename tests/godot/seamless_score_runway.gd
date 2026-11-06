@@ -194,6 +194,28 @@ func run() -> void:
     runway._advance_tails(49.0)
     check(runway._tails.is_empty(),
         "all outgoing renderers eventually retire without leaking nodes")
+    # The later layer may be empty before the older one. Physical
+    # retirement must nevertheless dequeue renderer layers ONLY from the
+    # front of the single chronological score-layer queue.
+    var long_head := MockView.new()
+    stage.score_frame.add_child(long_head)
+    long_head.stream_passes = [{
+        "world_origin":50.0,"source_floor":0.0,"source_ceiling":50.0}]
+    var short_second := MockView.new()
+    stage.score_frame.add_child(short_second)
+    short_second.stream_passes = [{
+        "world_origin":55.0,"source_floor":0.0,"source_ceiling":8.0}]
+    runway._retain_tail(long_head)
+    runway._retain_tail(short_second)
+    runway._advance_tails(70.0)
+    check(runway._tails.size()==2 and
+        runway._tails[0] == long_head and
+        runway._tails[1] == short_second and
+        short_second.stream_passes.is_empty(),
+        "later empty renderer cannot retire ahead of older visible notes")
+    runway._advance_tails(101.0)
+    check(runway._tails.is_empty(),
+        "when older source exits, both layers dequeue in FIFO order")
     runway._next_poll_ms = 0
     runway._request_if_needed({"loaded":true,"mode":"practice",
         "lesson_step":2,"lesson_steps":3},Time.get_ticks_msec()+1000)
