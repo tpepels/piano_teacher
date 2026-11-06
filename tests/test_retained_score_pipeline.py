@@ -126,7 +126,8 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "FileAccess.open(" in archive
     runway = (ROOT/"godot/score_runway.gd").read_text()
     assert "offline_history" not in runway
-    assert "Lifecycle._admit(owner,online,specs" in queue
+    assert "Lifecycle._admit(owner,online,prepared" in queue
+    assert "Lifecycle.validate_batch(online,specs)" in queue
     assert "online.pop_front()" in queue
     assert "online.pop_back()" in queue
     assert "func expire_front(" in queue
