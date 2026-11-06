@@ -13,12 +13,14 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 DESTINATION = Path(__file__).resolve().parent.parent / "godot" / "assets" / "countin"
-SOURCE = "https://commons.wikimedia.org/wiki/Special:Redirect/file/"
+SOURCE = "https://upload.wikimedia.org/wikipedia/commons/"
+# Direct original URLs verified against each Commons file page. Avoid an
+# extra redirect at startup and keep one deterministic source per syllable.
 SAMPLES = {
-    "ichi": "Ja-1-ichi.ogg",
-    "ni": "Ja-2-ni.ogg",
-    "san": "Ja-3-san.ogg",
-    "shi": "Ja-4-shi_counting.ogg",
+    "ichi": "7/7f/Ja-1-ichi.ogg",
+    "ni": "3/3c/Ja-2-ni.ogg",
+    "san": "8/83/Ja-3-san.ogg",
+    "shi": "b/bf/Ja-4-shi_counting.ogg",
 }
 MAX_BYTES = 256 * 1024
 
