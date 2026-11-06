@@ -252,12 +252,15 @@ func _run() -> void:
         "concurrent renderer layers use one writer for identical score source")
     check(first_layer.enqueue(owner,passage(1,10.0,"prepared",true),
         [],[],null,0.0,800.0,playhead,density,gap,4.0) and
-        second_layer.enqueue(other_owner,passage(2,23.0,"prepared",true),
+        second_layer.enqueue(other_owner,passage(1,23.0,"prepared",true),
         [],[],null,0.0,800.0,playhead,density,gap,4.0),
         "independent render layers append both source plans through shared journal")
     check(first_layer.history.size()==2 and
-        int(first_layer.history[0]["id"]) != int(first_layer.history[1]["id"]),
-        "overlapping renderers never allocate the same journal event ID")
+        int(first_layer.history[0]["id"]) != int(first_layer.history[1]["id"]) and
+        first_layer.history[0]["owner_serial"] == 1 and
+        first_layer.history[1]["owner_serial"] == 1 and
+        first_layer.history[0]["writer_id"] != first_layer.history[1]["writer_id"],
+        "two renderers may both own serial 1 without colliding in journal identity")
     var cold_layer := Queue.new()
     check(cold_layer.bind_score(shared_key,folder,true) and
         cold_layer.offline.size()==2 and
