@@ -19,6 +19,9 @@ var _future
 # Every outgoing score owns its retained ink until its last clip leaves.
 # Two quick lesson changes may overlap: there is no single-tail shortcut.
 var _tails: Array = []
+# During an unprepared manual revision, this outgoing renderer temporarily
+# owns the visible staff and playhead until replacement ink is published.
+var _manual_staff_tail
 var _bundle: Dictionary = {}
 var _layout: Dictionary = {}
 var _source_fingerprint := ""
@@ -76,14 +79,14 @@ func _discard() -> void:
     _terminal_preload_failure = false
     _report_accepted = false
 
-func _retain_tail(old) -> void:
+func _retain_tail(old, keep_staff: bool = false) -> void:
     if old == null or not is_instance_valid(old):
         return
-    old.runway_overlay = true
+    old.runway_overlay = not keep_staff
     if is_instance_valid(old.retained_annotations):
         old.retained_annotations.queue_redraw()
     old.runway_cutoff_beat = INF
-    old.set_transport_overlay_enabled(false)
+    old.set_transport_overlay_enabled(keep_staff)
     old.mouse_filter = Control.MOUSE_FILTER_IGNORE
     old.queue_redraw()
     # Leave outgoing ink below the fixed HUD. Moving a tail to the end of
@@ -93,6 +96,20 @@ func _retain_tail(old) -> void:
             old.get_index() > stage.renderer.get_index():
         stage.score_frame.move_child(old,stage.renderer.get_index())
     _tails.append(old)
+    if keep_staff:
+        _manual_staff_tail = old
+
+
+func active_revision_published(_revision: int) -> void:
+    # Called by ScoreAssetSession only once the replacement has completed
+    # authentic engraving. This is the handoff of staff/cursor ownership.
+    if _manual_staff_tail == null:
+        return
+    if is_instance_valid(_manual_staff_tail):
+        _manual_staff_tail.runway_overlay = true
+        _manual_staff_tail.set_transport_overlay_enabled(false)
+        _manual_staff_tail.queue_redraw()
+    _manual_staff_tail = null
 
 
 func _advance_tails(global_beat: float) -> void:
@@ -104,7 +121,7 @@ func _advance_tails(global_beat: float) -> void:
             _tails.remove_at(index)
             continue
         tail.present_flow(global_beat,{},0.0,false)
-        if tail.stream_passes.is_empty():
+        if tail.stream_passes.is_empty() and tail != _manual_staff_tail:
             tail.queue_free()
             _tails.remove_at(index)
 
@@ -274,7 +291,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     if outgoing.stream_passes.is_empty():
         outgoing.queue_free()
     else:
-        _retain_tail(outgoing)
+        _retain_tail(outgoing,true)
     return true
 
 
