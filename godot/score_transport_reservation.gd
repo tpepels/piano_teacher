@@ -47,6 +47,8 @@ static func plan(renderer, action: String, world: float,
     if reusable >= 0:
         return {"ok":true,"mode":"reuse","action":action,
             "opening":source_opening,
+            "protected_take":int(queue.online[reusable].get("take_owner",
+                queue.online[reusable]["serial"])),
             "start_world":float(queue.online[reusable]["world_origin"]) +
                 source_opening,"reason":"existing_future_owner"}
     # All possible mutations are previewed on a local ARRAY copy only.
