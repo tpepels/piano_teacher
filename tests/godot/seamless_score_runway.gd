@@ -134,14 +134,36 @@ func run() -> void:
     check(future.arm_calls == 2 and \
             is_equal_approx(future.armed_world,34.0),
         "promoted future source keeps its exactly scheduled world coordinate")
-    check(runway._tail == old and old.cleared == 0,
+    check(runway._tails == [old] and old.cleared == 0,
         "outgoing score survives until its own clips exit left")
-    runway._advance_tail(29.0)
-    check(runway._tail == old and old.last_world == 29.0,
+    runway._advance_tails(29.0)
+    check(runway._tails == [old] and old.last_world == 29.0,
         "previous notes scroll on the same one-way world axis")
-    runway._advance_tail(31.0)
-    check(runway._tail == null,
+    runway._advance_tails(31.0)
+    check(runway._tails.is_empty(),
         "outgoing renderer is retired when its final note passes")
+    # Two rapid promotions cannot destroy the older stage's still-visible
+    # notes, even when an unrelated preload gets invalidated.
+    var first_tail := MockView.new()
+    stage.score_frame.add_child(first_tail)
+    first_tail.stream_passes = [{
+        "world_origin":33.0,"source_floor":0.0,"source_ceiling":12.0}]
+    var second_tail := MockView.new()
+    stage.score_frame.add_child(second_tail)
+    second_tail.stream_passes = [{
+        "world_origin":36.0,"source_floor":0.0,"source_ceiling":12.0}]
+    runway._retain_tail(first_tail)
+    runway._retain_tail(second_tail)
+    runway._discard()
+    check(runway._tails.size()==2 and
+        is_instance_valid(first_tail) and is_instance_valid(second_tail),
+        "preload reset cannot remove either visible outgoing lesson")
+    runway._advance_tails(46.0)
+    check(runway._tails.size()==1 and runway._tails[0] == second_tail,
+        "each outgoing lesson expires independently on the world axis")
+    runway._advance_tails(49.0)
+    check(runway._tails.is_empty(),
+        "all outgoing renderers eventually retire without leaking nodes")
     runway._next_poll_ms = 0
     runway._request_if_needed({"loaded":true,"mode":"practice",
         "lesson_step":2,"lesson_steps":3},Time.get_ticks_msec()+1000)
