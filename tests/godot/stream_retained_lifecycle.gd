@@ -159,9 +159,10 @@ func _exercise() -> void:
         source_pool,rest_pool,note) and passes.size()==4,
         "another unique future owner uses the same general path")
     check(not Lifecycle.activate(passes,3,"piece|1|2|practice",false),
-        "two retained owners can never claim the same transport identity")
-    check(Lifecycle.activate(passes,3,"piece|1|3|practice",false),
-        "new owner may bind its own transport ID")
+        "same transport ID and source opening cannot create duplicate notation")
+    check(Lifecycle.widen_source(passes,3,2.0,4.0) and
+        Lifecycle.activate(passes,3,"piece|1|2|practice",false),
+        "Resume may reuse a transport ID with a distinct later source interval")
     var orphan: Array = [specs(4,70.0,"prepared",true)[1]]
     check(not Lifecycle.admit(owner,passes,orphan,
         source_pool,rest_pool,note) and passes.size()==4,
