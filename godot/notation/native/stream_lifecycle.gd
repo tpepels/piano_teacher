@@ -108,6 +108,44 @@ static func reposition(passes: Array, owner_serial: int,
     return true
 
 
+static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
+    # Preserve the exact visible/pending state before dispatching a control.
+    # A rejected or timed-out command must never leave ghost armed notes.
+    var result: Dictionary = {}
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+            continue
+        var role: String = str(item.get("kind","source"))
+        result[role] = {
+            "take_key":item.get("take_key",""),
+            "pending":item.get("pending",false),
+            "armed":item.get("armed",false),
+            "hidden_until_armed":item.get("hidden_until_armed",false),
+            "source_floor":item.get("source_floor",0.0),
+            "source_ceiling":item.get("source_ceiling",0.0),
+            "world_origin":item.get("world_origin",0.0)}
+    return result
+
+
+static func restore_owner(passes: Array, owner_serial: int,
+        snapshot: Dictionary) -> bool:
+    if not snapshot.has("source"):
+        return false
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+            continue
+        var role: String = str(item.get("kind","source"))
+        if not snapshot.has(role):
+            return false
+    for item in passes:
+        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+            continue
+        var original: Dictionary = snapshot[str(item.get("kind","source"))]
+        for field in original:
+            item[field] = original[field]
+    return true
+
+
 static func activate(passes: Array, owner_serial: int, key: String,
         armed: bool) -> bool:
     # Exactly one owner per source interval and transport identity. Resume
