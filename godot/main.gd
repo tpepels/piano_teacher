@@ -968,9 +968,27 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     if bool(parsed.get("loaded",false)) and practice_view.stage.renderer != null:
         var beat: float = _transport_beat_at(received_ms)
         var world: float = _unrolled_score_beat_at(beat,received_ms)
-        practice_view.stage.renderer.present(
-            parsed,beat,world -
-            float(practice_view.stage.renderer.runway_origin_beat))
+        var renderer = practice_view.stage.renderer
+        renderer.present(
+            parsed,beat,world-float(renderer.runway_origin_beat))
+        # The backend's retry-preparation schedule contains one absolute
+        # monotonic deadline. Map it through the already calibrated backend
+        # epoch, then through the ONE forward-moving score clock. No screen
+        # local fallback or rescheduling from delayed polling timestamps.
+        var preparation: Variant = parsed.get("practice_preparation")
+        var schedule: Variant = parsed.get("visual_preparation_schedule")
+        if preparation is Dictionary and schedule is Dictionary and \
+                visual_transport_clock.has_backend_offset and \
+                str(parsed.get("mode","")) == "practice" and \
+                str(parsed.get("phase","")) in ["feedback","recovering"] and \
+                not bool(parsed.get("paused",false)) and \
+                schedule.has("deadline_at_ms"):
+            var deadline_ms: int = roundi(
+                float(schedule["deadline_at_ms"]) +
+                visual_transport_clock.backend_offset_ms)
+            var deadline_world: float = score_flow.project(deadline_ms)
+            renderer.enqueue_recovery_queue(world,
+                float(preparation.get("source_from_beat",0.0)),deadline_world)
         # Atomically bind an acknowledged transport ID to the already armed
         # source BEFORE publishing the new backend state. Otherwise the UI
         # may observe a running Retry while its note copy still has the
