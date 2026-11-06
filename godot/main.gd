@@ -723,6 +723,8 @@ func _on_score_layout_published(_published_revision: int, values: Dictionary) ->
     live_midi_feedback.bind_layout(values, _published_revision)
 
 func _on_score_published(published_revision: int) -> void:
+    if score_runway != null:
+        score_runway.active_revision_published(published_revision)
     if phase0_smoke_mode:
         print("PHASE0_SCORE_READY_NATIVE: REVISION:", published_revision)
     print("NATIVE_MODEL_READY: ", published_revision,
