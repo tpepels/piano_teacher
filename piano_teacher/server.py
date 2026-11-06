@@ -2421,9 +2421,11 @@ class PracticeEngine:
             self.measurement.finish()
             self.running = False
             self.visual_transport._preview_loop_pending = True
-            self.visual_transport.next_at = repeat_deadline(
-                run_at=self.visual_transport.run_at, duration=duration,
-                gap_beats=self.visual_transport.visual_gap_beats, bpm=self.plan.bpm)
+            self.visual_transport.next_at = self._automatic_stream_deadline(
+                repeat_deadline(
+                    run_at=self.visual_transport.run_at, duration=duration,
+                    gap_beats=self.visual_transport.visual_gap_beats,
+                    bpm=self.plan.bpm))
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn progress."
             if now >= self.visual_transport.next_at:
