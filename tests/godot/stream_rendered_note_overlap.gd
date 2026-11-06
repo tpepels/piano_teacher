@@ -74,6 +74,15 @@ func _initialize() -> void:
     state["running"]=true
     state["transport_id"]=1
     v.present_flow(world,state,-float(prepared["start_world"]))
+    check(v._stream_armed_serial == ready_pass_serial and
+        v._stream_last_take.is_empty(),
+        "unacknowledged polling cannot bind an armed Play to a stale transport")
+    check(v.acknowledge_stream_arm(),
+        "successful backend Play response authorizes transport binding")
+    v.present_flow(world,state,-float(prepared["start_world"]))
+    check(v._stream_last_take == "piece|1|1|practice" and
+        v._stream_armed_serial == -1,
+        "an acknowledged Play binds its unique source and clears provisional state")
     check(v.admissions.size()==count,
         "the actual Play state transition cannot add notes")
     state["paused"]=true
@@ -86,6 +95,7 @@ func _initialize() -> void:
         "Pause before the first source note must not create a duplicate")
     state["paused"]=false
     state["phase"]="count_in"
+    check(v.acknowledge_stream_arm(),"backend Resume acknowledgement is required")
     v.present_flow(world+.1,state,-float(prepared["start_world"]))
     check(is_equal_approx(float(v.stream_passes[0]["world_origin"]),initial_origin),
         "the Play state transition cannot seek or move the score")
@@ -110,6 +120,8 @@ func _initialize() -> void:
                 "Pause never admits extra notes, even after many frames")
         if frame==44:
             var resume: Dictionary = v.arm_stream_take(world,3.0)
+            if not resume.is_empty():
+                v.acknowledge_stream_arm()
             check(not resume.is_empty(),
                 "Resume reserves an entirely new copy offscreen")
             var next: Dictionary = v.stream_passes[-1]
