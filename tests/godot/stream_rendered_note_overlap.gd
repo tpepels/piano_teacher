@@ -305,8 +305,8 @@ func _initialize() -> void:
         "changed-opening Resume withdraws all safe, still-unseen old music")
     var archived_paused := false
     for event in racing._stream_queue.history:
-        if int(event.get("owner_serial",-1)) == 1 and
-                str(event.get("event","")) == "withdrawn":
+        if (int(event.get("owner_serial",-1)) == 1 and
+                str(event.get("event","")) == "withdrawn"):
             archived_paused = true
     check(archived_paused,
         "retracted acknowledged music is retained offline instead of lost")
