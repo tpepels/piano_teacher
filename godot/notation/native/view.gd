@@ -519,7 +519,7 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
         Color(NOTE_INK,.50),1.2,true)
 
 func _stream_add_take(source_beat: float, start_world: float,
-        from_beat: float, through_beat: float, take_key: String) -> void:
+        from_beat: float, take_key: String) -> void:
     # Every musical attempt is admitted as ONE atomic batch. Its notes and
     # written rest are two clip roles of the same owner/identity, sharing an
     # immutable source origin and the same insertion/retirement machinery.
@@ -530,7 +530,9 @@ func _stream_add_take(source_beat: float, start_world: float,
         "kind":"source","owner_serial":owner_serial,
         "world_origin":original_origin,
         "source_floor":maxf(0.0,from_beat),
-        "source_ceiling":through_beat,
+        # A queued passage has an immutable full source span. The previous
+        # dynamic source-ceiling growth was rewriting committed notation.
+        "source_ceiling":timeline.duration_beats,
         "piece_duration":timeline.duration_beats,"take_key":take_key,
         "pending":take_key in ["prepared","autopending"],
         "hidden_until_armed":hidden}]
@@ -582,25 +584,26 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
         stream_passes,"ready",opening,world,right,header)
     if index >= 0:
         return int(stream_passes[index]["serial"])
-    var stale_index: int = StreamAdmission.select(
+    # READY never edits an existing placement. If its hidden source has
+    # approached the display, withdraw the still-unexposed tail into the
+    # offline queue, then append a fresh immutable future reservation.
+    var stale: int = StreamAdmission.select(
         stream_passes,"idle",opening,world)
-    var reused_serial: int = (
-        int(stream_passes[stale_index]["serial"]) if stale_index >= 0 else -1)
+    if stale >= 0:
+        var removed: Array[int] = _stream_queue.withdraw_tail(
+            self,world,timeline.pixels_per_beat,staff_gap(),
+            timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION,
+            "idle_expired")
+        if not removed.has(int(stream_passes[stale]["serial"])) if \
+                stale < stream_passes.size() else removed.is_empty():
+            return -1
     var onset: float = StreamAdmission.position(stream_passes,world,right,
-        header,NAN,reused_serial,StreamAdmission.READY_TRAVEL_BEATS,
+        header,NAN,-1,StreamAdmission.READY_TRAVEL_BEATS,
         timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
     if not is_finite(onset):
         return -1
-    if reused_serial >= 0:
-        # Only never-published notes may be retimed; the paired rest follows
-        # via the same owner identity, not via an independent placement path.
-        if StreamLifecycle.reposition(
-                stream_passes,reused_serial,onset-opening):
-            return reused_serial
-        return -1
     var old_serial := _stream_serial
-    _stream_add_take(opening,onset,opening,_stream_complete_measure(
-        opening+right+1.0),"prepared")
+    _stream_add_take(opening,onset,opening,"prepared")
     if _stream_serial == old_serial:
         return -1
     _stream_live_serial = -1
@@ -661,9 +664,7 @@ func arm_stream_take(world: float, opening: float,
         if not is_finite(checked):
             return {}
         var previous_serial := _stream_serial
-        _stream_add_take(opening,checked,opening,
-            _stream_complete_measure(opening+_stream_right_beats()+1.0),
-            "prepared")
+        _stream_add_take(opening,checked,opening,"prepared")
         if _stream_serial == previous_serial:
             return {}
         serial = _stream_serial
@@ -675,11 +676,6 @@ func arm_stream_take(world: float, opening: float,
         stream_passes,serial)
     if snapshot.is_empty():
         _reject_stream_candidate(serial,serial_before,old_live,{})
-        return {}
-    if reused_auto and not StreamLifecycle.widen_source(
-            stream_passes,serial,opening,
-            _stream_complete_measure(opening+_stream_right_beats()+1.0)):
-        _reject_stream_candidate(serial,serial_before,old_live,snapshot)
         return {}
     # Every unacknowledged control has a unique owner-scoped identity.
     if not StreamLifecycle.activate(
@@ -735,16 +731,6 @@ func cancel_stream_arm() -> bool:
     _stream_arm_rollback.clear()
     queue_redraw()
     return restored
-
-
-func _stream_extend_offscreen(item: Dictionary) -> void:
-    # The cached score never repaints. The clip widens only beyond the
-    # viewport's right edge, not at the moving timing line.
-    var horizon: float = stream_world_beat - \
-        float(item["world_origin"])+_stream_right_beats()+1.0
-    StreamLifecycle.widen_source(stream_passes,
-        int(item.get("serial",0)),float(item["source_floor"]),
-        _stream_complete_measure(horizon))
 
 
 func _stream_prune_expired() -> void:
@@ -828,7 +814,6 @@ func present_flow(world_beat: float, state: Dictionary,
         if _stream_live_serial >= 0:
             for item in stream_passes:
                 if int(item["serial"]) == _stream_live_serial:
-                    _stream_extend_offscreen(item)
                     var final_mastery: bool = bool(state.get("auto",false)) and \
                         int(state.get("streak",0))+1 >= \
                         int(state.get("clean_runs_required",3)) and \
@@ -862,9 +847,7 @@ func present_flow(world_beat: float, state: Dictionary,
                         else:
                             var live: int = _stream_live_serial
                             var before: int = _stream_serial
-                            _stream_add_take(0.0,checked,0.0,
-                                _stream_complete_measure(
-                                    _stream_right_beats()+1.0),"autopending")
+                            _stream_add_take(0.0,checked,0.0,"autopending")
                             item["successor_reserved"] = _stream_serial > before
                             _stream_live_serial = live
                     break
