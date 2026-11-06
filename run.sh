@@ -49,4 +49,9 @@ if [[ ! -f "$stamp" || "$(cat "$stamp")" != "$signature" ]]; then
     printf '%s\n' "$signature" > "$tmp"
     mv -f "$tmp" "$stamp"
 fi
+# Obtain public-domain spoken count-in samples once. Missing network/audio
+# must never block launching or affect the immutable score queue.
+if [[ "${PIANO_TEACHER_VOICE_DOWNLOAD:-1}" != "0" ]]; then
+    "$PYTHON" scripts/fetch_countin_voices.py || true
+fi
 exec "$GODOT" --path godot -- "$@"
