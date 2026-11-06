@@ -17,8 +17,12 @@ var _settled_by_take: Dictionary = {}
 
 static func from_assessment(raw: String) -> String:
     match raw:
-        "correct", "on_time":
+        "correct", "on_time", "hit":
             return HIT
+        "early_release":
+            return EARLY_RELEASE
+        "early_onset":
+            return EARLY_ONSET
         "missed", "wrong":
             return MISSED
         "late", "long":
