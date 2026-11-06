@@ -4,6 +4,10 @@ extends RefCounted
 ## at or ahead of the moving playhead by reconstructing the current source.
 const MIN_READING_BEATS := 3.0
 const OFFSCREEN_MARGIN_BEATS := 0.65
+# A fresh READY reservation needs room to travel before it approaches the
+# offscreen safety boundary. Without this slack, each frame immediately
+# advances the boundary past the reservation and retimes it continuously.
+const READY_TRAVEL_BEATS := 2.0
 const REST_GAP_BEATS := 1.0
 
 static func occupied_end(passes: Array, world: float) -> float:
