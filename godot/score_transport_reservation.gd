@@ -41,6 +41,24 @@ static func plan(renderer, action: String, world: float,
             reusable = Admission.select(queue.online,"paused",
                 source_opening,preview_world,0.0,0.0,
                 str(renderer._stream_last_take))
+            if reusable < 0 and int(renderer._stream_paused_owner) >= 0:
+                # A Pause snapshot can arrive before Play's ACK binds the
+                # backend transport key. The provisional ARMED source is
+                # still authoritative, and must not be retracted.
+                for index in range(queue.online.size()):
+                    var item: Dictionary = queue.online[index]
+                    if str(item.get("kind","")) != "source" or \
+                            int(item.get("take_owner",-1)) != \
+                                int(renderer._stream_paused_owner):
+                        continue
+                    var key: String = str(item.get("take_key",""))
+                    var onset: float = float(item["world_origin"]) + source_opening
+                    if key.begins_with("armed:") and \
+                            absf(float(item.get("source_floor",-1))-
+                                source_opening) < .00001 and \
+                            onset >= preview_world+Admission.MIN_READING_BEATS:
+                        reusable = index
+                        break
         if reusable < 0:
             reusable = Admission.select(queue.online,"automatic",
                 source_opening,preview_world,right,header)
