@@ -101,6 +101,7 @@ var _stream_paused_source := 0.0
 var _stream_live_serial := -1
 var _stream_armed_serial := -1
 var _stream_arm_rollback: Dictionary = {}
+var _stream_arm_acknowledged := false
 var _stream_serial := 0
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
@@ -377,6 +378,7 @@ func _stream_release_all() -> void:
     _stream_live_serial = -1
     _stream_armed_serial = -1
     _stream_arm_rollback.clear()
+    _stream_arm_acknowledged = false
 
 func _clear_retained_segments() -> void:
     _stream_release_all()
@@ -657,6 +659,7 @@ func arm_stream_take(world: float, opening: float,
         StreamLifecycle.restore_owner(stream_passes,serial,snapshot)
         return {}
     _stream_armed_serial = serial
+    _stream_arm_acknowledged = false
     _stream_arm_rollback = {
         "owner_serial":serial,"source_snapshot":snapshot,
         "newly_allocated":_stream_serial > serial_before,
@@ -668,6 +671,16 @@ func arm_stream_take(world: float, opening: float,
                 "reused_unplayed_count_in":reused_unplayed}
     cancel_stream_arm()
     return {}
+
+
+func acknowledge_stream_arm() -> bool:
+    # An asynchronous /state poll may still contain the OLD transport.
+    # Only a successful control response or acknowledged stage promotion
+    # can authorize binding its unique owner to a graded backend identity.
+    if _stream_armed_serial < 0 or _stream_arm_rollback.is_empty():
+        return false
+    _stream_arm_acknowledged = true
+    return true
 
 
 func cancel_stream_arm() -> bool:
@@ -688,6 +701,7 @@ func cancel_stream_arm() -> bool:
             owner_serial,_stream_arm_rollback["source_snapshot"])
     _stream_live_serial = int(_stream_arm_rollback["old_live_serial"])
     _stream_armed_serial = -1
+    _stream_arm_acknowledged = false
     _stream_arm_rollback.clear()
     queue_redraw()
     return restored
@@ -713,6 +727,8 @@ func _stream_prune_expired() -> void:
         _stream_live_serial = -1
     if retired.has(_stream_armed_serial):
         _stream_armed_serial = -1
+        _stream_arm_acknowledged = false
+        _stream_arm_rollback.clear()
 
 func present_flow(world_beat: float, state: Dictionary,
         graded_beat: float, allow_admission: bool = true) -> void:
@@ -748,17 +764,19 @@ func present_flow(world_beat: float, state: Dictionary,
         if key != _stream_last_take or _stream_was_paused:
             _stream_live_serial = -1
             if _stream_armed_serial >= 0:
-                if StreamLifecycle.activate(
-                        stream_passes,_stream_armed_serial,key,false):
-                    _stream_live_serial = _stream_armed_serial
-                    _stream_last_take = key
-                    _stream_arm_rollback.clear()
-                    _stream_armed_serial = -1
-                else:
-                    # The backend cannot bind duplicate physical notation.
-                    # Restore the unacknowledged display rather than leave
-                    # orphaned source/rest ink on the moving bar.
-                    cancel_stream_arm()
+                # A stale polling snapshot must not claim an unacknowledged
+                # Play/Resume/Retry. The source is already offscreen but its
+                # transport identity remains provisional until control ACK.
+                if _stream_arm_acknowledged:
+                    if StreamLifecycle.activate(
+                            stream_passes,_stream_armed_serial,key,false):
+                        _stream_live_serial = _stream_armed_serial
+                        _stream_last_take = key
+                        _stream_arm_rollback.clear()
+                        _stream_arm_acknowledged = false
+                        _stream_armed_serial = -1
+                    else:
+                        cancel_stream_arm()
             elif key != _stream_last_take and mode == "practice":
                 # Polling can bind only an already-present automatic owner
                 # whose world-time onset matches the graded backend deadline.
