@@ -55,6 +55,32 @@ def test_preview_continues_after_one_empty_measure_without_reloading(tmp_path):
         app.db.close()
 
 
+def test_recovery_queue_has_immutable_reading_lead_after_actual_authored_rest(tmp_path):
+    app = engine(tmp_path)
+    try:
+        app.start()
+        app._continuous_horizon_beats = 12.0
+        now = time.monotonic()
+        app._schedule_preparation(
+            0.0, now=now, from_visual=0.0, reverse_seconds=1.0)
+        rest = app.visual_transport.practice_preparation["measure"][
+            "duration_beats"]
+        expected = now + 1.0 + (
+            rest + max(0.0, 12.0-rest)) * 60.0 / app.plan.bpm
+        assert app.visual_transport.next_at == pytest.approx(expected)
+        assert app.visual_transport.preparation_schedule()[
+            "deadline_at_ms"] == pytest.approx(expected * 1000)
+        # A longer rest must not be followed by a duplicated reading delay.
+        app._continuous_horizon_beats = 2.0
+        later = now + 10.0
+        app._schedule_preparation(
+            0.0, now=later, from_visual=0.0, reverse_seconds=1.0)
+        expected = later + 1.0 + rest * 60.0 / app.plan.bpm
+        assert app.visual_transport.next_at == pytest.approx(expected)
+    finally:
+        app.db.close()
+
+
 def test_connected_silent_take_enters_normal_midi_recovery_and_never_awards_mastery(tmp_path):
     app = engine(tmp_path)
     try:
