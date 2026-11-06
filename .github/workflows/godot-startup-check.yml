@@ -47,6 +47,18 @@ jobs:
         run: |
           timeout 15s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
             --script "$PWD/tests/godot/countin_voice_assets.gd"
+      - name: Assert unified beat-cue scheduling across Play Pause Resume and retry
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          timeout 15s "$GODOT_BIN" --headless --path godot \
+            --script "$PWD/tests/godot/countin_cue_timeline.gd"
+      - name: Verify preflighted transport reservation and online queue invariants
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          timeout 20s "$GODOT_BIN" --headless --path godot \
+            --script "$PWD/tests/godot/transport_reservation_integration.gd"
       - name: Verify future-only score admissions and bounded retained projection
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
