@@ -1093,6 +1093,8 @@ func _cancel_pending_stream_arm() -> void:
 
 func _send_command(operation: String, payload: Dictionary) -> void:
     if not command_state.begin(operation,Time.get_ticks_msec()):
+        if operation == "practice.command":
+            _cancel_pending_stream_arm()
         return
     practice_view.present_busy(true)
     settings_view.present_busy(true)
