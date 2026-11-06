@@ -41,6 +41,12 @@ jobs:
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
         run: bash scripts/check-godot-syntax.sh
+      - name: Decode and play all four bundled Japanese count-in recordings
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          timeout 15s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
+            --script "$PWD/tests/godot/countin_voice_assets.gd"
       - name: Verify future-only score admissions and bounded retained projection
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
