@@ -733,6 +733,34 @@ func cancel_stream_arm() -> bool:
     return restored
 
 
+func trim_future_queue(reason: String) -> Array[int]:
+    # The moving staff has one exit policy. This is the ONLY retractable
+    # operation: remove the maximum never-exposed pending suffix, newest
+    # first, while preserving the irreversible older prefix.
+    var removed: Array[int] = _stream_queue.withdraw_tail(
+        self,stream_world_beat,timeline.pixels_per_beat,
+        staff_gap(),timeline.duration_beats,size.x,
+        size.x*PLAYHEAD_FRACTION,reason)
+    if not removed.is_empty():
+        # successor_reserved is scheduling metadata, not music geometry.
+        # A withdrawn speculative successor may be scheduled again later.
+        for item in stream_passes:
+            if str(item.get("kind","source")) == "source" and \
+                    bool(item.get("successor_reserved",false)):
+                var still_queued := false
+                for candidate in stream_passes:
+                    if str(candidate.get("take_key","")) == "autopending" and \
+                            str(candidate.get("kind","")) == "source":
+                        still_queued = true
+                        break
+                if not still_queued:
+                    item["successor_reserved"] = false
+        if removed.has(_stream_live_serial):
+            _stream_live_serial = -1
+        queue_redraw()
+    return removed
+
+
 func _stream_prune_expired() -> void:
     # All retirement, invalid-record cleanup and CanvasItem reuse take the
     # same path. The renderer itself never reparents or frees a stream clip.
@@ -771,10 +799,32 @@ func present_flow(world_beat: float, state: Dictionary,
         if _stream_armed_serial < 0:
             _stream_reserve_ready(stream_world_beat,opening)
     if paused_now:
+        if allow_admission:
+            trim_future_queue("pause")
         if not _stream_was_paused:
             _stream_paused_source = maxf(opening,opening+graded_beat)
         _stream_was_paused = true
         _stream_live_serial = -1
+    elif allow_admission and not running_now and phase in [
+            "feedback","recovering","preview_gap","review"]:
+        # Stop speculative admission on feedback. Preserve an already
+        # scheduled automatic retry ONLY if its unmodified source opening
+        # matches the engine's declared next passage.
+        var prep: Variant = state.get("practice_preparation")
+        var next_opening: float = (
+            float(prep.get("source_from_beat",0.0))
+            if prep is Dictionary else 0.0)
+        var keep_auto: bool = bool(state.get("auto",false)) or \
+            bool(state.get("preview_only",false))
+        if keep_auto and prep is Dictionary:
+            for item in stream_passes:
+                if str(item.get("take_key","")) == "autopending" and \
+                        absf(float(item.get("source_floor",-1.0))-
+                            next_opening) > .00001:
+                    keep_auto = false
+                    break
+        if not keep_auto:
+            trim_future_queue("changed_practice_decision")
     elif allow_admission and running_now and phase in [
             "count_in","playing","guided_wait"]:
         if key != _stream_last_take or _stream_was_paused:
