@@ -86,8 +86,12 @@ func _retain_tail(old) -> void:
     old.set_transport_overlay_enabled(false)
     old.mouse_filter = Control.MOUSE_FILTER_IGNORE
     old.queue_redraw()
-    if old.get_parent() == stage.score_frame:
-        stage.score_frame.move_child(old,stage.score_frame.get_child_count()-1)
+    # Leave outgoing ink below the fixed HUD. Moving a tail to the end of
+    # score_frame makes it paint over the count-in and note feedback.
+    if stage.renderer != old and old.get_parent() == stage.score_frame and \
+            is_instance_valid(stage.renderer) and \
+            old.get_index() > stage.renderer.get_index():
+        stage.score_frame.move_child(old,stage.renderer.get_index())
     _tails.append(old)
 
 
@@ -158,6 +162,9 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     _future.set_transport_overlay_enabled(false)
     _future.mouse_filter = Control.MOUSE_FILTER_IGNORE
     stage.score_frame.add_child(_future)
+    # Retained score layers belong at the original notation z-order,
+    # underneath count-in, note feedback and practice controls.
+    stage.score_frame.move_child(_future,stage.renderer.get_index()+1)
     _future.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _future.modulate.a = 0.001
     _future.visible = true
@@ -258,6 +265,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     incoming.set_density(float(outgoing.configured_density))
     incoming.set_transport_overlay_enabled(true)
     stage.score_frame.add_child(incoming)
+    stage.score_frame.move_child(incoming,outgoing.get_index()+1)
     incoming.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     incoming.visible = false
     stage.renderer = incoming
@@ -339,6 +347,10 @@ func promote_if_ready(state: Dictionary) -> bool:
     new_renderer.runway_origin_beat = 0.0
     new_renderer.runway_cutoff_beat = INF
     new_renderer.set_transport_overlay_enabled(true)
+    new_renderer.mouse_filter = Control.MOUSE_FILTER_PASS
+    if old != null and is_instance_valid(old) and \
+            old.get_parent() == stage.score_frame:
+        stage.score_frame.move_child(new_renderer,old.get_index()+1)
     stage.renderer = new_renderer
     score_session.adopt_prepared(state,new_renderer,_layout)
     renderer_promoted.emit(new_renderer)
