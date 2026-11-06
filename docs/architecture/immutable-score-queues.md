@@ -82,7 +82,11 @@ The architecture contains no `StreamLifecycle.reposition`,
 `StreamLifecycle.widen_source`, `StreamLifecycle.prune`,
 `StreamLifecycle.discard_owner`, `StreamLifecycle.release_all`,
 `_stream_extend_offscreen` or independent source/rest addition process.
-`ScoreRunway.offline_history` has been removed. All source/rest admission is
+`ScoreRunway.offline_history` has been removed. The superseded SVG-based
+score overlay, its notehead/feedback painter, its companion staff renderer
+and independent preview-motion module have been deleted with their obsolete
+overlay-specific test. The retained native renderer is the sole score path.
+All source/rest admission is
 through `ScoreStreamQueue.enqueue`; visual CanvasItems are owned by
 `StreamLifecycle` only. Score changes retain still-visible old renderer
 layers and retire those layers chronologically, from the front.
