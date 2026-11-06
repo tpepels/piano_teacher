@@ -56,6 +56,23 @@ func _init(renderer, native_feedback = null) -> void:
     if is_instance_valid(renderer) and renderer.has_signal("retained_ink_compiled"):
         renderer.connect("retained_ink_compiled",_finish_native_score)
 
+func replace_renderer(next_renderer) -> void:
+    # A manual lesson revision uses a fresh notation owner. The previous
+    # retained renderer must remain alive as a moving runway tail; never
+    # clear its CanvasItems through the new revision's asset lifecycle.
+    if _renderer == next_renderer:
+        return
+    if is_instance_valid(_renderer) and \
+            _renderer.has_signal("retained_ink_compiled") and \
+            _renderer.is_connected("retained_ink_compiled",_finish_native_score):
+        _renderer.disconnect("retained_ink_compiled",_finish_native_score)
+    _renderer = next_renderer
+    if is_instance_valid(next_renderer) and \
+            next_renderer.has_signal("retained_ink_compiled") and \
+            not next_renderer.is_connected("retained_ink_compiled",_finish_native_score):
+        next_renderer.connect("retained_ink_compiled",_finish_native_score)
+
+
 func update_context(state: Dictionary, now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))
     var next_revision: int = int(state.get("revision",0))
