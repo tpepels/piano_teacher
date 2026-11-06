@@ -15,9 +15,7 @@ static func _offstage(segment: Node2D) -> void:
 
 # Each attempt owns one source slot and, when the score has an authored
 # gap, one rest slot. These slots are never independently inserted.
-static func _admit(owner: Control, passes: Array, specs: Array,
-        source_pool: Array, rest_pool: Array, first_source: Node2D) -> bool:
-    var used: Dictionary = {}
+static func validate_batch(passes: Array, specs: Array) -> bool:
     var identities: Dictionary = {}
     for item in passes:
         var existing: String = str(item.get("slot_id",
@@ -26,8 +24,6 @@ static func _admit(owner: Control, passes: Array, specs: Array,
         if identities.has(existing):
             return false
         identities[existing] = true
-        if item.has("segment"):
-            used[item["segment"]] = true
     # Every admission is one complete passage: exactly one source and
     # zero or one dependent rest. A rest-only insertion is forbidden.
     if specs.is_empty():
@@ -71,6 +67,17 @@ static func _admit(owner: Control, passes: Array, specs: Array,
             # Even though source and rest use separate retained CanvasItems,
             # their relative musical position is controlled by ONE batch.
             return false
+    return true
+
+
+static func _admit(owner: Control, passes: Array, specs: Array,
+        source_pool: Array, rest_pool: Array, first_source: Node2D) -> bool:
+    if not validate_batch(passes,specs):
+        return false
+    var used: Dictionary = {}
+    for item in passes:
+        if item.has("segment"):
+            used[item["segment"]] = true
     for spec in specs:
         var role: String = str(spec["kind"])
         var pool: Array = source_pool if role == "source" else rest_pool
