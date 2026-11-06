@@ -20,7 +20,7 @@ func bind_score(key: String, directory: String = DEFAULT_DIR) -> bool:
     if key.is_empty():
         last_error = "A persistent score archive requires a score identity"
         return false
-    if key == score_key and not _path.is_empty():
+    if key == score_key and not _path.is_empty() and last_error.is_empty():
         return true
     score_key = key
     _path = directory.path_join(key.sha256_text()+".jsonl")
@@ -143,6 +143,19 @@ func record(kind: String, owner_serial: int, plan: Array,
                 pending.remove_at(i)
                 break
     return true
+
+func original_plan(owner_serial: int) -> Array:
+    # A score may be unloaded after its source has exited but its written
+    # rest is still onscreen. Recover the entire originally admitted source
+    # from the journal, not an unusable rest-only fragment.
+    for index in range(history.size()-1,-1,-1):
+        var event: Dictionary = history[index]
+        if str(event.get("event","")) == "enqueued" and \
+                str(event.get("session","")) == _session and \
+                int(event.get("owner_serial",-1)) == owner_serial:
+            return (event.get("plan",[]) as Array).duplicate(true)
+    return []
+
 
 func compatible(requested: Array) -> Dictionary:
     if requested.is_empty() or str(requested[0].get("kind",""))!="source":
