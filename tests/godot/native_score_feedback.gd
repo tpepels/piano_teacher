@@ -76,6 +76,15 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
+    var canonical := Status.new()
+    check(canonical.record("take","id",Status.HIT) and
+        canonical.status("take","id") == Status.HIT and
+        canonical.record("take","id",Status.EARLY_RELEASE,true) and
+        canonical.status("take","id") == Status.EARLY_RELEASE and
+        not canonical.record("take","id",Status.HIT,false),
+        "canonical status updates work and settled feedback overrides provisional hits")
+    check(canonical.status("other","id")==Status.UNPLAYED,
+        "a new take has no inherited note statuses")
     var score := Score.new()
     score.size = Vector2(720,180)
     var a: String = Status.take_key(_state(8))
