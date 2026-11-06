@@ -44,7 +44,7 @@ func _load_all() -> void:
             _streams.append(sound)
     if not _missing.is_empty():
         push_error("Bundled Japanese count-in audio missing or unreadable: " +
-            ", ".join(_missing) + " (reinstall or re-pull the tracked Ogg files)")
+            ", ".join(PackedStringArray(_missing)) + " (reinstall or re-pull the tracked Ogg files)")
 
 func available() -> bool:
     return _streams.size() == VOICE_NAMES.size() and _missing.is_empty()
