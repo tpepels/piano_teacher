@@ -107,8 +107,12 @@ func present(state: Dictionary) -> void:
         if id.is_empty():
             id = _event_id(str(mark.get("source_id","")))
         if head_glyphs.has(id):
-            changed = statuses.record(take,id,str(mark.get("status","")),
-                true) or changed
+            var grade: String = str(mark.get("status",""))
+            if grade == "short" and bool(mark.get("release_unobserved",false)):
+                # A physically unreleased key is late at release, never early.
+                # Preserve the backend grade; this only chooses note color.
+                grade = "long"
+            changed = statuses.record(take,id,grade,true) or changed
     for event in state.get("midi_visual_events",[]):
         if not event is Dictionary:
             continue
