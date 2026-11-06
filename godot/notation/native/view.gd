@@ -817,6 +817,10 @@ func present_flow(world_beat: float, state: Dictionary,
         _stream_was_paused = false
     elif not paused_now:
         _stream_live_serial = -1
+    # Retained compilation may have finished since the previous frame.
+    # Clip attachment happens here, before CanvasItem._draw() projects
+    # positions. No scene-tree modification is permitted in _draw().
+    StreamLifecycle.attach_compiled(stream_passes)
     queue_redraw()
 
 
