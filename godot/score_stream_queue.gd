@@ -51,7 +51,7 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
             end_beat = maxf(end_beat,float(item["world_origin"])+bounds.y/density)
         if opening_left < end_beat-.00001:
             return false
-    if not Lifecycle.admit(owner,online,specs,
+    if not Lifecycle._admit(owner,online,specs,
             source_pool,rest_pool,first_source):
         return false
     var frozen: Array = []
