@@ -540,43 +540,90 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
         Color(NOTE_INK,.50),1.2,true)
 
+var _stream_last_admitted := -1
+
+func _stream_source_windows(opening: float) -> Array[Vector2]:
+    # A passage is prepared once, but admitted as immutable adjoining
+    # measure strips. Visible strips lock; untouched future strips remain
+    # retractable without rewriting a previously rendered CanvasItem.
+    var edges: Array[float] = [opening]
+    for measure in timeline.measures:
+        var beat: float = float(measure.get("start_beat",-1.0))
+        if beat > opening+.00001 and \
+                beat < timeline.duration_beats-.00001:
+            edges.append(beat)
+    edges.append(timeline.duration_beats)
+    edges.sort()
+    var strips: Array[Vector2] = []
+    for i in range(1,edges.size()):
+        if edges[i] > edges[i-1]+.00001:
+            strips.append(Vector2(edges[i-1],edges[i]))
+    return strips
+
+
 func _stream_add_take(source_beat: float, start_world: float,
         from_beat: float, take_key: String) -> void:
-    # Every musical attempt is admitted as ONE atomic batch. Its notes and
-    # written rest are two clip roles of the same owner/identity, sharing an
-    # immutable source origin and the same insertion/retirement machinery.
-    var owner_serial: int = _stream_serial+1
+    _stream_last_admitted = -1
+    var first_serial: int = _stream_serial+1
     var original_origin: float = start_world-source_beat
     var hidden: bool = take_key == "prepared"
-    var specs: Array = [{
-        "kind":"source","owner_serial":owner_serial,
-        "world_origin":original_origin,
-        "source_floor":maxf(0.0,from_beat),
-        # A queued passage has an immutable full source span. The previous
-        # dynamic source-ceiling growth was rewriting committed notation.
-        "source_ceiling":timeline.duration_beats,
-        "piece_duration":timeline.duration_beats,"take_key":take_key,
-        "pending":take_key in ["prepared","autopending"],
-        "hidden_until_armed":hidden}]
+    var windows: Array[Vector2] = _stream_source_windows(maxf(0.0,from_beat))
+    if windows.is_empty():
+        return
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var gap_pixels: float = staff_gap()
     var gap: float = float(practice_timeline.get("gap",{}).get(
         "duration_beats",0.0))
-    if gap > .0001:
-        specs.append({
-            "kind":"rest","owner_serial":owner_serial,
-            "world_origin":original_origin+timeline.duration_beats,
-            "source_floor":0.0,"source_ceiling":gap,
-            "take_key":"rest","pending":false,
-            "hidden_until_armed":hidden})
-    if not _stream_queue.enqueue(self,specs,
-            retained_repeat_segments,retained_rest_segments,
-            retained_first_once,stream_world_beat,size.x,
-            size.x*PLAYHEAD_FRACTION,timeline.pixels_per_beat,
-            staff_gap(),timeline.duration_beats):
-        push_error("Refused duplicate source/rest stream owner %d" %
-            owner_serial)
-        return
-    _stream_serial = owner_serial
-    _stream_live_serial = owner_serial
+    var added := 0
+    for index in range(windows.size()):
+        var bounds: Vector2 = windows[index]
+        var is_first: bool = index == 0
+        var is_last: bool = index == windows.size()-1
+        var serial: int = first_serial+index
+        var clip_floor: float = bounds.x - (
+            (15.0 if bounds.x <= .0001 else 1.6)*gap_pixels/density
+            if is_first else 0.0)
+        var clip_ceiling: float = bounds.y + (
+            2.2*gap_pixels/density if is_last else 0.0)
+        var specs: Array = [{
+            "kind":"source","owner_serial":serial,
+            "take_owner":first_serial,
+            "world_origin":original_origin,
+            "source_floor":bounds.x,"source_ceiling":bounds.y,
+            "clip_floor":clip_floor,"clip_ceiling":clip_ceiling,
+            "piece_duration":timeline.duration_beats,"take_key":take_key,
+            "pending":take_key in ["prepared","autopending"],
+            "hidden_until_armed":hidden}]
+        if is_last and gap > .0001:
+            specs.append({
+                "kind":"rest","owner_serial":serial,
+                "take_owner":first_serial,
+                "world_origin":original_origin+timeline.duration_beats,
+                "source_floor":0.0,"source_ceiling":gap,
+                "take_key":"rest","pending":false,
+                "hidden_until_armed":hidden})
+        if not _stream_queue.enqueue(self,specs,
+                retained_repeat_segments,retained_rest_segments,
+                retained_first_once,stream_world_beat,size.x,
+                size.x*PLAYHEAD_FRACTION,timeline.pixels_per_beat,
+                gap_pixels,timeline.duration_beats):
+            # If admission fails partway through the immutable take,
+            # unwind ONLY the new right-hand strip suffix, preserving the
+            # old on-screen prefix and archiving every removed owner.
+            for rollback_index in range(added):
+                var removed: Array[int] = _stream_queue.withdraw_tail(
+                    self,stream_world_beat,density,gap_pixels,
+                    timeline.duration_beats,size.x,
+                    size.x*PLAYHEAD_FRACTION,"failed_take_batch",true)
+                if removed.is_empty():
+                    push_error("Cannot safely roll back incomplete streamed take")
+                    break
+            push_error("Refused immutable score strip admission %d" % serial)
+            return
+        added += 1
+    _stream_serial = first_serial+windows.size()-1
+    _stream_live_serial = first_serial
+    _stream_last_admitted = first_serial
 
 func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
