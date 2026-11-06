@@ -1677,6 +1677,16 @@ class PracticeEngine:
             self._source_model(), source_from_beat=target,
             from_visual=from_visual, now=now,
             reverse_seconds=reverse_seconds, bpm=self.plan.bpm)
+        # A recovery target may differ from the speculative next passage.
+        # Its newly queued source must have the SAME offscreen reading lead
+        # as a normal automatic repeat, after the authentic printed rest.
+        # The backend moves the graded deadline; Godot never moves old ink.
+        missing = max(
+            0.0,
+            self._continuous_horizon_beats
+            - self.visual_transport.visual_gap_beats,
+        )
+        self.visual_transport.next_at += missing * 60.0 / self.plan.bpm
         self.running = False
         self.recorder = None
         self.count_in_beats = 0.0
