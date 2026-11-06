@@ -181,6 +181,60 @@ func _initialize() -> void:
             return int(item.get("serial",0)) == next_owner),
         "failed new Resume is withdrawn atomically without changing history")
     v.free()
+    # A READY strip may have reached the visible boundary while the app
+    # processes Pause -> Resume. Visible old ink is immutable, but it must
+    # NEVER prevent an entirely new take being placed further in the future.
+    var stale := InstrumentedView.new()
+    stale.size = Vector2(800,440)
+    stale.native_ready = true
+    stale.timeline.duration_beats = 8.0
+    stale.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    stale.timeline.pixels_per_beat = 96.0
+    stale.present_flow(0.0,{"running":false,"paused":false,
+        "phase":"ready","mode":"practice","piece_fingerprint":"stale",
+        "revision":1,"transport_id":0,"play_from_beat":0.0},0.0)
+    var old_stale_origin: float = float(stale.stream_passes[0]["world_origin"])
+    stale._stream_queue.online[0]["ever_visible"] = true
+    var recovered: Dictionary = stale.arm_stream_take(4.0,0.0,NAN,true)
+    check(not recovered.is_empty(),
+        "Resume cannot reject a loaded score because its READY tail is already exposed")
+    check(is_equal_approx(float(stale.stream_passes[0]["world_origin"]),
+            old_stale_origin) and
+        float(recovered.get("start_world",-INF)) > old_stale_origin+8.0,
+        "exposed old notation is unchanged and fresh Resume ink stays in the future")
+    stale.free()
+    # Pausing in the middle of a measure changes the requested source
+    # opening. No earlier measure strip can be reused under that identity.
+    var middle := InstrumentedView.new()
+    middle.size = Vector2(800,440)
+    middle.native_ready = true
+    middle.timeline.duration_beats = 8.0
+    middle.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    middle.timeline.pixels_per_beat = 96.0
+    middle.present_flow(0.0,{"running":false,"paused":false,
+        "phase":"ready","mode":"practice","piece_fingerprint":"middle",
+        "revision":1,"transport_id":0,"play_from_beat":0.0},0.0)
+    var middle_arm: Dictionary = middle.arm_stream_take(.1,0.0)
+    check(not middle_arm.is_empty() and middle.acknowledge_stream_arm(),
+        "mid-measure fixture starts with an acknowledged score")
+    var middle_state: Dictionary = {"running":true,"paused":false,
+        "phase":"playing","mode":"practice","piece_fingerprint":"middle",
+        "revision":1,"transport_id":1,"play_from_beat":0.0}
+    middle.present_flow(.2,middle_state,3.25)
+    middle_state["paused"] = true
+    middle_state["phase"] = "paused"
+    middle.present_flow(.3,middle_state,3.25)
+    var earlier_count: int = middle.admissions.size()
+    var mid_resume: Dictionary = middle.arm_stream_take(.4,3.25,NAN,true)
+    check(not mid_resume.is_empty() and middle.admissions.size() == earlier_count+1,
+        "Resume in the middle of a measure enqueues a distinct future source")
+    check(middle.stream_passes.any(func(item: Dictionary) -> bool:
+        return str(item.get("kind",""))=="source" and
+            absf(float(item.get("source_floor",-1.0))-3.25)<.00001),
+        "the new passage begins at the exact resumed musical position")
+    middle.free()
     # Pause can arrive after backend Play but BEFORE the first running
     # snapshot binds its source to the transport key. The two queued measure
     # strips still belong to the current attempt and are NEVER speculative.
