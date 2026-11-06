@@ -242,3 +242,31 @@ def test_production_ready_smoke_accepts_hidden_offscreen_queue_replacement():
     assert "ready_world_origin = float(prepared[\"world_origin\"])" in script
     assert "moved hidden ink backwards" in script
     assert "Ready world-axis stopped or repositioned source" not in script
+
+
+
+def test_transport_and_voice_have_no_parallel_production_owners():
+    """Ban the exact duplicate paths responsible for recurring regressions."""
+    main = (ROOT / "godot/main.gd").read_text()
+    view = (ROOT / "godot/notation/native/view.gd").read_text()
+    queue = (ROOT / "godot/score_stream_queue.gd").read_text()
+    planner = (ROOT / "godot/score_transport_reservation.gd").read_text()
+    cues = (ROOT / "godot/countin_cue_timeline.gd").read_text()
+    coordinator = (ROOT / "godot/metronome_frame_coordinator.gd").read_text()
+    visuals = (ROOT / "godot/game_countin.gd").read_text()
+    voice = (ROOT / "godot/countin_voice_player.gd").read_text()
+    assert "renderer.reserve_transport_action(" in main
+    assert "renderer.arm_stream_take(" not in main
+    assert "renderer.trim_resume_speculation(" not in main
+    assert "renderer.trim_future_queue(" not in main
+    assert "TransportReservation.plan(" in view
+    assert "preview_tail_withdrawal(" in queue
+    assert "preview_tail_withdrawal(" in planner
+    assert 'planned["protected_take"]' in view
+    assert "CountInCueTimeline" in cues or "func observe(" in cues
+    assert "_cues.observe(" in coordinator
+    assert "count_tick_index" not in coordinator
+    assert "recovery_click_tick" not in coordinator
+    assert "AudioStreamPlayer.new()" not in visuals
+    assert "AudioStreamPlayer.new()" in voice
+    assert "practice_view.bind_countin_voice_player(spoken_countin)" in main
