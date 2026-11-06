@@ -164,6 +164,29 @@ func _run() -> void:
         new_source_pool,new_rest_pool,null,
         23.0,800.0,playhead,density,gap,4.0),
         "a rest cannot independently choose its world-time coordinate")
+    # An archived source with the same source window but a DIFFERENT
+    # passage length must not be substituted for the requested material.
+    # Both the printed rest and the backend grading deadline use the new
+    # duration, not the archived one's earlier endpoint.
+    var changed_duration: Array = passage(6,70.0,"prepared",true)
+    changed_duration[0]["piece_duration"] = 4.5
+    changed_duration[1]["world_origin"] = 74.5
+    var archived_before: int = after_close.offline.size()
+    check(after_close.enqueue(other_owner,changed_duration,
+        new_source_pool,new_rest_pool,null,
+        23.0,800.0,playhead,density,gap,4.0) and
+        after_close.offline.size() == archived_before and
+        int(after_close.history[-1]["from_id"]) == 0 and
+        is_equal_approx(float(after_close.online[0]["piece_duration"]),4.5) and
+        is_equal_approx(float(after_close.online[1]["world_origin"]),74.5),
+        "offline reuse rejects same-window passages with different durations")
+    var impossible_span: Array = passage(7,90.0,"prepared",true)
+    impossible_span[0]["piece_duration"] = 3.0
+    impossible_span[1]["world_origin"] = 93.0
+    check(not after_close.enqueue(other_owner,impossible_span,
+        new_source_pool,new_rest_pool,null,
+        23.0,800.0,playhead,density,gap,4.0),
+        "source ink cannot extend beyond the declared passage duration")
     # Interrupted sessions leave enqueued-but-never-finalized material in
     # the checked journal. A new process recovers it as offline source data,
     # with NO attempt to reuse the obsolete old screen coordinates.
