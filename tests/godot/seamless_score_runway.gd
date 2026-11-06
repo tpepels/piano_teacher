@@ -172,6 +172,9 @@ func run() -> void:
         "world_origin":36.0,"source_floor":0.0,"source_ceiling":12.0}]
     runway._retain_tail(first_tail)
     runway._retain_tail(second_tail)
+    runway._retain_tail(first_tail)
+    check(runway._tails.size()==2,
+        "a duplicate stage notification cannot register the same moving ink twice")
     runway._discard()
     check(runway._tails.size()==2 and
         is_instance_valid(first_tail) and is_instance_valid(second_tail),
