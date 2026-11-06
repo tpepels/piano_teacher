@@ -12,8 +12,13 @@ class Settings:
 class CountIn:
     extends RefCounted
     var events: Array = []
+    var spoken: Array[int] = []
+    var voice_available := false
     func present(beat: float, bar: int, visible: bool, paused: bool) -> void:
         events.append([beat,bar,visible,paused])
+    func speak_beat(number: int) -> bool:
+        spoken.append(number)
+        return voice_available
 
 class Stage:
     extends RefCounted
@@ -132,5 +137,40 @@ func _initialize() -> void:
             if raw_events[tap_clock] != expected_accent:
                 failures += 1
                 break
+    # Speech and visuals follow the existing backend beat and never create
+    # an independent timer, repeat on a poll, or speak during real notes.
+    practice.stage.count_in.voice_available = true
+    count_events.clear()
+    practice.stage.count_in.spoken.clear()
+    var counting := {"running":true,"transport_id":6,
+        "phase":"count_in","count_in_bar_beats":4}
+    owner.update(counting,1000,-4.0,1000)
+    owner.update(counting,1000,-4.0,1010)
+    owner.update(counting,1000,-3.0,1020)
+    if practice.stage.count_in.spoken != [1,2] or not count_events.is_empty():
+        failures += 1
+    owner.update(counting,1000,0.0,1030)
+    if count_events.size() != 1:
+        failures += 1
+    # A resumed transport can have positive graded time while the backend
+    # provides a separate negative ungraded count-in beat.
+    practice.stage.count_in.spoken.clear()
+    var resumed := {"running":true,"transport_id":7,"paused":false,
+        "phase":"count_in","bpm":60,"count_in_bar_beats":4,
+        "resume_count_in_beat":-4.0}
+    owner.update(resumed,1000,NAN,1000)
+    owner.update(resumed,1000,NAN,1000)
+    owner.update(resumed,1000,NAN,2000)
+    if practice.stage.count_in.spoken != [1,2]:
+        failures += 1
+    # An automatic retry uses the same count syllables, but a new tick key.
+    practice.stage.count_in.spoken.clear()
+    clock.retry_active = true
+    clock.preparing = true
+    clock.retry_beat = -4.0
+    owner.update({"phase":"feedback","paused":false,
+        "count_in_bar_beats":4},2000,NAN,2000)
+    if practice.stage.count_in.spoken != [1]:
+        failures += 1
     print("METRONOME_FRAME_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
