@@ -144,6 +144,19 @@ func _initialize() -> void:
                 is_equal_approx(float(item["world_origin"]),future_world)
     check(retained_origin,
         "repurposed source preserves world position and hides earlier noteheads")
+    check(v.cancel_stream_arm(),
+        "failed Resume restores the same prepositioned automatic owner")
+    var restored_auto: Dictionary = {}
+    for item in v.stream_passes:
+        if int(item.get("serial",-1)) == auto_serial:
+            restored_auto = item
+            break
+    check(not restored_auto.is_empty() and
+        str(restored_auto.get("take_key","")) == "autopending" and
+        bool(restored_auto.get("pending",false)) and
+        is_equal_approx(float(restored_auto.get("source_floor",-1.0)),0.0) and
+        v.admissions.size() == previous_count,
+        "failed Resume restores source clipping and pending status without new notes")
     v.free()
     # Regression for real Pause -> Resume -> immediate Retry. The old code
     # treated Restart like Resume and reused its already armed source,
@@ -204,6 +217,19 @@ func _initialize() -> void:
     var idle_armed: Dictionary = idle.arm_stream_take(idle.stream_world_beat,0)
     check(not idle_armed.is_empty() and idle.admissions.size()==1,
         "Play must claim the single already engraved idle reservation")
+    var idle_origin: float = float(idle.stream_passes[0]["world_origin"])
+    check(idle.cancel_stream_arm() and
+        str(idle.stream_passes[0].get("take_key",""))=="prepared" and
+        bool(idle.stream_passes[0].get("pending",false)) and
+        bool(idle.stream_passes[0].get("hidden_until_armed",false)),
+        "failed Play restores its original silent READY owner atomically")
+    idle.present_flow(idle.stream_world_beat+.1,ready_state,0.0)
+    idle.drawn_note_instances.clear()
+    idle.drawn_noteheads.clear()
+    idle._project_stream(idle.size.x*.33)
+    check(idle.admissions.size()==1 and idle.drawn_noteheads.is_empty() and
+        is_equal_approx(float(idle.stream_passes[0]["world_origin"]),idle_origin),
+        "failed Play cannot leave ghost notes or a second placement behind")
     idle.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
