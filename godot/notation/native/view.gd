@@ -110,6 +110,7 @@ var _cursor_engraved_events: Array = []
 var _stream_last_take := ""
 var _stream_was_paused := false
 var _stream_paused_source := 0.0
+var _stream_paused_owner := -1
 var _stream_live_serial := -1
 var _stream_armed_serial := -1
 var _stream_arm_rollback: Dictionary = {}
@@ -406,6 +407,7 @@ func _stream_release_all() -> void:
     _stream_last_take = ""
     _stream_was_paused = false
     _stream_paused_source = 0.0
+    _stream_paused_owner = -1
     _stream_live_serial = -1
     _stream_armed_serial = -1
     _stream_arm_rollback.clear()
@@ -795,14 +797,15 @@ func cancel_stream_arm() -> bool:
     return restored
 
 
-func trim_future_queue(reason: String) -> Array[int]:
+func trim_future_queue(reason: String,
+        protected_take: int = -1) -> Array[int]:
     # The moving staff has one exit policy. This is the ONLY retractable
     # operation: remove the maximum never-exposed pending suffix, newest
     # first, while preserving the irreversible older prefix.
     var removed: Array[int] = _stream_queue.withdraw_tail(
         self,stream_world_beat,timeline.pixels_per_beat,
         staff_gap(),timeline.duration_beats,size.x,
-        size.x*PLAYHEAD_FRACTION,reason)
+        size.x*PLAYHEAD_FRACTION,reason,false,protected_take)
     if not removed.is_empty():
         if _stream_live_serial >= 0 and \
                 not _stream_queue.has_take(_stream_live_serial):
@@ -883,10 +886,11 @@ func present_flow(world_beat: float, state: Dictionary,
         if _stream_armed_serial < 0:
             _stream_reserve_ready(stream_world_beat,opening)
     if paused_now:
-        if allow_admission:
-            trim_future_queue("pause")
         if not _stream_was_paused:
             _stream_paused_source = maxf(opening,opening+graded_beat)
+            _stream_paused_owner = _stream_live_serial
+        if allow_admission:
+            trim_future_queue("pause",_stream_paused_owner)
         _stream_was_paused = true
         _stream_live_serial = -1
     elif allow_admission and not running_now and phase in [
@@ -953,6 +957,7 @@ func present_flow(world_beat: float, state: Dictionary,
         # An unreserved start CANNOT create note ink in the current frame.
         # This fails closed rather than silently taking the old camera path.
         _stream_was_paused = false
+        _stream_paused_owner = -1
     elif not paused_now:
         _stream_live_serial = -1
     # Retained compilation may have finished since the previous frame.
