@@ -82,6 +82,21 @@ func _discard() -> void:
     _terminal_preload_failure = false
     _report_accepted = false
 
+func _link_existing_layers(incoming) -> void:
+    # All renderer layers live on one visual world axis. Queue ownership
+    # stays with the originating renderer; every new admission must check
+    # the previously committed ink in ALL still-live predecessor layers.
+    if not incoming is NativeView:
+        return
+    var predecessors: Array = _tails.duplicate()
+    if stage != null and stage.renderer != null:
+        predecessors.append(stage.renderer)
+    for previous in predecessors:
+        if previous != incoming and previous is NativeView and \
+                is_instance_valid(previous):
+            incoming._stream_queue.register_peer(previous)
+
+
 func _retain_tail(old, keep_staff: bool = false) -> void:
     if old == null or not is_instance_valid(old) or _tails.has(old):
         return
@@ -292,6 +307,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     incoming.active_hand = str(state.get("hand","both"))
     incoming.set_density(float(outgoing.configured_density))
     incoming.set_transport_overlay_enabled(true)
+    _link_existing_layers(incoming)
     stage.score_frame.add_child(incoming)
     stage.score_frame.move_child(incoming,outgoing.get_index()+1)
     incoming.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -354,6 +370,7 @@ func promote_if_ready(state: Dictionary) -> bool:
         return false
     var old = stage.renderer
     var new_renderer = _future
+    _link_existing_layers(new_renderer)
     # The new source can enter ONLY at the backend's already-scheduled
     # future downbeat. Do not promote a renderer with missing/late timing,
     # and never calculate a replacement onset in the current frame.
