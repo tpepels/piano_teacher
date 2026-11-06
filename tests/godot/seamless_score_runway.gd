@@ -13,7 +13,13 @@ class MockView:
     var runway_cutoff_beat := INF
     var runway_overlay := true
     var retained_annotations := Node2D.new()
+    var external_backdrop := true
+    var compact_inactive_staff := true
+    var configured_density := 100.0
     var cleared := 0
+    func set_density(value: float) -> bool:
+        configured_density = value
+        return true
     var timeline := {"pixels_per_beat": 100.0}
     var stream_passes: Array = []
     var last_world := -INF
@@ -193,5 +199,29 @@ func run() -> void:
         "lesson_step":2,"lesson_steps":3},Time.get_ticks_msec()+7000)
     check(runway._report.requested == ["score.stage_failed"],
         "terminal failure uses single authoritative engine report")
+    # Without an acknowledged next-stage preload, a manual revision may
+    # replace the current renderer. The asset reset must target a FRESH
+    # renderer while the outgoing score continues its world-time exit.
+    var manual: Dictionary = {"loaded":true,"revision":3,
+        "piece_fingerprint":"piece-a","hand":"left"}
+    var outgoing = stage.renderer
+    var old_revision := session.revision
+    check(runway.preserve_unprepared_revision(manual),
+        "manual revision must retain outgoing ink before re-engraving")
+    check(stage.renderer != outgoing and
+        session._renderer == stage.renderer and
+        session.revision == old_revision and
+        runway._tails.has(outgoing),
+        "manual transition swaps only the asset destination, not old notes")
+    session.update_context(manual,Time.get_ticks_msec())
+    check(outgoing.cleared == 0 and session.revision == 3 and
+        runway._tails.has(outgoing),
+        "new score asset reset must never clear its outgoing renderer")
+    runway._advance_tails(37.0)
+    check(runway._tails.has(outgoing) and outgoing.last_world >= 37.0,
+        "manual departure continues moving behind the next lesson")
+    runway._advance_tails(44.0)
+    check(not runway._tails.has(outgoing),
+        "manual departure retires only after its own last note exits")
     print("SEAMLESS_SCORE_RUNWAY_FAILURES:",failures)
     quit(0 if failures==0 else 1)
