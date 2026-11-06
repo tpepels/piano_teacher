@@ -16,6 +16,9 @@ on:
       - 'piano_teacher/notation/pixel_proof.py'
       - 'piano_teacher/notation/rest_intervention.py'
       - 'piano_teacher/notation/rest_placement_pixels.py'
+      - 'godot/score_stream_admission.gd'
+      - 'godot/score_stream_queue.gd'
+      - 'godot/score_stream_archive.gd'
       - 'godot/notation/native/**'
       - 'godot/notation/shared/**'
 
