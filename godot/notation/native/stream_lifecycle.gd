@@ -49,6 +49,28 @@ static func admit(owner: Control, passes: Array, specs: Array,
         identities[identifier] = true
     if not has_source:
         return false
+    var source_spec: Dictionary = {}
+    var rest_spec: Dictionary = {}
+    for spec in specs:
+        var origin: float = float(spec.get("world_origin",NAN))
+        var floor: float = float(spec.get("source_floor",NAN))
+        var ceiling: float = float(spec.get("source_ceiling",NAN))
+        if not is_finite(origin) or not is_finite(floor) or \
+                not is_finite(ceiling) or floor < 0.0 or ceiling <= floor:
+            return false
+        if str(spec["kind"]) == "source":
+            source_spec = spec
+        else:
+            rest_spec = spec
+    if not rest_spec.is_empty():
+        var source_length: float = float(source_spec.get("piece_duration",
+            source_spec["source_ceiling"]))
+        if not is_finite(source_length) or source_length <= 0.0 or \
+                absf(float(rest_spec["world_origin"])-(
+                    float(source_spec["world_origin"])+source_length)) > .00001:
+            # Even though source and rest use separate retained CanvasItems,
+            # their relative musical position is controlled by ONE batch.
+            return false
     for spec in specs:
         var role: String = str(spec["kind"])
         var pool: Array = source_pool if role == "source" else rest_pool
