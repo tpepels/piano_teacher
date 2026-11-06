@@ -33,8 +33,16 @@ func _load_voice_sample(index: int) -> void:
     if index < 0 or index >= VOICE_NAMES.size() or             _voice_streams[index] != null:
         return
     var path: String = "res://assets/countin/%s.ogg" % VOICE_NAMES[index]
-    if FileAccess.file_exists(path):
+    # ResourceLoader resolves Godot's imported asset in exported builds.
+    # Direct Ogg loading also works in a fresh checkout before import.
+    if ResourceLoader.exists(path):
+        var resource: Resource = ResourceLoader.load(path)
+        if resource is AudioStream:
+            _voice_streams[index] = resource
+    if _voice_streams[index] == null and FileAccess.file_exists(path):
         _voice_streams[index] = AudioStreamOggVorbis.load_from_file(path)
+    if _voice_streams[index] == null:
+        push_warning("Missing bundled spoken count-in recording: " + path)
 
 func set_spoken_enabled(enabled: bool) -> void:
     spoken_enabled = enabled
