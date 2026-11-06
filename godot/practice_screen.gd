@@ -304,6 +304,11 @@ func _ready() -> void:
     var modal_layer := CanvasLayer.new()
     modal_layer.layer = 1
     add_child(modal_layer)
+    # The saved-progress strip is anchored under the header without taking
+    # height away from the moving notation. Dismissing it on Play must not
+    # resize the score or invalidate retained engraving.
+    resume_banner.reparent(modal_layer,false)
+    resume_banner.z_index = 3
     open_picker = preload("res://source_measure_picker.gd").new()
     open_picker.confirmed.connect(func(_bar: int, _mode: String): confirm_source_picker())
     open_picker.cancel_requested.connect(cancel_source_picker)
@@ -734,6 +739,17 @@ func _dismiss_resume_hint() -> void:
     _resume_open_state.clear()
 
 
+func _position_resume_banner() -> void:
+    if resume_banner == null or practice_header == null:
+        return
+    var header: Rect2 = practice_header.get_global_rect()
+    var viewport_width: float = get_viewport_rect().size.x
+    var left: float = maxf(8.0,header.position.x)
+    resume_banner.position = Vector2(left,header.end.y+5.0)
+    resume_banner.size = Vector2(maxf(200.0,
+        minf(header.size.x,viewport_width-left-8.0)),42.0)
+
+
 func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
     var step: int = int(state.get("lesson_step",1))
     if bool(state.get("warmup",false)) or step <= 1:
@@ -747,6 +763,7 @@ func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
     resume_banner_message.text = "Saved at step %d of %d · Review the previous two?" % [
         step,int(state.get("lesson_steps",step))]
     resume_banner_message.tooltip_text = "Your earlier progress is preserved. Play to continue the saved step."
+    _position_resume_banner()
     resume_banner.show()
 
 
@@ -807,6 +824,7 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
     var compact: bool = view_size.y < 750.0
     var margin: int = 26 if width >= 1100.0 else 14
     stage.apply_viewport(view_size,scale,compact)
+    _position_resume_banner()
     open_picker.resize_panel(view_size)
     details_scroll.custom_minimum_size.x = minf(690.0,maxf(290.0,width-68.0))
     # The reserved score header keeps navigation outside the notation region.
