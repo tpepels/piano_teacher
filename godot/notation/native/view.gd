@@ -404,6 +404,7 @@ func _prepare_static_geometry() -> void:
 
 func _stream_release_all() -> void:
     _stream_queue.reset(self)
+    _scheduled_score_plan_ids.clear()
     _stream_last_take = ""
     _stream_was_paused = false
     _stream_paused_source = 0.0
@@ -543,6 +544,10 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
         Color(NOTE_INK,.50),1.2,true)
 
 var _stream_last_admitted := -1
+# Each backend decision has a stable identity. Repeated state polls cannot
+# enqueue another copy after the first source has already been activated
+# or has passed off the left edge.
+var _scheduled_score_plan_ids: Dictionary = {}
 
 func _stream_source_windows(opening: float) -> Array[Vector2]:
     # A passage is prepared once, but admitted as immutable adjoining
@@ -815,7 +820,7 @@ func trim_future_queue(reason: String,
 
 
 func enqueue_recovery_queue(world: float, source_opening: float,
-        graded_deadline_world: float) -> bool:
+        graded_deadline_world: float, plan_id: String = "") -> bool:
     # Recovery decisions arrive from the engine with an absolute graded
     # deadline. Reuse a compatible offline-planned future if possible;
     # otherwise withdraw the maximal safe suffix, then APPEND new source
@@ -826,10 +831,17 @@ func enqueue_recovery_queue(world: float, source_opening: float,
             source_opening < 0.0 or source_opening >= timeline.duration_beats:
         return false
     stream_world_beat = maxf(stream_world_beat,world)
+    var identity: String = plan_id if not plan_id.is_empty() else \
+        "%.6f:%.6f" % [source_opening,graded_deadline_world]
+    if _scheduled_score_plan_ids.has(identity):
+        return true
     var existing: int = StreamAdmission.select(_stream_queue.online,
         "automatic_due",source_opening,stream_world_beat,
         0.0,0.0,"",graded_deadline_world)
     if existing >= 0:
+        _scheduled_score_plan_ids[identity] = int(
+            _stream_queue.online[existing].get("take_owner",
+                _stream_queue.online[existing]["serial"]))
         return true
     trim_future_queue("recovery_replan")
     var checked: float = StreamAdmission.position(_stream_queue.online,
@@ -843,7 +855,10 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     var original_live: int = _stream_live_serial
     _stream_add_take(source_opening,checked,source_opening,"autopending")
     _stream_live_serial = original_live
-    return _stream_serial > before
+    if _stream_serial > before:
+        _scheduled_score_plan_ids[identity] = _stream_last_admitted
+        return true
+    return false
 
 
 func _stream_prune_expired() -> void:
