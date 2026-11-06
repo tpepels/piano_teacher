@@ -88,5 +88,22 @@ func _initialize() -> void:
         0.0,4.0,96.0,24.0,8.0)
     check(is_equal_approx(interior.y,384.0),
         "internal measure boundary may not show half the next note")
+    # Source's final barline/trailing notation belongs to the occupied
+    # world interval. The next score's header must clear that actual ink,
+    # not just its source_ceiling beat (which would clip overlapping bars).
+    var ended: Array = [{"kind":"source","owner_serial":12,
+        "world_origin":10.0,"source_floor":0.0,"source_ceiling":4.0}]
+    var d := 96.0
+    var g := 24.0
+    var last_ink: float = 10.0 + Admission.clip_bounds(
+        ended[0],d,g,4.0).y/d
+    var safe: float = Admission.position(ended,10.0,2.0,3.75,
+        NAN,-1,0.0,d,g,4.0)
+    check(last_ink > 14.0 and safe >= last_ink+3.75,
+        "new source begins beyond the last actual printed pixel and next header")
+    var premature: float = Admission.position(ended,10.0,2.0,3.75,
+        last_ink+3.0,-1,0.0,d,g,4.0)
+    check(not is_finite(premature),
+        "a source position that overlaps the preceding printed clip is rejected")
     print("SCORE_STREAM_ADMISSION_FAILURES:",failures)
     quit(0 if failures==0 else 1)
