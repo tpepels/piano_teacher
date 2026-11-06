@@ -25,7 +25,11 @@ class MockView:
     var stream_passes: Array = []
     var last_world := -INF
     var arm_calls := 0
+    var ack_calls := 0
     var armed_world := NAN
+    func acknowledge_stream_arm() -> bool:
+        ack_calls += 1
+        return true
     func _stream_right_beats() -> float:
         return 6.0
     func _stream_header_beats(_opening: float) -> float:
@@ -145,9 +149,9 @@ func run() -> void:
         future.get_index() < stage.hud.get_index() and
         future.mouse_filter == Control.MOUSE_FILTER_PASS,
         "departing and incoming score layers remain under the HUD; fingering remains interactive")
-    check(future.arm_calls == 2 and \
+    check(future.arm_calls == 2 and future.ack_calls == 1 and \
             is_equal_approx(future.armed_world,34.0),
-        "promoted future source keeps its exactly scheduled world coordinate")
+        "promoted future source keeps its acknowledged world coordinate")
     check(runway._tails == [old] and old.cleared == 0,
         "outgoing score survives until its own clips exit left")
     runway._advance_tails(29.0)
