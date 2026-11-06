@@ -153,7 +153,7 @@ func _ready() -> void:
     resume_banner = PanelContainer.new()
     resume_banner.name = "ResumePracticeChoice"
     resume_banner.visible = false
-    resume_banner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    resume_banner.size_flags_horizontal = Control.SIZE_SHRINK_END
     resume_banner.add_theme_stylebox_override("panel",
         Design.bordered_surface(Design.CHARCOAL,6,.32))
     add_child(resume_banner)
@@ -165,11 +165,12 @@ func _ready() -> void:
     resume_banner_message.clip_text = true
     resume_banner_message.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     resume_row.add_child(resume_banner_message)
-    resume_review_button = _button("Review 2 steps",_review_previous_steps,false,"secondary")
+    resume_review_button = _button("Review 2",_review_previous_steps,false,"secondary")
     resume_row.add_child(resume_review_button)
-    resume_continue_button = _button("Keep my place",_dismiss_resume_hint,false,"utility")
+    resume_continue_button = _button("Continue",_dismiss_resume_hint,false,"utility")
     resume_row.add_child(resume_continue_button)
-    resume_measure_button = _button("Choose measure",_resume_choose_measure,false,"utility")
+    resume_measure_button = _button("…",_resume_choose_measure,false,"utility")
+    resume_measure_button.tooltip_text = "Choose a measure"
     resume_row.add_child(resume_measure_button)
     stage = ScoreStage.new()
     add_child(stage)
@@ -194,6 +195,13 @@ func _ready() -> void:
     details_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     details_panel.add_theme_constant_override("separation",10)
     details_scroll.add_child(details_panel)
+    var voice_toggle := CheckButton.new()
+    voice_toggle.text = "Spoken count-in · Ichi, Ni, San, Shi"
+    voice_toggle.tooltip_text = "Use local Japanese voice samples instead of metronome clicks during preparation"
+    voice_toggle.button_pressed = stage.count_in.spoken_enabled
+    voice_toggle.toggled.connect(func(enabled: bool):
+        stage.count_in.set_spoken_enabled(enabled))
+    details_panel.add_child(voice_toggle)
     # Reuse the existing RH/LH/Together stage indicators in More, not above
     # the score; state updates and unlock animations remain wired.
     stage.practice_stage_bar.reparent(details_panel,false)
@@ -744,10 +752,11 @@ func _position_resume_banner() -> void:
         return
     var header: Rect2 = practice_header.get_global_rect()
     var viewport_width: float = get_viewport_rect().size.x
-    var left: float = maxf(8.0,header.position.x)
-    resume_banner.position = Vector2(left,header.end.y+5.0)
-    resume_banner.size = Vector2(maxf(200.0,
-        minf(header.size.x,viewport_width-left-8.0)),42.0)
+    # Do not insert another full-width toolbar above the score.
+    var width: float = minf(430.0,maxf(230.0,viewport_width-16.0))
+    var right: float = minf(header.end.x,viewport_width-8.0)
+    resume_banner.position = Vector2(maxf(8.0,right-width),header.end.y+5.0)
+    resume_banner.size = Vector2(width,40.0)
 
 
 func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
@@ -760,8 +769,7 @@ func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
     suppress_piano_input(state)
     _resume_open_state = state.duplicate(true)
     resume_measure_button.visible = allow_measure
-    resume_banner_message.text = "Saved at step %d of %d · Review the previous two?" % [
-        step,int(state.get("lesson_steps",step))]
+    resume_banner_message.text = "Continue at step %d?" % step
     resume_banner_message.tooltip_text = "Your earlier progress is preserved. Play to continue the saved step."
     _position_resume_banner()
     resume_banner.show()
