@@ -100,6 +100,7 @@ var _stream_was_paused := false
 var _stream_paused_source := 0.0
 var _stream_live_serial := -1
 var _stream_armed_serial := -1
+var _stream_arm_rollback: Dictionary = {}
 var _stream_serial := 0
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
@@ -375,6 +376,7 @@ func _stream_release_all() -> void:
     _stream_paused_source = 0.0
     _stream_live_serial = -1
     _stream_armed_serial = -1
+    _stream_arm_rollback.clear()
 
 func _clear_retained_segments() -> void:
     _stream_release_all()
@@ -593,24 +595,22 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
 func _stream_claim_pending_auto(world: float, opening: float) -> int:
     var index: int = StreamAdmission.select(stream_passes,"automatic",
         opening,world,_stream_right_beats(),_stream_header_beats(opening))
-    if index < 0:
-        return -1
-    var owner_serial: int = int(stream_passes[index]["serial"])
-    if not StreamLifecycle.widen_source(stream_passes,owner_serial,opening,
-            _stream_complete_measure(opening+_stream_right_beats()+1.0)):
-        return -1
-    return owner_serial
+    return int(stream_passes[index]["serial"]) if index >= 0 else -1
+
 
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false) -> Dictionary:
-    # Every Play, Resume, Retry or stage handoff claims one future musical
-    # owner. An already printed source cannot be moved after publication.
+    # The common future-only admission route owns a rollback snapshot until
+    # the backend confirms the newly armed transport. Failure returns all
+    # source/rest clip roles to their exact original state.
     if not native_ready or not retained_ready():
         return {}
     stream_world_beat = maxf(stream_world_beat,world)
+    var old_live: int = _stream_live_serial
     var serial := -1
     var reused := false
+    var reused_auto := false
     var reused_unplayed := false
     if resuming_paused and _stream_was_paused and \
             absf(opening-_stream_paused_source) < .0001:
@@ -622,7 +622,8 @@ func arm_stream_take(world: float, opening: float,
             reused_unplayed = true
     if serial < 0 and (resuming_paused or retrying):
         serial = _stream_claim_pending_auto(stream_world_beat,opening)
-        reused = serial >= 0
+        reused_auto = serial >= 0
+        reused = reused_auto
     if serial < 0 and is_finite(planned_start_world):
         var checked: float = StreamAdmission.position(stream_passes,
             stream_world_beat,_stream_right_beats(),
@@ -638,20 +639,52 @@ func arm_stream_take(world: float, opening: float,
         serial = _stream_serial
     elif serial < 0:
         serial = _stream_reserve_ready(stream_world_beat,opening)
+    if serial < 0:
+        return {}
+    var snapshot: Dictionary = StreamLifecycle.snapshot_owner(
+        stream_passes,serial)
+    if snapshot.is_empty():
+        return {}
+    if reused_auto and not StreamLifecycle.widen_source(
+            stream_passes,serial,opening,
+            _stream_complete_measure(opening+_stream_right_beats()+1.0)):
+        StreamLifecycle.restore_owner(stream_passes,serial,snapshot)
+        return {}
     # Every unacknowledged control has a unique owner-scoped identity.
-    # A shared 'prepared'/'claimed' key falsely collides when Play is still
-    # travelling on the bar and a separate Retry is already scheduled.
-    if serial < 0 or not StreamLifecycle.activate(
+    if not StreamLifecycle.activate(
             stream_passes,serial,"armed:%d" % serial,true):
+        StreamLifecycle.restore_owner(stream_passes,serial,snapshot)
         return {}
     _stream_armed_serial = serial
-    # The owner serial is authoritative even if its clipped opening changed.
+    _stream_arm_rollback = {
+        "owner_serial":serial,"source_snapshot":snapshot,
+        "old_live_serial":old_live}
     for item in stream_passes:
         if int(item.get("serial",-1)) == serial:
             return {"start_world":float(item["world_origin"])+opening,
                 "opening":opening,"reused":reused,
                 "reused_unplayed_count_in":reused_unplayed}
+    cancel_stream_arm()
     return {}
+
+
+func cancel_stream_arm() -> bool:
+    # Only an unacknowledged reservation may be rolled back. Once published,
+    # the world coordinates are immutable and its notes must exit normally.
+    if _stream_arm_rollback.is_empty():
+        return false
+    var owner_serial: int = int(_stream_arm_rollback["owner_serial"])
+    if _stream_armed_serial != owner_serial:
+        _stream_arm_rollback.clear()
+        return false
+    var restored: bool = StreamLifecycle.restore_owner(stream_passes,
+        owner_serial,_stream_arm_rollback["source_snapshot"])
+    _stream_live_serial = int(_stream_arm_rollback["old_live_serial"])
+    _stream_armed_serial = -1
+    _stream_arm_rollback.clear()
+    queue_redraw()
+    return restored
+
 
 func _stream_extend_offscreen(item: Dictionary) -> void:
     # The cached score never repaints. The clip widens only beyond the
@@ -712,7 +745,13 @@ func present_flow(world_beat: float, state: Dictionary,
                         stream_passes,_stream_armed_serial,key,false):
                     _stream_live_serial = _stream_armed_serial
                     _stream_last_take = key
-                _stream_armed_serial = -1
+                    _stream_arm_rollback.clear()
+                    _stream_armed_serial = -1
+                else:
+                    # The backend cannot bind duplicate physical notation.
+                    # Restore the unacknowledged display rather than leave
+                    # orphaned source/rest ink on the moving bar.
+                    cancel_stream_arm()
             elif key != _stream_last_take and mode == "practice":
                 # Polling can bind only an already-present automatic owner
                 # whose world-time onset matches the graded backend deadline.
