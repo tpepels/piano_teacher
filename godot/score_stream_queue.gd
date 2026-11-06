@@ -284,15 +284,6 @@ func withdraw_tail(owner: Control, world: float, density: float,
             withdrawn.append(int(item.get("serial",0)))
             Lifecycle.retire(owner,item)
     return withdrawn
-        while not online.is_empty() and owner_id(online[-1]) == last_owner:
-            var item: Dictionary = online.pop_back()
-            withdrawn.append(int(item.get("serial",0)))
-            Lifecycle.retire(owner,item)
-        # Explicit abort removes only its own last owner. It must never
-        # silently delete another reserved passage behind that owner.
-        if force_unacknowledged:
-            break
-    return withdrawn
 
 func withdraw_take_tail(owner: Control, take_owner: int, world: float,
         density: float, gap: float, duration: float,
