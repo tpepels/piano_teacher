@@ -142,6 +142,34 @@ func _initialize() -> void:
     check(retained_origin,
         "repurposed source preserves world position and hides earlier noteheads")
     v.free()
+    # Regression for real Pause -> Resume -> immediate Retry. The old code
+    # treated Restart like Resume and reused its already armed source,
+    # giving the new graded attempt a deadline in the past.
+    var quick := InstrumentedView.new()
+    quick.size = Vector2(800,440)
+    quick.native_ready = true
+    quick.timeline.duration_beats = 8.0
+    quick.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    quick.timeline.pixels_per_beat = 96.0
+    quick.present_flow(0.0,{
+        "running":false,"paused":false,"phase":"ready","mode":"practice",
+        "piece_fingerprint":"quick","revision":1,"transport_id":0,
+        "play_from_beat":0.0},0.0)
+    var quick_first: Dictionary = quick.arm_stream_take(0.0,0.0)
+    var quick_first_world: float = float(quick_first.get("start_world",NAN))
+    check(not quick_first.is_empty(),"quick Play reserves the first take")
+    # Simulate Resume's outstanding armed position before a frame consumes
+    # the new transport snapshot. Explicit Retry must not steal it.
+    var quick_count: int = quick.admissions.size()
+    var quick_retry: Dictionary = quick.arm_stream_take(.15,0.0,NAN,false,true)
+    check(quick.admissions.size()==quick_count+1 and
+        float(quick_retry.get("start_world",-INF)) > quick_first_world+8.0,
+        "rapid Retry requires a distinct future reservation")
+    check(is_equal_approx(float(quick.stream_passes[0]["world_origin"]),
+        quick_first_world),
+        "rapid Retry never moves the previous attempt on the staff")
+    quick.free()
     # READY remains empty indefinitely: the first offscreen retained
     # source is recycled, rather than accumulating ghost notes after idle.
     var idle := InstrumentedView.new()
