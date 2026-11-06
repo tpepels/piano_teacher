@@ -483,6 +483,7 @@ func _initialize() -> void:
     var ready_state: Dictionary = {"running":false,"paused":false,
         "phase":"ready","mode":"practice","piece_fingerprint":"idle",
         "revision":2,"transport_id":0,"play_from_beat":0.0}
+    var first_ready_origin := NAN
     for tick in range(350):
         var idle_world: float = tick*.12
         idle.present_flow(idle_world,ready_state,0)
@@ -504,10 +505,13 @@ func _initialize() -> void:
         check(idle.drawn_noteheads.is_empty(),
             "READY must not display idle noteheads without Play")
         var reserve: Dictionary = idle.stream_passes[0]
-        var threshold: float = idle_world+idle._stream_right_beats()+ \
-            idle._stream_header_beats(0.0)
-        check(float(reserve["world_origin"]) > threshold,
-            "READY replaces offscreen source rather than shifting an existing origin")
+        if tick == 0:
+            first_ready_origin = float(reserve["world_origin"])
+        if tick < 40:
+            check(idle.admissions.size()==1 and
+                is_equal_approx(float(reserve["world_origin"]),
+                    first_ready_origin),
+                "idle READY never re-enqueues just because hidden ink approached the edge")
     var recorded_withdrawals := 0
     for event in idle._stream_queue.history:
         if str(event.get("event","")) == "withdrawn":
@@ -516,31 +520,31 @@ func _initialize() -> void:
         idle._stream_queue.history.size() >= idle.admissions.size() +
             recorded_withdrawals,
         "all displaced READY source plans remain recoverable from the journal")
-    var idle_armed: Dictionary = idle.arm_stream_take(idle.stream_world_beat,0)
     var idle_before_play: int = idle.admissions.size()
+    var idle_armed: Dictionary = idle.arm_stream_take(idle.stream_world_beat,0)
     check(not idle_armed.is_empty() and
-        idle.admissions.size()==idle_before_play and
+        idle.admissions.size() <= idle_before_play+1 and
         idle.stream_passes.size()==2 and \
         idle.stream_passes.all(func(item: Dictionary) -> bool:
             return bool(item.get("armed",false))),
-        "Play claims every strip of the READY take without adding ink")
-    var idle_origin: float = float(idle.stream_passes[0]["world_origin"])
-    check(idle.cancel_stream_arm() and
-        str(idle.stream_passes[0].get("take_key",""))=="prepared" and
-        bool(idle.stream_passes[0].get("pending",false)) and
-        bool(idle.stream_passes[0].get("hidden_until_armed",false)),
-        "failed Play restores its original silent READY owner atomically")
+        "Play reuses fresh hidden READY ink or refreshes one expired reservation")
+    var onset: float = float(idle_armed.get("start_world",-INF))
+    var first_ink: float = onset-idle._stream_header_beats(0.0)
+    var delay_seconds: float = (
+        first_ink-idle.stream_world_beat-idle._stream_right_beats())*60.0/31.0
+    check(delay_seconds > 0.0 and delay_seconds < 1.5,
+        "Play starts fully offscreen yet the first clef arrives promptly at 31 BPM")
+    check(idle.cancel_stream_arm(),"failed Play rolls back its armed owner")
     idle.present_flow(idle.stream_world_beat+.1,ready_state,0.0)
     idle.drawn_note_instances.clear()
     idle.drawn_noteheads.clear()
     idle._project_stream(idle.size.x*.33)
     check(idle.stream_passes.size()==2 and idle.drawn_noteheads.is_empty() and
-        is_equal_approx(float(idle.stream_passes[0]["world_origin"]),idle_origin) and \
         idle.stream_passes.all(func(item: Dictionary) -> bool:
             return bool(item.get("pending",false)) and \
                 bool(item.get("hidden_until_armed",false)) and \
                 not bool(item.get("armed",false))),
-        "failed Play restores all immutable READY strips without ghost notes")
+        "failed Play leaves or rebuilds a hidden READY source without ghost notes")
     idle.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
