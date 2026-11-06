@@ -104,8 +104,21 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "ScoreStreamAdmission" not in view
     assert 'variant == "recovery"' not in source
     assert 'frame.score_loop_enabled' not in source
-    assert "clip.visible = false" in view
-    assert "clip.visible = segment.compiled" in view
+    lifecycle = (ROOT/"godot/notation/native/stream_lifecycle.gd").read_text()
+    assert "StreamLifecycle.create(self,choice" in view
+    assert "StreamLifecycle.create(self,rest" in view
+    assert "StreamLifecycle.prune(self,stream_passes" in view
+    assert "StreamLifecycle.release_all(self,stream_passes)" in view
+    assert "StreamLifecycle.attach_compiled(stream_passes)" in view
+    assert "StreamLifecycle.project(item,stream_world_beat" in view
+    assert "segment.reparent(" not in view
+    assert "clip.queue_free()" not in view
+    assert "stream_passes.remove_at(" not in view
+    assert "segment.reparent(clip,false)" in lifecycle
+    assert "segment.reparent(owner,false)" in lifecycle
+    assert "clip.visible = false" in lifecycle
+    assert "clip.visible = true" in lifecycle
+    assert "segment.compiled" not in lifecycle.split("func _offstage(",1)[0]
 
 
 def test_real_score_framebuffer_uses_production_world_axis():
