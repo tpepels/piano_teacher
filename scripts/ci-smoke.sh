@@ -104,6 +104,8 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_remedial_review.py \
   tests/test_continuous_practice_loop.py::test_connected_silent_take_enters_normal_midi_recovery_and_never_awards_mastery \
   tests/test_continuous_practice_loop.py::test_recovery_queue_has_immutable_reading_lead_after_actual_authored_rest \
+  tests/test_continuous_practice_loop.py::test_backend_authored_preview_queue_plan_survives_restart \
+  tests/test_continuous_practice_loop.py::test_backend_recovery_queue_plan_keeps_identical_midi_deadline \
   tests/test_continuous_practice_loop.py::test_coda_practice_finishes_before_adaptive_retry_or_guided_switch \
   tests/test_practice_stage_tempo_ladder.py::test_tempo_up_can_exceed_original_target_without_overwriting_per_song_progress \
   tests/test_assessment_service.py \
