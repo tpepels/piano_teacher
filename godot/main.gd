@@ -159,6 +159,7 @@ var live_midi_feedback = LiveMidiFeedback.new()
 var state_poll_timer: Timer
 var inprocess_bus: Node
 var score_runway
+var _pending_stream_renderer
 var native_started := false
 
 func _ready() -> void:
@@ -1045,6 +1046,7 @@ func _send_action(command: Dictionary) -> void:
             practice_view.present_message("Score is not ready for continuous playback")
             practice_view.finish_action()
             return
+        _pending_stream_renderer = renderer
         command = command.duplicate(true)
         command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
             float(reserved["start_world"]),visual_now,score_flow.bpm)
@@ -1082,6 +1084,13 @@ func _flush_transport_action() -> void:
     if not action.is_empty():
         _send_action({"action":action})
 
+func _cancel_pending_stream_arm() -> void:
+    if _pending_stream_renderer != null and \
+            is_instance_valid(_pending_stream_renderer):
+        _pending_stream_renderer.cancel_stream_arm()
+    _pending_stream_renderer = null
+
+
 func _send_command(operation: String, payload: Dictionary) -> void:
     if not command_state.begin(operation,Time.get_ticks_msec()):
         return
@@ -1089,6 +1098,8 @@ func _send_command(operation: String, payload: Dictionary) -> void:
     settings_view.present_busy(true)
     var err: int = command_state.dispatch(action_request,operation,payload)
     if err != OK:
+        if operation == "practice.command":
+            _cancel_pending_stream_arm()
         practice_view.present_busy(false)
         settings_view.present_busy(false)
         if operation == "practice.command":
@@ -1115,6 +1126,8 @@ func _on_action(code: int, body: PackedByteArray) -> void:
     var resume_saved: bool = bool(completed["resume_saved"])
     var completed_action: String = str(completed["action"])
     if code != 0:
+        if operation == "practice.command":
+            _cancel_pending_stream_arm()
         var message := _command_failure(code, body)
         if operation == "fingering.correct":
             fingering_save_error = message
@@ -1135,6 +1148,8 @@ func _on_action(code: int, body: PackedByteArray) -> void:
         score_error = ""
     command_success_effects.apply(decision,opened,
         code,body,int(completed["started_ms"]))
+    if operation == "practice.command":
+        _pending_stream_renderer = null
     _flush_transport_action()
     _poll()
     var deferred_library: Dictionary = command_state.take_library()
