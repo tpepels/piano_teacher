@@ -646,13 +646,13 @@ func arm_stream_take(world: float, opening: float,
         serial = _stream_serial
     elif serial < 0:
         serial = _stream_reserve_ready(stream_world_beat,opening)
+    # Every unacknowledged control has a unique owner-scoped identity.
+    # A shared 'prepared'/'claimed' key falsely collides when Play is still
+    # travelling on the bar and a separate Retry is already scheduled.
     if serial < 0 or not StreamLifecycle.activate(
-            stream_passes,serial,"prepared" if not reused else "claimed",true):
+            stream_passes,serial,"armed:%d" % serial,true):
         return {}
     _stream_armed_serial = serial
-    var index: int = StreamAdmission.select(
-        stream_passes,"bound",opening,stream_world_beat,0.0,0.0,
-        "prepared" if not reused else "claimed")
     # The owner serial is authoritative even if its clipped opening changed.
     for item in stream_passes:
         if int(item.get("serial",-1)) == serial:
