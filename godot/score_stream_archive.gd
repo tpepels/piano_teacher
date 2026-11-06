@@ -204,6 +204,10 @@ func compatible(requested: Array) -> Dictionary:
             if not is_finite(old_offset) or not is_finite(new_offset) or \
                     str(a.get("kind","")) != str(b.get("kind","")) or \
                     a.has("clip_floor") != b.has("clip_floor") or \
+                    absf(float(a.get("clip_leading_spaces",0.0))-
+                        float(b.get("clip_leading_spaces",0.0)))>.00001 or \
+                    absf(float(a.get("clip_trailing_spaces",0.0))-
+                        float(b.get("clip_trailing_spaces",0.0)))>.00001 or \
                     a.has("clip_ceiling") != b.has("clip_ceiling") or \
                     (a.has("clip_floor") and \
                     absf(float(a["clip_floor"])-float(b["clip_floor"]))>.00001) or \
