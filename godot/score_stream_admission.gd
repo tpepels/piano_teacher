@@ -97,6 +97,17 @@ static func position(passes: Array, world: float, right_beats: float,
     return minimum
 
 
+static func automatic_horizon(rest_beats: float,
+        right_beats: float, header_beats: float) -> float:
+    # This precise value is passed to the backend at Start AND used to place
+    # speculative automatic/preview ink. The backend's repeat deadline
+    # already includes the printed rest, so it adds only (horizon-rest).
+    # Never push a visual repeat later without moving the grading deadline.
+    return maxf(4.0,maxf(
+        right_beats+header_beats+1.5,
+        rest_beats+REST_GAP_BEATS+header_beats))
+
+
 static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
     return maxf(0.0,start_world-world)*60.0/maxf(1.0,bpm)
 
