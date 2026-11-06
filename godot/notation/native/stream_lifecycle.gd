@@ -203,6 +203,20 @@ static func _create(owner: Control, segment: Node2D, kind: String,
             owner_serial if owner_serial > 0 else abs(serial),kind],
         "hidden_until_armed":hidden_until_armed}
 
+static func present_pool(segments: Array, used: Dictionary = {}) -> void:
+    # The view never sets source/rest CanvasItem position or visibility.
+    # Keep uncompiled buffers visible to Godot but stage them far offscreen;
+    # hide compiled buffers that currently have no projected clip owner.
+    for segment in segments:
+        if segment == null or not is_instance_valid(segment):
+            continue
+        var should_show: bool = used.has(segment) or not bool(segment.get("compiled"))
+        if segment.visible != should_show:
+            segment.visible = should_show
+        if not bool(segment.get("compiled")):
+            _offstage(segment)
+
+
 static func prepare_recompile(owner: Control, passes: Array) -> void:
     # A viewport/hand change invalidates both source and printed rest ink.
     # Detach from hidden clips before queuing a new draw; reattach atomically
