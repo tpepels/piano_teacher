@@ -311,6 +311,51 @@ func _initialize() -> void:
     check(archived_paused,
         "retracted acknowledged music is retained offline instead of lost")
     racing.free()
+    # Long-passage Pause/Resume must not wait for the entire previously
+    # queued exercise to scroll away. Only the first VISIBLE strip locks.
+    var long_take := InstrumentedView.new()
+    long_take.size = Vector2(800,440)
+    long_take.native_ready = true
+    long_take.timeline.duration_beats = 16.0
+    long_take.timeline.measures = [
+        {"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0},
+        {"start_beat":8.0,"end_beat":12.0},
+        {"start_beat":12.0,"end_beat":16.0}]
+    long_take.timeline.pixels_per_beat = 96.0
+    var long_state: Dictionary = {
+        "running":false,"paused":false,"phase":"ready","mode":"practice",
+        "piece_fingerprint":"long","revision":1,"transport_id":0,
+        "play_from_beat":0.0}
+    long_take.present_flow(0.0,long_state,0.0)
+    var initial_long: Dictionary = long_take.arm_stream_take(0.0,0.0)
+    check(not initial_long.is_empty() and long_take.acknowledge_stream_arm(),
+        "long source prepares and binds the original four-measure take")
+    var original_long_origin: float = float(
+        long_take.stream_passes[0]["world_origin"])
+    long_state["running"] = true
+    long_state["phase"] = "count_in"
+    long_state["transport_id"] = 1
+    long_take.present_flow(1.0,long_state,2.2)
+    long_take._project_stream(long_take.size.x*.33)
+    check(bool(long_take.stream_passes[0].get("ever_visible",false)) and
+        long_take.stream_passes.size()==4,
+        "the first measure has entered but remaining measures are unexposed")
+    long_state["paused"] = true
+    long_state["phase"] = "paused"
+    long_take.present_flow(1.1,long_state,2.2)
+    long_take.trim_resume_speculation(1.2,2.2)
+    check(long_take.stream_passes.size()==1 and
+        is_equal_approx(float(long_take.stream_passes[0]["world_origin"]),
+            original_long_origin),
+        "Resume retains only the immutable visible measure, not 3 unseen measures")
+    var early_continue: Dictionary = long_take.arm_stream_take(
+        1.2,2.2,NAN,true)
+    check(not early_continue.is_empty() and
+        float(early_continue.get("start_world",INF)) <
+            original_long_origin+16.0,
+        "continued score starts before the obsolete full-passage endpoint")
+    long_take.free()
     # Regression for real Pause -> Resume -> immediate Retry. The old code
     # treated Restart like Resume and reused its already armed source,
     # giving the new graded attempt a deadline in the past.
