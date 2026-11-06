@@ -22,6 +22,7 @@ var paused_sample_ms := -1
 var paused_world_beat := NAN
 var paused_pass_serial := -1
 var ready_pass_serial := -1
+var ready_take_owner := -1
 var ready_world_origin := NAN
 var ready_world_beat := NAN
 var resumed_sample_ms := -1
@@ -122,15 +123,29 @@ func _process(_delta: float) -> bool:
             return false
         var prepared: Dictionary = {}
         var pending_count := 0
+        var queued_takes: Dictionary = {}
         for item in renderer.stream_passes:
             if str(item.get("kind","source")) == "source" and \
                     str(item.get("take_key","")) == "prepared" and \
                     bool(item.get("pending",false)):
-                prepared = item
+                if prepared.is_empty() or int(item["serial"]) < int(prepared["serial"]):
+                    prepared = item
                 pending_count += 1
-        if pending_count != 1:
-            _fail("Ready must retain exactly one offscreen unplayed source")
+                queued_takes[int(item.get("take_owner",item["serial"]))] = true
+        # A single logical READY take can contain several immutable
+        # source strips. Counting individual strips as separate attempts
+        # made the old production gate reject the intended architecture.
+        if pending_count <= 0 or queued_takes.size() != 1:
+            _fail("Ready must retain exactly one offscreen logical take")
             return true
+        for item in renderer.stream_passes:
+            if str(item.get("kind","source")) == "source" and \
+                    int(item.get("take_owner",item["serial"])) == \
+                    int(prepared.get("take_owner",prepared["serial"])) and \
+                    (str(item.get("take_key","")) != "prepared" or \
+                    not bool(item.get("hidden_until_armed",false))):
+                _fail("Ready source strip was activated before Play")
+                return true
         var density: float = renderer.timeline.pixels_per_beat
         var first_ink_x: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
             (float(prepared["world_origin"])-renderer.stream_world_beat) * \
@@ -146,6 +161,7 @@ func _process(_delta: float) -> bool:
             ready_world_beat = renderer.stream_world_beat
             ready_world_origin = float(prepared["world_origin"])
             ready_pass_serial = int(prepared["serial"])
+            ready_take_owner = int(prepared.get("take_owner",prepared["serial"]))
             return false
         if Time.get_ticks_msec()-ready_visible_since_ms < 250:
             return false
@@ -186,7 +202,7 @@ func _process(_delta: float) -> bool:
             if int(item["serial"]) == ready_pass_serial:
                 original_survived = is_equal_approx(
                     float(item["world_origin"]),ready_world_origin)
-            elif int(item["serial"]) > ready_pass_serial and \
+            elif int(item.get("take_owner",item["serial"])) != ready_take_owner and \
                     str(item.get("kind","source")) == "source":
                 # Automatic successors can already be prepared during the
                 # first graded frame, but NEVER inside the visible viewport.
@@ -212,6 +228,7 @@ func _process(_delta: float) -> bool:
                 })
             printerr("PHASE6_PLAY_STREAM_DIAGNOSTIC:",JSON.stringify({
                 "ready_serial":ready_pass_serial,
+                "ready_take_owner":ready_take_owner,
                 "ready_origin":ready_world_origin,
                 "world_beat":renderer.stream_world_beat,
                 "state_phase":app.last_state.get("phase"),
