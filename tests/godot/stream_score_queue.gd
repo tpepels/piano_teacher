@@ -124,10 +124,14 @@ func _run() -> void:
     # Reload the score journal through an entirely different Queue object,
     # simulating reopening the song in a new renderer/process.
     var restored := Queue.new()
-    check(restored.bind_score(score_key,folder) and
-        restored.online.is_empty() and restored.offline.size()==1 and
-        restored.offline[0]["plan"]==queue.offline[0]["plan"],
-        "offline FIFO survives a fresh queue instance with identical content")
+    var restored_ok: bool = restored.bind_score(score_key,folder)
+    var same_plan: bool = restored.offline.size() == 1 and
+        JSON.stringify(restored.offline[0]["plan"]) ==
+        JSON.stringify(queue.offline[0]["plan"])
+    check(restored_ok and restored.online.is_empty() and same_plan,
+        "offline FIFO survives reopening: loaded=%s ready=%d history=%d error=%s" %
+        [str(restored_ok),restored.offline.size(),restored.history.size(),
+            restored.last_error])
     var other_owner := Owner.new()
     root.add_child(other_owner)
     other_owner.size = owner.size
