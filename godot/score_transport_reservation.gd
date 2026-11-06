@@ -8,7 +8,7 @@ const Admission := preload("res://score_stream_admission.gd")
 static func _refuse(reason: String) -> Dictionary:
     return {"ok":false,"reason":reason}
 
-static func plan(renderer: Control, action: String, world: float,
+static func plan(renderer, action: String, world: float,
         source_opening: float) -> Dictionary:
     if action not in ["start","resume","restart"]:
         return _refuse("unsupported_action")
