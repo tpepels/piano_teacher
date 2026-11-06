@@ -864,8 +864,17 @@ func trim_resume_speculation(world: float, opening: float) -> Array[int]:
         # A paused source may be reused ONLY if its exact source interval
         # still has sufficient future reading time. Preserve this take when
         # it can really be bound; retract speculative successors instead.
+        var active_identity: String = _stream_last_take
+        if active_identity.is_empty():
+            # Pause may arrive before the Play acknowledgement was observed.
+            # The provisional armed owner must be protected equally.
+            for item in _stream_queue.online:
+                if str(item.get("kind","")) == "source" and int(item.get(
+                        "take_owner",-1)) == current_take:
+                    active_identity = str(item.get("take_key",""))
+                    break
         var reusable: int = StreamAdmission.select(_stream_queue.online,
-            "paused",opening,stream_world_beat,0.0,0.0,_stream_last_take)
+            "paused",opening,stream_world_beat,0.0,0.0,active_identity)
         if reusable >= 0 and int(_stream_queue.online[reusable].get(
                 "take_owner",-1)) == current_take:
             return trim_future_queue("resume_same_opening",current_take)
