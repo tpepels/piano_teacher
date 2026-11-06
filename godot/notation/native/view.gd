@@ -667,7 +667,10 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
             timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION,
             "idle_expired")
         if not removed.has(stale_serial):
-            return -1
+            # The old reservation has crossed its immutable exposure
+            # boundary. Retain it and append beyond its printed end.
+            # Returning -1 here strands Pause -> Resume at low BPM.
+            pass
     var onset: float = StreamAdmission.position(_stream_queue.online,world,right,
         header,NAN,StreamAdmission.READY_TRAVEL_BEATS,
         timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
