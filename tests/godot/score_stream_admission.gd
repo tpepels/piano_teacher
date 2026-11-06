@@ -21,15 +21,15 @@ func _initialize() -> void:
     check(Admission.select(passes,"ready",0.0,world,11.0,3.5)==0,
         "normal Play claims one prepositioned original source")
     check(Admission.select(passes,"idle",0.0,world)==0,
-        "idle retimes the existing hidden source, never a second copy")
+        "idle identifies its unexposed candidate for safe tail withdrawal")
     check(Admission.select(passes,"ready",0.0,first-6.0,11.0,3.5)==-1,
         "any source whose header entered the viewport fails safe")
     check(not is_finite(Admission.position(passes,world,11.0,3.5,
         first+1.0)),"explicit placement must reject overlaps including paired rests")
-    var retimed: float = Admission.position(passes,first-7.0,11.0,3.5,
-        NAN,1,Admission.READY_TRAVEL_BEATS)
-    check(retimed>first,
-        "repositioning excludes only the hidden owner's source and rest")
+    var appended: float = Admission.position(passes,first-7.0,11.0,3.5,
+        NAN,Admission.READY_TRAVEL_BEATS)
+    check(appended>first+12.0,
+        "new READY passage follows original source/rest without retiming them")
     passes[0]["take_key"] = "transport-one"
     passes[0]["pending"] = false
     check(Admission.select(passes,"paused",0.0,world,0.0,0.0,
@@ -98,11 +98,11 @@ func _initialize() -> void:
     var last_ink: float = 10.0 + Admission.clip_bounds(
         ended[0],d,g,4.0).y/d
     var safe: float = Admission.position(ended,10.0,2.0,3.75,
-        NAN,-1,0.0,d,g,4.0)
+        NAN,0.0,d,g,4.0)
     check(last_ink > 14.0 and safe >= last_ink+3.75,
         "new source begins beyond the last actual printed pixel and next header")
     var premature: float = Admission.position(ended,10.0,2.0,3.75,
-        last_ink+3.0,-1,0.0,d,g,4.0)
+        last_ink+3.0,0.0,d,g,4.0)
     check(not is_finite(premature),
         "a source position that overlaps the preceding printed clip is rejected")
     print("SCORE_STREAM_ADMISSION_FAILURES:",failures)
