@@ -808,6 +808,21 @@ func arm_stream_take(world: float, opening: float,
             absf(opening-_stream_paused_source) < .0001:
         var paused_index: int = StreamAdmission.select(_stream_queue.online,"paused",
             opening,stream_world_beat,0.0,0.0,_stream_last_take)
+        if paused_index < 0 and _stream_paused_owner >= 0:
+            # Pause can precede the preceding Play's transport ACK. In that
+            # race the armed owner's key is provisional, but its immutable
+            # source and future location are already authoritative.
+            for index in range(_stream_queue.online.size()):
+                var candidate: Dictionary = _stream_queue.online[index]
+                if str(candidate.get("kind","")) != "source" or \
+                        int(candidate.get("take_owner",-1)) != _stream_paused_owner:
+                    continue
+                if str(candidate.get("take_key","")).begins_with("armed:") and \
+                        absf(float(candidate.get("source_floor",-1))-opening) < .00001 and \
+                        float(candidate["world_origin"])+opening >= \
+                            stream_world_beat+StreamAdmission.MIN_READING_BEATS:
+                    paused_index = index
+                    break
         if paused_index >= 0:
             serial = int(_stream_queue.online[paused_index].get("take_owner",
                 _stream_queue.online[paused_index]["serial"]))
