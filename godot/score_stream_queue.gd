@@ -194,6 +194,22 @@ func withdraw_tail(owner: Control, world: float, density: float,
             break
     return withdrawn
 
+func withdraw_take_tail(owner: Control, take_owner: int, world: float,
+        density: float, gap: float, duration: float,
+        viewport_width: float, playhead_x: float, reason: String) -> Array[int]:
+    # Undo one provisional take atomically with respect to unrelated takes:
+    # even a failed command may withdraw only its own rightmost strips.
+    var removed: Array[int] = []
+    while not online.is_empty() and \
+            int(online[-1].get("take_owner",owner_id(online[-1]))) == take_owner:
+        var portion: Array[int] = withdraw_tail(owner,world,density,gap,
+            duration,viewport_width,playhead_x,reason,true)
+        if portion.is_empty():
+            break
+        removed.append_array(portion)
+    return removed
+
+
 func expire_front(owner: Control, world: float, density: float,
         gap: float, duration: float, playhead_x: float) -> Array[int]:
     var removed: Array[int] = []
