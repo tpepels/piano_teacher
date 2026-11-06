@@ -19,9 +19,6 @@ var _future
 # Every outgoing score owns its retained ink until its last clip leaves.
 # Two quick lesson changes may overlap: there is no single-tail shortcut.
 var _tails: Array = []
-# Immutable offline plans survive the lifetime of each outgoing renderer.
-# Old scene nodes can be freed without discarding their queued source plan.
-var offline_history: Array = []
 # During an unprepared manual revision, this outgoing renderer temporarily
 # owns the visible staff and playhead until replacement ink is published.
 var _manual_staff_tail
@@ -68,13 +65,9 @@ func _discard() -> void:
     _ack.cancel_request()
     _report.cancel_request()
     if _future != null and is_instance_valid(_future):
-        if not _bundle.is_empty():
-            offline_history.append({
-                "event":"unselected_stage",
-                "stage_key":str(_bundle.get("stage_key","")),
-                "fingerprint":str(_bundle.get("fingerprint","")),
-                "revision":int(_bundle.get("revision",-1)),
-                "bundle":_bundle.duplicate(true)})
+        # A preloader contains only an unadmitted, reconstructible asset.
+        # Musical source plans are retained by the authoritative journal,
+        # never copied into a second in-memory ScoreRunway history.
         _future.queue_free()
     _future = null
     _bundle.clear()
@@ -135,7 +128,8 @@ func _advance_tails(global_beat: float) -> void:
             continue
         tail.present_flow(global_beat,{},0.0,false)
         if tail.stream_passes.is_empty() and tail != _manual_staff_tail:
-            offline_history.append_array(tail.offline_stream_queue.duplicate(true))
+            # StreamQueue has already journaled its retired/withdrawn
+            # content. Do not maintain a parallel legacy history here.
             tail.queue_free()
             _tails.remove_at(index)
 
