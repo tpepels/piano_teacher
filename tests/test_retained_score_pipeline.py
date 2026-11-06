@@ -134,6 +134,10 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "StreamLifecycle.release_all(self,stream_passes)" in view
     assert "StreamLifecycle.attach_compiled(stream_passes)" in view
     assert "StreamLifecycle.project(item,stream_world_beat" in view
+    assert "StreamLifecycle.present_pool(retained_all_segments" in view
+    assert "func _hide_retained_segments(" not in view
+    assert "segment.visible =" not in view
+    assert "segment.position =" not in view
     assert "segment.reparent(" not in view
     assert "clip.queue_free()" not in view
     assert "stream_passes.remove_at(" not in view
