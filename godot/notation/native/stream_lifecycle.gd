@@ -104,23 +104,27 @@ static func _admit(owner: Control, passes: Array, specs: Array,
         used[choice] = true
         var owner_serial: int = int(spec["owner_serial"])
         var serial: int = owner_serial if role == "source" else -owner_serial
-        passes.append(_create(owner,choice,role,
+        var placed: Dictionary = _create(owner,choice,role,
             float(spec["world_origin"]),float(spec["source_floor"]),
             float(spec["source_ceiling"]),str(spec["take_key"]),serial,
             bool(spec.get("pending",false)),owner_serial,
-            bool(spec.get("hidden_until_armed",false))))
+            bool(spec.get("hidden_until_armed",false)))
+        placed["take_owner"] = int(spec.get("take_owner",owner_serial))
+        if spec.has("clip_floor") and spec.has("clip_ceiling"):
+            placed["clip_floor"] = float(spec["clip_floor"])
+            placed["clip_ceiling"] = float(spec["clip_ceiling"])
+        passes.append(placed)
     return true
 
 
 static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
-    # Preserve the exact visible/pending state before dispatching a control.
-    # A rejected or timed-out command must never leave ghost armed notes.
+    # Snapshot the entire logical take, including all measure strips.
+    # A rejected Play must never leave a later strip armed.
     var result: Dictionary = {}
     for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+        if int(item.get("take_owner",item.get("owner_serial",0))) != owner_serial:
             continue
-        var role: String = str(item.get("kind","source"))
-        result[role] = {
+        result[str(item["slot_id"])] = {
             "take_key":item.get("take_key",""),
             "pending":item.get("pending",false),
             "armed":item.get("armed",false),
@@ -130,18 +134,21 @@ static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
 
 static func restore_owner(passes: Array, owner_serial: int,
         snapshot: Dictionary) -> bool:
-    if not snapshot.has("source"):
+    if snapshot.is_empty():
+        return false
+    var found := false
+    for item in passes:
+        if int(item.get("take_owner",item.get("owner_serial",0))) != owner_serial:
+            continue
+        found = true
+        if not snapshot.has(str(item["slot_id"])):
+            return false
+    if not found:
         return false
     for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+        if int(item.get("take_owner",item.get("owner_serial",0))) != owner_serial:
             continue
-        var role: String = str(item.get("kind","source"))
-        if not snapshot.has(role):
-            return false
-    for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
-            continue
-        var original: Dictionary = snapshot[str(item.get("kind","source"))]
+        var original: Dictionary = snapshot[str(item["slot_id"])]
         for field in original:
             item[field] = original[field]
     return true
@@ -149,16 +156,14 @@ static func restore_owner(passes: Array, owner_serial: int,
 
 static func activate(passes: Array, owner_serial: int, key: String,
         armed: bool) -> bool:
-    # Exactly one owner per source interval and transport identity. Resume
-    # after the first attack legitimately introduces a NEW future clip of a
-    # LATER interval while the previous clip (same transport ID) scrolls out.
-    # Reject same-key/same-opening duplicates but retain disjoint resumes.
+    # One engine transport binds all immutable strips of its selected take.
+    # Source/geometry never change; only provisional transport state does.
     if owner_serial <= 0 or key.is_empty():
         return false
     var target: Dictionary = {}
     for item in passes:
         if str(item.get("kind","source")) == "source" and \
-                int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
+                int(item.get("take_owner",item.get("owner_serial",0))) == owner_serial:
             target = item
             break
     if target.is_empty():
@@ -166,14 +171,14 @@ static func activate(passes: Array, owner_serial: int, key: String,
     var target_floor: float = float(target.get("source_floor",-INF))
     for item in passes:
         if str(item.get("kind","source")) != "source" or \
-                int(item.get("owner_serial",abs(int(item.get("serial",0))))) == owner_serial:
+                int(item.get("take_owner",item.get("owner_serial",0))) == owner_serial:
             continue
         if str(item.get("take_key","")) == key and \
                 not bool(item.get("pending",false)) and \
                 absf(float(item.get("source_floor",-INF))-target_floor) < .00001:
             return false
     for item in passes:
-        if int(item.get("owner_serial",abs(int(item.get("serial",0))))) != owner_serial:
+        if int(item.get("take_owner",item.get("owner_serial",0))) != owner_serial:
             continue
         item["hidden_until_armed"] = false
         if str(item.get("kind","source")) == "source":
