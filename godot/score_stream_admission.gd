@@ -10,7 +10,7 @@ const OFFSCREEN_MARGIN_BEATS := 0.65
 const READY_TRAVEL_BEATS := 2.0
 const REST_GAP_BEATS := 1.0
 
-static func occupied_end(passes: Array, world: float) -> float:
+static func _occupied_end(passes: Array, world: float) -> float:
     var last := -INF
     for item in passes:
         var finish: float = float(item["world_origin"]) + float(item["source_ceiling"])
@@ -18,11 +18,11 @@ static func occupied_end(passes: Array, world: float) -> float:
             last = maxf(last,finish)
     return last
 
-static func future_start(passes: Array, world: float,
+static func _future_start(passes: Array, world: float,
         right_beats: float, header_beats: float) -> float:
     var start: float = world + maxf(MIN_READING_BEATS,
         right_beats + header_beats + OFFSCREEN_MARGIN_BEATS)
-    var occupied: float = occupied_end(passes,world)
+    var occupied: float = _occupied_end(passes,world)
     if is_finite(occupied):
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
     return start
@@ -90,7 +90,7 @@ static func position(passes: Array, world: float, right_beats: float,
                 int(item.get("owner_serial",abs(int(item.get("serial",0))))) == excluded_owner:
             continue
         remaining.append(item)
-    var minimum: float = future_start(
+    var minimum: float = _future_start(
         remaining,world,right_beats,header_beats)+travel_beats
     if is_finite(intended):
         return intended if intended >= minimum-.0001 else NAN
