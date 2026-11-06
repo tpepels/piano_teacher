@@ -1,7 +1,9 @@
 # Japanese spoken count-in
 
-The four Ogg Vorbis samples are cached by `scripts/fetch_countin_voices.py` on
-the first `./run.sh` launch. There is no network access during practice.
+The four Ogg Vorbis samples are cached by `scripts/fetch_countin_voices.py`.
+The first `./run.sh` launch may start an optional **background** download,
+but it never waits for the network before launching Godot. The game loads
+finished samples lazily from disk, with no network requests during practice.
 When a sample is absent, the existing metronome click is used for that beat.
 
 | UI | Source file | Author | License |
