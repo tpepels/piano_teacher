@@ -151,7 +151,10 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "ever_visible" in queue
     assert "func _stream_extend_offscreen(" not in view
     assert "func _stream_complete_measure(" not in view
-    assert "StreamAdmission.automatic_horizon(" in view
+    assert "StreamAdmission.automatic_horizon(" not in view
+    assert "successor_reserved" not in view
+    assert "final_mastery" not in view
+    assert "StreamAdmission.automatic_horizon(" in (ROOT/"godot/main.gd").read_text()
     assert 'state.get("preview_only",false)' in view
     app = (ROOT/"godot/main.gd").read_text()
     backend = (ROOT/"piano_teacher/server.py").read_text()
