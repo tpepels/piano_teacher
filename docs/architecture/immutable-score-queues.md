@@ -20,9 +20,22 @@ progression; the queue decides which already-engraved passage can be shown.
 The online queue is ordered by **physical world time**, not by when the
 backend returned a request. `enqueue()` rejects content that starts inside the
 viewport or overlaps the last printed pixel of any existing source/rest slot.
-Its source and rest have one immutable owner ID. Every placement has exactly
-one prepared musical source interval and optionally one authored rest, which
-shares its origin and piece duration.
+A logical take is represented by **adjoining immutable source strips**, one
+per measure boundary, sharing a `take_owner` and transport identity.
+Each strip has its own queue owner and journal event. Printed cut points
+are source beats; contextual clef and terminal ink margins are retained
+in staff-space units so reflow cannot change the musical boundaries.
+The final strip can carry one authored rest as part of its atomic admission.
+No individual strip may change its original source range or world origin.
+
+A lesson transition retains outgoing NativeViews with their existing queues.
+`ScoreRunway` registers every predecessor as a weak spatial-admission peer
+of the incoming queue. Every new enqueue must clear all still-live prior
+renderer layers, including rapid manual changes. At equal native density,
+their real printed world intervals may adjoin without overlap; at different
+densities, the prior ink must leave the viewport before incoming ink enters.
+Renderer layers themselves retire oldest-first. This enforces one global
+presentation order without transferring live CanvasItems between owners.
 
 ## Exactly two online removal directions
 
@@ -30,12 +43,15 @@ shares its origin and piece duration.
    source/rest entries. A later entry may be expired but remains queued until
    the older head has gone. A corrupt source and its paired rest are retired
    together when they reach the front, never from the interior.
-2. **Withdraw from the back.** `withdraw_tail()` works on complete owners,
-   newest first. It stops at the first owner whose ink has entered the viewport,
-   or whose placement is no longer safely speculative. Once any printed ink is
-   visible, `ever_visible` remains true. The admitted source's coordinates,
-   source range and musical identity are never rewritten. An unsuccessful
-   user command may retract only its own unacknowledged rearmost owner.
+2. **Withdraw from the back.** `withdraw_tail()` works on complete **strip
+   owners**, newest first. It stops at the first strip whose ink has entered
+   the viewport, even when that strip belongs to the same logical attempt as
+   later, still-invisible measures. Once any printed ink is visible,
+   `ever_visible` remains true. Retraction may remove future strips of an
+   acknowledged attempt without mutating any exposed fragment. During Pause,
+   the chosen active take is explicitly protected and speculative following
+   takes are withdrawn. An unsuccessful user command may retract only its own
+   provisional logical take via `withdraw_take_tail()`.
 
 The online queue can retain visible A while withdrawing speculative B, then
 append a rest and retry A. There is no insertion before visible ink and no
@@ -45,10 +61,16 @@ the renderer rejects it rather than fabricating an onscreen note.
 
 Pause stops speculative admission; the absolute visual axis continues.
 Retry and changed Coda/Fukuda decisions retract safe future material and then
-append exactly the engine-selected source. Resume cannot repurpose a different
-source interval. A successful source/transport bind changes only transport
-status; never immutable source geometry. Failed controls restore provisional
-status or atomically remove a newly inserted rearmost owner.
+append exactly the engine-selected source. The backend publishes
+`score_queue_next` with `plan_id`, `source_from_beat` and the absolute
+`deadline_at_ms`. This applies equally to graded recovery, automatic
+continuations and disconnected-MIDI preview. Godot converts that deadline
+through the shared calibrated clock and deduplicates repeated state snapshots
+by plan ID. Godot **never** computes mastery, streak, tempo or repeat choice.
+Resume cannot repurpose a different source interval. A successful
+source/transport bind changes only transport status; never immutable source
+geometry. Failed controls restore every strip's provisional status or remove
+only the rearmost strips of that newly inserted logical take.
 
 ## Offline queue and lossless journaling
 
@@ -66,8 +88,9 @@ before the corresponding online source/rest owner is withdrawn or freed.
 A failed journal append blocks the corresponding destructive queue operation.
 No Godot CanvasItem, resource or UI state is serialized.
 
-At enqueue, the offline FIFO is checked for a matching source interval,
-duration and rest under the same musical score key. The source plan is
+At enqueue, the offline FIFO is checked for an exactly matching strip source
+interval, total piece duration, rest and relative printed clip geometry,
+including staff-space margins, under the same musical score key. The source plan is
 materialized **into a new owner at a new future world coordinate**; the old
 archived plan is unchanged. The successful enqueue and consumption of the
 old offline ID are represented by the same journal event. A failed enqueue
@@ -104,6 +127,8 @@ layers and retire those layers chronologically, from the front.
   oldest-first exit across overlapping renderer layers
 - `tests/test_retained_score_pipeline.py`: structural rejection of
   superseded methods and duplicate ownership
+- `tests/test_continuous_practice_loop.py`: backend-selected plan ID and
+  absolute graded deadline survive preview and recovery transitions
 - Embedded production UI/real-MIDI scenario and three-score framebuffer CI:
   verify the real Godot 4.7.2 and Python bridge execution path
 
