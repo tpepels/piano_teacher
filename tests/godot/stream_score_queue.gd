@@ -188,6 +188,26 @@ func _run() -> void:
         23.0,800.0,playhead,density,gap,4.0) and
         interrupted_reader.offline.is_empty(),
         "recovered interrupted source is reinserted at a NEW offscreen location")
+    # After a SECOND crash/restart the old interrupted owner must NOT
+    # return alongside its already-consumed successor. Each replay is a
+    # one-time transfer of offline ownership, not a clone of the passage.
+    var interrupted_again := Queue.new()
+    check(interrupted_again.bind_score(interrupted_key,folder) and
+        interrupted_again.offline.size()==1 and
+        int(interrupted_again.offline[0]["id"]) ==
+            int(interrupted_reader.history[-1]["id"]),
+        "second restart must recover only the active successor, never the consumed predecessor")
+    check(interrupted_again.enqueue(other_owner,
+        passage(3,70.0,"prepared",true),[],[],null,
+        23.0,800.0,playhead,density,gap,4.0) and
+        interrupted_again.offline.is_empty(),
+        "second replay consumes interrupted successor exactly once")
+    var interrupted_third := Queue.new()
+    check(interrupted_third.bind_score(interrupted_key,folder) and
+        interrupted_third.offline.size()==1 and
+        int(interrupted_third.offline[0]["id"]) ==
+            int(interrupted_again.history[-1]["id"]),
+        "third restart never resurrects either previously consumed owner")
     # A fully finished source with a remaining written rest must archive
     # its complete ORIGINAL passage on unload, never an orphan rest alone.
     var trailing_key: String = score_key+"-rest"
@@ -195,23 +215,31 @@ func _run() -> void:
     check(trailing_writer.bind_score(trailing_key,folder) and
         trailing_writer.enqueue(other_owner,
             passage(1,10.0,"prepared",true),[],[],null,
+            0.0,800.0,playhead,density,gap,4.0) and
+        trailing_writer.enqueue(other_owner,
+            passage(2,23.0,"prepared",true),[],[],null,
             0.0,800.0,playhead,density,gap,4.0),
-        "rest-only teardown fixture admits complete source/rest pair")
+        "rest-only teardown fixture admits two complete source/rest owners")
     var source_departed: Array[int] = trailing_writer.expire_front(
         other_owner,19.0,density,gap,4.0,playhead)
     check(source_departed == [1] and
-        trailing_writer.online.size()==1 and
-        trailing_writer.online[0]["kind"]=="rest",
-        "source departs while its written semantic rest remains")
+        trailing_writer.online.size()==3 and
+        trailing_writer.online[0]["kind"]=="rest" and
+        int(trailing_writer.online[1]["owner_serial"])==2,
+        "source departs while its written rest and a later owner remain")
     trailing_writer.reset(other_owner)
-    check(trailing_writer.offline.size()==1 and
-        trailing_writer.offline[0]["plan"].size()==2,
-        "score unload saves original whole source even after source ink exits")
+    check(trailing_writer.online.is_empty() and
+        trailing_writer.offline.size()==2 and
+        trailing_writer.offline[0]["plan"].size()==2 and
+        trailing_writer.offline[1]["plan"].size()==2 and
+        int(trailing_writer.offline[1]["owner_serial"])==2,
+        "closing trailing-rest owner also preserves the NEXT complete owner without over-popping")
     var rest_reader := Queue.new()
     check(rest_reader.bind_score(trailing_key,folder) and
-        rest_reader.offline.size()==1 and
-        rest_reader.offline[0]["plan"].size()==2,
-        "trailing-only score teardown is recoverable after reopening")
+        rest_reader.offline.size()==2 and
+        rest_reader.offline[0]["plan"].size()==2 and
+        rest_reader.offline[1]["plan"].size()==2,
+        "both trailing-rest and next-source passages survive reopening")
     interrupted_owner.queue_free()
     owner.queue_free()
     other_owner.queue_free()
