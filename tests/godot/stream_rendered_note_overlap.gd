@@ -278,10 +278,9 @@ func _initialize() -> void:
         str(provisional_plan.get("mode",""))=="reuse" and
         int(provisional_plan.get("protected_take",-1))==1,
         "preflight protects the still-provisional Play source during a Pause/ACK race")
-    racing.trim_resume_speculation(.21,0.0)
     check(racing.stream_passes.size()==2 and
         racing._stream_queue.has_take(1),
-        "Resume must not treat the paused take as an incompatible successor")
+        "pure Resume preflight does not withdraw the provisional owner")
     check(racing.acknowledge_stream_arm(),
         "late Play acknowledgement can still bind its retained source")
     race_state["paused"] = false
@@ -305,11 +304,20 @@ func _initialize() -> void:
     var race_future: int = racing._stream_serial
     check(racing._stream_queue.has_take(racing._stream_last_admitted),
         "fixture includes a genuinely speculative future take")
-    racing.trim_resume_speculation(.24,3.0)
-    check(racing.stream_passes.is_empty() and
+    var changed_plan: Dictionary = TransportReservation.plan(
+        racing,"resume",.24,3.0)
+    check(bool(changed_plan.get("ok",false)) and
+        int(changed_plan.get("remaining_count",-1))==0 and
+        racing._stream_queue.has_take(1),
+        "changed-opening preflight sees the complete unseen suffix without mutating it")
+    var changed_take: Dictionary = racing.reserve_transport_action(
+        "resume",.24,3.0)
+    check(not changed_take.is_empty() and
         not racing._stream_queue.has_take(1) and
-        not racing._stream_queue.has_take(race_future),
-        "changed-opening Resume withdraws all safe, still-unseen old music")
+        not racing._stream_queue.has_take(race_future) and
+        racing.stream_passes.any(func(item: Dictionary) -> bool:
+            return absf(float(item.get("source_floor",-1))-3.0)<.00001),
+        "changed-opening Resume replaces safe old ink with new offscreen notation")
     var archived_paused := false
     for event in racing._stream_queue.history:
         if (int(event.get("owner_serial",-1)) == 1 and
@@ -351,13 +359,18 @@ func _initialize() -> void:
     long_state["paused"] = true
     long_state["phase"] = "paused"
     long_take.present_flow(1.1,long_state,2.2)
-    long_take.trim_resume_speculation(1.2,2.2)
-    check(long_take.stream_passes.size()==1 and
-        is_equal_approx(float(long_take.stream_passes[0]["world_origin"]),
-            original_long_origin),
-        "Resume retains only the immutable visible measure, not 3 unseen measures")
-    var early_continue: Dictionary = long_take.arm_stream_take(
-        1.2,2.2,NAN,true)
+    var long_plan: Dictionary = TransportReservation.plan(
+        long_take,"resume",1.2,2.2)
+    check(bool(long_plan.get("ok",false)) and
+        int(long_plan.get("remaining_count",-1))==1 and
+        long_take.stream_passes.size()==4,
+        "long-passage preflight predicts only the visible measure survives")
+    var early_continue: Dictionary = long_take.reserve_transport_action(
+        "resume",1.2,2.2)
+    check(is_equal_approx(float(long_take.stream_passes[0]["world_origin"]),
+            original_long_origin) and
+        int(long_take.stream_passes[0].get("take_owner",-1))==1,
+        "actual Resume commit preserves the first visible measure unchanged")
     check(not early_continue.is_empty() and
         float(early_continue.get("start_world",INF)) <
             original_long_origin+16.0,
