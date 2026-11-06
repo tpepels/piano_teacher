@@ -206,6 +206,9 @@ class PracticeEngine:
         self._future_stage_ready: tuple[str, int] | None = None
         self._future_stage_lead_beats = 0.0
         self._continuous_horizon_beats = 0.0
+        # Explicit backend-selected next take. Renderer may only enqueue this
+        # source identity at this exact monotonic graded deadline.
+        self._queue_scheduled_start = None
         self._prepared_stage_published = False
         # Global musical origin of a delayed, pre-engraved next stage.
         self._stage_handoff_visual_beat: float | None = None
@@ -1669,6 +1672,10 @@ class PracticeEngine:
         """Retain polling overshoot instead of moving the musical deadline."""
         self.start(from_beat=from_beat, mode=self.mode, loop_continuation=True,
                    scheduled_deadline=deadline)
+        self._queue_scheduled_start = (
+            self.transport_id, self.visual_transport.play_from_beat,
+            self.visual_transport.run_at, self.plan.identity,
+            self.score_revision)
 
     def _schedule_preparation(self, target: float, *, now: float,
                               from_visual: float, reverse_seconds: float):
@@ -2859,6 +2866,44 @@ class PracticeEngine:
         with self.lock:
             self._update()
             state = project_session_state(self._capture_session_snapshot())
+            # A single authoritative next-score intent covers automatic
+            # Coda/Fukuda continuation, repair and disconnected-MIDI preview.
+            # The frontend must not infer a repeat from streak, BPM, or phase.
+            next_floor = None
+            next_deadline = None
+            next_transport = self.transport_id + 1
+            preparation = state.get("practice_preparation")
+            schedule = state.get("visual_preparation_schedule")
+            if (self.mode == "practice" and not self.visual_transport.paused
+                    and isinstance(preparation, dict)
+                    and isinstance(schedule, dict)
+                    and "deadline_at_ms" in schedule):
+                next_floor = float(preparation["source_from_beat"])
+                next_deadline = float(schedule["deadline_at_ms"])
+            elif (self.mode == "practice" and not self.visual_transport.paused
+                    and self.visual_transport._preview_loop_pending
+                    and self.visual_transport.next_at > 0):
+                next_floor = 0.0
+                next_deadline = self.visual_transport.next_at * 1000.0
+            elif (self.mode == "practice" and self.running and
+                    self._queue_scheduled_start is not None):
+                transport, floor, run_at, stage_key, revision = (
+                    self._queue_scheduled_start)
+                if (transport == self.transport_id and
+                        stage_key == self.plan.identity and
+                        revision == self.score_revision):
+                    next_floor = float(floor)
+                    next_deadline = float(run_at) * 1000.0
+                    next_transport = self.transport_id
+            if (self.plan is not None and next_floor is not None
+                    and next_deadline is not None):
+                state["score_queue_next"] = {
+                    "plan_id": f"{self.fingerprint}:{self.plan.identity}:"
+                               f"{self.score_revision}:{next_transport}:"
+                               f"{next_floor:.6f}:{next_deadline:.3f}",
+                    "source_from_beat": next_floor,
+                    "deadline_at_ms": next_deadline,
+                }
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self._stage_handoff_visual_beat is not None:
                 state["next_stage_start_beat"] = self._stage_handoff_visual_beat
