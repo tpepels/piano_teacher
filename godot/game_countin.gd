@@ -23,10 +23,18 @@ func _ready() -> void:
     _voice_player = AudioStreamPlayer.new()
     _voice_player.volume_db = -3.0
     add_child(_voice_player)
-    for name in VOICE_NAMES:
-        var path: String = "res://assets/countin/%s.ogg" % name
-        var sound: AudioStream = load(path) if ResourceLoader.exists(path) else null
-        _voice_streams.append(sound)
+    # The optional downloader may still be running when Godot starts.
+    # Runtime Ogg loading avoids relying on the editor's import cache.
+    for i in range(VOICE_NAMES.size()):
+        _voice_streams.append(null)
+        _load_voice_sample(i)
+
+func _load_voice_sample(index: int) -> void:
+    if index < 0 or index >= VOICE_NAMES.size() or             _voice_streams[index] != null:
+        return
+    var path: String = "res://assets/countin/%s.ogg" % VOICE_NAMES[index]
+    if FileAccess.file_exists(path):
+        _voice_streams[index] = AudioStreamOggVorbis.load_from_file(path)
 
 func set_spoken_enabled(enabled: bool) -> void:
     spoken_enabled = enabled
@@ -43,6 +51,7 @@ func speak_beat(number: int) -> bool:
     # existing metronome tick. This is never allowed to delay the transport.
     if not spoken_enabled or _voice_player == null or             number < 1 or number > _voice_streams.size():
         return false
+    _load_voice_sample(number-1)
     var sound: AudioStream = _voice_streams[number-1]
     if sound == null:
         return false
