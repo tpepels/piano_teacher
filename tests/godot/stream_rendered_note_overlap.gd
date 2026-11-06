@@ -2,6 +2,7 @@ extends SceneTree
 ## Real present_flow / retained-note projection regression. A backend Play
 ## response is forbidden to allocate new notes or change the world origin.
 const Admission := preload("res://score_stream_admission.gd")
+const TransportReservation := preload("res://score_transport_reservation.gd")
 class FakeSegment:
     extends Node2D
     var compiled := true
@@ -271,6 +272,12 @@ func _initialize() -> void:
             return int(item.get("take_owner",-1))==1 and \
                 is_equal_approx(float(item["world_origin"]),race_origin)),
         "Pause cannot retract the in-flight, unexposed source strips")
+    var provisional_plan: Dictionary = TransportReservation.plan(
+        racing,"resume",.21,0.0)
+    check(bool(provisional_plan.get("ok",false)) and
+        str(provisional_plan.get("mode",""))=="reuse" and
+        int(provisional_plan.get("protected_take",-1))==1,
+        "preflight protects the still-provisional Play source during a Pause/ACK race")
     racing.trim_resume_speculation(.21,0.0)
     check(racing.stream_passes.size()==2 and
         racing._stream_queue.has_take(1),
