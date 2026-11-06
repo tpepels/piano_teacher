@@ -80,7 +80,9 @@ func _discard() -> void:
     _report_accepted = false
 
 func _retain_tail(old, keep_staff: bool = false) -> void:
-    if old == null or not is_instance_valid(old):
+    if old == null or not is_instance_valid(old) or _tails.has(old):
+        # Each outgoing renderer is registered exactly once. Duplicate
+        # handoff notifications cannot scroll/retire its notes twice.
         return
     old.runway_overlay = not keep_staff
     if is_instance_valid(old.retained_annotations):
