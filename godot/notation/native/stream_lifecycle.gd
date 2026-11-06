@@ -113,6 +113,10 @@ static func _admit(owner: Control, passes: Array, specs: Array,
         if spec.has("clip_floor") and spec.has("clip_ceiling"):
             placed["clip_floor"] = float(spec["clip_floor"])
             placed["clip_ceiling"] = float(spec["clip_ceiling"])
+            placed["clip_leading_spaces"] = float(
+                spec.get("clip_leading_spaces",0.0))
+            placed["clip_trailing_spaces"] = float(
+                spec.get("clip_trailing_spaces",0.0))
         passes.append(placed)
     return true
 
