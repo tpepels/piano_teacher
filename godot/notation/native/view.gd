@@ -74,6 +74,7 @@ const ContextPainter := preload("res://notation/native/context_painter.gd")
 const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
+const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
 const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 var symbols = SymbolPainter.new(layout,connector_geometry)
@@ -134,6 +135,7 @@ var frame_visible_beam_groups := 0
 # MusicXML structures.
 var retained_first_once
 var retained_repeat_segments: Array = []
+var retained_rest_segments: Array = []
 var retained_all_segments: Array = []
 var retained_annotations: Node2D
 var retained_ink_published := false
@@ -367,38 +369,26 @@ func _prepare_static_geometry() -> void:
     connector_geometry.prewarm_slur_geometry(prepared_gap)
 
 func _stream_release_all() -> void:
-    for item in stream_passes:
-        var segment = item.get("segment")
-        var clip = item.get("clip")
-        if segment != null and is_instance_valid(segment):
-            segment.reparent(self,false)
-            if str(item.get("kind","source")) == "rest":
-                retained_all_segments.erase(segment)
-                segment.queue_free()
-        if clip != null and is_instance_valid(clip):
-            clip.queue_free()
-    stream_passes.clear()
+    StreamLifecycle.release_all(self,stream_passes)
     _stream_last_take = ""
     _stream_was_paused = false
     _stream_paused_source = 0.0
     _stream_live_serial = -1
     _stream_armed_serial = -1
 
-
 func _clear_retained_segments() -> void:
     _stream_release_all()
-    for segment in [retained_first_once,retained_annotations]:
+    for segment in [retained_first_once,retained_annotations] + \
+            retained_repeat_segments + retained_rest_segments:
         if segment != null and is_instance_valid(segment):
-            remove_child(segment)
-            segment.queue_free()
-    for segment in retained_repeat_segments:
-        if segment != null and is_instance_valid(segment):
-            remove_child(segment)
+            if segment.get_parent() == self:
+                remove_child(segment)
             segment.queue_free()
     retained_first_once = null
     retained_annotations = null
     retained_ink_published = false
     retained_repeat_segments.clear()
+    retained_rest_segments.clear()
     retained_all_segments.clear()
 
 func _new_retained_segment(kind: String):
@@ -423,10 +413,12 @@ func _install_retained_segments() -> void:
 func _resize_retained_pool() -> void:
     if retained_first_once == null:
         return
-    # Single authentic source model and reusable offscreen copies.
+    # Score copies and their semantic full-measure rests are both engraved
+    # before a score revision can be published or practice can begin.
     while retained_repeat_segments.size() < 4:
         retained_repeat_segments.append(_new_retained_segment("source"))
-
+    while retained_rest_segments.size() < 5:
+        retained_rest_segments.append(_new_retained_segment("rest"))
 
 func retained_ready() -> bool:
     if not native_ready or size.x < 100.0 or size.y < 100.0 or \
@@ -435,7 +427,7 @@ func retained_ready() -> bool:
     for segment in [retained_first_once]:
         if not segment.compiled:
             return false
-    for segment in retained_repeat_segments:
+    for segment in retained_repeat_segments + retained_rest_segments:
         if not segment.compiled:
             return false
     return true
@@ -457,15 +449,15 @@ func _hide_retained_segments() -> void:
 
 func _invalidate_retained_segments() -> void:
     retained_ink_published = false
-    # Structural changes invalidate cached ink. Unused pool entries recompile
-    # offscreen now rather than when a later measure comes into view.
-    for segment in [retained_first_once]:
-        if segment != null:
+    # Every source/rest pass is owned by StreamLifecycle, including those
+    # currently clipped. Unstage BEFORE invalidation: a CanvasItem cannot
+    # rebuild its command buffer under an invisible clipping parent.
+    StreamLifecycle.prepare_recompile(self,stream_passes)
+    for segment in [retained_first_once] + \
+            retained_repeat_segments + retained_rest_segments:
+        if segment != null and is_instance_valid(segment):
             segment.compiled = false
             segment.queue_redraw()
-    for segment in retained_repeat_segments:
-        segment.compiled = false
-        segment.queue_redraw()
     _hide_retained_segments()
 
 func paint_retained_source(canvas: CanvasItem) -> RenderPass:
@@ -532,35 +524,19 @@ func _stream_add_take(source_beat: float, start_world: float,
             choice = segment
             break
     if choice == null:
-        # Very rapid manual retries can overlap more than the precompiled
-        # visible copies. Compile one more source ONCE, then reuse its ink.
+        # Excessive rapid retries are still placed strictly in the future.
+        # StreamLifecycle keeps the new segment visible to Godot for
+        # offscreen compilation, then attaches it to the hidden clip only
+        # once the retained source has compiled.
         choice = _new_retained_segment("source")
         retained_repeat_segments.append(choice)
-    var clip := Control.new()
-    clip.name = "StreamPassWindow"
-    # A CanvasItem must NEVER render once at (0,0) while its retained ink
-    # is being reparented. Publication follows the computed world transform.
-    clip.visible = false
-    clip.clip_contents = true
-    clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    clip.focus_mode = Control.FOCUS_NONE
-    add_child(clip)
-    choice.reparent(clip,false)
     _stream_serial += 1
     _stream_live_serial = _stream_serial
-    stream_passes.append({
-        "segment":choice,
-        "clip":clip,
-        "world_origin":start_world-source_beat,
-        "source_floor":maxf(0.0,from_beat),
-        "source_ceiling":through_beat,
-        "take_key":take_key,
-        "pending":take_key in ["prepared","autopending"],
-        "serial":_stream_serial,
-        "kind":"source",
-    })
-    # The rest belongs to exactly the same immutable moving-bar world axis
-    # as its preceding source. It is never a second source renderer/camera.
+    stream_passes.append(StreamLifecycle.create(self,choice,"source",
+        start_world-source_beat,maxf(0.0,from_beat),through_beat,
+        take_key,_stream_serial,take_key in ["prepared","autopending"]))
+    # The written full-measure rest shares this pass's immutable world
+    # origin. It is a pooled, precompiled segment, never a second camera.
     var silence: Dictionary = practice_timeline.get("gap",{})
     var gap: float = float(silence.get("duration_beats",0.0))
     if gap > .0001:
@@ -569,21 +545,20 @@ func _stream_add_take(source_beat: float, start_world: float,
 
 
 func _stream_add_rest(world: float, duration: float, owner_serial: int) -> void:
-    var rest = _new_retained_segment("rest")
-    var window := Control.new()
-    window.name = "StreamSemanticRest"
-    window.visible = false
-    window.clip_contents = true
-    window.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    window.focus_mode = Control.FOCUS_NONE
-    add_child(window)
-    rest.reparent(window,false)
-    stream_passes.append({
-        "segment":rest,"clip":window,"world_origin":world,
-        "source_floor":0.0,"source_ceiling":duration,
-        "take_key":"rest","pending":false,"kind":"rest",
-        "serial":-owner_serial})
-
+    var used: Dictionary = {}
+    for item in stream_passes:
+        used[item["segment"]] = true
+    var rest = null
+    for segment in retained_rest_segments:
+        if segment != null and is_instance_valid(segment) and not used.has(segment):
+            rest = segment
+            break
+    if rest == null:
+        # Compile any overflow rest offscreen BEFORE revealing its clip.
+        rest = _new_retained_segment("rest")
+        retained_rest_segments.append(rest)
+    stream_passes.append(StreamLifecycle.create(self,rest,"rest",
+        world,0.0,duration,"rest",-owner_serial,false))
 
 func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
@@ -731,29 +706,15 @@ func _stream_extend_offscreen(item: Dictionary) -> void:
 
 
 func _stream_prune_expired() -> void:
-    # Scene-tree mutations belong to the frame coordinator, never _draw().
-    # The GPU command-list pass only translates retained CanvasItems.
-    var density: float = maxf(1.0,timeline.pixels_per_beat)
-    var playhead_x: float = size.x*PLAYHEAD_FRACTION
-    for index in range(stream_passes.size()-1,-1,-1):
-        var item: Dictionary = stream_passes[index]
-        var segment = item["segment"]
-        var clip = item["clip"]
-        if segment == null or not is_instance_valid(segment) or \
-                clip == null or not is_instance_valid(clip):
-            stream_passes.remove_at(index)
-            continue
-        var source_left: float = playhead_x + (
-            float(item["world_origin"])-stream_world_beat)*density
-        if source_left + float(item.get("source_ceiling",
-                timeline.duration_beats))*density < -60.0:
-            segment.reparent(self,false)
-            if str(item.get("kind","source")) == "rest":
-                retained_all_segments.erase(segment)
-                segment.queue_free()
-            clip.queue_free()
-            stream_passes.remove_at(index)
-
+    # All retirement, invalid-record cleanup and CanvasItem reuse take the
+    # same path. The renderer itself never reparents or frees a stream clip.
+    var retired: Array[int] = StreamLifecycle.prune(self,stream_passes,
+        stream_world_beat,maxf(1.0,timeline.pixels_per_beat),
+        size.x*PLAYHEAD_FRACTION,staff_gap(),timeline.duration_beats)
+    if retired.has(_stream_live_serial):
+        _stream_live_serial = -1
+    if retired.has(_stream_armed_serial):
+        _stream_armed_serial = -1
 
 func present_flow(world_beat: float, state: Dictionary,
         graded_beat: float, allow_admission: bool = true) -> void:
@@ -862,62 +823,39 @@ func present_flow(world_beat: float, state: Dictionary,
 func _project_stream(playhead_x: float) -> void:
     var density: float = maxf(1.0,timeline.pixels_per_beat)
     var used: Dictionary = {}
-    for index in range(stream_passes.size()-1,-1,-1):
-        var item: Dictionary = stream_passes[index]
-        var segment = item["segment"]
-        var clip: Control = item["clip"]
-        if not is_instance_valid(segment) or not is_instance_valid(clip):
-            stream_passes.remove_at(index)
-            continue
-        var position: float = playhead_x + (
-            float(item["world_origin"])-stream_world_beat)*density
-        var floor_x: float = float(item["source_floor"])*density
-        var ceiling_x: float = float(item["source_ceiling"])*density
-        var is_rest: bool = str(item.get("kind","source")) == "rest"
-        var bounds: Vector2 = (Vector2(0.0,
-            float(item["source_ceiling"])*density)
-            if is_rest else StreamAdmission.engraved_clip_bounds(
-                float(item["source_floor"]),float(item["source_ceiling"]),
-                density,staff_gap(),timeline.duration_beats))
-        # Physical crop extends beyond semantic attacks. The extra prefix
-        # contains the real initial clef/key/meter; the extra suffix contains
-        # full noteheads and barline ink. Grading and hit-tests stay bounded
-        # by source_floor/source_ceiling, never by the padding.
-        # READY is an EMPTY moving staff. Its one silent prepared source is
-        # retained offscreen until Play, never revealed by elapsed idle time.
-        if not is_rest and str(item.get("take_key","")) == "prepared" and \
-                bool(item.get("pending",false)) and \
-                not bool(item.get("armed",false)):
-            clip.visible = false
-            continue
-        clip.position = Vector2(position+bounds.x,0.0)
-        clip.size = Vector2(maxf(1.0,bounds.y-bounds.x),size.y)
-        segment.position = Vector2(-bounds.x,0.0)
-        # Unhide ONLY after both parent crop and source translation exist.
-        clip.visible = segment.compiled
-        if segment.compiled:
-            used[segment] = true
-            var count: int = RetainedNoteProjection.append_visible(
-                segment.note_instances,position,size.x,playhead_x,
-                int(item["serial"]),drawn_note_instances,drawn_noteheads,
-                floor_x,ceiling_x)
-            visible_symbols += count
-            frame_scanned_events += count
-            if not is_rest:
-                fingering_pass_clocks.append({
-                    "clock":stream_world_beat-float(item["world_origin"])-play_from_beat,
-                    "pass_index":0,"pass_start":0.0,
-                    "stream_floor":float(item["source_floor"]),
-                    "stream_ceiling":float(item["source_ceiling"])})
-    # The source geometry is in immutable local source coordinates. Only
-    # the clip windows and Node2D transforms change on every render frame.
     for item in stream_passes:
-        var segment = item["segment"]
-        segment.visible = used.has(segment)
+        var segment = item.get("segment")
+        var clip = item.get("clip")
+        # Invalid records are retired by present_flow(), never mutated or
+        # removed during CanvasItem._draw().
+        if segment == null or not is_instance_valid(segment) or \
+                clip == null or not is_instance_valid(clip):
+            continue
+        if not StreamLifecycle.project(item,stream_world_beat,playhead_x,
+                density,staff_gap(),size,timeline.duration_beats):
+            continue
+        used[segment] = true
+        if str(item.get("kind","source")) == "rest":
+            continue
+        var position: float = playhead_x + \
+            (float(item["world_origin"])-stream_world_beat)*density
+        var count: int = RetainedNoteProjection.append_visible(
+            segment.note_instances,position,size.x,playhead_x,
+            int(item["serial"]),drawn_note_instances,drawn_noteheads,
+            float(item["source_floor"])*density,
+            float(item["source_ceiling"])*density)
+        visible_symbols += count
+        frame_scanned_events += count
+        fingering_pass_clocks.append({
+            "clock":stream_world_beat-float(item["world_origin"])-play_from_beat,
+            "pass_index":0,"pass_start":0.0,
+            "stream_floor":float(item["source_floor"]),
+            "stream_ceiling":float(item["source_ceiling"])})
+    # Newly allocated/invalidated CanvasItems must remain visible to Godot
+    # while compiling offscreen; compiled unused pool items remain hidden.
     for segment in retained_all_segments:
-        if not used.has(segment) and segment.visible:
-            segment.visible = not segment.compiled
-
+        if segment != null and is_instance_valid(segment):
+            segment.visible = used.has(segment) or not segment.compiled
 
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     var old_hand: String = active_hand
