@@ -58,10 +58,13 @@ class MockStage:
     extends Node
     var renderer
     var score_frame := Control.new()
+    var hud := Control.new()
     func _init() -> void:
         add_child(score_frame)
         renderer = MockView.new()
         score_frame.add_child(renderer)
+        hud.name = "ScoreCountInAndFeedback"
+        score_frame.add_child(hud)
 
 class MockRequest:
     extends Node
@@ -137,6 +140,10 @@ func run() -> void:
     check(stage.renderer == future and session._renderer == future and \
             session.revision == 2 and session.is_ready(),
         "same source-bound retained renderer becomes authoritative")
+    check(old.get_index() < stage.hud.get_index() and
+        future.get_index() < stage.hud.get_index() and
+        future.mouse_filter == Control.MOUSE_FILTER_PASS,
+        "departing and incoming score layers remain under the HUD; fingering remains interactive")
     check(future.arm_calls == 2 and \
             is_equal_approx(future.armed_world,34.0),
         "promoted future source keeps its exactly scheduled world coordinate")
@@ -213,6 +220,9 @@ func run() -> void:
         session.revision == old_revision and
         runway._tails.has(outgoing),
         "manual transition swaps only the asset destination, not old notes")
+    check(stage.renderer.get_index() < stage.hud.get_index() and
+        outgoing.get_index() < stage.hud.get_index(),
+        "manual transitions cannot place old or new score ink over HUD controls")
     session.update_context(manual,Time.get_ticks_msec())
     check(outgoing.cleared == 0 and session.revision == 3 and
         runway._tails.has(outgoing),
