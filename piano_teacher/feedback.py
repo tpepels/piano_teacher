@@ -57,6 +57,11 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             glyph = glyphs[index]
         result.append({
             "status": entry.status,
+            # A note still held beyond its expected release must NEVER be
+            # displayed as an early-release note merely because the grading
+            # status is "short" for an as-yet unclosed MIDI press.
+            "release_unobserved": bool(entry.observation is not None
+                                       and entry.observation.unreleased),
             "page": int(glyph["page"]),
             "x": float(glyph["x"]),
             "y": float(glyph["y"]),
