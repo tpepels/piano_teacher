@@ -351,6 +351,22 @@ def clocked_engine(tmp_path, monkeypatch):
         app.db.close()
 
 
+def test_backend_authored_preview_queue_plan_survives_restart(clocked_engine):
+    app, now = clocked_engine()
+    app.start()
+    assert app.state().get("score_queue_next") is None
+    now[0] = app.visual_transport.run_at + 8*60/80 + .21
+    pending = app.state()
+    assert pending["phase"] == "preview_gap"
+    plan = pending["score_queue_next"]
+    assert plan["source_from_beat"] == 0
+    assert plan["deadline_at_ms"] == pytest.approx(app.visual_transport.next_at*1000)
+    now[0] = app.visual_transport.next_at+.01
+    repeated = app.state()
+    assert repeated["running"] and repeated["preview_only"]
+    assert repeated["score_queue_next"]["plan_id"] == plan["plan_id"]
+
+
 def record_clean(app):
     phrase = app.plan.active_phrase
     app.recorder.presses = [
