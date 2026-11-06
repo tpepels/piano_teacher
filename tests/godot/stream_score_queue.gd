@@ -124,7 +124,7 @@ func _run() -> void:
     # Reload the score journal through an entirely different Queue object,
     # simulating reopening the song in a new renderer/process.
     var restored := Queue.new()
-    var restored_ok: bool = restored.bind_score(score_key,folder)
+    var restored_ok: bool = restored.bind_score(score_key,folder,true)
     var same_plan: bool = (restored.offline.size() == 1 and
         JSON.stringify(restored.offline[0]["plan"]) ==
         JSON.stringify(queue.offline[0]["plan"]))
@@ -151,11 +151,11 @@ func _run() -> void:
     check(restored.offline.size()==1 and restored.online.is_empty(),
         "score close returns its final source to the persistent offline FIFO")
     var after_close := Queue.new()
-    check(after_close.bind_score(score_key,folder) and
+    check(after_close.bind_score(score_key,folder,true) and
         after_close.offline.size()==1,
         "even score teardown cannot lose the last musical source")
     var wrong_source := Queue.new()
-    check(wrong_source.bind_score(score_key+"-different",folder) and
+    check(wrong_source.bind_score(score_key+"-different",folder,true) and
         wrong_source.offline.is_empty(),
         "a different musical score cannot consume another song's offline ink")
     var bad: Array = passage(5,60.0,"prepared",true)
@@ -179,7 +179,7 @@ func _run() -> void:
         [],[],null,0.0,800.0,playhead,density,gap,4.0),
         "interrupted session journals its online source before exposure")
     var interrupted_reader := Queue.new()
-    check(interrupted_reader.bind_score(interrupted_key,folder) and
+    check(interrupted_reader.bind_score(interrupted_key,folder,true) and
         interrupted_reader.offline.size()==1 and
         str(interrupted_reader.offline[0]["event"])=="interrupted",
         "unclosed online source is recovered as offline material on restart")
@@ -192,7 +192,7 @@ func _run() -> void:
     # return alongside its already-consumed successor. Each replay is a
     # one-time transfer of offline ownership, not a clone of the passage.
     var interrupted_again := Queue.new()
-    check(interrupted_again.bind_score(interrupted_key,folder) and
+    check(interrupted_again.bind_score(interrupted_key,folder,true) and
         interrupted_again.offline.size()==1 and
         int(interrupted_again.offline[0]["id"]) ==
             int(interrupted_reader.history[-1]["id"]),
@@ -203,7 +203,7 @@ func _run() -> void:
         interrupted_again.offline.is_empty(),
         "second replay consumes interrupted successor exactly once")
     var interrupted_third := Queue.new()
-    check(interrupted_third.bind_score(interrupted_key,folder) and
+    check(interrupted_third.bind_score(interrupted_key,folder,true) and
         interrupted_third.offline.size()==1 and
         int(interrupted_third.offline[0]["id"]) ==
             int(interrupted_again.history[-1]["id"]),
@@ -235,16 +235,40 @@ func _run() -> void:
         int(trailing_writer.offline[1]["owner_serial"])==2,
         "closing trailing-rest owner also preserves the NEXT complete owner without over-popping")
     var rest_reader := Queue.new()
-    check(rest_reader.bind_score(trailing_key,folder) and
+    check(rest_reader.bind_score(trailing_key,folder,true) and
         rest_reader.offline.size()==2 and
         rest_reader.offline[0]["plan"].size()==2 and
         rest_reader.offline[1]["plan"].size()==2,
         "both trailing-rest and next-source passages survive reopening")
+    # Two overlapping lesson renderers with identical musical source
+    # MUST share the same journal sequence rather than creating duplicate
+    # IDs and losing one of their source plans on restart.
+    var shared_key: String = score_key+"-overlapping"
+    var first_layer := Queue.new()
+    var second_layer := Queue.new()
+    check(first_layer.bind_score(shared_key,folder) and
+        second_layer.bind_score(shared_key,folder) and
+        first_layer._archive == second_layer._archive,
+        "concurrent renderer layers use one writer for identical score source")
+    check(first_layer.enqueue(owner,passage(1,10.0,"prepared",true),
+        [],[],null,0.0,800.0,playhead,density,gap,4.0) and
+        second_layer.enqueue(other_owner,passage(2,23.0,"prepared",true),
+        [],[],null,0.0,800.0,playhead,density,gap,4.0),
+        "independent render layers append both source plans through shared journal")
+    check(first_layer.history.size()==2 and
+        int(first_layer.history[0]["id"]) != int(first_layer.history[1]["id"]),
+        "overlapping renderers never allocate the same journal event ID")
+    var cold_layer := Queue.new()
+    check(cold_layer.bind_score(shared_key,folder,true) and
+        cold_layer.offline.size()==2 and
+        cold_layer.offline[0]["plan"].size()==2 and
+        cold_layer.offline[1]["plan"].size()==2,
+        "both independently queued overlapping source plans survive a cold restart")
     interrupted_owner.queue_free()
     owner.queue_free()
     other_owner.queue_free()
     var absolute: String = ProjectSettings.globalize_path(folder)
-    for key in [score_key,interrupted_key,trailing_key]:
+    for key in [score_key,interrupted_key,trailing_key,shared_key]:
         DirAccess.remove_absolute(absolute.path_join(key.sha256_text()+".jsonl"))
     DirAccess.remove_absolute(absolute)
     print("STREAM_SCORE_QUEUE_FAILURES:",failures)
