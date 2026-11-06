@@ -590,12 +590,12 @@ func _stream_reserve_ready(world: float, opening: float) -> int:
     var stale: int = StreamAdmission.select(
         stream_passes,"idle",opening,world)
     if stale >= 0:
+        var stale_serial: int = int(stream_passes[stale]["serial"])
         var removed: Array[int] = _stream_queue.withdraw_tail(
             self,world,timeline.pixels_per_beat,staff_gap(),
             timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION,
             "idle_expired")
-        if not removed.has(int(stream_passes[stale]["serial"])) if \
-                stale < stream_passes.size() else removed.is_empty():
+        if not removed.has(stale_serial):
             return -1
     var onset: float = StreamAdmission.position(stream_passes,world,right,
         header,NAN,-1,StreamAdmission.READY_TRAVEL_BEATS,
