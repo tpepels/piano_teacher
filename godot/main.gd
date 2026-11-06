@@ -1046,6 +1046,20 @@ func _send_action(command: Dictionary) -> void:
         var opening: float = maxf(0.0,float(last_state.get("play_from_beat",0.0)))
         if requested == "resume":
             opening = maxf(opening,opening+_transport_beat_at(Time.get_ticks_msec()))
+        if requested == "restart":
+            # Explicit Retry invalidates speculative next attempts. Withdraw
+            # only the never-exposed suffix, leave all visible notes moving,
+            # and retain withdrawn plans in the renderer's offline queue.
+            renderer.trim_future_queue("explicit_retry")
+        elif requested == "resume":
+            # A different source opening must not steal the old preloaded
+            # attempt. If it cannot be withdrawn, enqueue after its end.
+            var future: int = StreamAdmission.select(
+                renderer.stream_passes,"automatic",opening,visual_now,
+                renderer._stream_right_beats(),
+                renderer._stream_header_beats(opening))
+            if future < 0:
+                renderer.trim_future_queue("resume_different_opening")
         var reserved: Dictionary = renderer.arm_stream_take(
             visual_now,opening,NAN,requested == "resume",
             requested == "restart")
