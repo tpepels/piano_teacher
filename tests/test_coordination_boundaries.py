@@ -51,7 +51,9 @@ def test_main_callbacks_keep_reply_handling_and_presentation_separate():
     assert "renderer.present_clock(beat,visual_beat -" in frame
     assert "float(stage.renderer.runway_origin_beat)" in frame
     assert "renderer.present(" not in frame
-    assert "stage.renderer.present(" in state
+    assert "renderer = practice_view.stage.renderer" in state
+    assert "renderer.present(" in state
+    assert "renderer.enqueue_recovery_queue(" in state
     assert "app." not in frame
     assert "app." not in presenter
     assert "func _init(practice, settings, lesson, session," in frame
