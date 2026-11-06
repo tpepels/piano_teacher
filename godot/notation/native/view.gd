@@ -752,6 +752,38 @@ func trim_future_queue(reason: String) -> Array[int]:
     return removed
 
 
+func enqueue_recovery_queue(world: float, source_opening: float,
+        graded_deadline_world: float) -> bool:
+    # Recovery decisions arrive from the engine with an absolute graded
+    # deadline. Reuse a compatible offline-planned future if possible;
+    # otherwise withdraw the maximal safe suffix, then APPEND new source
+    # notation at that exact deadline. A late deadline must never cause
+    # an onscreen pop or independent renderer camera adjustment.
+    if not native_ready or not retained_ready() or \
+            not is_finite(graded_deadline_world) or \
+            source_opening < 0.0 or source_opening >= timeline.duration_beats:
+        return false
+    stream_world_beat = maxf(stream_world_beat,world)
+    var existing: int = StreamAdmission.select(stream_passes,
+        "automatic_due",source_opening,stream_world_beat,
+        0.0,0.0,"",graded_deadline_world)
+    if existing >= 0:
+        return true
+    trim_future_queue("recovery_replan")
+    var checked: float = StreamAdmission.position(stream_passes,
+        stream_world_beat,_stream_right_beats(),
+        _stream_header_beats(source_opening),
+        graded_deadline_world,0.0,timeline.pixels_per_beat,
+        staff_gap(),timeline.duration_beats)
+    if not is_finite(checked):
+        return false
+    var before: int = _stream_serial
+    var original_live: int = _stream_live_serial
+    _stream_add_take(source_opening,checked,source_opening,"autopending")
+    _stream_live_serial = original_live
+    return _stream_serial > before
+
+
 func _stream_prune_expired() -> void:
     # All retirement, invalid-record cleanup and CanvasItem reuse take the
     # same path. The renderer itself never reparents or frees a stream clip.
@@ -806,7 +838,7 @@ func present_flow(world_beat: float, state: Dictionary,
             float(prep.get("source_from_beat",0.0))
             if prep is Dictionary else 0.0)
         var keep_auto: bool = bool(state.get("auto",false)) or \
-            bool(state.get("preview_only",false))
+            bool(state.get("preview_only",false)) or prep is Dictionary
         if keep_auto and prep is Dictionary:
             for item in stream_passes:
                 if str(item.get("take_key","")) == "autopending" and \
