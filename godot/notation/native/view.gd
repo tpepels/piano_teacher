@@ -75,6 +75,7 @@ const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
+const StreamQueue := preload("res://score_stream_queue.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
 const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 var symbols = SymbolPainter.new(layout,connector_geometry)
@@ -90,7 +91,15 @@ var external_backdrop := false
 var compact_inactive_staff := false
 # One infinite front-of-house camera. Grading never reads this axis.
 var stream_world_beat := 0.0
-var stream_passes: Array = []
+var _stream_queue = StreamQueue.new()
+# Compatibility getter for the read-only renderer/test interface. Only
+# StreamQueue may structurally mutate the underlying online FIFO.
+var stream_passes: Array:
+    get:
+        return _stream_queue.online
+var offline_stream_queue: Array:
+    get:
+        return _stream_queue.offline
 # Immutable source event index for cursor ink clearance. The painter may
 # temporarily suppress one glyph for framebuffer controls; that must not
 # change the fixed timing line or alter unrelated image pixels.
@@ -371,7 +380,7 @@ func _prepare_static_geometry() -> void:
     connector_geometry.prewarm_slur_geometry(prepared_gap)
 
 func _stream_release_all() -> void:
-    StreamLifecycle.release_all(self,stream_passes)
+    _stream_queue.reset(self)
     _stream_last_take = ""
     _stream_was_paused = false
     _stream_paused_source = 0.0
@@ -534,9 +543,11 @@ func _stream_add_take(source_beat: float, start_world: float,
             "source_floor":0.0,"source_ceiling":gap,
             "take_key":"rest","pending":false,
             "hidden_until_armed":hidden})
-    if not StreamLifecycle.admit(self,stream_passes,specs,
+    if not _stream_queue.enqueue(self,specs,
             retained_repeat_segments,retained_rest_segments,
-            retained_first_once):
+            retained_first_once,stream_world_beat,size.x,
+            size.x*PLAYHEAD_FRACTION,timeline.pixels_per_beat,
+            staff_gap(),timeline.duration_beats):
         push_error("Refused duplicate source/rest stream owner %d" %
             owner_serial)
         return
@@ -607,7 +618,9 @@ func _reject_stream_candidate(owner_serial: int, before_serial: int,
     # A failed pre-commit reservation must not leave a speculative future
     # source/rest pair occupying the musical axis.
     if owner_serial > before_serial:
-        StreamLifecycle.discard_owner(self,stream_passes,owner_serial)
+        _stream_queue.withdraw_tail(self,stream_world_beat,
+            timeline.pixels_per_beat,staff_gap(),timeline.duration_beats,
+            size.x,size.x*PLAYHEAD_FRACTION,"rejected_admission",true)
     elif not snapshot.is_empty():
         StreamLifecycle.restore_owner(stream_passes,owner_serial,snapshot)
     _stream_live_serial = old_live_serial
@@ -709,8 +722,10 @@ func cancel_stream_arm() -> bool:
         return false
     var restored: bool = false
     if bool(_stream_arm_rollback.get("newly_allocated",false)):
-        restored = StreamLifecycle.discard_owner(
-            self,stream_passes,owner_serial) > 0
+        restored = not _stream_queue.withdraw_tail(
+            self,stream_world_beat,timeline.pixels_per_beat,
+            staff_gap(),timeline.duration_beats,size.x,
+            size.x*PLAYHEAD_FRACTION,"failed_command",true).is_empty()
     else:
         restored = StreamLifecycle.restore_owner(stream_passes,
             owner_serial,_stream_arm_rollback["source_snapshot"])
@@ -735,9 +750,9 @@ func _stream_extend_offscreen(item: Dictionary) -> void:
 func _stream_prune_expired() -> void:
     # All retirement, invalid-record cleanup and CanvasItem reuse take the
     # same path. The renderer itself never reparents or frees a stream clip.
-    var retired: Array[int] = StreamLifecycle.prune(self,stream_passes,
-        stream_world_beat,maxf(1.0,timeline.pixels_per_beat),
-        size.x*PLAYHEAD_FRACTION,staff_gap(),timeline.duration_beats)
+    var retired: Array[int] = _stream_queue.expire_front(
+        self,stream_world_beat,maxf(1.0,timeline.pixels_per_beat),
+        staff_gap(),timeline.duration_beats,size.x*PLAYHEAD_FRACTION)
     if retired.has(_stream_live_serial):
         _stream_live_serial = -1
     if retired.has(_stream_armed_serial):
