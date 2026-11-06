@@ -46,7 +46,11 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         rest_pool: Array, first_source: Node2D, world: float,
         viewport_width: float, playhead_x: float,
         density: float, gap: float, source_duration: float) -> bool:
-    if specs.is_empty() or str(specs[0].get("kind","")) != "source":
+    # Validate the caller's ORIGINAL musical request before considering
+    # an offline template. A malformed rest or overlapping source cannot be
+    # silently repaired by a compatible archived passage.
+    if specs.is_empty() or str(specs[0].get("kind","")) != "source" or \
+            not Lifecycle.validate_batch(online,specs):
         return false
     var planned: Dictionary = specs[0]
     var opening_left: float = float(planned.get("world_origin",NAN)) + \
