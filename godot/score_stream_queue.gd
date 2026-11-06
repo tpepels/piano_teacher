@@ -215,11 +215,18 @@ func _is_safe_tail(owner_serial: int, world: float, density: float,
 func withdraw_tail(owner: Control, world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, reason: String,
-        force_unacknowledged: bool = false) -> Array[int]:
+        force_unacknowledged: bool = false,
+        protected_take: int = -1) -> Array[int]:
     # The only permitted right-end dequeue operation. A visible/acknowledged
     # prefix is NEVER changed, even when future musical decisions differ.
     var withdrawn: Array[int] = []
     while not online.is_empty():
+        # Pausing preserves the already-selected running take, even if
+        # a later measure has not entered the viewport yet. Withdraw only
+        # speculative successors behind it.
+        if protected_take >= 0 and int(online[-1].get(
+                "take_owner",owner_id(online[-1]))) == protected_take:
+            break
         var last_owner: int = owner_id(online[-1])
         if not _is_safe_tail(last_owner,world,density,gap,duration,
                 viewport_width,playhead_x,force_unacknowledged):
