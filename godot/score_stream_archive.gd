@@ -182,11 +182,28 @@ func compatible(requested: Array) -> Dictionary:
         var plan: Array = entry.get("plan",[])
         if plan.size() != requested.size() or plan.is_empty():
             continue
+        # Geometry alone is insufficient. A new placement may share its
+        # source window yet have a different authored passage duration.
+        # Reusing that stored rest would silently change the time granted
+        # by the caller (and therefore disagree with MIDI grading).
+        var old_source: Dictionary = plan[0]
+        var new_source: Dictionary = requested[0]
+        if absf(float(old_source.get("piece_duration",
+                old_source.get("source_ceiling",-1))) -
+                float(new_source.get("piece_duration",
+                new_source.get("source_ceiling",-2)))) > .00001:
+            continue
         var same := true
         for j in range(plan.size()):
             var a: Dictionary = plan[j]
             var b: Dictionary = requested[j]
-            if str(a.get("kind","")) != str(b.get("kind","")) or \
+            var old_offset: float = float(a.get("world_origin",NAN)) - \
+                float(old_source.get("world_origin",NAN))
+            var new_offset: float = float(b.get("world_origin",NAN)) - \
+                float(new_source.get("world_origin",NAN))
+            if not is_finite(old_offset) or not is_finite(new_offset) or \
+                    str(a.get("kind","")) != str(b.get("kind","")) or \
+                    absf(old_offset-new_offset) > .00001 or \
                     absf(float(a.get("source_floor",-1))-
                         float(b.get("source_floor",-2)))>.00001 or \
                     absf(float(a.get("source_ceiling",-1))-
