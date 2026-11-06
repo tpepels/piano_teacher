@@ -124,6 +124,10 @@ static func _record(item: Dictionary) -> Dictionary:
     if item.has("clip_floor") and item.has("clip_ceiling"):
         stored["clip_floor"] = float(item["clip_floor"])
         stored["clip_ceiling"] = float(item["clip_ceiling"])
+        stored["clip_leading_spaces"] = float(
+            item.get("clip_leading_spaces",0.0))
+        stored["clip_trailing_spaces"] = float(
+            item.get("clip_trailing_spaces",0.0))
     return stored
 
 func enqueue(owner: Control, specs: Array, source_pool: Array,
