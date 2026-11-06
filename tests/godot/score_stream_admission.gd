@@ -66,6 +66,20 @@ func _initialize() -> void:
         "future passage must clear all existing note and rest extents")
     check(Admission.lead_seconds(first,world,31.0)>25.0,
         "grading respects offscreen travel at low tempo")
+    var preview_horizon: float = Admission.automatic_horizon(4.0,2.0,1.2)
+    var previous: Array = [
+        {"owner_serial":7,"world_origin":20.0,"source_floor":0.0,
+            "source_ceiling":8.0,"kind":"source"},
+        {"owner_serial":7,"world_origin":28.0,"source_floor":0.0,
+            "source_ceiling":4.0,"kind":"rest"}]
+    var next_expected: float = 20.0+8.0+preview_horizon
+    check(is_equal_approx(preview_horizon,6.2) and
+        is_equal_approx(Admission.position(
+            previous,20.0,2.0,1.2,next_expected),next_expected),
+        "preview/auto source clears written rest and header at exact backend deadline")
+    check(not is_finite(Admission.position(
+            previous,20.0,2.0,1.2,next_expected-.2)),
+        "renderer must reject a shorter deadline instead of silently retiming notes")
     var bounds: Vector2 = Admission.engraved_clip_bounds(
         0.0,4.0,96.0,24.0,4.0)
     check(bounds.x < -300 and bounds.y > 384,
