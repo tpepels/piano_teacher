@@ -49,13 +49,6 @@ if [[ ! -f "$stamp" || "$(cat "$stamp")" != "$signature" ]]; then
     printf '%s\n' "$signature" > "$tmp"
     mv -f "$tmp" "$stamp"
 fi
-# Optional voice acquisition must NEVER delay application startup.
-# Cached Oggs are loaded lazily by Godot; the click fallback works immediately.
-if [[ "${PIANO_TEACHER_VOICE_DOWNLOAD:-1}" != "0" ]] && \
-        ! "$PYTHON" scripts/fetch_countin_voices.py --verify >/dev/null 2>&1; then
-    voice_log_dir="${XDG_CACHE_HOME:-$HOME/.cache}/piano-teacher"
-    mkdir -p "$voice_log_dir"
-    ("$PYTHON" scripts/fetch_countin_voices.py \
-        >"$voice_log_dir/countin-download.log" 2>&1) </dev/null &
-fi
+# Spoken count-in clips are tracked assets. No network, installer, or
+# background process is involved in launching or playing an exercise.
 exec "$GODOT" --path godot -- "$@"
