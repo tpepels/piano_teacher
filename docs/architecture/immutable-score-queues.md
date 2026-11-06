@@ -17,6 +17,15 @@ progression; the queue decides which already-engraved passage can be shown.
 | `StreamLifecycle` | Validate exactly one source + optional paired rest; allocate, stage and project pre-engraved Godot CanvasItems | Scheduling a passage, deciding success/retry, changing source coordinates or removing arbitrary online entries |
 | `ScoreRunway` | Chronological queue of outgoing renderers, pre-engrave the next step, release only the oldest fully exited layer | Stopping the clock, moving old notes, deleting a newer layer before an older live layer |
 
+Fresh READY ink remains outside the right viewport edge, including
+the exact clef/key/time-signature clip geometry. The additional offscreen
+margin is 0.12 beat and the READY travel cushion is 0.30 beat. At 31 BPM
+this adds about 0.81 seconds until the first printed ink reaches the screen
+edge; a larger arbitrary travel allowance must not be reintroduced. Remaining
+musical lookahead and already committed older ink can still take longer.
+Voice sample acquisition is strictly non-blocking; optional network access
+must never delay Godot startup.
+
 The online queue is ordered by **physical world time**, not by when the
 backend returned a request. `enqueue()` rejects content that starts inside the
 viewport or overlaps the last printed pixel of any existing source/rest slot.
@@ -60,6 +69,13 @@ If the backend's proposed deadline is too early to fit the retry offscreen,
 the renderer rejects it rather than fabricating an onscreen note.
 
 Pause stops speculative admission; the absolute visual axis continues.
+While paused, the existing attempt is protected until a concrete Resume
+decision arrives. If the exact source interval is still safely reusable,
+Resume preserves it. Otherwise Resume retracts the **maximal still-unseen
+suffix, including unexposed measures of the formerly active attempt**, and
+appends a new continuation behind only the irreversible visible prefix.
+Protecting the whole old take after its source opening had changed caused
+minute-scale blank gaps at low BPM; that behavior is forbidden.
 Retry and changed Coda/Fukuda decisions retract safe future material and then
 append exactly the engine-selected source. The backend publishes
 `score_queue_next` with `plan_id`, `source_from_beat` and the absolute
