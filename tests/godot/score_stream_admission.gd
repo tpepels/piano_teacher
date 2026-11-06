@@ -5,43 +5,67 @@ func check(ok: bool, message: String) -> void:
     if not ok:
         failures += 1
         print("SCORE_STREAM_ADMISSION_FAILED:",message)
+
 func _initialize() -> void:
     var world := 20.0
     var passes: Array = []
-    var first := Admission.future_start(passes,world,11.0,3.5)
-    check(first>world+14.0,
-        "first clef and source note must start beyond viewport edge")
-    passes.append({"serial":1,"pending":true,
+    var first: float = Admission.position(passes,world,11.0,3.5)
+    check(first > world+14.0,
+        "one placement boundary keeps clef and source beyond viewport")
+    passes.append({"serial":1,"owner_serial":1,"kind":"source",
+        "pending":true,"armed":false,"take_key":"prepared",
         "world_origin":first,"source_floor":0.0,"source_ceiling":6.0})
-    check(Admission.pending_index(passes,0.0,world)==0,
-        "Play selects already reserved original source")
-    passes[0]["take_key"] = "prepared"
-    check(Admission.idle_reservation_index(passes,0.0)==0,
-        "One hidden READY source can be repositioned without recompilation")
-    check(Admission.pending_index(passes,0.0,first-6.0,11.0,3.5)==-1,
-        "A score whose clef entered the viewport is not safe to arm")
-    passes[0]["take_key"] = "take-1"
+    passes.append({"serial":-1,"owner_serial":1,"kind":"rest",
+        "pending":false,"world_origin":first+8.0,
+        "source_floor":0.0,"source_ceiling":4.0})
+    check(Admission.select(passes,"ready",0.0,world,11.0,3.5)==0,
+        "normal Play claims one prepositioned original source")
+    check(Admission.select(passes,"idle",0.0,world)==0,
+        "idle retimes the existing hidden source, never a second copy")
+    check(Admission.select(passes,"ready",0.0,first-6.0,11.0,3.5)==-1,
+        "any source whose header entered the viewport fails safe")
+    check(not is_finite(Admission.position(passes,world,11.0,3.5,
+        first+1.0)),"explicit placement must reject overlaps including paired rests")
+    var retimed: float = Admission.position(passes,first-7.0,11.0,3.5,
+        NAN,1,Admission.READY_TRAVEL_BEATS)
+    check(retimed>first,
+        "repositioning excludes only the hidden owner's source and rest")
+    passes[0]["take_key"] = "transport-one"
     passes[0]["pending"] = false
-    check(Admission.paused_unplayed_index(passes,"take-1",0.0,world)==0,
-        "Pause before source onset reuses existing future note ink")
-    check(Admission.paused_unplayed_index(passes,"take-1",0.0,first+1.0)==-1,
-        "Passed notes cannot be reused as a future resume")
-    passes.append({"serial":2,"pending":true,"take_key":"autopending",
-        "world_origin":first+12.0,"source_floor":0.0,"source_ceiling":6.0})
-    check(Admission.pending_index(passes,0.0,world)==-1,
-        "Manual Resume cannot steal the automatic retry reservation")
-    check(Admission.future_start(passes,world,11.0,3.5) >=
-        first+6.0+Admission.REST_GAP_BEATS+3.5,
-        "upcoming repeat cannot collide with still-moving first copy")
-    check(Admission.pending_index(passes,0.0,first+1.0)==-1,
-        "a past or imminent first note is not available to Play")
+    check(Admission.select(passes,"paused",0.0,world,0.0,0.0,
+        "transport-one")==0,
+        "paused source can be reused before its first graded note")
+    check(Admission.select(passes,"paused",0.0,first+1.0,0.0,0.0,
+        "transport-one")==-1,
+        "passed source cannot be reused by Resume")
+    var second_world: float = first+21.0
+    passes.append({"serial":2,"owner_serial":2,"kind":"source",
+        "pending":true,"armed":false,"take_key":"autopending",
+        "world_origin":second_world,"source_floor":0.0,"source_ceiling":6.0})
+    check(Admission.select(passes,"ready",0.0,world)==-1,
+        "READY must never select an automatic successor or a published take")
+    check(Admission.select(passes,"automatic",0.0,world,11.0,3.5)==2,
+        "manual Retry can claim already printed automatic source")
+    check(Admission.select(passes,"automatic_due",0.0,second_world,
+        0.0,0.0,"",second_world)==2,
+        "backend automatic deadline binds even when its onset is due now")
+    check(Admission.select(passes,"automatic_due",0.0,second_world,
+        0.0,0.0,"",second_world+1.0)==-1,
+        "backend deadlines cannot bind a different automatic passage")
+    check(Admission.select(passes,"bound",0.0,world,0.0,0.0,
+        "transport-one")==0,"one backend identity selects its single source")
+    check(Admission.position(passes,world,11.0,3.5) >=
+        second_world+6.0+Admission.REST_GAP_BEATS+3.5,
+        "future passage must clear all existing note and rest extents")
     check(Admission.lead_seconds(first,world,31.0)>25.0,
-        "graded start must respect actual offscreen travel even at slow BPM")
-    var bounds: Vector2 = Admission.engraved_clip_bounds(0.0,4.0,96.0,24.0,4.0)
+        "grading respects offscreen travel at low tempo")
+    var bounds: Vector2 = Admission.engraved_clip_bounds(
+        0.0,4.0,96.0,24.0,4.0)
     check(bounds.x < -300 and bounds.y > 384,
-        "source header and last original notehead remain within crop")
-    var interior: Vector2 = Admission.engraved_clip_bounds(0.0,4.0,96.0,24.0,8.0)
+        "engraved header and last notehead remain in crop")
+    var interior: Vector2 = Admission.engraved_clip_bounds(
+        0.0,4.0,96.0,24.0,8.0)
     check(is_equal_approx(interior.y,384.0),
-        "one source copy never exposes half of another measure")
+        "internal measure boundary may not show half the next note")
     print("SCORE_STREAM_ADMISSION_FAILURES:",failures)
     quit(0 if failures==0 else 1)
