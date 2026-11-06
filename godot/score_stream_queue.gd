@@ -196,6 +196,9 @@ func reset(owner: Control) -> void:
             if owner_id(item) != first_owner:
                 break
             specs.append(_record(item))
+        var complete: Array = _archive.original_plan(first_owner)
+        if not complete.is_empty():
+            specs = complete
         if not _archive.record("score_reset",first_owner,specs,
                 "score_unload"):
             push_error("Score plan preservation failed: "+last_error)
