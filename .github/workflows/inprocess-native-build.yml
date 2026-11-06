@@ -20,6 +20,8 @@ on:
       - 'godot/main.gd'
       - 'godot/score_runway.gd'
       - 'godot/score_stream_admission.gd'
+      - 'godot/score_stream_queue.gd'
+      - 'godot/score_stream_archive.gd'
       - 'godot/continuous_score_flow.gd'
       - 'godot/practice_frame_coordinator.gd'
       - 'godot/practice_control_policy.gd'
