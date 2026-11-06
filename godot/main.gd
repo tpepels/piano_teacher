@@ -131,6 +131,7 @@ var timeline_model_retry_after_ms: int:
         return score_session.timeline_model_retry_after_ms if score_session != null else 0
 
 var state_request_started_ms := 0
+var last_published_control_started_ms := -1
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
@@ -905,7 +906,13 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         state_pending = false
         # A pre-action snapshot can arrive after the control response. It
         # must not put a fresh count-in or paused attempt back in its old state.
-        if command_state.started_ms > 0 and state_request_started_ms <= command_state.started_ms:
+        if (command_state.started_ms > 0 and
+                state_request_started_ms <= command_state.started_ms) or (
+                last_published_control_started_ms >= 0 and
+                state_request_started_ms <= last_published_control_started_ms):
+            # Old polls remain invalid even after command_state.finish()
+            # clears started_ms. Never replace a newer graded transport
+            # with the earlier READY/paused snapshot.
             return
     if code != 0:
         practice_view.present_message(_command_failure(code, body))
@@ -1150,6 +1157,9 @@ func _on_action(code: int, body: PackedByteArray) -> void:
         fingering_save_error = ""
     elif str(decision["kind"]) == "library_open":
         score_error = ""
+    if bool(decision.get("publish_state",false)):
+        last_published_control_started_ms = maxi(
+            last_published_control_started_ms,int(completed["started_ms"]))
     if operation == "practice.command" and \
             _pending_stream_renderer != null and \
             is_instance_valid(_pending_stream_renderer):
