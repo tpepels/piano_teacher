@@ -18,6 +18,13 @@ func action_requested(action: String) -> bool:
     control_action = action
     return true
 
+func abort_action() -> void:
+    # The score transaction failed before dispatch. No command was sent,
+    # so no completion callback will clear this provisional action.
+    if not pending:
+        control_action = ""
+
+
 func begin(next_operation: String, now_ms: int) -> bool:
     if pending:
         return false
