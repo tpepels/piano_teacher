@@ -200,6 +200,11 @@ func reset(owner: Control) -> void:
             if owner_id(item) != first_owner:
                 break
             specs.append(_record(item))
+        # The archived ORIGINAL batch can contain more slots than remain
+        # online (e.g. the source has expired but its rest is still visible).
+        # Preserve the complete batch without popping non-existent entries
+        # or consuming the first slot of the NEXT owner.
+        var remaining_count: int = specs.size()
         var complete: Array = _archive.original_plan(first_owner)
         if not complete.is_empty():
             specs = complete
@@ -207,7 +212,7 @@ func reset(owner: Control) -> void:
                 "score_unload"):
             push_error("Score plan preservation failed: "+last_error)
             return
-        for i in range(specs.size()):
+        for i in range(remaining_count):
             Lifecycle.retire(owner,online.pop_front())
 
 func exposed_owner(owner_serial: int) -> bool:
