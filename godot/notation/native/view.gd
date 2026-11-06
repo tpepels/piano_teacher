@@ -521,7 +521,8 @@ func _stream_add_take(source_beat: float, start_world: float,
         "kind":"source","owner_serial":owner_serial,
         "world_origin":original_origin,
         "source_floor":maxf(0.0,from_beat),
-        "source_ceiling":through_beat,"take_key":take_key,
+        "source_ceiling":through_beat,
+        "piece_duration":timeline.duration_beats,"take_key":take_key,
         "pending":take_key in ["prepared","autopending"],
         "hidden_until_armed":hidden}]
     var gap: float = float(practice_timeline.get("gap",{}).get(
