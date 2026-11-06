@@ -99,19 +99,12 @@ static func select(passes: Array, purpose: String, opening: float,
 
 static func position(passes: Array, world: float, right_beats: float,
         header_beats: float, intended: float = NAN,
-        excluded_owner: int = -1, travel_beats: float = 0.0,
-        density: float = 96.0, gap: float = 24.0,
-        score_duration: float = INF) -> float:
-    # One common admission boundary for READY, Retry, automatic repeats and
-    # exact preloaded stages. Exclusions apply to both source and its rest.
-    var remaining: Array = []
-    for item in passes:
-        if excluded_owner >= 0 and \
-                int(item.get("owner_serial",abs(int(item.get("serial",0))))) == excluded_owner:
-            continue
-        remaining.append(item)
+        travel_beats: float = 0.0, density: float = 96.0,
+        gap: float = 24.0, score_duration: float = INF) -> float:
+    # One common append-only boundary. No existing passage is ever excluded
+    # or retimed to make a replacement appear earlier.
     var minimum: float = _future_start(
-        remaining,world,right_beats,header_beats,
+        passes,world,right_beats,header_beats,
         maxf(1.0,density),gap,score_duration)+travel_beats
     if is_finite(intended):
         return intended if intended >= minimum-.0001 else NAN
