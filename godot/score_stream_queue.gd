@@ -71,6 +71,9 @@ static func _record(item: Dictionary) -> Dictionary:
             item.get("source_ceiling",0.0))),
         "take_key":str(item.get("take_key","")),
         "slot_id":str(item.get("slot_id","")),
+        "take_owner":int(item.get("take_owner",owner_id(item))),
+        "clip_floor":float(item.get("clip_floor",NAN)),
+        "clip_ceiling":float(item.get("clip_ceiling",NAN)),
     }
 
 func enqueue(owner: Control, specs: Array, source_pool: Array,
@@ -151,10 +154,11 @@ func _is_safe_tail(owner_serial: int, world: float, density: float,
                 (float(item["world_origin"])-world)*density+bounds.x
             if first_x <= viewport_width:
                 return false
-    return found and not source.is_empty() and (
-        force_unacknowledged or (
-        bool(source.get("pending",false)) and
-        not bool(source.get("armed",false))))
+    # Once a strip is still entirely unexposed it may be retracted,
+    # even if an earlier strip of the same graded attempt was acknowledged.
+    # That is the essential difference between per-measure strips and an
+    # immutable full-passage owner that wrongly locks its invisible suffix.
+    return found and not source.is_empty()
 
 func withdraw_tail(owner: Control, world: float, density: float,
         gap: float, duration: float, viewport_width: float,
@@ -249,6 +253,12 @@ func reset(owner: Control) -> void:
             return
         for i in range(remaining_count):
             Lifecycle.retire(owner,online.pop_front())
+
+func has_take(take_serial: int) -> bool:
+    for item in online:
+        if int(item.get("take_owner",owner_id(item))) == take_serial:
+            return true
+    return false
 
 func exposed_owner(owner_serial: int) -> bool:
     for item in online:
