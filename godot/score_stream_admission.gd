@@ -75,7 +75,8 @@ static func select(passes: Array, purpose: String, opening: float,
                 matches = key == identity and not pending and \
                     absf(float(item.get("source_floor",-INF))-opening)<.00001
             "automatic","automatic_due":
-                matches = pending and not armed and key == "autopending"
+                matches = pending and not armed and key == "autopending" and \
+                    absf(float(item.get("source_floor",-INF))-opening)<.00001
             "bound":
                 matches = key == identity and not pending
         if not matches:
