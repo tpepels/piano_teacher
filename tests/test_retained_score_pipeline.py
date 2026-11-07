@@ -274,22 +274,40 @@ def test_transport_and_voice_have_no_parallel_production_owners():
 
 
 def test_note_status_feedback_has_one_owner_and_no_detached_glow():
-    """Guard against restoring the rings, particles and mutable note colors."""
+    """Guard against restoring rings, particles, overlays or queue copies."""
     score = (ROOT / "godot/native_score_feedback.gd").read_text()
     registry = (ROOT / "godot/note_status_registry.gd").read_text()
     ink = (ROOT / "godot/note_status_ink.gd").read_text()
+    layer = (ROOT / "godot/notation/native/note_status_layer.gd").read_text()
+    segment = (ROOT / "godot/notation/native/retained_segment.gd").read_text()
     native = (ROOT / "godot/notation/native/view.gd").read_text()
+    main = (ROOT / "godot/main.gd").read_text()
+    # One ledger, fed only by sequenced backend events; it draws nothing.
     assert 'var statuses := Statuses.new()' in score
-    assert 'Statuses.take_key(state)' in score
-    assert 'pass_index' in score and 'take_by_strip' in score
-    assert 'statuses.status(key,id)' in score
-    assert 'NoteInk.paint(' in score
-    assert 'draw_arc(' not in score and 'draw_circle(' not in score
-    assert 'GlowField' not in score and 'note_glow' not in score
-    assert 'func record(' in registry and 'func prune(' in registry
+    assert 'func ingest(event: Dictionary) -> String:' in score
+    assert 'func _draw(' not in score and 'extends Node' in score
+    assert 'midi_visual_events' not in score and 'feedback_marks' not in score
+    assert 'stream_passes' not in score
+    # Status ink is painted by each retained source strip, inside its clip.
+    assert 'status_layer = NoteStatusLayer.new(self)' in segment
+    assert 'segment.sync_note_status(take_key,note_status_source,note_status_visible)' in native
+    assert 'Ink.paint(layer,glyphs' in layer
+    for source in (score, layer, ink):
+        assert 'draw_arc(' not in source and 'draw_circle(' not in source
+        assert 'GlowField' not in source and 'note_glow' not in source
+    assert 'func observe(' in registry and 'func prune(' in registry
+    assert 'static func display_status(record: Dictionary) -> String:' in registry
     assert 'EARLY_RELEASE := "early_release"' in registry
     assert 'EARLY_ONSET := "early_onset"' in registry
-    assert 'return false' in ink and 'if status == Status.UNPLAYED' in ink
+    assert 'if status == Status.UNPLAYED' in ink and 'return false' in ink
     assert 'OUTER_GLOW_ALPHA := 0.045' in ink
-    assert 'glyphs.paint(' in ink and 'draw_arc(' not in ink
+    assert 'glyphs.paint_head(' in ink and 'draw_arc(' not in ink
+    assert 'BLEND_MODE_SUB' in ink and 'BLEND_MODE_ADD' in ink
+    # One acknowledged channel; no second snapshot path or stale-state check.
+    assert 'feedback_inbox.acknowledge(' in main
+    assert 'accept_live_event' not in main and 'poll_midi' not in main
+    assert '_consume_live_piano_hits' not in main
+    # Rendering never copies the online queue.
+    projection = native[native.index("func _project_stream"):native.index("func present(")]
+    assert 'stream_passes' not in projection and 'duplicate(' not in projection
     assert '_project_stream(playhead_x)' in native

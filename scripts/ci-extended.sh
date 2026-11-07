@@ -94,4 +94,10 @@ timeout 85s "$PYTHON" -m pytest -q tests/test_real_source_connector_overlap.py
 # a valid semantic model. Only the default case runs here (no corpus work).
 timeout 55s "$PYTHON" -m pytest -q \
   'tests/test_native_production.py::test_native_production_readiness_and_failure_gate[default]'
+# Note-status ink on the actual framebuffer and the production feedback path:
+# real Verovio heads, two physical copies, strip clipping, glow and tints.
+timeout 120s "$PYTHON" -m pytest -q \
+  tests/test_note_status_framebuffer.py \
+  tests/test_note_reactions.py \
+  tests/test_native_score_feedback.py
 "$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25

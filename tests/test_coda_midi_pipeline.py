@@ -146,8 +146,8 @@ def test_midi_rhythm_drill_really_changes_source_and_listen_uses_same_clock(tmp_
         bpm=piece.bpm,from_beat=0,run_at=100,running=True,
         paused=False,preview=False,mode="practice",transport_id=47,
         tempo_map=stage.tempo_map)
-    assert live.events[-1]["source_id"]==first.source_id
-    assert live.events[-1]["status"]=="on_time"
+    assert live.recent[-1]["source_id"]==first.source_id
+    assert live.recent[-1]["status"]=="on_time"
 
 
 def test_distinct_midi_inputs_have_distinct_source_timeline_fingerprints():

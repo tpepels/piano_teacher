@@ -130,9 +130,11 @@ def test_snapshot_assembly_and_live_hit_mapping_have_one_owner():
     assert "state.midi." not in builder
 
     main = (ROOT / "godot/main.gd").read_text()
-    handler = main.split("func _consume_live_piano_hits(", 1)[1].split(
+    handler = main.split("func _dispatch_feedback_event(", 1)[1].split(
         "\nfunc ", 1)[0]
-    assert "live_midi_feedback.consume(" in handler
+    assert "live_midi_feedback.react(" in handler
+    assert "stage.feedback.ingest(event)" in handler
+    assert "last_state" not in handler
     assert "for note in notes:" not in handler
     assert "live_midi_feedback.bind_layout(values, _published_revision)" in main
     index = (ROOT / "godot/live_midi_feedback.gd").read_text()

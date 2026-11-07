@@ -24,6 +24,8 @@ class MockView:
     var timeline := {"pixels_per_beat": 100.0}
     var stream_passes: Array = []
     var offline_stream_queue: Array = []
+    func stream_pass_count() -> int:
+        return stream_passes.size()
     func trim_future_queue(_reason: String) -> Array[int]:
         var removed: Array[int] = []
         while not stream_passes.is_empty() and \

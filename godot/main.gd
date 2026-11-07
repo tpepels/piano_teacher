@@ -42,6 +42,7 @@ const CountInVoicePlayer := preload("res://countin_voice_player.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
+const FeedbackEventInbox := preload("res://feedback_event_inbox.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -156,7 +157,8 @@ var device_pending: bool:
 var demo_player: Node
 var ui_scale := 1.0
 var practice_backdrop: ColorRect
-var last_seen_midi_visual_sequence := 0
+# One acknowledged channel delivers every note-feedback event exactly once.
+var feedback_inbox = FeedbackEventInbox.new()
 var live_midi_feedback = LiveMidiFeedback.new()
 var state_poll_timer: Timer
 var inprocess_bus: Node
@@ -852,18 +854,24 @@ func _toggle_fullscreen() -> void:
     settings_view.present_window_mode(enabled)
     _on_fullscreen_toggle(enabled)
 
-func _read_live_midi() -> void:
+func _read_feedback_events() -> void:
     if inprocess_bus == null or not inprocess_bus.is_ready():
         return
-    for message in inprocess_bus.poll_midi(last_seen_midi_visual_sequence):
-        if not message is Dictionary:
-            continue
-        var event: Dictionary = message
-        event["age"] = 0.0
-        practice_view.stage.feedback.accept_live_event(event, last_state)
-        var display_state: Dictionary = last_state.duplicate(false)
-        display_state["midi_visual_events"] = [event]
-        _consume_live_piano_hits(display_state)
+    _consume_feedback_reply(inprocess_bus.take_feedback_events())
+    inprocess_bus.request_feedback_events(feedback_inbox.acknowledged)
+
+func _consume_feedback_reply(reply: Variant) -> void:
+    for event in feedback_inbox.accept(reply):
+        _dispatch_feedback_event(event)
+        # Acknowledge only after the consumers returned a final outcome.
+        feedback_inbox.acknowledge(int(event["sequence"]))
+
+func _dispatch_feedback_event(event: Dictionary) -> void:
+    # Each event names its own take; no state snapshot is consulted.
+    practice_view.stage.feedback.ingest(event)
+    if str(event.get("kind","")) == "attack":
+        live_midi_feedback.react(event, score_effects, practice_view.stage,
+            layout_revision if layout_revision == revision else -1)
 
 func _poll() -> void:
     if score_session != null and not practice_view.is_source_picker_open():
@@ -896,7 +904,7 @@ func _process(_delta: float) -> void:
             last_state.get("tempo_segments",[]))
     score_flow.sample(ticks,source_bpm)
     score_effects.prune_expired(ticks)
-    _read_live_midi()
+    _read_feedback_events()
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
         last_state,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,
@@ -1019,15 +1027,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         fingering_save_error,
         demo_player != null and bool(demo_player.get("audio_error")),
         sample_started_ms < 0,received_ms,phase0_smoke_mode)
-    if bool(parsed.get("loaded",false)):
-        _consume_live_piano_hits(parsed)
     _refresh_score_status()
-
-func _consume_live_piano_hits(state: Dictionary) -> void:
-    last_seen_midi_visual_sequence = live_midi_feedback.consume(
-        state, score_effects, practice_view.stage,
-        last_seen_midi_visual_sequence,
-        layout_revision if layout_revision == revision else -1)
 
 
 func _request_layout() -> void:

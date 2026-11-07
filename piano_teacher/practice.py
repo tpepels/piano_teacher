@@ -54,6 +54,32 @@ class NoteAssessment:
     observation: NoteObservation | None = None
 
 
+def note_dimensions(entry: NoteAssessment) -> dict[str, str | None]:
+    """Independent pitch, onset and release observations for one graded note.
+
+    ``status`` collapses these into one grading category (onset first, then
+    release), which drives pass/fail and progression and is unchanged here.
+    The display needs all three: a note can be both early and released early.
+
+    pitch:   ``correct`` | ``wrong`` | ``missed``
+    onset:   ``on_time`` | ``early`` | ``late`` | None (no matched attack)
+    release: ``on_time`` | ``short`` | ``long`` | ``unreleased`` | None
+    """
+    if entry.status in ("missed", "wrong"):
+        return {"pitch": entry.status, "onset": None, "release": None}
+    observation = entry.observation
+    if observation is None:
+        # Evaluators without measurements still name the dimension they judged.
+        return {"pitch": "correct",
+                "onset": entry.status if entry.status in ("early", "late") else "on_time",
+                "release": entry.status if entry.status in ("short", "long") else
+                           None if entry.status in ("early", "late") else "on_time"}
+    release = ("unreleased" if observation.unreleased else
+               observation.hold_error or "on_time")
+    return {"pitch": "correct", "onset": observation.timing_error or "on_time",
+            "release": release}
+
+
 @dataclass(frozen=True)
 class Assessment:
     notes: tuple[NoteAssessment, ...]

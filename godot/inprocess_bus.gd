@@ -4,8 +4,8 @@ extends Node
 var native
 var pending: Dictionary = {}
 var ready_error := ""
-var midi_request_id := -1
-var midi_ready_events: Array = []
+var feedback_request_id := -1
+var feedback_reply: Variant = null
 
 const EXTENSION_PATH := "res://native/piano_bridge.gdextension"
 
@@ -54,16 +54,20 @@ func forget(identifier: int, requester: Node) -> void:
         pending.erase(identifier)
 
 
-func poll_midi(after_sequence: int) -> Array:
-    # Never call CPython or acquire its GIL on the Godot rendering thread.
-    # The one outstanding read is dispatched through the existing worker.
-    # Heavy notation/assessment may delay its result, but cannot block paint.
-    var completed: Array = midi_ready_events
-    midi_ready_events = []
-    if midi_request_id < 0 and is_ready():
-        midi_request_id = int(native.call("submit", "midi.events",
-            JSON.stringify({"since": maxi(0, after_sequence)})))
-    return completed
+## The completed feedback-log reply, if one arrived since the last call.
+func take_feedback_events() -> Variant:
+    var reply: Variant = feedback_reply
+    feedback_reply = null
+    return reply
+
+## Acknowledge processed events and ask for every later one. Never call
+## CPython or acquire its GIL on the Godot rendering thread: the one
+## outstanding read goes through the existing worker. A failed read loses
+## nothing, because the backend keeps unacknowledged events.
+func request_feedback_events(acknowledged: int) -> void:
+    if feedback_request_id < 0 and is_ready():
+        feedback_request_id = int(native.call("submit", "feedback.events",
+            JSON.stringify({"acknowledged": maxi(0, acknowledged)})))
 
 func _process(_delta: float) -> void:
     if native == null:
@@ -78,12 +82,14 @@ func _process(_delta: float) -> void:
         if not reply is Dictionary:
             continue
         var identifier := int(reply.get("id", -1))
-        if identifier == midi_request_id:
-            midi_request_id = -1
+        if identifier == feedback_request_id:
+            feedback_request_id = -1
             if int(reply.get("status", 3)) == 0:
                 var bytes: PackedByteArray = reply.get("body", PackedByteArray())
                 var parsed: Variant = JSON.parse_string(bytes.get_string_from_utf8())
-                midi_ready_events = parsed if parsed is Array else []
+                feedback_reply = parsed if parsed is Dictionary else null
+            else:
+                push_error("NOTE_FEEDBACK_READ_FAILED: status %d" % int(reply.get("status", 3)))
             continue
         var handle: WeakRef = pending.get(identifier)
         pending.erase(identifier)

@@ -42,10 +42,10 @@ def test_only_one_godot_command_adapter_and_score_queue():
     demo = (GODOT / "demo_player.gd").read_text()
     request = (GODOT / "inprocess_request.gd").read_text()
     assert "InProcessBus.new()" in main
-    assert "inprocess_bus.poll_midi(" in main
+    assert "inprocess_bus.take_feedback_events()" in main
     cpp = (SRC / "piano_native.cpp").read_text()
     bridge = (GODOT / "inprocess_bus.gd").read_text()
-    assert '"midi.events"' in bridge
+    assert '"feedback.events"' in bridge
     assert 'native.call("live_events_json"' not in bridge
     assert "live_events_json" not in cpp
     assert 'D_METHOD("submit", "operation", "payload")' in cpp

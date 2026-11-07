@@ -41,8 +41,10 @@ the desktop process and has no separate CLI or network listener.
   for research parity.
 - Onset spacing and tempo adapt to fast passages. The score, playhead,
   recovery and metronome share one presentation timeline.
-- Incoming MIDI note-on events immediately enter a bounded memory ring,
-  allowing a provisional mint playhead pulse before final hold grading.
+- Incoming MIDI key-down and key-up events immediately enter one
+  acknowledged feedback log, so a played note turns mint (or an early
+  key-up lavender) before settlement; the authoritative assessment, published
+  continuously during playback, then overrides it note by note.
 - Wrong/missed/extra pitches are failures; yellow warnings cause a retry
   when at least half of distinct attacks are yellow.
 - MIDI calibration uses a visible breathing beat, one initial four-beat

@@ -73,5 +73,5 @@ def test_later_midi_measure_real_engraving_listen_and_midi_feedback(tmp_path):
                  from_beat=0,run_at=100,running=True,paused=False,
                  preview=False,mode="practice",transport_id=8,
                  tempo_map=stage.tempo_map)
-    assert view.events[-1]["status"]=="on_time"
-    assert view.events[-1]["source_id"]==first.source_id
+    assert view.recent[-1]["status"]=="on_time"
+    assert view.recent[-1]["source_id"]==first.source_id

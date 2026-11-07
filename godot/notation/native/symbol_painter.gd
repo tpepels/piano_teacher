@@ -1,6 +1,7 @@
 extends RefCounted
 ## Explicit-canvas native ink; source geometry stays in ScoreLayout.
 ## Paint APIs prepend (canvas, frame) to the original view method arguments.
+const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const Geometry := preload("res://notation/native/geometry.gd")
 const Design := preload("res://practice_theme.gd")
 const RenderPass := preload("res://notation/native/render_pass.gd")
@@ -159,7 +160,9 @@ func paint_engraved_chord(canvas, frame: RenderPass, event: Dictionary, x: float
             int(current.get("dots",0)),ink,gap)
         paint_note_accidental(canvas,frame,current,center.x,center.y,ink,gap)
         var id: String = str(current.get("id",""))
-        frame.record_notehead(current,center,score_layout.size.x)
+        frame.record_notehead(current,center,score_layout.size.x,ink,{
+            "source":"chord_heads" if beamed else "chord","template":key,
+            "head_index":i,"anchor":Vector2(x,anchor)})
         painted.append(id)
     return painted
 
@@ -190,7 +193,9 @@ func paint_note(canvas, frame: RenderPass, event: Dictionary, x: float,
             return
         paint_rhythm_dots(canvas,frame,x,y,int(event.get("dots",0)),ink,gap)
         paint_note_accidental(canvas,frame,event,x,y,ink,gap)
-        frame.record_notehead(event,Vector2(x,y),score_layout.size.x)
+        frame.record_notehead(event,Vector2(x,y),score_layout.size.x,ink,{
+            "source":"note","template":VerovioGlyphs.note_template_name(kind,normal_up),
+            "head_index":0,"anchor":Vector2(x,y)})
         return
     var solid: bool = kind not in ["half","whole"]
     score_layout.glyphs.paint(canvas, "head_black" if solid else (
@@ -203,7 +208,7 @@ func paint_note(canvas, frame: RenderPass, event: Dictionary, x: float,
             x,y,float(beam_stem["tip_y"]),gap,ink)
     paint_rhythm_dots(canvas,frame,x,y,int(event.get("dots",0)),ink,gap)
     paint_note_accidental(canvas,frame,event,x,y,ink,gap)
-    frame.record_notehead(event,Vector2(x,y),score_layout.size.x)
+    frame.record_notehead(event,Vector2(x,y),score_layout.size.x,ink)
 
 
 func paint_beams(canvas, frame: RenderPass, data: Dictionary, gap: float) -> void:

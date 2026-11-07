@@ -772,7 +772,7 @@ def test_midi_deadline_handoff_retains_first_attack_release_and_feedback(
     recorder = app.recorder
     assert recorder is not previous_recorder
     assert recorder.presses == [PlayedNote(note.pitch, pytest.approx(overshoot), None)]
-    event = app.live_input.events[-1]
+    event = app.live_input.recent[-1]
     assert event["received_at"] == received_at
     assert event["transport_id"] == app.transport_id
     assert event["source_id"] == note.source_id and event["status"] == "on_time"
@@ -806,7 +806,7 @@ def test_midi_during_preparation_is_ungraded_and_release_cannot_invent_attack(
         assert not app.running and app.recorder is previous_recorder
         assert previous_recorder is None or not previous_recorder.presses
         assert app.transport_id == transport and app.visual_transport.next_at == deadline
-        assert app.live_input.events[-1]["status"] == "heard"
+        assert app.live_input.recent[-1]["status"] == "heard"
         assert not app.live_input.used
     now[0] = deadline
     app._receive(midi_note(note.pitch, is_on=False))
@@ -815,7 +815,7 @@ def test_midi_during_preparation_is_ungraded_and_release_cannot_invent_attack(
     now[0] += .001
     app._receive(midi_note(note.pitch))
     assert len(app.recorder.presses) == 1
-    assert app.live_input.events[-1]["status"] == "on_time"
+    assert app.live_input.recent[-1]["status"] == "on_time"
 
 
 @pytest.mark.parametrize("kind", MIDI_HANDOFFS)
@@ -834,14 +834,14 @@ def test_paused_midi_does_not_consume_handoff_and_resume_keeps_deadline(
         assert app.visual_transport.paused and not app.running and app.recorder is previous_recorder
         assert previous_recorder is None or not previous_recorder.presses
         assert app.visual_transport.next_at == deadline and app.transport_id == transport
-        assert app.live_input.events[-1]["status"] == "heard"
+        assert app.live_input.recent[-1]["status"] == "heard"
     app.control("resume")
     assert app.visual_transport.next_at == pytest.approx(deadline + 30)
     now[0] = deadline + 30
     app._receive(midi_note(note.pitch))
     assert app.visual_transport.run_at == pytest.approx(deadline + 30)
     assert app.recorder.presses == [PlayedNote(note.pitch, 0, None)]
-    assert app.live_input.events[-1]["status"] == "on_time"
+    assert app.live_input.recent[-1]["status"] == "on_time"
 
 
 def test_playing_and_non_note_midi_do_not_poll_transport(clocked_engine, monkeypatch):
@@ -897,7 +897,7 @@ def test_midi_settles_unpolled_source_before_next_attack(
     assert recorder is not old_recorder
     assert recorder.presses == [PlayedNote(note.pitch, pytest.approx(overshoot), None)]
     assert app.midi.input_at == received_at
-    event = app.live_input.events[-1]
+    event = app.live_input.recent[-1]
     assert event["received_at"] == received_at
     assert event["status"] == "on_time" and event["source_id"] == note.source_id
     assert event["transport_id"] == app.transport_id

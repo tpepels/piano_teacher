@@ -64,11 +64,11 @@ class EngineCommands:
                 if values:
                     raise ValueError(f"{operation} takes no input")
                 return self._reply(OK, getattr(engine, self.READS[operation])())
-            if operation == "midi.events":
-                since = values.get("since", 0)
-                if type(since) is not int or since < 0:
-                    raise ValueError("MIDI event sequence must be nonnegative")
-                return self._reply(OK, self.drain_midi_events(since))
+            if operation == "feedback.events":
+                acknowledged = values.get("acknowledged", 0)
+                if type(acknowledged) is not int or acknowledged < 0:
+                    raise ValueError("Feedback acknowledgement must be a nonnegative sequence")
+                return self._reply(OK, self.drain_feedback_events(acknowledged))
             if operation == "midi.devices":
                 return self._reply(OK, {"devices": engine.ports()})
             if operation == "score.native_layout":
@@ -146,9 +146,10 @@ class EngineCommands:
                     print("INPROCESS_COMMAND_SLOW:", operation,
                           round(elapsed_ms, 2), "ms", flush=True)
 
-    def drain_midi_events(self, since: int) -> list[dict]:
+    def drain_feedback_events(self, acknowledged: int) -> dict:
+        """Acknowledge processed events and return every later one."""
         with self.engine.lock:
-            return self.engine.live_events.after(since)
+            return self.engine.feedback_events.after(acknowledged)
 
     def close(self) -> None:
         if not self.owned:

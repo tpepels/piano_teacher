@@ -37,6 +37,7 @@ and same persistent voice owner were used throughout the practice journey.
 | `MetronomeFrameCoordinator` | Convert those beat events into either one spoken syllable or one click | Maintain separate counter/tempo rules per transport phase |
 | `CountInVoicePlayer` | Root-owned audio playback, 4 shipped Ogg resources, persistent preference, clear diagnostics | Depend on rendered score, network, or UI widget lifecycle |
 | `GameCountIn` | Draw the pulse circles for the same sampled beat | Own AudioStreamPlayer or infer timing |
+| `FeedbackEventLog` / `FeedbackEventInbox` | The single acknowledged note-feedback channel; every event carries its own take identity (see `note-status-ink.md`) | Validate events against a state snapshot, or drop an unacknowledged event |
 
 `score_stream_queue.gd.preview_tail_withdrawal()` and
 `withdraw_tail()` share the **same exposure and protected-take
@@ -92,6 +93,9 @@ there is no legacy camera fallback.
   actual frame-coordinator-to-voice event path.
 - `tests/test_phase1_transport.py`: backend-sampled monotonic timing and
   source meter, without coupling to names of removed UI tick counters.
+- `tests/test_note_reactions.py`: feedback events of a new transport reach
+  the production ledger exactly once while the UI snapshot still names the
+  previous transport.
 - `godot/production_ui_smoke.gd`: actual Godot scene and embedded Python
   Play/Pause/Resume with immutable notation and audible cue scheduling.
 

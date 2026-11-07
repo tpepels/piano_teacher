@@ -9,6 +9,10 @@ class CompiledSegment:
     extends Node2D
     var compiled := true
     var note_instances: Array = []
+    # Retained-strip interface: binds the strip's take to the status ledger.
+    var synced_take := ""
+    func sync_note_status(take_key: String, _source, _visible_ink: bool) -> void:
+        synced_take = take_key
 
 class View:
     extends "res://notation/native/view.gd"

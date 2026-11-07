@@ -145,7 +145,7 @@ func _advance_tails(global_beat: float) -> void:
         if first == null or not is_instance_valid(first):
             _tails.pop_front()
             continue
-        if first == _manual_staff_tail or not first.stream_passes.is_empty():
+        if first == _manual_staff_tail or first.stream_pass_count() > 0:
             break
         # The source queue has already journaled all withdrawn/expired ink.
         first.queue_free()
@@ -315,7 +315,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     stage.renderer = incoming
     score_session.replace_renderer(incoming)
     renderer_promoted.emit(incoming)
-    if outgoing.stream_passes.is_empty():
+    if outgoing.stream_pass_count() == 0:
         outgoing.queue_free()
     else:
         _retain_tail(outgoing,true)

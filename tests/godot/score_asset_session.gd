@@ -314,14 +314,14 @@ func test_native() -> void:
     var Native := load("res://notation/native/view.gd")
     var NativeFeedback := load("res://native_score_feedback.gd")
     var renderer: Control = Native.new()
-    var feedback: Control = NativeFeedback.new()
+    var feedback: Node = NativeFeedback.new()
     var session := Session.new(renderer,feedback)
     session.update_context(context(13),0)
     finish_layout(session,13,1)
     check(not session.score_error.is_empty() and not session.is_ready(),
         "real native renderer must reject missing authentic brace glyph")
     check(not renderer.visible and feedback.score_revision == -1 and
-        feedback.source_to_id.is_empty(),
+        feedback.bound_revisions().is_empty(),
         "real native feedback must be detached on glyph rejection")
     check(session.retry(2),"native failure can restart canonical asset lifecycle")
     feedback.free()

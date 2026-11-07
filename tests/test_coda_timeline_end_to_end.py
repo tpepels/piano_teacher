@@ -94,8 +94,8 @@ def test_real_score_shared_timeline_from_notation_through_listen_and_feedback(tm
         phrase=phrase, hand="right", bpm=60, from_beat=0,
         run_at=100, running=True, paused=False, preview=False,
         mode="practice", transport_id=9, tempo_map=tempo)
-    assert view.events[-1]["source_id"] == after_change.source_id
-    assert view.events[-1]["status"] == "on_time"
+    assert view.recent[-1]["source_id"] == after_change.source_id
+    assert view.recent[-1]["status"] == "on_time"
 
     layout_notes = [
         {"id": f"ink-{index}", "source_id": n.source_id,

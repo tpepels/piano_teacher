@@ -123,4 +123,6 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_moonlight_real_midi_beams.py \
   tests/test_shared_tempo_timeline.py \
   tests/test_live_input_view.py \
+  tests/test_continuous_note_feedback.py \
+  tests/test_feedback.py \
   tests/test_notation_coverage_report.py

@@ -70,9 +70,9 @@ def test_live_preview_and_final_grading_agree_at_slow_and_shaped_tempo():
     for transport, bpm, tempo in [(1, 40, None), (2, 60, TempoMap("slow", (
             TempoSegment(0, 4, 40),)))]:
         view.reset_attempt()
-        view.receive(pitch=60, is_on=True, now=10.2, phrase=phrase,
+        event = view.receive(pitch=60, is_on=True, now=10.2, phrase=phrase,
                      hand="right", bpm=bpm, from_beat=0, run_at=10,
                      running=True, paused=False, preview=False,
                      mode="practice", transport_id=transport, tempo_map=tempo)
-        assert view.events[-1]["status"] == "on_time"
+        assert event["status"] == "on_time"
     assert evaluate(phrase, "right", 40, [PlayedNote(60, .2, 1.1)]).clean

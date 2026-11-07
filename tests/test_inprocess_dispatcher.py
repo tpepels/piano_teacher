@@ -9,7 +9,7 @@ import json
 from types import SimpleNamespace
 
 from piano_teacher.inprocess import EngineCommands
-from piano_teacher.live_event_ring import LiveEventRing
+from piano_teacher.feedback_events import FeedbackEventLog
 from piano_teacher.server import PracticeEngine
 
 
@@ -100,23 +100,27 @@ def test_typed_mutations_and_invalid_operands():
 
 
 def test_real_embedded_engine_has_one_shared_transport_and_event_ring(tmp_path):
-    visual = LiveEventRing()
-    engine = PracticeEngine(tmp_path, enable_midi=False, live_events=visual)
+    visual = FeedbackEventLog()
+    engine = PracticeEngine(tmp_path, enable_midi=False, feedback_events=visual)
     bridge = EngineCommands(engine=engine)
+    take = {"piece_fingerprint": "f", "revision": 2, "transport_id": 11,
+            "mode": "practice", "graded": True}
     try:
         status, values = _decode(bridge.request("state.snapshot"))
         assert status == 0 and not values["loaded"]
-        assert not hasattr(engine.live_events, "socket")
+        assert not hasattr(engine.feedback_events, "socket")
         status, values = _decode(bridge.request("settings.snapshot"))
         assert status == 0 and "exercise_strategy" in values
-        visual.publish({"sequence": 4, "transport_id": 11,
-                        "status": "on_time", "pitch": 60})
-        assert bridge.drain_midi_events(3)[0]["sequence"] == 4
-        assert bridge.drain_midi_events(4) == []
-        status, payload = _decode(bridge.request("midi.events", '{"since":3}'))
-        assert status == 0 and payload[0]["sequence"] == 4
-        assert _decode(bridge.request("midi.events", '{"since":4}')) == (0, [])
-        assert _decode(bridge.request("midi.events", '{"since":-1}'))[0] == 1
+        for _ in range(4):
+            visual.publish({"kind": "attack", **take, "status": "on_time", "pitch": 60})
+        assert [e["sequence"] for e in bridge.drain_feedback_events(2)["events"]] == [3, 4]
+        # Acknowledged events are released; unacknowledged ones are retained.
+        assert [e["sequence"] for e in visual.pending()] == [3, 4]
+        status, payload = _decode(bridge.request("feedback.events", '{"acknowledged":3}'))
+        assert status == 0 and [e["sequence"] for e in payload["events"]] == [4]
+        status, payload = _decode(bridge.request("feedback.events", '{"acknowledged":4}'))
+        assert status == 0 and payload["events"] == [] and payload["latest"] == 4
+        assert _decode(bridge.request("feedback.events", '{"acknowledged":-1}'))[0] == 1
     finally:
         engine.db.close()
 

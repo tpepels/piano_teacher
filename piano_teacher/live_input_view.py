@@ -1,7 +1,11 @@
 """Immediate physical MIDI display events. Never grants note credit or mastery.
 
-Key-down feedback is provisional: final pitch, onset and release scoring still
-belongs to practice.evaluate and the authoritative musical clock.
+Key-down and key-up feedback is provisional: final pitch, onset and release
+scoring still belongs to practice.evaluate and the authoritative musical clock.
+``receive`` returns one unsequenced event; the engine stamps it with its take
+identity and publishes it through the single acknowledged FeedbackEventLog.
+A key-up is bound to the same source note as its key-down (FIFO per pitch, as
+in the Recorder), so an early release can be shown as soon as it happens.
 """
 from __future__ import annotations
 
@@ -10,16 +14,20 @@ from bisect import bisect_left, bisect_right
 
 from .music import Phrase, source_note_id
 from .exercise_contracts import TempoMap
-from .grading_tolerance import onset_tolerance
+from .grading_tolerance import onset_tolerance, duration_tolerance
 from .lesson_settings import SETTINGS
 
 
 class LiveInputView:
     def __init__(self) -> None:
         self.held: dict[int, int] = {}
-        self.events: deque[dict] = deque(maxlen=32)
-        self.sequence = 0
+        # Recent key-downs for the on-screen keyboard only (not score ink).
+        self.recent: deque[dict] = deque(maxlen=32)
         self.used: set[int] = set()
+        # Per pitch, FIFO of (source_id, attack_at, expected_seconds,
+        # seconds_per_beat) for presses that are still down. Unmatched
+        # presses hold a None source so release pairing stays FIFO.
+        self._down: dict[int, deque[tuple[str | None, float, float, float]]] = {}
         self._indexed_phrase: Phrase | None = None
         self._onset_beats: list[float] = []
         self._ordered_notes: list[tuple[int, object]] = []
@@ -39,8 +47,10 @@ class LiveInputView:
         self._onset_beats = [note.start - phrase.start for _, note in ordered]
 
     def reset_attempt(self) -> None:
+        # Keys still held from an earlier take never release into this one.
         self.used.clear()
-        self.events.clear()
+        self.recent.clear()
+        self._down.clear()
 
     def clear_device(self) -> None:
         self.held.clear()
@@ -51,16 +61,17 @@ class LiveInputView:
         hand: str, bpm: float, from_beat: float, run_at: float,
         running: bool, paused: bool, preview: bool, mode: str,
         transport_id: int, tempo_map: TempoMap | None = None,
-    ) -> None:
+    ) -> dict | None:
         if not 0 <= pitch <= 127:
-            return
+            return None
         if not is_on:
             remaining = self.held.get(pitch, 0) - 1
             if remaining > 0:
                 self.held[pitch] = remaining
             else:
                 self.held.pop(pitch, None)
-            return
+            return self._release(pitch, now, running=running, paused=paused,
+                                 transport_id=transport_id)
 
         self.held[pitch] = self.held.get(pitch, 0) + 1
         status = "heard"
@@ -69,6 +80,7 @@ class LiveInputView:
         # this beat, not against a guessed page coordinate. The transient
         # visual marker never consumes an expected note or awards credit.
         reference_source = ""
+        matched_hold: tuple[float, float] | None = None
         if running and not paused and mode in ("practice", "perform"):
             if now < run_at:
                 status = "count_in"
@@ -86,6 +98,14 @@ class LiveInputView:
                         return (tempo_map.seconds_at(beat) - origin,
                                 60.0 / tempo_map.bpm_at(beat))
                     return ((beat - from_beat) * 60.0 / bpm, 60.0 / bpm)
+
+                def held_seconds(note):
+                    # Identical to practice.evaluate's expected duration.
+                    attack = note.start - phrase.start
+                    release = min(note.end, phrase.end) - phrase.start
+                    if tempo_map is not None:
+                        return tempo_map.seconds_at(release) - tempo_map.seconds_at(attack)
+                    return (release - attack) * 60.0 / bpm
 
                 candidates = []
                 nearby = []
@@ -117,8 +137,10 @@ class LiveInputView:
                     self.used.add(index)
                     source = source_note_id(note, index)
                     drift = at - expected_at
+                    spb = expected(note)[1]
                     status = ("on_time" if abs(drift) <= onset_tolerance(
-                        expected(note)[1]) else "early" if drift < 0 else "late")
+                        spb) else "early" if drift < 0 else "late")
+                    matched_hold = (held_seconds(note), spb)
                 else:
                     status = "unexpected"
                     # Only exact source attacks can receive provisional
@@ -128,23 +150,52 @@ class LiveInputView:
                             nearby, key=lambda entry: entry[:3])
                         reference_source = source_note_id(reference, index)
 
-        self.sequence += 1
-        self.events.append({
-            "sequence": self.sequence, "pitch": pitch, "status": status,
+        self._down.setdefault(pitch, deque()).append(
+            (source or None, now, *(matched_hold or (0.0, 0.0))))
+        event = {
+            "kind": "attack", "pitch": pitch, "status": status,
             "source_id": source, "reference_source_id": reference_source,
             "transport_id": transport_id, "received_at": now,
-        })
+        }
+        self.recent.append(event)
+        return dict(event)
+
+    def _release(self, pitch: int, now: float, *, running: bool, paused: bool,
+                 transport_id: int) -> dict | None:
+        """Bind a key-up to its source note and classify the observed hold.
+
+        Uses the grader's own duration tolerance, so the provisional verdict
+        agrees with practice.evaluate for the same press. Settled assessment
+        still overrides it; this never changes grading.
+        """
+        pending = self._down.get(pitch)
+        if not pending:
+            return None
+        source, attack_at, expected, spb = pending.popleft()
+        if not pending:
+            self._down.pop(pitch, None)
+        if source is None or not running or paused:
+            return None
+        held = max(0.0, now - attack_at)
+        slack = duration_tolerance(expected, spb)
+        release = ("short" if held < expected - slack else
+                   "long" if held > expected + slack else "on_time")
+        return {"kind": "release", "pitch": pitch, "source_id": source,
+                "release": release, "held_seconds": held,
+                "expected_seconds": expected, "transport_id": transport_id,
+                "received_at": now}
 
     def snapshot(
         self, *, now: float, phrase: Phrase | None, hand: str,
         beat: float, playing: bool,
     ) -> dict:
-        # Small bounded event history makes brief taps visible even when the key
-        # has already been released before the next Godot HTTP poll.
+        # Bounded key-down history keeps brief taps visible on the keyboard
+        # even when the key was released before the next state poll. Score
+        # feedback never reads this; it consumes the FeedbackEventLog.
         events = [
-            {k: v for k, v in event.items() if k != "received_at"}
+            {k: v for k, v in event.items() if k not in ("received_at", "kind")}
             | {"age": max(0.0, now - event["received_at"])}
-            for event in self.events
+            for event in self.recent
             if 0 <= now - event["received_at"] <= 1.2
         ]
         expected: list[int] = []
@@ -162,6 +213,6 @@ class LiveInputView:
                 })
         return {
             "midi_held_pitches": sorted(self.held),
-            "midi_visual_events": events,
+            "midi_recent_keys": events,
             "midi_next_pitches": expected,
         }

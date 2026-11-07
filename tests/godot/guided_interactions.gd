@@ -88,7 +88,7 @@ func run() -> void:
     await process_frame
     await process_frame
     RenderingServer.force_draw()
-    var id: String = str(app.practice_view.stage.feedback.source_to_id.get(str(target.id), ""))
+    var id: String = str(app.practice_view.stage.feedback.note_for_source(app.revision, str(target.id)))
     check(app.practice_view.stage.renderer.drawn_noteheads.has(id), "Guided source target is actually painted")
     var painted: Dictionary = app.practice_view.stage.renderer.drawn_noteheads.duplicate()
     var position: float = app.practice_view.stage.renderer.clock_beat
@@ -101,11 +101,8 @@ func run() -> void:
     check(app.practice_view.stage.renderer.clock_beat == position,"Guided score never advances with wall-clock time")
     check(app.practice_view.stage.renderer.drawn_noteheads == painted,
         "Actual guided source head projection stays fixed across wall-clock time")
-    check(app.practice_view.stage.feedback.markers.get(id, "") == "expected",
-        "Guided feedback marks the real source target")
-    if painted.has(id):
-        check(app.practice_view.stage.feedback.note_position(id) == painted[id],
-            "Guided feedback uses the compositor's painted source head")
+    check(app.practice_view.stage.renderer.note_status_source == app.practice_view.stage.feedback,
+        "Guided notation paints status ink only from the one note-status ledger")
     check(app.practice_view.stage.feedback.score == app.practice_view.stage.renderer, "Guided feedback binds the actual production view")
     check(app._native_score_ready(), "Guided transport preserves native revision readiness")
     print("GUIDED_UI_FAILURES:",failures.size())

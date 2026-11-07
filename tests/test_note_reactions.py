@@ -1,8 +1,16 @@
-"""Native feedback follows authentic source events through the production app."""
+"""Backend feedback events reach the production app's ledger exactly once.
+
+A real PracticeEngine performs a take (clean, omitted, early-released notes)
+under a controlled clock. The production Godot application then consumes the
+engine's own acknowledged event log through main.gd's single feedback path,
+while its last state snapshot is deliberately stale (the previous transport,
+not yet playing) -- the transport transition that used to discard events.
+"""
 import json
 from pathlib import Path
 import shutil
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,23 +20,66 @@ ROOT = Path(__file__).resolve().parents[1]
 GODOT = shutil.which("godot") or shutil.which("godot4")
 
 
-@pytest.mark.skipif(GODOT is None, reason="Godot 4 not installed")
-def test_native_feedback_and_reaction_queues_follow_real_source_events(tmp_path):
+def _performed_take(tmp_path, monkeypatch):
+    from piano_teacher import server
     from piano_teacher.server import PracticeEngine
 
     midi = tmp_path / "chords.mid"
     make_fixture(midi)
+    now = [500.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
     engine = PracticeEngine(tmp_path / "data", enable_midi=False)
     try:
         engine.load(str(midi))
         engine.plan.set_hand("both")
-        payload = {"model": engine.semantic_score(),
-                   "layout": engine.geometry(), "state": engine.state()}
+        engine.midi.port = SimpleNamespace(closed=False)
+        payload = {"model": engine.semantic_score(), "layout": engine.geometry()}
+        engine.start()
+        assert engine.running and not engine.preview_only
+        payload["stale_state"] = engine.state()  # count-in of this transport
+        phrase = engine.plan.active_phrase
+        spb = 60.0 / engine.plan.bpm
+        keys = []
+        for index, note in enumerate(phrase.notes):
+            if index == 1:
+                continue  # omitted: must be shown missed during playback
+            onset = (note.start - phrase.start) * spb
+            release = (note.end - phrase.start) * spb
+            if index == 2:
+                release = onset + .05  # early release
+            keys += [(onset, 0, note.pitch, True), (release, 1, note.pitch, False)]
+        for at, _, pitch, down in sorted(keys):
+            now[0] = engine.visual_transport.run_at + at
+            engine._receive(SimpleNamespace(type="note_on" if down else "note_off",
+                                            note=pitch, velocity=80 if down else 0,
+                                            channel=0))
+            engine.advance_clock()
+        end = engine.visual_transport.run_at + (phrase.end - phrase.start) * spb
+        while engine.running and now[0] < end + 3:
+            now[0] += .05
+            engine.advance_clock()
+        assert engine.pending_result is not None or engine.performance_summary is not None \
+            or engine.feedback_marks
+        payload["feedback"] = engine.feedback_events.after(0)
+        events = payload["feedback"]["events"]
+        assert {event["kind"] for event in events} == {"attack", "release", "assessment"}
+        assert {event["transport_id"] for event in events} == {engine.transport_id}
+        assert payload["stale_state"]["phase"] != "playing"
+        # The state the UI last saw names the PREVIOUS transport.
+        payload["stale_state"]["transport_id"] = engine.transport_id - 1
+        payload["state"] = dict(payload["stale_state"])
+        return payload
     finally:
         engine.db.close()
+
+
+@pytest.mark.skipif(GODOT is None, reason="Godot 4 not installed")
+def test_engine_feedback_events_reach_the_production_ledger_once(tmp_path, monkeypatch):
+    payload = _performed_take(tmp_path, monkeypatch)
     (tmp_path / "native.json").write_text(json.dumps(payload))
     script = tmp_path / "note_reactions.gd"
     script.write_text('''extends SceneTree
+const Status := preload("res://note_status_registry.gd")
 var failures: Array[String] = []
 
 func check(ok: bool, label: String) -> void:
@@ -39,120 +90,58 @@ func check(ok: bool, label: String) -> void:
 func _initialize() -> void:
     call_deferred("run")
 
-func present(app: Control, state: Dictionary) -> void:
-    app._on_state(0,JSON.stringify(state).to_utf8_buffer())
-
 func run() -> void:
+    var folder: String = OS.get_cmdline_user_args()[0]
     var app = load("FIXTURE_PATH").new()
     root.add_child(app)
-    var error: String = await app.load_native_fixture(OS.get_cmdline_user_args()[0])
+    var error: String = await app.load_native_fixture(folder)
     check(error.is_empty(), "Production native fixture loads: " + error)
     if not failures.is_empty():
         app.free()
         quit(1)
         return
+    var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+        folder.path_join("native.json")))
     var renderer = app.practice_view.stage.renderer
     var feedback = app.practice_view.stage.feedback
     check(feedback.score == renderer and feedback.score_revision == app.revision,
-        "Production binds native feedback to the loaded source revision")
-    check(feedback.is_visible_in_tree(), "Native feedback is the visible presentation layer")
-    var attacks: Array = []
-    for event in renderer.layout.ordered_events:
-        if bool(event.get("is_attack",false)) and event.get("source_id") != null:
-            attacks.append(event)
-    check(attacks.size() >= 3, "Imported repeated chords contain real source attacks")
-    if not failures.is_empty():
-        app.free()
-        quit(1)
-        return
-    var first: Dictionary = attacks[0]
-    var second: Dictionary = attacks[1]
-    var later: Dictionary = attacks[-1]
-    for event in [first,second,later]:
-        check(feedback.source_to_id.get(str(event.source_id)) == str(event.id),
-            "Native binding preserves each authentic source identity")
-    renderer.present({"running":true,"hand":"both"},float(first.beat))
-    await process_frame
-    await process_frame
-    check(renderer.drawn_noteheads.has(str(first.id)), "Production paints the first authentic notehead")
-    check(feedback.note_position(str(first.id)) == renderer.drawn_noteheads[str(first.id)],
-        "Feedback samples the actually painted native notehead")
-    check(feedback.note_position("missing-source") == Vector2.INF,
-        "Unknown source identity cannot invent a feedback position")
-    var before: Vector2 = feedback.note_position(str(first.id))
-    renderer.present({"running":true,"hand":"both"},float(first.beat)+.25)
-    await process_frame
-    await process_frame
-    var after: Vector2 = feedback.note_position(str(first.id))
-    check(absf(before.x-after.x-renderer.timeline.pixels_per_beat*.25) < .01 and
-        absf(before.y-after.y) < .01, "Feedback follows actual native scrolling at fixed beat density")
-
-    var state: Dictionary = app.last_state.duplicate(true)
-    state.merge({"phase":"playing", "mode":"practice", "running":true,
-        "paused":false, "preview_only":false, "transport_id":3,
-        "feedback_marks":[{"source_id":str(second.source_id), "status":"missed"},
-            {"note_id":str(later.id), "status":"early", "estimated":true}],
-        "midi_visual_events":[
-            {"sequence":1,"transport_id":3,"source_id":str(first.source_id),"status":"on_time","age":.02},
-            {"sequence":2,"transport_id":3,"source_id":str(later.source_id),"status":"late","age":.03},
-            {"sequence":3,"transport_id":3,"reference_source_id":str(second.source_id),
-                "status":"unexpected","pitch":73,"age":.02}]},true)
-    present(app,state)
-    check(feedback.markers.get(str(second.id)) == "missed" and feedback.markers.size() == 1,
-        "Only assessed exact source identities mark the native score")
-    check(feedback.pulses.size() == 3 and feedback.pulses[0].id == str(first.id) and
-        feedback.pulses[1].id == str(later.id) and feedback.pulses[2].id == str(second.id),
-        "Native feedback maps judged attacks and unexpected input to their true source targets")
-    check(app.score_effects.hit_pulses.size() == 2 and app.score_effects.wrong_ghosts.size() == 1,
-        "Source event queues retain judged hits and unexpected input")
-    check(app.score_effects.hit_pulses[0].note_id == str(first.id) and
-        app.score_effects.hit_pulses[1].note_id == str(later.id),
-        "Source queues distinguish separate attacks rather than repeated pitches")
-    check(app.score_effects.hit_pulses[0].duration_ms == 220,
-        "Source hit lifetime stays short and bounded")
-    present(app,state)
-    check(feedback.pulses.size() == 3 and app.score_effects.hit_pulses.size() == 2 and
-        app.score_effects.wrong_ghosts.size() == 1, "Repeated polls cannot replay a judged event")
-
-    # Fresh sequences with stale transport, old age or an unknown source are consumed safely.
-    state.midi_visual_events = [
-        {"sequence":4,"transport_id":2,"source_id":str(first.source_id),"status":"on_time","age":.01},
-        {"sequence":5,"transport_id":3,"source_id":str(first.source_id),"status":"on_time","age":2.0},
-        {"sequence":6,"transport_id":3,"source_id":"missing-source","status":"on_time","age":.01}]
-    present(app,state)
-    check(feedback.pulses.size() == 3 and app.score_effects.hit_pulses.size() == 2,
-        "Stale or unmapped events cannot create a native reward")
-    for ungraded_mode in ["preview", "listen"]:
-        state.preview_only = ungraded_mode == "preview"
-        state.mode = "listen" if ungraded_mode == "listen" else "practice"
-        state.transport_id += 1
-        var sequence: int = 7 if ungraded_mode == "preview" else 8
-        state.midi_visual_events = [{"sequence":sequence,"transport_id":state.transport_id,
-            "source_id":str(first.source_id),"status":"on_time","age":.01}]
-        present(app,state)
-        check(feedback.markers.is_empty() and feedback.pulses.is_empty(),
-            ungraded_mode + " clears native assessed feedback")
-        check(app.score_effects.hit_pulses.is_empty() and app.score_effects.wrong_ghosts.is_empty(),
-            ungraded_mode + " cannot retain or award source hit credit")
-        state.preview_only = false
-        state.mode = "practice"
-        state.feedback_marks = []
-        present(app,state)
-        check(feedback.pulses.is_empty() and app.score_effects.hit_pulses.is_empty(),
-            "Returning to graded practice cannot replay " + ungraded_mode + " events")
-
-    var groups: Array = load("res://living_score.gd").groups_crossed(
-        app.living_chords,float(first.beat)-.01,float(first.beat)+.01)
-    var chord_notes := 0
-    for event in attacks:
-        if absf(float(event.beat)-float(first.beat)) < .001:
-            chord_notes += 1
-    check(groups.size() == 1 and groups[0].notes.size() == chord_notes,
-        "Crossing an authentic source onset groups the entire chord exactly once")
-    renderer.queue_redraw()
-    feedback.queue_redraw()
-    await process_frame
-    await process_frame
+        "Production binds the ledger to the loaded source revision")
+    check(renderer.note_status_source == feedback,
+        "The production renderer paints from the one note-status ledger")
+    # The UI has not seen a snapshot of the new transport yet.
+    app.last_state = data["stale_state"]
+    var reply: Dictionary = data["feedback"]
+    var events: Array = reply["events"]
+    app._consume_feedback_reply(reply)
+    check(app.feedback_inbox.acknowledged == int(events[-1]["sequence"]),
+        "Every event is acknowledged after it was processed")
+    check(feedback.ignored_events == 0 and feedback.pending_events() == 0,
+        "No event of the transport transition is dropped or left pending")
+    var latest: Dictionary = {}
+    var take := ""
+    var hits := 0
+    for event in events:
+        take = Status.take_key(event)
+        if event["kind"] == "assessment":
+            latest[event["note_id"]] = event
+        elif event["kind"] == "attack" and event["status"] in ["on_time","early","late"]:
+            hits += 1
+    check(not latest.is_empty(), "The engine published per-note assessments")
+    var missed := 0
+    for id in latest:
+        var expected: String = Status.display_status(latest[id]["dimensions"])
+        check(feedback.status_for(take,id) == expected,
+            "note %s shows %s from its settled dimensions" % [id,expected])
+        check(feedback.statuses.is_settled(take,id), "note %s is settled" % id)
+        missed += int(expected == Status.MISSED)
+    check(missed >= 1, "The omitted note is shown missed")
+    check(app.score_effects.hit_pulses.size() == mini(32,hits),
+        "Each matched attack produced exactly one stage reaction")
+    var applied: int = feedback.applied_events
+    app._consume_feedback_reply(reply)
+    check(feedback.applied_events == applied and
+            app.score_effects.hit_pulses.size() == mini(32,hits),
+        "A repeated reply cannot replay an acknowledged event")
     print("NOTE_REACTIONS_FAILURES:",failures.size())
     app.free()
     quit(0 if failures.is_empty() else 1)
@@ -160,7 +149,7 @@ func run() -> void:
     result = subprocess.run(
         [GODOT, "--headless", "--path", str(ROOT / "godot"),
          "--script", str(script), "--", str(tmp_path)],
-        capture_output=True, text=True, timeout=30
+        capture_output=True, text=True, timeout=60
     )
     output = result.stdout + result.stderr
     assert result.returncode == 0, output

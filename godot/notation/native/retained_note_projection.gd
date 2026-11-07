@@ -6,7 +6,8 @@ extends RefCounted
 static func append_visible(notes: Array, shift_x: float, viewport_width: float,
         playhead_x: float, pass_index: int,
         instances: Array, nearest_heads: Dictionary,
-        local_floor_x: float = -INF, local_ceiling_x: float = INF) -> int:
+        local_floor_x: float = -INF, local_ceiling_x: float = INF,
+        take_key: String = "", clip_x: Vector2 = Vector2(-INF,INF)) -> int:
     var minimum: float = maxf(-60.0-shift_x,local_floor_x)
     var maximum: float = minf(viewport_width+60.0-shift_x,local_ceiling_x)
     var low := 0
@@ -42,6 +43,10 @@ static func append_visible(notes: Array, shift_x: float, viewport_width: float,
         copy["position"] = screen
         copy["pass_index"] = pass_index
         copy["instance_id"] = placement_id
+        # Identity and clipping travel WITH the projected instance: the
+        # immutable take that owns its strip and that strip's screen window.
+        copy["take_key"] = take_key
+        copy["clip_x"] = clip_x
         instances.append(copy)
         if not nearest_heads.has(ident) or \
                 absf(screen.x-playhead_x)<absf(nearest_heads[ident].x-playhead_x):

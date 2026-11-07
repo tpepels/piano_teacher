@@ -53,11 +53,22 @@ func ink(hand: String) -> Color:
 func event_ink(score_layout, event: Dictionary) -> Color:
     return ink(score_layout.performing_hand(event))
 
-func record_notehead(event: Dictionary, point: Vector2, viewport_width: float) -> void:
+func record_notehead(event: Dictionary, point: Vector2, viewport_width: float,
+        ink: Color = Color.WHITE, painted: Dictionary = {"source":"glyph"}) -> void:
     var id: String = str(event["id"])
     pass_noteheads[id] = point
+    var kind: String = str(event.get("note_type","quarter"))
+    # Immutable paint metadata of THIS physical head: the exact authentic
+    # head mask, ink and staff space used for it. Status ink recolors this
+    # head in place inside the same retained strip; it never re-derives it.
     drawn_note_instances.append({"event_id":id,"source_id":event.get("source_id"),
-        "pass_index":pass_index,"instance_id":"%d:%s" % [pass_index,id],"position":point})
+        "pass_index":pass_index,"instance_id":"%d:%s" % [pass_index,id],"position":point,
+        "head":("head_whole" if kind == "whole" else
+            "head_half" if kind == "half" else "head_black"),
+        "ink":ink,"gap":gap})
+    # How the strip drew this head: a standalone glyph, or head ``head_index``
+    # of composite artwork ``template`` anchored at ``anchor``.
+    drawn_note_instances[-1].merge(painted,true)
     if not drawn_noteheads.has(id) or \
             absf(point.x-viewport_width*PLAYHEAD_FRACTION) < \
             absf(drawn_noteheads[id].x-viewport_width*PLAYHEAD_FRACTION):

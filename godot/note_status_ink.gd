@@ -1,7 +1,18 @@
 extends RefCounted
-## Single authentic-notehead color/glow painter. All light is drawn using
-## the exact Verovio notehead alpha mask, never a circle, arc, badge,
-## particle, ColorRect or separate bloom positioned near the note.
+## Single authentic-notehead recoloring painter. All light is drawn using the
+## exact Verovio notehead alpha mask, never a circle, arc, badge, particle,
+## ColorRect or separate bloom positioned near the note.
+##
+## A status head is recolored IN PLACE, inside the retained source strip that
+## owns the note, with three passes of the same head mask:
+##   ERASE  blend SUB: subtract the exact ink the strip painted for this head
+##          (the template's own head texels, same rectangle, staff space and
+##          ink color -- see glyphs.gd head_cutout);
+##   CORE   blend ADD: add the status tint with the same coverage;
+##   GLOW   blend MIX: two barely larger copies at very low alpha.
+## For coverage a over background b, the strip held b(1-a)+ink*a. ERASE+CORE
+## leave exactly b(1-a)+tint*a: the white head is replaced, not overpainted,
+## so no white contour survives under or around the colored one.
 const Status := preload("res://note_status_registry.gd")
 const Design := preload("res://practice_theme.gd")
 const COLORS := {
@@ -11,7 +22,8 @@ const COLORS := {
     "early_release": Color("#BCA4F1"),
     "early_onset": Color("#EBCF81"),
 }
-const CORE_ALPHA := 0.97
+const PASSES := ["erase", "core", "glow"]
+const CORE_ALPHA := 1.0
 const INNER_GLOW_ALPHA := 0.105
 const OUTER_GLOW_ALPHA := 0.045
 const INNER_SCALE := 1.024
@@ -23,21 +35,34 @@ static func color_for(status: String) -> Color:
 static func glow_strength(status: String) -> float:
     return 0.0 if status == Status.UNPLAYED else OUTER_GLOW_ALPHA
 
-static func paint(canvas: CanvasItem, glyphs,
-        head: String, point: Vector2, gap: float, status: String) -> bool:
+static func material_for(pass_name: String) -> CanvasItemMaterial:
+    var material := CanvasItemMaterial.new()
+    material.blend_mode = (CanvasItemMaterial.BLEND_MODE_SUB if pass_name == "erase"
+        else CanvasItemMaterial.BLEND_MODE_ADD if pass_name == "core"
+        else CanvasItemMaterial.BLEND_MODE_MIX)
+    return material
+
+## Paint one pass for one physical head. ``instance`` is the immutable record
+## the strip stored when it engraved the head: position, head mask, ink, staff
+## space and the exact artwork (template, head index, anchor) it came from.
+static func paint(canvas: CanvasItem, glyphs, instance: Dictionary,
+        status: String, pass_name: String) -> bool:
     if status == Status.UNPLAYED or not COLORS.has(status):
         return false
     if not is_instance_valid(canvas) or glyphs == null or \
-            not glyphs.has_method("paint"):
+            not glyphs.has_method("paint_head"):
         return false
     var tint: Color = COLORS[status]
-    # The same genuine notehead texture is composited three times. The
-    # 2.4% and 5.2% expansion adds only an extremely soft contour-bound
-    # light at the very edge of the note (about 1 px at normal staff size).
-    # The inner core is the changed note itself. Hollow notes remain hollow.
-    glyphs.paint(canvas,head,point.x,point.y,gap*OUTER_SCALE,
-        Color(tint,OUTER_GLOW_ALPHA),true)
-    glyphs.paint(canvas,head,point.x,point.y,gap*INNER_SCALE,
-        Color(tint,INNER_GLOW_ALPHA),true)
-    return bool(glyphs.paint(canvas,head,point.x,point.y,gap,
-        Color(tint,CORE_ALPHA),true))
+    match pass_name:
+        "erase":
+            # Exactly the ink the strip painted for this head, subtracted.
+            return bool(glyphs.paint_head(canvas,instance,instance["ink"]))
+        "core":
+            return bool(glyphs.paint_head(canvas,instance,Color(tint,CORE_ALPHA)))
+        "glow":
+            # 2.4% and 5.2% expansion of the authentic head mask about its
+            # centre: an extremely soft, contour-bound light about 1 px wide.
+            glyphs.paint_head(canvas,instance,Color(tint,OUTER_GLOW_ALPHA),OUTER_SCALE)
+            return bool(glyphs.paint_head(canvas,instance,
+                Color(tint,INNER_GLOW_ALPHA),INNER_SCALE))
+    return false

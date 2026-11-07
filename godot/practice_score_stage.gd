@@ -25,7 +25,7 @@ var score_frame: Control
 var renderer: Control
 var playhead_glow: ColorRect
 var runway_steps: Control
-var feedback: Control
+var feedback: Node # note-status ledger; strips paint its ink
 var effects: Control
 var phase_cue: Control
 var hand_cue_panel: PanelContainer
@@ -132,7 +132,6 @@ func _ready() -> void:
     effects.surface_visible = false
     effects.z_index = 1
     feedback = preload("res://native_score_feedback.gd").new()
-    feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_frame.add_child(feedback)
     if not renderer.set_density_from_env():
         push_warning("Native score density: " + str(renderer.notice))
@@ -273,11 +272,9 @@ func present_runway_steps(state: Dictionary, global_visual: float,
         _first_attack_offset = StepTimeline.first_playable_beat(model,hand)
     # A step title is attached to an already reserved source copy, never
     # positioned from a READY-only camera or backend scroll offset.
-    var current_start := INF
-    for item in renderer.stream_passes:
-        var onset: float = float(item["world_origin"])+_first_attack_offset
-        if onset >= global_visual-.001:
-            current_start = minf(current_start,onset)
+    # Read the online queue in place; never copy it on the frame path.
+    var current_start: float = renderer.first_source_origin_after(
+        global_visual-.001-_first_attack_offset)+_first_attack_offset
     runway_steps.present(state,global_visual,current_start,
         next_start,next_label,next_density,global_visual)
 
@@ -294,7 +291,7 @@ func present(state: Dictionary, busy: bool) -> void:
     if str(state.get("mode","practice")) == "learn":
         keyboard.update_state(state.get("teaching",{}) if state.get("teaching") is Dictionary else {})
     else:
-        keyboard.update_live(state.get("midi_next_pitches",[]),state.get("midi_held_pitches",[]),state.get("midi_visual_events",[]),
+        keyboard.update_live(state.get("midi_next_pitches",[]),state.get("midi_held_pitches",[]),state.get("midi_recent_keys",[]),
             not str(state.get("device","")).is_empty() and str(state.get("mode","")) in ["practice","perform"])
 
 func _present_hand_cue(state: Dictionary) -> void:

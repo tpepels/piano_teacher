@@ -87,6 +87,10 @@ var failure_reason := ""
 var visible_symbols := 0
 var drawn_noteheads: Dictionary = {}
 var drawn_note_instances: Array = []
+# Read-only view of the note-status ledger (NativeScoreFeedback). Each source
+# strip paints its own status ink from it; the renderer never grades.
+var note_status_source = null
+var note_status_visible := true
 var selected_density := 0.0
 var external_backdrop := false
 var compact_inactive_staff := false
@@ -100,7 +104,38 @@ var _stream_queue = StreamQueue.new()
 # All internal rendering/transport code uses _stream_queue.online directly.
 var stream_passes: Array:
     get:
+        # Diagnostics/test snapshot only. No rendering or per-frame path may
+        # read this: it copies the whole online queue.
         return _stream_queue.online.duplicate(true)
+
+func stream_pass_count() -> int:
+    return _stream_queue.online.size()
+
+## Take keys of every source strip in the online queue, without copying it.
+func visible_take_keys() -> Array:
+    var keys: Array = []
+    for item in _stream_queue.online:
+        if str(item.get("kind","source")) == "source":
+            keys.append(str(item.get("take_key","")))
+    return keys
+
+## Earliest admitted source-strip world origin at or after ``from_world``.
+func first_source_origin_after(from_world: float) -> float:
+    var result := INF
+    for item in _stream_queue.online:
+        var origin: float = float(item["world_origin"])
+        if origin >= from_world:
+            result = minf(result,origin)
+    return result
+
+func set_note_status_source(source) -> void:
+    note_status_source = source
+    queue_redraw()
+
+func set_note_status_visible(enabled: bool) -> void:
+    if note_status_visible != enabled:
+        note_status_visible = enabled
+        queue_redraw()
 var offline_stream_queue: Array:
     get:
         return _stream_queue.offline
@@ -1155,11 +1190,18 @@ func _project_stream(playhead_x: float) -> void:
             continue
         var position: float = playhead_x + \
             (float(item["world_origin"])-stream_world_beat)*density
+        var take_key: String = str(item.get("take_key",""))
+        # Status ink is a child of this strip: it inherits the strip's exact
+        # transform and clip window. Repaints only when its take changes.
+        segment.sync_note_status(take_key,note_status_source,note_status_visible)
+        var clip_bounds: Vector2 = StreamLifecycle.screen_bounds(
+            item,density,staff_gap(),timeline.duration_beats)
         var count: int = RetainedNoteProjection.append_visible(
             segment.note_instances,position,size.x,playhead_x,
             int(item["serial"]),drawn_note_instances,drawn_noteheads,
             float(item["source_floor"])*density,
-            float(item["source_ceiling"])*density)
+            float(item["source_ceiling"])*density,take_key,
+            Vector2(position+clip_bounds.x,position+clip_bounds.y))
         visible_symbols += count
         frame_scanned_events += count
         fingering_pass_clocks.append({

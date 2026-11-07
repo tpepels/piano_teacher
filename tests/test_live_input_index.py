@@ -15,12 +15,12 @@ def test_large_score_onsets_indexed_before_physical_callback():
     index_id = id(view._ordered_notes)
     # The source does not get re-sorted on every keystroke.
     for i in (0, 2000, 5999):
-        view.receive(pitch=60+i%12, is_on=True, now=10.0+i,
-                     phrase=phrase, hand="right", bpm=60.0,
+        event = view.receive(pitch=60+i%12, is_on=True, now=10.0+i,
+                             phrase=phrase, hand="right", bpm=60.0,
                      from_beat=0, run_at=10.0, running=True, paused=False,
                      preview=False, mode="practice", transport_id=1)
-        assert view.events[-1]["source_id"] == f"source-{i}"
-        assert view.events[-1]["status"] == "on_time"
+        assert event["source_id"] == f"source-{i}"
+        assert event["status"] == "on_time"
         assert id(view._ordered_notes) == index_id
 
 
@@ -34,9 +34,9 @@ def test_unsorted_chord_and_shaped_tempo_preserve_original_source_index():
     view = LiveInputView()
     view.prepare(phrase)
     for pitch, beat, source in ((60, 0, "first"),(64, 0, "second"),(67, 4, "later")):
-        view.receive(pitch=pitch, is_on=True, now=10+tempo.seconds_at(beat),
+        event = view.receive(pitch=pitch, is_on=True, now=10+tempo.seconds_at(beat),
                      phrase=phrase, hand="right", bpm=60, from_beat=0,
                      run_at=10, running=True, paused=False, preview=False,
                      mode="practice", transport_id=1, tempo_map=tempo)
-        assert view.events[-1]["source_id"] == source
-        assert view.events[-1]["status"] == "on_time"
+        assert event["source_id"] == source
+        assert event["status"] == "on_time"

@@ -60,7 +60,8 @@ from .application.session_snapshot_builder import (
 from .completion_route import completion_route
 from .visual_transport import VisualTransport
 from .midi_calibration import MidiTapCalibration
-from .live_event_ring import LiveEventRing
+from .feedback_events import FeedbackEventLog
+from .live_assessment_publisher import LiveAssessmentPublisher
 from .runtime_timings import RuntimeTimings
 from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
@@ -119,7 +120,7 @@ class PracticeEngine:
         self.guided_session.return_context = context
 
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
-                 live_events: LiveEventRing | None = None):
+                 feedback_events: FeedbackEventLog | None = None):
         self.lock = threading.RLock()
         # Whole-source inference must never block MIDI or state polling.
         # Serialize source loads and durable corrections separately instead.
@@ -140,7 +141,11 @@ class PracticeEngine:
         self.next_boundary_beat = 0.0
         self.feedback_seconds = SETTINGS.feedback_seconds
         self.midi_calibration = MidiTapCalibration()
-        self.live_events = live_events if live_events is not None else LiveEventRing()
+        # The single acknowledged note-feedback channel to the score: provisional
+        # attack/release events and authoritative per-note assessments.
+        self.feedback_events = (feedback_events if feedback_events is not None
+                                else FeedbackEventLog())
+        self.live_assessment = LiveAssessmentPublisher(self.feedback_events)
         self.runtime_timings = RuntimeTimings()
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
@@ -813,7 +818,7 @@ class PracticeEngine:
                     return
             if message.type in ("note_on", "note_off"):
                 is_on = message.type == "note_on" and message.velocity > 0
-                self.live_input.receive(
+                live_event = self.live_input.receive(
                     pitch=message.note, is_on=is_on, now=corrected_at,
                     phrase=self.plan.active_phrase if self.plan is not None else None,
                     hand=self.plan.hand if self.plan is not None else "both",
@@ -824,8 +829,9 @@ class PracticeEngine:
                     transport_id=self.transport_id,
                     tempo_map=self._active_tempo_map(),
                 )
-                if is_on and self.live_input.events:
-                    self.live_events.publish(self.live_input.events[-1])
+                if live_event is not None:
+                    self.feedback_events.publish(
+                        {**live_event, **self._feedback_take()})
             if self.mode == "learn":
                 if (self.teaching is not None and self.midi.connected
                         and message.type in ("note_on", "note_off")):
@@ -2338,6 +2344,7 @@ class PracticeEngine:
         # BPM selected for the next retry. Re-scaling the recorded
         # timestamps early would move mistakes to incorrect notes.
         self.feedback_marks=self._live_feedback((now-self.visual_transport.run_at))
+        self.live_assessment.publish(self.feedback_marks, self._feedback_take())
         tempo_map = self._active_tempo_map()
         assessed = self.assessment_policies.select(tempo_map).grade(
             phrase, hand=self.plan.hand, bpm=self.plan.bpm,
@@ -2498,6 +2505,10 @@ class PracticeEngine:
             self.measurement.finish()
         self.feedback_marks = assessed.marks
         self.feedback_unmapped = assessed.unmapped
+        # The completed take's settled grades, before any transition below can
+        # start another transport.
+        self.live_assessment.publish(self.feedback_marks, self._feedback_take(),
+                                     final=True)
         self.feedback = assessed.feedback
         self.running=False
         self.recorder=None
@@ -2734,6 +2745,7 @@ class PracticeEngine:
     def _update(self) -> None:
         try:
             self._update_transition()
+            self._publish_live_assessment()
         except Exception:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=time.monotonic())
@@ -2805,6 +2817,31 @@ class PracticeEngine:
             awaiting_score=self.awaiting_score_revision is not None,
             pending_rewind=self.visual_transport.pending_rewind is not None,
         ), mode=self.mode, now=now)
+
+    def _feedback_take(self) -> dict:
+        """Immutable identity of the take that the next feedback belongs to."""
+        return {"piece_fingerprint": self.fingerprint or "",
+                "revision": int(self.score_revision),
+                "transport_id": int(self.transport_id), "mode": self.mode,
+                "graded": (not self.preview_only
+                           and self.mode in ("practice", "perform"))}
+
+    def _publish_live_assessment(self) -> None:
+        """Publish the incremental assessment continuously during playback.
+
+        Uses the same _live_feedback grading call as every other consumer;
+        only new or changed per-note results enter the feedback event log.
+        """
+        if (not self.running or self.visual_transport.paused
+                or self.mode not in ("practice", "perform")):
+            return
+        elapsed = time.monotonic() - self.visual_transport.run_at
+        marks = self._live_feedback(elapsed) if elapsed >= 0 else []
+        self.live_assessment.publish(marks, self._feedback_take())
+
+    def _live_marks_for_snapshot(self, _elapsed_seconds: float) -> list[dict]:
+        # _state_snapshot runs _update first, which refreshed these marks.
+        return list(self.live_assessment.latest_marks) if self.running else []
 
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Only publish source-bound live marks with a current engraved map."""
@@ -2991,7 +3028,7 @@ class PracticeEngine:
             elapsed_beat=self._elapsed_beat,
             phase=self._phase,
             source_model=self._source_model,
-            live_feedback=self._live_feedback,
+            live_feedback=self._live_marks_for_snapshot,
             visual_motion=self._visual_motion,
             active_tempo_map=self._active_tempo_map,
             display_phrase=self.display_phrase,

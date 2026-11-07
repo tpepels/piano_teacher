@@ -106,7 +106,7 @@ func run() -> void:
         assert(renderer.set_density(float(configuration["density"])))
         renderer.set_fingering_annotations_enabled(false)
         renderer.set_transport_overlay_enabled(false)
-        app.practice_view.stage.feedback.visible = false
+        app.practice_view.stage.renderer.set_note_status_visible(false)
         await process_frame
         await process_frame
         var fixed_region := Rect2i()

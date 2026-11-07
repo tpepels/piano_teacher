@@ -64,6 +64,15 @@ var tuplet_metadata: Dictionary = {}
 var slur_textures: Dictionary = {}
 var slur_metadata: Dictionary = {}
 var error := ""
+# CPU copies of the authentic artwork that status ink must reproduce exactly:
+# the three notehead glyphs and every composite note/chord template.
+var head_images: Dictionary = {}
+var template_images: Dictionary = {}
+var _head_cutouts: Dictionary = {}
+# A cutout keeps the template's own texels within this distance (font units,
+# 250 per staff space) of the notehead outline: the full antialiased head,
+# never more than ~0.05 space of an attached stem.
+const HEAD_CUTOUT_MARGIN := 12.0
 
 func ready() -> bool:
     return textures.size() == REQUIRED.size()
@@ -104,6 +113,8 @@ func load_font(items: Dictionary) -> bool:
             return false
         loaded_textures[name] = ImageTexture.create_from_image(image)
         loaded_bounds[name] = geometry.duplicate()
+        if name.begins_with("head_"):
+            head_images[name] = image
     textures = loaded_textures
     bounds = loaded_bounds
     font_name = common_font
@@ -122,6 +133,7 @@ func load_note_templates(items: Dictionary) -> bool:
     var new_bounds: Dictionary = {}
     var stems: Dictionary = {}
     var stem_boxes: Dictionary = {}
+    _forget_template_images("note:")
     for name in NOTE_TEMPLATES:
         var item: Dictionary = items.get(name, {})
         if str(item.get("source", "")) != "verovio-engraved-note" or \
@@ -144,6 +156,7 @@ func load_note_templates(items: Dictionary) -> bool:
             return false
         new_textures[name] = ImageTexture.create_from_image(note)
         new_bounds[name] = coordinates.duplicate()
+        template_images["note:"+name] = note
         if name != "whole":
             var stem: Dictionary = item.get("stem_only",{})
             var box: Array = stem.get("bounds",[])
@@ -241,6 +254,7 @@ func paint_tie(canvas: CanvasItem, x0: float, x1: float, y: float,
 func load_chord_templates(items: Dictionary) -> bool:
     # These are optional: unusually wide or ambiguous chord patterns use
     # the existing per-glyph renderer. Never substitute fake sprite ink.
+    _forget_template_images("chord")
     var loaded := {}
     var metrics := {}
     var loaded_heads: Dictionary = {}
@@ -262,6 +276,7 @@ func load_chord_templates(items: Dictionary) -> bool:
             error = "Unreadable Verovio chord sprite: " + str(key)
             return false
         loaded[str(key)] = ImageTexture.create_from_image(img)
+        template_images["chord:"+str(key)] = img
         metrics[str(key)] = {
             "bounds":bounds.duplicate(), "head_positions":positions.duplicate(true)}
         var heads: Dictionary = item.get("heads_only",{})
@@ -275,6 +290,7 @@ func load_chord_templates(items: Dictionary) -> bool:
                 return false
             loaded_heads[str(key)] = ImageTexture.create_from_image(heads_image)
             heads_dimensions[str(key)] = heads["bounds"]
+            template_images["chord_heads:"+str(key)] = heads_image
         var stem: Dictionary = item.get("stem_only",{})
         if str(stem.get("source","")) == "verovio-engraved-chord-stem" and \
                 stem.get("bounds",[]).size() == 4:
@@ -634,10 +650,13 @@ func paint_note_stem(canvas: CanvasItem, kind: String, up: bool,
     return true
 
 
+static func note_template_name(kind: String, up: bool) -> String:
+    return "whole" if kind == "whole" else kind + ("_up" if up else "_down")
+
+
 func paint_note(canvas: CanvasItem, kind: String, up: bool,
         x: float, y: float, gap: float, ink: Color) -> bool:
-    var name: String = ("whole" if kind == "whole"
-        else kind + ("_up" if up else "_down"))
+    var name: String = note_template_name(kind,up)
     var texture: Texture2D = note_textures.get(name)
     if texture == null:
         return false
@@ -669,3 +688,125 @@ func paint(canvas: CanvasItem, name: String, x: float, y: float,
     )
     canvas.draw_texture_rect(glyph, rect, false, color)
     return true
+
+
+## Font-unit box [x, y, w, h] of the artwork a head was engraved with,
+## relative to its paint anchor; empty when unknown.
+func _template_box(source: String, key: String) -> Array:
+    match source:
+        "note":
+            return note_bounds.get(key,[])
+        "chord":
+            return chord_metadata.get(key,{}).get("bounds",[])
+        "chord_heads":
+            return chord_heads_bounds.get(key,[])
+    return []
+
+
+## The exact pixels of ONE notehead inside the composite Verovio artwork it
+## was engraved with: the template's own texels, kept only within a small
+## margin around that head's outline (stems, flags and other chord members
+## are cleared). Same size, format and texels as the template, so drawing it
+## with the template's rectangle samples bit-identically for every head
+## pixel. Built once per (template, head) with native Image operations.
+func head_cutout(source: String, key: String, index: int, head: String) -> Texture2D:
+    var cache_key: String = "%s|%s|%d|%s" % [source,key,index,head]
+    if _head_cutouts.has(cache_key):
+        return _head_cutouts[cache_key]
+    var cutout: Texture2D = null
+    var template: Image = template_images.get(source+":"+key)
+    var glyph: Image = head_images.get(head)
+    var box: Array = _template_box(source,key)
+    var glyph_box: Array = bounds.get(head,[])
+    var offset := Vector2.ZERO
+    if source != "note":
+        var positions: Array = chord_heads(key)
+        if index >= 0 and index < positions.size():
+            offset = Vector2(float(positions[index][0]),float(positions[index][1]))
+        else:
+            template = null
+    if template != null and glyph != null and box.size() == 4 and glyph_box.size() == 4:
+        var sx: float = template.get_width()/float(box[2])
+        var sy: float = template.get_height()/float(box[3])
+        # Head glyph rectangle in template texels (heads are drawn centred).
+        var gw: int = maxi(1,roundi(float(glyph_box[2])*sx))
+        var gh: int = maxi(1,roundi(float(glyph_box[3])*sy))
+        var origin := Vector2i(
+            roundi((offset.x-float(glyph_box[2])*.5-float(box[0]))*sx),
+            roundi((offset.y+float(glyph_box[1])-float(box[1]))*sy))
+        var stamp: Image = glyph.duplicate()
+        stamp.convert(Image.FORMAT_RGBA8)
+        stamp.resize(gw,gh,Image.INTERPOLATE_BILINEAR)
+        var mask := Image.create_empty(template.get_width(),template.get_height(),
+            false,Image.FORMAT_RGBA8)
+        var radius: int = maxi(1,ceili(HEAD_CUTOUT_MARGIN*maxf(sx,sy)))
+        for dy in range(-radius,radius+1):
+            for dx in range(-radius,radius+1):
+                if dx*dx+dy*dy <= radius*radius:
+                    mask.blend_rect(stamp,Rect2i(Vector2i.ZERO,stamp.get_size()),
+                        origin+Vector2i(dx,dy))
+        if source != "note":
+            # Chord members touch. Partition the artwork at the mid-line to
+            # each neighbour (the same rounded line from both sides), so every
+            # texel belongs to exactly one head and is never recolored twice.
+            var transparent := Color(0,0,0,0)
+            var w: int = template.get_width()
+            var h: int = template.get_height()
+            var positions: Array = chord_heads(key)
+            for other in range(positions.size()):
+                if other == index:
+                    continue
+                var dx_units: float = float(positions[other][0])-offset.x
+                var dy_units: float = float(positions[other][1])-offset.y
+                if absf(dy_units) >= absf(dx_units):
+                    var mid: int = roundi(((offset.y+float(positions[other][1]))*.5-
+                        float(box[1]))*sy)
+                    if dy_units > 0.0:
+                        mask.fill_rect(Rect2i(0,mid,w,maxi(0,h-mid)),transparent)
+                    else:
+                        mask.fill_rect(Rect2i(0,0,w,clampi(mid,0,h)),transparent)
+                else:
+                    var mid_x: int = roundi(((offset.x+float(positions[other][0]))*.5-
+                        float(box[0]))*sx)
+                    if dx_units > 0.0:
+                        mask.fill_rect(Rect2i(mid_x,0,maxi(0,w-mid_x),h),transparent)
+                    else:
+                        mask.fill_rect(Rect2i(0,0,clampi(mid_x,0,w),h),transparent)
+        var head_only := Image.create_empty(template.get_width(),
+            template.get_height(),false,template.get_format())
+        head_only.blit_rect_mask(template,mask,
+            Rect2i(Vector2i.ZERO,template.get_size()),Vector2i.ZERO)
+        cutout = ImageTexture.create_from_image(head_only)
+    _head_cutouts[cache_key] = cutout
+    return cutout
+
+
+## Repaint one engraved head with ``color``: the exact template head pixels
+## for composite notes/chords, or the standalone authentic head glyph when
+## that is what the strip drew. ``scale`` > 1 grows the same mask around the
+## head centre (glow only).
+func paint_head(canvas: CanvasItem, instance: Dictionary, color: Color,
+        scale: float = 1.0) -> bool:
+    var gap: float = float(instance["gap"])
+    var head: String = str(instance["head"])
+    var point: Vector2 = instance["position"]
+    var source: String = str(instance.get("source","glyph"))
+    if source == "glyph" or scale != 1.0:
+        return paint(canvas,head,point.x,point.y,gap*scale,color,true)
+    var key: String = str(instance.get("template",""))
+    var texture: Texture2D = head_cutout(source,key,int(instance.get("head_index",0)),head)
+    var box: Array = _template_box(source,key)
+    if texture == null or box.size() != 4:
+        return paint(canvas,head,point.x,point.y,gap,color,true)
+    var anchor: Vector2 = instance["anchor"]
+    var unit: float = gap/250.0
+    canvas.draw_texture_rect(texture,Rect2(anchor.x+float(box[0])*unit,
+        anchor.y+float(box[1])*unit,float(box[2])*unit,float(box[3])*unit),false,color)
+    return true
+
+
+func _forget_template_images(prefix: String) -> void:
+    for key in template_images.keys():
+        if str(key).begins_with(prefix):
+            template_images.erase(key)
+    _head_cutouts.clear()

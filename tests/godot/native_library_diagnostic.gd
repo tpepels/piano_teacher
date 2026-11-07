@@ -58,7 +58,7 @@ func run() -> void:
         var feedback_sources: Array[String] = []
         for source in source_ids:
             check(attack_sources.has(source), filename + ": lost source ID " + source)
-            if feedback != null and str(feedback.source_to_id.get(source, "")) == \
+            if feedback != null and feedback.note_for_source(app.revision, source) == \
                     str(attack_sources.get(source, "missing")):
                 feedback_sources.append(source)
         check(feedback_sources.size() == source_ids.size(),
@@ -85,8 +85,8 @@ func run() -> void:
             var point: Vector2 = view.drawn_noteheads[id]
             if Rect2(Vector2.ZERO, view.size).has_point(point):
                 displayed.append(source)
-                check(feedback != null and feedback.note_position(id).is_equal_approx(point),
-                    filename + ": feedback must follow the displayed native head")
+                check(feedback != null and view.note_status_source == feedback,
+                    filename + ": the displayed native head paints from the note-status ledger")
         check(not displayed.is_empty(), filename + ": no source attack is visible in the native stage")
         samples.append({"measure": manifest.measure, "ready": app._native_score_ready(),
             "source_ids": source_ids, "displayed_source_ids": displayed,

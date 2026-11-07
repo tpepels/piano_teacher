@@ -93,5 +93,5 @@ def test_real_coda_slowdown_source_score_listen_and_grader_share_clock(
         phrase=stage.variant.phrase,hand=first.hand,bpm=72,from_beat=0,
         run_at=100,running=True,paused=False,preview=False,
         mode="practice",transport_id=41,tempo_map=stage.tempo_map)
-    assert live.events[-1]["source_id"] == first.source_id
-    assert live.events[-1]["status"] == "on_time"
+    assert live.recent[-1]["source_id"] == first.source_id
+    assert live.recent[-1]["status"] == "on_time"

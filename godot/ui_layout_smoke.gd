@@ -235,22 +235,23 @@ func _run() -> void:
             "meter":[4,4], "keys":{"right":0,"left":0},
             "clefs":{"right":{"sign":"G","line":2},"left":{"sign":"F","line":4}}}]}
     _check(view.load_score(model), "Native feedback fixture accepts source notation")
-    var live_feedback: Control = scene.native_score_feedback
+    var live_feedback = scene.practice_view.stage.feedback
     live_feedback.bind_score(view, 11)
-    live_feedback.present({"revision":11, "running":true, "phase":"playing",
-        "transport_id":4, "midi_visual_events":[{"sequence":1, "transport_id":4,
-            "reference_source_id":"real-attack", "status":"unexpected", "age":0.0}]})
-    _check(live_feedback.pulses.size() == 1 and
-        live_feedback.pulses[0].id == "engraved-head",
-        "Wrong MIDI pitch attaches to the authentic source head")
-    live_feedback.pulses[0]["until"] = Time.get_ticks_msec() - 2
-    live_feedback._process(0.016)
-    _check(live_feedback.pulses.is_empty(),
-        "Expired native feedback vanishes while the score is stationary")
-    live_feedback.present({"revision":11, "running":true, "phase":"playing",
-        "transport_id":4, "midi_visual_events":[{"sequence":2, "transport_id":4,
-            "reference_source_id":"unknown", "status":"unexpected", "age":0.0}]})
-    _check(live_feedback.pulses.is_empty(), "Feedback cannot fabricate a missing source head")
+    var take := {"piece_fingerprint":"", "revision":11, "transport_id":4,
+        "mode":"practice", "graded":true}
+    var wrong: Dictionary = take.merged({"kind":"attack", "sequence":1,
+        "reference_source_id":"real-attack", "status":"unexpected"})
+    _check(live_feedback.ingest(wrong) == "ignored",
+        "A wrong MIDI pitch never colors an authentic source head")
+    var hit: Dictionary = take.merged({"kind":"attack", "sequence":2,
+        "source_id":"real-attack", "status":"on_time"})
+    _check(live_feedback.ingest(hit) == "applied" and
+        live_feedback.status_for("|11|4|practice", "engraved-head") == "hit",
+        "An accepted attack colors exactly its engraved source head")
+    var unknown: Dictionary = take.merged({"kind":"attack", "sequence":3,
+        "source_id":"unknown", "status":"on_time"})
+    _check(live_feedback.ingest(unknown) == "ignored",
+        "Feedback cannot fabricate a missing source head")
 
     # Mapped notes belong on the engraved staff, not under a large red
     # rectangle. Reserve a small fallback warning for unmapped backend data.

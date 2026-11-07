@@ -178,7 +178,13 @@ func check_frame() -> void:
     frame.record_notehead(event,Vector2(700,220),1000.0)
     check(frame.drawn_noteheads["a"] == Vector2(410,220),"nearest actual head to fixed playhead wins")
     check(frame.pass_noteheads["a"] == Vector2(700,220),"current pass head records latest authentic position")
-    check(frame.drawn_note_instances[0] == {"event_id":"a","source_id":"source-a","pass_index":3,"instance_id":"3:a","position":Vector2(600,220)},"edit identity metadata unchanged")
+    var instance: Dictionary = frame.drawn_note_instances[0]
+    check(instance["event_id"] == "a" and instance["source_id"] == "source-a" and
+        instance["pass_index"] == 3 and instance["instance_id"] == "3:a" and
+        instance["position"] == Vector2(600,220),"edit identity metadata unchanged")
+    check(instance["head"] == "head_black" and instance["source"] == "glyph" and
+        instance["gap"] == frame.gap and instance["ink"] is Color,
+        "each head records the exact artwork, ink and staff space it was painted with")
     var other = Pass.new({})
     check(other.drawn_noteheads.is_empty() and other.drawn_note_instances.is_empty() and other.visible_symbols == 0 and other.scanned_events == 0 and other.visible_beam_groups == 0,"per-pass mutable outputs isolated")
     check(frame.visual_scroll_beat == 17.0 and frame.gap == 20.0,"explicit presentation values")

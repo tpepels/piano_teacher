@@ -1,81 +1,68 @@
 extends SceneTree
+## Contract of the note-status ledger and its event ingestion.
+## Physical rendering (pixels, clipping, glow, alignment) is verified on the
+## real Verovio framebuffer by tests/test_note_status_framebuffer.py.
 const Status := preload("res://note_status_registry.gd")
 const Ink := preload("res://note_status_ink.gd")
+const Inbox := preload("res://feedback_event_inbox.gd")
 
-class GlyphRecorder extends RefCounted:
-    var paints: Array = []
-    func paint(_canvas: CanvasItem, name: String, x: float, y: float,
-            gap: float, tone: Color, centered: bool = false) -> bool:
-        paints.append({"name":name,"x":x,"y":y,"gap":gap,
-            "tone":tone,"centered":centered})
-        return true
+class Layout extends RefCounted:
+    var ordered_events: Array = []
 
-class Score extends Control:
-    var glyphs := GlyphRecorder.new()
-    var drawn_noteheads := {
-        "a":Vector2(100,80),"b":Vector2(155,80),
-        "c":Vector2(205,80),"d":Vector2(255,80),
-        "e":Vector2(310,80),"f":Vector2(350,80)}
-    var drawn_note_instances: Array = []
-    var stream_passes: Array = []
-    var layout := {"ordered_events":[
-        {"id":"a","kind":"note","note_type":"quarter",
-            "source_id":"sa","is_attack":true},
-        {"id":"b","kind":"note","note_type":"half",
-            "source_id":"sb","is_attack":true},
-        {"id":"c","kind":"note","note_type":"whole",
-            "source_id":"sc","is_attack":true},
-        {"id":"d","kind":"note","note_type":"quarter",
-            "source_id":"sd","is_attack":true},
-        {"id":"e","kind":"note","note_type":"quarter",
-            "source_id":"se","is_attack":true},
-        {"id":"f","kind":"note","note_type":"quarter",
-            "source_id":"sf","is_attack":true}]}
-    func staff_gap() -> float:
-        return 16.0
+class Renderer extends Control:
+    var layout := Layout.new()
+    var source = null
+    var ink_visible := true
+    var takes: Array = []
+    func _init(ids: Array) -> void:
+        for id in ids:
+            layout.ordered_events.append({"id":id,"kind":"note",
+                "source_id":"s"+id,"is_attack":true})
+    func set_note_status_source(value) -> void:
+        source = value
+    func set_note_status_visible(enabled: bool) -> void:
+        ink_visible = enabled
+    func visible_take_keys() -> Array:
+        return takes
 
 var failures: Array[String] = []
+var sequence := 0
+
 func check(ok: bool, reason: String) -> void:
     if not ok:
         failures.append(reason)
         push_error("NATIVE_FEEDBACK_FAILED: "+reason)
 
-func _state(transport: int) -> Dictionary:
-    return {"piece_fingerprint":"fixture","revision":7,
-        "mode":"practice","phase":"playing","running":true,
-        "transport_id":transport,"preview_only":false,
-        "feedback_marks":[],"midi_visual_events":[]}
+func _take(transport: int, revision: int = 7) -> Dictionary:
+    return {"piece_fingerprint":"fixture","revision":revision,
+        "transport_id":transport,"mode":"practice","graded":true}
 
-func _assert_ink(paints: Array, glyph: String, x: float,
-        status: String) -> bool:
-    var color: Color = Ink.color_for(status)
-    var core := 0
-    var inner := 0
-    var outer := 0
-    for paint in paints:
-        if str(paint["name"]) != glyph or \
-                absf(float(paint["x"])-x) > .001:
-            continue
-        var tone: Color = paint["tone"]
-        if absf(tone.r-color.r) > .0001 or \
-                absf(tone.g-color.g) > .0001 or \
-                absf(tone.b-color.b) > .0001:
-            continue
-        var gap: float = float(paint["gap"])
-        if absf(gap-16.0)<.001 and tone.a > .9:
-            core += 1
-        elif absf(gap-16.0*Ink.INNER_SCALE)<.001 and \
-                tone.a <= .11:
-            inner += 1
-        elif absf(gap-16.0*Ink.OUTER_SCALE)<.001 and \
-                tone.a <= .05:
-            outer += 1
-    return core==1 and inner==1 and outer==1
+func _event(kind: String, transport: int, fields: Dictionary,
+        revision: int = 7) -> Dictionary:
+    sequence += 1
+    var event: Dictionary = _take(transport,revision)
+    event.merge(fields,true)
+    event["kind"] = kind
+    event["sequence"] = sequence
+    return event
+
+func _assess(transport: int, id: String, dims: Dictionary,
+        revision: int = 7) -> Dictionary:
+    return _event("assessment",transport,{"note_id":id,"source_id":"s"+id,
+        "status":"x","dimensions":dims},revision)
 
 func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
+    _registry()
+    _precedence()
+    await _ingestion()
+    _inbox()
+    print("NATIVE_FEEDBACK_FAILURES:",failures.size())
+    quit(0 if failures.is_empty() else 1)
+
+func _registry() -> void:
     var canonical := Status.new()
     check(canonical.record("take","id",Status.HIT) and
         canonical.status("take","id") == Status.HIT and
@@ -85,125 +72,149 @@ func run() -> void:
         "canonical status updates work and settled feedback overrides provisional hits")
     check(canonical.status("other","id")==Status.UNPLAYED,
         "a new take has no inherited note statuses")
-    var score := Score.new()
-    score.size = Vector2(720,180)
-    var a: String = Status.take_key(_state(8))
-    var b: String = Status.take_key(_state(9))
-    score.stream_passes = [
-        {"serial":10,"kind":"source","take_key":a},
-        {"serial":11,"kind":"source","take_key":b}]
-    for id in score.drawn_noteheads:
-        score.drawn_note_instances.append({
-            "event_id":id,"position":score.drawn_noteheads[id],
-            "pass_index":10})
-    # Same semantic note, physically present in a newer retry copy.
-    score.drawn_note_instances.append({
-        "event_id":"a","position":Vector2(480,80),"pass_index":11})
-    score.drawn_note_instances.append({
-        "event_id":"b","position":Vector2(530,80),"pass_index":11})
-    root.add_child(score)
-    var feedback = load("res://native_score_feedback.gd").new()
-    root.add_child(feedback)
-    feedback.size = score.size
-    feedback.bind_score(score,7)
-    check(feedback.status_for(a,"a") == Status.UNPLAYED,
-        "every original note starts unplayed")
-    check(Ink.glow_strength(Status.UNPLAYED) == 0.0 and \
-            Ink.glow_strength(Status.HIT) > 0.0 and \
+    var revision: int = canonical.take_revision("take")
+    canonical.record("take","id",Status.EARLY_RELEASE,true)
+    check(canonical.take_revision("take") == revision,
+        "an unchanged settled record does not invalidate the strip")
+    check(Ink.glow_strength(Status.UNPLAYED) == 0.0 and
+            Ink.glow_strength(Status.HIT) > 0.0 and
             Ink.glow_strength(Status.HIT) <= .05,
         "only played/graded notes have a minor contour-bound glow")
+    check(Ink.material_for("erase").blend_mode == CanvasItemMaterial.BLEND_MODE_SUB and
+            Ink.material_for("core").blend_mode == CanvasItemMaterial.BLEND_MODE_ADD,
+        "status ink replaces the authentic head instead of overpainting it")
+
+func _precedence() -> void:
+    var cases := [
+        [{"pitch":"wrong"},Status.MISSED],
+        [{"pitch":"missed"},Status.MISSED],
+        [{"pitch":"correct","onset":"late","release":"short"},Status.LATE],
+        [{"pitch":"correct","onset":"early","release":"short"},Status.EARLY_ONSET],
+        [{"pitch":"correct","onset":"early","release":"long"},Status.EARLY_ONSET],
+        [{"pitch":"correct","onset":"on_time","release":"short"},Status.EARLY_RELEASE],
+        [{"pitch":"correct","onset":"on_time","release":"long"},Status.LATE],
+        [{"pitch":"correct","onset":"on_time","release":"unreleased"},Status.LATE],
+        [{"pitch":"correct","onset":"on_time","release":"on_time"},Status.HIT],
+        [{},Status.UNPLAYED]]
+    for case in cases:
+        check(Status.display_status(case[0]) == case[1],
+            "precedence %s -> %s" % [str(case[0]),case[1]])
+
+func _ingestion() -> void:
+    var feedback = load("res://native_score_feedback.gd").new()
+    root.add_child(feedback)
+    var renderer := Renderer.new(["a","b","c","d","e","f"])
+    root.add_child(renderer)
+    feedback.bind_score(renderer,7)
+    check(renderer.source == feedback, "the renderer reads the one note-status ledger")
+    var t8: String = Status.take_key(_take(8))
+    var t9: String = Status.take_key(_take(9))
+    # Every strip key the renderer assigns equals the event take key.
+    check(t8 == "fixture|7|8|practice", "event identity matches strip take keys")
+    feedback.present({"piece_fingerprint":"fixture","revision":7,
+        "transport_id":8,"mode":"practice","phase":"playing"})
+    check(feedback.ingest(_event("attack",8,{"source_id":"sa","status":"on_time"})) ==
+        "applied" and feedback.status_for(t8,"a") == Status.HIT,
+        "a live accepted attack colors its own note immediately")
+    check(feedback.ingest(_event("release",8,{"source_id":"sa","release":"short"})) ==
+        "applied" and feedback.status_for(t8,"a") == Status.EARLY_RELEASE,
+        "an observed early key-up shows early release before settlement")
+    check(not feedback.statuses.is_settled(t8,"a"), "MIDI evidence stays provisional")
+    feedback.ingest(_assess(8,"a",{"pitch":"correct","onset":"on_time","release":"on_time"}))
+    check(feedback.status_for(t8,"a") == Status.HIT and feedback.statuses.is_settled(t8,"a"),
+        "the settled assessment overrides provisional MIDI feedback")
+    feedback.ingest(_event("release",8,{"source_id":"sa","release":"short"}))
+    check(feedback.status_for(t8,"a") == Status.HIT,
+        "late provisional evidence cannot change a settled note")
+    feedback.ingest(_assess(8,"a",{"pitch":"correct","onset":"on_time","release":"long"}))
+    check(feedback.status_for(t8,"a") == Status.LATE,
+        "a later settled grade (after the real key-up) still replaces the earlier one")
+    feedback.ingest(_assess(8,"b",{"pitch":"missed"}))
+    feedback.ingest(_assess(8,"c",{"pitch":"correct","onset":"late","release":"on_time"}))
+    feedback.ingest(_assess(8,"d",{"pitch":"correct","onset":"on_time","release":"short"}))
+    feedback.ingest(_assess(8,"e",{"pitch":"correct","onset":"early","release":"short"}))
+    check(feedback.status_for(t8,"b") == Status.MISSED and
+            feedback.status_for(t8,"c") == Status.LATE and
+            feedback.status_for(t8,"d") == Status.EARLY_RELEASE and
+            feedback.status_for(t8,"e") == Status.EARLY_ONSET,
+        "missed, late, early release and early onset are recorded distinctly")
+    check((feedback.statuses.record_of(t8,"e") as Dictionary).get("release") == "short",
+        "a combined early onset keeps its independent early-release observation")
+    check(feedback.ingest(_assess(8,"unknown",{"pitch":"missed"})) == "ignored" and
+            feedback.ingest(_event("attack",8,{"source_id":"sz","status":"on_time"})) == "ignored" and
+            feedback.ingest(_event("attack",8,{"source_id":"sf","status":"unexpected"})) == "ignored",
+        "unmapped or unexpected input cannot color a printed note")
+    var ungraded: Dictionary = _event("attack",8,{"source_id":"sf","status":"on_time"})
+    ungraded["graded"] = false
+    check(feedback.ingest(ungraded) == "ignored" and
+            feedback.status_for(t8,"f") == Status.UNPLAYED,
+        "preview/listen attacks never earn an on-score grade")
+
+    # P0 regression: Play/Resume/Retry start transport 9 before the UI has a
+    # snapshot of it. The event names its own take and must not be lost.
+    feedback.present({"piece_fingerprint":"fixture","revision":7,
+        "transport_id":8,"mode":"practice","phase":"feedback"})
+    check(feedback.ingest(_event("attack",9,{"source_id":"sb","status":"late"})) ==
+        "applied" and feedback.status_for(t9,"b") == Status.LATE,
+        "an attack of the new transport applies although the last state is stale")
+    check(feedback.status_for(t8,"b") == Status.MISSED,
+        "the same source note keeps its grade in the earlier physical copy")
+
+    # Events for an engraving that is not bound yet are buffered, in order.
+    var next := Renderer.new(["a","b"])
+    root.add_child(next)
+    var t10r8: String = Status.take_key(_take(10,8))
+    check(feedback.ingest(_event("attack",10,{"source_id":"sa","status":"on_time"},8)) ==
+        "buffered" and feedback.ingest(_assess(10,"b",{"pitch":"missed"},8)) == "buffered",
+        "events for a future engraving are buffered instead of dropped")
+    check(feedback.status_for(t10r8,"a") == Status.UNPLAYED, "buffered events are not shown early")
+    renderer.takes = [t8,t9]
+    feedback.bind_score(next,8)
+    check(feedback.pending_events() == 0 and
+            feedback.status_for(t10r8,"a") == Status.HIT and
+            feedback.status_for(t10r8,"b") == Status.MISSED,
+        "binding the engraving replays its buffered events")
+    check(feedback.ingest(_event("attack",3,{"source_id":"sa","status":"on_time"},5)) ==
+        "ignored", "events of an engraving no renderer shows are discarded")
+    # The outgoing renderer still scrolls as a tail: its takes stay colored.
+    feedback.present({"piece_fingerprint":"fixture","revision":8,
+        "transport_id":10,"mode":"practice","phase":"playing"})
+    check(feedback.status_for(t8,"b") == Status.MISSED and
+            feedback.status_for(t9,"b") == Status.LATE,
+        "grades of a still-visible outgoing engraving persist")
+    renderer.takes = []
+    feedback.present({"piece_fingerprint":"fixture","revision":8,
+        "transport_id":10,"mode":"practice","phase":"playing"})
+    check(feedback.status_for(t8,"b") == Status.UNPLAYED and
+            feedback.status_for(t10r8,"b") == Status.MISSED,
+        "takes are pruned only after their strips leave every renderer")
+    feedback.present({"piece_fingerprint":"fixture","revision":8,"preview_only":true,
+        "transport_id":11,"mode":"practice"})
+    check(not next.ink_visible and not renderer.ink_visible and
+            feedback.status_for(t10r8,"b") == Status.MISSED,
+        "an ungraded preview hides graded ink without erasing it")
+    feedback.present({"piece_fingerprint":"fixture","revision":8,
+        "transport_id":11,"mode":"practice"})
+    check(next.ink_visible, "returning to graded practice restores the ink")
+    renderer.free()
     await process_frame
-    score.glyphs.paints.clear()
-    feedback.queue_redraw()
-    await process_frame
-    check(score.glyphs.paints.is_empty(),
-        "unplayed noteheads retain the original unmodified Verovio ink")
-    var state := _state(8)
-    state.midi_visual_events = [{"sequence":1,"source_id":"sa",
-        "transport_id":8,"status":"on_time","age":.01}]
-    feedback.present(state)
-    check(feedback.status_for(a,"a")==Status.HIT,
-        "live accepted attack colors its correct note immediately")
-    feedback.present(state)
-    check(feedback.statuses.snapshot().get(a,{}).size()==1,
-        "repeated polls cannot duplicate or recolor another note")
-    score.glyphs.paints.clear()
-    feedback.queue_redraw()
-    await process_frame
-    check(_assert_ink(score.glyphs.paints,"head_black",100,Status.HIT),
-        "hit renders subtle mint directly through authentic notehead mask")
-    check(not score.glyphs.paints.any(func(item: Dictionary) -> bool:
-        return absf(float(item.get("x",0))-480)<.001),
-        "next unplayed repetition of the SAME note stays completely unchanged")
-    state.feedback_marks = [
-        {"note_id":"a","status":"correct"},
-        {"note_id":"b","status":"missed"},
-        {"note_id":"c","status":"late"},
-        {"note_id":"d","status":"short"},
-        {"note_id":"e","status":"early"},
-        {"note_id":"f","status":"extra","estimated":true}]
-    feedback.present(state)
-    check(feedback.status_for(a,"a")==Status.HIT and \
-            feedback.status_for(a,"b")==Status.MISSED and \
-            feedback.status_for(a,"c")==Status.LATE and \
-            feedback.status_for(a,"d")==Status.EARLY_RELEASE and \
-            feedback.status_for(a,"e")==Status.EARLY_ONSET,
-        "hit missed late early release and early onset all have distinct records")
-    check(feedback.status_for(a,"f")==Status.UNPLAYED,
-        "unmatched/estimated extras cannot color a printed source note")
-    score.glyphs.paints.clear()
-    feedback.queue_redraw()
-    await process_frame
-    check(_assert_ink(score.glyphs.paints,"head_half",155,Status.MISSED),
-        "missed uses exactly the engraved hollow note contour in coral")
-    check(_assert_ink(score.glyphs.paints,"head_whole",205,Status.LATE),
-        "late has its own golden status on the actual whole note")
-    check(_assert_ink(score.glyphs.paints,"head_black",255,Status.EARLY_RELEASE),
-        "early release has independent lavender status from Python short grade")
-    check(_assert_ink(score.glyphs.paints,"head_black",310,Status.EARLY_ONSET),
-        "early onset is not mislabeled as an early key release")
-    state.feedback_marks = [{"note_id":"f","status":"short",
-        "release_unobserved":true}]
-    feedback.present(state)
-    check(feedback.status_for(a,"f")==Status.LATE,
-        "an unreleased held note must never be shown as an early release")
-    state.feedback_marks = []
-    feedback.present(state)
-    check(feedback.status_for(a,"b")==Status.MISSED,
-        "graded status persists after the backend slides its feedback window")
-    var next := _state(9)
-    feedback.present(next)
-    check(feedback.status_for(a,"b")==Status.MISSED and \
-            feedback.status_for(b,"b")==Status.UNPLAYED,
-        "old moving copy retains grade while next take is unplayed")
-    next.feedback_marks = [{"note_id":"b","status":"correct"}]
-    feedback.present(next)
-    score.glyphs.paints.clear()
-    feedback.queue_redraw()
-    await process_frame
-    check(_assert_ink(score.glyphs.paints,"head_half",155,Status.MISSED) and \
-            _assert_ink(score.glyphs.paints,"head_half",530,Status.HIT),
-        "two simultaneous copies of the same source note have distinct colors")
-    next.preview_only = true
-    feedback.present(next)
-    check(feedback.status_for(a,"b")==Status.MISSED,
-        "preview cannot erase authoritative already-visible assessment")
-    score.glyphs.paints.clear()
-    feedback.queue_redraw()
-    await process_frame
-    check(score.glyphs.paints.is_empty(),
-        "ungraded preview never paints a misleading graded head")
-    next.preview_only = false
-    feedback.present(next)
-    check(feedback.status_for(a,"b")==Status.MISSED,
-        "restoring practice preserves already graded notes in old copies")
-    var other_score := Score.new()
-    root.add_child(other_score)
-    feedback.bind_score(other_score,8)
-    check(feedback.statuses.snapshot().is_empty(),
-        "new engraving revision resets all old note-status records")
+    feedback.bind_score(next,9)
+    check(feedback.ingest(_event("attack",12,{"source_id":"sa","status":"on_time"},8)) ==
+        "ignored", "a new engraving revision does not inherit the previous note map")
     feedback.free()
-    score.free()
-    other_score.free()
-    print("NATIVE_FEEDBACK_FAILURES:",failures.size())
-    quit(0 if failures.is_empty() else 1)
+    next.free()
+
+func _inbox() -> void:
+    var inbox := Inbox.new()
+    var events := [{"sequence":1},{"sequence":2},{"sequence":3}]
+    var first: Array = inbox.accept({"events":events})
+    check(first.size() == 3, "all unacknowledged events are delivered")
+    inbox.acknowledge(2)
+    var again: Array = inbox.accept({"events":events})
+    check(again.size() == 1 and int(again[0]["sequence"]) == 3,
+        "a repeated reply never re-applies acknowledged events")
+    inbox.acknowledge(3)
+    inbox.accept({"events":[{"sequence":5}]})
+    check(inbox.gaps == 1, "a sequence gap is detected, never silently accepted")
+    inbox.accept({"events":[],"lost_through":9})
+    check(inbox.lost_through == 9, "backend overflow is reported")

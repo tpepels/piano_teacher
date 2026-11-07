@@ -74,7 +74,8 @@ def _perform_real_practice(engine, piece, now, *, wrong_first_pitch=False):
         expected_release = (note.end-engine.plan.active_phrase.start) * .5
         pitch = note.pitch + 1 if wrong_first_pitch and index == 0 else note.pitch
         _send(engine, now, run_at + expected_onset + DELAY, pitch=pitch, on=True)
-        observed_live.append(engine.live_events.after(0)[-1])
+        observed_live.append([e for e in engine.feedback_events.pending()
+                              if e["kind"] == "attack"][-1])
         observed_onsets.append(engine.recorder.presses[-1].onset)
         _send(engine, now, run_at + expected_release + DELAY, pitch=pitch, on=False)
 

@@ -36,9 +36,12 @@ runtime, HTTP service, UDP listener or port binding.
 - `piano_teacher.inprocess.EngineCommands` dispatches typed engine
   operations. `PracticeEngine` remains authoritative for musical time,
   grading, adaptive lessons, library state and MIDI input.
-- Provisional physical MIDI note-on feedback is appended to a bounded
-  `LiveEventRing` during the hardware callback, then read by Godot on
-  the next frame without blocking on state serialization.
+- Note feedback travels through one acknowledged `FeedbackEventLog`
+  (`feedback.events`): provisional key-down/key-up events appended during the
+  hardware callback and authoritative per-note assessments published on every
+  clock update. Each event carries its take identity. Godot reads the log on
+  the next frame and acknowledges events only after processing them; the
+  backend retains anything unacknowledged.
 - The Python GIL is held only while invoking Python; the C++ queue
   uses a condition variable rather than an extra polling thread.
 

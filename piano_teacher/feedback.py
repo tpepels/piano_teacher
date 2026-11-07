@@ -6,7 +6,7 @@ notes remain in the textual assessment and are reported separately.
 from __future__ import annotations
 
 from .music import Phrase, note_name, source_note_id
-from .practice import Assessment
+from .practice import Assessment, note_dimensions
 from typing import Callable
 from .engraving.geometry import locate_beat
 
@@ -57,11 +57,9 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             glyph = glyphs[index]
         result.append({
             "status": entry.status,
-            # A note still held beyond its expected release must NEVER be
-            # displayed as an early-release note merely because the grading
-            # status is "short" for an as-yet unclosed MIDI press.
-            "release_unobserved": bool(entry.observation is not None
-                                       and entry.observation.unreleased),
+            # Pitch, onset and release are independent observations. A key
+            # still held past its release is "unreleased", never "short".
+            "dimensions": note_dimensions(entry),
             "page": int(glyph["page"]),
             "x": float(glyph["x"]),
             "y": float(glyph["y"]),

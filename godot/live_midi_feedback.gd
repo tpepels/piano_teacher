@@ -20,68 +20,53 @@ func bind_layout(source_layout: Dictionary, source_revision: int) -> void:
         if note is Dictionary:
             note_by_id[str(note.get("id", ""))] = note
 
-func consume(state: Dictionary, effects, stage, last_sequence: int,
-        current_revision: int) -> int:
-    var events: Array = state.get("midi_visual_events", [])
-    var ungraded: bool = bool(state.get("preview_only", false)) or \
-        str(state.get("mode", "")) == "listen"
-    var applicable: bool = revision == current_revision and \
-        str(state.get("phase", "")) == "playing"
-    var current_transport: int = int(state.get("transport_id", -2))
-    for candidate in events:
-        if not candidate is Dictionary:
-            continue
-        var event: Dictionary = candidate
-        var sequence: int = int(event.get("sequence", 0))
-        if sequence <= last_sequence:
-            continue
-        # Consume the sequence even if it is stale, ungraded, or from an
-        # older attempt. Do not replay it later when the lesson changes.
-        last_sequence = sequence
-        if ungraded or not applicable or \
-                int(event.get("transport_id", -1)) != current_transport:
-            continue
-        var status: String = str(event.get("status", ""))
-        var age: float = float(event.get("age", 99.0))
-        if age > 1.05:
-            continue
-        if status == "unexpected":
-            var reference: String = str(event.get("reference_source_id", ""))
-            var reference_note_id: String = str(attack_map.get(reference, ""))
-            var missed_note: Dictionary = note_by_id.get(reference_note_id, {})
-            if missed_note.is_empty():
-                continue
-            var remaining: int = maxi(1, 420 - int(age * 1000.0))
-            effects.wrong_ghosts.append({
-                "page": int(missed_note.get("page", 0)),
-                "x": float(missed_note.get("x", 0.0)),
-                "y": float(missed_note.get("y", 0.0)),
-                "duration_ms": 420,
-                "until_ms": Time.get_ticks_msec() + remaining
-            })
-            if effects.wrong_ghosts.size() > 32:
-                effects.wrong_ghosts.pop_front()
-            stage.effects.react("unexpected")
-            stage.impact_callout.call("react", "unexpected")
-            continue
-        if status not in ["on_time", "early", "late"] or age > .22:
-            continue
-        var source: String = str(event.get("source_id", ""))
-        var note_id: String = str(attack_map.get(source, ""))
-        var hit_note: Dictionary = note_by_id.get(note_id, {})
-        if hit_note.is_empty():
-            continue
-        effects.hit_pulses.append({
-            "page": int(hit_note.get("page", 0)),
-            "x": float(hit_note.get("x", 0.0)),
-            "y": float(hit_note.get("y", 0.0)),
-            "status": status,
-            "note_id": note_id,
-            "duration_ms": 220,
-            "until_ms": Time.get_ticks_msec() + maxi(1, 220 - int(age * 1000.0))
+## Stage reaction for one backend attack event from the acknowledged feedback
+## channel. Delivered exactly once, so no sequence bookkeeping lives here.
+## The event names its own take; only graded attacks on the bound engraving
+## produce a reaction. Score ink is owned by NativeScoreFeedback.
+func react(event: Dictionary, effects, stage, current_revision: int) -> bool:
+    if str(event.get("kind","attack")) != "attack" or \
+            not bool(event.get("graded",false)) or \
+            revision < 0 or revision != current_revision or \
+            int(event.get("revision",-1)) != revision:
+        return false
+    var status: String = str(event.get("status", ""))
+    if status == "unexpected":
+        var reference: String = str(event.get("reference_source_id", ""))
+        var reference_note_id: String = str(attack_map.get(reference, ""))
+        var missed_note: Dictionary = note_by_id.get(reference_note_id, {})
+        if missed_note.is_empty():
+            return false
+        effects.wrong_ghosts.append({
+            "page": int(missed_note.get("page", 0)),
+            "x": float(missed_note.get("x", 0.0)),
+            "y": float(missed_note.get("y", 0.0)),
+            "duration_ms": 420,
+            "until_ms": Time.get_ticks_msec() + 420
         })
-        if effects.hit_pulses.size() > 32:
-            effects.hit_pulses.pop_front()
-        stage.effects.react(status)
-        stage.impact_callout.call("react", status)
-    return last_sequence
+        if effects.wrong_ghosts.size() > 32:
+            effects.wrong_ghosts.pop_front()
+        stage.effects.react("unexpected")
+        stage.impact_callout.call("react", "unexpected")
+        return true
+    if status not in ["on_time", "early", "late"]:
+        return false
+    var source: String = str(event.get("source_id", ""))
+    var note_id: String = str(attack_map.get(source, ""))
+    var hit_note: Dictionary = note_by_id.get(note_id, {})
+    if hit_note.is_empty():
+        return false
+    effects.hit_pulses.append({
+        "page": int(hit_note.get("page", 0)),
+        "x": float(hit_note.get("x", 0.0)),
+        "y": float(hit_note.get("y", 0.0)),
+        "status": status,
+        "note_id": note_id,
+        "duration_ms": 220,
+        "until_ms": Time.get_ticks_msec() + 220
+    })
+    if effects.hit_pulses.size() > 32:
+        effects.hit_pulses.pop_front()
+    stage.effects.react(status)
+    stage.impact_callout.call("react", status)
+    return true

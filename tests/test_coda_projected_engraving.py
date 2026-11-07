@@ -123,8 +123,8 @@ def test_actual_coda_wav_live_input_and_missed_note_use_svg_clock(tmp_path):
         phrase=stage.variant.phrase,hand="right",bpm=80,from_beat=0,
         run_at=100,running=True,paused=False,preview=False,mode="practice",
         transport_id=11,tempo_map=stage.tempo_map)
-    assert view.events[-1]["source_id"]==target.source_id
-    assert view.events[-1]["status"]=="on_time"
+    assert view.recent[-1]["source_id"]==target.source_id
+    assert view.recent[-1]["status"]=="on_time"
 
     played=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
                        stage.tempo_map.seconds_at(n.end))
