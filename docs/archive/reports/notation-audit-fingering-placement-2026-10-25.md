@@ -108,13 +108,13 @@ captured annotation-free frame.
 
 | Passage | Before | After |
 | --- | --- | --- |
-| Hanon ascending, measures 7–8 | [remote lanes](evidence/fingering-placement-2026-10-25/hanon-before.png) | [local numbers](evidence/fingering-placement-2026-10-25/hanon-after.png) |
-| Chopin, measures 5–6 | [remote lanes](evidence/fingering-placement-2026-10-25/chopin-before.png) | [local numbers](evidence/fingering-placement-2026-10-25/chopin-after.png) |
-| Peace Piece, measures 3–4 | [remote lanes](evidence/fingering-placement-2026-10-25/evans-before.png) | [chord/voice attachment](evidence/fingering-placement-2026-10-25/evans-after.png) |
+| Hanon ascending, measures 7–8 | [remote lanes](../../evidence/fingering-placement-2026-10-25/hanon-before.png) | [local numbers](../../evidence/fingering-placement-2026-10-25/hanon-after.png) |
+| Chopin, measures 5–6 | [remote lanes](../../evidence/fingering-placement-2026-10-25/chopin-before.png) | [local numbers](../../evidence/fingering-placement-2026-10-25/chopin-after.png) |
+| Peace Piece, measures 3–4 | [remote lanes](../../evidence/fingering-placement-2026-10-25/evans-before.png) | [chord/voice attachment](../../evidence/fingering-placement-2026-10-25/evans-after.png) |
 
-Also retained: [Hanon canonical frame](evidence/fingering-placement-2026-10-25/hanon-canonical.png),
-[simplified step](evidence/fingering-placement-2026-10-25/hanon-skeleton.png) and
-[corresponding original](evidence/fingering-placement-2026-10-25/hanon-original.png).
+Also retained: [Hanon canonical frame](../../evidence/fingering-placement-2026-10-25/hanon-canonical.png),
+[simplified step](../../evidence/fingering-placement-2026-10-25/hanon-skeleton.png) and
+[corresponding original](../../evidence/fingering-placement-2026-10-25/hanon-original.png).
 
 Real framebuffer regressions also cover Hanon low and descending passages,
 simplified versus original Hanon (2 versus 8 attacks using the same whole-piece

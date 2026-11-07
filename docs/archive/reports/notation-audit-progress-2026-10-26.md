@@ -30,7 +30,7 @@ source tracking propagate into rhythm, flag-absence and boundary outcomes.
 The report's "articulation" family actually refers to ambiguous accidentals.
 The retained fixtures contain no fingering assignments or authored fingerings.
 
-The compact [machine baseline](evidence/native-audit-2026-10-26/historical-baseline.json)
+The compact [machine baseline](../../evidence/native-audit-2026-10-26/historical-baseline.json)
 records the inventory, hashes, archive provenance and classification caveats.
 The full local per-case index is retained at
 `/tmp/notation-audit-baseline-2026-10-26.json`.
@@ -41,7 +41,7 @@ original shard-0 archive was reconstructed from untouched members and its
 generated-entry timestamps, then restored **byte-for-byte**, matching its
 original SHA256 `d3e1246265dd977f40289b42b2b71bce5fd4bdd0a4601c69bcae3da8e9696924`.
 The interruption ZIP is unchanged. No case/capture data was discarded; see
-[the preservation record](evidence/native-audit-2026-10-26/diagnostic-archive-preservation.json).
+[the preservation record](../../evidence/native-audit-2026-10-26/diagnostic-archive-preservation.json).
 
 ## Current classification and reproduction
 
@@ -70,15 +70,15 @@ Full Verovio supplies the appropriate flag clearance when engraving that
 context; a local controlled engraving reproduced that difference.
 
 Fresh before evidence, source XML, full reference SVG/PNG and producer manifest
-are under [the evidence directory](evidence/native-audit-2026-10-26/).
+are under [the evidence directory](../../evidence/native-audit-2026-10-26).
 
 | Before | After |
 | --- | --- |
-| ![G4 tie touching its flag](evidence/native-audit-2026-10-26/before-autumn-g4.png) | ![G4 tie clear of flag](evidence/native-audit-2026-10-26/after-autumn-standard/native-3.60.png) |
-| ![F4 tie touching its flag](evidence/native-audit-2026-10-26/before-autumn-f4.png) | ![F4 tie clear of flag](evidence/native-audit-2026-10-26/after-autumn-standard/native-11.60.png) |
+| ![G4 tie touching its flag](../../evidence/native-audit-2026-10-26/before-autumn-g4.png) | ![G4 tie clear of flag](../../evidence/native-audit-2026-10-26/after-autumn-standard/native-3.60.png) |
+| ![F4 tie touching its flag](../../evidence/native-audit-2026-10-26/before-autumn-f4.png) | ![F4 tie clear of flag](../../evidence/native-audit-2026-10-26/after-autumn-standard/native-11.60.png) |
 
-[Compact F4 framebuffer](evidence/native-audit-2026-10-26/after-autumn-compact/native-11.60.png)
-and [full original reference](evidence/native-audit-2026-10-26/autumn-reference.svg).
+[Compact F4 framebuffer](../../evidence/native-audit-2026-10-26/after-autumn-compact/native-11.60.png)
+and [full original reference](../../evidence/native-audit-2026-10-26/autumn-reference.svg).
 
 ## Correction and verification record
 

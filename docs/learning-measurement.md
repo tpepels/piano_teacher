@@ -4,7 +4,7 @@
 defines the complete P0 measurement phase and subsequent read-only analytics.
 Implementation and verification status are tracked in ROADMAP. Only
 [ROADMAP](../ROADMAP.md) defines development phases. The
-[source audit](learning-measurement-audit-2026-11-04.md) records today's gaps.
+[source audit](archive/reports/learning-measurement-audit-2026-11-04.md) records today's gaps.
 
 P0 uses `application/learning_capture.py` and `learning_ledger.py`;
 [verification and remaining gates](verification/learning-measurement-2026-11-04.md)

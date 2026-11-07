@@ -10,7 +10,7 @@ defaults. P0 now implements one transactional learning ledger, authoritative
 matched observations, all exposure scopes, intervention/outcome links,
 migration, crash-prefix recovery, retention and working Settings export/deletion.
 Accepted-take mastery is unchanged. The
-[verification receipt](verification/learning-measurement-2026-11-04.md) records
+[verification receipt](../../verification/learning-measurement-2026-11-04.md) records
 tested routes, corrected failures and remaining acceptance limits.
 
 The 74-row JSON audit now includes an explicit `p0_delta` on every row and
@@ -30,10 +30,10 @@ count or intermediate runtime failure as current-head evidence.
 
 Every variable row in sections 1–5 has been rechecked: **74 rows**
 (15 curriculum, 17 tempo/mastery, 10 grading, 18 interventions, 14 longitudinal).
-The [row-level evidence ledger](evidence/learning-measurement-2026-11-04/variable-audit.json)
+The [row-level evidence ledger](../../evidence/learning-measurement-2026-11-04/variable-audit.json)
 preserves each original cell, current classification, discrepancy and source
 excerpt. “Absent” still means absent as a durable first-class measurement;
-the [approved ledger contract](learning-measurement.md) subsequently addresses
+the [approved ledger contract](../../learning-measurement.md) subsequently addresses
 the capture/persistence gaps. Analytical interfaces remain P1 work.
 
 **User decision:** preserve three consecutive **accepted** full-target Practice

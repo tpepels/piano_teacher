@@ -73,7 +73,7 @@ the separate 16-fixture pinned backend job passed strict gate checks.
 
 - [17-piece / 51-excerpt original Coda comparison, 12 of 12 jobs successful](https://github.com/tpepels/piano_teacher/actions/runs/41485239072)
 - [16 source MIDI fixtures versus pinned author](https://github.com/tpepels/piano_teacher/actions/runs/41485239252)
-- [Exact per-request comparison script](../scripts/probe_coda_midi_author_algorithms.py)
+- [Exact per-request comparison script](../../../scripts/probe_coda_midi_author_algorithms.py)
 
 ## Full-piece product integration
 

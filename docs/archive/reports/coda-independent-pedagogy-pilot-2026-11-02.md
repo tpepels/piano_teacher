@@ -53,7 +53,7 @@ the start of data collection; neither branch is updated mid-study.
    retention test at the common test BPM, with a seven-day test when feasible.
    Those delayed outcomes need explicit fields and a prespecified analysis; the
    v1 immediate pre/post program does not analyze them. See the current
-   [retry evaluation protocol](mistake-response-policies.md#evaluation-protocol).
+   [retry evaluation protocol](../../mistake-response-policies.md#evaluation-protocol).
 
 **Unit of randomization:** one participant learning one piece. A
 participant may contribute only one piece to avoid falsely treating

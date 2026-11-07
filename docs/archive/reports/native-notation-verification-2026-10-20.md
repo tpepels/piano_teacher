@@ -54,7 +54,7 @@ measure-start screenshots.
 | **Total** | **1,041** | **41,857 / 41,857** |
 
 All stages passed with zero fallbacks and zero missing IDs. The checked-in
-[machine-readable summary](evidence/native-notation-2026-10-20/library-summary.json)
+[machine-readable summary](../../evidence/native-notation-2026-10-20/library-summary.json)
 records per-piece counts and density maxima. The maximum observed global scale
 was approximately 7794 pixels/beat in Peace Piece.
 

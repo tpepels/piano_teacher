@@ -134,7 +134,7 @@ Six obsolete worktrees were removed after byte-verified preservation; one
 missing worktree registration was pruned. Twelve old temporary local branch
 names were removed. Five unique historical commits remain on two pushed
 archive branches, with a verified local Git bundle and all dirty/untracked
-files saved. See [the preservation inventory](archive/worktree-preservation-2026-10-25.md).
+files saved. See [the preservation inventory](../worktree-preservation-2026-10-25.md).
 Historical teaching notes were integrated into the documentation archive.
 Alternative grading/layout work remains archived for deliberate future ports.
 

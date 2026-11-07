@@ -55,13 +55,13 @@ single-letter columns and a progress rail escaping above secondary screens.
 Screens were recaptured after those fixes; source images are retained at their
 original resolution:
 
-- [Practice, desktop](evidence/art-direction-2026-10-20/practice-desktop.png)
-- [Practice, compact](evidence/art-direction-2026-10-20/practice-compact.png)
-- [Library](evidence/art-direction-2026-10-20/library-desktop.png)
-- [Lesson path](evidence/art-direction-2026-10-20/lesson-path-desktop.png)
-- [Settings](evidence/art-direction-2026-10-20/settings-desktop.png)
-- [Native chord lesson](evidence/art-direction-2026-10-20/native-chord-lesson.png)
-- [Capture evidence](evidence/art-direction-2026-10-20/capture-summary.json)
+- [Practice, desktop](../../evidence/art-direction-2026-10-20/practice-desktop.png)
+- [Practice, compact](../../evidence/art-direction-2026-10-20/practice-compact.png)
+- [Library](../../evidence/art-direction-2026-10-20/library-desktop.png)
+- [Lesson path](../../evidence/art-direction-2026-10-20/lesson-path-desktop.png)
+- [Settings](../../evidence/art-direction-2026-10-20/settings-desktop.png)
+- [Native chord lesson](../../evidence/art-direction-2026-10-20/native-chord-lesson.png)
+- [Capture evidence](../../evidence/art-direction-2026-10-20/capture-summary.json)
 
 ## Verification
 
@@ -87,5 +87,5 @@ excluded independently of the rendered frame. All 180 checks, the original
 `.97` white threshold and `.98` active-rail fraction remain, with an additional
 minimum-coverage assertion. The offline fixture also avoids issuing HTTP calls.
 
-- [Test results](evidence/art-direction-2026-10-20/test-summary.json)
-- [MIDI learner results](evidence/art-direction-2026-10-20/midi-journey-summary.json)
+- [Test results](../../evidence/art-direction-2026-10-20/test-summary.json)
+- [MIDI learner results](../../evidence/art-direction-2026-10-20/midi-journey-summary.json)

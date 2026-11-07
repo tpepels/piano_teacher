@@ -5,7 +5,7 @@ detectors do not establish complete independent visual correctness. Production
 rendering has not been changed to make this audit pass.
 
 The completed local run is recorded in the
-[102-case results](native-notation-phase3-results-2026-10-22.json). Both independent
+[102-case results](../../native-notation-phase3-results-2026-10-22.json). Both independent
 boundaries contain all 51 reports and all 17 sources, with no source-inventory
 accounting errors. There are 513 captured windows, 13,032 native PNGs and 1,242
 rest suppression controls. Completion remains blocked:

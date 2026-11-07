@@ -112,19 +112,19 @@ three-clean mastery, pause/resume and revision acknowledgement.
 ## Actual score and UI artifacts
 
 Representative actual raster output is checked in under
-[`docs/evidence/phase2a`](evidence/phase2a/):
+[`docs/evidence/phase2a`](../../evidence/phase2a):
 
-- [High left hand in treble](evidence/phase2a/midi_high_left-1.png),
-  [parallel tied voices](evidence/phase2a/xml_parallel_tied_voices-1.png),
-  [pickup](evidence/phase2a/xml_pickup-1.png) and
-  [source key/spelling](evidence/phase2a/xml_keys_spelling-1.png).
-- [Triplets](evidence/phase2a/triplets.png) and
-  [quintuplets](evidence/phase2a/quintuplets.png).
-- [Six-page exercise, first page](evidence/phase2a/xml_long_multipage-1.png)
-  and [last page](evidence/phase2a/xml_long_multipage-6.png).
-- [Moving count-in at 40 BPM](evidence/phase2a/count-in-40bpm.png) and
-  [normal launcher at 800×600](evidence/phase2a/practice-800x600.png).
-- [Complete corpus report](evidence/phase2a/corpus-report.json), including
+- [High left hand in treble](../../evidence/phase2a/midi_high_left-1.png),
+  [parallel tied voices](../../evidence/phase2a/xml_parallel_tied_voices-1.png),
+  [pickup](../../evidence/phase2a/xml_pickup-1.png) and
+  [source key/spelling](../../evidence/phase2a/xml_keys_spelling-1.png).
+- [Triplets](../../evidence/phase2a/triplets.png) and
+  [quintuplets](../../evidence/phase2a/quintuplets.png).
+- [Six-page exercise, first page](../../evidence/phase2a/xml_long_multipage-1.png)
+  and [last page](../../evidence/phase2a/xml_long_multipage-6.png).
+- [Moving count-in at 40 BPM](../../evidence/phase2a/count-in-40bpm.png) and
+  [normal launcher at 800×600](../../evidence/phase2a/practice-800x600.png).
+- [Complete corpus report](../../evidence/phase2a/corpus-report.json), including
   explicit per-variant attack maps and source-note facts.
 
 Score PNGs composite the production transparent raster on white for review;

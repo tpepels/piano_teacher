@@ -4,7 +4,7 @@ Phase 4 enforces evidence completeness; it does not repair the renderer or
 extend the detectors' musical scope. This branch depends on draft PR #37.
 The native renderer currently remains **blocked for release**. Phase 3 found
 two authored secondary-voice rests lost during lesson projection; the
-[Phase 5 remediation](native-notation-phase5-remediation.md) corrects that loss.
+[Phase 5 remediation](../../native-notation-phase5-remediation.md) corrects that loss.
 Large parts of the visual notation inventory remain unsupported or ambiguous.
 
 ## Decision rule

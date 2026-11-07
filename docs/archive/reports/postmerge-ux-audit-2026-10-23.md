@@ -63,15 +63,15 @@ and short notes still fail the existing strict grading criteria.
 
 These PNGs retain their original captured pixels:
 
-- [Practice, desktop](evidence/ux-audit-2026-10-23/practice-desktop.png)
-- [Practice, compact](evidence/ux-audit-2026-10-23/practice-compact.png)
-- [Chopin, compact Both](evidence/ux-audit-2026-10-23/chopin-compact.png)
-- [Moonlight playing](evidence/ux-audit-2026-10-23/moonlight-compact.png)
-- [Library](evidence/ux-audit-2026-10-23/library-desktop.png)
-- [Lesson Path](evidence/ux-audit-2026-10-23/lesson-path-desktop.png)
-- [Settings](evidence/ux-audit-2026-10-23/settings-desktop.png)
-- [Before: contradictory navigation icons](evidence/ux-audit-2026-10-23/before-navigation-compact.png)
-- [Capture checks and image hashes](evidence/ux-audit-2026-10-23/capture-summary.json)
+- [Practice, desktop](../../evidence/ux-audit-2026-10-23/practice-desktop.png)
+- [Practice, compact](../../evidence/ux-audit-2026-10-23/practice-compact.png)
+- [Chopin, compact Both](../../evidence/ux-audit-2026-10-23/chopin-compact.png)
+- [Moonlight playing](../../evidence/ux-audit-2026-10-23/moonlight-compact.png)
+- [Library](../../evidence/ux-audit-2026-10-23/library-desktop.png)
+- [Lesson Path](../../evidence/ux-audit-2026-10-23/lesson-path-desktop.png)
+- [Settings](../../evidence/ux-audit-2026-10-23/settings-desktop.png)
+- [Before: contradictory navigation icons](../../evidence/ux-audit-2026-10-23/before-navigation-compact.png)
+- [Capture checks and image hashes](../../evidence/ux-audit-2026-10-23/capture-summary.json)
 
 With the project environment on `PATH`, a free port 8765, X11 and `xdotool`:
 

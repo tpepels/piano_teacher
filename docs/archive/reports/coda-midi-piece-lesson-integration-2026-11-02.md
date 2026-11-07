@@ -148,6 +148,6 @@ verification completed as follows:
 - [Actual Verovio engraving, synthesized Listen, MIDI grading 41451818275](https://github.com/tpepels/piano_teacher/actions/runs/41451818275):
   **39 passed**, including new full-excerpt x2/x4 slowdown regression cases
 
-A permanent [machine-readable source and runtime evidence record](evidence/coda-2026-11-02-author-excerpt-catalog.json)
+A permanent [machine-readable source and runtime evidence record](../../evidence/coda-2026-11-02-author-excerpt-catalog.json)
 captures the pinned author SHA, exact catalog classification, test links
 and separate unverified properties.
