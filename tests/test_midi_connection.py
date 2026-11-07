@@ -42,9 +42,9 @@ class Backend:
 
 def owner(monkeypatch, *, enabled=True):
     clock = [100.0]
-    monkeypatch.setattr(midi_connection.time, "monotonic", lambda: clock[0])
     backend = Backend()
-    return midi_connection.MidiConnection(enabled=enabled, backend=backend), backend, clock
+    return (midi_connection.MidiConnection(enabled=enabled, backend=backend,
+                                           clock=lambda: clock[0]), backend, clock)
 
 
 def test_selection_releases_before_cancellation_and_closes_before_open(monkeypatch):

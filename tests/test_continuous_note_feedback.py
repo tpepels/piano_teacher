@@ -33,18 +33,18 @@ def engine(tmp_path, monkeypatch):
     engine.start()
     engine.engraving()  # the real source-note-v1 layout used for note identity
     assert engine.plan.bpm == 40 and engine.running and not engine.preview_only
-    engine.now = now
+    engine.test_clock = now
     yield engine
     engine.db.close()
 
 
 def _at(engine, offset):
-    engine.now[0] = engine.visual_transport.run_at + offset
+    engine.test_clock[0] = engine.visual_transport.run_at + offset
     engine.advance_clock()
 
 
 def _key(engine, offset, pitch, down):
-    engine.now[0] = engine.visual_transport.run_at + offset
+    engine.test_clock[0] = engine.visual_transport.run_at + offset
     engine._receive(SimpleNamespace(type="note_on" if down else "note_off",
                                     note=pitch, velocity=80 if down else 0,
                                     channel=0))
@@ -190,7 +190,7 @@ def test_publication_failure_does_not_pause_the_take(engine, monkeypatch, caplog
     def boom():
         raise TypeError("display failure")
     monkeypatch.setattr(engine, "_live_feedback", lambda elapsed: boom())
-    engine.now[0] = engine.visual_transport.run_at + 1.0
+    engine.test_clock[0] = engine.visual_transport.run_at + 1.0
     feedback = engine.feedback
     engine._update()
     assert not engine.visual_transport.paused and engine.feedback == feedback

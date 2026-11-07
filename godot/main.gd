@@ -117,6 +117,8 @@ var rendered_revision: int:
 
 var last_state: Dictionary = {}
 var last_state_tick := 0
+# Time of the frame being processed; sampled once at the top of _process.
+var frame_ms := 0
 var visual_transport_clock = VisualTransportClock.new()
 var score_flow = ContinuousScoreFlow.new()
 var metronome_frame
@@ -324,22 +326,13 @@ func _transport_beat_now() -> float:
     return _transport_beat_at(Time.get_ticks_msec())
 
 func _transport_beat_at(at_ms: int) -> float:
-    # Keep the score's musical clock phase-locked across uneven replies.
-    # The Python engine remains authoritative for note timing and assessment.
+    # The one Godot-side projection of the engine's musical clock. It is
+    # phase-locked to accepted snapshots; the Python engine stays
+    # authoritative for note timing and assessment. Until a snapshot of this
+    # transport is accepted, the last reported beat is held, never guessed.
     if visual_transport_clock.matches(last_state):
         return visual_transport_clock.score_beat(at_ms)
-    # Direct-state smoke fixtures, before any network snapshot is received.
-    var beat: float = float(last_state.get("clock_beat", 0.0))
-    if bool(last_state.get("running", false)) and not bool(last_state.get("paused", false)):
-        var elapsed: float = maxf(0.0, float(at_ms - last_state_tick) / 1000.0)
-        var segments: Array = last_state.get("tempo_segments", [])
-        if segments.is_empty():
-            beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0
-        else:
-            beat = TempoTimeline.beat_at_seconds(
-                float(last_state.get("clock_elapsed_seconds", 0.0)) + elapsed,
-                float(last_state.get("bpm", 60.0)), segments)
-    return beat
+    return float(last_state.get("clock_beat", 0.0))
 
 # Projection only: never change the backend's local MIDI grading clock.
 # Across repeats the model is drawn at consecutive positions on one infinite
@@ -871,7 +864,7 @@ func _dispatch_feedback_event(event: Dictionary) -> void:
         # offset the age is unknown and the reaction plays.
         var age_ms := 0.0
         if visual_transport_clock.has_backend_offset and event.has("received_at"):
-            age_ms = float(Time.get_ticks_msec()) - (
+            age_ms = float(frame_ms) - (
                 float(event["received_at"]) * 1000.0 +
                 visual_transport_clock.backend_offset_ms)
         live_midi_feedback.react(event, practice_view.stage,
@@ -900,7 +893,9 @@ func _process(_delta: float) -> void:
         _request_devices()
         _request_settings()
         _request_library()
-    var ticks: int = Time.get_ticks_msec()
+    # One clock sample per frame: every frame-path consumer sees one instant.
+    frame_ms = Time.get_ticks_msec()
+    var ticks: int = frame_ms
     var beat: float = _transport_beat_at(ticks)
     var source_bpm: float = float(last_state.get("bpm",40.0))
     if bool(last_state.get("running",false)) or bool(last_state.get("paused",false)):

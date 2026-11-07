@@ -12,11 +12,11 @@ from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
 import json
-import time
 import uuid
 
 from ..practice import Recorder
 from ..sqlite_transaction import sqlite_atomic
+from ..clock import Clock, monotonic
 
 
 def utc_now() -> str:
@@ -28,12 +28,13 @@ def identifier() -> str:
 
 
 class LearningCapture:
-    def __init__(self, ledger):
+    def __init__(self, ledger, *, clock: Clock = monotonic):
+        self._clock = clock
         self.ledger = ledger
         ledger.recover_open_sessions()
         self.run_id = identifier()
         self.session_id = identifier()
-        self.origin = time.monotonic()
+        self.origin = self._clock()
         ledger.start_session(self.session_id, self.run_id, utc_now(),
                              str(datetime.now().astimezone().tzinfo))
         self.attempt_id: str | None = None
@@ -77,7 +78,7 @@ class LearningCapture:
         return self.ledger.record_event(
             self.session_id, kind,
             {**data, "run_id": self.run_id,
-             "monotonic_offset": time.monotonic()-self.origin,
+             "monotonic_offset": self._clock()-self.origin,
              "utc": utc_now()}, attempt_id=self.attempt_id,
             event_id=key)
 
@@ -93,7 +94,7 @@ class LearningCapture:
         self.waiting_decision = None
         self.context = deepcopy({**context, "run_id": self.run_id,
                                  "started_utc": utc_now(),
-                                 "monotonic_start": time.monotonic()-self.origin,
+                                 "monotonic_start": self._clock()-self.origin,
                                  "parent_decision_id": self.parent_decision})
         self.verification_episode = (deepcopy(self.episode) if self.episode and
             context["scope"] == "full" and
@@ -130,9 +131,9 @@ class LearningCapture:
                 self.ledger.checkpoint(self.attempt_id, {
                     "boundary": boundary,
                     "boundary_unit": "target_index" if self.context["scope"] == "guided" else "source_beat",
-                    "monotonic_offset": time.monotonic()-self.origin,
+                    "monotonic_offset": self._clock()-self.origin,
                     "played": [asdict(n) for n in played], "coverage": "checkpointed_prefix"})
-                self.flush_intervals(time.monotonic(), keep_phase=True)
+                self.flush_intervals(self._clock(), keep_phase=True)
 
     def seal(self, played, *, state: str, reason: str, result=None,
              eligible: bool = False, extra: dict | None = None) -> None:
@@ -166,7 +167,7 @@ class LearningCapture:
                        {"missingness": "grader_detail_unavailable"})})
         self.sealed = {
             "state": state, "reason": reason, "ended_utc": utc_now(),
-            "monotonic_end": time.monotonic()-self.origin,
+            "monotonic_end": self._clock()-self.origin,
             "assessment": assessment, "observations": observations,
             "played": [asdict(n) for n in played],
             "capture_complete": state == "completed",
@@ -232,7 +233,7 @@ class LearningCapture:
                  "passed": self.sealed["assessment"]["passed"],
                  "clean": self.sealed["assessment"]["clean"],
                  "causal_comparison": False})
-        self.flush_intervals(time.monotonic(), keep_phase=True)
+        self.flush_intervals(self._clock(), keep_phase=True)
 
     def _verification_ready(self) -> bool:
         return bool(self.verification_episode and self.sealed and
@@ -283,7 +284,7 @@ class LearningCapture:
         self.waiting_decision = self.episode = self.verification_episode = None
         self.guided = Recorder()
         self.intervals = []
-        self.phase, self.phase_at = "idle", time.monotonic()
+        self.phase, self.phase_at = "idle", self._clock()
 
     def flush_intervals(self, now: float, *, keep_phase: bool = False) -> None:
         previous_phase = self.phase
@@ -299,6 +300,6 @@ class LearningCapture:
         if self.closed:
             return
         self.interrupt(reason, self.guided.presses)
-        self.flush_intervals(time.monotonic())
+        self.flush_intervals(self._clock())
         self.ledger.close_session(self.session_id, reason)
         self.closed = True

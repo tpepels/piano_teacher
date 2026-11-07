@@ -61,6 +61,7 @@ from .application.session_snapshot_builder import (
 from .completion_route import completion_route
 from .visual_transport import VisualTransport
 from .midi_calibration import MidiTapCalibration
+from .clock import Clock, monotonic
 from .feedback_events import FeedbackEventLog
 from .live_assessment_publisher import LiveAssessmentPublisher
 from .runtime_timings import RuntimeTimings
@@ -121,13 +122,16 @@ class PracticeEngine:
         self.guided_session.return_context = context
 
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
-                 feedback_events: FeedbackEventLog | None = None):
+                 feedback_events: FeedbackEventLog | None = None,
+                 clock: Clock | None = None):
+        # The one monotonic clock of this session; collaborators receive it.
+        self.now: Clock = clock if clock is not None else monotonic
         self.lock = threading.RLock()
         # Whole-source inference must never block MIDI or state polling.
         # Serialize source loads and durable corrections separately instead.
         self._fingering_lock = threading.Lock()
         self._piece_generation = 0
-        self.guided_session = GuidedSession()
+        self.guided_session = GuidedSession(clock=self.now)
         self.plan: LearningPlan | None = None
         self.score = None
         self.source = None
@@ -192,7 +196,7 @@ class PracticeEngine:
         self._pending_assessed_bpm: float | None = None
         self.feedback_marks: list[dict] = []
         self.feedback_unmapped = 0
-        self.midi = MidiConnection(enabled=enable_midi)
+        self.midi = MidiConnection(enabled=enable_midi, clock=self.now)
         self.live_input = LiveInputView()
         self.assessment = AssessmentService()
         self.assessment_policies = PracticeAssessmentPolicies.defaults(self.assessment)
@@ -208,7 +212,7 @@ class PracticeEngine:
         self.fingering = FingeringService(data_dir / "fingering")
         self.preprocessing = PreprocessingCache(data_dir / "preprocessed")
         self.score_artifacts = ScoreArtifacts(self.preprocessing)
-        self.future_score = FutureScore(data_dir / "preprocessed")
+        self.future_score = FutureScore(data_dir / "preprocessed", clock=self.now)
         self._future_stage_ready: tuple[str, int] | None = None
         self._future_stage_lead_beats = 0.0
         self._continuous_horizon_beats = 0.0
@@ -225,7 +229,7 @@ class PracticeEngine:
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
-        self.measurement = LearningCapture(self.progress.ledger)
+        self.measurement = LearningCapture(self.progress.ledger, clock=self.now)
         self.progress.ledger.prune(days=self.library.settings["evidence_retention_days"],
                                    budget_mib=self.library.settings["evidence_budget_mib"])
         self._action_reason = "transition"
@@ -250,7 +254,7 @@ class PracticeEngine:
             self.live_input.clear_device()
             self._stop(reason=reason)
             if self.teaching is not None:
-                self.teaching.set_connected(False, now=time.monotonic())
+                self.teaching.set_connected(False, now=self.now())
         self.feedback = notice.feedback
         self.next_action = notice.next_action
 
@@ -259,7 +263,7 @@ class PracticeEngine:
             return
         if notice.connected is not None and self.teaching is not None:
             self.teaching.set_connected(notice.connected, now=(notice.sampled_at
-                if notice.sampled_at is not None else time.monotonic()))
+                if notice.sampled_at is not None else self.now()))
         self.feedback = notice.feedback
         self.next_action = notice.next_action
 
@@ -314,12 +318,12 @@ class PracticeEngine:
                 if not self.midi.connected:
                     raise ValueError("Connect the MIDI keyboard before calibrating")
                 self._stop()
-                self.midi_calibration.start(time.monotonic())
+                self.midi_calibration.start(self.now())
                 self.feedback = "Tap one key per click through five continuous rounds"
             elif action == "calibration_cancel":
                 self.midi_calibration.cancel()
             elif action == "calibration_apply":
-                result = self.midi_calibration.snapshot(time.monotonic())["result"]
+                result = self.midi_calibration.snapshot(self.now())["result"]
                 if not result or not result.get("reliable"):
                     raise ValueError("Finish a consistent calibration before applying it")
                 self.set_preferences(midi_offset_ms=max(0, min(250, result["estimate_ms"])))
@@ -575,7 +579,7 @@ class PracticeEngine:
                 self.progress.ledger.delete_learner()
             self.measurement.discard_deleted()
             self._stop(reason="delete_learner_history", persist_evidence=False)
-            self.measurement = LearningCapture(self.progress.ledger)
+            self.measurement = LearningCapture(self.progress.ledger, clock=self.now)
             self.plan = replacement
             self._reset_trouble()
             self.open_from_beat = 0.0
@@ -736,7 +740,7 @@ class PracticeEngine:
 
     def _receive_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
         # Timestamp in the hardware input callback, not on the rendering thread.
-        now = time.monotonic() if received_at is None else received_at
+        now = self.now() if received_at is None else received_at
         with self.lock:
             if self.midi_calibration.active:
                 if not deferred:
@@ -987,7 +991,7 @@ class PracticeEngine:
         with self.measurement.atomic():
             self.measurement.interrupt("lesson_reset", self.recorder.presses if self.recorder else
                                        self.measurement.guided.presses)
-            self.measurement.flush_intervals(time.monotonic())
+            self.measurement.flush_intervals(self.now())
             self.progress.reset_piece(fingerprint)
             self.fukuda_mistakes.reset(fingerprint)
             self.progress.save(replacement, fingerprint)
@@ -1015,9 +1019,9 @@ class PracticeEngine:
         if persist_evidence:
             with self.measurement.atomic():
                 self.measurement.interrupt(reason, played, censor=not preserve_episode,
-                    extra={"guidance": self.teaching.snapshot(now=time.monotonic())}
+                    extra={"guidance": self.teaching.snapshot(now=self.now())}
                           if self.mode == "learn" and self.teaching is not None else None)
-                self.measurement.flush_intervals(time.monotonic())
+                self.measurement.flush_intervals(self.now())
         self._deferred_midi.clear()
         self._resume_grading_after = 0.0
         self._resume_ignored_pitches.clear()
@@ -1075,7 +1079,7 @@ class PracticeEngine:
         """Record a completed guided idea once, without awarding timed mastery."""
         prepared_before = self.guided_session.prepared
         completed = False
-        guidance = (self.teaching.snapshot(now=time.monotonic()) if
+        guidance = (self.teaching.snapshot(now=self.now()) if
                     self.mode == "learn" and self.teaching is not None else None)
         exposure_completed = bool(guidance and guidance["completed"] and
                                   self.measurement.attempt_id is not None)
@@ -1113,7 +1117,7 @@ class PracticeEngine:
         except Exception:
             self.guided_session.prepared = prepared_before
             if not self.visual_transport.paused:
-                self.visual_transport.pause(at=time.monotonic())
+                self.visual_transport.pause(at=self.now())
             self.feedback = "Could not save the guided preparation"
             self.next_action = "Check storage, then Resume to save this same exposure."
             raise
@@ -1252,7 +1256,7 @@ class PracticeEngine:
             start_beat=start, end_beat=end,
             phrase=fragment.phrase),
             stage_key=self.plan.identity, revision=self.score_revision,
-            now=time.monotonic(), connected=self.midi.connected,
+            now=self.now(), connected=self.midi.connected,
             recovery=recovery)
         self.measurement.begin(self._learning_context(scope="guided", start=start, end=end))
         self.awaiting_score_revision = self.score_revision
@@ -1349,7 +1353,7 @@ class PracticeEngine:
         self.count_in_bar_beats = start.count_in_bar_beats
         self.count_in_meter = list(start.count_in_meter)
         self.count_in_beats = start.count_in_beats
-        self.visual_transport.run_at = time.monotonic()+start.delay_seconds
+        self.visual_transport.run_at = self.now()+start.delay_seconds
         self.feedback = "Count in, then listen"
 
     def _prepare_perform(self, *, scope: str = "current"):
@@ -1523,7 +1527,7 @@ class PracticeEngine:
                         "from_bpm": outcome.previous_bpm, "to_bpm": p.bpm,
                         "first_bar": p.active_phrase.first_bar,
                         "last_bar": p.active_phrase.last_bar,
-                        "expires_at": time.monotonic() + 7.0,
+                        "expires_at": self.now() + 7.0,
                     }
                 if outcome.stage_changed:
                     self.open_from_beat = 0.0
@@ -1641,7 +1645,7 @@ class PracticeEngine:
                 time_signatures=self.plan.piece.time_signatures,
                 bpm=self.plan.bpm, position=position,
                 loop_continuation=loop_continuation,
-                preview=self.preview_only, now=time.monotonic())
+                preview=self.preview_only, now=self.now())
             self.visual_transport.play_from_beat = scheduled.from_beat
             self.count_in_bar_beats = scheduled.count_in_bar_beats
             self.count_in_meter = list(scheduled.count_in_meter)
@@ -1652,10 +1656,10 @@ class PracticeEngine:
             if scheduled_deadline is None and presentation_lead_seconds > 0:
                 self.visual_transport.run_at = max(
                     self.visual_transport.run_at,
-                    time.monotonic() + presentation_lead_seconds)
+                    self.now() + presentation_lead_seconds)
                 self.count_in_beats = max(
                     self.count_in_beats,
-                    (self.visual_transport.run_at-time.monotonic())*self.plan.bpm/60)
+                    (self.visual_transport.run_at-self.now())*self.plan.bpm/60)
             scope = ("preview" if self.preview_only else "perform" if mode == "perform" else
                      "partial" if self._automatic_remedial_review else
                      "section_review" if self.review_end_beat is not None else
@@ -1671,7 +1675,7 @@ class PracticeEngine:
                 self.auto = False
                 self.feedback = "Could not record the start of this attempt"
                 raise
-            self.measurement.phase_changed("count_in" if self.count_in_beats else "active", time.monotonic())
+            self.measurement.phase_changed("count_in" if self.count_in_beats else "active", self.now())
             self.feedback = "Count in, then play"
             self.next_action = scheduled.next_action
 
@@ -1783,7 +1787,7 @@ class PracticeEngine:
                 self._start_listen_if_ready()
             elif decision == "learn":
                 self.awaiting_score_revision = None
-                self.teaching.start(now=time.monotonic())
+                self.teaching.start(now=self.now())
             elif decision == "practice":
                 self.start(
                     from_beat=(self.visual_transport.pending_rewind if self.visual_transport.pending_rewind is not None
@@ -1808,7 +1812,7 @@ class PracticeEngine:
     def _control_learning(self, action: str, kwargs: dict) -> None:
         if action == "learn_next":
             if (self.mode != "learn" or self.teaching is None
-                    or not self.teaching.snapshot(now=time.monotonic())["completed"]):
+                    or not self.teaching.snapshot(now=self.now())["completed"]):
                 raise ValueError("Find the current notes before continuing to the next idea")
             self._save_guided_preparation()
             if self._guided_return is not None:
@@ -1841,7 +1845,7 @@ class PracticeEngine:
             self._open_selected_measure(kwargs)
         elif action == "hints":
             self.guided_session.set_hints(
-                bool(kwargs.get("enabled", False)), now=time.monotonic())
+                bool(kwargs.get("enabled", False)), now=self.now())
             if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
                 self.measurement.assistance_used = True
 
@@ -1929,7 +1933,7 @@ class PracticeEngine:
             return
         if self._pending_rolling is not None:
             decision, phrase, grid, score_beat, _old_now = self._pending_rolling
-            self._apply_rolling_recovery(decision, phrase, grid, score_beat, time.monotonic())
+            self._apply_rolling_recovery(decision, phrase, grid, score_beat, self.now())
             self.visual_transport.paused = False
             self.visual_transport.paused_at = 0.0
             return
@@ -1953,7 +1957,7 @@ class PracticeEngine:
             self.feedback = "Preparing sheet music"
             return
         if route == "rewind":
-            sampled = time.monotonic()
+            sampled = self.now()
             visual_now = self.visual_transport.paused_at if self.visual_transport.paused else sampled
             position, _, _ = self._visual_motion(visual_now)
             target = (self.visual_transport.pending_rewind if self.visual_transport.pending_rewind is not None
@@ -2006,7 +2010,7 @@ class PracticeEngine:
 
     def _pause_current_session(self):
         """Pause learning, playback or preparation using one sampled clock."""
-        now = time.monotonic()
+        now = self.now()
         context = self._phase(now) if not self.visual_transport.paused else ""
         require_pausable(paused=self.visual_transport.paused, phase=context)
         self.pause_context = context
@@ -2024,7 +2028,7 @@ class PracticeEngine:
             paused=self.visual_transport.paused, learning=learning, running=self.running,
             preview_pending=self.visual_transport._preview_loop_pending,
             automatic_feedback=self.pending_result is not None and self.auto)
-        now = time.monotonic()
+        now = self.now()
         paused_at = self.visual_transport.paused_at
         if reuse_pending_score and (
                 presentation_lead_seconds <= 0.0 or
@@ -2686,7 +2690,7 @@ class PracticeEngine:
             self.measurement.checkpoint(self.recorder.presses if self.recorder else (), boundary=boundary)
         except Exception:
             if not self.visual_transport.paused:
-                self.visual_transport.pause(at=time.monotonic())
+                self.visual_transport.pause(at=self.now())
             self.feedback = "Could not save the recording checkpoint"
             self.next_action = "Check storage, then Resume to retry this boundary."
             raise
@@ -2748,7 +2752,7 @@ class PracticeEngine:
             self._update_transition()
         except Exception:
             if not self.visual_transport.paused:
-                self.visual_transport.pause(at=time.monotonic())
+                self.visual_transport.pause(at=self.now())
             self.feedback = "Could not save or finish the practice transition"
             self.next_action = "Check storage or the reported error, then Resume to retry this same take."
             raise
@@ -2763,7 +2767,7 @@ class PracticeEngine:
         """Advance the backend clock under its existing session lock."""
         self._poll_midi_connection()
         self._apply_listen_failure()
-        now = time.monotonic()
+        now = self.now()
         if self.visual_transport.paused:
             self.measurement.phase_changed("pause", now)
         elif self.mode == "learn":
@@ -2859,7 +2863,7 @@ class PracticeEngine:
             return
         if self.visual_transport.paused:
             return
-        elapsed = time.monotonic() - self.visual_transport.run_at
+        elapsed = self.now() - self.visual_transport.run_at
         marks = self._live_feedback(elapsed) if elapsed >= 0 else []
         self.live_assessment.publish(marks, self._feedback_take())
 
@@ -2979,8 +2983,8 @@ class PracticeEngine:
                 state["next_stage_start_beat"] = self._stage_handoff_visual_beat
             if self.plan is not None:
                 beat = self.plan.active_phrase.start + self.visual_transport.play_from_beat
-                if self.running and time.monotonic() >= self.visual_transport.run_at:
-                    beat += self._elapsed_beat(time.monotonic() - self.visual_transport.run_at)
+                if self.running and self.now() >= self.visual_transport.run_at:
+                    beat += self._elapsed_beat(self.now() - self.visual_transport.run_at)
                 keys = [key for key in self.plan.piece.key_signatures
                         if key.beat <= beat + 1e-7
                         and key.hand in ("both", self.plan.hand)]
@@ -2988,7 +2992,7 @@ class PracticeEngine:
             # A score-free Settings screen still needs an authoritative
             # backend clock epoch for its MIDI tap calibration. Midpoint-only
             # UI extrapolation drifts when score and device requests queue.
-            calibration_sample_at = time.monotonic()
+            calibration_sample_at = self.now()
             state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
             state["resume_count_in_beat"] = (
@@ -3071,6 +3075,7 @@ class PracticeEngine:
             preparation_schedule=self.visual_transport.preparation_schedule,
             teaching_snapshot=self.teaching.snapshot if self.teaching is not None else None,
             set_visual_gap_beats=self._set_snapshot_visual_gap,
+            clock=self.now,
         )
         return capture_session_snapshot(values, reads)
 
@@ -3160,7 +3165,7 @@ class PracticeEngine:
             if (self.pending_result is not None and self.auto and
                     not self.running and not self.visual_transport.paused and
                     self._mastery_candidate(self.pending_result) is not None):
-                now = time.monotonic()
+                now = self.now()
                 phrase = self.plan.active_phrase
                 finish = (self.visual_transport.run_at +
                           self._elapsed_seconds(phrase.end-phrase.start) -

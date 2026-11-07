@@ -7,12 +7,12 @@ retains neither a LearningPlan nor an engine, lock, store or callback.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import time
 
 from ..exercise_generator import ExerciseVariant
 from .guided_fragment import select_guided_fragment
 from ..music import Phrase, source_note_id
 from ..teaching import TeachingConfig, TeachingController
+from ..clock import Clock, monotonic
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,8 @@ def select_fragment(variant: ExerciseVariant, boundaries: tuple[float, ...],
 
 
 class GuidedSession:
-    def __init__(self):
+    def __init__(self, *, clock: Clock = monotonic):
+        self._clock = clock
         self.controller: TeachingController | None = None
         self.fragment: GuidedFragment | None = None
         self.persistent_hints = False
@@ -96,7 +97,7 @@ class GuidedSession:
         if (self.prepared or remediation_active or not learning
                 or self.controller is None):
             return False
-        snapshot = self.controller.snapshot(now=time.monotonic())
+        snapshot = self.controller.snapshot(now=self._clock())
         if not snapshot["completed"]:
             return False
         record_preparation(

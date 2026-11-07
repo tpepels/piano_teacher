@@ -6,7 +6,6 @@ musical transition authority. The returned dataclass is projected separately.
 """
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 
@@ -92,18 +91,21 @@ class SnapshotReadPorts:
     preparation_schedule: Callable[..., Any]
     teaching_snapshot: Callable[..., Any] | None
     set_visual_gap_beats: Callable[[float], None]
+    clock: Callable[[], float]
 
 
 def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     """Capture values under the session lock, including stateful read adapters.
 
-    Clock reads retain their original order and purpose. Teaching snapshots
-    may tick the controller; all such work finishes before pure projection.
+    The clock is sampled ONCE: every time-derived field of one snapshot
+    describes the same instant. Teaching snapshots may tick the controller;
+    all such work finishes before pure projection.
     """
+    sampled_at = reads.clock()
     p = state.plan
     seek_grid = reads.seek_grid()
     activity = ActivitySnapshot(
-        sampled_at=time.monotonic(),
+        sampled_at=sampled_at,
         learner=reads.learner_snapshot() if p is not None else None,
         placement_available=(not state.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
         skip_available=(not state.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
@@ -111,12 +113,12 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         seek_range=({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
                     if seek_grid is not None else None),
         next_action=state.next_action,
-        transition_now=((state.paused_at if state.paused else time.monotonic())
+        transition_now=((state.paused_at if state.paused else sampled_at)
             if state.next_at and (state.pending_result is not None or state.pending_rewind is not None) else 0.0),
         next_at=state.next_at,
         pending_transition=state.pending_result is not None or state.pending_rewind is not None,
         retry_range=state.retry_range,
-        notice_now=time.monotonic() if state.recovery_notice is not None else 0.0,
+        notice_now=sampled_at if state.recovery_notice is not None else 0.0,
         recovery_notice=state.recovery_notice,
         guided_recovery=state._guided_recovery_pending or state._guided_return is not None,
         pause_context=state.pause_context,
@@ -125,19 +127,19 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         review_pending=state.review_end_beat is not None,
         midi_input_count=state.midi_input_count,
         midi_input_note=state.midi_input_note,
-        midi_now=time.monotonic() if state.midi_input_at is not None else 0.0,
+        midi_now=sampled_at if state.midi_input_at is not None else 0.0,
         midi_input_at=state.midi_input_at,
         metronome=state.metronome,
         hints_enabled=state.persistent_hints,
         fingering=p.piece.fingering_plan.summary()
             if p is not None and p.piece.fingering_plan is not None else None,
     )
-    visual_now = state.paused_at if state.paused else time.monotonic()
+    visual_now = state.paused_at if state.paused else sampled_at
     visual_beat = state.play_from_beat
     if state.running and visual_now >= state.run_at and p is not None:
         visual_beat += reads.elapsed_beat(visual_now-state.run_at)
     activity = replace(activity, midi_display=reads.live_input_snapshot(
-        now=time.monotonic(),
+        now=sampled_at,
         phrase=p.active_phrase if p is not None else None,
         hand=p.hand if p is not None else "both", beat=visual_beat,
         playing=(p is not None and state.mode in ("practice", "perform")
@@ -160,7 +162,6 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     lesson_steps = tuple(
         (step.exercise_index, step.hand, step.key)
         for step in all_steps if step.exercise_index == p.index)
-    sampled_at = time.monotonic()
     now = state.paused_at if state.paused else sampled_at
     elapsed = now-state.run_at
     phase = reads.phase(now)
@@ -215,7 +216,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     )
     guided = None
     if state.mode == "learn" and state.teaching_active:
-        teaching = reads.teaching_snapshot(now=time.monotonic())
+        teaching = reads.teaching_snapshot(now=sampled_at)
         phrase = reads.display_phrase()
         guided = GuidedSnapshot(
             teaching=teaching,

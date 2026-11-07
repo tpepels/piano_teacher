@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-import time
 
 from ..hardware_probe import HardwareProbe
+from ..clock import Clock, monotonic
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,8 @@ class MidiConnection:
     SCAN_SECONDS = 3.0
     RETRY_SECONDS = 4.0
 
-    def __init__(self, *, enabled: bool = True, backend=None):
+    def __init__(self, *, enabled: bool = True, backend=None, clock: Clock = monotonic):
+        self._clock = clock
         self.enabled = enabled
         self._backend = backend
         self.port = None
@@ -53,7 +54,7 @@ class MidiConnection:
         self.input_count = 0
         self.input_note = None
         self.input_at = None
-        self.probe = HardwareProbe()
+        self.probe = HardwareProbe(clock=clock)
 
     def _driver(self):
         if self._backend is not None:
@@ -96,7 +97,7 @@ class MidiConnection:
                 "Reconnect your piano, then press Start.", connected=False)
         finally:
             self._close(port)
-            self.retry_after = time.monotonic()+self.RETRY_SECONDS
+            self.retry_after = self._clock()+self.RETRY_SECONDS
 
     @contextmanager
     def selecting(self, name: str, *, callback):
@@ -109,7 +110,7 @@ class MidiConnection:
         finally:
             self._close(port)
         self.retry_after = 0.0
-        self.next_scan_at = time.monotonic()+self.SCAN_SECONDS
+        self.next_scan_at = self._clock()+self.SCAN_SECONDS
         if name:
             if not self.enabled:
                 raise ValueError("MIDI input is disabled")
@@ -137,14 +138,14 @@ class MidiConnection:
             and (not self.connected or self.device not in names)))
 
     def scan_due(self, preferred: str) -> bool:
-        now = time.monotonic()
+        now = self._clock()
         if self.enabled and now >= self.next_scan_at and (self.device or preferred):
             self.next_scan_at = now+self.SCAN_SECONDS
             return True
         return False
 
     def restore_preferred(self, names: tuple[str, ...], preferred: str, *, callback) -> MidiNotice | None:
-        now = time.monotonic()
+        now = self._clock()
         if not (self.enabled and preferred and not self.connected
                 and preferred in names and now >= self.retry_after):
             return None

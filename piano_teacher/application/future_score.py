@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from collections import OrderedDict, deque
 import json
-import time
 from threading import Lock, Thread
 
 from .score_artifacts import ScoreArtifacts, ScoreSelection
 from ..preprocessing_cache import PreprocessingCache
+from ..clock import Clock, monotonic
 
 MAX_LOOKAHEAD = 2
 MAX_QUEUED = 2
@@ -26,7 +26,8 @@ def _reply(value: dict) -> bytes:
 
 
 class FutureScore:
-    def __init__(self, cache_folder):
+    def __init__(self, cache_folder, *, clock: Clock = monotonic):
+        self._clock = clock
         self._folder = cache_folder
         self._guard = Lock()
         self._source = None
@@ -49,7 +50,7 @@ class FutureScore:
         key = selection.identity
         failure = self._errors.get(key)
         retry_due = (failure is None or
-                     (failure[1] < MAX_RETRIES and time.monotonic() >= failure[2]))
+                     (failure[1] < MAX_RETRIES and self._clock() >= failure[2]))
         if key not in self._ready and retry_due and key != self._working:
             if not any(pending[0].identity == key for pending in self._pending):
                 if primary:
@@ -133,7 +134,7 @@ class FutureScore:
                     previous = self._errors.get(key)
                     attempts = (previous[1] if previous else 0) + 1
                     self._errors[key] = (
-                        error, attempts, time.monotonic() +
+                        error, attempts, self._clock() +
                         RETRY_DELAY_SECONDS * (2 ** (attempts - 1)))
                     self._errors.move_to_end(key)
                     while len(self._errors) > MAX_LOOKAHEAD:

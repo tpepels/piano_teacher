@@ -105,7 +105,6 @@ def _await_failure(future, selection, count):
 
 def test_future_score_retries_transient_native_failures_without_losing_stage(tmp_path, monkeypatch):
     clock = [100.0]
-    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
 
     class Flaky:
         attempts = 0
@@ -122,7 +121,7 @@ def test_future_score_retries_transient_native_failures_without_losing_stage(tmp
     monkeypatch.setattr(module, "ScoreArtifacts", Flaky)
     monkeypatch.setattr(module, "PreprocessingCache", lambda root: root)
     selection = _selection(object(), 2)
-    future = module.FutureScore(tmp_path)
+    future = module.FutureScore(tmp_path, clock=lambda: clock[0])
     for attempt in (1, 2):
         assert json.loads(future.ensure(
             selection, number=2, label="Next"))["status"] == "preparing"
@@ -141,7 +140,6 @@ def test_future_score_retries_transient_native_failures_without_losing_stage(tmp
 
 def test_future_score_exhaustion_returns_explicit_error_without_fake_ink(tmp_path, monkeypatch):
     clock = [100.0]
-    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
 
     class Broken:
         def __init__(self, cache):
@@ -154,7 +152,7 @@ def test_future_score_exhaustion_returns_explicit_error_without_fake_ink(tmp_pat
     monkeypatch.setattr(module, "ScoreArtifacts", Broken)
     monkeypatch.setattr(module, "PreprocessingCache", lambda root: root)
     selection = _selection(object(), 2)
-    future = module.FutureScore(tmp_path)
+    future = module.FutureScore(tmp_path, clock=lambda: clock[0])
     for attempt in (1, 2, 3):
         future.ensure(selection, number=2, label="Next")
         error, count, due = _await_failure(future, selection, attempt)

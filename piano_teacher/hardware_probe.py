@@ -7,7 +7,7 @@ and none of these events enter the assessment, mastery or transport clock.
 from __future__ import annotations
 
 import math
-import time
+from .clock import Clock, monotonic
 
 MAX_EVENTS = 512
 MAX_SECONDS = 90.0
@@ -15,7 +15,8 @@ CHORD_WINDOW_SECONDS = 0.080
 
 
 class HardwareProbe:
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Clock = monotonic) -> None:
+        self._clock = clock
         self.active = False
         self.device = ""
         self.reason = ""
@@ -38,7 +39,7 @@ class HardwareProbe:
     def start(self, device: str, *, now: float | None = None) -> dict:
         if not device:
             raise ValueError("Connect a MIDI piano before starting hardware diagnostics")
-        instant = time.monotonic() if now is None else now
+        instant = self._clock() if now is None else now
         self.__init__()
         self.active = True
         self.device = device
@@ -47,7 +48,7 @@ class HardwareProbe:
         return self.snapshot(now=instant)
 
     def stop(self, reason: str = "completed", *, now: float | None = None) -> dict:
-        instant = time.monotonic() if now is None else now
+        instant = self._clock() if now is None else now
         if self.active:
             self.active = False
             self.stopped_at = instant
@@ -57,7 +58,7 @@ class HardwareProbe:
     def receive(self, message: object, *, now: float | None = None) -> None:
         if not self.active or self.started_at is None:
             return
-        instant = time.monotonic() if now is None else now
+        instant = self._clock() if now is None else now
         if instant - self.started_at >= MAX_SECONDS:
             self.stop("time_limit", now=instant)
             return
@@ -112,7 +113,7 @@ class HardwareProbe:
             self.overflow += 1
 
     def snapshot(self, *, now: float | None = None) -> dict:
-        instant = time.monotonic() if now is None else now
+        instant = self._clock() if now is None else now
         if self.active and self.started_at is not None and (
                 instant - self.started_at >= MAX_SECONDS):
             self.active = False
