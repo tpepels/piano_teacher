@@ -115,7 +115,7 @@ def _regressed_script(folder, kind):
 
 
 @pytest.fixture(scope='module', params=['double-barline', 'repeat-dots', 'dotted-seconds', 'evans-small'])
-def obstacle_capture(request, tmp_path_factory):
+def obstacle_capture(request, tmp_path_factory, lumikey_runtime):
     kind = request.param
     folder = tmp_path_factory.mktemp('fingering-geometry-' + kind)
     path = EVANS if kind == 'evans-small' else _authored_source(folder, kind)

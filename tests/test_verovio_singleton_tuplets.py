@@ -27,7 +27,7 @@ def singleton(event_id="solo", *, kind="note", chord=False):
 
 def source_svg(*, kind="note", chord=False, bracket=True, hidden=False):
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
 
     pitched = "<rest/>" if kind == "rest" else "<pitch><step>C</step><octave>5</octave></pitch>"
     marks = (f'<notations><tuplet type="start" number="1" bracket="{"yes" if bracket else "no"}" '
@@ -158,7 +158,7 @@ def generated_rest_source(tmp_path):
     from piano_teacher.server import PracticeEngine
     from piano_teacher.notation.lesson import build_lesson_score
     from piano_teacher.notation.model import build_score_model
-    from piano_teacher.score import render_layout
+    from piano_teacher.engraving.engraving import render_layout
 
     path = tmp_path/"rest.musicxml"
     path.write_text('''<score-partwise version="4.0"><part-list><score-part id="RH">
@@ -173,6 +173,8 @@ def generated_rest_source(tmp_path):
     <note id="after"><pitch><step>E</step><octave>5</octave></pitch><duration>20</duration>
     <voice>1</voice><type>quarter</type></note></measure></part></score-partwise>''')
     engine = PracticeEngine(tmp_path/"cache", enable_midi=False)
+    # The default Coda/Fukuda course is MIDI-only; this is a MusicXML source.
+    engine.library.update(exercise_strategy="source-progression")
     try:
         engine.load(str(path))
         engine.plan.restore_location(kind="learn", first_bar=1, last_bar=1, hand="right", level="original")

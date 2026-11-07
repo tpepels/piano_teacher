@@ -17,6 +17,7 @@ def harness(tmp_path, monkeypatch):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(Piece("Tempo layout", 100, notes,
                                     (Phrase(1, 1, 4, 0, 16, notes),)))
+    engine.fingerprint = "harness"
     engine.plan.set_bpm(80)
     engine.midi.port = object()
     try:
@@ -168,6 +169,7 @@ def test_pickup_count_in_uses_source_meter_instead_of_short_first_bar(harness):
     e.plan = LearningPlan(Piece("Three quarter pickup", 100, notes,
                                (Phrase(1, 1, 2, 0, 4, notes),),
                                bar_boundaries=(0, 1, 4), time_signatures=((0, 3, 4),)))
+    e.fingerprint = "pickup_count_in_uses_source_meter_instead_of_sho"
     e.plan.set_bpm(80)
     e.start()
     state = e.state()

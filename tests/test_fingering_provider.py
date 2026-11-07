@@ -12,6 +12,7 @@ def piece(notes):
     return Piece('Fingering regression', 120, tuple(notes), ())
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_real_models_both_hands_and_playable_chords():
     source = piece([Note(0, 1, p, i//3, 0, hand='left' if i<3 else 'right',
                          source_id=f'n{i}') for i,p in enumerate((48,52,55,60,64,67))])
@@ -24,6 +25,7 @@ def test_real_models_both_hands_and_playable_chords():
     assert result['n3'].finger < result['n4'].finger < result['n5'].finger
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_fixed_lookahead_and_overlap_do_not_reuse_held_finger():
     source = piece([Note(0,2,60,0,0,source_id='held'),
                     Note(1,2,64,0,0,source_id='fixed'),
@@ -35,6 +37,7 @@ def test_fixed_lookahead_and_overlap_do_not_reuse_held_finger():
 
 
 @pytest.mark.parametrize('hand', ['right','left'])
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_chord_reserves_available_slots_around_a_held_finger(hand):
     source=piece([Note(0,2,84,0,0,hand=hand,source_id='held'),
                   *(Note(1,2,p,0,0,hand=hand,source_id=str(p)) for p in (60,64,67,70))])
@@ -45,6 +48,7 @@ def test_chord_reserves_available_slots_around_a_held_finger(hand):
     assert chord==sorted(chord,reverse=hand=='left')
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_model_choice_cannot_strand_later_chord_tones():
     # A retained Peace Piece voicing: the imported RH track includes this
     # wide register. This checks finger capacity, not an assumed hand span.
@@ -54,12 +58,14 @@ def test_model_choice_cannot_strand_later_chord_tones():
     assert [result[str(p)].finger for p in (36,60,64,67)]==[1,2,3,4]
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_impossible_chord_is_unknown_not_fabricated():
     source = piece([Note(0,1,60+i,0,0,source_id=str(i)) for i in range(6)])
     result = LumikeyProvider().predict(source, {})
     assert all(a.finger is None and a.reason for a in result.values())
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_equal_pitch_distinct_source_voices_remain_distinct():
     source = piece([Note(0,2,60,0,0,source_id='v1',voice='1'),
                     Note(0,1,60,0,0,source_id='v2',voice='2'),
@@ -70,6 +76,7 @@ def test_equal_pitch_distinct_source_voices_remain_distinct():
 
 
 @pytest.mark.parametrize('reverse', [False, True])
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_fixed_shared_key_is_independent_of_source_order(reverse):
     unisons=[Note(0,2,60,0,0,source_id='auto'),Note(0,1,60,0,0,source_id='fixed')]
     source=piece([*(reversed(unisons) if reverse else unisons),
@@ -79,6 +86,7 @@ def test_fixed_shared_key_is_independent_of_source_order(reverse):
     assert not result['fixed'].reason
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_persistence_priority_projection_and_no_reinference(tmp_path):
     source = replace(piece([Note(0,2,60,0,0,source_id='xml-p0-m0-e1'),
                             Note(1,2,64,0,0,source_id='xml-p0-m0-e2')]),
@@ -105,6 +113,7 @@ def test_persistence_priority_projection_and_no_reinference(tmp_path):
     assert cleared.assignments['xml-p0-m0-e1'].finger==2
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_runtime_failure_never_fabricates(tmp_path):
     source=piece([Note(0,1,60,0,0,source_id='n')])
     plan=FingeringService(tmp_path,provider=LumikeyProvider(node='/missing/node')).prepare(source,'broken')
@@ -151,6 +160,7 @@ def test_ambiguous_authored_substitution_is_preserved_not_guessed(tmp_path):
     assert service.correct(source,'xml',a.source_id,3).assignments[a.source_id].finger==3
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_conflicting_fixed_fingers_remain_authoritative_and_reported(tmp_path):
     source=piece([Note(0,1,60,0,0,source_id='a'),Note(0,1,64,0,0,source_id='b')])
     provider=LumikeyProvider()
@@ -168,6 +178,7 @@ def test_wrong_json_type_in_derived_cache_is_a_cache_miss(tmp_path):
 
 
 @pytest.mark.parametrize('corruption', ['manual', 'list', 'null'])
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_derived_cache_cannot_override_fixed_or_crash_on_nested_corruption(tmp_path,corruption):
     source=piece([Note(0,1,60,0,0,source_id='n')])
     service=FingeringService(tmp_path)
@@ -180,6 +191,7 @@ def test_derived_cache_cannot_override_fixed_or_crash_on_nested_corruption(tmp_p
     assert service.prepare(source,'one')==expected
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_corrupt_plan_with_missing_runtime_keeps_durable_manual_finger(tmp_path):
     source=piece([Note(0,1,60,0,0,source_id='n')])
     FingeringService(tmp_path).correct(source,'one','n',4)

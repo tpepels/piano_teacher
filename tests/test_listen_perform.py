@@ -55,7 +55,7 @@ def test_listen_is_audible_exact_full_variant_and_cannot_grade_midi(lesson, bpm)
     assert demo['duration_seconds'] == pytest.approx(16*60/bpm)
     assert not demo['ready'] and e.recorder is None
     available = wait_audio(e)
-    assert available['demo']['audio_available'] and available['demo']['url']
+    assert available['demo']['audio_available']
     audio = e.demo_audio(demo['token'])
     with wave.open(str(audio), 'rb') as wav:
         assert wav.getnchannels() in (1, 2) and wav.getsampwidth() == 2
@@ -263,7 +263,7 @@ def test_listen_render_does_not_block_controls_and_late_result_cannot_revive_sto
         assert entered.wait(.5)
         loading = e.state()
         assert loading['phase'] == 'loading'
-        assert loading['demo']['url'] == '' and not loading['demo']['audio_available']
+        assert not loading['demo']['audio_available']
         e.control('score_ready', revision=loading['revision'])
         e.control('demo_ready', revision=loading['revision'], token=loading['demo']['token'])
         assert not e.state()['running']
@@ -327,7 +327,7 @@ def test_failed_background_render_exposes_honest_error_and_cannot_be_acknowledge
     state = wait_audio(e)
     assert state['phase'] == 'ready' and not state['running']
     assert 'could not' in state['feedback'] and state['demo']['error']
-    assert not state['demo']['audio_available'] and not state['demo']['url']
+    assert not state['demo']['audio_available']
     e.control('score_ready', revision=state['revision'])
     e.control('demo_ready', token=state['demo']['token'], revision=state['revision'])
     assert e.state()['phase'] == 'ready' and not e.state()['running']
@@ -352,34 +352,19 @@ def test_failed_render_is_settled_before_a_control_without_a_state_poll(lesson):
     assert state['feedback'] == 'Listen audio could not be prepared: Controlled unavailable audio cache'
 
 
-def test_real_demo_http_route_returns_pcm_and_rejects_abandoned_tokens(lesson):
-    import threading
-    import urllib.request
-    import urllib.error
-    from http.server import ThreadingHTTPServer
-    from piano_teacher.server import Handler
+def test_demo_audio_returns_pcm_and_rejects_abandoned_tokens(lesson):
+    # The HTTP demo route was removed with the HTTP backend (c5c06467); the
+    # embedded runtime hands the engine's token-checked WAV path to the host.
     e, _, _ = lesson(120)
     e.control('listen')
     state = wait_audio(e)
-    handler = type('DemoHandler', (Handler,), {'engine': e})
-    http = ThreadingHTTPServer(('127.0.0.1', 0), handler)
-    thread = threading.Thread(target=http.serve_forever, daemon=True)
-    thread.start()
-    try:
-        url = f'http://127.0.0.1:{http.server_port}'+state['demo']['url']
-        with urllib.request.urlopen(url, timeout=3) as reply:
-            body = reply.read()
-            assert reply.status == 200 and reply.headers['Content-Type'] == 'audio/wav'
-            assert int(reply.headers['Content-Length']) == len(body)
-            assert body[:4] == b'RIFF' and body[8:12] == b'WAVE'
-        e.control('stop')
-        with pytest.raises(urllib.error.HTTPError) as error:
-            urllib.request.urlopen(url, timeout=3)
-        assert error.value.code == 400
-    finally:
-        http.shutdown()
-        http.server_close()
-        thread.join(3)
+    token = state['demo']['token']
+    with open(e.demo_audio(token), 'rb') as audio:
+        body = audio.read()
+    assert body[:4] == b'RIFF' and body[8:12] == b'WAVE'
+    e.control('stop')
+    with pytest.raises(ValueError, match='no longer current'):
+        e.demo_audio(token)
 
 
 def test_listen_without_piano_remains_audible_and_never_grades(lesson):
@@ -408,7 +393,13 @@ def test_perform_loading_ack_and_clock_freeze_with_pause_then_stop_discards_revi
     beat = e.state()['clock_beat']
     now[0] += 50
     e.control('resume')
-    assert e.state()['clock_beat'] == beat
+    # Resuming re-enters a count-in; the musical clock then continues from the
+    # frozen beat, so the frozen interval itself (50 s) never advances it.
+    resumed = e.state()
+    assert resumed['phase'] == 'count_in' and resumed['count_in_beats'] > 0
+    assert resumed['clock_beat'] == pytest.approx(beat - resumed['count_in_beats'])
+    now[0] += resumed['count_in_beats']*60/resumed['bpm']
+    assert e.state()['clock_beat'] == pytest.approx(beat)
     e.control('stop')
     now[0] += 100
     e.control('score_ready', revision=revision)

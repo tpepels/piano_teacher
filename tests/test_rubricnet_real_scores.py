@@ -5,7 +5,10 @@ These are checked-in two-staff MusicXML scores with distinct rhythmic and
 polyphonic structures. No online access during extraction or prediction.
 """
 from math import isfinite
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -15,14 +18,36 @@ from piano_teacher.research.rubricnet_model import RubricNetModel
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "connector_pixels"
+ROOT = Path(__file__).resolve().parents[1]
+WORKER_MODULES = "music21, torch, scipy, sklearn, pandas, sortedcontainers, lxml, matplotlib, seaborn"
+
+
+def _worker_python() -> str:
+    """The optional worker interpreter: the environment override, else the
+    isolated venv created by scripts/setup-rubricnet.sh, else this one."""
+    configured = os.getenv("PIANO_TEACHER_RUBRICNET_PYTHON", "")
+    local = ROOT / ".rubricnet-venv" / "bin" / "python"
+    return configured or (str(local) if local.is_file() else sys.executable)
+
+
+@pytest.fixture(scope="module")
+def rubricnet_python() -> str:
+    python = _worker_python()
+    probe = subprocess.run([python, "-c", f"import {WORKER_MODULES}"],
+                           capture_output=True, text=True, timeout=120)
+    if probe.returncode:
+        pytest.skip("optional RubricNet worker dependencies unavailable in "
+                    f"{python} (run scripts/setup-rubricnet.sh): "
+                    + probe.stderr.strip().splitlines()[-1])
+    return python
 
 
 @pytest.mark.parametrize("score_name", [
     "beam16", "beams", "beam-down", "beam-chords",
 ])
-def test_offline_worker_extracts_real_two_hand_scores_and_predicts(score_name):
+def test_offline_worker_extracts_real_two_hand_scores_and_predicts(score_name, rubricnet_python):
     score = (FIXTURES/score_name/"score.musicxml").read_text(encoding="utf-8")
-    features = RubricNetExtractor(timeout_seconds=20).extract(score)
+    features = RubricNetExtractor(rubricnet_python, timeout_seconds=20).extract(score)
     assert tuple(features) == BASIC_FEATURES
     assert len(features) == 12
     assert all(isfinite(x) for x in features.values())
@@ -33,10 +58,10 @@ def test_offline_worker_extracts_real_two_hand_scores_and_predicts(score_name):
 
 
 @pytest.mark.parametrize("score_name", ["tuplets", "moonlight-rest-voices"])
-def test_unpitched_second_hand_is_rejected_without_fabricated_features(score_name):
+def test_unpitched_second_hand_is_rejected_without_fabricated_features(score_name, rubricnet_python):
     source = (FIXTURES/score_name/"score.musicxml").read_text(encoding="utf-8")
     with pytest.raises(RubricNetUnavailable):
-        RubricNetExtractor(timeout_seconds=20).extract(source)
+        RubricNetExtractor(rubricnet_python, timeout_seconds=20).extract(source)
 
 
 def test_worker_matches_published_bach_reference_fixture():

@@ -69,7 +69,7 @@ def test_note_stems_are_only_verovio_svg_graphics():
 def test_real_flag_is_not_embedded_in_reusable_beam_stem():
     import verovio
     from xml.etree import ElementTree as ET
-    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
     from piano_teacher.notation.assets.notes import _one_note_xml, _only_stem_svg
 
     toolkit = _create_verovio_toolkit(verovio)

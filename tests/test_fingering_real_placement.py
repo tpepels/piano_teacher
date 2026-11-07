@@ -24,7 +24,7 @@ CASES=[('hanon-low',HANON,1,2),('hanon-rise',HANON,7,8),('hanon-fall',HANON,15,1
 
 
 @pytest.fixture(scope='module')
-def originals(tmp_path_factory):
+def originals(tmp_path_factory, lumikey_runtime):
     store=FingeringService(tmp_path_factory.mktemp('placement-plans'))
     result={}
     for name in (HANON,CHOPIN,EVANS):

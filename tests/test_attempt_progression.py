@@ -124,6 +124,7 @@ def test_start_and_loop_continuation_share_cached_grid_and_clock(tmp_path,monkey
     monkeypatch.setattr(server.time,"monotonic",lambda:123.0)
     engine = PracticeEngine(tmp_path,enable_midi=False)
     engine.plan = LearningPlan(piece)
+    engine.fingerprint = "start_and_loop_continuation_share_cached_grid_an"
     try:
         engine.start()
         assert engine.preview_only

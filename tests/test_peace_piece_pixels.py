@@ -86,7 +86,7 @@ def _assert_source(data):
 
 
 @pytest.fixture(scope='module')
-def peace_captures(tmp_path_factory):
+def peace_captures(tmp_path_factory, lumikey_runtime):
     from piano_teacher.fingering import FingeringService, project_model
     from piano_teacher.importing.pieces import import_piece
     from piano_teacher.learning import LearningPlan

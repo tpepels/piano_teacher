@@ -140,7 +140,7 @@ def _fixture(folder):
 
 
 @pytest.fixture(scope="module")
-def captured(tmp_path_factory):
+def captured(tmp_path_factory, lumikey_runtime):
     command = _godot()
     folder = tmp_path_factory.mktemp("native-fingering")
     data = _fixture(folder)

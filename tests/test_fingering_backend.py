@@ -76,6 +76,7 @@ def _unprojected(engine):
                              hand=engine.plan.hand, revision=engine.score_revision)
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_import_prepares_original_piece_outside_lock_before_learning_plan(engine, music, monkeypatch):
     prepare = engine.fingering.prepare
     calls = []
@@ -105,6 +106,7 @@ def test_import_prepares_original_piece_outside_lock_before_learning_plan(engine
     assert len(chord) == len(set(chord)) == 3
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_complete_lesson_path_projects_saved_fingers_without_inference(engine, music, monkeypatch):
     engine.load(str(music))
     plan = engine.plan
@@ -135,6 +137,7 @@ def test_complete_lesson_path_projects_saved_fingers_without_inference(engine, m
     assert set(seen) == {n.source_id for n in plan.piece.notes}
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_corrections_persist_and_removal_restores_prediction(tmp_path, music, monkeypatch):
     directory = tmp_path / "persisted"
     first = PracticeEngine(directory, enable_midi=False)
@@ -167,6 +170,7 @@ def test_corrections_persist_and_removal_restores_prediction(tmp_path, music, mo
         third.db.close()
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
     engine.load(str(music))
     learning = engine.plan
@@ -196,6 +200,7 @@ def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
     assert engine.score_artifacts.engraving_cache_key is None
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_native_geometry_receives_same_projected_model(engine, music, monkeypatch):
     from piano_teacher.application import score_preparation
     engine.load(str(music))
@@ -243,6 +248,7 @@ def api(engine, music):
     return request
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_inprocess_fingering_reads_and_corrects_source_assignments(engine, music, api):
     assert api("fingering.status")[1]["assignments"] == {}
     assert api("library.open", {"id": music.name})[0] == OK
@@ -311,6 +317,7 @@ def test_provider_runtime_failure_is_visible_without_fabricated_fingers(engine, 
     assert engine.fingering_status()["assignments"][source_id]["finger"] == 2
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_tied_continuations_do_not_gain_new_fingering_attacks(engine, tmp_path):
     engine.load(str(_midi(tmp_path / "tied.mid", held=True)))
     engine.control("select_step", number=len(engine.plan.lesson_steps))
@@ -322,6 +329,7 @@ def test_tied_continuations_do_not_gain_new_fingering_attacks(engine, tmp_path):
     assert all(("fingering" in e) == e["is_attack"] for e in segments)
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_correction_retargets_pending_score_ack_without_starting_attempt(engine, music):
     engine.load(str(music))
     engine.control("practice")
@@ -342,6 +350,7 @@ def test_correction_retargets_pending_score_ack_without_starting_attempt(engine,
     assert engine.running
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_correction_during_listen_audio_render_preserves_readiness(engine, music, monkeypatch):
     from piano_teacher.demo import DemoAudioCache
     from piano_teacher import sample_piano
@@ -380,6 +389,7 @@ def test_correction_during_listen_audio_render_preserves_readiness(engine, music
     assert engine.running and engine.mode == "listen"
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_correction_after_failed_listen_render_does_not_restore_loading(engine, music):
     engine.load(str(music))
 
@@ -446,6 +456,7 @@ def test_load_inference_keeps_state_responsive_and_rejects_queued_old_piece_edit
     assert engine.state()["fingering"]["manual"] == 0
 
 
+@pytest.mark.usefixtures("lumikey_runtime")
 def test_concurrent_edits_survive_learning_plan_reset(engine, music, monkeypatch):
     engine.load(str(music))
     previous_plan = engine.plan

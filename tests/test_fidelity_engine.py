@@ -74,6 +74,7 @@ def test_piece_key_and_clef_metadata_reach_active_lesson_compiler(tmp_path, monk
         return original(phrase, **kwargs)
     monkeypatch.setattr(score_artifacts, 'build_lesson_score', record)
     e = PracticeEngine(tmp_path/'metadata-data', enable_midi=False)
+    e.library.update(exercise_strategy='source-progression')  # MusicXML is not a MIDI-only Coda source
     try:
         e.load(str(path))
         e.geometry()
@@ -94,11 +95,12 @@ def test_ordinary_midi_identity_metadata_does_not_invalidate_saved_course_progre
     try:
         e.load(str(path))
         piece = e.plan.piece
-        old_notes = tuple(Note(n.start,n.end,n.pitch,n.track,n.channel,n.hand) for n in piece.notes)
+        old_notes = tuple(Note(n.start,n.end,n.pitch,n.track,n.channel,n.hand,n.source_id) for n in piece.notes)
         old_by_object = {id(note): old for note,old in zip(piece.notes,old_notes)}
         old_phrases = tuple(replace(phrase, notes=tuple(old_by_object[id(n)] for n in phrase.notes))
                             for phrase in piece.phrases)
-        legacy = LearningPlan(replace(piece, notes=old_notes, phrases=old_phrases))
+        legacy = LearningPlan(replace(piece, notes=old_notes, phrases=old_phrases),
+                              exercise_strategy=e.library.settings['exercise_strategy'])
         assert [step.key for step in legacy.lesson_steps] == [step.key for step in e.plan.lesson_steps]
         e.plan = legacy
         e.plan.set_bpm(88)
@@ -126,6 +128,7 @@ def test_corrected_pickup_course_keeps_history_and_resets_incompatible_streak(tm
 <measure number="1"><note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration></note></measure></part></score-partwise>''')
     data = tmp_path/'pickup-progress-data'
     old = PracticeEngine(data, enable_midi=False)
+    old.library.update(exercise_strategy='source-progression')  # MusicXML is not a MIDI-only Coda source
     try:
         old.load(str(path))
         piece = old.plan.piece
@@ -133,7 +136,7 @@ def test_corrected_pickup_course_keeps_history_and_resets_incompatible_streak(tm
         old_notes = tuple(Note(n.start,n.end,n.pitch,n.track,n.channel,n.hand) for n in piece.notes)
         legacy = replace(piece, notes=old_notes, bar_boundaries=(0,4,8),
                          phrases=(Phrase(1,1,2,0,8,old_notes),))
-        old.plan = LearningPlan(legacy)
+        old.plan = LearningPlan(legacy, exercise_strategy='source-progression')
         old.plan.set_bpm(88)
         old.plan.streak = 2
         old_key = old.plan.identity
@@ -146,9 +149,15 @@ def test_corrected_pickup_course_keeps_history_and_resets_incompatible_streak(tm
         reopened.load(str(path))
         assert reopened.plan.piece.bar_boundaries == (0,1,5)
         assert reopened.plan.identity != old_key
-        assert reopened.plan.bpm == reopened.plan.target_bpm == 88
+        # The piece-wide target survives; a superseded course row is retained on
+        # disk but never executed, so no old tempo, streak or mastery is applied.
+        assert reopened.plan.target_bpm == 88 and reopened.plan.bpm != 88
         assert reopened.plan.streak == 0
-        assert reopened.plan.mastered[old_key] == 80
+        assert old_key not in reopened.plan.mastered
+        kept = reopened.progress.db.execute(
+            "SELECT bpm FROM mastery WHERE fingerprint=? AND exercise=?",
+            (reopened.fingerprint, old_key)).fetchone()
+        assert kept == (80,)
         assert reopened.plan.exercise.phrase.first_bar == 1
         assert reopened.plan.exercise.phrase.last_bar == 2
     finally:

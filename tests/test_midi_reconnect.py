@@ -52,6 +52,7 @@ def connected(tmp_path, monkeypatch):
     engine = PracticeEngine(tmp_path)
     notes = (Note(0, 1, 60, 0, 0, "right"),)
     engine.plan = LearningPlan(Piece("Reconnect", 100, notes, (Phrase(1, 1, 2, 0, 8, notes),)))
+    engine.fingerprint = "connected"
     engine.connect("USB Piano")
     yield engine, midi
     if engine.midi.port is not None:

@@ -117,7 +117,7 @@ def test_two_real_musicxml_eighths_produce_native_verovio_beam(monkeypatch):
     monkeypatch.setenv("PIANO_TEACHER_BEAM_DEBUG","1")
     """A real Verovio wheel must export the SVG classes we extract."""
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
 
     notation = """<score-partwise version="4.0"><work><work-title> </work-title></work>
       <movement-title> </movement-title><part-list>
@@ -140,7 +140,7 @@ def test_two_real_musicxml_eighths_produce_native_verovio_beam(monkeypatch):
                                "svgContentBoundingBoxes":True})
     assert toolkit.loadData(notation)
     page = toolkit.renderToSVG(1)
-    from piano_teacher.score_geometry import parse_svg_geometry
+    from piano_teacher.source_svg import parse_svg_geometry
     page_geometry = parse_svg_geometry(page)
     assert {"n1","n2"}.issubset(page_geometry.elements)
     result = extract_beam_fragments([page], MODEL)
@@ -200,7 +200,7 @@ def test_verovio_beamed_chord_keeps_one_attack_and_all_pitches(monkeypatch):
 @pytest.mark.parametrize("upper,direction", [("B", "up"), ("A", "down")])
 def test_original_verovio_beamed_chord_has_only_two_time_anchors(upper, direction):
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
     score = f"""<score-partwise version="4.0"><work><work-title> </work-title></work>
       <movement-title> </movement-title><part-list><score-part id="P1">
       <part-name>Piano</part-name></score-part></part-list>

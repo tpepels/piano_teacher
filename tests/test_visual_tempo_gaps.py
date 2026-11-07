@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from piano_teacher import server
-from piano_teacher.learning import Exercise, LearningPlan
+from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
 
@@ -22,7 +22,7 @@ def test_shaped_tempo_then_full_rest_has_no_new_time_origin(tmp_path, monkeypatc
                   time_signatures=((0, 4, 4),))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(piece, tempo_strategy="two-phase-tempo")
-    engine.plan.exercises = (Exercise("learn",phrase,"shaped-clock"),)
+    engine.fingerprint = "shaped_tempo_then_full_rest_has_no_new_time_orig"
     engine.plan.variant_index = next(
         i for i, stage in enumerate(engine.plan.stages) if stage.shaped_tempo)
     engine.plan.bpm = 80
@@ -76,7 +76,7 @@ def test_failed_shaped_take_rewinds_from_the_true_visual_position(tmp_path, monk
                   time_signatures=((0, 4, 4),))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(piece, tempo_strategy="two-phase-tempo")
-    engine.plan.exercises = (Exercise("learn",phrase,"shaped-clock"),)
+    engine.fingerprint = "failed_shaped_take_rewinds_from_the_true_visual_"
     engine.plan.variant_index = next(
         i for i, stage in enumerate(engine.plan.stages) if stage.shaped_tempo)
     engine.plan.bpm = 80

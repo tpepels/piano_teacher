@@ -20,6 +20,7 @@ def sample_piece():
 def test_count_in_and_live_midi_visibility(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(sample_piece())
+    engine.fingerprint = "count_in_and_live_midi_visibility"
     try:
         engine.control("start")
         before = engine.state()
@@ -40,6 +41,7 @@ def test_count_in_and_live_midi_visibility(tmp_path):
 def test_stop_resets_count_in(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(sample_piece())
+    engine.fingerprint = "stop_resets_count_in"
     try:
         engine.control("start")
         engine.control("stop")

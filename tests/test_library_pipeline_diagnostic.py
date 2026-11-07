@@ -1,4 +1,4 @@
-"""Phase 6 diagnostic against the actual importer, engraver and PNG pipeline."""
+"""Phase 6 diagnostic against the actual importer and engraver pipeline."""
 from __future__ import annotations
 
 import importlib.util
@@ -21,9 +21,9 @@ SPEC.loader.exec_module(diagnostic)
     "midi_mixed_meter.mid",
     "xml_pickup.musicxml",
 ])
-def test_true_start_middle_end_navigation_and_raster(filename, tmp_path):
+def test_true_start_middle_end_navigation_and_engraving(filename, tmp_path):
     # Runs the production engine, actual source-note mapping and Verovio
-    # rasterizer. Fake PNGs and synthetic layout objects cannot pass.
+    # engraver. Synthetic layout objects cannot pass.
     result = diagnostic.check_one(FIXTURES / filename, tmp_path / "evidence", godot=None)
     assert result["status"] == "pass"
     assert result["source_notes"] > 0
@@ -32,10 +32,7 @@ def test_true_start_middle_end_navigation_and_raster(filename, tmp_path):
         manifest = json.loads((tmp_path / "evidence" / item["manifest"]).read_text())
         assert manifest["measure"] == item["selected"]
         assert manifest["layout"]["notes"]
-        assert item["pages"] >= 1
-        for filename in manifest["pages"]:
-            assert (tmp_path / "evidence" / filename).read_bytes().startswith(
-                bytes.fromhex("89504e470d0a1a0a"))
+        assert item["pages"] >= 1 and manifest["pages"] == item["pages"]
 
 
 def test_broken_library_entry_does_not_prevent_next_file(tmp_path):
@@ -66,25 +63,6 @@ def test_sample_bars_selects_real_attacks_instead_of_timeline_fractions():
             Note(388, 390, 67, 0, 0, "right"),
         ]
     assert diagnostic.sample_bars(Sparse()) == [1, 51, 98]
-
-
-def test_source_raster_diagnostic_does_not_require_native_preparation(tmp_path, monkeypatch):
-    from piano_teacher.server import PracticeEngine
-
-    geometry = PracticeEngine.geometry
-
-    def reference_geometry(self, *, native_notes=True):
-        assert native_notes is False, "Source raster checks must not depend on native assets"
-        return geometry(self, native_notes=False)
-
-    def unexpected_native_model(self):
-        pytest.fail("Source-only diagnostics must not prepare a native model")
-
-    monkeypatch.setattr(PracticeEngine, "geometry", reference_geometry)
-    monkeypatch.setattr(PracticeEngine, "semantic_score", unexpected_native_model)
-    result = diagnostic.check_one(FIXTURES / "xml_pickup.musicxml", tmp_path, godot=None)
-    assert result["status"] == "pass"
-    assert result["samples"]
 
 
 @pytest.mark.parametrize("filename", ["midi_mixed_meter.mid", "xml_pickup.musicxml"])

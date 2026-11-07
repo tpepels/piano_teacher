@@ -98,7 +98,7 @@ def test_canonical_piece_preserves_original_source_and_note_object_identities():
 
 def test_fixture_canonicalizes_authored_reference_without_mutating_piece(tmp_path):
     from piano_teacher.notation.audit_annotations import CANONICAL_CAPTURE_CONFIG
-    from piano_teacher.score import import_piece
+    from piano_teacher.importing.pieces import import_piece
     from scripts.check_native_verovio_overlay import AuditCase, fixture
 
     tree = ET.parse(ROOT / 'tests/fixtures/native_pixel_pitch_probe.musicxml')

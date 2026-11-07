@@ -24,7 +24,7 @@ PIECES = [
 
 
 @pytest.mark.parametrize('name', PIECES)
-def test_complete_real_piece_and_all_lesson_variants(name, tmp_path):
+def test_complete_real_piece_and_all_lesson_variants(name, tmp_path, lumikey_runtime):
     path = ROOT/'midi'/name
     piece,_ = import_piece(path)
     signature = sha256(path.read_bytes()).hexdigest()

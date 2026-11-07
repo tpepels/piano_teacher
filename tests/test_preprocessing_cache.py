@@ -10,7 +10,7 @@ from piano_teacher.server import PracticeEngine
 FIXTURE = Path(__file__).parent / "fixtures/musical_fidelity/midi_four_four.mid"
 
 
-def test_reopening_source_and_engraving_skips_parsing_and_rasterization(
+def test_reopening_source_and_engraving_skips_parsing_and_engraving(
         tmp_path, monkeypatch):
     music = tmp_path / "piece.mid"
     music.write_bytes(FIXTURE.read_bytes())
@@ -20,13 +20,10 @@ def test_reopening_source_and_engraving_skips_parsing_and_rasterization(
         first.load(str(music))
         source_ids = tuple(n.source_id for n in first.plan.piece.notes)
         layout = first.engraving()
-        png = first.engraved_png(0)
-        assert png.startswith(b"\x89PNG\r\n\x1a\n")
         assert layout.pages
     finally:
         first.db.close()
 
-    import piano_teacher.score as score
     import piano_teacher.server as server
 
     def unexpected(*args, **kwargs):
@@ -34,7 +31,6 @@ def test_reopening_source_and_engraving_skips_parsing_and_rasterization(
 
     monkeypatch.setattr(server, "import_piece", unexpected)
     monkeypatch.setattr(score_artifacts, "render_layout", unexpected)
-    monkeypatch.setattr(score_artifacts, "rasterize_score", unexpected)
     again = PracticeEngine(directory, enable_midi=False)
     try:
         again.load(str(music))
@@ -42,7 +38,6 @@ def test_reopening_source_and_engraving_skips_parsing_and_rasterization(
         cached_layout = again.engraving()
         assert cached_layout.pages == layout.pages
         assert cached_layout.layout == layout.layout
-        assert again.engraved_png(0) == png
     finally:
         again.db.close()
 
@@ -69,7 +64,6 @@ def test_corrupted_cache_is_an_ordinary_miss(tmp_path):
     path = cache._path("source", key, "json.gz")
     path.write_bytes(b"corrupted compressed cache")
     assert cache.read_json("source", key) is None
-    assert cache.read_png(cache.key("png", "no-png")) is None
 
 
 def test_source_bytes_change_forces_reimport(tmp_path):

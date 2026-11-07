@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def _authored_beamed_chords():
     """Low thirds forced down and high thirds forced up in authored XML."""
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
     from piano_teacher.notation.assets.beams import extract_beam_fragments
     from piano_teacher.notation.assets.chords import chord_templates
     from piano_teacher.notation.assets.notes import note_templates

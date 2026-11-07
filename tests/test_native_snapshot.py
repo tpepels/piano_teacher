@@ -51,7 +51,7 @@ def test_native_preparation_keeps_revision_locked_until_assets_are_bound(tmp_pat
     worker = threading.Thread(target=switch_hand)
     worker.start()
     try:
-        layout = engine.geometry(native_notes=True)
+        layout = engine.geometry()
         assert "native_chord_templates" in layout
         assert layout["revision"] == revision
     finally:

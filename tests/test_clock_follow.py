@@ -19,6 +19,7 @@ def test_timeline_moves_at_exact_tempo_even_without_piano(tmp_path, monkeypatch)
     monkeypatch.setattr(server.time, "monotonic", lambda: t[0])
     engine = PracticeEngine(tmp_path, enable_midi=True)
     engine.plan = LearningPlan(_piece())
+    engine.fingerprint = "timeline_moves_at_exact_tempo_even_without_piano"
     try:
         engine.start()
         assert engine.state()["preview_only"] is True
@@ -69,6 +70,7 @@ def test_tempo_control_changes_count_in_and_cursor_speed(tmp_path, monkeypatch):
     monkeypatch.setattr(server.time, "monotonic", lambda: t[0])
     engine = PracticeEngine(tmp_path, enable_midi=True)
     engine.plan = LearningPlan(_piece())
+    engine.fingerprint = "tempo_control_changes_count_in_and_cursor_speed"
     try:
         engine.control("tempo", bpm=80)
         engine.start()

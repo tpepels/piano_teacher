@@ -33,7 +33,8 @@ def test_progress_persists(tmp_path):
     first.plan=LearningPlan(fixture_piece())
     first.fingerprint='abc'
     first.plan.set_bpm(70)
-    first.plan.mastered['learn:1-2:right']=100
+    stage=first.plan.lesson_steps[0].key  # content-derived; hand-written keys are never restored
+    first.plan.mastered[stage]=100
     first._save()
     first.db.close()
     second=PracticeEngine(tmp_path,enable_midi=False)
@@ -41,17 +42,16 @@ def test_progress_persists(tmp_path):
     second.fingerprint='abc'
     second._restore()
     assert second.plan.bpm==70
-    assert second.plan.mastered['learn:1-2:right']==100
+    assert second.plan.mastered[stage]==100
     second.db.close()
 
 
 def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
-    """Multiple UI polls/pages must not repeatedly engrave the same exercise."""
-    from piano_teacher.score import EngravedScore
-    from piano_teacher import server
+    """Repeated UI polls must not repeatedly engrave the same exercise."""
+    from piano_teacher.engraving.engraving import EngravedScore
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(fixture_piece())
-    engine.score = object()
+    engine.fingerprint = "layout_cached_until_score_revision_changes"
     calls = []
     def fake_render(score, first, last, hand, *, total_beats, bpm, continuous=False):
         calls.append((first,last,hand,total_beats,bpm))
@@ -60,14 +60,11 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
                               "notes":[{"pitch":n.pitch,"beat":n.start-score.phrase.start}
                                        for n in score.phrase.notes]})
     monkeypatch.setattr(score_artifacts,"render_layout",fake_render)
-    assert engine.engraved(0) == "<svg>page 1</svg>"
-    assert engine.engraved(1) == "<svg>page 2</svg>"
-    assert engine.geometry(native_notes=False)["pages"] == 2
+    assert engine.engraving().pages == ("<svg>page 1</svg>","<svg>page 2</svg>")
+    assert engine.engraving().layout["pages"] == 2
     assert calls == [(1,2,"right",8,100)]
-    with __import__('pytest').raises(ValueError,match="Invalid score page"):
-        engine.engraved(2)
     engine.control("hand",hand="both")
-    assert engine.geometry(native_notes=False)["pages"] == 2
+    assert engine.engraving().layout["pages"] == 2
     assert calls[-1] == (1,2,"both",8,100)
     assert len(calls) == 2
     engine.db.close()
@@ -76,6 +73,7 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
 def test_playhead_beat_state_at_countin_and_play(tmp_path):
     engine=PracticeEngine(tmp_path,enable_midi=False)
     engine.plan=LearningPlan(fixture_piece())
+    engine.fingerprint = "playhead_beat_state_at_countin_and_play"
     engine.control("start")
     state=engine.state()
     assert state["beat"] == 0

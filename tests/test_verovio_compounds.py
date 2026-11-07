@@ -30,7 +30,7 @@ def test_whole_chord_ink_is_centred_on_source_head_positions():
 
 def test_real_chord_stem_excludes_its_nested_flag():
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
     from piano_teacher.notation.assets.chords import (
         _xml, _extract_chord, _only_original_chord_stems,
     )

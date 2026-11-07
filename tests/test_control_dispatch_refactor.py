@@ -17,6 +17,7 @@ def app(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(Piece("Dispatch", 100, notes, (phrase,),
                                      bar_boundaries=(0, 4, 8)))
+    engine.fingerprint = "app"
     try:
         yield engine
     finally:

@@ -64,6 +64,8 @@ def captures(tmp_path_factory):
         pytest.skip("Real native framebuffer checks require Godot 4 and DISPLAY")
     folder = tmp_path_factory.mktemp("native-head-ink")
     engine = PracticeEngine(folder / "cache", enable_midi=False)
+    # The default Coda/Fukuda course is MIDI-only; these are MusicXML sources.
+    engine.library.update(exercise_strategy="source-progression")
     payloads, sources = [], {}
     try:
         for name, kind, down, voices in (
@@ -79,7 +81,7 @@ def captures(tmp_path_factory):
             engine.plan.restore_location(kind="learn", first_bar=1, last_bar=1,
                                          hand="right", level="original")
             baseline = {"model": engine.semantic_score(),
-                        "layout": engine.geometry(native_notes=True)}
+                        "layout": engine.geometry()}
             assert sum(e["kind"] == "note" for e in baseline["model"]["notation_events"]) == (3 if voices else 1)
             mutations = ["baseline", "extra-head", "missing-head"]
             if not voices:

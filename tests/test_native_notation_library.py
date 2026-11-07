@@ -322,7 +322,7 @@ def test_downward_32nd_flag_uses_the_font_attachment_origin():
 
 
 def test_long_reference_uses_the_same_pagination_as_production():
-    from piano_teacher.score import import_piece
+    from piano_teacher.importing.pieces import import_piece
     path = Path(__file__).parent/"fixtures/musical_fidelity/xml_long_multipage.musicxml"
     piece, _ = import_piece(path)
     assert len(piece.bar_boundaries)-1 > 12

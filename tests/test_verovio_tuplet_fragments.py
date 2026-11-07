@@ -81,8 +81,8 @@ def test_tuplets_require_explicit_musicxml_boundaries():
 def test_real_verovio_exports_explicit_triplet_bracket(with_chords):
     """Catches mistaken assumptions about SVG classes in installed Verovio."""
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
-    from piano_teacher.score_geometry import parse_svg_geometry
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
+    from piano_teacher.source_svg import parse_svg_geometry
     notes=[]
     for i in range(3):
         marks=(f'<notations><tuplet type="{"start" if i==0 else "stop"}"'
@@ -125,7 +125,7 @@ def test_real_verovio_exports_explicit_triplet_bracket(with_chords):
                  if "tuplet" in n.get("class","").lower()]
         print("ACTUAL_VEROVIO_TUPLET_CLASSES",classes[:20])
         from piano_teacher.notation.assets.tuplets import crop_art
-        from piano_teacher.score_geometry import parse_svg_geometry
+        from piano_teacher.source_svg import parse_svg_geometry
         geom=parse_svg_geometry(original)
         first=geom.elements["n1"]
         last=geom.elements["n3"]

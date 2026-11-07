@@ -77,7 +77,7 @@ def test_slashed_grace_uses_original_verovio_fallback_without_disappearing(tmp_p
 
 
 def test_real_verovio_grace_engraving_keeps_only_scored_source_anchors(tmp_path):
-    from piano_teacher.score import render_layout
+    from piano_teacher.engraving.engraving import render_layout
 
     for slash in ("no", "yes"):
         piece = _source(tmp_path, slash=slash)

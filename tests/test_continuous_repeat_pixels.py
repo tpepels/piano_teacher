@@ -61,7 +61,7 @@ def build_repeat_fixture(case, *, piece=None, plan=None, phrase=None):
 
 
 @pytest.fixture(scope='module')
-def repeat_originals(tmp_path_factory):
+def repeat_originals(tmp_path_factory, lumikey_runtime):
     from piano_teacher.fingering import FingeringService
     from piano_teacher.importing.pieces import import_piece
     store = FingeringService(tmp_path_factory.mktemp('repeat-whole-piece-plans'))

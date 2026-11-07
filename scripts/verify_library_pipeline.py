@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Phase 6: verify real imported files through practice navigation, Verovio,
-PNG rasterization, source-note mapping, and Godot's native production view.
+source-note mapping, and Godot's native production view.
 
 All output is written outside the music folder. Each input is isolated in a
 subprocess with a deadline; a corrupt or very large file cannot stop the rest.
@@ -17,7 +17,6 @@ import sys
 import tempfile
 import time
 import traceback
-from io import BytesIO
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -39,7 +38,6 @@ def sample_bars(piece) -> list[int]:
 
 
 def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
-    from PIL import Image
     from piano_teacher.server import PracticeEngine
 
     started = time.monotonic()
@@ -48,6 +46,9 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
     # most-recent piece; even a failed check is read-only for their library.
     with tempfile.TemporaryDirectory(prefix="piano-phase6-") as temp:
         engine = PracticeEngine(Path(temp) / "state", enable_midi=False)
+        if path.suffix.lower() not in (".mid", ".midi"):
+            # The default Coda/Fukuda course is MIDI-only.
+            engine.library.update(exercise_strategy="source-progression")
         samples = []
         try:
             engine.load(str(path))
@@ -62,7 +63,7 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                 if state["mode"] != "practice" or state["running"]:
                     raise AssertionError("Opening a starting measure unexpectedly began playback")
                 # Real Verovio, glyph positions, timing map and exact alignment.
-                layout = engine.geometry(native_notes=False)
+                layout = engine.geometry()
                 engraving = engine.engraving()
                 if not engraving.pages or not layout["systems"]:
                     raise AssertionError("Engraving contains no pages or staff systems")
@@ -79,22 +80,12 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                         raise AssertionError("An engraved notehead is outside the page")
                     if not 0 <= int(note["page"]) < len(engraving.pages):
                         raise AssertionError("An engraved notehead refers to a missing page")
-                files = []
-                for page in range(len(engraving.pages)):
-                    png = engine.engraved_png(page)
-                    image = Image.open(BytesIO(png))
-                    image.load()
-                    if image.width < 50 or image.height < 50:
-                        raise AssertionError("Rendered PNG has invalid dimensions")
-                    filename = f"sample-{index+1:02d}-page-{page:02d}.png"
-                    (evidence / filename).write_bytes(png)
-                    files.append(filename)
                 native_folder = None
                 if godot:
                     native_folder = f"sample-{index+1:02d}"
                     folder = evidence / native_folder
                     folder.mkdir(exist_ok=True)
-                    payload = {"layout": engine.geometry(native_notes=True),
+                    payload = {"layout": layout,
                                "model": engine.semantic_score(), "state": state}
                     source_ids = {note["id"] for note in payload["model"]["notes"]}
                     if not required.issubset(source_ids):
@@ -120,7 +111,7 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                     raise AssertionError("Diagnostic preview incorrectly awarded mastery")
                 manifest = {
                     "measure": bar, "hand": engine.plan.hand,
-                    "layout": layout, "pages": files,
+                    "layout": layout, "pages": len(engraving.pages),
                 }
                 if native_folder:
                     manifest["native_fixture"] = native_folder
@@ -128,7 +119,7 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                 (evidence / manifest_name).write_text(
                     json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
                 samples.append({"measure": bar, "selected": selected,
-                    "hand": engine.plan.hand, "pages": len(files),
+                    "hand": engine.plan.hand, "pages": len(engraving.pages),
                     "noteheads": len(layout["notes"]),
                     "anchors": len(layout["anchors"]),
                     "playback": "timed-preview-verified",

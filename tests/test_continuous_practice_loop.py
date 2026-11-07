@@ -5,6 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 import time
+
+import mido
 import pytest
 
 from piano_teacher.learning import LearningPlan
@@ -116,7 +118,7 @@ def test_clean_auto_take_increases_bpm_without_reengraving(tmp_path):
         length = app.plan.active_phrase.end - app.plan.active_phrase.start
         app.running = False
         app.pending_result = SimpleNamespace(
-            correct=2, notes=[object(), object()], extra_notes=0, clean=True)
+            correct=2, notes=[object(), object()], extra_notes=0, clean=True, passed=True)
         app.visual_transport.next_at = time.monotonic() - .1
         app._update()
         assert app.plan.bpm > bpm
@@ -137,7 +139,7 @@ def test_failed_auto_take_moves_back_in_place_and_never_advances_repeat(tmp_path
         length = app.plan.active_phrase.end - app.plan.active_phrase.start
         app.running = False
         app.pending_result = SimpleNamespace(
-            correct=1, notes=[object(), object()], extra_notes=0, clean=False)
+            correct=1, notes=[object(), object()], extra_notes=0, clean=False, passed=False)
         app.visual_transport._retry_previous_pass = True
         app.visual_transport._visual_rewind_from = length
         app.visual_transport._visual_rewind_to = 0.0
@@ -669,6 +671,7 @@ def test_manual_retry_preparation_is_only_for_continuous_practice(
                                tuple(n for n in piece.notes if start <= n.start < end))
                         for i, (start, end) in enumerate(((0, 3), (3, 6))))
         app.plan = LearningPlan(replace(piece, phrases=phrases), consolidate=True)
+        app.fingerprint = "manual_retry_preparation_is_only_for_continuous_"
         app.plan.select(next(i for i, exercise in enumerate(app.plan.exercises)
                              if exercise.kind == "perform"))
         app.plan.set_bpm(80)
@@ -737,8 +740,9 @@ def midi_handoff(clocked_engine, monkeypatch):
 
 
 def midi_note(pitch, *, is_on=True):
-    return SimpleNamespace(type="note_on" if is_on else "note_off", channel=0,
-                           note=pitch, velocity=90 if is_on else 0)
+    # The production message type (a mido Message), including .copy().
+    return mido.Message("note_on" if is_on else "note_off", channel=0,
+                        note=pitch, velocity=90 if is_on else 0)
 
 
 @pytest.mark.parametrize("kind", MIDI_HANDOFFS)
@@ -762,6 +766,10 @@ def test_midi_deadline_handoff_retains_first_attack_release_and_feedback(
     monkeypatch.setattr(app, "_update", delayed_update)
     now[0] = received_at = deadline + overshoot
     app._receive(midi_note(note.pitch))
+    # The callback only queues a due handoff key with its hardware timestamp;
+    # the native worker's clock wakeup settles the handoff, then replays it.
+    assert calls == [] and app._deferred_midi
+    app.advance_clock()
     assert calls == [received_at]
     assert app.running and app.transport_id == transport + 1
     assert app.score_revision == revision and app.count_in_beats == 0
@@ -810,6 +818,7 @@ def test_midi_during_preparation_is_ungraded_and_release_cannot_invent_attack(
         assert not app.live_input.used
     now[0] = deadline
     app._receive(midi_note(note.pitch, is_on=False))
+    app.advance_clock()  # the worker wakeup settles the queued due handoff
     assert app.running and app.visual_transport.run_at == pytest.approx(deadline)
     assert not app.recorder.presses and not app.live_input.held
     now[0] += .001
@@ -839,6 +848,7 @@ def test_paused_midi_does_not_consume_handoff_and_resume_keeps_deadline(
     assert app.visual_transport.next_at == pytest.approx(deadline + 30)
     now[0] = deadline + 30
     app._receive(midi_note(note.pitch))
+    app.advance_clock()
     assert app.visual_transport.run_at == pytest.approx(deadline + 30)
     assert app.recorder.presses == [PlayedNote(note.pitch, 0, None)]
     assert app.live_input.recent[-1]["status"] == "on_time"
@@ -888,6 +898,7 @@ def test_midi_settles_unpolled_source_before_next_attack(
     now[0] = received_at = deadline + overshoot
     note = phrase.notes[0]
     app._receive(midi_note(note.pitch))
+    app.advance_clock()
     assert app.visual_transport.run_at == pytest.approx(deadline)
     assert app.running and app.transport_id == transport + 1
     assert app.score_revision == revision and app.count_in_beats == 0
@@ -966,6 +977,8 @@ def peace_timing_engine(tmp_path, monkeypatch):
         app = PracticeEngine(tmp_path / str(len(engines)), enable_midi=False)
         engines.append(app)
         app.plan = LearningPlan(piece)
+        app.fingerprint = "create"
+        app.fingerprint = "peace_timing_engine"
         app.plan.set_hand(hand)
         app.plan.set_bpm(bpm)
         if connected:
@@ -1212,7 +1225,7 @@ def test_clean_handoff_derivative_preserves_deadline_and_source_model(
     run_at, rate = app.visual_transport.run_at, bpm/60
     first = motion_sample(app, now, run_at+8/rate+.21)
     second = motion_sample(app, now, now[0]+.05)
-    assert first["take_result"] == {"clean": True, "correct": 2, "total": 2}
+    assert first["take_result"] == {"clean": True, "accepted": True, "correct": 2, "total": 2}
     assert_motion_rate(first, second, rate)
     deadline = app.visual_transport.next_at
     assert deadline == pytest.approx(run_at+12/rate)
@@ -1237,6 +1250,7 @@ def test_clean_handoff_derivative_preserves_deadline_and_source_model(
 def test_coda_practice_finishes_before_adaptive_retry_or_guided_switch(clocked_engine):
     app, now = clocked_engine(grid=(0, 4, 8, 12, 16), connected=True, dense=True)
     app.plan = LearningPlan(app.plan.piece, consolidate=True, exercise_strategy="coda-part")
+    app.fingerprint = "coda_practice_finishes_before_adaptive_retry_or_"
     original = next(i for i, step in enumerate(app.plan.lesson_steps, 1)
                     if step.hand == "right" and step.level == "original")
     app.plan.select_step(original)
