@@ -6,6 +6,7 @@ Communication with Godot uses an in-memory native command queue.
 from __future__ import annotations
 from dataclasses import asdict, replace
 from collections import deque
+import logging
 import hashlib
 import json
 import os
@@ -2745,13 +2746,18 @@ class PracticeEngine:
     def _update(self) -> None:
         try:
             self._update_transition()
-            self._publish_live_assessment()
         except Exception:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=time.monotonic())
             self.feedback = "Could not save or finish the practice transition"
             self.next_action = "Check storage or the reported error, then Resume to retry this same take."
             raise
+        # Display publication must never pause the take or alter feedback text.
+        try:
+            self._publish_live_assessment()
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Live assessment publication failed; skipping this tick")
 
     def _update_transition(self) -> None:
         """Advance the backend clock under its existing session lock."""
@@ -2832,8 +2838,12 @@ class PracticeEngine:
         Uses the same _live_feedback grading call as every other consumer;
         only new or changed per-note results enter the feedback event log.
         """
-        if (not self.running or self.visual_transport.paused
+        if (not self.running or self.preview_only
                 or self.mode not in ("practice", "perform")):
+            # No running graded take: never carry the previous take's marks.
+            self.live_assessment.latest_marks = []
+            return
+        if self.visual_transport.paused:
             return
         elapsed = time.monotonic() - self.visual_transport.run_at
         marks = self._live_feedback(elapsed) if elapsed >= 0 else []
@@ -2853,7 +2863,7 @@ class PracticeEngine:
             return []
         tempo_map = self._active_tempo_map()
         try:
-            return self.assessment_policies.select(tempo_map).live(
+            marks = self.assessment_policies.select(tempo_map).live(
                 p.active_phrase, hand=p.hand, bpm=p.bpm,
                 played=self.recorder.presses if self.recorder else [],
                 from_beat=self.visual_transport.play_from_beat, elapsed_seconds=elapsed_seconds,
@@ -2861,6 +2871,15 @@ class PracticeEngine:
                 layout=engraving.layout, tempo=tempo_map)
         except (ValueError, RuntimeError, KeyError):
             return []
+        # Live display only: a key still held within the grader's own hold
+        # tolerance has no release verdict yet (pending), not "unreleased".
+        # The grading status and the final take assessment are untouched.
+        for mark in marks:
+            until = mark.pop("hold_tolerance_until", None)
+            if (until is not None and elapsed_seconds <= until
+                    and (mark.get("dimensions") or {}).get("release") == "unreleased"):
+                mark["dimensions"] = {**mark["dimensions"], "release": None}
+        return marks
 
     def advance_clock(self) -> int:
         """Advance scheduled transitions without waiting for a UI state request.

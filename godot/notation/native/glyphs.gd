@@ -80,6 +80,8 @@ func ready() -> bool:
 func load_font(items: Dictionary) -> bool:
     if ready():
         return true
+    # head_images is replaced below; cutouts derived from the old ones are stale.
+    _head_cutouts.clear()
     var loaded_textures: Dictionary = {}
     var loaded_bounds: Dictionary = {}
     var common_font := ""

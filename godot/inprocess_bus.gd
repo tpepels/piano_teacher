@@ -5,6 +5,7 @@ var native
 var pending: Dictionary = {}
 var ready_error := ""
 var feedback_request_id := -1
+var _feedback_read_failing := false
 var feedback_reply: Variant = null
 
 const EXTENSION_PATH := "res://native/piano_bridge.gdextension"
@@ -85,11 +86,14 @@ func _process(_delta: float) -> void:
         if identifier == feedback_request_id:
             feedback_request_id = -1
             if int(reply.get("status", 3)) == 0:
+                _feedback_read_failing = false
                 var bytes: PackedByteArray = reply.get("body", PackedByteArray())
                 var parsed: Variant = JSON.parse_string(bytes.get_string_from_utf8())
                 feedback_reply = parsed if parsed is Dictionary else null
             else:
-                push_error("NOTE_FEEDBACK_READ_FAILED: status %d" % int(reply.get("status", 3)))
+                if not _feedback_read_failing:
+                    push_error("NOTE_FEEDBACK_READ_FAILED: status %d" % int(reply.get("status", 3)))
+                _feedback_read_failing = true
             continue
         var handle: WeakRef = pending.get(identifier)
         pending.erase(identifier)

@@ -12,8 +12,9 @@ extends RefCounted
 ##   onset:   on_time | early | late
 ##   release: on_time | short | long | unreleased
 ## Provisional MIDI evidence merges one dimension at a time. A settled
-## assessment replaces the whole record and locks it against provisional
-## evidence; a later settled assessment (e.g. after the real key-up) may
+## assessment replaces the whole record and locks every dimension it decided
+## against provisional evidence (a dimension it left pending, such as a key
+## still held, may still be filled by the observed key-up); a later settled assessment (e.g. after the real key-up) may
 ## still replace it.
 const UNPLAYED := "unplayed"
 const HIT := "hit"
@@ -101,12 +102,15 @@ func observe(take: String, note_id: String, observation: Dictionary,
         return false
     var notes: Dictionary = _notes_by_take.get(take,{})
     var previous: Dictionary = notes.get(note_id,{})
-    if not settled and bool(previous.get("settled",false)):
-        return false
+    var locked: bool = not settled and bool(previous.get("settled",false))
     var record: Dictionary = {} if settled else previous.duplicate()
     for dimension in DIMENSIONS:
         var value: Variant = observation.get(dimension)
         if value != null and not str(value).is_empty():
+            # Provisional evidence may fill a dimension a settled record left
+            # pending, but never overwrites one the settled record decided.
+            if locked and not str(previous.get(dimension,"")).is_empty():
+                continue
             record[dimension] = str(value)
     var shown: String = display_status(record)
     if shown == UNPLAYED:

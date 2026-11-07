@@ -55,6 +55,9 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             _, index = min(options)
             unused.remove(index)
             glyph = glyphs[index]
+        observation = entry.observation
+        held = (observation is not None and observation.unreleased
+                and observation.actual_onset is not None)
         result.append({
             "status": entry.status,
             # Pitch, onset and release are independent observations. A key
@@ -67,6 +70,13 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             "note_id": glyph["id"],
             **({'source_id':glyph['source_id']} if strict else {}),
             "beat": beat,
+            # Attempt-seconds deadline until which a still-held key is within
+            # the grader's own hold tolerance. Live display only (see
+            # PracticeEngine._live_feedback); grading never reads it.
+            **({"hold_tolerance_until":
+                observation.actual_onset + (observation.expected_release
+                    - observation.expected_onset) + observation.duration_tolerance}
+               if held else {}),
         })
     # The extra note has no notated notehead. Use the real beat-time x
     # coordinate, with an explicit estimated-position marker near the system.

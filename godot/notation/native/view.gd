@@ -119,8 +119,8 @@ func visible_take_keys() -> Array:
             keys.append(str(item.get("take_key","")))
     return keys
 
-## Earliest admitted source-strip world origin at or after ``from_world``.
-func first_source_origin_after(from_world: float) -> float:
+## Earliest admitted strip (source or rest) world origin at or after ``from_world``.
+func first_strip_origin_after(from_world: float) -> float:
     var result := INF
     for item in _stream_queue.online:
         var origin: float = float(item["world_origin"])

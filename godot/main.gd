@@ -870,8 +870,16 @@ func _dispatch_feedback_event(event: Dictionary) -> void:
     # Each event names its own take; no state snapshot is consulted.
     practice_view.stage.feedback.ingest(event)
     if str(event.get("kind","")) == "attack":
+        # Python stamps `received_at` in backend monotonic seconds; the
+        # clock's backend offset maps it to local ticks. Without a calibrated
+        # offset the age is unknown and the reaction plays.
+        var age_ms := 0.0
+        if visual_transport_clock.has_backend_offset and event.has("received_at"):
+            age_ms = float(Time.get_ticks_msec()) - (
+                float(event["received_at"]) * 1000.0 +
+                visual_transport_clock.backend_offset_ms)
         live_midi_feedback.react(event, score_effects, practice_view.stage,
-            layout_revision if layout_revision == revision else -1)
+            layout_revision if layout_revision == revision else -1, age_ms)
 
 func _poll() -> void:
     if score_session != null and not practice_view.is_source_picker_open():

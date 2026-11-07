@@ -159,3 +159,39 @@ def test_preview_takes_publish_ungraded_identity_and_no_assessment(engine):
     assert attacks and all(event["graded"] is False for event in attacks)
     assert not [event for event in _events(engine, "assessment")
                 if event["transport_id"] == engine.transport_id]
+
+
+def test_held_legato_note_is_pending_within_tolerance_then_unreleased(engine):
+    # n0 lasts 1.5 s; the grader's hold tolerance is 1.125 s at this tempo.
+    _key(engine, 0.0, 60, True)
+    for tick in (1.7, 2.0, 2.5):
+        _at(engine, tick)
+    held = _assessed(engine)["n0"]
+    assert held["dimensions"] == {
+        "pitch": "correct", "onset": "on_time", "release": None}, (
+        "a key held within tolerance has no release verdict yet (shown as hit)")
+    assert held["status"] == "short", "grading status is untouched"
+    _at(engine, 2.8)  # beyond expected duration plus the tolerance
+    held = _assessed(engine)["n0"]
+    assert held["dimensions"]["release"] == "unreleased"
+    assert held["status"] == "short"
+
+
+def test_marks_do_not_outlive_a_graded_running_take(engine):
+    _key(engine, 0.0, 60, True)
+    _at(engine, 2.8)
+    assert engine.live_assessment.latest_marks
+    engine.running = False
+    engine._publish_live_assessment()
+    assert engine.live_assessment.latest_marks == []
+
+
+def test_publication_failure_does_not_pause_the_take(engine, monkeypatch, caplog):
+    def boom():
+        raise TypeError("display failure")
+    monkeypatch.setattr(engine, "_live_feedback", lambda elapsed: boom())
+    engine.now[0] = engine.visual_transport.run_at + 1.0
+    feedback = engine.feedback
+    engine._update()
+    assert not engine.visual_transport.paused and engine.feedback == feedback
+    assert "Live assessment publication failed" in caplog.text

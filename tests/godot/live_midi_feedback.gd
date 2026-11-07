@@ -57,8 +57,14 @@ func _initialize() -> void:
     stale["revision"] = 3
     if feedback.react(stale,particles,stage,4) or particles.hit_pulses.size()!=1:
         failed += 1
+    # A stalled backend delivers an old attack: no transient reaction.
+    if feedback.react(hit,particles,stage,4,900.0) or particles.hit_pulses.size()!=1 or \
+            stage.effects.reactions.size()!=2:
+        failed += 1
+    if not feedback.react(hit,particles,stage,4,100.0) or particles.hit_pulses.size()!=2:
+        failed += 1
     feedback.clear()
-    if feedback.react(hit,particles,stage,4) or particles.hit_pulses.size()!=1:
+    if feedback.react(hit,particles,stage,4) or particles.hit_pulses.size()!=2:
         failed += 1
     print("LIVE_MIDI_FEEDBACK_FAILURES:",failed)
     quit(0 if failed==0 else 1)

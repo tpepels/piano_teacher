@@ -56,6 +56,7 @@ func _initialize() -> void:
 
 func run() -> void:
     _registry()
+    _pending_release()
     _precedence()
     await _ingestion()
     _inbox()
@@ -83,6 +84,27 @@ func _registry() -> void:
     check(Ink.material_for("erase").blend_mode == CanvasItemMaterial.BLEND_MODE_SUB and
             Ink.material_for("core").blend_mode == CanvasItemMaterial.BLEND_MODE_ADD,
         "status ink replaces the authentic head instead of overpainting it")
+
+func _pending_release() -> void:
+    var ledger := Status.new()
+    # Settled onset with a still-held key: the release dimension is pending.
+    ledger.observe("take","n",{"pitch":"correct","onset":"on_time"},true)
+    check(ledger.status("take","n") == Status.HIT, "settled held note shows its onset result")
+    check(ledger.observe("take","n",{"pitch":"correct","release":"short"},false) and
+            ledger.status("take","n") == Status.EARLY_RELEASE and
+            ledger.is_settled("take","n"),
+        "a settled record with a pending release accepts the provisional key-up")
+    check(not ledger.observe("take","n",{"release":"long"},false) and
+            ledger.status("take","n") == Status.EARLY_RELEASE,
+        "a provisional release cannot overwrite the release a settled record now holds")
+    var decided := Status.new()
+    decided.observe("take","m",{"pitch":"correct","onset":"on_time","release":"on_time"},true)
+    check(not decided.observe("take","m",{"release":"short"},false) and
+            decided.status("take","m") == Status.HIT,
+        "a settled decided release still rejects provisional evidence")
+    check(not decided.observe("take","m",{"onset":"late"},false) and
+            decided.status("take","m") == Status.HIT,
+        "a settled decided onset still rejects provisional evidence")
 
 func _precedence() -> void:
     var cases := [

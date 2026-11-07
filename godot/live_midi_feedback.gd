@@ -24,7 +24,13 @@ func bind_layout(source_layout: Dictionary, source_revision: int) -> void:
 ## channel. Delivered exactly once, so no sequence bookkeeping lives here.
 ## The event names its own take; only graded attacks on the bound engraving
 ## produce a reaction. Score ink is owned by NativeScoreFeedback.
-func react(event: Dictionary, effects, stage, current_revision: int) -> bool:
+## `age_ms` is how long ago the attack happened; the transient reaction (pulse,
+## ghost, callout) is skipped when a backend stall delivered it late.
+const MAX_REACTION_AGE_MS := 250.0
+func react(event: Dictionary, effects, stage, current_revision: int,
+        age_ms: float = 0.0) -> bool:
+    if age_ms > MAX_REACTION_AGE_MS:
+        return false
     if str(event.get("kind","attack")) != "attack" or \
             not bool(event.get("graded",false)) or \
             revision < 0 or revision != current_revision or \

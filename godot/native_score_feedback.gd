@@ -24,6 +24,7 @@ var _source_maps: Dictionary = {}
 var _note_ids: Dictionary = {}
 var _renderers: Array = [] # [{renderer: WeakRef, revision: int}]
 var _buffered: Array = []
+var _overflow_logged := false
 var applied_events := 0
 var buffered_events := 0
 var ignored_events := 0
@@ -60,6 +61,7 @@ func bind_score(renderer: Control, revision: int) -> void:
     # Replay, in sequence order, events that arrived before this engraving.
     var waiting: Array = _buffered
     _buffered = []
+    _overflow_logged = false
     for event in waiting:
         ingest(event)
 
@@ -71,7 +73,9 @@ func ingest(event: Dictionary) -> String:
         if revision > _highest_bound_revision():
             if _buffered.size() >= MAX_BUFFERED:
                 _buffered.pop_front()
-                push_error("NOTE_FEEDBACK_BUFFER_OVERFLOW: oldest unbound event dropped")
+                if not _overflow_logged:
+                    _overflow_logged = true
+                    push_error("NOTE_FEEDBACK_BUFFER_OVERFLOW: oldest unbound events dropped")
             _buffered.append(event)
             buffered_events += 1
             return "buffered"
@@ -119,6 +123,11 @@ func present(state: Dictionary) -> void:
     var suppress: bool = bool(state.get("preview_only",false)) or \
         str(state.get("mode","")) == "listen"
     _suppress_graded_ink = suppress
+    # A buffered event older than the state's revision can never bind.
+    var current_revision: int = int(state.get("revision",-2))
+    if not _buffered.is_empty():
+        _buffered = _buffered.filter(func(event: Dictionary) -> bool:
+            return int(event.get("revision",-1)) >= current_revision)
     if int(state.get("revision",-2)) == score_revision and not suppress:
         _active_take = Statuses.take_key(state)
     var keys: Array = []

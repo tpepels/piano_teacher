@@ -273,7 +273,7 @@ func present_runway_steps(state: Dictionary, global_visual: float,
     # A step title is attached to an already reserved source copy, never
     # positioned from a READY-only camera or backend scroll offset.
     # Read the online queue in place; never copy it on the frame path.
-    var current_start: float = renderer.first_source_origin_after(
+    var current_start: float = renderer.first_strip_origin_after(
         global_visual-.001-_first_attack_offset)+_first_attack_offset
     runway_steps.present(state,global_visual,current_start,
         next_start,next_label,next_density,global_visual)
