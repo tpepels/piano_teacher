@@ -36,7 +36,10 @@ def test_listen_and_visual_client_consume_shared_tempo_timeline():
     clock = (ROOT / "godot/visual_transport_clock.gd").read_text()
     assert "TempoTimeline.seconds_at_beat(visual_beat, bpm, segments)" in demo
     assert 'state.get("tempo_segments", [])' in demo
-    assert 'last_state.get("tempo_segments", [])' in main
+    # The visual client projects the beat only through the shared-tempo
+    # transport clock; there is no second constant-BPM extrapolator.
+    assert "visual_transport_clock.score_beat(at_ms)" in main
+    assert "elapsed * float(last_state.get(\"bpm\"" not in main
     assert "TempoTimeline.beat_at_seconds(seconds, bpm, segments)" in clock
     assert "visual_beat * 60.0 / bpm" not in demo
 
