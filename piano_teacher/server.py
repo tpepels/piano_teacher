@@ -61,6 +61,7 @@ from .application.session_snapshot_builder import (
 from .completion_route import completion_route
 from .visual_transport import VisualTransport
 from .midi_calibration import MidiTapCalibration
+from . import state_contract
 from .clock import Clock, monotonic
 from .feedback_events import FeedbackEventLog
 from .live_assessment_publisher import LiveAssessmentPublisher
@@ -2942,12 +2943,22 @@ class PracticeEngine:
                 (time.perf_counter() - began) * 1000.0)
 
     def state(self) -> dict:
+        """Full snapshot, including static values; returned by commands."""
         began = time.perf_counter()
         try:
-            return self._state_snapshot()
+            state = self._state_snapshot()
+            state["schema_version"] = state_contract.VERSION
+            return state
         finally:
             self.runtime_timings.state_ms.append(
                 (time.perf_counter()-began)*1000.0)
+
+    def poll_state(self) -> dict:
+        """The per-frame snapshot: the full state minus static values."""
+        state = self.state()
+        for key in state_contract.STATIC_KEYS:
+            state.pop(key, None)
+        return state
 
     def _state_snapshot(self) -> dict:
         with self.lock:

@@ -43,6 +43,7 @@ const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 const FeedbackEventInbox := preload("res://feedback_event_inbox.gd")
+const StateContract := preload("res://state_contract.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -119,6 +120,7 @@ var last_state: Dictionary = {}
 var last_state_tick := 0
 # Time of the frame being processed; sampled once at the top of _process.
 var frame_ms := 0
+var reported_contract_problems: Dictionary = {}
 var visual_transport_clock = VisualTransportClock.new()
 var score_flow = ContinuousScoreFlow.new()
 var metronome_frame
@@ -849,6 +851,18 @@ func _read_feedback_events() -> void:
     _consume_feedback_reply(inprocess_bus.take_feedback_events())
     inprocess_bus.request_feedback_events(feedback_inbox.acknowledged)
 
+## Debug builds report each distinct snapshot contract violation once:
+## a renamed or retyped key must not silently become a .get() default.
+## Only engine snapshots carry schema_version (tests assert it); hand-built
+## fixture states without one are not validated.
+func _check_state_contract(state: Dictionary) -> void:
+    if not OS.is_debug_build() or not state.has("schema_version"):
+        return
+    for problem in StateContract.problems(state):
+        if not reported_contract_problems.has(problem):
+            reported_contract_problems[problem] = true
+            push_error("STATE_CONTRACT: " + problem)
+
 func _consume_feedback_reply(reply: Variant) -> void:
     for event in feedback_inbox.accept(reply):
         _dispatch_feedback_event(event)
@@ -934,6 +948,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
+    _check_state_contract(parsed)
     if frame_diagnostics:
         var phase_name: String = str(parsed.get("phase", ""))
         var attempt: int = int(parsed.get("transport_id", -1))

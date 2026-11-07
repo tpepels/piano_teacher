@@ -26,6 +26,9 @@ class FakeEngine:
     def state(self):
         return {"phase": "ready", "revision": 17, "source": self.library_id}
 
+    def poll_state(self):
+        return self.state()
+
     def preferences(self):
         return {"metronome": True}
 

@@ -21,7 +21,7 @@ FAILED = 3
 
 class EngineCommands:
     READS = {
-        "state.snapshot": "state",
+        "state.snapshot": "poll_state",
         "fingering.status": "fingering_status",
         "library.catalog": "library_listing",
         "library.health_status": "library_health_status",

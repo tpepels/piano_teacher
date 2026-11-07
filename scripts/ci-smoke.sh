@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-python}"
 "$PYTHON" -m compileall -q piano_teacher tests scripts
 "$PYTHON" scripts/audit-transport-forwarding.py
+"$PYTHON" scripts/generate_state_contract.py --check
 find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 # Focused, self-contained MIDI and state/assessment contracts.
 timeout 65s "$PYTHON" -m pytest -q \
@@ -125,5 +126,6 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_live_input_view.py \
   tests/test_continuous_note_feedback.py \
   tests/test_take_boundaries.py \
+  tests/test_state_contract.py \
   tests/test_feedback.py \
   tests/test_notation_coverage_report.py
