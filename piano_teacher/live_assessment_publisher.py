@@ -18,6 +18,12 @@ class LiveAssessmentPublisher:
         self._published: dict[str, tuple] = {}
         self.latest_marks: list[dict] = []
 
+    def clear(self) -> None:
+        """Forget the previous take's marks; a new take starts empty."""
+        self._take = None
+        self._published.clear()
+        self.latest_marks = []
+
     def publish(self, marks: list[dict], take: dict, *, final: bool = False) -> int:
         """Publish marks that differ from what this take already published."""
         key = tuple(take[field] for field in

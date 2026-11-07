@@ -1247,7 +1247,7 @@ class PracticeEngine:
             fingerprint=self.fingerprint, stage_key=self.plan.identity, unit=unit)
         if bump_revision:
             self.score_revision += 1
-        self.transport_id += 1
+        self._open_take()
         # Reuse the existing guided owner: one controller, held-key history,
         # fragment source and completion state for this teaching session.
         self.guided_session.bind(GuidedFragment(
@@ -1348,7 +1348,7 @@ class PracticeEngine:
         if start is None:
             return
         self.awaiting_score_revision = None
-        self.transport_id += 1
+        self._open_take()
         self.running = True
         self.count_in_bar_beats = start.count_in_bar_beats
         self.count_in_meter = list(start.count_in_meter)
@@ -1626,17 +1626,10 @@ class PracticeEngine:
             # Only the engine mutates transport and input state. The timing
             # policy below receives an explicit immutable musical schedule.
             self.visual_transport.begin_take(loop_continuation=loop_continuation)
-            self.transport_id += 1
-            self.live_input.reset_attempt()
-            self.live_input.prepare(phrase)
+            self._open_take(phrase=phrase, recording=True)
             self.running = True
             self.auto = mode == "practice" and not self.preview_only
             self.awaiting_score_revision = None
-            self.pending_result = None
-            self._pending_assessed_bpm = None
-            self.feedback_marks = []
-            self.feedback_unmapped = 0
-            self.recorder = Recorder()
             self.visual_transport.visual_gap_beats = self._source_model()[
                 "practice_timeline"]["gap"]["duration_beats"]
             position = self.open_from_beat if from_beat is None else from_beat
@@ -2842,6 +2835,26 @@ class PracticeEngine:
         print("COMPLETED_TAKE_LAYOUT_COLD: engraving inside the clock tick", flush=True)
         return self.score_artifacts.engraving(selection).layout
 
+    def _open_take(self, *, phrase: Phrase | None = None,
+                   recording: bool = False) -> int:
+        """Begin a new transport epoch: the ONE place take-scoped state resets.
+
+        Practice, guided learning and Listen all open takes here, so a new
+        transport ID never coexists with the previous take's recorder, live
+        MIDI matches, settlement or feedback marks.
+        """
+        self.transport_id += 1
+        self.live_input.reset_attempt()
+        if phrase is not None:
+            self.live_input.prepare(phrase)
+        self.recorder = Recorder() if recording else None
+        self.pending_result = None
+        self._pending_assessed_bpm = None
+        self.feedback_marks = []
+        self.feedback_unmapped = 0
+        self.live_assessment.clear()
+        return self.transport_id
+
     def _feedback_take(self) -> dict:
         """Immutable identity of the take that the next feedback belongs to."""
         return {"piece_fingerprint": self.fingerprint or "",
@@ -2859,7 +2872,7 @@ class PracticeEngine:
         if (not self.running or self.preview_only
                 or self.mode not in ("practice", "perform")):
             # No running graded take: never carry the previous take's marks.
-            self.live_assessment.latest_marks = []
+            self.live_assessment.clear()
             return
         if self.visual_transport.paused:
             return

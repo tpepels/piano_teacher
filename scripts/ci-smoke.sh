@@ -124,5 +124,6 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_shared_tempo_timeline.py \
   tests/test_live_input_view.py \
   tests/test_continuous_note_feedback.py \
+  tests/test_take_boundaries.py \
   tests/test_feedback.py \
   tests/test_notation_coverage_report.py
