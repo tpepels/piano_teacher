@@ -61,26 +61,26 @@ done
 # Pure SceneTree fixtures execute in-process, without MIDI, score loading or UI.
 for fixture in continuous_score_flow command_success_effects command_request_state inprocess_request_lifecycle command_success_presenter practice_control_policy practice_frame_coordinator metronome_frame_coordinator calibration_beat_pulse coda_piece_strategy score_asset_lifecycle seamless_score_runway native_score_feedback; do
   echo "Checking Godot behavior: $fixture"
-  timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/$fixture.gd"
+  GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/$fixture.gd"
 done
 # Run the real Practice UI in the headless Godot harness after parsing.
 for scenario in captions signals score_gate intro_markers source_picker resume_choice midi_guard layout; do
   echo "Checking Practice UI: $scenario"
-  timeout 15s "$binary" --headless --path godot \
+  GODOT_BIN="$binary" bash scripts/godot-test.sh 15s --headless --path godot \
     --script "$PWD/tests/godot/practice_screen.gd" -- "$scenario"
 done
 for scenario in preferences tempo_draft signals pickers layout hierarchy; do
   echo "Checking Settings: $scenario"
-  timeout 15s "$binary" --headless --path godot \
+  GODOT_BIN="$binary" bash scripts/godot-test.sh 15s --headless --path godot \
     --script "$PWD/tests/godot/settings_ownership.gd" -- "$scenario"
 done
 for scenario in overview choices reset layout large_course; do
   echo "Checking Lesson Path: $scenario"
-  timeout 15s "$binary" --headless --path godot \
+  GODOT_BIN="$binary" bash scripts/godot-test.sh 15s --headless --path godot \
     --script "$PWD/tests/godot/lesson_ownership.gd" -- "$scenario"
 done
 for contract in publication stale retry failure native; do
   echo "Checking Godot score-session contract: $contract"
-  timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/score_asset_session.gd" -- "$contract"
+  GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/score_asset_session.gd" -- "$contract"
 done
 echo "GODOT_STARTUP_SYNTAX_OK"
