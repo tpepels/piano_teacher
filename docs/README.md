@@ -23,7 +23,7 @@
 - [Phase 4 Fukuda MIDI-domain implementation](archive/reports/fukuda-midi-phase4-2026-11-02.md).
 - [2026-11-04 architecture/retry development audit](verification/development-audit-2026-11-04.md) records reproduced defects, local checks and open acceptance limits.
 - [2026-11-04 learning measurement verification](verification/learning-measurement-2026-11-04.md) records P0 capture, migration, privacy controls and remaining gates.
-- [`archive/reports/`](archive/reports/) holds dated research, Coda, notation, teaching-phase and verification reports. They are experiments, comparisons or implementation evidence; their time-relative claims must not override ROADMAP or the contracts above.
+- `archive/reports/` holds dated research, Coda, notation, teaching-phase and verification reports. They are experiments, comparisons or implementation evidence; their time-relative claims must not override ROADMAP or the contracts above.
 - `docs/evidence/` contains captured images, logs, corpus ledgers and provenance.
 - [Archived plans and superseded architecture](archive/development/README.md) preserve old material without an active implementation track.
 - Godot MCP under godot/addons/godot_mcp_toolkit/ is optional editor tooling, excluded from the production runtime and standalone package.
