@@ -99,5 +99,6 @@ timeout 55s "$PYTHON" -m pytest -q \
 timeout 120s "$PYTHON" -m pytest -q \
   tests/test_note_status_framebuffer.py \
   tests/test_note_reactions.py \
-  tests/test_native_score_feedback.py
+  tests/test_native_score_feedback.py \
+  tests/test_native_asset_worker.py
 "$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25

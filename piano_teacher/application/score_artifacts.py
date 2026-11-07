@@ -1,13 +1,24 @@
 """Selected notation and source engraving, independent of session state.
 
-The application serializes calls under its existing lock. This owner receives
-source values, never an engine, learning plan, transport or renderer callback.
+This owner receives source values, never an engine, learning plan, transport
+or renderer callback. It serializes its own work under two locks of its own,
+so the application calls it OUTSIDE the engine lock: a cold Verovio engraving
+must not stall the musical tick or the MIDI callback.
+
+- ``_model_lock`` guards the selected notation and semantic model (fast once
+  built). The state snapshot needs only this lock.
+- ``_engraving_lock`` guards engraving and native asset preparation (seconds
+  when cold). Lock order is always engraving -> model, never the reverse.
+
+The selected layout is published as one immutable entry, so ``cached_layout``
+never waits for an engraving.
 """
 from __future__ import annotations
 
 from copy import deepcopy
 import hashlib
 import os
+import threading
 import time
 from dataclasses import dataclass
 
@@ -44,22 +55,27 @@ class ScoreSelection:
 class ScoreArtifacts:
     def __init__(self, preprocessing: PreprocessingCache):
         self.preprocessing = preprocessing
+        self._engraving_lock = threading.RLock()
+        self._model_lock = threading.RLock()
         self.invalidate()
 
     def invalidate(self) -> None:
         """Discard selected artifacts; durable, source-keyed entries remain reusable."""
-        self._notation_identity: tuple | None = None
-        self._notation: LessonScore | None = None
-        self._model: dict | None = None
-        self._projected_model: dict | None = None
-        self._prepared_layout_identity: tuple | None = None
-        self._prepared_layout: dict | None = None
-        self._layout_identity: tuple | None = None
-        self._layout: EngravedScore | None = None
-        self._layout_source_bpm: float | None = None
-        self._layout_key: str | None = None
+        with self._engraving_lock, self._model_lock:
+            self._notation_identity: tuple | None = None
+            self._notation: LessonScore | None = None
+            self._model: dict | None = None
+            self._projected_model: dict | None = None
+            self._prepared_layout_identity: tuple | None = None
+            self._prepared_layout: dict | None = None
+            # (identity, layout, source_bpm, cache_key), replaced atomically.
+            self._layout_entry: tuple | None = None
 
     def _selected_notation(self, selected: ScoreSelection) -> LessonScore:
+        with self._model_lock:
+            return self._selected_notation_locked(selected)
+
+    def _selected_notation_locked(self, selected: ScoreSelection) -> LessonScore:
         if selected.identity != self._notation_identity or self._notation is None:
             piece = selected.piece
             notation = build_lesson_score(
@@ -84,42 +100,57 @@ class ScoreArtifacts:
 
     def notation_musicxml(self, selected: ScoreSelection) -> str:
         """The exact selected lesson XML, shared with model and engraving."""
-        return self._selected_notation(selected).musicxml
+        with self._model_lock:
+            return self._selected_notation(selected).musicxml
 
     def source_model(self, selected: ScoreSelection) -> dict:
         """Internal source contract; the command queue publishes a semantic snapshot."""
-        notation = self._selected_notation(selected)
-        if self._model is None:
-            self._model = build_score_model(notation,
-                boundaries=selected.piece.bar_boundaries,
-                hand=selected.hand, revision=selected.revision)
-        return self._model
+        with self._model_lock:
+            notation = self._selected_notation(selected)
+            if self._model is None:
+                self._model = build_score_model(notation,
+                    boundaries=selected.piece.bar_boundaries,
+                    hand=selected.hand, revision=selected.revision)
+            return self._model
 
     def semantic_score(self, selected: ScoreSelection) -> dict:
         # Native geometry needs this exact projection, then score.semantic
         # requests it again. Build the source/fingering mapping once for a
         # selected stage and revision; return isolated snapshots to consumers.
-        source = self.source_model(selected)
-        if self._projected_model is None:
-            self._projected_model = project_model(deepcopy(source),
-                selected.piece.fingering_plan,
-                source_musicxml=selected.piece.source_musicxml)
-        return deepcopy(self._projected_model)
+        with self._model_lock:
+            source = self.source_model(selected)
+            if self._projected_model is None:
+                self._projected_model = project_model(deepcopy(source),
+                    selected.piece.fingering_plan,
+                    source_musicxml=selected.piece.source_musicxml)
+            return deepcopy(self._projected_model)
 
     def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
-        """Feedback may read only ink belonging to this exact source selection."""
-        return self._layout if self._layout_identity == selected.identity else None
+        """Feedback may read only ink belonging to this exact source selection.
+
+        Lock-free: reads one atomically published entry, so the musical tick
+        never waits for an engraving in progress.
+        """
+        entry = self._layout_entry
+        return entry[1] if entry is not None and entry[0] == selected.identity else None
 
     def source_bpm_changed(self, source_bpm: float) -> bool:
-        return self._layout is not None and self._layout_source_bpm != source_bpm
+        entry = self._layout_entry
+        return entry is not None and entry[2] != source_bpm
 
     @property
     def engraving_cache_key(self) -> str | None:
-        return self._layout_key
+        entry = self._layout_entry
+        return entry[3] if entry is not None else None
 
     def engraving(self, selected: ScoreSelection) -> EngravedScore:
-        if self.cached_layout(selected) is not None:
-            return self._layout
+        with self._engraving_lock:
+            return self._engraving(selected)
+
+    def _engraving(self, selected: ScoreSelection) -> EngravedScore:
+        cached = self.cached_layout(selected)
+        if cached is not None:
+            return cached
         piece, phrase = selected.piece, selected.phrase
         notation = self._selected_notation(selected)
         # Short exercises remain continuous; larger works retain bounded pages.
@@ -157,13 +188,14 @@ class ScoreArtifacts:
             self.preprocessing.write_json("engraving", key,
                 {"pages": list(layout.pages), "layout": layout.layout})
             self.preprocessing.prune()
-        self._layout = layout
-        self._layout_identity = selected.identity
-        self._layout_source_bpm = piece.bpm
-        self._layout_key = key
+        self._layout_entry = (selected.identity, layout, piece.bpm, key)
         return layout
 
     def geometry(self, selected: ScoreSelection) -> dict:
+        with self._engraving_lock:
+            return self._geometry(selected)
+
+    def _geometry(self, selected: ScoreSelection) -> dict:
         # A transient renderer retry or second layout request for the same
         # source revision must not re-extract every Verovio beam/tie/tuplet
         # fragment. Preserve an owned immutable snapshot; callers cannot
@@ -172,7 +204,7 @@ class ScoreArtifacts:
             return deepcopy(self._prepared_layout)
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
-        score = self.engraving(selected)
+        score = self._engraving(selected)
         if diagnostics:
             print("SCORE_GEOMETRY_STAGE: engraving",
                   round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
@@ -185,7 +217,7 @@ class ScoreArtifacts:
         checkpoint = time.perf_counter()
         prepared = score_preparation.assemble_layout(score,
             native_model=model, notation_xml=notation.musicxml,
-            cache=self.preprocessing, cache_key=self._layout_key or "",
+            cache=self.preprocessing, cache_key=self.engraving_cache_key or "",
             revision=selected.revision)
         if diagnostics:
             print("SCORE_GEOMETRY_STAGE: native-assets",

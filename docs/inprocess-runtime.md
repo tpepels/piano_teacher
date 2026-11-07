@@ -42,8 +42,16 @@ runtime, HTTP service, UDP listener or port binding.
   clock update. Each event carries its take identity. Godot reads the log on
   the next frame and acknowledges events only after processing them; the
   backend retains anything unacknowledged.
-- The Python GIL is held only while invoking Python; the C++ queue
-  uses a condition variable rather than an extra polling thread.
+- Score asset preparation (`score.native_layout`, `score.semantic`) runs on
+  a second native thread. A cold Verovio engraving takes seconds; on the
+  command/tick worker it used to delay every musical tick and state read.
+  `ScoreArtifacts` serializes itself (engraving lock, then model lock) and is
+  called outside the engine lock; the snapshot needs only the model lock, and
+  the tick reads the published layout without locking. Measured on the real
+  bridge: about 170 state reads answered during a 2.4 s cold engraving
+  (`tests/test_native_asset_worker.py`).
+- The Python GIL is held only while invoking Python; the C++ queues
+  use condition variables rather than polling threads.
 
 Godot uses `inprocess_request.gd` for typed operation requests and
 `score_asset_queue.gd` for revision-bound `score.native_layout` and

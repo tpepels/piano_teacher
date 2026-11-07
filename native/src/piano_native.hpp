@@ -34,6 +34,10 @@ class PianoNative : public RefCounted {
     std::mutex mutex_;
     std::condition_variable available_;
     std::deque<Command> pending_;
+    // Read-only score asset preparation (seconds of Verovio engraving) runs
+    // on its own thread so it can never delay the musical tick on worker_.
+    std::condition_variable assets_available_;
+    std::deque<Command> asset_pending_;
     std::deque<Reply> completed_;
     std::thread worker_;
     std::atomic<bool> stopping_{false};
@@ -45,6 +49,8 @@ class PianoNative : public RefCounted {
     void *engine_ = nullptr;
     void initialize_python();
     void worker_loop();
+    void asset_loop();
+    static bool is_asset_operation(const std::string &operation);
     int tick_engine();
     Reply execute(const Command &command);
 protected:

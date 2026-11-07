@@ -59,6 +59,7 @@ PianoNative::PianoNative() {
 PianoNative::~PianoNative() {
     stopping_ = true;
     available_.notify_all();
+    assets_available_.notify_all();
     if (worker_.joinable()) worker_.join();
     // Do not Py_Finalize(): rtmidi and native extensions may still have
     // background callbacks. There is exactly one runtime per application.
@@ -123,8 +124,35 @@ void PianoNative::initialize_python() {
     PyGILState_Release(gil);
 }
 
+bool PianoNative::is_asset_operation(const std::string &operation) {
+    // Read-only operations whose Python side runs outside the engine lock
+    // (ScoreArtifacts serializes itself). Only these may leave worker_.
+    return operation == "score.native_layout" || operation == "score.semantic";
+}
+
+void PianoNative::asset_loop() {
+    while (true) {
+        Command next;
+        {
+            std::unique_lock<std::mutex> guard(mutex_);
+            assets_available_.wait(guard, [this] {
+                return stopping_ || !asset_pending_.empty();
+            });
+            if (stopping_) return;
+            next = std::move(asset_pending_.front());
+            asset_pending_.pop_front();
+        }
+        Reply output = execute(next);
+        std::lock_guard<std::mutex> guard(mutex_);
+        completed_.push_back(std::move(output));
+    }
+}
+
 void PianoNative::worker_loop() {
     initialize_python();
+    // Started only after CPython and the engine exist; joined below before
+    // the engine is closed, so no asset request can outlive the engine.
+    std::thread assets([this] { asset_loop(); });
     // Command responses and musical deadlines share this one worker.
     // An idle UI or slow state snapshots must never be the engine's timer.
     // Waiting releases the queue mutex and the CPython GIL.
@@ -170,6 +198,8 @@ void PianoNative::worker_loop() {
                 std::chrono::milliseconds(std::clamp(interval_ms, 10, 500));
         }
     }
+    assets_available_.notify_all();
+    if (assets.joinable()) assets.join();
     if (engine_) {
         PyGILState_STATE gil = PyGILState_Ensure();
         PyObject *response = PyObject_CallMethod(
@@ -235,12 +265,15 @@ PianoNative::Reply PianoNative::execute(const Command &command) {
 int64_t PianoNative::submit(const String &operation, const String &body) {
     if (stopping_ || !ready_) return -1;
     int64_t id;
+    Command command{0, utf8(operation), utf8(body)};
+    const bool asset = is_asset_operation(command.operation);
     {
         std::lock_guard<std::mutex> guard(mutex_);
         id = ++next_id_;
-        pending_.push_back(Command{id, utf8(operation), utf8(body)});
+        command.id = id;
+        (asset ? asset_pending_ : pending_).push_back(std::move(command));
     }
-    available_.notify_one();
+    (asset ? assets_available_ : available_).notify_one();
     return id;
 }
 

@@ -2466,7 +2466,7 @@ class PracticeEngine:
             played=self.recorder.presses if self.recorder else [],
             from_beat=self.visual_transport.play_from_beat, end_beat=ending,
             tempo=tempo_map, policies=self.assessment_policies,
-            layout_for_feedback=lambda: self.engraving().layout)
+            layout_for_feedback=self._layout_for_completed_take)
         result = assessed.result
         route = completion_route(self.mode, self.review_end_beat, self.visual_transport.play_from_beat)
         if self._automatic_remedial_review and route == "section_review":
@@ -2823,6 +2823,20 @@ class PracticeEngine:
             awaiting_score=self.awaiting_score_revision is not None,
             pending_rewind=self.visual_transport.pending_rewind is not None,
         ), mode=self.mode, now=now)
+
+    def _layout_for_completed_take(self) -> dict:
+        """Ink for the settled take: the layout the learner just played from.
+
+        The displayed score was engraved before the take started, so this is
+        the published cached layout. Engraving inside the clock tick happens
+        only if that invariant was broken, and is logged.
+        """
+        selection = self._score_selection()
+        cached = self.score_artifacts.cached_layout(selection)
+        if cached is not None:
+            return cached.layout
+        print("COMPLETED_TAKE_LAYOUT_COLD: engraving inside the clock tick", flush=True)
+        return self.score_artifacts.engraving(selection).layout
 
     def _feedback_take(self) -> dict:
         """Immutable identity of the take that the next feedback belongs to."""
@@ -3182,18 +3196,29 @@ class PracticeEngine:
         with self.lock:
             return self.score_artifacts.source_model(self._score_selection())
 
-    def semantic_score(self) -> dict:
+    def _selected_artifacts(self) -> tuple[ScoreArtifacts, ScoreSelection]:
+        """Capture the selection and its owner under the engine lock only.
+
+        Notation, engraving and native asset preparation then run outside
+        the engine lock (ScoreArtifacts serializes itself), so a cold Verovio
+        engraving cannot stall the musical tick or a MIDI callback. Results
+        carry their source revision; a stale one is rejected by revision.
+        """
         with self.lock:
-            return self.score_artifacts.semantic_score(self._score_selection())
+            return self.score_artifacts, self._score_selection()
+
+    def semantic_score(self) -> dict:
+        artifacts, selection = self._selected_artifacts()
+        return artifacts.semantic_score(selection)
 
     def engraving(self) -> EngravedScore:
-        with self.lock:
-            return self.score_artifacts.engraving(self._score_selection())
+        artifacts, selection = self._selected_artifacts()
+        return artifacts.engraving(selection)
 
     def geometry(self) -> dict:
         """Publish the selected native score and semantic asset revision."""
-        with self.lock:
-            return self.score_artifacts.geometry(self._score_selection())
+        artifacts, selection = self._selected_artifacts()
+        return artifacts.geometry(selection)
 
     def lesson_overview(self) -> dict:
         with self.lock:
