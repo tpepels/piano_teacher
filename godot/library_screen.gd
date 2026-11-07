@@ -1,6 +1,6 @@
 extends VBoxContainer
 # Owns Library controls, captured presentation values and search/scan rendering.
-# HTTP lifetimes, opening music and navigation belong to the application.
+# Request lifetimes, opening music and navigation belong to the application.
 const UI := preload("res://ui_factory.gd")
 const Design := preload("res://practice_theme.gd")
 const LibraryRow := preload("res://library_row.gd")

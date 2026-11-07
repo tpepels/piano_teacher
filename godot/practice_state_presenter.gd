@@ -7,16 +7,14 @@ var practice_view
 var settings_view
 var lesson_view
 var lesson_session
-var score_effects
 var poll_timer: Timer
 var last_smoke_phase := ""
 
-func _init(practice, settings, lesson, session, effects, timer: Timer) -> void:
+func _init(practice, settings, lesson, session, timer: Timer) -> void:
     practice_view = practice
     settings_view = settings
     lesson_view = lesson
     lesson_session = session
-    score_effects = effects
     poll_timer = timer
 
 func present(parsed: Dictionary, screen: String, busy: bool,
@@ -47,8 +45,5 @@ func present(parsed: Dictionary, screen: String, busy: bool,
     if smoke and phase != last_smoke_phase:
         last_smoke_phase = phase
         print("PHASE0_PHASE:",phase)
-    score_effects.marks.clear()
-    for marker in parsed.get("feedback_marks",[]):
-        score_effects.marks.append(marker)
     practice_view.present_busy(busy)
     practice_view.consider_piano_start(sampled_state,screen == "practice")

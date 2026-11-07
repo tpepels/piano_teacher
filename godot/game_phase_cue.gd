@@ -78,7 +78,7 @@ func present(state: Dictionary) -> void:
     message = next_message
     accent = next_accent
     target_opacity = 0.0 if message.is_empty() else 1.0
-    # A stable Ready/Paused cue needs no redraw every HTTP state poll.
+    # A stable Ready/Paused cue needs no redraw on every state snapshot.
     if phase_changed:
         queue_redraw()
 

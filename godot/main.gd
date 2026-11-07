@@ -268,10 +268,10 @@ func _ready() -> void:
     add_child(health_timer)
     frame_coordinator = PracticeFrameCoordinator.new(
         practice_view,settings_view,lesson_view,lesson_session,
-        score_effects,demo_player,frame_meter)
+        demo_player,frame_meter)
     state_presenter = PracticeStatePresenter.new(
         practice_view,settings_view,lesson_view,lesson_session,
-        score_effects,state_poll_timer)
+        state_poll_timer)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(
@@ -725,10 +725,6 @@ func _on_score_asset_failure(message: String) -> void:
 func _on_score_assets_invalidated(_new_revision: int) -> void:
     live_midi_feedback.clear()
     living_chords.clear()
-    score_effects.marks.clear()
-    score_effects.hit_pulses.clear()
-    score_effects.wrong_ghosts.clear()
-    score_effects.preview_pulses.clear()
 
 func _on_score_layout_published(_published_revision: int, values: Dictionary) -> void:
     living_chords = LivingScore.prepare(values)
@@ -878,7 +874,7 @@ func _dispatch_feedback_event(event: Dictionary) -> void:
             age_ms = float(Time.get_ticks_msec()) - (
                 float(event["received_at"]) * 1000.0 +
                 visual_transport_clock.backend_offset_ms)
-        live_midi_feedback.react(event, score_effects, practice_view.stage,
+        live_midi_feedback.react(event, practice_view.stage,
             layout_revision if layout_revision == revision else -1, age_ms)
 
 func _poll() -> void:
@@ -911,7 +907,6 @@ func _process(_delta: float) -> void:
         source_bpm = TempoTimeline.bpm_at_beat(beat,source_bpm,
             last_state.get("tempo_segments",[]))
     score_flow.sample(ticks,source_bpm)
-    score_effects.prune_expired(ticks)
     _read_feedback_events()
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
@@ -919,7 +914,7 @@ func _process(_delta: float) -> void:
         command_state.pending,current_screen,_native_score_ready(),living_chords,
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
-        score_effects.record_preview(arrivals,practice_view.stage,ticks)
+        score_effects.record_preview(arrivals,practice_view.stage)
     if score_runway != null:
         # Old score clips continue exiting even during a revision load or
         # a source-picker transition with no currently loaded piece.

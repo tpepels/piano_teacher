@@ -136,15 +136,5 @@ func _initialize() -> void:
     var rejected: Dictionary = NativeScoreAssets.install(renderer, score_reply)
     if bool(rejected["ok"]) or rejected.get("error","") != "Source glyphs missing":
         failures += 1
-    var effects := ScoreEffects.new()
-    effects.marks = [{"id":"canonical"}]
-    effects.hit_pulses = [{"until_ms":49},{"until_ms":51}]
-    effects.wrong_ghosts = [{"until_ms":0},{"until_ms":99}]
-    effects.preview_pulses = [{"until_ms":50}]
-    effects.prune_expired(50)
-    if (effects.marks.size() != 1 or effects.hit_pulses.size() != 1
-            or effects.wrong_ghosts.size() != 1
-            or not effects.preview_pulses.is_empty()):
-        failures += 1
     print("NATIVE_REFACTOR_FAILURES:", failures)
     quit(0 if failures == 0 else 1)

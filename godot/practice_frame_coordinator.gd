@@ -9,7 +9,6 @@ var practice_view
 var settings_view
 var lesson_view
 var lesson_session
-var score_effects
 var demo_player
 var frame_meter
 var busy_presented: Variant = null
@@ -19,12 +18,11 @@ var last_sync_report_ms := 0
 var last_lead_tick := -999
 var last_cursor_tick := -1
 
-func _init(practice, settings, lesson, session, effects, demo, meter) -> void:
+func _init(practice, settings, lesson, session, demo, meter) -> void:
     practice_view = practice
     settings_view = settings
     lesson_view = lesson
     lesson_session = session
-    score_effects = effects
     demo_player = demo
     frame_meter = meter
 

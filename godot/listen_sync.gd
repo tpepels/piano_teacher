@@ -2,7 +2,7 @@ extends RefCounted
 
 # Phase 8B: pure, bounded Listen audio-to-score drift evaluation.
 # Godot's mix clock can estimate software drift, never physical key or
-# speaker latency. A transient HTTP poll error must not seek the piano.
+# speaker latency. A transient state-poll error must not seek the piano.
 const TOLERANCE_SECONDS := 0.20
 const REQUIRED_CONSECUTIVE := 3
 const CORRECTION_COOLDOWN_MS := 1800

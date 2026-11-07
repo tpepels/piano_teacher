@@ -14,10 +14,10 @@ func _ready() -> void:
     startup_last_music_checked = true
     frame_coordinator = PracticeFrameCoordinator.new(
         practice_view,settings_view,lesson_view,lesson_session,
-        score_effects,null,frame_meter)
+        null,frame_meter)
     state_presenter = PracticeStatePresenter.new(
         practice_view,settings_view,lesson_view,lesson_session,
-        score_effects,null)
+        null)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(

@@ -137,9 +137,6 @@ def test_snapshot_assembly_and_live_hit_mapping_have_one_owner():
     assert "last_state" not in handler
     assert "for note in notes:" not in handler
     assert "live_midi_feedback.bind_layout(values, _published_revision)" in main
-    index = (ROOT / "godot/live_midi_feedback.gd").read_text()
-    assert "note_by_id[str(note.get(" in index
-    assert "note_by_id.get(note_id, {})" in index
 
 
 @pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),

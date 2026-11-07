@@ -26,19 +26,19 @@ func _initialize() -> void:
     var failures := 0
     var stage := Stage.new()
     var effects := ScoreEffects.new()
-    effects.record_preview([{"notes":[{"x":12.0,"y":5.0,"page":0}]}],
-        stage,1000)
-    if effects.preview_pulses.size()!=1 or \
-            effects.preview_pulses[0]["until_ms"]!=1220 or \
-            stage.effects.preview_calls!=1:
-        failures += 1
-    effects.hit_pulses.append({"until_ms":1500})
-    effects.transition_mode({"mode":"listen"},stage)
-    if not effects.hit_pulses.is_empty() or \
-            stage.effects.impact_energy!=0.0 or stage.effects.redraws!=1:
+    effects.record_preview([],stage)
+    effects.record_preview([{"notes":[{"id":"a"}]}],stage)
+    if stage.effects.preview_calls != 1:
         failures += 1
     effects.transition_mode({"mode":"practice"},stage)
-    if not effects.preview_pulses.is_empty():
+    if stage.impact_callout.clears != 0 or stage.effects.impact_energy != 2.0:
+        failures += 1
+    effects.transition_mode({"mode":"listen"},stage)
+    if stage.impact_callout.clears != 1 or \
+            stage.effects.impact_energy != 0.0 or stage.effects.redraws != 1:
+        failures += 1
+    effects.transition_mode({"preview_only":true},stage)
+    if stage.impact_callout.clears != 2 or stage.effects.redraws != 1:
         failures += 1
     print("SCORE_EFFECTS_OWNER_FAILURES:",failures)
     quit(0 if failures==0 else 1)

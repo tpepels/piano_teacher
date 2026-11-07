@@ -159,7 +159,7 @@ func sync_beat(beat: float, meter: int, preview: bool) -> void:
         next_meter != beats_per_bar or preview != score_preview
     beat_fraction = next_fraction
     # The practice progress rail follows the same extrapolated beat as the
-    # notation; HTTP polling and smoothing cannot delay its measure fill.
+    # notation; snapshot polling and smoothing cannot delay its measure fill.
     if measure_boundaries.size() >= 2:
         var absolute_beat := play_from_beat + maxf(0.0, beat)
         var exact_progress := clampf((absolute_beat - play_from_beat) /

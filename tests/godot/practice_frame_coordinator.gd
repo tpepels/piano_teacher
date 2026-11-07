@@ -66,7 +66,7 @@ func _initialize() -> void:
     var lesson := Busy.new()
     var session := Session.new()
     var demo := Demo.new()
-    var coordinator = Coordinator.new(practice,settings,lesson,session,null,demo,null)
+    var coordinator = Coordinator.new(practice,settings,lesson,session,demo,null)
     var empty: Dictionary = {}
     if not coordinator.advance(empty,1.25,9.25,1000,.016,
             false,"practice",true,[]).is_empty():

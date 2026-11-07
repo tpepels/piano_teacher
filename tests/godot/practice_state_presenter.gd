@@ -47,31 +47,26 @@ class Session:
     func update_context(_state: Dictionary, _now_ms: int) -> void:
         calls += 1
 
-class Effects:
-    extends RefCounted
-    var marks: Array = []
-
 func _initialize() -> void:
     var failures := 0
     var practice := Practice.new()
     var settings := Settings.new()
     var lesson := Lesson.new()
     var session := Session.new()
-    var effects := Effects.new()
     var timer := Timer.new()
-    var presenter = Presenter.new(practice,settings,lesson,session,effects,timer)
+    var presenter = Presenter.new(practice,settings,lesson,session,timer)
     var state = {"loaded":true,"phase":"playing","device":"Piano",
         "fingering":{"source":"current"},
         "feedback_marks":[{"id":"note-1","status":"correct"}]}
     presenter.present(state,"practice",false,true,"",false,true,1234,false)
     if lesson.reports!=1 or practice.reports!=1 or practice.starts!=1 or \
             settings.calibrations!=1 or settings.practice_reports!=1 or \
-            session.calls!=1 or timer.wait_time!=.08 or effects.marks.size()!=1:
+            session.calls!=1 or timer.wait_time!=.08:
         failures += 1
     var unloaded = {"loaded":false,"phase":"ready","device":""}
     presenter.present(unloaded,"settings",true,false,"",false,false,1300,false)
     if practice.reports!=2 or practice.starts!=1 or session.calls!=2 or \
-            timer.wait_time!=.15 or effects.marks.size()!=1:
+            timer.wait_time!=.15:
         failures += 1
     print("PRACTICE_STATE_PRESENTER_FAILURES:",failures)
     timer.free()

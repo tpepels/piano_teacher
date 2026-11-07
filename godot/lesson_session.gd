@@ -1,5 +1,5 @@
 extends RefCounted
-# Owns the lesson overview cache and request lifecycle, independently of HTTP/UI.
+# Owns the lesson overview cache and request lifecycle, independently of the request transport and UI.
 signal request_requested
 signal overview_changed(values: Dictionary)
 signal request_failed(message: String)
