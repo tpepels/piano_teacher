@@ -139,7 +139,8 @@ static func _record(item: Dictionary) -> Dictionary:
 func enqueue(owner: Control, specs: Array, source_pool: Array,
         rest_pool: Array, first_source: Node2D, world: float,
         viewport_width: float, playhead_x: float,
-        density: float, gap: float, source_duration: float) -> bool:
+        density: float, gap: float, source_duration: float,
+        empty_strip: bool = false) -> bool:
     # Validate the caller's ORIGINAL musical request before considering
     # an offline template. A malformed rest or overlapping source cannot be
     # silently repaired by a compatible archived passage.
@@ -150,9 +151,18 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     var opening_left: float = float(planned.get("world_origin",NAN)) + \
         Admission.clip_bounds(planned,density,gap,source_duration).x / density
     # A new passage must be completely outside the viewport, and behind
-    # everything already physically written into the online queue.
-    if not is_finite(opening_left) or \
-            playhead_x + (opening_left-world)*density <= viewport_width or \
+    # everything already physically written into the online queue. The one
+    # exception is a user Play/Resume on an empty strip (owner decision
+    # 2026-11-08): with no ink of another take right of the playhead, here
+    # or in a live peer layer, its opening may appear on the empty staff.
+    var take: int = int(planned.get("take_owner",planned.get("owner_serial",-1)))
+    var onto_empty_strip: bool = empty_strip and \
+        not Admission.ink_ahead_of(online,world,density,gap,
+            source_duration,take) and \
+        minimum_peer_opening(density,viewport_width,playhead_x) <= world+.00001
+    var inside: bool = is_finite(opening_left) and \
+        playhead_x + (opening_left-world)*density <= viewport_width
+    if not is_finite(opening_left) or (inside and not onto_empty_strip) or \
             not _clears_prior_layers(opening_left,density,
                 viewport_width,playhead_x):
         return false
@@ -190,6 +200,7 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         online[before+index]["admitted_playhead_x"] = playhead_x
         online[before+index]["admitted_density"] = density
         online[before+index]["admitted_staff_gap"] = gap
+        online[before+index]["admitted_on_empty_strip"] = inside
     var id: int = int(matching.get("id",0))
     if not _archive.record("enqueued",int(prepared[0]["owner_serial"]),
             plan,"offline_reuse" if id > 0 else "new",id,

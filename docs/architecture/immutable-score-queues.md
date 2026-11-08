@@ -21,6 +21,14 @@ specified in [transport-and-countin](transport-and-voice-contract.md).
 | `StreamLifecycle` | Validate exactly one source + optional paired rest; allocate, stage and project pre-engraved Godot CanvasItems | Scheduling a passage, deciding success/retry, changing source coordinates or removing arbitrary online entries |
 | `ScoreRunway` | Chronological queue of outgoing renderers, pre-engrave the next step, release only the oldest fully exited layer | Stopping the clock, moving old notes, deleting a newer layer before an older live layer |
 
+On an empty strip (nothing of this queue or a live peer layer printed
+right of the playhead), Play and Resume instead place the opening one
+count-in bar ahead of the playhead, so Play to first note takes one bar
+(owner decision 2026-11-08; see rule 8 of
+[transport-and-countin](transport-and-voice-contract.md)). The queue admits
+such ink inside the viewport only after verifying that strip is empty, and
+records `admitted_on_empty_strip`.
+
 Fresh READY ink remains outside the right viewport edge, including
 the exact clef/key/time-signature clip geometry. The additional offscreen
 margin is 0.12 beat and the READY travel cushion is 0.30 beat. At 31 BPM
@@ -40,7 +48,8 @@ preparation events against the same authoritative beat.
 
 The online queue is ordered by **physical world time**, not by when the
 backend returned a request. `enqueue()` rejects content that starts inside the
-viewport or overlaps the last printed pixel of any existing source/rest slot.
+viewport (except a user Play/Resume onto an empty strip, above) or overlaps the
+last printed pixel of any existing source/rest slot.
 A logical take is represented by **adjoining immutable source strips**, one
 per measure boundary, sharing a `take_owner` and transport identity.
 Each strip has its own queue owner and journal event. Printed cut points

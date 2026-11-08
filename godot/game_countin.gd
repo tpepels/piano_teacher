@@ -1,4 +1,5 @@
 extends Control
+const CueTimeline := preload("res://countin_cue_timeline.gd")
 ## Score-overlay visuals only. No audio player, external IO, or independent
 ## clock is allowed here. A persistent root-owned voice service handles sound.
 var count := 4
@@ -34,8 +35,12 @@ func voice_status() -> Dictionary:
 func speak_beat(number: int) -> bool:
     return bool(_voice_service.speak_beat(number)) if _voice_service != null else false
 
-func present(beat: float, beats_per_bar: int, running: bool, paused: bool) -> void:
-    var show: bool = running and not paused and is_finite(beat) and beat < 0.0
+func present(beat: float, beats_per_bar: int, running: bool, paused: bool,
+        count_in_beats: float = 0.0) -> void:
+    # Only the count-in bar before the start shows a countdown; any longer
+    # lead before it is blank (owner decision 2026-11-08).
+    var show: bool = running and not paused and is_finite(beat) and \
+        CueTimeline.counting(beat,beats_per_bar,count_in_beats)
     var next_count: int = clampi(beats_per_bar,1,12)
     var step: int = posmod(int(floor(beat+.00001)),next_count) if show else -1
     var fraction: float = fposmod(beat,1.0) if show else 0.0

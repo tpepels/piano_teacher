@@ -41,5 +41,37 @@ func _initialize() -> void:
     check(cues.observe("",NAN,4).is_empty() and
         cues.observe("play:2",-2.0,0).is_empty(),
         "invalid clock samples never produce audible cues")
+    # Owner decision 2026-11-08: a lead longer than the count-in is silent;
+    # exactly one bar of the meter is counted, never several cycles.
+    var long_lead := Cues.new()
+    var counted: Array[int] = []
+    var other := 0
+    var beat := -13.0
+    while beat < 0.0:
+        var cue: Dictionary = long_lead.observe("play:long",beat,4,4.0)
+        if bool(cue.get("count_in",false)):
+            counted.append(int(cue["syllable"]))
+        if not cue.is_empty() and beat < -4.0-.0001:
+            other += 1
+        beat += .02
+    check(counted == [1,2,3,4] and other == 0,
+        "a 13-beat lead emits exactly meter count-in ticks: " + str(counted))
+    var capped := Cues.new()
+    var capped_ticks := 0
+    beat = -9.0
+    while beat < 0.0:
+        if bool(capped.observe("play:capped",beat,4,2.0).get("count_in",false)):
+            capped_ticks += 1
+        beat += .02
+    check(capped_ticks == 2,
+        "a tempo-capped count-in counts only its own beats: " + str(capped_ticks))
+    var retry := Cues.new()
+    var retry_ticks := 0
+    beat = -11.0
+    while beat < 0.0:
+        if bool(retry.observe("retry:deadline:789",beat,3).get("count_in",false)):
+            retry_ticks += 1
+        beat += .02
+    check(retry_ticks == 3, "a long Retry preparation counts one 3/4 bar")
     print("COUNTIN_TIMELINE_FAILURES:",failures)
     quit(0 if failures==0 else 1)

@@ -9,7 +9,9 @@ static func _refuse(reason: String) -> Dictionary:
     return {"ok":false,"reason":reason}
 
 static func plan(renderer, action: String, world: float,
-        source_opening: float) -> Dictionary:
+        source_opening: float, count_in_beats: float) -> Dictionary:
+    # count_in_beats is the engine's published next_count_in_beats: the one
+    # count-in bar this Play/Resume gets before its first source beat.
     if action not in ["start","resume","restart"]:
         return _refuse("unsupported_action")
     if not is_finite(world) or not is_finite(source_opening):
@@ -30,10 +32,25 @@ static func plan(renderer, action: String, world: float,
     var right: float = renderer._stream_right_beats()
     var header: float = renderer._stream_header_beats(source_opening)
     var preview_world: float = maxf(world,float(renderer.stream_world_beat))
-    # A prepared, fully offscreen take is the cheapest valid reservation.
-    # Reuse MUST be verified before planning any tail withdrawal.
+    # All possible mutations are previewed on a local ARRAY copy only.
+    # Visible and already-exposed strips remain fixed forever.
+    var withdrawn: Dictionary = queue.preview_tail_withdrawal(
+        preview_world,density,staff_gap,duration,width,
+        width*renderer.PLAYHEAD_FRACTION)
+    var survivors: Array = withdrawn["remaining"]
+    var peer_floor: float = queue.minimum_peer_opening(
+        density,width,width*renderer.PLAYHEAD_FRACTION)
+    # Owner decision 2026-11-08: Play or Resume on an empty strip opens one
+    # count-in bar ahead of the playhead. A hidden READY take was never
+    # seen, so it is withdrawn rather than reused from beyond the right edge.
+    var near_onset: float = NAN
+    if action in ["start","resume"]:
+        near_onset = Admission.empty_strip_start(survivors,preview_world,
+            count_in_beats,header,peer_floor,density,staff_gap,duration)
+    # A prepared, fully offscreen take is the cheapest valid reservation
+    # while other ink is still moving ahead of the playhead.
     var reusable := -1
-    if action == "start":
+    if action == "start" and not is_finite(near_onset):
         reusable = Admission.select(queue.online,"ready",
             source_opening,preview_world,right,header)
     elif action == "resume":
@@ -69,17 +86,19 @@ static func plan(renderer, action: String, world: float,
                 queue.online[reusable]["serial"])),
             "start_world":float(queue.online[reusable]["world_origin"]) +
                 source_opening,"reason":"existing_future_owner"}
-    # All possible mutations are previewed on a local ARRAY copy only.
-    # Visible and already-exposed strips remain fixed forever.
-    var withdrawn: Dictionary = queue.preview_tail_withdrawal(
-        preview_world,density,staff_gap,duration,width,
-        width*renderer.PLAYHEAD_FRACTION)
-    var survivors: Array = withdrawn["remaining"]
+    if is_finite(near_onset):
+        return {"ok":true,"mode":"append","action":action,
+            "opening":source_opening,"start_world":near_onset,
+            "empty_strip":true,
+            "first_pixel_x":width*renderer.PLAYHEAD_FRACTION +
+                (near_onset-header-preview_world)*density,
+            "first_ink_delay_seconds":0.0,
+            "remaining_count":survivors.size(),
+            "withdraw_owners":withdrawn["owners"].duplicate(),
+            "reason":"empty_strip_count_in_bar"}
     var onset: float = Admission.position(survivors,preview_world,
         right,header,NAN,Admission.READY_TRAVEL_BEATS,
         density,staff_gap,duration)
-    var peer_floor: float = queue.minimum_peer_opening(
-        density,width,width*renderer.PLAYHEAD_FRACTION)
     if is_finite(peer_floor):
         onset = maxf(onset,peer_floor+header+Admission.REST_GAP_BEATS)
     if not is_finite(onset):
@@ -88,7 +107,7 @@ static func plan(renderer, action: String, world: float,
     if first_pixel_x <= width:
         return _refuse("not_fully_offscreen")
     return {"ok":true,"mode":"append","action":action,
-        "opening":source_opening,"start_world":onset,
+        "opening":source_opening,"start_world":onset,"empty_strip":false,
         "first_pixel_x":first_pixel_x,
         "first_ink_delay_seconds":
             maxf(0.0,(first_pixel_x-width)/density)*60.0/

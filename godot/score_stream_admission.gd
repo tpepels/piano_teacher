@@ -1,7 +1,8 @@
 extends RefCounted
 ## Single, forward-only source reservation contract. A Play/Resume action
-## selects already pre-engraved, offscreen ink. It never creates a notehead
-## at or ahead of the moving playhead by reconstructing the current source.
+## selects already pre-engraved, offscreen ink, or, on an empty strip, opens
+## one count-in bar ahead of the playhead (empty_strip_start). It never pops
+## a notehead in over, or ahead of, ink that is already visible.
 const MIN_READING_BEATS := 3.0
 # Keep the first printed pixel just beyond the viewport. Large margins
 # multiply into seconds of blank screen at slow practice tempos.
@@ -107,6 +108,50 @@ static func select(passes: Array, purpose: String, opening: float,
             closest = onset
             chosen = index
     return chosen
+
+
+static func ink_ahead_of(passes: Array, world: float, density: float,
+        gap: float, score_duration: float, except_take: int = -1) -> bool:
+    # True when any printed source/rest pixel lies right of the playhead.
+    for item in passes:
+        if except_take >= 0 and int(item.get("take_owner",
+                item.get("owner_serial",-1))) == except_take:
+            continue
+        var bounds: Vector2 = clip_bounds(item,density,gap,score_duration)
+        if float(item["world_origin"]) + bounds.y/density > world+.00001:
+            return true
+    return false
+
+
+static func empty_strip_start(passes: Array, world: float,
+        count_in_beats: float, header_beats: float, peer_floor: float,
+        density: float = 96.0, gap: float = 24.0,
+        score_duration: float = INF) -> float:
+    # Owner decision 2026-11-08: "the notes should appear closer to the
+    # playhead, so the wait is about one bar". With nothing printed right of
+    # the playhead (this queue and every live peer layer), Play places the
+    # opening's first source beat exactly one count-in bar ahead, so the
+    # opening appears on the empty strip instead of travelling in from the
+    # right edge. Otherwise NAN: the append-only offscreen rule applies.
+    # Older ink that already passed the playhead keeps the same rest gap as
+    # any appended passage; committed origins are never moved.
+    if not is_finite(count_in_beats) or count_in_beats <= 0.0:
+        return NAN
+    density = maxf(1.0,density)
+    if ink_ahead_of(passes,world,density,gap,score_duration):
+        return NAN
+    if is_finite(peer_floor) and peer_floor > world+.00001:
+        return NAN
+    var start: float = world + count_in_beats
+    var last := -INF
+    for item in passes:
+        var bounds: Vector2 = clip_bounds(item,density,gap,score_duration)
+        last = maxf(last,float(item["world_origin"]) + bounds.y/density)
+    if is_finite(last):
+        start = maxf(start,last + REST_GAP_BEATS + header_beats)
+    if is_finite(peer_floor):
+        start = maxf(start,peer_floor + REST_GAP_BEATS + header_beats)
+    return start
 
 
 static func position(passes: Array, world: float, right_beats: float,

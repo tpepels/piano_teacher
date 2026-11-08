@@ -112,12 +112,10 @@ class AttemptProgression:
             self._grid = phrase_grid(phrase, boundaries)
         return self._grid
 
-    def schedule_start(self, *, phrase: Phrase,
-                       boundaries: tuple[float, ...],
-                       time_signatures: tuple,
-                       bpm: float, position: float,
-                       loop_continuation: bool, preview: bool,
-                       now: float) -> AttemptStart:
+    def count_in_bar(self, *, phrase: Phrase,
+                     boundaries: tuple[float, ...], time_signatures: tuple,
+                     position: float) -> tuple[float, float, tuple[int, int]]:
+        """Return (from_beat, bar_beats, meter) of the bar a take starts in."""
         from_beat = max(0.0, min(float(position),
                                  phrase.end - phrase.start - 1e-6))
         grid = self.grid_for(phrase, boundaries)
@@ -136,6 +134,18 @@ class AttemptProgression:
         if authored_meter is not None:
             meter = tuple(authored_meter)
             bar_beats = meter[0] * 4 / meter[1]
+        return from_beat, bar_beats, meter
+
+    def schedule_start(self, *, phrase: Phrase,
+                       boundaries: tuple[float, ...],
+                       time_signatures: tuple,
+                       bpm: float, position: float,
+                       loop_continuation: bool, preview: bool,
+                       now: float) -> AttemptStart:
+        from_beat, bar_beats, meter = self.count_in_bar(
+            phrase=phrase, boundaries=boundaries,
+            time_signatures=time_signatures, position=position)
+        grid = self.grid_for(phrase, boundaries)
         count_in = 0.0 if loop_continuation else lead_in_beats(bar_beats,bpm)
         return AttemptStart(
             from_beat=from_beat, count_in_bar_beats=bar_beats,

@@ -52,11 +52,12 @@ there is no legacy camera fallback.
 ## Non-negotiable temporal and visual rules
 
 1. Every printed note/rest is inserted strictly beyond the right viewport
-   edge, including its exact clef, key, and meter ink bounds. No later
-   command may shift it, even by one pixel.
-2. Play reuses its prepared READY owner when valid. An expired hidden
-   reservation is withdrawn once and replaced from pre-engraved music.
-   READY does not continuously re-enqueue on every frame.
+   edge, including its exact clef, key, and meter ink bounds, with one
+   exception (rule 8). No later command may shift it, even by one pixel.
+2. Play reuses its prepared READY owner when valid and other ink is still
+   ahead of the playhead. An expired hidden reservation is withdrawn once
+   and replaced from pre-engraved music. READY does not continuously
+   re-enqueue on every frame.
 3. Pause stops speculative admission, not the monotonic scroll. Resume
    keeps a safely reusable exact source; otherwise it withdraws the
    *maximum still-unseen suffix* and allocates a distinct future passage.
@@ -77,6 +78,20 @@ there is no legacy camera fallback.
    fallback never reports itself as spoken playback. Headless CI verifies
    decoding and playback activation; physical speaker output requires a
    real-device check, which headless tests cannot establish.
+8. **One count-in bar, short start** (owner decision 2026-11-08). The
+   engine publishes `next_count_in_beats`: one bar of the starting measure,
+   capped by `count_in_max_seconds`. When nothing of this queue or any live
+   peer layer is printed right of the playhead, Play or Resume places the
+   opening's first source beat exactly that far ahead
+   (`ScoreStreamAdmission.empty_strip_start`); the never-seen hidden READY
+   take is withdrawn, not reused from beyond the right edge. The new ink
+   appears on the empty staff; it never pops in over, or ahead of, visible
+   ink. Otherwise the append-only offscreen rule applies. In both cases the
+   engine's `count_in_beats` stays that one bar: `run_at` equals the
+   reserved score deadline, and any longer lead is silent. `CountInCueTimeline`
+   and `GameCountIn` count and show only the last `count_in_beats` before
+   beat 0 (one bar of the meter for Retry preparation), so every take start
+   speaks exactly one "Ichi, Ni, San, Shi".
 
 ## Required regression gates
 

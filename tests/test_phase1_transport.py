@@ -214,7 +214,8 @@ def test_godot_uses_single_transport_sample_for_music_and_metronome():
     cue_timeline = (root / 'countin_cue_timeline.gd').read_text()
     assert 'if paused:' in click_owner
     assert '_cues.hold(token,beat)' in click_owner
-    assert '_dispatch_cue(token,beat,bar,false)' in click_owner
+    # The engine's one count-in bar windows every cue (owner, 2026-11-08).
+    assert '_dispatch_cue(token,beat,bar,false,count_in_beats)' in click_owner
     assert 'var tick := floori(beat + .00001)' in cue_timeline
     assert '"accent":posmod(tick,meter) == 0' in cue_timeline
 
@@ -239,7 +240,7 @@ def test_three_four_count_in_retains_meter_for_click_accents(harness):
     assert 'CueTimeline.new()' in clicks
     assert '"accent":posmod(tick,meter) == 0' in (
         root / 'countin_cue_timeline.gd').read_text()
-    assert 'practice_view.stage.count_in.present(beat,bar,true,paused)' in clicks
+    assert 'practice_view.stage.count_in.present(beat,bar,true,paused,count_in_beats)' in clicks
     assert 'metronome_frame.update(last_state,last_state_tick,sampled_beat,now_ms)' in main
 
 
@@ -254,11 +255,16 @@ def test_explicit_renderer_reading_lead_keeps_midi_on_authoritative_resume_clock
     resumed = e.state()
     assert resumed["phase"] == "count_in"
     assert resumed["transport_id"] == 1
-    assert e._resume_grading_after == pytest.approx(t[0]+6.0)
+    # The renderer's reserved lead is the deadline. It is longer than the
+    # one count-in bar (2.5 beats at 40 BPM), so no further minimum applies;
+    # the old fixed four-beat minimum was removed with the owner decision of
+    # 2026-11-08 (one count-in bar, Play/Resume to first note about one bar).
+    assert e._resume_grading_after == pytest.approx(t[0]+5.5)
+    assert resumed["count_in_beats"] == pytest.approx(2.5)
     t[0] += 5.0
     assert e.state()["phase"] == "count_in"
     assert e.recorder is not None and len(e.recorder.presses) == 0
-    t[0] += 1.0
+    t[0] += 0.5
     assert e.state()["phase"] == "playing"
     assert e.state()["clock_beat"] == pytest.approx(before)
     assert e.state()["transport_id"] == 1

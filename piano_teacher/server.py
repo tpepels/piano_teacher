@@ -16,6 +16,7 @@ import time
 import math
 
 from .learning import LearningPlan
+from .lesson_timing import lead_in_beats
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.future_score import FutureScore
@@ -1648,12 +1649,13 @@ class PracticeEngine:
             self.visual_transport.run_at = (scheduled.run_at if scheduled_deadline is None
                                             else scheduled_deadline)
             if scheduled_deadline is None and presentation_lead_seconds > 0:
+                # The renderer's reserved score deadline is the graded
+                # deadline. Any lead longer than the count-in is silent:
+                # the count-in stays the single bar before the first beat
+                # (owner decision 2026-11-08: one "Ichi Ni San Shi" only).
                 self.visual_transport.run_at = max(
                     self.visual_transport.run_at,
                     self.now() + presentation_lead_seconds)
-                self.count_in_beats = max(
-                    self.count_in_beats,
-                    (self.visual_transport.run_at-self.now())*self.plan.bpm/60)
             scope = ("preview" if self.preview_only else "perform" if mode == "perform" else
                      "partial" if self._automatic_remedial_review else
                      "section_review" if self.review_end_beat is not None else
@@ -1672,6 +1674,26 @@ class PracticeEngine:
             self.measurement.phase_changed("count_in" if self.count_in_beats else "active", self.now())
             self.feedback = "Count in, then play"
             self.next_action = scheduled.next_action
+
+    def _next_count_in_beats(self) -> float:
+        """The one count-in bar a user Play or Resume gets now.
+
+        One bar of the starting measure, capped by count_in_max_seconds
+        (lead_in_beats). The renderer places an opening on an empty strip
+        exactly this far ahead of the playhead, so Play to first note is one
+        count-in bar and the score and graded deadlines stay identical.
+        """
+        if self.plan is None or self.plan.bpm <= 0:
+            return 0.0
+        if self.running or self.visual_transport.paused:
+            bar_beats = self.count_in_bar_beats
+        else:
+            phrase = self.plan.active_phrase
+            _, bar_beats, _ = self.attempt_progression.count_in_bar(
+                phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
+                time_signatures=self.plan.piece.time_signatures,
+                position=self.open_from_beat)
+        return lead_in_beats(bar_beats, self.plan.bpm) if bar_beats > 0 else 0.0
 
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Retain polling overshoot instead of moving the musical deadline."""
@@ -2052,13 +2074,17 @@ class PracticeEngine:
                 # never double-add a full reading lead to the old count-in.
                 # Restore the graded downbeat to that exact unchanged future
                 # world position. Earlier graded keys cannot exist yet.
+                # The count-in is the one bar before grading resumes; a
+                # longer reading lead before it is silent (owner decision
+                # 2026-11-08). It never grows with the presentation lead.
+                count_in = self._next_count_in_beats()
                 if reuse_pending_score:
                     self.visual_transport.run_at = now + presentation_lead_seconds
                     self._resume_grading_after = self.visual_transport.run_at
-                    self.count_in_beats = max(self.count_in_beats,
-                        presentation_lead_seconds*self.plan.bpm/60.0)
                 else:
-                    lead_seconds = max(4.0*60.0/self.plan.bpm,
+                    # The renderer reserves at least the published count-in
+                    # (next_count_in_beats); its lead is the score deadline.
+                    lead_seconds = max(count_in*60.0/self.plan.bpm,
                         presentation_lead_seconds)
                     already_waiting = max(0.0,self._resume_grading_after-now)
                     additional = max(0.0,lead_seconds-already_waiting)
@@ -2066,8 +2092,7 @@ class PracticeEngine:
                         self.visual_transport.run_at += additional
                     self._resume_grading_after = now + max(
                         lead_seconds,already_waiting)
-                    self.count_in_beats = max(self.count_in_beats,
-                        (self._resume_grading_after-now)*self.plan.bpm/60)
+                self.count_in_beats = count_in
             elif (self.midi.connected and not self.preview_only
                   and self.pause_context == "playing"
                   and not had_reading_lead
@@ -2257,7 +2282,10 @@ class PracticeEngine:
                 next_deadline = scheduled_offscreen_start(
                     deadline, lead_beats, self.plan.bpm)
                 self._continue_at(next_deadline)
-                self.count_in_beats = max(self.count_in_beats,lead_beats)
+                # One count-in bar before the handed-off stage starts; the
+                # rest of its offscreen lead is silent (owner, 2026-11-08).
+                self.count_in_beats = min(
+                    lead_beats, self._next_count_in_beats())
                 return
             self._prepared_stage_published = False
             selected_retry = self._policy_retry
@@ -3019,6 +3047,7 @@ class PracticeEngine:
             calibration_sample_at = self.now()
             state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
+            state["next_count_in_beats"] = self._next_count_in_beats()
             state["resume_count_in_beat"] = (
                 (calibration_sample_at - self._resume_grading_after)
                 * self.plan.bpm / 60.0

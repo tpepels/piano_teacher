@@ -73,6 +73,7 @@ const SCHEMA := {
     "mistake_response_strategy": ["string"],
     "mode": ["string"],
     "next_action": ["string"],
+    "next_count_in_beats": ["number"],
     "original_bpm": ["number"],
     "pause_context": ["null", "string"],
     "paused": ["bool"],

@@ -14,7 +14,8 @@ class CountIn:
     var events: Array = []
     var spoken: Array[int] = []
     var voice_available := false
-    func present(beat: float, bar: int, visible: bool, paused: bool) -> void:
+    func present(beat: float, bar: int, visible: bool, paused: bool,
+            _count_in_beats: float = 0.0) -> void:
         events.append([beat,bar,visible,paused])
     func speak_beat(number: int) -> bool:
         spoken.append(number)

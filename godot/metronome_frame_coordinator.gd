@@ -14,8 +14,8 @@ var retry_first_click_sent := false
 var _cues := CueTimeline.new()
 
 func _dispatch_cue(token: String, beat: float, bar: int,
-        use_raw_click: bool) -> void:
-    var cue: Dictionary = _cues.observe(token,beat,bar)
+        use_raw_click: bool, count_in_beats: float = 0.0) -> void:
+    var cue: Dictionary = _cues.observe(token,beat,bar,count_in_beats)
     if cue.is_empty():
         return
     var tick: int = int(cue["tick"])
@@ -100,6 +100,8 @@ func update(state: Dictionary, state_tick_ms: int,
         _dispatch_cue("retry:%d:%s" % [
             int(state.get("revision",-1)),retry_key],retry_beat,meter,true)
         return
+    # The engine's one count-in bar; a longer lead before it stays silent.
+    var count_in_beats: float = float(state.get("count_in_beats",0.0))
     var resume_value: Variant = state.get("resume_count_in_beat")
     var moving: bool = bool(state.get("running",false)) and \
         not bool(state.get("paused",false))
@@ -111,11 +113,11 @@ func update(state: Dictionary, state_tick_ms: int,
             var resume_meter: int = maxi(1,int(round(float(
                 state.get("count_in_bar_beats",4)))))
             practice_view.stage.count_in.present(
-                resume_beat,resume_meter,true,false)
+                resume_beat,resume_meter,true,false,count_in_beats)
             _dispatch_cue("resume:%d:%d" % [
                 int(state.get("revision",-1)),
                 int(state.get("transport_id",0))],
-                resume_beat,resume_meter,true)
+                resume_beat,resume_meter,true,count_in_beats)
             return
     if state.is_empty() or not bool(state.get("running",false)):
         practice_view.stage.count_in.present(0.0,4,false,false)
@@ -127,10 +129,10 @@ func update(state: Dictionary, state_tick_ms: int,
     var paused: bool = bool(state.get("paused",false))
     var bar: int = maxi(1,int(round(float(state.get(
         "count_in_bar_beats",4)))))
-    practice_view.stage.count_in.present(beat,bar,true,paused)
+    practice_view.stage.count_in.present(beat,bar,true,paused,count_in_beats)
     var token: String = "running:%d:%d" % [
         int(state.get("revision",-1)),int(state.get("transport_id",0))]
     if paused:
         _cues.hold(token,beat)
         return
-    _dispatch_cue(token,beat,bar,false)
+    _dispatch_cue(token,beat,bar,false,count_in_beats)

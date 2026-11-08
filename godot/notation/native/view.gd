@@ -605,7 +605,7 @@ func _stream_source_windows(opening: float) -> Array[Vector2]:
 
 
 func _stream_add_take(source_beat: float, start_world: float,
-        from_beat: float, take_key: String) -> void:
+        from_beat: float, take_key: String, empty_strip: bool = false) -> void:
     _stream_last_admitted = -1
     var first_serial: int = _stream_serial+1
     var original_origin: float = start_world-source_beat
@@ -654,7 +654,7 @@ func _stream_add_take(source_beat: float, start_world: float,
                 retained_repeat_segments,retained_rest_segments,
                 retained_first_once,stream_world_beat,size.x,
                 size.x*PLAYHEAD_FRACTION,timeline.pixels_per_beat,
-                gap_pixels,timeline.duration_beats):
+                gap_pixels,timeline.duration_beats,empty_strip):
             # If admission fails partway through the immutable take,
             # unwind ONLY the new right-hand strip suffix, preserving the
             # old on-screen prefix and archiving every removed owner.
@@ -781,12 +781,13 @@ func _transport_admission_receipt(planned: Dictionary,
 
 
 func reserve_transport_action(action: String, world: float,
-        opening: float) -> Dictionary:
+        opening: float, count_in_beats: float) -> Dictionary:
     # The ONLY user-command route. First compute both the future slot and
     # safe suffix on immutable previews; failed preflight cannot withdraw
-    # any source or start the backend transport.
+    # any source or start the backend transport. count_in_beats is the
+    # engine's next_count_in_beats (one count-in bar).
     var planned: Dictionary = TransportReservation.plan(
-        self,action,world,opening)
+        self,action,world,opening,count_in_beats)
     if not bool(planned.get("ok",false)):
         push_error("SCORE_TRANSPORT_PREFLIGHT: %s action=%s opening=%.3f" % [
             str(planned.get("reason","unknown")),action,opening])
@@ -813,7 +814,8 @@ func reserve_transport_action(action: String, world: float,
         push_error("SCORE_TRANSPORT_COMMIT: online queue changed during preflight")
         return {}
     var admitted: Dictionary = arm_stream_take(
-        world,opening,intended,false,false)
+        world,opening,intended,false,false,
+        count_in_beats if bool(planned.get("empty_strip",false)) else 0.0)
     if admitted.is_empty():
         push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")
         return {}
@@ -826,7 +828,8 @@ func reserve_transport_action(action: String, world: float,
 
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
-        resuming_paused: bool = false, retrying: bool = false) -> Dictionary:
+        resuming_paused: bool = false, retrying: bool = false,
+        empty_strip_count_in: float = 0.0) -> Dictionary:
     # The common future-only admission route owns a rollback snapshot until
     # the backend confirms the newly armed transport. Failure returns all
     # source/rest clip roles to their exact original state.
@@ -872,10 +875,23 @@ func arm_stream_take(world: float, opening: float,
             stream_world_beat,_stream_right_beats(),
             _stream_header_beats(opening),planned_start_world,0.0,
             timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+        var onto_empty_strip := false
+        if not is_finite(checked) and empty_strip_count_in > 0.0:
+            # The preflight chose the empty-strip count-in bar slot; the
+            # live queue must still permit exactly that deadline.
+            var earliest: float = StreamAdmission.empty_strip_start(
+                _stream_queue.online,stream_world_beat,empty_strip_count_in,
+                _stream_header_beats(opening),
+                _stream_queue.minimum_peer_opening(timeline.pixels_per_beat,
+                    size.x,size.x*PLAYHEAD_FRACTION),
+                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+            onto_empty_strip = is_finite(earliest) and \
+                planned_start_world >= earliest-.0001
+            checked = planned_start_world if onto_empty_strip else NAN
         if not is_finite(checked):
             return {}
         var previous_serial := _stream_serial
-        _stream_add_take(opening,checked,opening,"prepared")
+        _stream_add_take(opening,checked,opening,"prepared",onto_empty_strip)
         if _stream_serial == previous_serial:
             return {}
         serial = _stream_last_admitted

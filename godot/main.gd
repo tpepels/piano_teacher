@@ -1100,8 +1100,11 @@ func _send_action(command: Dictionary) -> void:
         # One preflighted transaction plans the maximal retractable suffix,
         # verifies a future admission, then commits it with one graded deadline.
         # Failure cannot mutate the online queue before a valid plan exists.
+        # The engine publishes the one count-in bar this action gets; on an
+        # empty strip the opening is placed exactly that far ahead.
         var reserved: Dictionary = renderer.reserve_transport_action(
-            requested,visual_now,opening)
+            requested,visual_now,opening,
+            float(last_state.get("next_count_in_beats",0.0)))
         if reserved.is_empty():
             command_state.abort_action()
             practice_view.finish_action()

@@ -226,6 +226,30 @@ func _process(_delta: float) -> bool:
         initial_transport = int(app.last_state.get("transport_id",-1))
         var original_survived := false
         var new_ink_offscreen := true
+        # Owner decision 2026-11-08: Play on an empty strip replaces the
+        # never-seen hidden READY take with one opening one count-in bar
+        # ahead of the playhead. That take is then the original to track.
+        var empty_strip_take := -1
+        for item in renderer.stream_passes:
+            if str(item.get("kind","source")) == "source" and \
+                    bool(item.get("admitted_on_empty_strip",false)) and \
+                    int(item["serial"]) > ready_pass_serial:
+                empty_strip_take = int(item.get("take_owner",item["serial"]))
+                break
+        if empty_strip_take >= 0 and not renderer._stream_queue.has_take(ready_take_owner):
+            for item in renderer.stream_passes:
+                if int(item.get("take_owner",item["serial"])) == empty_strip_take:
+                    ready_pass_serial = int(item["serial"])
+                    ready_take_owner = empty_strip_take
+                    ready_world_origin = float(item["world_origin"])
+                    var empty_bounds: Vector2 = Admission.clip_bounds(
+                        item,renderer.timeline.pixels_per_beat,
+                        renderer.staff_gap(),renderer.timeline.duration_beats)
+                    ready_first_expiry_world = ready_world_origin + \
+                        empty_bounds.y/renderer.timeline.pixels_per_beat + \
+                        renderer.size.x*ScoreView.PLAYHEAD_FRACTION / \
+                            renderer.timeline.pixels_per_beat
+                    break
         for item in renderer.stream_passes:
             if int(item["serial"]) == ready_pass_serial:
                 original_survived = is_equal_approx(
@@ -378,7 +402,10 @@ func _process(_delta: float) -> bool:
                 var earliest_x: float = playhead_at_enqueue + \
                     (float(item["world_origin"])-world_at_enqueue)*density_at_enqueue + \
                     bounds.x
-                admitted_outside = earliest_x > viewport_at_enqueue
+                # Inside the viewport only onto an empty strip, which the
+                # queue verified at enqueue (owner decision 2026-11-08).
+                admitted_outside = earliest_x > viewport_at_enqueue or \
+                    bool(item.get("admitted_on_empty_strip",false))
             future_only_at_enqueue = future_only_at_enqueue and admitted_outside
         diagnostics.append({
             "serial":serial,"take_owner":take_owner,

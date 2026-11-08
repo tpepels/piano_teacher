@@ -3,6 +3,8 @@ extends SceneTree
 ## response is forbidden to allocate new notes or change the world origin.
 const Admission := preload("res://score_stream_admission.gd")
 const TransportReservation := preload("res://score_transport_reservation.gd")
+# The engine's next_count_in_beats: one 4/4 bar.
+const COUNT_IN := 4.0
 class FakeSegment:
     extends Node2D
     var compiled := true
@@ -28,11 +30,13 @@ class InstrumentedView:
                     "position":Vector2(float(i)*96.0,200.0)})
         return segment
     func _stream_add_take(source_beat: float, start_world: float,
-            from_beat: float, take_key: String) -> void:
+            from_beat: float, take_key: String,
+            empty_strip: bool = false) -> void:
         var before: int = _stream_serial
         # Test the REAL online/offline queue. Only immutable retained DRAW
         # buffers are replaced by in-memory dummy glyphs.
-        super._stream_add_take(source_beat,start_world,from_beat,take_key)
+        super._stream_add_take(source_beat,start_world,from_beat,take_key,
+            empty_strip)
         if _stream_serial > before:
             admissions.append({"world":start_world,"serial":_stream_serial})
 
@@ -277,7 +281,7 @@ func _initialize() -> void:
                 is_equal_approx(float(item["world_origin"]),race_origin)),
         "Pause cannot retract the in-flight, unexposed source strips")
     var provisional_plan: Dictionary = TransportReservation.plan(
-        racing,"resume",.21,0.0)
+        racing,"resume",.21,0.0,COUNT_IN)
     check(bool(provisional_plan.get("ok",false)) and
         str(provisional_plan.get("mode",""))=="reuse" and
         int(provisional_plan.get("protected_take",-1))==1,
@@ -309,19 +313,25 @@ func _initialize() -> void:
     check(racing._stream_queue.has_take(racing._stream_last_admitted),
         "fixture includes a genuinely speculative future take")
     var changed_plan: Dictionary = TransportReservation.plan(
-        racing,"resume",.24,3.0)
+        racing,"resume",.24,3.0,COUNT_IN)
     check(bool(changed_plan.get("ok",false)) and
         int(changed_plan.get("remaining_count",-1))==0 and
         racing._stream_queue.has_take(1),
         "changed-opening preflight sees the complete unseen suffix without mutating it")
     var changed_take: Dictionary = racing.reserve_transport_action(
-        "resume",.24,3.0)
+        "resume",.24,3.0,COUNT_IN)
     check(not changed_take.is_empty() and
         not racing._stream_queue.has_take(1) and
         not racing._stream_queue.has_take(race_future) and
         racing.stream_passes.any(func(item: Dictionary) -> bool:
             return absf(float(item.get("source_floor",-1))-3.0)<.00001),
-        "changed-opening Resume replaces safe old ink with new offscreen notation")
+        "changed-opening Resume replaces safe old ink with new notation")
+    # Owner decision 2026-11-08: nothing of the paused take was ever seen,
+    # so the strip is empty and the new opening lands one count-in bar
+    # ahead of the playhead instead of beyond the right edge.
+    check(bool(changed_plan.get("empty_strip",false)) and
+        is_equal_approx(float(changed_take.get("start_world",NAN)),.24+COUNT_IN),
+        "Resume on an empty strip places its opening one count-in bar ahead")
     var archived_paused := false
     for event in racing._stream_queue.history:
         if (int(event.get("owner_serial",-1)) == 1 and
@@ -364,13 +374,13 @@ func _initialize() -> void:
     long_state["phase"] = "paused"
     long_take.present_flow(1.1,long_state,2.2)
     var long_plan: Dictionary = TransportReservation.plan(
-        long_take,"resume",1.2,2.2)
+        long_take,"resume",1.2,2.2,COUNT_IN)
     check(bool(long_plan.get("ok",false)) and
         int(long_plan.get("remaining_count",-1))==1 and
         long_take.stream_passes.size()==4,
         "long-passage preflight predicts only the visible measure survives")
     var early_continue: Dictionary = long_take.reserve_transport_action(
-        "resume",1.2,2.2)
+        "resume",1.2,2.2,COUNT_IN)
     check(is_equal_approx(float(long_take.stream_passes[0]["world_origin"]),
             original_long_origin) and
         int(long_take.stream_passes[0].get("take_owner",-1))==1,

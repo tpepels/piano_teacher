@@ -117,5 +117,21 @@ func _initialize() -> void:
         last_ink+3.0,0.0,d,g,4.0)
     check(not is_finite(premature),
         "a source position that overlaps the preceding printed clip is rejected")
+    # Owner decision 2026-11-08: on an empty strip the opening's first beat
+    # is one count-in bar ahead; never while ink is still ahead of the
+    # playhead, and always behind older ink plus the rest gap and header.
+    check(is_equal_approx(Admission.empty_strip_start([],5.0,4.0,3.75,NAN,d,g,4.0),
+            9.0), "empty strip: first beat exactly one count-in bar ahead")
+    check(not is_finite(Admission.empty_strip_start(ended,12.0,4.0,3.75,NAN,d,g,4.0)),
+        "ink still right of the playhead keeps the append-only offscreen rule")
+    var after_old: float = Admission.empty_strip_start(ended,last_ink,4.0,3.75,NAN,d,g,4.0)
+    check(is_equal_approx(after_old,last_ink+Admission.REST_GAP_BEATS+3.75),
+        "ink that just passed the playhead keeps its rest gap and header clearance")
+    check(is_equal_approx(Admission.empty_strip_start(ended,40.0,4.0,3.75,NAN,d,g,4.0),
+            44.0), "long-departed ink does not delay the count-in bar")
+    check(not is_finite(Admission.empty_strip_start([],5.0,4.0,3.75,6.0,d,g,4.0)),
+        "a live peer layer still on screen blocks empty-strip placement")
+    check(not is_finite(Admission.empty_strip_start([],5.0,0.0,3.75,NAN,d,g,4.0)),
+        "no published count-in means no on-screen placement")
     print("SCORE_STREAM_ADMISSION_FAILURES:",failures)
     quit(0 if failures==0 else 1)

@@ -51,16 +51,31 @@ func _run() -> void:
     var original_count: int = v.stream_passes.size()
     check(original_count == 4,"READY has one immutable four-measure take")
     var original_origin: float = float(v.stream_passes[0]["world_origin"])
-    var start_plan: Dictionary = Reservation.plan(v,"start",0.01,0.0)
+    # Owner decision 2026-11-08 ("the notes should appear closer to the
+    # playhead, so the wait is about one bar"): on an empty strip Play opens
+    # one count-in bar ahead of the playhead. The never-seen READY take is
+    # withdrawn instead of being reused from beyond the right edge.
+    const COUNT_IN := 4.0
+    var start_plan: Dictionary = Reservation.plan(v,"start",0.01,0.0,COUNT_IN)
     check(bool(start_plan.get("ok",false)) and
-        str(start_plan.get("mode",""))=="reuse",
-        "Play preflight binds pre-engraved READY without making new notes")
+        str(start_plan.get("mode",""))=="append" and
+        bool(start_plan.get("empty_strip",false)) and
+        is_equal_approx(float(start_plan.get("start_world",NAN)),0.01+COUNT_IN),
+        "Play on an empty strip plans its first beat one count-in bar ahead: " +
+            str(start_plan))
     check(v.stream_passes.size()==original_count and
         float(v.stream_passes[0]["world_origin"])==original_origin,
         "preflight must never mutate the queue")
-    var started: Dictionary = v.reserve_transport_action("start",0.01,0.0)
-    check(not started.is_empty() and v.stream_passes.size()==original_count,
-        "Play reserves exactly one existing logical take")
+    var started: Dictionary = v.reserve_transport_action("start",0.01,0.0,COUNT_IN)
+    check(not started.is_empty() and v.stream_passes.size()==original_count and
+        is_equal_approx(float(started.get("start_world",NAN)),0.01+COUNT_IN),
+        "Play replaces the unseen READY take with one take at the count-in bar")
+    check(float(started.get("start_world",NAN)) < original_origin,
+        "the opening no longer waits behind the offscreen READY slot")
+    original_origin = float(v.stream_passes[0]["world_origin"])
+    v._project_stream(v.size.x*.33)
+    check(bool(v.stream_passes[0].get("ever_visible",false)),
+        "the opening is on the empty staff as soon as Play is armed")
     check(v.acknowledge_stream_arm(),"Play backend acknowledgment binds take")
     state["running"] = true
     state["phase"] = "playing"
@@ -77,7 +92,7 @@ func _run() -> void:
     v.present_flow(entry_world+.02,state,3.25)
     var resume_world: float = entry_world+.03
     var resume_plan: Dictionary = Reservation.plan(
-        v,"resume",resume_world,3.25)
+        v,"resume",resume_world,3.25,COUNT_IN)
     check(bool(resume_plan.get("ok",false)) and
         str(resume_plan.get("mode",""))=="append" and
         int(resume_plan.get("remaining_count",-1))==1,
@@ -86,8 +101,10 @@ func _run() -> void:
         is_equal_approx(float(v.stream_passes[0]["world_origin"]),
             original_origin),
         "preflight leaves the actual online queue untouched")
+    check(not bool(resume_plan.get("empty_strip",true)),
+        "with the paused take still ahead of the playhead Resume stays append-only")
     var resumed: Dictionary = v.reserve_transport_action(
-        "resume",resume_world,3.25)
+        "resume",resume_world,3.25,COUNT_IN)
     check(not resumed.is_empty() and
         is_equal_approx(float(v.stream_passes[0]["world_origin"]),
             original_origin),
@@ -97,7 +114,7 @@ func _run() -> void:
     check(float(resumed.get("start_world",-INF)) > resume_world,
         "new grading deadline remains strictly in the future")
     var pre_invalid: int = v.stream_passes.size()
-    var invalid: Dictionary = Reservation.plan(v,"restart",resume_world,25.0)
+    var invalid: Dictionary = Reservation.plan(v,"restart",resume_world,25.0,COUNT_IN)
     check(not bool(invalid.get("ok",true)) and
         v.stream_passes.size()==pre_invalid,
         "invalid source is rejected without a queue mutation")
