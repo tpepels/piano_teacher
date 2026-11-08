@@ -385,24 +385,36 @@ def test_real_application_popup_posts_correction_and_reloads_revision(captured, 
     env = dict(os.environ, HOME=str(home), XDG_DATA_HOME=str(tmp_path / "data"),
                XDG_CONFIG_HOME=str(tmp_path / "config"), XDG_CACHE_HOME=str(tmp_path / "cache"),
                **embedded_python_env())
-    try:
-        result = _run_godot([*_godot(), "--path", str(ROOT / "godot"),
-            "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility",
-            "--script", str(ROOT / "tests/godot/native_fingering_application.gd"),
-            "--", str(folder), source_path.name], timeout=300, env=env)
-    except subprocess.TimeoutExpired as exc:
-        (folder / "application.log").write_bytes((exc.stdout or b"")+(exc.stderr or b""))
-        raise
-    output = result.stdout+result.stderr
-    (folder / "application.log").write_text(output)
-    assert result.returncode == 0, output
-    assert "NATIVE_FINGERING_APPLICATION_FAILURES:0" in output, output
-    assert "SCRIPT ERROR" not in output and "Parse Error" not in output, output
+    def run_app(*mode_args):
+        try:
+            result = _run_godot([*_godot(), "--path", str(ROOT / "godot"),
+                "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility",
+                "--script", str(ROOT / "tests/godot/native_fingering_application.gd"),
+                "--", str(folder), source_path.name, *mode_args], timeout=300, env=env)
+        except subprocess.TimeoutExpired as exc:
+            (folder / f"application-{mode_args[0]}.log").write_bytes((exc.stdout or b"")+(exc.stderr or b""))
+            raise
+        output = result.stdout+result.stderr
+        (folder / f"application-{mode_args[0]}.log").write_text(output)
+        assert result.returncode == 0, output
+        assert "NATIVE_FINGERING_APPLICATION_FAILURES:0" in output, output
+        assert "SCRIPT ERROR" not in output and "Parse Error" not in output, output
+
+    def override_in_fresh_engine(source_id):
+        engine = PracticeEngine(tmp_path / "data" / "piano-teacher", enable_midi=False)
+        try:
+            engine.load(str(music / source_path.name))
+            return (engine.fingering_status()["assignments"][source_id]["manual"],
+                    len(engine.plan.lesson_steps))
+        finally:
+            engine.db.close()
+
+    # Run 1: the popup corrects one finger; the app stops after the reload.
+    run_app("edit")
     report = json.loads((folder / "app-report.json").read_text())
     assert report['static_memory'] < 512*1024*1024, "Long lesson paths must share font resources"
     assert report["before"] != report["changed"]
-    # The chain: one override reported by the engine, a newer revision, then removal.
-    assert report["manual_after_edit"] == 1 and report["manual_after_restore"] == 0
+    assert report["manual_after_edit"] == 1
     assert report["edit_revision"] > report["initial_revision"]
     assert np.any(_rgb(folder,"app-before.png") != _rgb(folder,"app-corrected.png"))
     x,y,w,h = report["finger_rect"]
@@ -410,12 +422,14 @@ def test_real_application_popup_posts_correction_and_reloads_revision(captured, 
     before = _rgb(folder,"app-before.png")[y0:y1,x0:x1]
     after = _rgb(folder,"app-corrected.png")[y0:y1,x0:x1]
     assert np.count_nonzero(np.max(np.abs(before-after),axis=2)>20) >= 5, "The actual MIDI finger digit must change in the framebuffer"
-    # The removal is persisted: a fresh engine over the same data has no override.
-    engine = PracticeEngine(tmp_path / "data" / "piano-teacher", enable_midi=False)
-    try:
-        engine.load(str(music / source_path.name))
-        assignments = engine.fingering_status()["assignments"]
-        assert report["source_id"] in assignments
-        assert assignments[report["source_id"]]["manual"] is None
-    finally:
-        engine.db.close()
+    # The edit is persisted: a fresh engine over the same data holds the override.
+    manual, lesson_steps = override_in_fresh_engine(report["source_id"])
+    assert manual == report["changed"]
+    assert report["path_steps"] == lesson_steps
+    # Run 2: a fresh process sees the override, then removes it.
+    run_app("restore", report["source_id"], str(report["before"]))
+    restored = json.loads((folder / "restore-report.json").read_text())
+    assert restored["manual_after_edit"] == 1 and restored["manual_after_restore"] == 0
+    assert restored["revision"] >= 1
+    manual, _ = override_in_fresh_engine(report["source_id"])
+    assert manual is None

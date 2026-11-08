@@ -189,16 +189,27 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_NO_STANDALONE_SHAPE:",ids)
                 continue
-            png = cairosvg.svg2png(bytestring=filtered.encode(),output_width=1600)
-            with Image.open(BytesIO(png)) as decoded:
-                rgba = decoded.convert("RGBA")
+            width = BASE_RASTER_WIDTH
+            while True:
+                png = cairosvg.svg2png(bytestring=filtered.encode(),output_width=width)
+                with Image.open(BytesIO(png)) as decoded:
+                    rgba = decoded.convert("RGBA")
+                staff_space = (lines[1]-lines[0])*rgba.height
+                if staff_space >= MIN_STAFF_SPACE_PX:
+                    break
+                # A long unbroken system is wide: a fixed raster would leave
+                # its staff spaces too small to read. Scale it to the system.
+                width = math.ceil(width*TARGET_STAFF_SPACE_PX/max(staff_space,1e-6))
+                if width > MAX_RASTER_WIDTH:
+                    raise BeamExtractionError(
+                        "Verovio system too wide to rasterize beams legibly "
+                        f"(needs {width}px, limit {MAX_RASTER_WIDTH}px)")
             alpha = rgba.getchannel("A")
             bbox = alpha.getbbox()
             if bbox is None:
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_EMPTY_IMAGE:",ids)
                 continue
-            staff_space = (lines[1]-lines[0])*rgba.height
             span = (x1-x0)*rgba.width
             if not 4 < staff_space < 300 or span < 4:
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
@@ -279,6 +290,16 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             # notes. Keep the existing group renderer for that passage.
             continue
     return output
+
+
+BASE_RASTER_WIDTH = 1600
+MIN_STAFF_SPACE_PX = 4.5     # below this a rasterized beam is not legible
+TARGET_STAFF_SPACE_PX = 8.0
+MAX_RASTER_WIDTH = 24000
+
+
+class BeamExtractionError(Exception):
+    """A required beam cannot be extracted; never publish a silent empty atlas."""
 
 
 def beam_fragments(svgs, model, cache=None, cache_identity="") -> dict:

@@ -13,6 +13,8 @@ func _play_until_visible(app: Control) -> bool:
     var deadline: int = Time.get_ticks_msec()+90000
     while Time.get_ticks_msec() < deadline:
         await process_frame
+        # A new score revision promotes a new renderer; never hold the old one.
+        renderer = app.practice_view.stage.renderer
         if not app.command_state.pending and str(app.last_state.get("phase","")) == "ready" and \
                 app._native_score_ready() and renderer.retained_ready():
             app._toggle_playing()
@@ -43,6 +45,9 @@ func _run() -> void:
     # The embedded engine starts with the app; open the library piece the way
     # the Music screen does, resuming straight into practice.
     var piece: String = OS.get_cmdline_user_args()[1]
+    # Two runs share one data directory: "edit" corrects a finger and stops;
+    # "restore" starts a fresh process, finds that override persisted, removes it.
+    var mode: String = OS.get_cmdline_user_args()[2]
     var started: int = Time.get_ticks_msec()+60000
     while not app.native_started and Time.get_ticks_msec() < started:
         await process_frame
@@ -71,48 +76,76 @@ func _run() -> void:
     var changed: int = previous % 5+1
     var revision: int = app.rendered_revision
     var revision_initial: int = revision
-    var finger_rect: Rect2 = renderer.get_global_transform_with_canvas()*first["rect"]
-    finger_rect.position *= root.content_scale_factor
-    finger_rect.size *= root.content_scale_factor
-    root.get_texture().get_image().save_png(folder.path_join("app-before.png"))
-    var click := InputEventMouseButton.new()
-    click.button_index = MOUSE_BUTTON_RIGHT
-    click.pressed = true
-    click.position = renderer.get_global_transform_with_canvas()*first["rect"].get_center()
-    root.push_input(click,true)
-    await process_frame
-    if renderer.annotations.fingering_popup == null or not renderer.annotations.fingering_popup.visible:
-        failures.append("App right click did not open the fingering editor")
+    var finger_rect: Rect2 = Rect2()
+    var manual_after_edit := -1
+    var edit_revision := -1
+    if mode == "restore":
+        source = OS.get_cmdline_user_args()[3]
+        previous = int(OS.get_cmdline_user_args()[4])
+        # The override survived the process restart: engine and native score agree.
+        for event in renderer.layout.ordered_events:
+            if event.get("source_id") == source and event.get("is_attack",false):
+                changed = int(event.get("fingering",{}).get("finger",-1))
+                if event.get("fingering",{}).get("origin") != "manual":
+                    failures.append("The saved correction was not applied after restart")
+        manual_after_edit = int(app.last_state.get("fingering",{}).get("manual",-1))
+        if manual_after_edit != 1:
+            failures.append("A fresh process must report the persisted override, got %d" % manual_after_edit)
     else:
-        renderer.annotations.fingering_popup.id_pressed.emit(changed)
-    if app.command_state.operation != "fingering.correct":
-        failures.append("Popup must send fingering.correct through the production command request")
-    if app.action_request.timeout < 300.0:
-        failures.append("Whole-piece inference must not inherit the short control request timeout")
-    print("FINGERING_APPLICATION_EDIT:",source)
-    # The correction reloads the score at a new revision; show it again.
-    var reload_deadline: int = Time.get_ticks_msec()+60000
-    while app.rendered_revision <= revision and Time.get_ticks_msec() < reload_deadline:
+        finger_rect = renderer.get_global_transform_with_canvas()*first["rect"]
+        finger_rect.position *= root.content_scale_factor
+        finger_rect.size *= root.content_scale_factor
+        root.get_texture().get_image().save_png(folder.path_join("app-before.png"))
+        var click := InputEventMouseButton.new()
+        click.button_index = MOUSE_BUTTON_RIGHT
+        click.pressed = true
+        click.position = renderer.get_global_transform_with_canvas()*first["rect"].get_center()
+        root.push_input(click,true)
         await process_frame
-    if app.rendered_revision <= revision:
-        failures.append("Correction did not reload a new score revision")
-    if not await _play_until_visible(app):
-        quit(1)
+        if renderer.annotations.fingering_popup == null or not renderer.annotations.fingering_popup.visible:
+            failures.append("App right click did not open the fingering editor")
+        else:
+            renderer.annotations.fingering_popup.id_pressed.emit(changed)
+        if app.command_state.operation != "fingering.correct":
+            failures.append("Popup must send fingering.correct through the production command request")
+        if app.action_request.timeout < 300.0:
+            failures.append("Whole-piece inference must not inherit the short control request timeout")
+        print("FINGERING_APPLICATION_EDIT:",source)
+        # The correction reloads the score at a new revision; show it again.
+        var reload_deadline: int = Time.get_ticks_msec()+60000
+        while app.rendered_revision <= revision and Time.get_ticks_msec() < reload_deadline:
+            await process_frame
+        if app.rendered_revision <= revision:
+            failures.append("Correction did not reload a new score revision")
+        if not await _play_until_visible(app):
+            quit(1)
+            return
+        var corrected := false
+        for event in app.practice_view.stage.renderer.layout.ordered_events:
+            if event.get("source_id") == source and event.get("is_attack",false):
+                corrected = event.get("fingering",{}).get("finger") == changed and \
+                    event.get("fingering",{}).get("origin") == "manual"
+        if not corrected:
+            failures.append("API correction did not reach the refreshed native score")
+        # The engine's own status reflects the persisted override.
+        manual_after_edit = int(app.last_state.get("fingering",{}).get("manual",-1))
+        if manual_after_edit != 1:
+            failures.append("Engine fingering status must report exactly one override, got %d" % manual_after_edit)
+        edit_revision = app.rendered_revision
+        root.get_texture().get_image().save_png(folder.path_join("app-corrected.png"))
+        revision = app.rendered_revision
+        var edit_file := FileAccess.open(folder.path_join("app-report.json"),FileAccess.WRITE)
+        edit_file.store_string(JSON.stringify({"source_id":source,"before":previous,"changed":changed,
+            "initial_revision":revision_initial,"edit_revision":edit_revision,
+            "manual_after_edit":manual_after_edit,"failures":failures,
+            "static_memory":OS.get_static_memory_usage(),"path_steps":app.lesson_view.steps.entries.size(),
+            "finger_rect":[finger_rect.position.x,finger_rect.position.y,finger_rect.size.x,finger_rect.size.y]}))
+        edit_file.close()
+        for failure in failures:
+            push_error(failure)
+        print("NATIVE_FINGERING_APPLICATION_FAILURES:",failures.size())
+        quit(0 if failures.is_empty() else 1)
         return
-    var corrected := false
-    for event in app.practice_view.stage.renderer.layout.ordered_events:
-        if event.get("source_id") == source and event.get("is_attack",false):
-            corrected = event.get("fingering",{}).get("finger") == changed and \
-                event.get("fingering",{}).get("origin") == "manual"
-    if not corrected:
-        failures.append("API correction did not reach the refreshed native score")
-    # The engine's own status reflects the persisted override.
-    var manual_after_edit: int = int(app.last_state.get("fingering",{}).get("manual",-1))
-    if manual_after_edit != 1:
-        failures.append("Engine fingering status must report exactly one override, got %d" % manual_after_edit)
-    var edit_revision: int = app.rendered_revision
-    root.get_texture().get_image().save_png(folder.path_join("app-corrected.png"))
-    revision = app.rendered_revision
     print("FINGERING_APPLICATION_RESTORE:",source)
     app._on_fingering_change_requested(source,null)
     var restore_deadline: int = Time.get_ticks_msec()+60000
@@ -169,12 +202,11 @@ func _run() -> void:
     if app.command_state.pending or app.fingering_save_error.is_empty():
         failures.append("An old native view cannot correct a newly loaded piece")
     app.last_state = current
-    var file := FileAccess.open(folder.path_join("app-report.json"),FileAccess.WRITE)
+    var file := FileAccess.open(folder.path_join("restore-report.json"),FileAccess.WRITE)
     file.store_string(JSON.stringify({"source_id":source,"before":previous,"changed":changed,
-        "revision":app.rendered_revision,"edit_revision":edit_revision,"initial_revision":revision_initial,
-        "manual_after_edit":manual_after_edit,"manual_after_restore":manual_after_restore,"failures":failures,
-        "static_memory":OS.get_static_memory_usage(),"path_steps":app.lesson_view.steps.entries.size(),
-        "finger_rect":[finger_rect.position.x,finger_rect.position.y,finger_rect.size.x,finger_rect.size.y]}))
+        "revision":app.rendered_revision,"manual_after_edit":manual_after_edit,
+        "manual_after_restore":manual_after_restore,"failures":failures}))
+    file.close()
     for failure in failures:
         push_error(failure)
     print("NATIVE_FINGERING_APPLICATION_FAILURES:",failures.size())

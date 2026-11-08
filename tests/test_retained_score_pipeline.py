@@ -238,7 +238,10 @@ def test_production_journey_does_not_depend_on_removed_camera_switch():
 
 def test_production_ready_smoke_accepts_hidden_offscreen_queue_replacement():
     script = (ROOT/"godot/production_ui_smoke.gd").read_text()
-    assert "pending_count != 1" in script
+    # One logical READY take may hold several strips; the gate counts takes,
+    # not strips (queued_takes), so strip-count text is intentionally absent.
+    assert "queued_takes.size() != 1" in script
+    assert "pending_count != 1" not in script
     assert "ready_world_origin = float(prepared[\"world_origin\"])" in script
     assert "moved hidden ink backwards" in script
     assert "Ready world-axis stopped or repositioned source" not in script

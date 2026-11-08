@@ -311,3 +311,25 @@ def test_long_source_beam_keeps_all_32_attacks(monkeypatch):
                                 {"notation_events":events})
     assert found["|".join(ids)]["note_ids"]==ids
     assert len(found["|".join(ids)]["tip_offsets"])==32
+
+
+def test_long_unbroken_system_scales_its_raster_instead_of_dropping_beams(tmp_path):
+    """8 unbroken bars are ~62k units wide: a fixed 1600 px raster left 3.5 px
+    staff spaces and silently produced no beam fragments."""
+    from test_reading_spacing import reading_phrase
+    from test_recovery_motion import make_phrase_fixture
+
+    _, layout = make_phrase_fixture(tmp_path, reading_phrase(bars=8))
+    required = layout["native_required_beam_groups"]
+    assert len(required) == 8
+    assert set(required) <= set(layout["native_beam_fragments"])
+
+
+def test_unrasterizable_system_raises_instead_of_returning_nothing(monkeypatch, tmp_path):
+    from piano_teacher.notation.assets import beams
+    from test_reading_spacing import reading_phrase
+    from test_recovery_motion import make_phrase_fixture
+
+    monkeypatch.setattr(beams, "MAX_RASTER_WIDTH", beams.BASE_RASTER_WIDTH)
+    with pytest.raises(Exception, match="(?i)beam"):
+        make_phrase_fixture(tmp_path, reading_phrase(bars=8))

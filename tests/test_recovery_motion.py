@@ -91,12 +91,10 @@ def test_tied_chords_and_rests_keep_constant_travel_across_measures(tmp_path):
     if not godot:
         pytest.skip("Godot 4 unavailable")
     from test_reading_spacing import reading_phrase
-    # One unbroken system: beam extraction rasterizes a page at a fixed 1600 px
-    # and rejects staff spaces under 4 px (assets/beams.py), which is reached
-    # at 8 bars of this reading-spacing phrase. Six bars keep ties and rests.
-    phrase = reading_phrase(bars=6)
+    # One unbroken system: its page is wide, so beam extraction must scale its raster.
+    phrase = reading_phrase(bars=8)
     model, _ = make_phrase_fixture(tmp_path, phrase)
-    assert len(model["measures"]) == 6
+    assert len(model["measures"]) == 8
     assert any(event["kind"] == "rest" for event in model["notation_events"])
     assert any(event.get("tie_start") or event.get("tie_stop")
                for event in model["notation_events"])
