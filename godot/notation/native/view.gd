@@ -1231,6 +1231,11 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
             "phase":str(state.get("phase",""))
         }))
     var focus_changed := layout.set_focused_staff(_focused_staff_for_score())
+    if focus_changed and native_ready and size.y >= 100.0:
+        # Focusing a staff moves every note on it and drops the prepared
+        # source geometry. Rebuild it now: painting must never meet a stale
+        # cache, or the retained ink would never compile.
+        _prepare_static_geometry()
     if old_hand != active_hand or focus_changed:
         _invalidate_retained_segments()
         queue_redraw()

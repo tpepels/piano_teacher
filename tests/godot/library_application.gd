@@ -72,7 +72,9 @@ func test_app_open_resume(app: Control) -> void:
         "Continue preserves saved place and bypasses the source picker")
     app._navigate("library")
     entries(view)[1].pressed.emit()
-    app._on_action(0,JSON.stringify(saved_state()).to_utf8_buffer())
+    var fresh := saved_state()
+    fresh["lesson_step"] = 1
+    app._on_action(0,JSON.stringify(fresh).to_utf8_buffer())
     check(app.practice_view.open_picker.visible and app.practice_view.open_picker.title_label.text == "Saved music",
         "Ordinary selection still opens the independent source picker")
 

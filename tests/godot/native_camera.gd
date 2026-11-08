@@ -1,11 +1,29 @@
 extends SceneTree
 # Replace HTTP only. UI, authenticated assets, callbacks, count-in, clock and
 # the actual native CanvasItem run unchanged. No server or MIDI device needed.
+class SilentRequest extends RefCounted:
+    # Accepts a score command and never answers; the fixture supplies the
+    # authentic responses itself.
+    var timeout := 5.0
+    func request(_operation: String, _payload: Dictionary = {}) -> int:
+        return OK
+    func cancel_request() -> void:
+        pass
+
+class OfflineRequest extends RefCounted:
+    var timeout := 5.0
+    func request(_operation: String, _payload: Dictionary = {}) -> int:
+        return OK
+
 class FixtureApp extends "res://main.gd":
     func _ready() -> void:
         super._ready()
         set_process(false)
         state_poll_timer.stop()
+        score_queue.layout_request = SilentRequest.new()
+        score_queue.model_request = SilentRequest.new()
+        action_request = OfflineRequest.new()
+        native_started = true  # No engine: every response is supplied below.
 
     func _poll() -> void:
         pass
@@ -24,7 +42,14 @@ class FixtureApp extends "res://main.gd":
 
 var app: Control
 var samples: Array = []
+const FINGERPRINT := "native-camera-fixture"
+# A fast tempo keeps the wall-clock wait for a take to reach the screen short.
+const BPM := 240.0
 var attempt := 100
+# World position of source beat 0 for the take being sampled. The monotonic
+# world axis is wall-clock time (ContinuousScoreFlow); the engine's transport
+# clock is that axis relative to this origin.
+var take_origin := 0.0
 var clock_matched := true
 
 func _initialize() -> void:
@@ -39,18 +64,69 @@ func draw_frame() -> void:
     await process_frame
     await process_frame
 
-func set_state(beat: float, running: bool, paused := false, play_from := 0.0) -> void:
-    attempt += 1
+func set_state(beat: float, running: bool, paused := false, play_from := 0.0,
+        new_transport := true) -> void:
+    # Each Play/Restart is one transport; pause, resume and the camera
+    # samples inside it keep their transport id.
+    if new_transport:
+        attempt += 1
     app.last_state = {"loaded":true, "revision":app.revision,
-        "transport_id":attempt, "mode":"practice", "hand":"both",
+        "piece_fingerprint":FINGERPRINT, "transport_id":attempt, "mode":"practice", "hand":"both",
         "phase":"paused" if paused else "count_in" if beat < 0.0 else
             "playing" if running else "ready",
         "running":running, "paused":paused, "clock_beat":beat,
-        "bpm":120.0, "play_from_beat":play_from,
-        "count_in_beats":.5, "count_in_bar_beats":4,
+        "bpm":BPM, "play_from_beat":play_from,
+        "count_in_beats":4, "count_in_bar_beats":4,
         "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats}
     app.last_state_tick = Time.get_ticks_msec()
     app.visual_transport_clock.accept(app.last_state, app.last_state_tick, app.last_state_tick)
+
+func begin_take(action: String, play_from: float) -> bool:
+    # Play and Restart go through the one production route: a preflighted
+    # reservation binds a prepared take, and the engine's acknowledgement
+    # arms it. An unreserved transport cannot create note ink.
+    set_state(0.0, false, false, play_from)
+    await draw_frame()
+    var view = app.practice_view.stage.renderer
+    var deadline := Time.get_ticks_msec() + 5000
+    while not view.retained_ready() and Time.get_ticks_msec() < deadline:
+        await process_frame
+    app._send_action({"action": action})
+    if not app.command_state.pending:
+        push_error("Transport action was refused: no reservation reached the engine")
+        return false
+    var armed: int = view._stream_armed_serial
+    for item in view._stream_queue.online:
+        if int(item.get("take_owner", item["serial"])) == armed:
+            take_origin = float(item["world_origin"])
+            break
+    attempt += 1
+    app._on_action(0, JSON.stringify({"loaded":true, "revision":app.revision,
+        "phase":"count_in", "running":true, "paused":false, "mode":"practice",
+        "piece_fingerprint":FINGERPRINT, "transport_id":attempt, "hand":"both", "bpm":BPM, "clock_beat":-2.5,
+        "play_from_beat":play_from, "count_in_beats":4, "count_in_bar_beats":4,
+        "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats}).to_utf8_buffer())
+    return true
+
+func transport_clock(play_from: float) -> float:
+    return app.score_flow.project(Time.get_ticks_msec()) - take_origin - play_from
+
+func tick(running: bool, paused: bool, play_from: float, frozen_clock := NAN) -> void:
+    # The engine reports its transport clock; a paused engine holds it while
+    # the visual world axis keeps moving.
+    var clock: float = frozen_clock if is_finite(frozen_clock) else transport_clock(play_from)
+    set_state(clock, running, paused, play_from, false)
+    await draw_frame()
+
+func run_until_musical(beat: float, play_from: float) -> bool:
+    var view = app.practice_view.stage.renderer
+    var deadline := Time.get_ticks_msec() + 12000
+    while Time.get_ticks_msec() < deadline:
+        await tick(true, false, play_from)
+        if view.stream_world_beat - take_origin >= beat:
+            return true
+    push_error("The reserved take never reached beat %.2f" % beat)
+    return false
 
 func capture(label: String) -> Dictionary:
     var view = app.practice_view.stage.renderer
@@ -61,11 +137,12 @@ func capture(label: String) -> Dictionary:
             continue
         var point: Vector2 = view.drawn_noteheads[id]
         heads.append({"id":id, "onset":float(event.beat), "x":point.x, "y":point.y})
-    var projected_clock: float = view.clock_beat if view.running or view.paused else 0.0
+    # The beat under the fixed playhead on the monotonic world axis.
+    var musical: float = view.stream_world_beat - take_origin
     var sample := {"label":label, "heads":heads, "width":view.size.x,
         "height":view.size.y, "density":view.timeline.pixels_per_beat,
-        "clock":view.clock_beat, "play_from":view.play_from_beat,
-        "musical_beat":view.play_from_beat+projected_clock,
+        "clock":musical-view.play_from_beat, "play_from":view.play_from_beat,
+        "musical_beat":musical, "playhead_x":view.size.x*view.PLAYHEAD_FRACTION,
         "staff_gap":view.staff_gap(), "visible_count":app._visible_score_noteheads()}
     samples.append(sample)
     return sample
@@ -83,11 +160,17 @@ func run() -> void:
         push_error("Production camera must use the app's native notation view")
         quit(1)
         return
-    app.revision = int(payload.model.revision)
-    app.last_state = {"loaded":true, "phase":"ready"}
-    app.requested_layout_revision = app.revision
-    app._on_layout(0, 200, PackedStringArray(), JSON.stringify(payload.layout).to_utf8_buffer())
-    app._on_timeline_model(0, 200, PackedStringArray(), JSON.stringify(payload.model).to_utf8_buffer())
+    # The score session owns revision and request lifecycle: select the
+    # revision through a state snapshot, then answer its layout and model.
+    app.last_state = {"loaded":true, "phase":"ready", "revision":int(payload.model.revision),
+        "piece_fingerprint":FINGERPRINT}
+    app.score_session.update_context(app.last_state, Time.get_ticks_msec())
+    app._on_layout(0, JSON.stringify(payload.layout).to_utf8_buffer())
+    app._on_timeline_model(0, JSON.stringify(payload.model).to_utf8_buffer())
+    # Readiness includes the retained CanvasItems compiling after their draw.
+    var ready_deadline := Time.get_ticks_msec() + 5000
+    while not app._native_score_ready() and Time.get_ticks_msec() < ready_deadline:
+        await process_frame
     if not app._native_score_ready():
         push_error("Real fixture assets and model must prepare the production view")
         quit(1)
@@ -101,11 +184,11 @@ func run() -> void:
     await process_frame
     await process_frame
     var ready_frame: Dictionary = capture("ready")
-    # A stopped score must retain its source glyphs. For a source attack
-    # that fits the fixed initial camera, having no visible noteheads is a
-    # rendering failure even if score_ready and the staff rules are drawn.
+    # READY ink is a hidden immutable take outside the right viewport edge
+    # (docs/architecture/immutable-score-queues.md): it must be prepared and
+    # compiled, but no notehead may be on screen before Play.
     var opening_attack_exists := false
-    var initial_cursor_x: float = view.size.x * .42
+    var initial_cursor_x: float = view.size.x * view.PLAYHEAD_FRACTION
     for event in view.layout.ordered_events:
         if str(event.get("kind", "")) != "note" or bool(event.get("chord", false)):
             continue
@@ -115,53 +198,82 @@ func run() -> void:
         if predicted_x >= 0.0 and predicted_x < view.size.x:
             opening_attack_exists = true
             break
-    if opening_attack_exists and int(ready_frame.visible_count) <= 0:
-        push_error("Native score has a visible opening note but renders blank before Play")
+    if int(ready_frame.visible_count) != 0 or view._stream_queue.online.is_empty():
+        push_error("READY must hold a hidden offscreen take and show no ink before Play")
+        quit(1)
+        return
+    if not opening_attack_exists:
+        push_error("Fixture needs an opening attack that fits the camera")
         quit(1)
         return
     var short_passage: bool = view.timeline.duration_beats * view.timeline.pixels_per_beat < view.size.x * .91
-    set_state(-2.5, true)
-    await draw_frame()
-    set_state(-1.5, true)
-    await draw_frame()
-    # A short half-beat lead must scroll through zero at nominal BPM.
+    if not await begin_take("start", 0.0):
+        quit(1)
+        return
+    # Count-in: the take travels in from offscreen before its clock reaches 0.
+    if not await run_until_musical(-3.0, 0.0):
+        quit(1)
+        return
     print("NATIVE_CAMERA_TRANSPORT_BEGIN")
-    set_state(-.5, true)
     var lead_samples := 0
     var playing_samples := 0
-    for index in range(9):
-        await draw_frame()
-        capture("lead" if view.clock_beat < 0.0 else "playing")
-        if view.clock_beat < 0.0:
+    for index in range(10):
+        await tick(true, false, 0.0)
+        var moving: Dictionary = capture("lead" if float(view.stream_world_beat-take_origin) < 0.0 else "playing")
+        if str(moving.label) == "lead":
             lead_samples += 1
         else:
             playing_samples += 1
-        await create_timer(.06).timeout
+        await create_timer(.15).timeout
     print("NATIVE_CAMERA_TRANSPORT_END")
-    var first_playing: Dictionary = samples[-1]
-    set_state(float(first_playing.clock), true, true)
-    await draw_frame()
+    # Pause holds the engine clock only; the visual axis is monotonic.
+    var hold: float = float(samples[-1].clock)
+    await tick(true, true, 0.0, hold)
     var paused: Dictionary = capture("paused")
-    await create_timer(.06).timeout
-    await draw_frame()
-    var frozen: Dictionary = capture("paused")
-    set_state(float(frozen.clock), true)
-    await draw_frame()
+    await create_timer(.15).timeout
+    await tick(true, true, 0.0, hold)
+    var later: Dictionary = capture("paused")
+    var pause_axis_continues := float(later.musical_beat) > float(paused.musical_beat)
+    for head in paused.heads:
+        for other in later.heads:
+            if other.id == head.id:
+                pause_axis_continues = pause_axis_continues and absf(
+                    (float(head.x) - float(other.x)) - (
+                    float(later.musical_beat) - float(paused.musical_beat)) *
+                    float(paused.density)) < .5
+    await tick(true, false, 0.0)
     var resumed: Dictionary = capture("resume")
-    await create_timer(.06).timeout
-    await draw_frame()
+    await create_timer(.15).timeout
+    await tick(true, false, 0.0)
     var advanced: Dictionary = capture("resume")
-    set_state(0.0, true, true, 3.0)
-    await draw_frame()
+    # Restart from bar 2 and a later resize go through the same reservation.
+    if not await begin_take("restart", 3.0):
+        quit(1)
+        return
+    if not await run_until_musical(3.0 - 3.0, 3.0):
+        quit(1)
+        return
+    await tick(true, false, 3.0)
     capture("seek")
     root.size = Vector2i(960, 720)
-    await draw_frame()
+    # A resize recompiles every retained strip; ink returns once they compile.
+    var resize_deadline := Time.get_ticks_msec() + 5000
+    while not view.retained_ready() and Time.get_ticks_msec() < resize_deadline:
+        await tick(true, false, 3.0)
+    await tick(true, false, 3.0)
+    await tick(true, false, 3.0)
     capture("seek")
+    # A stopped score returns to READY: its new take waits offscreen.
     set_state(0.0, false)
     await draw_frame()
     capture("stopped")
-    set_state(-.25, true)
-    await draw_frame()
+    if not await begin_take("restart", 0.0):
+        quit(1)
+        return
+    if not await run_until_musical(-3.0, 0.0):
+        quit(1)
+        return
+    await tick(true, false, 0.0)
     capture("restart")
     var indexed: Array = view._visible_events(0.0, 1.0)
     var beats: Array = []
@@ -170,7 +282,7 @@ func run() -> void:
     var report := {"samples":samples, "short_passage":short_passage,
         "screen":app.current_screen, "native_ready":app._native_score_ready(),
         "lead_samples":lead_samples, "playing_samples":playing_samples,
-        "pause_frozen":paused.heads == frozen.heads and paused.clock == frozen.clock,
+        "pause_axis_continues":pause_axis_continues,
         "resume_advanced":float(advanced.clock) > float(resumed.clock),
         "clock_matched":clock_matched, "clipped":app.practice_view.stage.score_frame.clip_contents,
         "same_timeline":view.timeline == timeline,

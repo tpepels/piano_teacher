@@ -66,12 +66,39 @@ func run() -> void:
         # Seek to a genuine source attack. Source rests before it must not
         # let an empty native viewport pass as a displayed score.
         var first_beat: float = float(view.timeline.notes[0].onset_beats)
-        var state: Dictionary = app.last_state.duplicate(true)
-        state["running"] = false
-        state["paused"] = true
-        state["play_from_beat"] = first_beat
-        view.present(state, 0.0)
-        view.queue_redraw()
+        # READY holds its take hidden offscreen until Play. Press Play through
+        # the production route and let the monotonic world axis bring the
+        # first source attack onto the stage, as the transport clock would.
+        var deadline: int = Time.get_ticks_msec() + 5000
+        while not view.retained_ready() and Time.get_ticks_msec() < deadline:
+            await process_frame
+        app._send_action({"action": "start"})
+        check(app.command_state.pending, filename + ": Play must reserve a take")
+        var origin := 0.0
+        for item in view._stream_queue.online:
+            if int(item.get("take_owner", item["serial"])) == view._stream_armed_serial:
+                origin = float(item["world_origin"])
+                break
+        var playing: Dictionary = app.last_state.duplicate(true)
+        playing["bpm"] = 240.0
+        playing["running"] = true
+        playing["paused"] = false
+        playing["transport_id"] = int(playing.get("transport_id", 0)) + 1
+        playing["count_in_beats"] = 4
+        playing["count_in_bar_beats"] = 4
+        playing["clock_beat"] = -8.0
+        app._on_action(0, JSON.stringify(playing).to_utf8_buffer())
+        var arrival: int = Time.get_ticks_msec() + 15000
+        while Time.get_ticks_msec() < arrival:
+            playing["clock_beat"] = app.score_flow.project(Time.get_ticks_msec()) - origin - float(playing.get("play_from_beat", 0.0))
+            playing["phase"] = "count_in" if float(playing["clock_beat"]) < 0.0 else "playing"
+            app.last_state = playing.duplicate(true)
+            app.last_state_tick = Time.get_ticks_msec()
+            app.visual_transport_clock.accept(app.last_state, app.last_state_tick, app.last_state_tick)
+            app._process(0.0)
+            await process_frame
+            if view.stream_world_beat - origin >= maxf(first_beat, float(playing.get("play_from_beat", 0.0))):
+                break
         await process_frame
         await process_frame
         RenderingServer.force_draw()

@@ -1,23 +1,57 @@
 extends SceneTree
 
 # Keep the production library, navigation and response handlers; replace
-# only HTTP transport so saved server state can be exercised deterministically.
+# only the worker transport so saved server state can be exercised
+# deterministically. Command ownership stays in the real CommandRequestState.
+class RecordingRequest extends RefCounted:
+    var timeout := 5.0
+    var calls: Array[Dictionary]
+    func _init(recorded: Array[Dictionary]) -> void:
+        calls = recorded
+    func request(operation: String, payload: Dictionary = {}) -> int:
+        calls.append({"operation": operation, "payload": payload.duplicate(true)})
+        return OK
+
 class FixtureApp extends "res://main.gd":
-    var posts: Array[Dictionary] = []
+    var commands: Array[Dictionary] = []
 
     func _ready() -> void:
         _build_interface()
+        action_request = RecordingRequest.new(commands)
+        startup_last_music_checked = true
+        frame_coordinator = PracticeFrameCoordinator.new(
+            practice_view, settings_view, lesson_view, lesson_session,
+            null, frame_meter)
+        state_presenter = PracticeStatePresenter.new(
+            practice_view, settings_view, lesson_view, lesson_session, null)
+        command_failure_presenter = CommandFailurePresenter.new(
+            library_view, practice_view, settings_view, home_view)
+        command_success_presenter = CommandSuccessPresenter.new(
+            library_view, practice_view, settings_view, lesson_session)
+        command_success_effects = CommandSuccessEffects.new(
+            command_success_presenter, _on_state, _navigate,
+            _request_settings, _request_library, _request_library_health,
+            _refresh_score_status)
+        metronome_frame = MetronomeFrameCoordinator.new(
+            settings_view, practice_view, visual_transport_clock,
+            _transport_beat_at, _count_tick, _raw_click)
         resized.connect(_update_responsive_layout)
         _update_responsive_layout()
         set_process(false)
 
-    func _send_post(path: String, payload: Dictionary) -> void:
-        last_post_path = path
-        action_pending = true
-        action_request_started_ms = Time.get_ticks_msec()
-        posts.append({"path": path, "payload": payload.duplicate(true)})
-
     func _poll() -> void:
+        pass
+
+    func _request_library() -> void:
+        pass
+
+    func _request_library_health() -> void:
+        pass
+
+    func _request_settings() -> void:
+        pass
+
+    func _request_devices() -> void:
         pass
 
     func _request_layout() -> void:
@@ -63,7 +97,7 @@ func run() -> void:
         "count": 2, "warmups": [], "pieces": [
             {"id": "other.mid", "title": "Another piece", "format": "MIDI", "folder": ""},
             {"id": "Collection/real.mid", "title": TITLE, "format": "MIDI", "folder": "Collection"}]}
-    app._on_library(0, 200, PackedStringArray(), JSON.stringify(listing).to_utf8_buffer())
+    app._on_library(0, JSON.stringify(listing).to_utf8_buffer())
     app._navigate("library")
     for frame in range(6):
         await process_frame
@@ -83,41 +117,41 @@ func run() -> void:
         check(recent.tooltip_text.contains(TITLE) and recent.tooltip_text.contains("Collection"),
             "Continue must preserve the complete real title and folder")
         recent.pressed.emit()
-        check(app.posts == [{"path": "/library/open", "payload": {"id": "Collection/real.mid"}}],
+        check(app.commands == [{"operation": "library.open", "payload": {"id": "Collection/real.mid"}}],
             "Continue opens the actual stored identifier through the existing backend")
-        app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
+        app._on_action(0, JSON.stringify(saved_state()).to_utf8_buffer())
         await process_frame
         check(app.current_screen == "practice" and not app.practice_view.open_picker.visible,
             "Continue returns to restored practice without replacing it through a starting-point chooser")
         check(app.last_state.get("lesson_step") == 17 and app.last_state.get("hand") == "left"
             and app.last_state.get("bpm") == 64 and app.last_state.get("streak") == 2,
             "Continue must present the backend's saved lesson, hand, tempo and streak")
-        app.posts.clear()
+        app.commands.clear()
         app._navigate("library")
-        app.action_pending = true
-        app.last_post_path = "/control"
+        app._send_action({"action": "pause"})
+        app.commands.clear()
         app.home_view.resume_button.pressed.emit()
-        check(app.posts.is_empty(), "Continue waits for an in-flight transport action")
-        app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
+        check(app.commands.is_empty(), "Continue waits for an in-flight transport action")
+        app._on_action(0, JSON.stringify(saved_state()).to_utf8_buffer())
         await process_frame
         await process_frame
-        check(app.posts == [{"path": "/library/open", "payload": {"id": "Collection/real.mid"}}],
+        check(app.commands == [{"operation": "library.open", "payload": {"id": "Collection/real.mid"}}],
             "Queued Continue retains the exact saved identifier")
-        app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
+        app._on_action(0, JSON.stringify(saved_state()).to_utf8_buffer())
         check(not app.practice_view.open_picker.visible, "Queued Continue retains resume intent after transport completion")
 
         # A failed Pause must cancel its queued Continue. Otherwise the next
         # successful ordinary open drains the stale queue and reopens A.
         app._navigate("library")
-        app.posts.clear()
-        app.action_pending = true
-        app.last_post_path = "/control"
+        app.commands.clear()
+        app._send_action({"action": "pause"})
+        app.commands.clear()
         app.home_view.resume_button.pressed.emit()
-        check(app.pending_library_piece == "Collection/real.mid",
+        check(app.command_state.queued_library_piece == "Collection/real.mid",
             "Continue queues the recent piece behind an in-flight Pause")
-        app._on_action(0, 400, PackedStringArray(),
+        app._on_action(400,
             JSON.stringify({"error": "Pause rejected"}).to_utf8_buffer())
-        check(app.pending_library_piece.is_empty() and not app.pending_library_resume,
+        check(app.command_state.queued_library_piece.is_empty() and not app.command_state.queued_library_resume,
             "Failed actions must discard queued library selection and resume intent")
         check(app.library_view.library_message.text.contains("Pause rejected")
             and not app.library_view.library_message.text.contains("Preparing"),
@@ -125,10 +159,13 @@ func run() -> void:
         app._open_library_piece("other.mid")
         var other := saved_state()
         other["title"] = "Another piece"
-        app._on_action(0, 200, PackedStringArray(), JSON.stringify(other).to_utf8_buffer())
+        # A piece with no saved lesson progress opens the starting-point
+        # chooser; progress beyond step 1 asks to continue instead.
+        other["lesson_step"] = 1
+        app._on_action(0, JSON.stringify(other).to_utf8_buffer())
         await process_frame
         await process_frame
-        check(app.posts == [{"path": "/library/open", "payload": {"id": "other.mid"}}],
+        check(app.commands == [{"operation": "library.open", "payload": {"id": "other.mid"}}],
             "Opening B after a failed Pause cannot replay stale Continue A")
         check(app.practice_view.open_picker.visible and app.practice_view.open_picker.title_label.text == "Another piece",
             "The later ordinary selection retains its own starting-point chooser")
@@ -145,33 +182,38 @@ func run() -> void:
             "Search still matches actual title/folder metadata: " + query)
     app.library_view.library_search.text = ""
     listing["last_piece"] = "deleted.mid"
-    app._on_library(0, 200, PackedStringArray(), JSON.stringify(listing).to_utf8_buffer())
-    app.posts.clear()
+    app._on_library(0, JSON.stringify(listing).to_utf8_buffer())
+    app.commands.clear()
     app.home_view.resume_button.pressed.emit()
-    check(app.posts.is_empty(), "A missing last-opened file must not expose a broken Continue action")
+    check(app.commands.is_empty(), "A missing last-opened file must not expose a broken Continue action")
     for row in entries(app):
         var detail := row.find_child("MusicDetail", true, false) as Label
         check(detail != null and not detail.text.begins_with("Continue"),
             "A missing last-opened identifier cannot remain advertised as recent")
-    app.action_pending = false
     app._open_library_piece("other.mid")
-    app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
+    var fresh := saved_state()
+    fresh["lesson_step"] = 1
+    app._on_action(0, JSON.stringify(fresh).to_utf8_buffer())
     check(app.practice_view.open_picker.visible, "Ordinary music selection retains its starting-point chooser")
     app.practice_view.open_picker.hide()
+    app._open_library_piece("other.mid")
+    app._on_action(0, JSON.stringify(saved_state()).to_utf8_buffer())
+    check(app.practice_view.is_resume_prompt_open() and not app.practice_view.open_picker.visible,
+        "Ordinary selection of music with saved lesson progress asks to continue instead of choosing a start")
     listing["last_piece"] = "warmup:chords"
     listing["warmups"] = [{"id": "warmup:chords", "title": "Chord Changes", "bpm": 68, "focus": "Triads"}]
-    app._on_library(0, 200, PackedStringArray(), JSON.stringify(listing).to_utf8_buffer())
+    app._on_library(0, JSON.stringify(listing).to_utf8_buffer())
     rows = entries(app)
     check(str(rows[0].get_meta("library_title", "")) == "Chord Changes",
         "Built-in recent music uses its catalog title instead of an identifier")
-    app.posts.clear()
+    app.commands.clear()
     rows[0].pressed.emit()
-    check(app.posts == [{"path": "/library/open", "payload": {"id": "warmup:chords"}}],
+    check(app.commands == [{"operation": "library.open", "payload": {"id": "warmup:chords"}}],
         "Continue also uses the actual built-in music identifier")
     var warmup := saved_state()
     warmup["warmup"] = true
     warmup["title"] = "Chord Changes"
-    app._on_action(0, 200, PackedStringArray(), JSON.stringify(warmup).to_utf8_buffer())
+    app._on_action(0, JSON.stringify(warmup).to_utf8_buffer())
     check(app.current_screen == "practice" and not app.practice_view.open_picker.visible,
         "Recent warm-up continues through the same saved-state route")
     print("LIBRARY_RESUME_FAILURES:", failures.size())

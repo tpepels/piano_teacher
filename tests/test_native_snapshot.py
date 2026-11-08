@@ -25,7 +25,7 @@ def test_new_model_waits_for_current_revision_native_assets():
     assert "NATIVE_REVISION_READINESS_PASS" in proc.stdout
 
 
-def test_native_preparation_keeps_revision_locked_until_assets_are_bound(tmp_path, monkeypatch):
+def test_native_preparation_stays_on_its_captured_revision_while_the_lesson_changes(tmp_path, monkeypatch):
     from piano_teacher.notation.assets import glyphs
 
     engine = PracticeEngine(tmp_path, enable_midi=False)
@@ -43,8 +43,11 @@ def test_native_preparation_keeps_revision_locked_until_assets_are_bound(tmp_pat
         changed.set()
 
     def symbols_during_transition():
+        # Preparation runs outside the engine lock (PracticeEngine.
+        # _selected_artifacts), so a newer lesson may be selected meanwhile
+        # and must not block on, nor leak into, the revision being prepared.
         entered.set()
-        assert not changed.wait(.1), "A newer lesson replaced the source before fragments were bound"
+        assert changed.wait(10), "A lesson change was blocked behind native asset preparation"
         return real_symbols()
 
     monkeypatch.setattr(glyphs, "preparation_symbols", symbols_during_transition)
@@ -54,6 +57,7 @@ def test_native_preparation_keeps_revision_locked_until_assets_are_bound(tmp_pat
         layout = engine.geometry()
         assert "native_chord_templates" in layout
         assert layout["revision"] == revision
+        assert engine.score_revision == revision + 1
     finally:
         entered.set()
         worker.join(timeout=10)

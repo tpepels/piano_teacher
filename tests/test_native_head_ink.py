@@ -16,7 +16,7 @@ import subprocess
 from PIL import Image
 import pytest
 
-from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION, detect_staff_lines, expected_y
 from piano_teacher.notation.raster_matching import _joint_candidates
 from piano_teacher.notation.reference_font import reference_glyphs
 from piano_teacher.notation.pixel_ink import bright
@@ -144,7 +144,7 @@ def _measure(picture, *, down):
     """
     pixels = bright(picture)
     staff = detect_staff_lines(picture)["right"]
-    gap, x = staff.gap, picture.width * .42
+    gap, x = staff.gap, picture.width * PLAYHEAD_FRACTION
     request = dict(glyph=reference_glyphs()["head_black"], gap=gap,
                    origin_y=staff.lines[0], dxs=range(-round(3*gap), round(3*gap)+1))
     candidates = _joint_candidates(pixels, request, x,

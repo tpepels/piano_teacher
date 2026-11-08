@@ -50,8 +50,8 @@ func run() -> void:
         # Containers and minimum-size invalidation settle on deferred frames.
         for frame in range(8):
             await process_frame
-        app.overlay_drawer.modulate.a = 1.0
-        var drawer: Rect2 = app.overlay_drawer.get_global_rect()
+        app.navigation_drawer.drawer.modulate.a = 1.0
+        var drawer: Rect2 = app.navigation_drawer.drawer.get_global_rect()
         print("DRAWER:", page, " ", drawer)
         check(drawer.position.x >= -1 and drawer.end.x <= root.get_visible_rect().size.x + 1,
             page + " drawer fits the window")

@@ -14,7 +14,7 @@ import subprocess
 
 import pytest
 
-from scripts.review_art_direction import godot_command, validate_report
+from scripts.review_art_direction import embedded_python_env, godot_command, validate_report
 
 ROOT = Path(__file__).resolve().parents[1]
 GODOT = shutil.which("godot") or shutil.which("godot4")
@@ -31,7 +31,8 @@ def test_actual_application_composition_without_http(tmp_path: Path, size: tuple
     env = {**os.environ,
            "XDG_DATA_HOME": str(tmp_path / "data"),
            "XDG_CONFIG_HOME": str(tmp_path / "config"),
-           "XDG_CACHE_HOME": str(tmp_path / "cache")}
+           "XDG_CACHE_HOME": str(tmp_path / "cache"),
+           **embedded_python_env()}
     env.pop("PIANO_TEACHER_NATIVE_NOTATION", None)
     env.pop("PIANO_TEACHER_RENDERER", None)
     command = godot_command(GODOT, config_path, size, render=False)

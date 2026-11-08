@@ -29,5 +29,5 @@ def test_fixed_beat_timeline_and_preparation_at_40_80_120_bpm():
 def test_native_app_uses_existing_visual_transport_clock(native_camera_run):
     report, _ = native_camera_run
     assert report["native_ready"] and report["clock_matched"]
-    assert report["pause_frozen"] and report["resume_advanced"]
+    assert report["pause_axis_continues"] and report["resume_advanced"]
     assert report["lead_samples"] >= 2 and report["playing_samples"] >= 3

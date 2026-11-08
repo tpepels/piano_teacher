@@ -9,6 +9,7 @@ from PIL import Image
 import pytest
 
 from piano_teacher.music import Note, Phrase, Piece
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -193,7 +194,7 @@ def test_genuine_music_corruption_near_fingering_is_still_rejected(isolation_cap
     # Add authentic head/stem ink at the canonical position where its
     # optional finger normally lives. There is deliberately no label mask.
     label = next(v for v in first['labels'] if report['missing_id'] in v['event_ids'])
-    target_x, target_y = round(good.shape[1]*.42), round(label['rect'][1])
+    target_x, target_y = round(good.shape[1]*PLAYHEAD_FRACTION), round(label['rect'][1])
     added = good.copy()
     dx, dy = target_x-round(np.median(xs)), target_y-round(np.median(ys))
     inside = (xs+dx >= 0) & (xs+dx < good.shape[1]) & (ys+dy >= 0) & (ys+dy < good.shape[0])

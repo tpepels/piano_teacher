@@ -2,10 +2,27 @@ extends SceneTree
 ## Actual application composition: HTTP/native review, or server-free geometry.
 ## Only geometry mode supplies state. Screenshots always use main.tscn unchanged.
 
+class SilentRequest extends RefCounted:
+    # Accepts a request and never answers: no score command reaches the engine.
+    var timeout := 5.0
+    func request(_operation: String, _payload: Dictionary = {}) -> int:
+        return OK
+    func cancel_request() -> void:
+        pass
+
 class GeometryApp extends "res://main.gd":
     # Keep production _ready(), theme, controls, resize and response handlers.
     # Suppress the wire, not the scene. Never claim native readiness here.
     var network_requests := 0
+
+    func _init() -> void:
+        # The saved last piece is not opened at startup in this fixture.
+        startup_last_music_checked = true
+
+    func _ready() -> void:
+        super._ready()
+        score_queue.layout_request = SilentRequest.new()
+        score_queue.model_request = SilentRequest.new()
 
     func _poll() -> void:
         pass
@@ -23,7 +40,7 @@ class GeometryApp extends "res://main.gd":
         pass
 
     func _request_lesson() -> void:
-        _on_lesson(0, 200, PackedStringArray(), JSON.stringify({
+        _on_lesson(0, JSON.stringify({
             "current_step": 1, "completed_steps": 0, "total_steps": 3,
             "steps": [{"number": 1, "exercise": 1, "hand": "right", "level": "original",
                 "kind": "practice", "first_bar": 9, "last_bar": 12}]
@@ -35,9 +52,9 @@ class GeometryApp extends "res://main.gd":
     func _request_timeline_model() -> void:
         pass
 
-    func _send_post(_path: String, _payload: Dictionary) -> void:
+    func _send_command(operation: String, _payload: Dictionary) -> void:
         network_requests += 1
-        push_error("ART_DIRECTION_UNEXPECTED_HTTP: " + _path)
+        push_error("ART_DIRECTION_UNEXPECTED_HTTP: " + operation)
 
 var app: Control
 var config: Dictionary = {}
@@ -143,7 +160,7 @@ func active_controls() -> Array:
     var result: Array = []
     collect_controls(app.screens[app.current_screen], result)
     if app.current_screen != "practice":
-        collect_controls(app.navigation_rail, result)
+        collect_controls(app.navigation_drawer.rail, result)
     return result
 
 func collect_captions(node: Node, result: Array) -> void:
@@ -186,7 +203,7 @@ func check_captions(label: String) -> Array:
     var captions: Array = []
     collect_captions(app.screens[app.current_screen], captions)
     if app.current_screen != "practice":
-        collect_captions(app.navigation_rail, captions)
+        collect_captions(app.navigation_drawer.rail, captions)
     var metrics: Array = []
     for caption in captions:
         if not exposed_rect(caption).has_area():
@@ -253,10 +270,13 @@ func check_settings_rows(label: String) -> Dictionary:
 
 func requests_idle() -> bool:
     # Polls continue normally; only actions/assets/drawer data gate captures.
-    return not (app.action_pending or app.layout_pending or
-        app.timeline_model_pending or app.library_pending or app.lesson_session.pending or
-        app.settings_pending or app.device_pending or app.library_health_pending) and \
-        app.pending_transport_action.is_empty() and app.pending_library_piece.is_empty()
+    # Geometry mode answers no score command, so only HTTP mode waits for them.
+    var score_busy: bool = not geometry_only and (
+        app.layout_pending or app.timeline_model_pending)
+    return not (app.command_state.pending or score_busy
+        or app.library_catalog.pending or app.lesson_session.pending or
+        app.settings_pending or app.device_pending or app.library_catalog.health_pending) and \
+        app.command_state.queued_transport.is_empty() and app.command_state.queued_library_piece.is_empty()
 
 func native_status() -> Dictionary:
     if app == null:
@@ -269,7 +289,7 @@ func native_status() -> Dictionary:
         "state_revision": int(app.last_state.get("revision", -1)),
         "layout_revision": app.layout_revision, "rendered_revision": app.rendered_revision,
         "model_revision": app.timeline_model_revision, "phase": app.last_state.get("phase", ""),
-        "action_pending": app.action_pending, "pending_action": app.pending_transport_action,
+        "action_pending": app.command_state.pending, "pending_action": app.command_state.queued_transport,
         "window_size": [root.size.x, root.size.y], "window_mode": root.mode,
         "window_geometry": window_geometry(),
         "covered_by_drawer": app.current_screen != "practice"}
@@ -358,7 +378,7 @@ func settled() -> bool:
     var stable_frames := [0]
     var previous_value := [""]
     return await wait_until(func() -> bool:
-        var tween_done: bool = app.drawer_intro == null or not app.drawer_intro.is_running()
+        var tween_done: bool = app.navigation_drawer.intro == null or not app.navigation_drawer.intro.is_running()
         if not requests_idle() or not tween_done or not window_geometry_ready():
             stable_frames[0] = 0
             return false
@@ -423,12 +443,12 @@ func capture(label: String) -> bool:
             check(not app.practice_view.start_button.disabled, label + ": primary transport is usable")
             check(not app.practice_view.stage.score_status_panel.is_visible_in_tree(), label + ": no score loading cover")
     else:
-        rectangles["drawer"] = rect_data(screen_rect(app.overlay_drawer))
+        rectangles["drawer"] = rect_data(screen_rect(app.navigation_drawer.drawer))
         rectangles["active_page"] = rect_data(screen_rect(app.screens[app.current_screen]))
-        check(app.overlay_root.is_visible_in_tree() and fits(screen_rect(app.overlay_drawer), viewport),
+        check(app.navigation_drawer.root.is_visible_in_tree() and fits(screen_rect(app.navigation_drawer.drawer), viewport),
             label + ": active drawer fits")
         check(fits(screen_rect(app.screens[app.current_screen]), viewport), label + ": active page fits")
-        for control in app.screen_navigation.values():
+        for control in app.navigation_drawer.navigation.values():
             check(fits(screen_rect(control), viewport), label + ": drawer navigation fits")
         if app.current_screen == "library":
             check(fits(screen_rect(app.library_view.library_search), viewport), label + ": library search fits")
@@ -495,15 +515,15 @@ func show_geometry_state(phase: String) -> void:
         "hand_stages": [{"hand": "right", "active": true}, {"hand": "left"}, {"hand": "both"}],
         "lesson_level": "original", "skip_available": true, "feedback_marks": [],
         "preview_only": true, "feedback": "Ready to practise"}
-    app._on_state(0, 200, PackedStringArray(), JSON.stringify(state).to_utf8_buffer())
+    app._on_state(0, JSON.stringify(state).to_utf8_buffer())
 
 func geometry_journey() -> bool:
     app.set_process(false)
-    app._on_settings(0, 200, PackedStringArray(), JSON.stringify({
+    app._on_settings(0, JSON.stringify({
         "fullscreen": false, "music_dir": "/review/music", "metronome": true}).to_utf8_buffer())
     if not await prepare_window():
         return false
-    app._on_library(0, 200, PackedStringArray(), JSON.stringify({
+    app._on_library(0, JSON.stringify({
         "folder": "/review/music", "count": 1, "last_piece": "ala.mid", "warmups": [],
         "pieces": [{"id": "ala.mid", "title": "Ala – Joep Beving", "format": "MIDI", "folder": "Music"}]
     }).to_utf8_buffer())

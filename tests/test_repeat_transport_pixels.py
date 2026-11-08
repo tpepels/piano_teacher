@@ -51,8 +51,18 @@ def transport_capture(request,repeat_originals,tmp_path_factory):
     source_start,source_end=original.bar_boundaries[first-1],original.bar_boundaries[last]
     notes=tuple(note for note in original.notes if source_start<=note.start<source_end)
     phrase=Phrase(1,first,last,source_start,source_end,notes)
+    # The lesson definition is immutable once generated; choose the excerpt
+    # where the production generator chooses its exercises.
+    from piano_teacher import lesson_generators
+    excerpt=(Exercise('learn',phrase,'actual-repeat-excerpt'),)
+    monkeypatch.setattr(lesson_generators,'build_exercises',lambda piece,**_:excerpt)
     engine.plan=LearningPlan(original,consolidate=True)
-    engine.plan.exercises=(Exercise('learn',phrase,'actual-repeat-excerpt'),)
+    monkeypatch.undo()
+    monkeypatch=pytest.MonkeyPatch()
+    # Starting a take records a learning attempt, which requires the source
+    # identity that PracticeEngine.load() would have set.
+    import hashlib
+    engine.fingerprint=hashlib.sha256((ROOT/"midi"/ALA).read_bytes()).hexdigest()
     engine.plan.set_hand('left')
     engine.plan.variant_index=len(engine.plan.variants)-1
     engine.plan.target_bpm=240

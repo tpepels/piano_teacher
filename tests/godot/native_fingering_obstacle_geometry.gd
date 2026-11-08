@@ -77,25 +77,25 @@ func _run() -> void:
         measure["left_barline"] = {"style":"none","repeat":""}
         measure["right_barline"] = {"style":"none","repeat":""}
     renderer.load_score(without_punctuation)
+    await FramebufferTake.show(self, renderer, IDLE_STATE, .125)
     renderer.set_fingering_annotations_enabled(false)
     await _capture(viewport,renderer,"punctuation-free.png")
     renderer.load_score(fixture["model"])
+    await FramebufferTake.show(self, renderer, IDLE_STATE, .125)
     renderer.set_fingering_annotations_enabled(true)
     # _frame toggles annotation mode after its baseline; rebuild before probes.
     await _capture(viewport,renderer,"diagnostic.png")
     var witnesses: Array = _local_witnesses(renderer)
     var envelope: Dictionary = _envelope_coverage(renderer)
-    var app = load("res://main.gd").new()
-    app.practice_view.stage.renderer = renderer
-    app.layout_revision = app.revision
-    app.timeline_model_revision = app.revision
-    app.rendered_revision = app.revision
-    app.practice_view.stage.fingering_status_label = Label.new()
-    app._present_fingering_status(fixture["summary"])
-    var warning := {"text":app.practice_view.stage.fingering_status_label.text,"tooltip":app.practice_view.stage.fingering_status_label.tooltip_text,
-        "visible":app.practice_view.stage.fingering_status_label.visible}
-    app.practice_view.stage.fingering_status_label.free()
-    app.free()
+    # The production stage owns the fingering warning; the application only
+    # passes it the summary and the renderer's placement issue count.
+    var stage = load("res://practice_score_stage.gd").new()
+    root.add_child(stage)
+    stage.present_fingering(fixture["summary"],
+        renderer.annotations.fingering_placement_issues.size(),"")
+    var warning := {"text":stage.fingering_status_label.text,"tooltip":stage.fingering_status_label.tooltip_text,
+        "visible":stage.fingering_status_label.visible}
+    stage.queue_free()
     frames.append(await _frame(viewport,renderer,fixture["model"],.375,"scroll"))
     var regressed: Dictionary = {}
     if fixture.has("regressed_script"):

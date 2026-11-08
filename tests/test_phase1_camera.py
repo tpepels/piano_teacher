@@ -51,14 +51,30 @@ def native_camera_run(tmp_path_factory):
     return json.loads(report), output
 
 
+# READY and a stopped score hold their take hidden outside the right viewport
+# edge until Play (docs/architecture/immutable-score-queues.md). Every sample
+# of a running transport shows its take on the monotonic world axis.
+RUNNING = ("lead", "playing", "paused", "resume", "seek", "restart")
+
+
+def running_samples(report):
+    return [s for s in report["samples"] if s["label"] in RUNNING]
+
+
+def test_ready_score_is_hidden_until_play(native_camera_run):
+    report, _ = native_camera_run
+    ready = next(s for s in report["samples"] if s["label"] == "ready")
+    assert not ready["heads"] and ready["visible_count"] == 0
+
+
 def test_native_projection_uses_source_beats_under_fixed_playhead(native_camera_run):
     report, _ = native_camera_run
     assert {s["label"] for s in report["samples"]} >= {
         "ready", "lead", "playing", "paused", "seek", "stopped", "restart"}
-    for sample in report["samples"]:
+    for sample in running_samples(report):
         assert sample["heads"], sample
         for head in sample["heads"]:
-            expected = (.42 * sample["width"] +
+            expected = (sample["playhead_x"] +
                         (head["onset"] - sample["musical_beat"]) * sample["density"])
             assert head["x"] == pytest.approx(expected, abs=.002), sample
 
@@ -67,7 +83,7 @@ def test_native_camera_keeps_ink_visible_after_resize_and_seek(native_camera_run
     report, _ = native_camera_run
     assert len({s["width"] for s in report["samples"]}) >= 2
     assert any(s["play_from"] > 0 for s in report["samples"])
-    for sample in report["samples"]:
+    for sample in running_samples(report):
         visible = [head for head in sample["heads"]
                    if 0 <= head["x"] <= sample["width"]
                    and 0 <= head["y"] <= sample["height"]]
@@ -91,9 +107,10 @@ def test_visible_event_lookup_excludes_distant_source_notes(native_camera_run):
     assert report["scanned_events"] < report["total_events"]
 
 
-def test_pause_freezes_native_ink_and_resume_uses_real_clock(native_camera_run):
+def test_pause_keeps_the_visual_axis_moving_and_resume_uses_real_clock(native_camera_run):
     report, _ = native_camera_run
-    assert report["pause_frozen"]
+    # Pause holds the engine clock; the visual axis is monotonic and goes on.
+    assert report["pause_axis_continues"]
     assert report["resume_advanced"]
     assert report["clock_matched"]
 

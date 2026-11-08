@@ -71,7 +71,11 @@ def test_godot_produces_metronome_and_follows_score(native_camera_run):
     report, output = native_camera_run
     assert report["high_click_bytes"] > 0 and report["low_click_bytes"] > 0
     assert report["click_stream_selected"]
-    assert "PHASE0_CLICK:count_in" in output
+    # Count-in beats are spoken by the root-owned voice player instead of
+    # clicked (MetronomeFrameCoordinator._dispatch_cue); the metronome clicks
+    # once the take is playing.
+    assert "PHASE0_PHASE:count_in" in output
+    assert "PHASE0_CLICK:playing" in output
     assert report["clock_matched"] and report["resume_advanced"]
     assert report["clipped"]
 

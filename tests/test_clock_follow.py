@@ -86,7 +86,7 @@ def test_tempo_control_changes_count_in_and_cursor_speed(tmp_path, monkeypatch):
 def test_frontend_has_time_driven_native_beam(native_camera_run):
     report, _ = native_camera_run
     assert report["clock_matched"] and report["resume_advanced"]
-    assert report["pause_frozen"]
+    assert report["pause_axis_continues"]
 
 
 def test_frontend_prevents_start_before_native_notation(tmp_path):

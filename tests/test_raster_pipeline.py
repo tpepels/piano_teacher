@@ -85,9 +85,12 @@ def test_production_native_view_uses_source_note_identities(native_camera_run):
     # Raster utilities above serve offline verification only. Production
     # coordinates now come from the real native CanvasItem and source model.
     report, _ = native_camera_run
+    # READY holds its take offscreen; source identities show once it plays.
     ready = next(s for s in report["samples"] if s["label"] == "ready")
-    assert ready["heads"] and ready["visible_count"] > 0
-    assert len({h["id"] for h in ready["heads"]}) == len(ready["heads"])
+    assert not ready["heads"] and ready["visible_count"] == 0
+    playing = next(s for s in report["samples"] if s["label"] == "playing")
+    assert playing["heads"] and playing["visible_count"] > 0
+    assert len({h["id"] for h in playing["heads"]}) == len(playing["heads"])
     assert report["same_atlas"] and report["same_index"]
 
 

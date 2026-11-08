@@ -43,6 +43,23 @@ def resolution(value: str) -> tuple[int, int]:
     return width, height
 
 
+def embedded_python_env() -> dict[str, str]:
+    """Environment for the GDExtension's embedded CPython.
+
+    It must see this checkout and the same interpreter and packages that run
+    the Python side (see scripts/verify-native-bridge.sh).
+    """
+    import sysconfig
+    paths = os.pathsep.join(filter(None, (
+        str(ROOT), sysconfig.get_paths()["purelib"], os.environ.get("PYTHONPATH", ""))))
+    env = {"PIANO_TEACHER_PYTHON_HOME": sys.base_prefix, "PYTHONPATH": paths}
+    libdir = sysconfig.get_config_var("LIBDIR")
+    if libdir:
+        env["LD_LIBRARY_PATH"] = os.pathsep.join(filter(None, (
+            libdir, os.environ.get("LD_LIBRARY_PATH", ""))))
+    return env
+
+
 def godot_command(godot: str, config: Path, size: tuple[int, int], *, render: bool) -> list[str]:
     return [godot, *([] if render else ["--headless"]),
             "--resolution", f"{size[0]}x{size[1]}", "--audio-driver", "Dummy",
@@ -275,8 +292,7 @@ def main(argv: list[str] | None = None) -> int:
     output.mkdir(parents=True, exist_ok=True)
     env = {**os.environ,
            "XDG_DATA_HOME": str(output / "data"), "XDG_CONFIG_HOME": str(output / "config"),
-           "XDG_CACHE_HOME": str(output / "cache"),
-           "PYTHONPATH": str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")}
+           "XDG_CACHE_HOME": str(output / "cache"), **embedded_python_env()}
     deadline = time.monotonic() + args.timeout
     summary = {"status": "running", "mode": "geometry" if args.geometry_only else "http",
                "file": str(args.file.resolve()), "measure": args.measure,

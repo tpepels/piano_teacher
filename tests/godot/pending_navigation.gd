@@ -7,8 +7,15 @@ class RecordingRequest extends RefCounted:
     var calls: Array[Dictionary]
     func _init(recorded: Array[Dictionary]) -> void:
         calls = recorded
+    # Start/Resume carry timing derived from the renderer's score admission.
+    # These scenarios assert which commands are sent, and in what order.
+    const ADMISSION_TIMING := ["presentation_lead_seconds",
+        "continuous_horizon_beats", "reuse_pending_score"]
     func request(_operation: String, payload: Dictionary) -> int:
-        calls.append(payload.duplicate(true))
+        var recorded := payload.duplicate(true)
+        for key in ADMISSION_TIMING:
+            recorded.erase(key)
+        calls.append(recorded)
         return OK
 
 class FixtureApp extends "native_production_fixture.gd":
@@ -59,13 +66,26 @@ func state(phase: String) -> Dictionary:
 
 func show_state(phase: String) -> void:
     app._on_state(0,JSON.stringify(state(phase)).to_utf8_buffer())
+    # Presenting a state can focus a staff or admit more source strips; the
+    # renderer refuses a transport action until their ink has been drawn and
+    # compiled (notation_not_compiled). A user acts frames later; so does this.
+    var renderer = app.practice_view.stage.renderer
+    await process_frame
+    var deadline := Time.get_ticks_msec() + 5000
+    while not renderer.retained_ready() and Time.get_ticks_msec() < deadline:
+        await process_frame
+    check(renderer.retained_ready(), "Retained ink is compiled after presenting " + phase)
+    # Regression: focusing the presented hand's staff dropped the prepared
+    # source geometry without rebuilding it, so painting hit a stale cache.
+    check(renderer.layout.cached_offsets_gap > 0.0,
+        "Presenting a hand keeps the prepared static engraving geometry: " + phase)
 
 func acknowledge(phase: String, code: int = 0) -> void:
     var body: Dictionary = state(phase) if code == 0 else {"error": "Temporary request failure"}
     app._on_action(code,JSON.stringify(body).to_utf8_buffer())
 
 func test_pending_start_or_resume(action: String, destination: String) -> void:
-    show_state("paused" if action == "resume" else "ready")
+    await show_state("paused" if action == "resume" else "ready")
     app._send_action({"action": action})
     app._navigate(destination)
     check(app.wire_commands == [{"action": action}],
@@ -82,7 +102,7 @@ func test_pending_start_or_resume(action: String, destination: String) -> void:
         "Only a real pending overlay pause should remain after acknowledgement")
 
 func test_quick_music_selection_survives_pending_pause() -> void:
-    show_state("playing")
+    await show_state("playing")
     app._navigate("library")
     check(app.command_state.pending, "Opening the music drawer requests a pause")
     app._open_library_piece("selected.mid")
@@ -97,7 +117,7 @@ func test_quick_music_selection_survives_pending_pause() -> void:
 
 
 func test_start_picker_keyboard_is_modal() -> void:
-    show_state("ready")
+    await show_state("ready")
     app.practice_view.show_source_picker({"title":"Test_-_MIDI", "piece_last_bar":77,
         "selected_start_bar":1})
     var pending_field: LineEdit = app.practice_view.open_picker.measure.get_line_edit()
@@ -119,10 +139,10 @@ func test_start_picker_keyboard_is_modal() -> void:
 
 
 func test_response_before_poll() -> void:
-    show_state("ready")
+    await show_state("ready")
     app._send_action({"action": "start"})
     app.state_request_started_ms = app.command_state.started_ms
-    show_state("playing") # A pre-action poll arrives while Start is pending.
+    await show_state("playing") # A pre-action poll arrives while Start is pending.
     check(str(app.last_state.get("phase", "")) == "ready",
         "A pre-Start poll cannot publish while the command owns the pending snapshot")
     acknowledge("count_in")
@@ -133,7 +153,7 @@ func test_response_before_poll() -> void:
         "Navigating after Start acknowledgement pauses the count-in even before a state poll: " + str(app.wire_commands))
 
 func test_stop_overrides_pending_pause() -> void:
-    show_state("playing")
+    await show_state("playing")
     app._navigate("settings")
     check(app.wire_commands == [{"action": "pause"}], "Opening Settings first requests a pause")
     app._navigate("library")
@@ -142,7 +162,7 @@ func test_stop_overrides_pending_pause() -> void:
         "Opening music while pause is pending preserves the same attempt: " + str(app.wire_commands))
 
 func test_failed_request_flushes_intent() -> void:
-    show_state("ready")
+    await show_state("ready")
     app._send_action({"action": "start"})
     app._navigate("settings")
     acknowledge("ready", 1)
@@ -163,17 +183,17 @@ func run() -> void:
         return
     var scenario := OS.get_cmdline_user_args()[0]
     match scenario:
-        "start_settings": test_pending_start_or_resume("start", "settings")
-        "start_lesson": test_pending_start_or_resume("start", "lesson")
-        "resume_settings": test_pending_start_or_resume("resume", "settings")
-        "resume_lesson": test_pending_start_or_resume("resume", "lesson")
-        "start_library": test_pending_start_or_resume("start", "library")
-        "start_home": test_pending_start_or_resume("start", "home")
-        "response_before_poll": test_response_before_poll()
-        "stop_overrides_pause": test_stop_overrides_pending_pause()
+        "start_settings": await test_pending_start_or_resume("start", "settings")
+        "start_lesson": await test_pending_start_or_resume("start", "lesson")
+        "resume_settings": await test_pending_start_or_resume("resume", "settings")
+        "resume_lesson": await test_pending_start_or_resume("resume", "lesson")
+        "start_library": await test_pending_start_or_resume("start", "library")
+        "start_home": await test_pending_start_or_resume("start", "home")
+        "response_before_poll": await test_response_before_poll()
+        "stop_overrides_pause": await test_stop_overrides_pending_pause()
         "quick_music_click": await test_quick_music_selection_survives_pending_pause()
-        "picker_modal": test_start_picker_keyboard_is_modal()
-        "failure_flushes_intent": test_failed_request_flushes_intent()
+        "picker_modal": await test_start_picker_keyboard_is_modal()
+        "failure_flushes_intent": await test_failed_request_flushes_intent()
         _: check(false, "Unknown scenario: " + scenario)
     print("PENDING_NAVIGATION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

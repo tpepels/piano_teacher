@@ -7,6 +7,14 @@ const Design := preload("res://practice_theme.gd")
 class FixtureApp extends "res://main.gd":
     func _ready() -> void:
         _build_interface()
+        # Production wiring of the per-frame coordinators, without an engine.
+        native_started = true
+        frame_coordinator = PracticeFrameCoordinator.new(
+            practice_view,settings_view,lesson_view,lesson_session,
+            null,frame_meter)
+        metronome_frame = MetronomeFrameCoordinator.new(
+            settings_view,practice_view,visual_transport_clock,
+            _transport_beat_at,_count_tick,_raw_click)
         resized.connect(_update_responsive_layout)
         _update_responsive_layout()
         set_process(false)
@@ -117,7 +125,7 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     await process_frame
-    check(app.overlay_drawer.size.x >= 510.0,
+    check(app.navigation_drawer.drawer.size.x >= 510.0,
         "At 1024px the library must not collapse to a 400px website sidebar")
     var music_row = load("res://library_row.gd").new()
     root.add_child(music_row)
@@ -137,11 +145,14 @@ func run() -> void:
     app._update_visual_frame_rate({"running":false, "paused":false})
     check(Engine.max_fps == 30, "Idle Godot presentation must run at lower CPU cost")
     check(OS.low_processor_usage_mode, "Idle stage must render on demand")
-    app._update_visual_frame_rate({"running":true, "paused":false})
+    app._navigate("practice")
+    # Every loaded Practice phase has the forward-moving stage (main.gd
+    # _update_visual_frame_rate); only an unloaded screen is idle.
+    app._update_visual_frame_rate({"loaded":true, "running":true, "paused":false})
     check(Engine.max_fps == 60, "Moving sheet music retains the full 60 FPS budget")
     check(not OS.low_processor_usage_mode, "Moving score requires continuous frames")
     app._update_visual_frame_rate({"running":true, "paused":true})
-    check(Engine.max_fps == 30, "Pausing reduces visual CPU usage")
+    check(Engine.max_fps == 30, "An unloaded paused screen reduces visual CPU usage")
     check(OS.low_processor_usage_mode, "An unloaded paused screen remains idle")
     app._update_visual_frame_rate({"loaded":true,"running":true,
         "paused":true,"phase":"paused"})

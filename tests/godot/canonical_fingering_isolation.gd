@@ -1,4 +1,5 @@
 extends SceneTree
+const FramebufferTake := preload("framebuffer_take.gd")
 # Exercise the public production switch on the real compositor, including
 # reloads and scrolling. There is no screenshot mask or substitute renderer.
 var folder: String
@@ -49,7 +50,7 @@ func _run() -> void:
         for variant in [{"name":"original","model":original},
                 {"name":"changed","model":changed},{"name":"removed","model":removed}]:
             assert(renderer.load_score(variant["model"]), renderer.failure_reason)
-            renderer.present({"running":true,"paused":true,"bpm":40.0,"hand":"both",
+            await FramebufferTake.show(self, renderer, {"running":true,"paused":true,"bpm":40.0,"hand":"both",
                 "transport_id":19,"count_in_beats":0.0,"play_from_beat":0.0},clock)
             renderer.set_fingering_annotations_enabled(true)
             var normal := "normal-%d-%s.png" % [index,variant["name"]]
@@ -83,7 +84,7 @@ func _run() -> void:
     # Hide a genuine written note only after load validation, leaving the
     # source XML, staff, atlas and every other musical event unchanged.
     assert(renderer.load_score(original))
-    renderer.present({"running":true,"paused":true,"bpm":40.0,"hand":"both",
+    await FramebufferTake.show(self, renderer, {"running":true,"paused":true,"bpm":40.0,"hand":"both",
         "transport_id":19,"count_in_beats":0.0,"play_from_beat":0.0},0.0)
     var kept: Array = []
     var missing_id := ""
@@ -93,6 +94,8 @@ func _run() -> void:
         else:
             kept.append(event)
     renderer.layout.ordered_events = kept
+    await FramebufferTake.recompile(self, renderer, {"running":true,"paused":true,"bpm":40.0,"hand":"both",
+        "transport_id":19,"count_in_beats":0.0,"play_from_beat":0.0},0.0)
     await _capture(viewport,renderer,"missing-musical-note.png")
     # Independent all-digit reference atlas for the existing strict OCR oracle.
     var font: Font = ThemeDB.fallback_font

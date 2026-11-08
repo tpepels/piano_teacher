@@ -46,7 +46,14 @@ func _initialize() -> void:
         failures += 1
     # Regression for the observed one-frame jump/pop: a new retained score
     # pass is hidden until its first placement on the moving world timeline.
-    view._stream_add_take(0.0,14.0,0.0,4.0,"prepared")
+    # _stream_add_take needs source windows: give the view a two-measure model.
+    view.size = Vector2(800,440)
+    view.native_ready = true
+    view.timeline.duration_beats = 8
+    view.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    view.timeline.pixels_per_beat = 96.0
+    view._stream_add_take(0.0,14.0,0.0,"prepared")
     if view.stream_passes.is_empty() or \
             bool(view.stream_passes[0]["clip"].visible):
         failures += 1

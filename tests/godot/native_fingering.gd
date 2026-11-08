@@ -1,4 +1,6 @@
 extends SceneTree
+const FramebufferTake := preload("framebuffer_take.gd")
+const IDLE_STATE := {"running":true, "paused":true, "hand":"both"}
 
 var checks: Array = []
 var requests: Array = []
@@ -19,7 +21,7 @@ func _frame(view: SubViewport, renderer: Control, model: Dictionary, clock: floa
     renderer.load_score(model)
     renderer.set_transport_overlay_enabled(false)
     renderer.set_fingering_annotations_enabled(true)
-    renderer.present({"running":true, "paused":true, "hand":"both","bpm":tempo,
+    await FramebufferTake.show(self, renderer, {"running":true, "paused":true, "hand":"both","bpm":tempo,
         "score_loop_enabled":is_finite(virtual_clock)}, clock, virtual_clock)
     await _capture(view, renderer, name+".png")
     var labels: Array = []
@@ -66,6 +68,7 @@ func _run() -> void:
     frames.append(await _frame(view,renderer,model,.125,"start"))
     frames.append(await _frame(view,renderer,model,.375,"scroll"))
     renderer.load_score(model)
+    await FramebufferTake.show(self, renderer, IDLE_STATE, .125)
     await _capture(view,renderer,"editor-before.png")
     if renderer.has_signal("fingering_change_requested"):
         renderer.fingering_change_requested.connect(func(source_id: String, finger: Variant):
@@ -97,6 +100,7 @@ func _run() -> void:
         if not renderer.annotations.fingering_popup.visible:
             checks.append("Tap must open the correction popup")
         renderer.load_score(model)
+        await FramebufferTake.show(self, renderer, IDLE_STATE, .125)
         if renderer.annotations.fingering_popup.visible:
             checks.append("A changed score must dismiss stale editor targets")
         var unknown: Dictionary = model.duplicate(true)
@@ -104,6 +108,7 @@ func _run() -> void:
             if note["id"] == fixture["unknown_id"]:
                 note.erase("fingering")
         renderer.load_score(unknown)
+        await FramebufferTake.show(self, renderer, IDLE_STATE, .125)
         await _capture(view,renderer,"unknown.png")
         touch.position = renderer.drawn_noteheads[fixture["unknown_id"]]
         renderer._gui_input(touch)
@@ -146,7 +151,7 @@ func _run() -> void:
         event["fingering"] = invalid[n % invalid.size()]
         n += 1
     renderer.load_score(malformed)
-    renderer.present({"running":true,"paused":true,"hand":"both"},0.0)
+    await FramebufferTake.show(self, renderer, IDLE_STATE, 0.0)
     await _capture(view,renderer,"malformed.png")
     var bad: Image = view.get_texture().get_image()
     renderer.set_fingering_annotations_enabled(false)

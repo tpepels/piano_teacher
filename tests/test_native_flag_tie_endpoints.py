@@ -197,7 +197,11 @@ class TieView extends "res://notation/native/view.gd":
         glyphs.paint_note(self,spec["last"],up,280.0,110.0,gap,NOTE_INK)
         var place: Dictionary = connector_geometry.tie_placement(first,last,100.0,280.0,gap)
         selected = connector_geometry.tie_template_key(first,last,place,gap)
-        symbols.paint_tie_contour(self,RenderPass.new(),first,last,place,gap)
+        # Draw through the production path: tie shapes are prepared once per
+        # score, then painted translated.
+        layout.tie_pairs = [{"first":first,"last":last}]
+        connector_geometry.prewarm_tie_clearances(gap)
+        symbols.paint_ties(self,RenderPass.new(),0.0,0.0,gap)
         labels.clear()
         reservations.clear()
         if spec.get("fingering",false):
@@ -216,7 +220,7 @@ class TieView extends "res://notation/native/view.gd":
             annotations.fingering_annotations_enabled = true
             annotations.drawn_fingerings.clear()
             if numbered:
-                annotations.paint(self,0.0,0.0,gap,0,0.0,{"active_hand":active_hand,"play_from_beat":play_from_beat,"score_loop_enabled":score_loop_enabled,"preparation_history":preparation_history})
+                annotations.paint(self,0.0,0.0,gap,0,0.0,{"active_hand":active_hand,"play_from_beat":play_from_beat,"score_loop_enabled":score_loop_enabled})
             for item in annotations.drawn_fingerings:
                 var rect: Rect2 = item["rect"]
                 var head: Vector2 = item["head"]

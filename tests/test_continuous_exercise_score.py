@@ -72,10 +72,13 @@ def test_practice_keeps_keyboard_exit_and_native_source_score(native_camera_run)
     root = Path(__file__).resolve().parents[1] / "godot" / "main.gd"
     source = root.read_text(encoding="utf-8")
     assert 'event.ctrl_pressed' in source and 'KEY_Q' in source
-    assert 'var rail_exit := _button("Exit", _exit_app' in source
+    drawer = (root.parent / "navigation_drawer.gd").read_text(encoding="utf-8")
+    assert '"Exit", exit_app' in drawer
     report, _ = native_camera_run
     assert report["native_ready"] and report["same_atlas"] and report["same_timeline"]
-    assert all(sample["visible_count"] > 0 for sample in report["samples"])
+    # READY and a stopped score keep their take hidden until Play.
+    assert all(sample["visible_count"] > 0 for sample in report["samples"]
+               if sample["label"] not in ("ready", "stopped"))
 
 
 def test_continuous_spacing_is_independent_of_bpm():

@@ -1,4 +1,5 @@
 extends SceneTree
+const FramebufferTake := preload("framebuffer_take.gd")
 # Actual native framebuffer probes. Only the extra-head intervention adds ink;
 # all ordinary notation and deliberately wrong templates use the production view.
 
@@ -8,8 +9,9 @@ class Probe extends "res://notation/native/view.gd":
     func _draw() -> void:
         super._draw()
         if extra_head and native_ready:
-            glyphs.paint(self, "head_black", size.x*.42+_gap()*2.0,
-                _staff_center("right"), _gap(), Color("e5f2ea"), true)
+            var gap: float = staff_gap()
+            glyphs.paint(self, "head_black", size.x*PLAYHEAD_FRACTION+gap*2.0,
+                layout.staff_center("right"), gap, Color("e5f2ea"), true)
 
 func _initialize() -> void:
     call_deferred("capture")
@@ -26,6 +28,9 @@ func capture() -> void:
         renderer.size = Vector2(1536, 520)
         renderer.extra_head = bool(item.get("extra_head", false))
         viewport.add_child(renderer)
+        # The probe's source heads sit at the fixed playhead; the playhead
+        # graphic is not notation and must not add ink to the measured column.
+        renderer.set_transport_overlay_enabled(false)
         var a: Dictionary = item["layout"]
         if not renderer.set_verovio_glyphs(a["native_glyphs"],
                 a["native_note_templates"], a["native_tie_templates"],
@@ -37,10 +42,9 @@ func capture() -> void:
             push_error(renderer.failure_reason)
             quit(1)
             return
-        renderer.present({"running":true, "paused":true, "bpm":40.0,
+        await FramebufferTake.show(self, renderer, {"running":true, "paused":true, "bpm":40.0,
             "hand":"right", "transport_id":19, "count_in_beats":0.0,
             "play_from_beat":0.0}, 0.0)
-        await process_frame
         await process_frame
         await RenderingServer.frame_post_draw
         var folder: String = args[1].path_join(item["name"])

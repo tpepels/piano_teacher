@@ -1,4 +1,5 @@
 extends SceneTree
+const FramebufferTake := preload("framebuffer_take.gd")
 
 var failures: Array[String] = []
 
@@ -33,9 +34,8 @@ func run() -> void:
     var painted: Dictionary = {}
     var density: float = renderer.timeline.pixels_per_beat
     for beat in [0.0,4.0]:
-        renderer.present({"running":true,"bpm":80,"hand":"both"},beat)
+        await FramebufferTake.show(self, renderer, {"running":true,"bpm":80,"hand":"both"},beat)
         renderer.queue_redraw()
-        await process_frame
         await process_frame
         for id in renderer.drawn_noteheads:
             painted[id] = true

@@ -7,23 +7,29 @@ var failures: Array[String] = []
 func _initialize() -> void:
     call_deferred("_audit")
 
+# The frame the audit last presented; re-presented after a recompile so the
+# production lifecycle can attach the freshly compiled source again.
+var _flow_snapshot: Dictionary = {}
+var _flow_at := 0.0
+
 func _recompile_retained_source(renderer) -> void:
-    # The native view paints authenticated source ink once into a child
-    # CanvasItem. Redrawing the parent alone merely moves that cached ink.
-    # A causal pixel intervention must re-record the affected source child.
-    var source = renderer.retained_first_once
-    if source == null:
+    # The native view paints authenticated source ink once into child
+    # CanvasItems. Redrawing the parent alone merely moves that cached ink.
+    # A causal pixel intervention must re-record the affected source passes
+    # through the production invalidation, which unstages every strip first:
+    # a CanvasItem cannot rebuild under an invisible clipping parent.
+    if renderer.retained_first_once == null:
         failures.append("Missing retained source for controlled pixel intervention")
         return
-    source.compiled = false
-    source.queue_redraw()
-    for attempt in range(8):
+    renderer._invalidate_retained_segments()
+    for attempt in range(30):
         await process_frame
-        if source.compiled:
+        if renderer.retained_ready():
             break
-    if not source.compiled:
+    if not renderer.retained_ready():
         failures.append("Source retained ink did not recompile after intervention")
         return
+    renderer.present_flow(_flow_at,_flow_snapshot,_flow_at)
     renderer.queue_redraw()
     await process_frame
     await RenderingServer.frame_post_draw
@@ -31,7 +37,10 @@ func _recompile_retained_source(renderer) -> void:
 func _capture_schedule(fixture: Dictionary, density: float) -> Dictionary:
     # Density chooses capture cost only. Python must establish actual motion,
     # viewport coverage and ownership from the saved images independently.
-    var original: Array = fixture.get("sample_beats", [0.0, 1.5, 3.5, 5.5])
+    var original: Array = fixture.get("sample_beats", [0.0, 1.5, 3.5, 5.5]).duplicate()
+    # The world axis is monotonic: a later frame cannot rewind to an earlier
+    # clock, so every capture schedule runs in ascending clock order.
+    original.sort()
     if not bool(fixture.get("full_symbol_inventory", false)):
         return {"samples": original, "added": 0, "interval": 0.0}
     var interval: float = minf(0.15, 96.0 / maxf(1.0, density))
@@ -152,9 +161,16 @@ func _audit() -> void:
             "bpm": 40.0, "hand": str(fixture.get("hand","both")),
             "transport_id": 19, "count_in_beats": 0.0,
             "play_from_beat": 0.0, "phase":"playing"}
-        renderer.present(snapshot,at)
-        renderer.present_flow(at,snapshot,at)
-        await process_frame
+        _flow_snapshot = snapshot
+        _flow_at = at
+        # Strips admitted by a frame compile after their first draw and are
+        # attached by the next present_flow; present until all are drawn.
+        for settle in range(30):
+            renderer.present(snapshot,at)
+            renderer.present_flow(at,snapshot,at)
+            await process_frame
+            if settle >= 1 and renderer.retained_ready():
+                break
         await process_frame
         await RenderingServer.frame_post_draw
         if not renderer.annotations.drawn_fingerings.is_empty():

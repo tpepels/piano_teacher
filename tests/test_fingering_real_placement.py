@@ -11,6 +11,7 @@ import pytest
 from piano_teacher.fingering import FingeringService, project_model
 from piano_teacher.importing.pieces import import_piece
 from piano_teacher.learning import LearningPlan
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 from scripts.check_native_verovio_overlay import AuditCase, fixture
 from test_native_fingering import _godot, _rgb, _run_godot, _verify_numbers
 
@@ -131,7 +132,7 @@ def _verify_source_attachment_from_pixels(folder,data,report):
             center=np.array([np.floor(x)+(xx.min()+xx.max())/2,np.floor(y)+(yy.min()+yy.max())/2])
             for identity in label['event_ids']:
                 note=notes[identity]
-                origin=picture.width*.42+(float(note['beat'])-clock)*density
+                origin=picture.width*PLAYHEAD_FRACTION+(float(note['beat'])-clock)*density
                 head=_connector_head(picture,written,note,origin)
                 assert head is not None,(identity,note['spelling'])
                 assert np.linalg.norm(center-[head['x'],head['y']])<=head['gap']*2.5

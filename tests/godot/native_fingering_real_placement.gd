@@ -21,7 +21,7 @@ func _run() -> void:
     frames.append(await _frame(viewport,renderer,fixture["model"],.375,"scroll"))
     var density: float = renderer.timeline.pixels_per_beat
     renderer.set_transport_overlay_enabled(true)
-    renderer.present({"running":true,"paused":true,"hand":"both"},.125)
+    await FramebufferTake.show(self, renderer, {"running":true,"paused":true,"hand":"both"},.125)
     await _capture(viewport,renderer,"after.png")
     renderer.set_fingering_annotations_enabled(false)
     await _capture(viewport,renderer,"after-canonical.png")
@@ -39,6 +39,8 @@ func _run() -> void:
             assets["native_tuplet_fragments"],assets["native_slur_fragments"],assets["native_required_slur_pairs"],
             assets["native_slurs_complete"],assets["native_required_beam_groups"],assets["native_beams_complete"]))
         previous.load_score(fixture["model"])
+        # The pinned historical view predates the stream queue: it draws
+        # directly from present().
         previous.present({"running":true,"paused":true,"hand":"both"},.125)
         await _capture(viewport,previous,"before.png")
     # The reference font and hand colours are public APIs, independent of
