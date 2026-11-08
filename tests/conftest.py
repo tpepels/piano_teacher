@@ -9,8 +9,10 @@ behaviour still run); tests that need real predictions depend on the
 """
 from __future__ import annotations
 
+import functools
 import json
 import os
+import shutil
 import subprocess
 
 import pytest
@@ -18,34 +20,39 @@ import pytest
 from piano_teacher.fingering.lumikey import RUNTIME
 
 _PROBE = {"notes": [{"source_id": "probe", "left": False, "note": 60, "time": 0, "duration": 500}]}
-_unavailable: str | None = None
-_probed = False
 
 
-def _probe_lumikey_runtime() -> str | None:
-    """Return why the real runtime cannot predict, or None if it works.
+@functools.cache
+def _probe_lumikey_runtime() -> tuple[str, str]:
+    """Classify the real runtime: ("ok"|"absent"|"broken", detail).
 
     Runs the real bridge once on one note, offline, exactly as production does.
+    Only genuine absence (no node binary, no node_modules, MODULE_NOT_FOUND)
+    is "absent" and skips; every other failure is "broken" and must fail.
     """
     node = os.environ.get("PIANO_FINGERING_NODE", "node")
+    if shutil.which(node) is None:
+        return "absent", f"node binary {node!r} not found"
+    if not (RUNTIME / "node_modules").is_dir():
+        return "absent", f"{RUNTIME / 'node_modules'} is missing"
     try:
         run = subprocess.run([node, str(RUNTIME / "bridge.cjs")], input=json.dumps(_PROBE),
                              capture_output=True, text=True, timeout=120, check=False,
                              env={**os.environ, "OMP_NUM_THREADS": "1"})
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return f"LumiKey fingering runtime cannot start ({exc})"
-    if run.returncode:
-        lines = [line.strip() for line in run.stderr.splitlines() if line.strip()]
-        detail = next((line for line in lines if line.startswith("Error")), None) or (
-            lines[0] if lines else "no error output")
-        return f"LumiKey fingering runtime is not installed or broken ({detail})"
-    return None
+        return "broken", f"cannot run or hung: {exc!r}"
+    if run.returncode == 0:
+        return "ok", ""
+    if "MODULE_NOT_FOUND" in run.stderr or "Cannot find module" in run.stderr:
+        lines = [x.strip() for x in run.stderr.splitlines() if x.strip()]
+        return "absent", next((x for x in lines if x.startswith("Error")), lines[0] if lines else "module not found")
+    return "broken", f"exit {run.returncode}: {run.stderr[-2000:]}"
 
 
 @pytest.fixture(scope="session")
 def lumikey_runtime():
-    global _unavailable, _probed
-    if not _probed:
-        _unavailable, _probed = _probe_lumikey_runtime(), True
-    if _unavailable:
-        pytest.skip(f"{_unavailable}; run scripts/setup-fingering.sh")
+    state, detail = _probe_lumikey_runtime()
+    if state == "absent":
+        pytest.skip(f"LumiKey fingering runtime is not installed ({detail}); run scripts/setup-fingering.sh")
+    if state == "broken":
+        pytest.fail(f"LumiKey fingering runtime is installed but broken: {detail}", pytrace=False)

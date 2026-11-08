@@ -491,11 +491,13 @@ def test_local_failure_prepares_in_target_meter_and_keeps_adaptive_escalation(cl
     assert retry["visual_offset_beats"] == 0 and retry["count_in_beats"] == 0
     now[0] = app.visual_transport.run_at + 8*60/72 + .03
     second = app.state()
-    assert second["guided_recovery"] and second["recovery_beat"] == 6
+    # 127c94ee: a second failure at the slower setting no longer enters a
+    # guided wait (perpetual score flow); the take keeps repeating in place.
+    assert not second["guided_recovery"] and second["recovery_beat"] == 6
+    assert second["phase"] == "recovering" and second["bpm"] == 65
     now[0] = app.visual_transport.next_at + .01
-    guided = app.state()
-    assert guided["mode"] == "learn" and guided["first_bar"] == 3
-    assert guided["last_bar"] == 4
+    again = app.state()
+    assert again["mode"] == "practice" and again["running"] and again["play_from_beat"] == 6
 
 
 def test_manual_retry_preparation_pauses_and_resumes_without_skipping(clocked_engine):

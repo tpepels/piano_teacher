@@ -86,7 +86,8 @@ def test_failed_shaped_take_rewinds_from_the_true_visual_position(tmp_path, monk
         assert not engine.preview_only
         clock[0] = engine.visual_transport.run_at + 6.75 + .25
         result = engine.state()
-        assert result["phase"] == "recovering"
+        assert result["phase"] == "feedback"  # the held take result outranks the rewind (state_projection.project_phase)
+        assert result["recovery_beat"] == 0 and result["visual_scroll_speed"] < 0
         assert engine.visual_transport._visual_rewind_from == pytest.approx(8+.25*80/60)
     finally:
         engine.db.close()
