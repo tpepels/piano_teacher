@@ -76,6 +76,7 @@ def test_godot_produces_metronome_and_follows_score(native_camera_run):
     # clicked (MetronomeFrameCoordinator._dispatch_cue); the metronome clicks
     # once the take is playing.
     assert "PHASE0_PHASE:count_in" in output
+    assert report["spoken_count_in"] > 0, "the count-in cue was never spoken"
     assert "PHASE0_CLICK:playing" in output
     assert report["clock_matched"] and report["resume_advanced"]
     assert report["clipped"]

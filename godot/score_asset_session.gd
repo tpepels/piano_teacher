@@ -321,6 +321,9 @@ func _finish_native_score() -> void:
     if _renderer.has_method("retained_ready") and not _renderer.retained_ready():
         return
     if rendered_revision == revision:
+        # A resize or staff focus recompiled this revision's strips. Status
+        # published while they compiled said "Compiling"; clear it.
+        _publish_status()
         return
     rendered_revision = revision
     _preparing_since_ms = -1

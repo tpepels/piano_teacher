@@ -1,5 +1,6 @@
 extends SceneTree
 const NativeAssets := preload("res://native_score_assets.gd")
+const FramebufferTake := preload("framebuffer_take.gd")
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -50,31 +51,31 @@ func run() -> void:
                         absf(float(event.get("beat",-1))-first) < .001:
                     first_id = str(event.id)
                     break
-            check(renderer.drawn_noteheads.has(first_id),
-                "READY preview retains the first native %s attack at %.0f px/beat" % [hand,density])
-            if renderer.drawn_noteheads.has(first_id):
-                var head: Vector2 = renderer.drawn_noteheads[first_id]
-                var marker: float = stage.runway_steps.marker_x(
-                    stage.runway_steps._current_start,stage.runway_steps._current_beat,
-                    stage.runway_steps._density,stage.runway_steps.size.x)
-                check(head.x > 0 and head.x < renderer.size.x,
-                    "Long-rest READY preview exposes authentic note ink")
-                check(absf(marker-head.x) < .01,
-                    "READY %s marker %.3f follows retained notehead %.3f at %.0f px/beat" %
-                    [hand,marker,head.x,density])
+            # READY holds its take hidden offscreen until Play
+            # (docs/architecture/immutable-score-queues.md); the marker's
+            # own camera is checked here, the head alignment under Play below.
+            check(not renderer.drawn_noteheads.has(first_id),
+                "READY keeps its source take offscreen at %.0f px/beat" % density)
             check(renderer.clock_beat == 0.0 and renderer.play_from_beat == 0.0,
                 "READY camera projection preserves the source transport origin")
             # Playback uses the real source clock, including its written rest.
             heading.running = true
             heading.phase = "playing"
-            renderer.present(heading,first,first)
+            # A moving take whose origin is beat 0, on the monotonic world axis.
+            renderer.clear_score()
+            check(renderer.set_density(density) and renderer.load_score(payload.model),
+                "Source reloads for the moving take")
+            await FramebufferTake.show(self,renderer,heading,first,first)
             stage.present_runway_steps(heading,first)
             await settle()
             check(renderer.drawn_noteheads.has(first_id),"Playback retains its first source attack")
             if renderer.drawn_noteheads.has(first_id):
+                var moving: Vector2 = renderer.drawn_noteheads[first_id]
+                check(moving.x > 0 and moving.x < renderer.size.x,
+                    "Long-rest playback exposes authentic note ink")
                 check(absf(stage.runway_steps.marker_x(stage.runway_steps._current_start,
                     stage.runway_steps._current_beat,stage.runway_steps._density,
-                    stage.runway_steps.size.x)-renderer.drawn_noteheads[first_id].x) < .01,
+                    stage.runway_steps.size.x)-moving.x) < .01,
                     "Playing marker follows the authoritative source clock")
             heading.paused = true
             heading.phase = "paused"

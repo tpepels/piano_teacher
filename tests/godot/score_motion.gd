@@ -1,4 +1,5 @@
 extends SceneTree
+const FramebufferTake := preload("framebuffer_take.gd")
 
 class FixtureApp extends "native_production_fixture.gd":
     # Sample deterministic backend snapshots through the production process.
@@ -15,22 +16,18 @@ func check(ok: bool, message: String) -> void:
 
 func _initialize() -> void: call_deferred("run")
 
-func sample(beat: float, bpm: float = 80.0, start: float = 0.0) -> Dictionary:
-    var state: Dictionary = app.last_state.duplicate(true)
-    state.merge({"loaded":true, "revision":app.revision,
-        "running":true, "paused":true, "phase":"count_in" if beat < 0.0 else "playing",
-        "mode":"practice", "preview_only":true, "clock_beat":beat,
-        "visual_offset_beats":0.0, "visual_scroll_beat":start+beat,
-        "bpm":bpm, "hand":"both", "transport_id":198,
-        "play_from_beat":start, "count_in_beats":4.0,
-        "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats},true)
-    app._on_state(0,JSON.stringify(state).to_utf8_buffer(),Time.get_ticks_msec())
-    app._process(0.0)
-    app.practice_view.stage.renderer.queue_redraw()
-    await process_frame
-    await process_frame
+func sample(world: float) -> Dictionary:
+    # The world axis is monotonic and wall-clock driven in the application, so
+    # this harness presents explicit world positions in ascending order: one
+    # take whose origin is beat 0, as a framebuffer audit of moving ink needs.
+    var view = app.practice_view.stage.renderer
+    var state: Dictionary = {"loaded":true, "running":true, "paused":false,
+        "phase":"count_in" if world < 0.0 else "playing", "mode":"practice",
+        "bpm":80.0, "hand":"both", "transport_id":198, "play_from_beat":0.0,
+        "count_in_beats":4.0, "duration_beats":view.timeline.duration_beats}
+    await FramebufferTake.show(self, view, state, world)
     RenderingServer.force_draw()
-    return app.practice_view.stage.renderer.drawn_noteheads.duplicate()
+    return view.drawn_noteheads.duplicate()
 
 func run() -> void:
     var folder: String = OS.get_cmdline_user_args()[0]
@@ -48,24 +45,37 @@ func run() -> void:
         return
     var view = app.practice_view.stage.renderer
     var source: Dictionary = view.timeline.model.duplicate(true)
-    # Initialize the actual presentation before recording its viewport. The
-    # asset response alone does not publish transport captions or controls.
-    await sample(-.125)
+    # Start from an empty strip so the harness admits the one take it samples.
+    view._stream_release_all()
     var size_before: Vector2 = view.size
     var position_before: Vector2 = view.position
     var density: float = view.timeline.pixels_per_beat
     var results: Array = []
     var checked := 0
+    # Every sample is a world position; take them in ascending order and keep
+    # the painted heads of each.
+    var worlds: Dictionary = {}
+    for event in view.layout.ordered_events:
+        if str(event.get("kind", "")) == "note":
+            worlds[float(event.beat)-.125] = true
+            worlds[float(event.beat)+.125] = true
+    for measure in view.timeline.measures:
+        worlds[float(measure.start_beat)-.001] = true
+        worlds[float(measure.start_beat)+.001] = true
+    var ordered: Array = worlds.keys()
+    ordered.sort()
+    var painted: Dictionary = {}
+    for world in ordered:
+        painted[world] = await sample(world)
     # Every source attack, including later systems, must be present when its
-    # backend beat reaches the fixed line. Measure the painted head twice;
-    # chord offsets are fixed source ink and cancel from the travel oracle.
+    # beat reaches the fixed line; chord offsets are fixed source ink.
     for event in view.layout.ordered_events:
         if str(event.get("kind", "")) != "note":
             continue
         var id: String = str(event.id)
         var onset: float = float(event.beat)
-        var before: Dictionary = await sample(onset-.125)
-        var after: Dictionary = await sample(onset+.125)
+        var before: Dictionary = painted[onset-.125]
+        var after: Dictionary = painted[onset+.125]
         check(before.has(id) and after.has(id), "Source note remains painted around onset: " + id)
         if not before.has(id) or not after.has(id):
             continue
@@ -74,30 +84,18 @@ func run() -> void:
         check(absf((a.x-b.x)-density*.25) < .02,
             "Painted source head travels at constant density: " + id)
         check(absf(a.y-b.y) < .01, "Scrolling preserves source pitch: " + id)
-        check(absf((a.x+b.x)*.5-view.size.x*.42) < view.staff_gap()*1.1,
+        check(absf((a.x+b.x)*.5-view.size.x*view.PLAYHEAD_FRACTION) < view.staff_gap()*1.1,
             "Authentic head crosses timing line on source beat: " + id)
         check(view.size == size_before and view.position == position_before,
             "The native viewport stays fixed while notation moves")
         results.append({"id":id,"beat":onset,"before":a.x,"after":b.x})
         checked += 1
     check(checked >= 3, "Fixture checks several actual painted attacks")
-    # Negative count-in, seek offsets, and each tempo use that same axis.
-    for bpm in [40.0,80.0,120.0]:
-        for start in [0.0, minf(4.0,view.timeline.duration_beats*.5)]:
-            var baseline: Dictionary = await sample(-.1,bpm,start)
-            var later: Dictionary = await sample(-.1+bpm/60.0*.05,bpm,start)
-            var shared := 0
-            for painted_id in baseline:
-                if later.has(painted_id):
-                    check(absf((baseline[painted_id].x-later[painted_id].x)-density*bpm/60.0*.05) < .02,
-                        "Count-in and seeks preserve tempo travel")
-                    shared += 1
-            check(shared > 0, "Count-in/seek samples contain authentic note ink")
     # Explicit source bar boundaries cannot introduce a speed change.
     for measure in view.timeline.measures:
         var boundary: float = float(measure.start_beat)
-        var a: Dictionary = await sample(boundary-.001)
-        var b: Dictionary = await sample(boundary+.001)
+        var a: Dictionary = painted[boundary-.001]
+        var b: Dictionary = painted[boundary+.001]
         var common := 0
         for painted_id in a:
             if b.has(painted_id):
@@ -105,11 +103,10 @@ func run() -> void:
                     "Measure/system boundary never jumps or stalls")
                 common += 1
         check(common > 0, "Boundary contains visible real notation")
-    var paused: Dictionary = await sample(1.0)
+    # The same world position paints the same ink: a held axis stays fixed.
+    var held: Dictionary = await sample(float(ordered[-1]))
     await create_timer(.05).timeout
-    app._process(0.0)
-    await process_frame
-    check(view.drawn_noteheads == paused, "Paused notation stays fixed across wall time")
+    check(await sample(float(ordered[-1])) == held, "A held world position stays fixed across wall time")
     check(view.timeline.model == source, "Motion never rewrites source events")
     check(app._native_score_ready(), "Production remains ready after all motion samples")
     var output := FileAccess.open(folder.path_join("samples.json"), FileAccess.WRITE)

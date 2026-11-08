@@ -1,30 +1,33 @@
 extends SceneTree
 
+const FingeringPlacement := preload("res://notation/native/fingering_placement.gd")
 var failures: Array = []
 
 func _initialize() -> void:
     call_deferred("_run")
 
-func _settle(app: Control, after_revision: int = -1) -> bool:
-    var deadline: int = Time.get_ticks_msec()+25000
+# READY holds its take hidden offscreen; press Play through the production
+# route and let the world axis bring the source (and its digits) on screen.
+func _play_until_visible(app: Control) -> bool:
+    var renderer = app.practice_view.stage.renderer
+    var deadline: int = Time.get_ticks_msec()+90000
     while Time.get_ticks_msec() < deadline:
         await process_frame
-        if app.rendered_revision > after_revision and app._native_score_ready() and \
-                not app.practice_view.stage.renderer.annotations.drawn_fingerings.is_empty() and not app.action_pending:
+        if not app.command_state.pending and str(app.last_state.get("phase","")) == "ready" and \
+                app._native_score_ready() and renderer.retained_ready():
+            app._toggle_playing()
+        if not renderer.annotations.drawn_fingerings.is_empty() and \
+                renderer.drawn_noteheads.size() > 0 and not app.command_state.pending:
             await process_frame
             await RenderingServer.frame_post_draw
             return true
-    failures.append("Native app did not become ready: "+str(app.score_error))
-    push_error(failures[-1]+" "+str({"rendered":app.rendered_revision,
-        "ready":app._native_score_ready(),"pending":app.action_pending,
-        "size":app.practice_view.stage.renderer.size,"labels":app.practice_view.stage.renderer.annotations.drawn_fingerings.size(),
-        "layout":app.practice_view.stage.renderer.annotations.fingering_layout.size(),
-        "same_layout":is_same(app.practice_view.stage.renderer.layout,app.practice_view.stage.renderer.annotations.score_layout),
-        "indices":[app.practice_view.stage.renderer.layout.ordered_events.size(),app.practice_view.stage.renderer.annotations.score_layout.ordered_events.size()],
-        "assigned":app.practice_view.stage.renderer.layout.ordered_events[0].get("fingering") if not app.practice_view.stage.renderer.layout.ordered_events.is_empty() else null,
-        "issues":app.practice_view.stage.renderer.annotations.fingering_placement_issues,
-        "enabled":app.practice_view.stage.renderer.annotations.fingering_annotations_enabled,
-        "running":app.last_state.get("running"),"phase":app.last_state.get("phase")}))
+    failures.append("Play never brought fingered notation on screen: "+JSON.stringify({
+        "phase":app.last_state.get("phase"),"loaded":app.last_state.get("loaded"),
+        "ready":app._native_score_ready(),"pending":app.command_state.pending,
+        "error":app.score_error,"labels":renderer.annotations.drawn_fingerings.size(),
+        "heads":renderer.drawn_noteheads.size(),"screen":app.current_screen,
+        "title":app.last_state.get("title"),"message":app.library_view.library_message.text,"opstate":app.command_state.operation,"catalog":app.library_catalog.get("catalog"),"fingering":app.last_state.get("fingering")}))
+    push_error(failures[-1])
     return false
 
 func _run() -> void:
@@ -37,24 +40,37 @@ func _run() -> void:
         push_error("Production app has no fingering POST handler")
         quit(1)
         return
-    if not await _settle(app):
+    # The embedded engine starts with the app; open the library piece the way
+    # the Music screen does, resuming straight into practice.
+    var piece: String = OS.get_cmdline_user_args()[1]
+    var started: int = Time.get_ticks_msec()+60000
+    while not app.native_started and Time.get_ticks_msec() < started:
+        await process_frame
+    if not app.native_started:
+        failures.append("Embedded engine did not start: "+str(app.inprocess_bus.get("ready_error")))
+        push_error(failures[-1])
+        quit(1)
+        return
+    app._open_library_piece(piece,true)
+    if not await _play_until_visible(app):
         quit(1)
         return
     # The complete path arrives independently of the initial score. Long
     # sources must finish building it before the memory assertion or edits.
     var path_deadline: int = Time.get_ticks_msec()+25000
-    while (app.lesson_session.pending or app.practice_view.stage.steps.entries.is_empty()) and Time.get_ticks_msec() < path_deadline:
+    while (app.lesson_session.pending or app.lesson_view.steps.entries.is_empty()) and Time.get_ticks_msec() < path_deadline:
         await process_frame
-    if app.lesson_session.pending or app.practice_view.stage.steps.entries.is_empty():
+    if app.lesson_session.pending or app.lesson_view.steps.entries.is_empty():
         failures.append("Complete lesson path did not become ready")
     var folder: String = OS.get_cmdline_user_args()[0]
     var renderer: Control = app.practice_view.stage.renderer
     var first: Dictionary = renderer.annotations.drawn_fingerings[0]
     var id: String = first["event_ids"][0]
-    var source: String = renderer.FingeringPlacement.source(renderer.layout.expression_note_index[id])
+    var source: String = FingeringPlacement.source(renderer.layout.expression_note_index[id])
     var previous: int = int(first["finger"])
     var changed: int = previous % 5+1
     var revision: int = app.rendered_revision
+    var revision_initial: int = revision
     var finger_rect: Rect2 = renderer.get_global_transform_with_canvas()*first["rect"]
     finger_rect.position *= root.content_scale_factor
     finger_rect.size *= root.content_scale_factor
@@ -69,12 +85,18 @@ func _run() -> void:
         failures.append("App right click did not open the fingering editor")
     else:
         renderer.annotations.fingering_popup.id_pressed.emit(changed)
-    if app.last_post_path != "/fingering":
-        failures.append("Popup must POST /fingering through the production action request")
+    if app.command_state.operation != "fingering.correct":
+        failures.append("Popup must send fingering.correct through the production command request")
     if app.action_request.timeout < 300.0:
         failures.append("Whole-piece inference must not inherit the short control request timeout")
     print("FINGERING_APPLICATION_EDIT:",source)
-    if not await _settle(app,revision):
+    # The correction reloads the score at a new revision; show it again.
+    var reload_deadline: int = Time.get_ticks_msec()+60000
+    while app.rendered_revision <= revision and Time.get_ticks_msec() < reload_deadline:
+        await process_frame
+    if app.rendered_revision <= revision:
+        failures.append("Correction did not reload a new score revision")
+    if not await _play_until_visible(app):
         quit(1)
         return
     var corrected := false
@@ -84,11 +106,21 @@ func _run() -> void:
                 event.get("fingering",{}).get("origin") == "manual"
     if not corrected:
         failures.append("API correction did not reach the refreshed native score")
+    # The engine's own status reflects the persisted override.
+    var manual_after_edit: int = int(app.last_state.get("fingering",{}).get("manual",-1))
+    if manual_after_edit != 1:
+        failures.append("Engine fingering status must report exactly one override, got %d" % manual_after_edit)
+    var edit_revision: int = app.rendered_revision
     root.get_texture().get_image().save_png(folder.path_join("app-corrected.png"))
     revision = app.rendered_revision
     print("FINGERING_APPLICATION_RESTORE:",source)
     app._on_fingering_change_requested(source,null)
-    if not await _settle(app,revision):
+    var restore_deadline: int = Time.get_ticks_msec()+60000
+    while app.rendered_revision <= revision and Time.get_ticks_msec() < restore_deadline:
+        await process_frame
+    if app.rendered_revision <= revision:
+        failures.append("Removing the correction did not reload a new score revision")
+    if not await _play_until_visible(app):
         quit(1)
         return
     var restored := false
@@ -98,6 +130,9 @@ func _run() -> void:
                 event.get("fingering",{}).get("origin") != "manual"
     if not restored:
         failures.append("Removing the correction did not restore the production assignment")
+    var manual_after_restore: int = int(app.last_state.get("fingering",{}).get("manual",-1))
+    if manual_after_restore != 0:
+        failures.append("Engine fingering status must report no override after removal, got %d" % manual_after_restore)
     app._present_fingering_status({"status":"partial","unknown":6,"assigned":12})
     if not app.practice_view.stage.fingering_status_label.visible or "6" not in app.practice_view.stage.fingering_status_label.text or \
             "Right-click" not in app.practice_view.stage.fingering_status_label.tooltip_text:
@@ -129,15 +164,16 @@ func _run() -> void:
     var current: Dictionary = app.last_state.duplicate(true)
     app.last_state["revision"] = app.revision+1
     app.last_state["piece_fingerprint"] = "another-loaded-piece"
-    app.last_post_path = "stale-target-control"
+    app.fingering_save_error = ""
     app._on_fingering_change_requested(source,changed)
-    if app.action_pending or app.last_post_path != "stale-target-control":
+    if app.command_state.pending or app.fingering_save_error.is_empty():
         failures.append("An old native view cannot correct a newly loaded piece")
     app.last_state = current
     var file := FileAccess.open(folder.path_join("app-report.json"),FileAccess.WRITE)
     file.store_string(JSON.stringify({"source_id":source,"before":previous,"changed":changed,
-        "revision":app.rendered_revision,"failures":failures,
-        "static_memory":OS.get_static_memory_usage(),"path_steps":app.practice_view.stage.steps.entries.size(),
+        "revision":app.rendered_revision,"edit_revision":edit_revision,"initial_revision":revision_initial,
+        "manual_after_edit":manual_after_edit,"manual_after_restore":manual_after_restore,"failures":failures,
+        "static_memory":OS.get_static_memory_usage(),"path_steps":app.lesson_view.steps.entries.size(),
         "finger_rect":[finger_rect.position.x,finger_rect.position.y,finger_rect.size.x,finger_rect.size.y]}))
     for failure in failures:
         push_error(failure)

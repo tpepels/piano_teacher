@@ -292,7 +292,9 @@ func run() -> void:
         "total_events":view.layout.ordered_events.size(),
         "high_click_bytes":app.click_high.data.size(),
         "low_click_bytes":app.click_low.data.size(),
-        "click_stream_selected":app.click_player.stream != null}
+        "click_stream_selected":app.click_player.stream != null,
+        # The count-in is spoken by the root-owned voice player, not clicked.
+        "spoken_count_in":int(app.get_node("CountInVoicePlayer").last_spoken_number)}
     print("NATIVE_CAMERA_REPORT:", JSON.stringify(report))
     app.queue_free()
     await process_frame

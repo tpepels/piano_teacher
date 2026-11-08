@@ -74,6 +74,23 @@ func state(phase: String = "ready") -> Dictionary:
 
 func show_state(phase: String = "ready") -> void:
     app._on_state(0,JSON.stringify(state(phase)).to_utf8_buffer())
+    # Presenting a state can focus a staff or admit source strips; a transport
+    # action is refused until their ink has compiled (notation_not_compiled).
+    # A user acts frames later; so does this.
+    var renderer = app.practice_view.stage.renderer
+    await process_frame
+    var deadline := Time.get_ticks_msec() + 5000
+    while not renderer.retained_ready() and Time.get_ticks_msec() < deadline:
+        await process_frame
+
+# Present a snapshot and let the renderer compile before the next user action.
+func apply_state(snapshot: Dictionary) -> void:
+    app._on_state(0,JSON.stringify(snapshot).to_utf8_buffer())
+    var renderer = app.practice_view.stage.renderer
+    await process_frame
+    var deadline := Time.get_ticks_msec() + 5000
+    while not renderer.retained_ready() and Time.get_ticks_msec() < deadline:
+        await process_frame
 
 func key(code: Key) -> void:
     var event := InputEventKey.new()
@@ -96,9 +113,11 @@ func test_three_button_stage() -> void:
     app.practice_view.stage.phase_cue.present({"loaded":false, "phase":"ready"})
     check(app.practice_view.stage.phase_cue.message.is_empty(),
         "Empty library must not invite the pianist to start an absent score")
-    show_state()
-    check(app.practice_view.practice_controls.get_child_count() == 3,
-        "Practice surface must have exactly Play, Retry and Listen")
+    await show_state()
+    check(app.practice_view.practice_controls.get_child_count() == 4,
+        "Practice surface must have exactly Retry, Play, Listen and More")
+    check(app.practice_view.practice_controls.get_child(3) == app.practice_view.practice_details_button,
+        "More (details) is the fourth control, after the three primary actions")
     check(app.practice_view.practice_controls.get_child(0) == app.practice_view.practice_retry_button,
         "Retry is the first primary action")
     check(app.practice_view.practice_controls.get_child(1) == app.practice_view.start_button,
@@ -111,9 +130,10 @@ func test_three_button_stage() -> void:
         "Piano transport keys must retain keyboard focus")
     check(app.practice_view.start_button.get_theme_color("font_color").a < .01,
         "Default Godot button label must not overlap the custom game icon")
-    var exit_controls: Array = app.screens["settings"].find_children("*", "Button", true, false)
+    # Exit lives in the navigation drawer (navigation_drawer.gd).
+    var exit_controls: Array = app.navigation_drawer.drawer.find_children("*", "Button", true, false)
     check(exit_controls.any(func(node):
-        return node.text == "Exit application" and node.focus_mode == Control.FOCUS_ALL),
+        return node.text == "Exit" and node.focus_mode == Control.FOCUS_ALL),
         "Fullscreen application retains a keyboard-accessible Exit in Settings")
     check(app.settings_view.listen_volume_slider.max_value >= 12.0,
         "Settings needs a separate Listen gain adjustment")
@@ -121,12 +141,12 @@ func test_three_button_stage() -> void:
         "Compact phase cue remains on the music stage")
     check(not app.lesson_view.mode_choice.is_visible_in_tree() and not app.lesson_view.hints_toggle.is_visible_in_tree(),
         "Advanced dropdowns must not appear during playing")
-    show_state("paused")
+    await show_state("paused")
     check(app.practice_view.start_button.visible and app.practice_view.start_button.text.begins_with("Resume"),
         "Paused score retains its Resume control")
     check(not app.practice_view.pause_sheet.visible,
         "Pausing must not force a modal menu over the music")
-    show_state("ready")
+    await show_state("ready")
     app.commands.clear()
     app.practice_view.listen_button.pressed.emit()
     expect_command("listen", "One tap enters Listen")
@@ -173,7 +193,7 @@ func test_short_challenge_loop() -> void:
         {"hand":"both","active":false,"complete":false,"locked":true}]
     app._on_state(0,JSON.stringify(run).to_utf8_buffer())
     var ribbon_visible_at_ready: bool = app.practice_view.stage.practice_stage_bar.visible
-    check("LEFT HAND" in app.practice_view.progress_label.text and "1/3 CLEAN" in app.practice_view.progress_label.text,
+    check("LEFT HAND" in app.practice_view.progress_label.text and "1/3 ACCEPTED" in app.practice_view.progress_label.text,
         "Practice should show the short musical challenge and committed clean streak")
     run["phase"] = "count_in"
     run["running"] = true
@@ -247,16 +267,16 @@ func test_short_challenge_loop() -> void:
         "Backend hand completion must unlock the next real stage")
     check("RIGHT HAND UNLOCKED" in app.practice_view.progress_label.text,
         "Completed first hand should visibly unlock the next without opening a menu")
-    check(app.practice_view.practice_controls.get_child_count() == 3,
+    check(app.practice_view.practice_controls.get_child_count() == 4,
         "Game-like challenge flow must not add another transport button")
 
 
 func test_primary_transport() -> void:
-    show_state()
+    await show_state()
     app.practice_view.start_button.pressed.emit()
     expect_command("start", "Primary button starts a ready passage")
     for phase in ["count_in", "playing", "feedback", "recovering", "loading"]:
-        show_state(phase)
+        await show_state(phase)
         app.commands.clear() # Ignore the ordinary loading score-ready acknowledgement.
         key(KEY_SPACE)
         expect_command("pause", "Space pauses " + phase + " without abandoning the attempt")
@@ -264,7 +284,7 @@ func test_primary_transport() -> void:
         check(visible_buttons("Pause").size() == 1, "Only one Pause control is visible during " + phase)
         app.practice_view.start_button.pressed.emit()
         expect_command("pause", "Primary button pauses " + phase)
-    show_state("paused")
+    await show_state("paused")
     key(KEY_SPACE)
     expect_command("resume", "Space resumes the same paused attempt")
     app.practice_view.start_button.pressed.emit()
@@ -274,17 +294,17 @@ func test_primary_transport() -> void:
 func test_secondary_stop() -> void:
     # Advanced Stop remains functional from Lesson Path or the S shortcut.
     # It is not a fourth/fifth routine button on the score.
-    show_state()
+    await show_state()
     check(visible_buttons("Stop").is_empty(),
         "Normal practice shows no Stop button competing with three actions")
     for phase in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]:
-        show_state(phase)
+        await show_state(phase)
         app.commands.clear()
         key(KEY_S)
         expect_command("stop", "S ends an attempt during " + phase)
         check(visible_buttons("Stop").is_empty(),
             "Stop must remain out of the normal practice flow")
-    show_state("playing")
+    await show_state("playing")
     app._navigate("lesson")
     check(app.lesson_view.stop_button.is_visible_in_tree() and not app.lesson_view.stop_button.disabled,
         "Advanced Stop stays accessible in Lesson Path")
@@ -308,7 +328,7 @@ func routed_key(code: Key, unicode_value: int = 0, shifted: bool = false) -> voi
 
 func test_focused_shortcuts() -> void:
     for phase in ["ready", "playing", "paused"]:
-        show_state(phase)
+        await show_state(phase)
         for control in app.practice_view.practice_controls.get_children():
             if not control is Button or control.disabled:
                 continue
@@ -321,7 +341,7 @@ func test_focused_shortcuts() -> void:
             expect_command(action, "Space performs one transport action with " + control.text + " focused during " + phase)
     # Enter keeps ordinary button activation, and typing in Settings remains
     # native text input rather than invoking practice shortcuts.
-    show_state()
+    await show_state()
     for control in app.practice_view.practice_controls.get_children():
         if control is Button and control.text == "Retry":
             control.grab_focus()
@@ -339,11 +359,11 @@ func test_practice_detours() -> void:
     for destination in ["settings", "lesson"]:
         for phase in ["count_in", "playing", "feedback", "recovering", "loading"]:
             app._navigate("practice")
-            show_state(phase)
+            await show_state(phase)
             app.commands.clear()
             app._navigate(destination)
             expect_command("pause", "Opening " + destination + " pauses " + phase)
-            show_state("paused") # The backend has acknowledged the pause.
+            await show_state("paused") # The backend has acknowledged the pause.
             var beat: float = app.last_state.clock_beat
             var transport: int = app.last_state.transport_id
             check(app.has_method("_go_back"), "Detours provide one Back action that remembers their origin")
@@ -354,7 +374,7 @@ func test_practice_detours() -> void:
                 check(app.last_state.clock_beat == beat and app.last_state.transport_id == transport,
                     "Back preserves the paused beat and attempt")
         app._navigate("practice")
-        show_state("paused")
+        await show_state("paused")
         app.commands.clear()
         app._navigate(destination)
         check(app.commands.is_empty(), "An already paused attempt is not stopped when opening " + destination)
@@ -362,7 +382,7 @@ func test_practice_detours() -> void:
 func test_settings_back_origin() -> void:
     for origin in ["practice", "library"]:
         app._navigate(origin)
-        show_state() # A score can remain loaded while browsing the library.
+        await show_state() # A score can remain loaded while browsing the library.
         app.commands.clear()
         app._navigate("settings")
         check(app.has_method("_go_back"), "Settings Back must remember where Settings was opened")
@@ -376,7 +396,7 @@ func test_abandon_practice() -> void:
     # Active transport pauses, rather than being thrown away.
     for phase in ["count_in", "playing", "feedback", "recovering", "loading"]:
         app._navigate("practice")
-        show_state(phase)
+        await show_state(phase)
         app.commands.clear()
         app._navigate("library")
         expect_command("pause", "Opening music preserves " + phase + " through Pause")
@@ -384,7 +404,7 @@ func test_abandon_practice() -> void:
         check(app.navigation_drawer.root.visible and app.navigation_drawer.drawer.visible,
             "Music selection is an in-context overlay, not a new screen")
     app._navigate("practice")
-    show_state("paused")
+    await show_state("paused")
     app.commands.clear()
     app._navigate("library")
     check(app.commands.is_empty(), "Browsing an already paused attempt does not restart or stop it")
@@ -395,7 +415,7 @@ func test_abandon_practice() -> void:
     check(app.current_screen == "practice", "The old Home route redirects to the single practice view")
 
 func test_compact_feedback() -> void:
-    show_state()
+    await show_state()
     await process_frame
     await process_frame
     var viewport := root.get_visible_rect()
@@ -449,7 +469,7 @@ func test_caption_bounds() -> void:
                     "Bounded captions must receive pointer hover for their full tooltip")
                 check(viewport.encloses(caption.get_parent().get_global_rect()),
                     "Caption slot must fit the viewport at %s" % dimensions)
-            check(app.practice_view.feedback_label.max_lines_visible == 1 and app.practice_view.lesson_info_label.max_lines_visible == (2 if app.size.x < 1000.0 else 1),
+            check(app.practice_view.feedback_label.max_lines_visible == 1 and app.practice_view.lesson_info_label.max_lines_visible == 2,
                 "Reserve a feedback line and enough instruction space for this viewport")
 
 func test_notation_phase_cues() -> void:
@@ -470,6 +490,11 @@ func test_notation_phase_cues() -> void:
             app._update_count_in()
             await process_frame
             await process_frame
+            # The cue belongs to the score-status panel; wait for the reloaded
+            # score to publish before judging what covers its notation.
+            var published := Time.get_ticks_msec() + 5000
+            while app.practice_view.stage.score_status_panel.visible and Time.get_ticks_msec() < published:
+                await process_frame
             check(not app.practice_view.stage.phase_cue.is_visible_in_tree(),
                 "A phase capsule must never obscure loaded notation during %s at %s" % [phase, dimensions])
             var score_rect: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
@@ -564,7 +589,7 @@ func test_modes() -> void:
         "Review retries exactly the chosen source measures")
     for pending_mode in ["listen", "perform"]:
         app._navigate("practice")
-        show_state("ready")
+        await show_state("ready")
         app.command_state.action_requested(pending_mode)
         app.command_state.begin("practice.command",Time.get_ticks_msec())
         app.commands.clear()
@@ -598,7 +623,7 @@ func test_pause_choices() -> void:
         "Matching current and target tempo retains one clear BPM value")
     paused["bpm"] = 64
     app._on_state(0,JSON.stringify(paused).to_utf8_buffer())
-    check(app.practice_view.speed_label.text.contains("64 BPM") and app.practice_view.speed_label.text.contains("target 80"),
+    check(app.practice_view.speed_label.text.contains("64 BPM") and app.practice_view.speed_label.tooltip_text.contains("target 80 BPM"),
         "Reduced practice tempo shows both its current BPM and the selected target")
     app.practice_view.pause_sheet.exit_button.pressed.emit()
     check(app.current_screen == "library", "Sheet Exit returns to the music library")
@@ -689,52 +714,52 @@ func test_handsfree_midi_start_and_readability() -> void:
     ready["mode"] = "perform"
     ready["device"] = "Kawai CA-49"
     ready["midi_input_count"] = 0
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     app.commands.clear()
     ready["midi_input_count"] = 1
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     expect_command("start", "Fresh piano note starts ready Perform mode")
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     check(app.commands.is_empty(), "Duplicate MIDI snapshots cannot start twice")
     app._navigate("settings")
     ready["midi_input_count"] = 2
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     check(app.commands.is_empty(), "Checking MIDI in Settings never starts practice")
     app._navigate("practice")
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     check(app.commands.is_empty(), "Returning from Settings does not replay an old key")
     ready["midi_input_count"] = 3
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     expect_command("start", "New note after returning starts Perform")
     var playing := ready.duplicate(true)
     playing["phase"] = "playing"
     playing["running"] = true
     playing["midi_input_count"] = 4
-    app._on_state(0,JSON.stringify(playing).to_utf8_buffer())
+    await apply_state(playing)
     check(app.commands.is_empty(), "Playing notes do not restart the transport")
     var learning := state("guided_wait")
     learning["mode"] = "learn"
     learning["device"] = "Kawai CA-49"
     learning["midi_input_count"] = 5
     learning["teaching"] = {"completed":false, "target_index":0,"target_count":1}
-    app._on_state(0,JSON.stringify(learning).to_utf8_buffer())
+    await apply_state(learning)
     check(app.commands.is_empty(), "Learn mode still uses piano notes for teaching")
     learning["phase"] = "guided_complete"
     learning["teaching"] = {"completed":true,"target_index":1,"target_count":1,"has_more_units":true}
     learning["midi_input_count"] = 6
-    app._on_state(0,JSON.stringify(learning).to_utf8_buffer())
+    await apply_state(learning)
     check(app.commands.is_empty(), "Note that completes the idea cannot immediately skip it")
     learning["midi_input_count"] = 7
-    app._on_state(0,JSON.stringify(learning).to_utf8_buffer())
+    await apply_state(learning)
     expect_command("learn_next", "Fresh note after an idea advances hands-free")
     var finished := state("performance_complete")
     finished["mode"] = "perform"
     finished["device"] = "Kawai CA-49"
     finished["midi_input_count"] = 8
-    app._on_state(0,JSON.stringify(finished).to_utf8_buffer())
+    await apply_state(finished)
     check(app.commands.is_empty(), "Phase transition cannot reuse a previous key")
     finished["midi_input_count"] = 9
-    app._on_state(0,JSON.stringify(finished).to_utf8_buffer())
+    await apply_state(finished)
     expect_command("start", "Fresh note repeats a completed warm-up")
     # A new physical key after the feedback is visible can retry a failed
     # scored passage. The same key at the phase transition cannot skip it.
@@ -743,14 +768,14 @@ func test_handsfree_midi_start_and_readability() -> void:
     failed["device"] = "Kawai CA-49"
     failed["midi_input_count"] = 10
     failed["auto"] = false
-    app._on_state(0,JSON.stringify(failed).to_utf8_buffer())
+    await apply_state(failed)
     check(app.commands.is_empty(), "The key that ended a take cannot dismiss feedback")
     failed["midi_input_count"] = 11
-    app._on_state(0,JSON.stringify(failed).to_utf8_buffer())
+    await apply_state(failed)
     expect_command("restart", "Fresh piano key explicitly retries a failed passage")
     failed["auto"] = true
     failed["midi_input_count"] = 12
-    app._on_state(0,JSON.stringify(failed).to_utf8_buffer())
+    await apply_state(failed)
     check(app.commands.is_empty(), "Piano key cannot override an automatic recovery")
     # There is no mode change when a warm-up is opened from the library.
     app.command_state.begin("library.open",Time.get_ticks_msec())
@@ -795,19 +820,19 @@ func test_picker_midi_guard() -> void:
     ready["mode"] = "perform"
     ready["device"] = "Test piano"
     ready["midi_input_count"] = 0
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     app.practice_view.show_source_picker(ready)
     app.commands.clear()
     ready["midi_input_count"] = 1
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     check(app.commands.is_empty(),"Piano input cannot start a transport under the source picker")
     app.practice_view.cancel_source_picker()
     app._navigate("practice")
     app.commands.clear()
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     check(app.commands.is_empty(),"Closing the picker cannot replay a key heard while choosing a source measure")
     ready["midi_input_count"] = 2
-    app._on_state(0,JSON.stringify(ready).to_utf8_buffer())
+    await apply_state(ready)
     expect_command("start","A fresh key after closing the picker still starts Perform")
 
 func run() -> void:
@@ -826,25 +851,25 @@ func run() -> void:
         return
     var scenario := OS.get_cmdline_user_args()[0]
     match scenario:
-        "three_button_stage": test_three_button_stage()
-        "short_challenge_loop": test_short_challenge_loop()
-        "primary_transport": test_primary_transport()
-        "secondary_stop": test_secondary_stop()
+        "three_button_stage": await test_three_button_stage()
+        "short_challenge_loop": await test_short_challenge_loop()
+        "primary_transport": await test_primary_transport()
+        "secondary_stop": await test_secondary_stop()
         "focused_shortcuts": await test_focused_shortcuts()
-        "practice_detours": test_practice_detours()
-        "settings_back_origin": test_settings_back_origin()
-        "abandon_practice": test_abandon_practice()
+        "practice_detours": await test_practice_detours()
+        "settings_back_origin": await test_settings_back_origin()
+        "abandon_practice": await test_abandon_practice()
         "compact_feedback": await test_compact_feedback()
         "caption_bounds": await test_caption_bounds()
         "notation_phase_cues": await test_notation_phase_cues()
-        "instructional_transition": test_instructional_transition()
-        "modes": test_modes()
-        "pause_choices": test_pause_choices()
+        "instructional_transition": await test_instructional_transition()
+        "modes": await test_modes()
+        "pause_choices": await test_pause_choices()
         "focus_trap": await test_focus_trap()
-        "learner_progression": test_learner_progression()
+        "learner_progression": await test_learner_progression()
         "handsfree_midi": await test_handsfree_midi_start_and_readability()
-        "picker_polling": test_picker_polling()
-        "picker_midi_guard": test_picker_midi_guard()
+        "picker_polling": await test_picker_polling()
+        "picker_midi_guard": await test_picker_midi_guard()
         _: check(false, "Unknown interaction scenario: " + scenario)
     print("PRACTICE_INTERACTION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

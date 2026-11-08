@@ -129,11 +129,12 @@ def test_verovio_score_positions_are_unchanged_at_different_tempos():
 
 def test_skip_next_lesson_control_stays_visible_in_practice():
     from pathlib import Path
-    source = (Path(__file__).resolve().parents[1] / "godot" / "main.gd"
+    # The control belongs to the Practice screen (practice_screen.gd).
+    source = (Path(__file__).resolve().parents[1] / "godot" / "practice_screen.gd"
               ).read_text(encoding="utf-8")
     assert 'practice_skip_button = _button("Next lesson"' in source
     assert 'practice_skip_button.visible = bool(parsed.get("loaded", false))' in source
-    assert '"reason": "Learner skipped to the next lesson from the practice screen"' in source
+    assert '"reason":"Learner skipped to the next lesson from the practice screen"' in source
     assert 'practice_skip_button.disabled = not bool(parsed.get("skip_available", false))' in source
 
 

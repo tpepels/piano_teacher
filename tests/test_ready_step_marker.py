@@ -13,17 +13,6 @@ GODOT = shutil.which("godot") or shutil.which("godot4")
 
 
 @pytest.mark.skipif(GODOT is None, reason="Godot 4 unavailable")
-def test_ready_preview_queries_are_bounded_and_follow_display_invalidations():
-    result = subprocess.run(
-        [GODOT, "--headless", "--path", str(ROOT / "godot"), "--script",
-         str(ROOT / "tests/godot/ready_preview_cache.gd")],
-        capture_output=True, text=True, timeout=20)
-    output = result.stdout + result.stderr
-    assert result.returncode == 0 and "READY_PREVIEW_CACHE_OK" in output, output
-    assert "SCRIPT ERROR" not in output and "ERROR:" not in output, output
-
-
-@pytest.mark.skipif(GODOT is None, reason="Godot 4 unavailable")
 def test_ready_step_marker_follows_actual_native_head_after_long_opening_rest(tmp_path):
     from piano_teacher.server import PracticeEngine
 

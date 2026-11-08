@@ -1212,11 +1212,13 @@ func _project_stream(playhead_x: float) -> void:
         segment.sync_note_status(take_key,note_status_source,note_status_visible)
         var clip_bounds: Vector2 = StreamLifecycle.screen_bounds(
             item,density,staff_gap(),timeline.duration_beats)
+        # Register every head the strip actually shows, including heads a
+        # voice column displaced left of its source floor into the clip's
+        # leading margin: they are painted, so they must stay interactive.
         var count: int = RetainedNoteProjection.append_visible(
             segment.note_instances,position,size.x,playhead_x,
             int(item["serial"]),drawn_note_instances,drawn_noteheads,
-            float(item["source_floor"])*density,
-            float(item["source_ceiling"])*density,take_key,
+            clip_bounds.x,clip_bounds.y,take_key,
             Vector2(position+clip_bounds.x,position+clip_bounds.y))
         visible_symbols += count
         frame_scanned_events += count

@@ -16,11 +16,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run_godot(command, *, timeout):
+def _run_godot(command, *, timeout, env=None):
     """Keep a rendering regression from exhausting the developer/CI machine."""
     stopped = Event()
     exceeded = []
-    with subprocess.Popen(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+    with subprocess.Popen(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env) as process:
         def guard():
             while not stopped.wait(.1):
                 try:
@@ -360,56 +360,62 @@ def test_pixel_oracle_rejects_erased_wrong_and_colliding_fingering(captured):
         _verify_numbers(folder,clipped,data['expected_count'])
 
 
-@pytest.mark.parametrize("source", ["xml", "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
-    "Le_Pianiste_virtuose_-_Première_partie_(1-20)_-_C_L_Hanon.midi"],ids=["xml","chopin-midi","hanon-midi"])
-def test_real_application_popup_posts_correction_and_reloads_revision(captured, source):
+# The Music library lists MIDI only, so the production app cannot open the
+# MusicXML fixture; the XML placement itself is covered by the framebuffer tests.
+@pytest.mark.parametrize("source", ["Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+    "Le_Pianiste_virtuose_-_Première_partie_(1-20)_-_C_L_Hanon.midi"],ids=["chopin-midi","hanon-midi"])
+def test_real_application_popup_posts_correction_and_reloads_revision(captured, source, tmp_path):
+    """Popup -> fingering.correct -> persisted override -> reloaded revision, on the embedded runtime."""
+    import os, shutil, sys, sysconfig
     from piano_teacher.server import PracticeEngine
-    from piano_teacher.transport.http import Handler
+    from scripts.review_art_direction import embedded_python_env
 
+    if not (ROOT / "godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so").exists():
+        pytest.skip("The native bridge is not built")
     fixture_folder, _, _ = captured
-    name = "xml" if source == "xml" else "chopin" if source.startswith("Chopin") else "hanon"
+    name = "chopin" if source.startswith("Chopin") else "hanon"
     folder = fixture_folder / ("application-"+name)
     folder.mkdir()
-    source_path = fixture_folder / "fingering.musicxml" if source == "xml" else ROOT / "midi" / source
-    engine = PracticeEngine(folder / "application-cache", enable_midi=False)
-    engine.load(str(source_path))
-    handler = type("FingeringHandler", (Handler,), {"engine":engine})
+    # An isolated home and library: the embedded engine opens this one piece.
+    home = tmp_path / "home"
+    music = home / "Music" / "Piano Teacher"
+    music.mkdir(parents=True)
+    source_path = ROOT / "midi" / source
+    shutil.copy(source_path, music / source_path.name)
+    env = dict(os.environ, HOME=str(home), XDG_DATA_HOME=str(tmp_path / "data"),
+               XDG_CONFIG_HOME=str(tmp_path / "config"), XDG_CACHE_HOME=str(tmp_path / "cache"),
+               **embedded_python_env())
     try:
-        server = ThreadingHTTPServer(("127.0.0.1",8765),handler)
-    except OSError:
-        engine.db.close()
-        pytest.skip("Production loopback port is already in use")
-    thread = Thread(target=server.serve_forever,daemon=True)
-    thread.start()
+        result = _run_godot([*_godot(), "--path", str(ROOT / "godot"),
+            "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility",
+            "--script", str(ROOT / "tests/godot/native_fingering_application.gd"),
+            "--", str(folder), source_path.name], timeout=300, env=env)
+    except subprocess.TimeoutExpired as exc:
+        (folder / "application.log").write_bytes((exc.stdout or b"")+(exc.stderr or b""))
+        raise
+    output = result.stdout+result.stderr
+    (folder / "application.log").write_text(output)
+    assert result.returncode == 0, output
+    assert "NATIVE_FINGERING_APPLICATION_FAILURES:0" in output, output
+    assert "SCRIPT ERROR" not in output and "Parse Error" not in output, output
+    report = json.loads((folder / "app-report.json").read_text())
+    assert report['static_memory'] < 512*1024*1024, "Long lesson paths must share font resources"
+    assert report["before"] != report["changed"]
+    # The chain: one override reported by the engine, a newer revision, then removal.
+    assert report["manual_after_edit"] == 1 and report["manual_after_restore"] == 0
+    assert report["edit_revision"] > report["initial_revision"]
+    assert np.any(_rgb(folder,"app-before.png") != _rgb(folder,"app-corrected.png"))
+    x,y,w,h = report["finger_rect"]
+    x0,y0,x1,y1 = int(x),int(y),int(np.ceil(x+w)),int(np.ceil(y+h))
+    before = _rgb(folder,"app-before.png")[y0:y1,x0:x1]
+    after = _rgb(folder,"app-corrected.png")[y0:y1,x0:x1]
+    assert np.count_nonzero(np.max(np.abs(before-after),axis=2)>20) >= 5, "The actual MIDI finger digit must change in the framebuffer"
+    # The removal is persisted: a fresh engine over the same data has no override.
+    engine = PracticeEngine(tmp_path / "data" / "piano-teacher", enable_midi=False)
     try:
-        try:
-            result = _run_godot([*_godot(), "--path", str(ROOT / "godot"),
-                "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility",
-                "--script", str(ROOT / "tests/godot/native_fingering_application.gd"),
-                "--", str(folder)], timeout=100)
-        except subprocess.TimeoutExpired as exc:
-            (folder / "application.log").write_bytes((exc.stdout or b"")+(exc.stderr or b""))
-            raise
-        output = result.stdout+result.stderr
-        (folder / "application.log").write_text(output)
-        assert result.returncode == 0, output
-        assert "NATIVE_FINGERING_APPLICATION_FAILURES:0" in output, output
-        assert "SCRIPT ERROR" not in output and "Parse Error" not in output, output
-        report = json.loads((folder / "app-report.json").read_text())
-        assert report['path_steps']==len(engine.plan.lesson_steps)
-        assert report['static_memory'] < 512*1024*1024, "Long lesson paths must share font resources"
-        assert report["before"] != report["changed"]
+        engine.load(str(music / source_path.name))
         assignments = engine.fingering_status()["assignments"]
         assert report["source_id"] in assignments
         assert assignments[report["source_id"]]["manual"] is None
-        assert np.any(_rgb(folder,"app-before.png") != _rgb(folder,"app-corrected.png"))
-        x,y,w,h = report["finger_rect"]
-        x0,y0,x1,y1 = int(x),int(y),int(np.ceil(x+w)),int(np.ceil(y+h))
-        before = _rgb(folder,"app-before.png")[y0:y1,x0:x1]
-        after = _rgb(folder,"app-corrected.png")[y0:y1,x0:x1]
-        assert np.count_nonzero(np.max(np.abs(before-after),axis=2)>20) >= 5, "The actual MIDI finger digit must change in the framebuffer"
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
         engine.db.close()

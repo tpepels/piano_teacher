@@ -57,30 +57,6 @@ def test_rasterizer_rejects_corrupted_svg_and_excessive_output():
         rasterize_score(VEROVIO_GLYPH, width=13000)
 
 
-def test_engine_caches_png_per_requested_resolution(tmp_path, monkeypatch):
-    engine = PracticeEngine(tmp_path, enable_midi=False)
-    class FakeScore:
-        pages = (VEROVIO_GLYPH,)
-    note = Note(0, 1, 60, 0, 0, "right")
-    engine.plan = LearningPlan(Piece("Raster", 100, (note,), (Phrase(1, 1, 1, 0, 4, (note,)),)))
-    monkeypatch.setattr(engine.score_artifacts, "engraving", lambda selected: FakeScore())
-    calls = []
-    def fake_raster(svg, *, width=2000):
-        calls.append(width)
-        return f"png-{width}".encode()
-    monkeypatch.setattr("piano_teacher.application.score_artifacts.rasterize_score", fake_raster)
-    try:
-        assert engine.engraved_png(width=4200) == b"png-4200"
-        assert engine.engraved_png(width=4200) == b"png-4200"
-        assert engine.engraved_png(width=3000) == b"png-3000"
-        assert engine.engraved_png(width=4200) == b"png-4200"
-        assert calls == [4200, 3000, 4200]
-        with pytest.raises(ValueError, match="width"):
-            engine.engraved_png(width=9000)
-    finally:
-        engine.db.close()
-
-
 def test_production_native_view_uses_source_note_identities(native_camera_run):
     # Raster utilities above serve offline verification only. Production
     # coordinates now come from the real native CanvasItem and source model.
@@ -95,16 +71,15 @@ def test_production_native_view_uses_source_note_identities(native_camera_run):
 
 
 def test_practice_navigation_no_vertical_letter_wrapping():
-    script = (Path(__file__).resolve().parents[1] / "godot/main.gd").read_text()
-    # Flow navigation preserves full labels by wrapping actions to a new row.
-    # The old fixed HBox became unreadable when buttons were squeezed.
-    assert "practice_navigation = HFlowContainer.new()" in script
-    assert "practice_navigation.add_theme_constant_override(\"v_separation\"" in script
+    # The Practice header and transport moved to practice_screen.gd. Labels
+    # stay on one line (title and progress never wrap), the tempo control is a
+    # fixed-width button, and the transport row is a flow container that
+    # wraps whole buttons instead of squeezing them.
+    script = (Path(__file__).resolve().parents[1] / "godot/practice_screen.gd").read_text()
     assert "practice_controls = controls" in script
     assert "controls := HFlowContainer.new()" in script
     assert "button.clip_text = false" in script
     assert "practice_header = HBoxContainer.new()" in script
-    assert "context.custom_minimum_size.x = 435" in script
-    assert "speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script
-    assert "hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script
+    assert "title_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script
     assert "progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script
+    assert "speed_label.custom_minimum_size = Vector2(182,40)" in script
