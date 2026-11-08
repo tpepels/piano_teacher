@@ -1,23 +1,19 @@
-"""Tempo-capped count-in is short even when beginning at very slow BPM."""
+"""The count-in is always one full bar, even at very slow BPM.
+
+Owner decision 2026-11-08: "Ichi, Ni, San, Shi" over the whole bar at any
+tempo. The former count_in_max_seconds cap (about four seconds, in half-beat
+steps) is removed.
+"""
 import pytest
 from piano_teacher.lesson_timing import lead_in_beats
 from test_phase1_camera import native_camera_run
 
 
-@pytest.mark.parametrize("bar,bpm,expected", [
-    (4, 100, 4),
-    (3, 100, 3),
-    (4, 40, 2.5),
-    (3, 40, 2.5),
-    (4, 20, 1),
-    (3, 12, 0.5),
-    (3, 120, 3),
+@pytest.mark.parametrize("bar,bpm", [
+    (4, 100), (3, 100), (4, 40), (3, 40), (4, 20), (3, 12), (3, 120), (1.5, 31),
 ])
-def test_lead_in_is_at_most_one_measure_and_about_four_seconds(bar, bpm, expected):
-    lead = lead_in_beats(bar, bpm)
-    assert lead == expected
-    assert lead <= bar
-    assert lead * 60 / bpm <= 4.01
+def test_lead_in_is_exactly_one_measure_at_any_tempo(bar, bpm):
+    assert lead_in_beats(bar, bpm) == bar
 
 
 def test_invalid_count_in_inputs_fail():

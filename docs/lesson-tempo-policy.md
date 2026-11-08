@@ -26,7 +26,6 @@ are required to experiment with another pace. Settings are validated on startup.
 | `grading_duration_floor_seconds` | 0.16 | Minimum allowed held-duration error |
 | `grading_match_window_min_seconds` | 0.35 | Minimum window to associate a played note with its expected pitch |
 | `grading_match_window_beats` | 0.65 | Tempo-scaled matching window |
-| `count_in_max_seconds` | 4.0 | Maximum count-in length before practice starts |
 
 ## Grading units and mastery criterion
 

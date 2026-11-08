@@ -201,5 +201,7 @@ def test_pickup_prepares_using_immediately_following_source_meter(tmp_path):
     session.acknowledge_score(7)
     start = session.begin_playback(7)
     assert start.count_in_meter == (4, 4) and start.count_in_bar_beats == 4
-    assert start.count_in_beats == 2.5 and start.delay_seconds == 3.75
+    # The pickup rule is unchanged; the count-in is now the whole following
+    # 4/4 bar at any tempo (owner decision 2026-11-08: no seconds cap).
+    assert start.count_in_beats == 4 and start.delay_seconds == 6.0
     assert selected.variant.phrase.end == 4.5 and selected.bar_boundaries == (0, .5, 4.5)

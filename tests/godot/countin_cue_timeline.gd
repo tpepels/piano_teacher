@@ -56,15 +56,21 @@ func _initialize() -> void:
         beat += .02
     check(counted == [1,2,3,4] and other == 0,
         "a 13-beat lead emits exactly meter count-in ticks: " + str(counted))
-    var capped := Cues.new()
-    var capped_ticks := 0
-    beat = -9.0
+    # The window is the engine's count_in_beats. 0 is a real count-in of
+    # zero (a loop continuation): nothing is counted. Only the explicit
+    # WHOLE_BAR sentinel means "one bar of the meter".
+    var none := Cues.new()
+    var none_ticks := 0
+    beat = -6.0
     while beat < 0.0:
-        if bool(capped.observe("play:capped",beat,4,2.0).get("count_in",false)):
-            capped_ticks += 1
+        if bool(none.observe("play:loop",beat,4,0.0).get("count_in",false)):
+            none_ticks += 1
         beat += .02
-    check(capped_ticks == 2,
-        "a tempo-capped count-in counts only its own beats: " + str(capped_ticks))
+    check(none_ticks == 0,
+        "a loop continuation with count_in_beats 0 counts nothing: " + str(none_ticks))
+    check(not Cues.counting(-.5,4,0.0) and Cues.counting(-.5,4,Cues.WHOLE_BAR) and
+        Cues.counting(-3.9,4,Cues.WHOLE_BAR) and not Cues.counting(-4.1,4,Cues.WHOLE_BAR),
+        "WHOLE_BAR counts exactly one bar; 0 counts none")
     var retry := Cues.new()
     var retry_ticks := 0
     beat = -11.0

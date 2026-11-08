@@ -14,7 +14,7 @@ var retry_first_click_sent := false
 var _cues := CueTimeline.new()
 
 func _dispatch_cue(token: String, beat: float, bar: int,
-        use_raw_click: bool, count_in_beats: float = 0.0) -> void:
+        use_raw_click: bool, count_in_beats: float = CueTimeline.WHOLE_BAR) -> void:
     var cue: Dictionary = _cues.observe(token,beat,bar,count_in_beats)
     if cue.is_empty():
         return
@@ -101,7 +101,9 @@ func update(state: Dictionary, state_tick_ms: int,
             int(state.get("revision",-1)),retry_key],retry_beat,meter,true)
         return
     # The engine's one count-in bar; a longer lead before it stays silent.
-    var count_in_beats: float = float(state.get("count_in_beats",0.0))
+    # A hand-built snapshot without the key counts one bar of the meter.
+    var count_in_beats: float = float(state.get("count_in_beats",
+        CueTimeline.WHOLE_BAR))
     var resume_value: Variant = state.get("resume_count_in_beat")
     var moving: bool = bool(state.get("running",false)) and \
         not bool(state.get("paused",false))
@@ -114,10 +116,22 @@ func update(state: Dictionary, state_tick_ms: int,
                 state.get("count_in_bar_beats",4)))))
             practice_view.stage.count_in.present(
                 resume_beat,resume_meter,true,false,count_in_beats)
-            _dispatch_cue("resume:%d:%d" % [
-                int(state.get("revision",-1)),
-                int(state.get("transport_id",0))],
-                resume_beat,resume_meter,true,count_in_beats)
+            # A Resume that reuses the paused count-in keeps its original
+            # first-beat deadline, so its countdown is the same musical axis
+            # as the transport beat. Continue that epoch: a syllable already
+            # heard before Pause is not spoken again (one cycle only).
+            var transport_beat: float = sampled_beat if is_finite(sampled_beat) \
+                else float(transport_beat_at.call(now_ms))
+            var running_token: String = "running:%d:%d" % [
+                int(state.get("revision",-1)),int(state.get("transport_id",0))]
+            var continued: bool = is_finite(transport_beat) and \
+                absf(transport_beat-resume_beat) < .05 and \
+                _cues.continues(running_token,resume_beat)
+            var resume_token: String = running_token if continued else \
+                "resume:%d:%d" % [int(state.get("revision",-1)),
+                int(state.get("transport_id",0))]
+            _dispatch_cue(resume_token,resume_beat,resume_meter,true,
+                count_in_beats)
             return
     if state.is_empty() or not bool(state.get("running",false)):
         practice_view.stage.count_in.present(0.0,4,false,false)

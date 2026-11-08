@@ -24,12 +24,13 @@ def boot(tmp_path,monkeypatch,bars):
     return engine,now
 
 
-def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch):
+def test_full_bar_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch):
     e,now=boot(tmp_path,monkeypatch,2)
     try:
+        # Owner decision 2026-11-08: the count-in is always one full bar.
         assert e.state()["lead_in_bars"]==1
-        assert e.state()["count_in_beats"]==2.5
-        assert e.state()["clock_beat"]==pytest.approx(-2.5)
+        assert e.state()["count_in_beats"]==4
+        assert e.state()["clock_beat"]==pytest.approx(-4)
         start=e.visual_transport.run_at
         sec=60/e.plan.bpm
         for i in range(3):
@@ -204,7 +205,7 @@ func _initialize():
     assert "RECOVERY_NAVIGATION_PAUSED" in process.stdout
 
 
-def test_three_quarter_time_has_six_lead_in_beats(tmp_path,monkeypatch):
+def test_three_quarter_time_counts_in_one_whole_bar(tmp_path,monkeypatch):
     now=[20.0]
     monkeypatch.setattr(server.time,"monotonic",lambda:now[0])
     notes=(Note(0,1,60,0,0,"right"),Note(4,5,62,0,0,"right"))
@@ -213,8 +214,9 @@ def test_three_quarter_time_has_six_lead_in_beats(tmp_path,monkeypatch):
     e.fingerprint="three-quarter-fixture"
     try:
         e.start()
+        # The whole 3/4 bar at any tempo (owner decision 2026-11-08).
         assert e.state()["lead_in_bars"]==1
-        assert e.state()["count_in_beats"]==2.5
-        assert e.state()["clock_beat"]==pytest.approx(-2.5)
+        assert e.state()["count_in_beats"]==3
+        assert e.state()["clock_beat"]==pytest.approx(-3)
     finally:
         e.db.close()

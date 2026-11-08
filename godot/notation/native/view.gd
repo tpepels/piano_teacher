@@ -858,7 +858,7 @@ func arm_stream_take(world: float, opening: float,
                 if str(candidate.get("take_key","")).begins_with("armed:") and \
                         absf(float(candidate.get("source_floor",-1))-opening) < .00001 and \
                         float(candidate["world_origin"])+opening >= \
-                            stream_world_beat+StreamAdmission.MIN_READING_BEATS:
+                            stream_world_beat+StreamAdmission.PAUSED_REUSE_EPSILON_BEATS:
                     paused_index = index
                     break
         if paused_index >= 0:

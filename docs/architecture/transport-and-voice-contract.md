@@ -79,8 +79,8 @@ there is no legacy camera fallback.
    decoding and playback activation; physical speaker output requires a
    real-device check, which headless tests cannot establish.
 8. **One count-in bar, short start** (owner decision 2026-11-08). The
-   engine publishes `next_count_in_beats`: one bar of the starting measure,
-   capped by `count_in_max_seconds`. When nothing of this queue or any live
+   engine publishes `next_count_in_beats`: one full bar of the starting
+   measure at any tempo (no seconds cap). When nothing of this queue or any live
    peer layer is printed right of the playhead, Play or Resume places the
    opening's first source beat exactly that far ahead
    (`ScoreStreamAdmission.empty_strip_start`); the never-seen hidden READY
@@ -90,8 +90,14 @@ there is no legacy camera fallback.
    engine's `count_in_beats` stays that one bar: `run_at` equals the
    reserved score deadline, and any longer lead is silent. `CountInCueTimeline`
    and `GameCountIn` count and show only the last `count_in_beats` before
-   beat 0 (one bar of the meter for Retry preparation), so every take start
-   speaks exactly one "Ichi, Ni, San, Shi".
+   beat 0 (`CountInCueTimeline.WHOLE_BAR`, one bar of the meter, for Retry
+   preparation; a real `count_in_beats` of 0 counts nothing), so every take
+   start speaks exactly one "Ichi, Ni, San, Shi". The count-in is always the
+   whole bar at any tempo (owner decision 2026-11-08; the former
+   `count_in_max_seconds` cap was removed). Resume reuses a paused take whose
+   onset is still strictly ahead of the playhead (no reading floor), so
+   Pause inside the count-in resumes with only the rest of that bar; the
+   Resume countdown continues the same epoch and never repeats a syllable.
 
 ## Required regression gates
 

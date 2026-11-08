@@ -11,6 +11,11 @@ import math
 from pathlib import Path
 
 
+# count_in_max_seconds: removed by the owner decision of 2026-11-08 (the
+# count-in is always one full bar at any tempo).
+RETIRED_KEYS = frozenset({"count_in_max_seconds"})
+
+
 @dataclass(frozen=True)
 class LessonSettings:
     focus_measures: int
@@ -35,12 +40,15 @@ class LessonSettings:
     grading_duration_floor_seconds: float
     grading_match_window_min_seconds: float
     grading_match_window_beats: float
-    count_in_max_seconds: float
 
 
 def load_lesson_settings(path: Path | None = None) -> LessonSettings:
     path = Path(path) if path is not None else Path(__file__).with_name("lesson_settings.json")
     raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        # Retired policy keys still load; they no longer change anything.
+        raw = {key: value for key, value in raw.items()
+               if key not in RETIRED_KEYS}
     expected = set(LessonSettings.__dataclass_fields__)
     if not isinstance(raw, dict) or set(raw) != expected:
         raise ValueError(f"Lesson settings keys must match {sorted(expected)}")
@@ -70,7 +78,6 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
             or data.grading_duration_floor_seconds <= 0
             or data.grading_match_window_min_seconds < data.grading_onset_tolerance_seconds
             or data.grading_match_window_beats <= 0
-            or data.count_in_max_seconds <= 0
             or not 0 < data.recovery_tempo_multiplier < 1):
         raise ValueError("Invalid lesson target, BPM limit, or adaptive tempo multiplier")
     return data

@@ -1,7 +1,5 @@
-"""Count-in duration at the exercise tempo, not a fixed number of bars."""
+"""Count-in length: one full bar of the preparation meter."""
 from __future__ import annotations
-from math import floor
-from .lesson_settings import SETTINGS
 
 
 def preparation_meter(meter: tuple[int, int] | None,
@@ -23,15 +21,13 @@ def preparation_meter(meter: tuple[int, int] | None,
     return meter
 
 
-def lead_in_beats(bar_beats: float, bpm: float, max_seconds: float | None = None) -> float:
-    """Up to one bar, capped to about four seconds at slow practice tempos.
+def lead_in_beats(bar_beats: float, bpm: float) -> float:
+    """The count-in is always one full bar of the preparation meter.
 
-    Use half-quarter-note steps when a full beat would create a long wait.
-    The transport still moves continuously at the chosen BPM.
+    Owner decision 2026-11-08: "Ichi, Ni, San, Shi" over the whole bar at
+    any tempo (6 s for 4/4 at 40 BPM). The former count_in_max_seconds
+    cap, which shortened slow count-ins to half-beat steps, is removed.
     """
-    if max_seconds is None:
-        max_seconds = SETTINGS.count_in_max_seconds
-    if bar_beats <= 0 or bpm <= 0 or max_seconds <= 0:
-        raise ValueError("Count-in requires positive meter, BPM and duration")
-    available = floor(max_seconds * bpm / 60.0 * 2.0 + 1e-9) / 2.0
-    return min(bar_beats, max(.5, available))
+    if bar_beats <= 0 or bpm <= 0:
+        raise ValueError("Count-in requires positive meter and BPM")
+    return float(bar_beats)

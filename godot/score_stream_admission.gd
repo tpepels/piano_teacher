@@ -13,6 +13,8 @@ const OFFSCREEN_MARGIN_BEATS := 0.12
 # Use a short admission cushion; committed world origins never change.
 const READY_TRAVEL_BEATS := 0.30
 const REST_GAP_BEATS := 1.0
+# "Strictly ahead of the playhead" for reusing a paused take.
+const PAUSED_REUSE_EPSILON_BEATS := .001
 
 static func clip_bounds(item: Dictionary, density: float,
         gap: float, score_duration: float) -> Vector2:
@@ -68,7 +70,12 @@ static func select(passes: Array, purpose: String, opening: float,
     var earliest: float = world + maxf(MIN_READING_BEATS,
         right_beats+header_beats+OFFSCREEN_MARGIN_BEATS)
     if purpose == "paused":
-        earliest = world+MIN_READING_BEATS
+        # A paused take's immutable ink is already placed; reusing it pops
+        # nothing in. It only has to be strictly ahead of the playhead. A
+        # reading floor here stranded Pause-in-count-in -> Resume behind an
+        # offscreen append once the opening is one count-in bar ahead
+        # (Task 2b review, owner decision 2026-11-08).
+        earliest = world + PAUSED_REUSE_EPSILON_BEATS
     var chosen := -1
     var closest := -INF if purpose == "bound" else INF
     for index in range(passes.size()):

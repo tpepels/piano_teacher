@@ -73,7 +73,7 @@ static func plan(renderer, action: String, world: float,
                     if key.begins_with("armed:") and \
                             absf(float(item.get("source_floor",-1))-
                                 source_opening) < .00001 and \
-                            onset >= preview_world+Admission.MIN_READING_BEATS:
+                            onset >= preview_world+Admission.PAUSED_REUSE_EPSILON_BEATS:
                         reusable = index
                         break
         if reusable < 0:

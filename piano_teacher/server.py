@@ -1678,8 +1678,8 @@ class PracticeEngine:
     def _next_count_in_beats(self) -> float:
         """The one count-in bar a user Play or Resume gets now.
 
-        One bar of the starting measure, capped by count_in_max_seconds
-        (lead_in_beats). The renderer places an opening on an empty strip
+        One full bar of the starting measure at any tempo (lead_in_beats,
+        owner decision 2026-11-08). The renderer places an opening on an empty strip
         exactly this far ahead of the playhead, so Play to first note is one
         count-in bar and the score and graded deadlines stay identical.
         """

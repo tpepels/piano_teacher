@@ -36,7 +36,7 @@ func speak_beat(number: int) -> bool:
     return bool(_voice_service.speak_beat(number)) if _voice_service != null else false
 
 func present(beat: float, beats_per_bar: int, running: bool, paused: bool,
-        count_in_beats: float = 0.0) -> void:
+        count_in_beats: float = CueTimeline.WHOLE_BAR) -> void:
     # Only the count-in bar before the start shows a countdown; any longer
     # lead before it is blank (owner decision 2026-11-08).
     var show: bool = running and not paused and is_finite(beat) and \

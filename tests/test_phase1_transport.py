@@ -28,15 +28,17 @@ def harness(tmp_path, monkeypatch):
 
 def test_signed_beat_is_continuous_at_downbeat(harness):
     e, t = harness
+    # Owner decision 2026-11-08: the count-in is always a full bar, here
+    # 4 beats = 6 s at 40 BPM (the former 4 s cap gave 2.5 beats).
     e.start()
-    assert e.state()['clock_beat'] == pytest.approx(-2.5)
+    assert e.state()['clock_beat'] == pytest.approx(-4.0)
     assert e.state()['transport_id'] == 1
     t[0] = 101.5
-    assert e.state()['clock_beat'] == pytest.approx(-1.5)
-    t[0] = 103.75
+    assert e.state()['clock_beat'] == pytest.approx(-3.0)
+    t[0] = 106.0
     assert e.state()['phase'] == 'playing'
     assert e.state()['clock_beat'] == pytest.approx(0)
-    t[0] = 106
+    t[0] = 108.25
     assert e.state()['clock_beat'] == pytest.approx(1.5)
     assert e.state()['beat'] == pytest.approx(1.5)
 
@@ -57,12 +59,13 @@ def test_pause_during_count_in_freezes_clock(harness):
     t[0] = 101.5
     e.control('pause')
     assert e.state()['phase'] == 'paused'
-    assert e.state()['clock_beat'] == pytest.approx(-1.5)
+    # Full-bar count-in (owner decision 2026-11-08): 4 beats at 40 BPM.
+    assert e.state()['clock_beat'] == pytest.approx(-3.0)
     t[0] = 191.5
-    assert e.state()['clock_beat'] == pytest.approx(-1.5)
+    assert e.state()['clock_beat'] == pytest.approx(-3.0)
     e.control('resume')
     assert e.state()['phase'] == 'count_in'
-    t[0] = 193.75
+    t[0] = 196.0
     assert e.state()['phase'] == 'playing'
     assert e.state()['clock_beat'] == pytest.approx(0)
 
@@ -70,16 +73,17 @@ def test_pause_during_count_in_freezes_clock(harness):
 def test_pause_preserves_recorded_midi_timing(harness):
     e, t = harness
     e.start()
-    t[0] = 105.25
+    # One beat after the full-bar count-in (6 s at 40 BPM, owner 2026-11-08).
+    t[0] = 107.5
     e._receive(SimpleNamespace(type='note_on', note=60, velocity=90))
     assert len(e.recorder.presses) == 1
     e.control('pause')
-    t[0] = 705.25
+    t[0] = 707.5
     e._receive(SimpleNamespace(type='note_on', note=70, velocity=90))
     assert len(e.recorder.presses) == 1
     assert e.state()['clock_beat'] == pytest.approx(1)
     e.control('resume')
-    t[0] = 706.0
+    t[0] = 708.25
     e._receive(SimpleNamespace(type='note_off', note=60, velocity=0))
     assert e.state()['clock_beat'] == pytest.approx(1.5)
     assert e.recorder.presses[0].onset == pytest.approx(1.5)
@@ -93,9 +97,10 @@ def test_restart_clears_attempt_but_not_mastery(harness, mode):
     mastery = dict(e.plan.mastered)
     e.start(mode=mode)
     initial = e.state()
-    assert initial['phase'] == 'count_in' and initial['count_in_beats'] == 2.5
-    assert initial['clock_beat'] == -2.5 and e.plan.bpm == 40
-    t[0] = 105.25
+    # Full-bar count-in at any tempo (owner decision 2026-11-08).
+    assert initial['phase'] == 'count_in' and initial['count_in_beats'] == 4
+    assert initial['clock_beat'] == -4 and e.plan.bpm == 40
+    t[0] = 107.5
     e._receive(SimpleNamespace(type='note_on', note=60, velocity=90))
     assert len(e.recorder.presses) == 1
     ident = e.transport_id
@@ -109,9 +114,9 @@ def test_restart_clears_attempt_but_not_mastery(harness, mode):
         # An uninterrupted performance gets a fresh count-in; continuous
         # practice's reverse/preparation lifecycle must not leak into it.
         assert restarted['phase'] == 'count_in'
-        assert restarted['count_in_beats'] == 2.5 and restarted['clock_beat'] == -2.5
+        assert restarted['count_in_beats'] == 4 and restarted['clock_beat'] == -4
         assert restarted['practice_preparation'] is None
-        assert e.transport_id == ident+1 and e.visual_transport.run_at == restart_at+3.75
+        assert e.transport_id == ident+1 and e.visual_transport.run_at == restart_at+6.0
         t[0] = e.visual_transport.run_at-.01
         assert e.state()['phase'] == 'count_in'
         t[0] = e.visual_transport.run_at
@@ -230,7 +235,8 @@ def test_three_four_count_in_retains_meter_for_click_accents(harness):
     ))
     e.start()
     assert e.state()['count_in_bar_beats'] == pytest.approx(3)
-    assert e.state()['count_in_beats'] < 3
+    # The whole 3/4 bar, never shortened (owner decision 2026-11-08).
+    assert e.state()['count_in_beats'] == pytest.approx(3)
     # The current metronome coordinator consumes the same authored source
     # meter in both normal and preparation phases; Main only supplies beat.
     root = Path(__file__).resolve().parents[1] / 'godot'
@@ -251,17 +257,16 @@ def test_explicit_renderer_reading_lead_keeps_midi_on_authoritative_resume_clock
     before = e.state()["clock_beat"]
     e.control("pause")
     t[0] += 2.0
-    e.control("resume", presentation_lead_seconds=5.5)
+    e.control("resume", presentation_lead_seconds=7.5)
     resumed = e.state()
     assert resumed["phase"] == "count_in"
     assert resumed["transport_id"] == 1
     # The renderer's reserved lead is the deadline. It is longer than the
-    # one count-in bar (2.5 beats at 40 BPM), so no further minimum applies;
-    # the old fixed four-beat minimum was removed with the owner decision of
-    # 2026-11-08 (one count-in bar, Play/Resume to first note about one bar).
-    assert e._resume_grading_after == pytest.approx(t[0]+5.5)
-    assert resumed["count_in_beats"] == pytest.approx(2.5)
-    t[0] += 5.0
+    # one full count-in bar (4 beats = 6 s at 40 BPM; owner decisions of
+    # 2026-11-08: one count-in bar, always a whole bar), so it applies as is.
+    assert e._resume_grading_after == pytest.approx(t[0]+7.5)
+    assert resumed["count_in_beats"] == pytest.approx(4.0)
+    t[0] += 7.0
     assert e.state()["phase"] == "count_in"
     assert e.recorder is not None and len(e.recorder.presses) == 0
     t[0] += 0.5
