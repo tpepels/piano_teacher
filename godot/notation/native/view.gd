@@ -487,10 +487,20 @@ func _install_retained_segments() -> void:
 func _resize_retained_pool() -> void:
     if retained_first_once == null:
         return
-    # Score copies and their semantic full-measure rests are both engraved
-    # before a score revision can be published or practice can begin.
-    while retained_repeat_segments.size() < 4:
+    # Precompile one bounded authored interval per score measure, not one
+    # WHOLE-PIECE buffer per measure. Initial admission can now attach
+    # already engraved measure strips without consuming a frame to rebuild.
+    # Extra reusable buffers are available for future overlapping takes.
+    var windows: Array[Vector2] = _stream_source_windows(
+        maxf(0.0,play_from_beat))
+    if not windows.is_empty():
+        retained_first_once.set_source_window(windows[0].x,windows[0].y)
+    var required: int = maxi(4,windows.size()-1)
+    while retained_repeat_segments.size() < required:
         retained_repeat_segments.append(_new_retained_segment("source"))
+    for index in range(1,windows.size()):
+        retained_repeat_segments[index-1].set_source_window(
+            windows[index].x,windows[index].y)
     while retained_rest_segments.size() < 5:
         retained_rest_segments.append(_new_retained_segment("rest"))
 
