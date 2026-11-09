@@ -99,12 +99,12 @@ def _pair_at(snapshot, *, source_end: float, gap_beats: float,
     return tuple(matches)
 
 
-def confirmed_gap_tracks(written, snapshots) -> frozenset[int]:
+def confirmed_gap_tracks(written, snapshots) -> dict:
     """Require repeated stable genuine two-staff rests, never a single ghost."""
     duration = _source_gap_duration(written)
     density = _photographic_density(snapshots)
     if duration is None or density is None:
-        return frozenset()
+        return {}
     source_end = float(written.bars[-1])
     pairs = Counter()
     for snapshot in snapshots:
@@ -115,23 +115,21 @@ def confirmed_gap_tracks(written, snapshots) -> frozenset[int]:
         if matched:
             pairs[tuple(obj["track"] for obj in matched)] += 1
     if not pairs:
-        return frozenset()
+        return {}
     ranked = pairs.most_common(2)
     if ranked[0][1] < 3 or (len(ranked) > 1 and ranked[1][1] == ranked[0][1]):
-        return frozenset()
-    return frozenset(ranked[0][0])
+        return {}
+    return dict(tracks=frozenset(ranked[0][0]), source_end=source_end,
+                gap_beats=duration, density=density)
 
 
-def verified_procedural_pair(snapshot, confirmed_tracks):
-    """Recheck full position and both complete isolatable real PNG masks later."""
-    if not confirmed_tracks or "error" in snapshot:
+def verified_procedural_pair(snapshot, confirmed):
+    """Repeat all source/photo geometry checks at each frame before credit."""
+    if not confirmed or "error" in snapshot:
         return ()
-    # The first phase already checked every camera/staff/clock position.
-    # Require both same current-frame track IDs before crediting either.
-    pair = [obj for obj in snapshot["objects"]
-            if obj.get("family") == "rest" and
-            obj.get("name") == "rest_whole" and
-            obj.get("track") in confirmed_tracks]
-    if len(pair) != 2 or {obj["track"] for obj in pair} != confirmed_tracks:
+    pair = _pair_at(snapshot,source_end=confirmed["source_end"],
+                    gap_beats=confirmed["gap_beats"],
+                    density=confirmed["density"])
+    if not pair or {obj["track"] for obj in pair} != confirmed["tracks"]:
         return ()
-    return tuple(pair)
+    return pair
