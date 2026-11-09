@@ -301,6 +301,25 @@ def _runs(values):
     return [(int(p[0]), int(p[-1])+1) for p in np.split(a, np.flatnonzero(np.diff(a)>1)+1) if len(p)]
 
 
+def _photographed_beam_runs(frame, low: int, high: int, x: int):
+    """Read continuous real beam ink, including quantized subthreshold pixels.
+
+    The strict pale-ink mask sometimes splits one beam across a *single*
+    8-bit antialias pixel: the photographed RGB can still contain substantial
+    pale ink at that location. Reconnect only when the two adjacent pixels
+    are already strict positive beam ink AND this exact missing pixel carries
+    photographed colored-light evidence. Never bridge an erased/background
+    pixel, a multi-pixel gap, or the legitimate spacing between beams.
+    No source geometry or renderer metadata authorizes a reconstructed pixel.
+    """
+    core = frame['pixels'][low:high, x].copy()
+    if len(core) >= 3 and 'beam_edge' in frame:
+        edge = frame['beam_edge'][low:high, x]
+        bridges = core[:-2] & core[2:] & ~core[1:-1] & edge[1:-1]
+        core[1:-1] |= bridges
+    return [(a+low, b+low) for a, b in _runs(core)]
+
+
 def _reference_column(art, x):
     column = round(x)-art['bbox'][0]
     return _runs(art['mask'][:, column]) if 0 <= column < art['mask'].shape[1] else []
@@ -400,7 +419,7 @@ def _beam(row, frames, target):
             tip_b = stems[i+1]['top'] if up else stems[i+1]['bottom']-1
             tip = tip_a+(tip_b-tip_a)*fraction
             lo, hi = max(0, round(tip-1.5*gap)), min(frame['pixels'].shape[0], round(tip+1.5*gap))
-            observed = [(a+lo, b+lo) for a, b in _runs(frame['pixels'][lo:hi, x])]
+            observed = _photographed_beam_runs(frame, lo, hi, x)
             expected_thickness = [(b-a)*gap/24 for a, b in runs]
             expected_separation = [(a-runs[0][0])*gap/24 for a, _ in runs]
             fit = len(observed) == len(runs)
