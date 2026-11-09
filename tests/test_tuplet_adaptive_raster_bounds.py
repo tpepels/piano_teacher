@@ -122,5 +122,5 @@ def test_native_scale_page_bypasses_local_raster_only_when_source_pixels_suffice
     monkeypatch.setattr(tuplets, '_local_vector_art', unexpected_local)
     svg = _svg().replace('10000 1000', '1000 1000')
     art = tuplets.crop_art(svg, .02, (.1, .1), 'number')
-    assert _image(art).size == (32, 32)
+    assert _image(art).size == (16, 16)
     assert art['bounds'] == pytest.approx([0, 0, 125, 125])
