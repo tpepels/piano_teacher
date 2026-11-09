@@ -116,7 +116,9 @@ func _ready() -> void:
     renderer.external_backdrop = true
     renderer.compact_inactive_staff = true
     renderer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    renderer.visible = false
+    # The empty moving staff/playhead exists from application startup,
+    # before the first score model or retained note buffer is ready.
+    renderer.visible = true
     score_frame.add_child(renderer)
 
     runway_steps = StepTimeline.new()
