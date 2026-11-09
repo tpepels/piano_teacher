@@ -55,5 +55,22 @@ func _initialize() -> void:
     varying.sample(3000,Tempo.bpm_at_beat(2.0,40.0,map))
     check(is_equal_approx(varying.project(4000),40.0/60.0+48.0/60.0+96.0/60.0),
         "Tempo changes modify only forward velocity, never the world origin")
+    var tempo_change := Flow.new()
+    tempo_change.sample(1000,60.0)
+    tempo_change.sample(2000,60.0)
+    var authored: Array = [
+        {"start_beat":0.0,"end_beat":2.0,"bpm":60.0},
+        {"start_beat":2.0,"end_beat":4.0,"bpm":120.0}]
+    var local_now: float = tempo_change.project(2000)
+    var at_deadline: float = tempo_change.project_authored_future(
+        3000,2000,1.75,60.0,authored)
+    check(is_equal_approx(at_deadline-local_now,1.75),
+        "future deadline integrates the original tempo change, not one BPM")
+    check(is_equal_approx(tempo_change.project_authored_future(
+        3000,2000,1.75,60.0,[])-local_now,1.0),
+        "pause/feedback gap without authored map preserves selected BPM")
+    check(tempo_change.project_authored_future(
+        1900,2000,1.75,60.0,authored) >= local_now,
+        "past-stamped deadlines never rewind visual world")
     print("CONTINUOUS_SCORE_FLOW_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
