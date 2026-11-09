@@ -1,0 +1,60 @@
+name: Current repeat/rest/header native pixel acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/current-repeat-pixels.yml'
+      - 'tests/test_current_repeat_pixels.py'
+      - 'tests/godot/current_repeat_pixel_capture.gd'
+      - 'godot/score_stream_queue.gd'
+      - 'godot/score_stream_admission.gd'
+      - 'godot/notation/native/**'
+
+permissions:
+  contents: read
+
+jobs:
+  current-queue-native-framebuffer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install canonical real framebuffer runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]'
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o /tmp/godot.zip
+          mkdir -p /tmp/godot-bin
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 755 /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Verify repeat passes, meter rest and pixel-negative controls
+        run: |
+          mkdir -p "$RUNNER_TEMP/repeat-proof"
+          set -o pipefail
+          timeout 210s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -m pytest -q -rx --tb=short \
+              --basetemp="$RUNNER_TEMP/repeat-proof/captures" \
+              --junitxml="$RUNNER_TEMP/repeat-proof/junit.xml" \
+              tests/test_current_repeat_pixels.py \
+              2>&1 | tee "$RUNNER_TEMP/repeat-proof/results.txt"
+      - name: Preserve authentic PNGs and reproducible failure witnesses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-repeat-pixels-${{ github.sha }}
+          path: ${{ runner.temp }}/repeat-proof/
+          if-no-files-found: warn
+          retention-days: 14
