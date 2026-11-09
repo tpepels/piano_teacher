@@ -690,3 +690,67 @@ failures. Auto-remediation that changes passage/hand/tempo must still be
 verified end-to-end; its visual queue intentionally does not fabricate a
 new on-screen copy if the engine's revised deadline does not match the
 prepared source.
+
+
+## 2026-11-09 — post-Task-3 native audit and acceptance gates
+
+The complete 24-shard Godot 4.7.2 audit initially ran on `5b3a11f`.
+It did **not** establish full notation acceptance: many source cases, especially
+original Hanon, Chopin and Debussy, failed the independent five-rail detector
+with `Image staff rule has no consistent thin horizontal core`. The
+35-minute matrix jobs also exceeded their runtime budgets before reaching the
+declared source/case denominators. Partial case counts, timeout exits and
+unverified symbols cannot be promoted to passes; keep the original artifacts
+and [run 42639148266](https://github.com/tpepels/piano_teacher/actions/runs/42639148266)
+as negative evidence.
+
+### Implemented verification repairs
+
+- At `ce984aec`, `verify_all_notehead_pixels` can now intersect multiple
+  **real** current Godot photographs to recover fixed gray staff rules from
+  beneath transient moving noteheads and beams. The exact original five-line
+  detector, notehead thresholds, source ID denominators and ink matching remain
+  unchanged. The currently tested frame is always an input to the intersection:
+  a line deleted from even one frame still fails. No native score telemetry
+  supplies a rail or pitch position.
+- The existing real-score framebuffer sample passed on that change:
+  [run 42654227334](https://github.com/tpepels/piano_teacher/actions/runs/42654227334).
+- The new authentic Hanon (bars 37–40), Chopin (bars 13–16), and Debussy
+  (bars 33–36) notehead pixel/erased-rail regressions passed **3/3**:
+  [run 42654644865](https://github.com/tpepels/piano_teacher/actions/runs/42654644865).
+  These are *selected* notehead witnesses, not every symbol or a full-corpus
+  waiver. The same workflow now includes separate all-symbol case acceptance.
+- Modern repeat-visual tests photograph the live native queue with original
+  passage, complete metered rest, and a fresh replay including source header.
+  A deliberately deleted replay header fails the same image predicate;
+  [run 42655813267](https://github.com/tpepels/piano_teacher/actions/runs/42655813267)
+  passed **1/1**. This supersedes the retired looping/rewind tests without
+  restoring their obsolete render path or relaxing pixel limits.
+- The embedded production Moonlight journey, Pause/Resume/Retry, Listen,
+  tempo change, reopen, Peace Piece/Chopin, native bridge, and assembled
+  package verification passed on `7d486c2`:
+  [run 42639112951](https://github.com/tpepels/piano_teacher/actions/runs/42639112951).
+
+### Still mandatory, not certified
+
+1. Run every original/lesson/hand symbol in the 24-shard audit on the
+   **new** implementation revision, resolve any remaining genuine pixel
+   failures and bounded-execution issues, and require all denominators.
+   Existing partial/timeout evidence proves neither correctness nor completion.
+2. Perform the Phase 6 full practice/recovery workflow on a connected physical
+   USB and Bluetooth MIDI keyboard, measuring the actual latency/calibration,
+   audio/visual note synchronization, device loss/reconnect and long practice.
+   Headless/software OpenGL has no physical keyboard or listening measurement.
+3. Reproduce the non-bundled Beethoven Pathétique and any user-imported MIDI
+   that previously showed slow loading/Retry Score, with actual score files
+   and production screenshots/logs. Issues #45 and #46 remain open until the
+   affected copies pass cold/warm opening, readable passage and final
+   whole-piece playback.
+4. The current generator/policy ownership still separates Coda/Fukuda
+   transformed exercises from mistake-response selection and the tempo/mastery
+   ladder. Full Coda/Fukuda decision authority remains an explicit unsatisfied
+   product requirement until a single coherent decision contract replaces the
+   divided policy and tests show all control decisions originate there.
+5. Phase 4 original-paper figure/threshold comparisons, Phase 7 learner
+   efficacy evaluation and target-machine release acceptance are not
+   established by source or synthetic tests.
