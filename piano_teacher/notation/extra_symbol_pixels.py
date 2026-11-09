@@ -33,6 +33,7 @@ from .pixel_context import rectangular_rest_orientation
 from .pixel_proof import PLAYHEAD_FRACTION, RasterStaff, detect_staff_lines
 from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
+from .procedural_rest_ownership import confirmed_gap_tracks, verified_procedural_pair
 from .pixel_ink import rasterize_outline, bright
 
 STRIPE_HALF_WIDTH = 64
@@ -812,7 +813,9 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
                     source_anchors[sid] = dict(bbox=obj['bbox'], travel=travel,
                                               error=travel_error, gap=obj['gap'])
             snapshots.append(dict(clock=clock, frame=paths[clock].name, objects=objects,
-                                  areas=areas, motion=motion, shape=photo['shape'],
+                                  areas=areas, motion=motion, shift=shift,
+                                  staves=photo['staves'], camera=photo['camera'],
+                                  shape=photo['shape'],
                                   travel=travel, travel_error=travel_error))
             if motion:
                 motions.append(motion)
@@ -822,6 +825,12 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
             motion_errors.append(dict(clock=clock, reason=str(exc)))
             previous, previous_objects, previous_clock = None, [], clock
     del previous
+    # Practice silence is drawn after the original source ends. Its two
+    # whole-rest contours are not authored MusicXML events, so inspect the
+    # independently photographed source-end meter and exact moving PNG
+    # positions before claiming either. No lone rest earns an exemption.
+    procedural = confirmed_gap_tracks(written,snapshots)
+    procedural_frames = 0
     source_by_id = {e['source']['id']: e for e in written.symbols if e['visible']}
     bound = {sid for sid in owners.values() if sid is not None}
     source_counts = Counter(e['kind'] for e in source_by_id.values())
@@ -845,10 +854,14 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
         photo = photo_cache.restore(folder/snapshot['frame'])
         claimed = np.zeros(photo['shape'], dtype=bool)
         unexpected, unresolved = [], []
+        procedural_pair = verified_procedural_pair(snapshot,procedural)
+        procedural_tracks = {obj['track'] for obj in procedural_pair}
+        if len(procedural_tracks) == 2:
+            procedural_frames += 1
         for obj in snapshot['objects']:
             x0, y0, x1, y1 = obj['bbox']
             owner = owners.get(obj['track'])
-            if owner is not None:
+            if owner is not None or obj['track'] in procedural_tracks:
                 # Tight original reference support, never its whole box or
                 # the whole actual connected component (which can hide extras).
                 claimed[y0:y1, x0:x1] |= _template(obj['name'], obj['gap']) & photo['ink'][y0:y1, x0:x1]
@@ -902,7 +915,8 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
             evidence=dict(unexpected=unexpected, unresolved=unresolved, unowned_pixels=count,
                           occluded_pixels=photo['occluded'],
                           scanned_areas=snapshot['areas'], motion=snapshot['motion'],
-                          owned_objects=sum(owners.get(o['track']) is not None for o in snapshot['objects']))))
+                          owned_objects=sum(owners.get(o['track']) is not None for o in snapshot['objects']),
+                          procedural_rest_pair_owned=len(procedural_tracks)==2)))
         # Independently empty viewport tiles are useful positive bounded
         # observations even while other regions remain unsupported.
         H, W = photo['shape']
@@ -938,6 +952,8 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
         motion_errors=motion_errors, missing_source_clocks=missing,
         binding_errors=sorted(set(binding_errors)), unowned_pixels=unowned_total,
         source_supported=source_supported,
+        procedural_rest_pair_frames=procedural_frames,
+        procedural_rest_pair_tracks=sorted(procedural.get("tracks",())),
         certified_tiles=certified, decoded_frame_cache_limit=2,
         full_absence_status='unverified')
     return dict(measured=measured, coverage=coverage, complete=False,
