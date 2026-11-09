@@ -218,6 +218,9 @@ class PracticeEngine:
         self._future_stage_ready: tuple[str, int] | None = None
         self._future_stage_lead_beats = 0.0
         self._continuous_horizon_beats = 0.0
+        # The untimed guided engine owns repeat presentation epochs; no
+        # Godot-side guess about missed notes or lesson progression.
+        self._guided_stream_deadline: float | None = None
         # Explicit backend-selected next take. Renderer may only enqueue this
         # source identity at this exact monotonic graded deadline.
         self._queue_scheduled_start = None
@@ -1238,6 +1241,7 @@ class PracticeEngine:
         start, end = fragment.beat_range
         retry_range = self.retry_range if recovery else None
         self._stop(reason="guided_recovery" if recovery else "learn", preserve_episode=recovery)
+        self._guided_stream_deadline = None
         self._remediation_active = remediation
         if recovery:
             self.retry_range = retry_range
@@ -3029,6 +3033,31 @@ class PracticeEngine:
                 # continuous native staff has no admitted source copy.
                 next_floor = float(self.visual_transport.play_from_beat)
                 next_deadline = float(self.visual_transport.run_at)*1000.0
+                next_transport = self.transport_id
+            elif (self.mode == "learn" and self.plan is not None
+                    and not self.visual_transport.paused
+                    and self.awaiting_score_revision is None
+                    and str(state.get("phase", "")) in
+                        ("guided_wait", "introducing", "disconnected")):
+                # The guided lesson is untimed: the *backend* republishes
+                # the same current idea after it has passed, with authentic
+                # full-meter silence. Completion/revision invalidates it.
+                now = self.now()
+                duration = max(0.25,
+                    self.display_phrase().end-self.display_phrase().start)
+                count_in = self._next_count_in_beats()
+                lead_seconds = max(count_in, 1.0)*60.0/self.plan.bpm
+                gap_seconds = max(2.0,self._continuous_horizon_beats)*60.0/self.plan.bpm
+                if self._guided_stream_deadline is None:
+                    self._guided_stream_deadline = now+lead_seconds
+                elif now > self._guided_stream_deadline + (
+                        duration*60.0/self.plan.bpm+gap_seconds):
+                    self._guided_stream_deadline = max(
+                        now+lead_seconds,
+                        self._guided_stream_deadline+
+                        duration*60.0/self.plan.bpm+gap_seconds+lead_seconds)
+                next_floor = 0.0
+                next_deadline = self._guided_stream_deadline*1000.0
                 next_transport = self.transport_id
             if (self.plan is not None and next_floor is not None
                     and next_deadline is not None):
