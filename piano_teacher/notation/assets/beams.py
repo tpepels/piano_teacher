@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 5
+VERSION = 6
 
 
 def _classes(node: ET.Element) -> set[str]:
@@ -75,6 +75,13 @@ def _filter_beam_svg(svg: str, selected: tuple[str, ...]) -> str | None:
 
     if not prune(root):
         return None
+    # Verovio's reference pages can fade the non-selected staff with a
+    # 0.48 ancestor opacity. Native Godot applies that presentation fade
+    # based on its active-hand selection; keeping it in a fragment would
+    # bake an irreversible double fade into source beam pixels.
+    for ancestor in root.iter():
+        if ancestor.get("opacity") == "0.48":
+            del ancestor.attrib["opacity"]
     # A beam is a polygon/path; never accept a fallback notehead shape.
     shape_count = sum(1 for node in candidate.iter()
                       if node.tag.rsplit("}",1)[-1] in {"path","polygon","polyline"})
@@ -189,65 +196,58 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_NO_STANDALONE_SHAPE:",ids)
                 continue
-            width = BASE_RASTER_WIDTH
-            while True:
-                png = cairosvg.svg2png(bytestring=filtered.encode(),output_width=width)
-                with Image.open(BytesIO(png)) as decoded:
-                    rgba = decoded.convert("RGBA")
-                staff_space = (lines[1]-lines[0])*rgba.height
-                if staff_space >= MIN_STAFF_SPACE_PX:
-                    break
-                # A long unbroken system is wide: a fixed raster would leave
-                # its staff spaces too small to read. Scale it to the system.
-                width = math.ceil(width*TARGET_STAFF_SPACE_PX/max(staff_space,1e-6))
-                if width > MAX_RASTER_WIDTH:
-                    raise BeamExtractionError(
-                        "Verovio system too wide to rasterize beams legibly "
-                        f"(needs {width}px, limit {MAX_RASTER_WIDTH}px)")
+            # Rasterize the ACTUAL isolated Verovio beam polygon, at a
+            # bounded local scale. A 1600px full-page screenshot previously
+            # yielded a 63x3 source mask that was enlarged fivefold in
+            # practice, leaving gray antialias gaps and false beam levels.
+            # Recording the vector paths locally keeps complete authentic
+            # beam ink without allocating a 24k-wide whole-page surface.
+            from .tuplets import _local_vector_art
+            space = lines[1]-lines[0]
+            art = _local_vector_art(
+                filtered,space,(x0,y0),"verovio-engraved-beam")
+            if art is None:
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_NO_BOUNDED_VECTOR_ART:",ids)
+                continue
+            bounds = [float(number) for number in art["bounds"]]
+            if (len(bounds) != 4 or min(bounds[2:]) <= 0.0
+                    or not all(math.isfinite(n) for n in bounds)):
+                continue
+            with Image.open(BytesIO(base64.b64decode(art["png_base64"]))) as decoded:
+                rgba = decoded.convert("RGBA")
             alpha = rgba.getchannel("A")
-            bbox = alpha.getbbox()
-            if bbox is None:
+            intrinsic_span = (x1-x0)*250/space
+            if (intrinsic_span <= 4 or bounds[2] > intrinsic_span*2.2
+                    or rgba.width <= 1 or rgba.height <= 1):
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
-                    print("VEROVIO_BEAM_EMPTY_IMAGE:",ids)
+                    print("VEROVIO_BEAM_BAD_BOUNDED_SCALE:",ids,bounds,intrinsic_span)
                 continue
-            span = (x1-x0)*rgba.width
-            if not 4 < staff_space < 300 or span < 4:
-                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
-                    print("VEROVIO_BEAM_BAD_SCALE:",ids,staff_space,span)
-                continue
-            left,top,right,bottom = bbox
-            # Reject page-spanning or mistaken template geometry.
-            if (right-left) > span*2.2:
-                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
-                    print("VEROVIO_BEAM_TOO_WIDE:",ids,right-left,span)
-                continue
-            # Locate the original Verovio beam edge at each stem attachment.
-            # These offsets let Godot finish each native stem exactly on the
-            # REAL exported beam polygon, rather than a guessed line.
-            beam_centre = (top+bottom)*.5
-            up = beam_centre < y0*rgba.height
+            # The same normalized page coordinates supply the source
+            # musical anchors and physical reference-stem positions.
+            # Convert them to the bounded raster via its measured extent,
+            # never by assuming the image is a resized whole SVG page.
+            x_scale = rgba.width/bounds[2]
+            y_scale = rgba.height/bounds[3]
+            up = bounds[1]+bounds[3]*.5 < 0
             edges = []
             for index,(note_x,note_y,_) in enumerate(anchors):
-                # Beamed chords attach to the outermost actual Verovio
-                # notehead. The leader may be an inner chord tone.
-                source_heads = [geom.elements[id] for id in chord_ids[index]]
+                source_heads = [geom.elements[ident] for ident in chord_ids[index]]
                 reference_y = (max(head[1] for head in source_heads) if up
                                else min(head[1] for head in source_heads))
-                actual_stem = getattr(geom, "stem_x", {}).get(ids[index])
-                stem_x = (actual_stem*rgba.width if actual_stem is not None else
-                          note_x*rgba.width + (.54 if up else -.54)*staff_space)
-                px = round(stem_x)
+                source_stem = getattr(geom,"stem_x",{}).get(ids[index])
+                stem_units = (((source_stem-x0)*250/space)
+                    if source_stem is not None else
+                    (note_x-x0)*250/space+(.54 if up else -.54)*250)
+                position = round((stem_units-bounds[0])*x_scale)
                 sample = []
-                # Verovio's stem attachment differs from the centre of
-                # its notehead. Scan a full space around the approximate
-                # edge, preferring the nearest actual beam pixel.
-                for distance in range(round(staff_space*1.1)+1):
-                    columns = (px-distance,px+distance) if distance else (px,)
-                    for col in columns:
-                        if col < 0 or col >= rgba.width:
+                for distance in range(round(1.1*250*x_scale)+1):
+                    columns = (position-distance,position+distance) if distance else (position,)
+                    for column in columns:
+                        if not 0 <= column < rgba.width:
                             continue
-                        sample = [row for row in range(top,bottom)
-                                  if alpha.getpixel((col,row)) > 50]
+                        sample = [row for row in range(rgba.height)
+                                  if alpha.getpixel((column,row)) > 50]
                         if sample:
                             break
                     if sample:
@@ -255,32 +255,21 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if not sample:
                     break
                 edge_y = min(sample) if up else max(sample)
-                edges.append((edge_y-reference_y*rgba.height)*250/staff_space)
+                edge_units = bounds[1]+(edge_y+.5)/y_scale
+                reference_units = (reference_y-y0)*250/space
+                edges.append(edge_units-reference_units)
             if len(edges) != len(anchors):
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_STEM_EDGE_MISSING:",
                           ids,len(edges),len(anchors))
-                continue
-            crop = rgba.crop(bbox)
-            white = Image.new("RGBA",crop.size,(255,255,255,255))
-            white.putalpha(crop.getchannel("A"))
-            buffer=BytesIO()
-            white.save(buffer,format="PNG",optimize=True)
-            bounds = [(left-x0*rgba.width)*250/staff_space,
-                      (top-y0*rgba.height)*250/staff_space,
-                      (right-left)*250/staff_space,
-                      (bottom-top)*250/staff_space]
-            intrinsic_span = span*250/staff_space
-            if not all(math.isfinite(v) for v in bounds+[intrinsic_span]):
                 continue
             output["|".join(ids)] = {
                 "source":"verovio-engraved-beam","units_per_space":250,
                 "bounds":bounds, "span":intrinsic_span,
                 "note_ids":list(ids), "chord_note_ids":[list(g) for g in chord_ids],
                 "stem_up":up, "tip_offsets":edges,
-                "head_offsets":[(x-x0)*rgba.width*250/staff_space
-                                for x,_,_ in anchors],
-                "png_base64":base64.b64encode(buffer.getvalue()).decode(),
+                "head_offsets":[(x-x0)*250/space for x,_,_ in anchors],
+                "png_base64":art["png_base64"],
             }
         except (KeyError,ValueError,TypeError,ET.ParseError,RuntimeError,
                 OverflowError) as exc:
