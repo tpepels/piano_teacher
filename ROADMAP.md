@@ -754,3 +754,48 @@ as negative evidence.
 5. Phase 4 original-paper figure/threshold comparisons, Phase 7 learner
    efficacy evaluation and target-machine release acceptance are not
    established by source or synthetic tests.
+
+
+### 2026-11-09 — Complete-symbol rejection and newest bounded CI evidence
+
+The expanded source-pixel gate remains **RED** on
+[run 42658927695](https://github.com/tpepels/piano_teacher/actions/runs/42658927695).
+Its strict positive and corrupted-rail controls passed **32 + 3 tests**, and
+its two all-symbol cases failed with **98 Hanon** and **256 Chopin** error
+entries. Against the previous all-symbol attempt on
+[run 42656223093](https://github.com/tpepels/piano_teacher/actions/runs/42656223093)
+(175 Hanon, 356 Chopin), the full-scope error inventory shrank without
+relaxing a tolerance, deleting an obligation or claiming a mismatch passed.
+The exact source screenshots, original Verovio pages, per-family observations
+and cause counts are in each run's uploaded `dense-rails-*` artifact.
+
+Shared `PhotographedStaffRails` now supplies strict current-frame-intersected
+rail evidence to the independent captured-frame, note-feature, structure, rest,
+and unexpected-symbol owners. The finite photo-cache, mutation and pixel
+contracts passed 32/32 on the matching CI run. Their selected real-source
+checks passed another 3/3. The original source noteheads verified 32/32 on
+Hanon and 77/77 on Chopin; all 4 Hanon and 7 Chopin ledger obligations,
+and all 4 Chopin rest obligations, are independently verified.
+
+Remaining failures are substantive and must stay RED: Hanon 7 of 8 beams
+mismatch original profile; Chopin 5 of 9 beams mismatch and 3 have no complete
+common witness; dense stem/flag attachment and contour checks remain incomplete;
+one Chopin graphical tuplet numeral mismatches, while 14 hidden source markers
+cannot count as graphical proof; unowned/ambiguous ink and the explicit
+family-candidate resource budget prevent whole-frame absence certification.
+These exact categories must be addressed by causal production-drawing and
+proof-algorithm fixes, with mutated-image controls preserved. Neither the
+current three-frame rail witnesses nor a new tolerance can authorize missing
+beam/flag/tuplet/absence evidence.
+
+Issue #45's bounded *same-real-source* reopen path is now part of
+`tests/test_phase6_score_performance.py`: Moonlight and Hanon reimport,
+native engraving, semantic source-vs-written ID binding, retained progress
+selection, and P95/cold/warm time limits passed
+[run 42658481719](https://github.com/tpepels/piano_teacher/actions/runs/42658481719).
+The user's specific originally failing imported MIDI is not bundled here,
+so #45 must not be closed solely from these two source samples.
+
+The full 24-shard corpus has **not** passed at the repaired revision.
+Software native acceptance, physical MIDI and genuine learner effectiveness
+are independent unfulfilled exit conditions.
