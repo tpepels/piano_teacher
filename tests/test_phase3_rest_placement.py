@@ -3,8 +3,12 @@ from PIL import Image, ImageDraw
 import pytest
 
 from piano_teacher.notation.phase3_pixels import verify_all_rest_pixels
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 from test_phase3_rest_differences import _captures
 from test_phase3_rest_orientation import REAL, _dotted_capture
+
+# Fabricated captures place the rest onset at the production timing line.
+ONSET = round(1536*PLAYHEAD_FRACTION)
 
 
 def _unchanged_ink(folder, box):
@@ -41,14 +45,14 @@ def test_readable_whole_space_voice_displacements_keep_placement_credit(tmp_path
 def test_shape_preserving_layout_mutations_never_receive_placement_credit(tmp_path, mutation):
     if mutation == "touch-dot":
         xml = _dotted_capture(tmp_path, kind="whole")
-        _unchanged_ink(tmp_path, (669, 164, 671, 166))
+        _unchanged_ink(tmp_path, (ONSET+24, 164, ONSET+26, 166))
     else:
         xml = _captures(tmp_path, kind="whole" if "body" in mutation else "quarter",
                         shift=5 if mutation == "off-grid" else 120 if mutation == "too-far" else 0)
         if mutation == "touch-body":
-            _unchanged_ink(tmp_path, (657, 162, 659, 166))
+            _unchanged_ink(tmp_path, (ONSET+12, 162, ONSET+14, 166))
         elif mutation == "overlap-body":
-            _unchanged_ink(tmp_path, (644, 157, 644, 172))
+            _unchanged_ink(tmp_path, (ONSET-1, 157, ONSET-1, 172))
     report = verify_all_rest_pixels(xml, tmp_path)
     row = report["measured"][0]
     # Contour identity remains known; layout is a distinct ledger obligation.
@@ -60,8 +64,8 @@ def test_shape_preserving_layout_mutations_never_receive_placement_credit(tmp_pa
 
 def test_small_but_readable_clearance_is_not_a_collision(tmp_path):
     xml = _captures(tmp_path, kind="whole")
-    # Three blank pixel columns separate body x<=656 from neighbor x=660.
-    _unchanged_ink(tmp_path, (660, 162, 662, 166))
+    # Three blank pixel columns separate body x<=ONSET+11 from neighbor x=ONSET+15.
+    _unchanged_ink(tmp_path, (ONSET+15, 162, ONSET+17, 166))
     row = verify_all_rest_pixels(xml, tmp_path)["measured"][0]
     assert row["placement_evidence"]["status"] == "verified", row
     assert row["placement_evidence"]["min_clearance_spaces"] == pytest.approx(.15)
@@ -81,7 +85,7 @@ def _isolated_capture(folder, kind, shift):
                  "restored-0.00000.png", "without.png"):
         path = folder/name
         image = Image.open(path).convert("RGB")
-        ImageDraw.Draw(image).rectangle((670, 155, 692, 167), fill=(16, 41, 35))
+        ImageDraw.Draw(image).rectangle((ONSET+25, 155, ONSET+47, 167), fill=(16, 41, 35))
         image.save(path)
     return xml
 

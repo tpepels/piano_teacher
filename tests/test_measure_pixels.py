@@ -10,19 +10,25 @@ DPI_REAL = Path(__file__).parent / "fixtures/measure_pixels/source-rests-1600x10
 BACKGROUND = (25, 47, 48)
 RAIL = (68, 91, 89)
 INK = (165, 190, 185)
+TIMING = (64, 214, 160)
+# These hand-authored frames keep their original layout: the photographed
+# timing rule (as in every real capture) sits at x=336. The oracle measures
+# that rule from pixels; it no longer assumes a remembered 42% fraction.
+TIMING_X = 336
 
 
 def picture(styles=("regular", "regular", "regular"), *, shifts=None):
     """Supplementary hand-authored rules, not replacement production goldens.
 
-    Principal anchors are x=318,510,702: public origin 800*.42, 96px/beat,
-    beats 0,2,4 and a single 18px clearance. Staff gap is 10 pixels.
+    Principal anchors are x=318,510,702: photographed timing rule at 336,
+    96px/beat, beats 0,2,4 and a single 18px clearance. Staff gap is 10 pixels.
     """
     image = Image.new("RGB", (800, 280), BACKGROUND)
     draw = ImageDraw.Draw(image)
     for y in (40, 50, 60, 70, 80, 170, 180, 190, 200, 210):
         draw.line((0, y, 799, y), fill=RAIL)
     draw.line((29, 40, 29, 210), fill=INK, width=2)  # Public system gutter.
+    draw.rectangle((TIMING_X-1, 10, TIMING_X, 270), fill=TIMING)  # Timing rule.
     weights = {"regular": (1,), "heavy": (5,), "light-light": (1, 1),
                "light-heavy": (1, 5), "heavy-light": (5, 1), "heavy-heavy": (5, 5)}
     for i, style in enumerate(styles):
@@ -53,8 +59,10 @@ def test_real_retained_ala_rules_are_measured_without_renderer_coordinates():
 def test_real_before_ala_rest_is_268_half_pixels_and_must_fail_288_pixel_invariant():
     from piano_teacher.notation.measure_pixels import verify_measure_frame
     with Image.open(REAL) as raw:
+        # Archived capture without a photographed rule, taken at the former
+        # 42% timing line (moved in 3121b755).
         result = verify_measure_frame(raw, [{"beat": b} for b in (3, 6, 9, 12)],
-                                      clock_beat=4.5, density=96)
+                                      clock_beat=4.5, density=96, timing_x=raw.width*.42)
     assert not result["passed"]
     assert result["errors"]
     assert result["widths"][0]["expected_px"] == 288
@@ -154,7 +162,7 @@ def test_partly_clipped_declared_double_group_is_not_an_extra_rule(anchor):
     draw = ImageDraw.Draw(image)
     for x in (anchor-7, anchor):
         draw.line((x, 40, x, 210), fill=INK)
-    edge_beat = (anchor+18-800*.42)/96
+    edge_beat = (anchor+18-TIMING_X)/96
     expected = [*boundaries(), {"beat": edge_beat, "style": "light-light"}]
     result = verify_measure_frame(image, expected, clock_beat=0, density=96, clearance_px=18)
     assert result["passed"], result
@@ -168,7 +176,7 @@ def test_visible_double_near_gutter_still_participates_in_projection():
     draw = ImageDraw.Draw(image)
     for x in (35, 42):
         draw.line((x, 40, x, 210), fill=INK)
-    beat = (42+18-800*.42)/96
+    beat = (42+18-TIMING_X)/96
     expected = [{"beat": beat, "style": "light-light"}, *boundaries()]
     result = verify_measure_frame(image, expected, clock_beat=0, density=96, clearance_px=18)
     assert result["passed"], result
@@ -184,7 +192,7 @@ def test_left_clipped_double_requires_its_visible_principal(principal_present):
     # gutter; the principal rule is fully visible and remains mandatory.
     if principal_present:
         ImageDraw.Draw(image).line((40, 40, 40, 210), fill=INK)
-    beat = (40+18-800*.42)/96
+    beat = (40+18-TIMING_X)/96
     expected = [{"beat": beat, "style": "light-light"}, *boundaries()]
     result = verify_measure_frame(image, expected, clock_beat=0, density=96,
                                   clearance_px=18)
@@ -228,9 +236,13 @@ def test_actual_dpi_capture_scales_only_the_public_system_gutter():
         assert any(rule["center"] == 35.5 for rule in unscaled["strokes"])
         assert all(rule["center"] >= 40 for rule in scaled["strokes"])
         expected = [{"beat": b} for b in range(4, 81, 4)]
-        assert not verify_measure_frame(image, expected, clock_beat=12, density=120)["passed"]
+        # This archived capture shows no coloured timing rule; it was taken
+        # with the line at the former 42% of the width (moved in 3121b755).
+        timing_x = image.width*.42
+        assert not verify_measure_frame(image, expected, clock_beat=12, density=120,
+                                        timing_x=timing_x)["passed"]
         result = verify_measure_frame(image, expected, clock_beat=12, density=120,
-                                      pixel_scale=1.25)
+                                      pixel_scale=1.25, timing_x=timing_x)
     assert result["passed"], result
     assert len(result["widths"]) == 2
     assert [w["expected_px"] for w in result["widths"]] == [480, 480]
@@ -248,12 +260,13 @@ def test_dpi_scale_does_not_exempt_rules_outside_scaled_gutter_or_relax_toleranc
     color = image.getpixel((stroke["cols"][0], (top+bottom)//2))
     ImageDraw.Draw(image).line((42, top, 42, bottom), fill=color)
     expected = [{"beat": b} for b in range(4, 81, 4)]
+    timing_x = image.width*.42  # Archived capture without a photographed rule.
     result = verify_measure_frame(image, expected, clock_beat=12, density=120,
-                                  pixel_scale=1.25)
+                                  pixel_scale=1.25, timing_x=timing_x)
     assert not result["passed"]
     assert any("unexpected" in error.lower() for error in result["errors"])
     relaxed = verify_measure_frame(image, expected, clock_beat=12, density=120,
-                                   pixel_scale=1.25, tolerance_px=1.875)
+                                   pixel_scale=1.25, tolerance_px=1.875, timing_x=timing_x)
     assert not relaxed["passed"]
     assert any("tolerance" in error.lower() for error in relaxed["errors"])
 

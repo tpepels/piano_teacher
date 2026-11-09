@@ -223,9 +223,12 @@ def test_real_score_framebuffer_uses_production_world_axis():
     assert "renderer._stream_add_take(0.0,0.0,0.0," in harness
     assert "renderer.present_flow(at,snapshot,at)" in harness
     assert "PLAYHEAD_FRACTION = 0.33" in oracle
-    assert "image.width*PLAYHEAD_FRACTION" in phase3
+    # Verifiers anchor on the photographed timing rule, falling back to the
+    # production fraction only for rasters without one.
+    assert "return image.width * PLAYHEAD_FRACTION" in oracle
+    assert "xpos=round(playhead_x(image))" in phase3
     rest = (ROOT/"piano_teacher/notation/rest_intervention.py").read_text()
-    assert "shape[1]*PLAYHEAD_FRACTION" in rest
+    assert "playhead_x(Image.fromarray(original" in rest
     assert "PLAYHEAD_FRACTION := .33" in native
 
 

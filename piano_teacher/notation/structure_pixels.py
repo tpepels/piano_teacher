@@ -22,7 +22,7 @@ from .head_registration import register_noteheads
 from .pixel_context import clef_at
 from .pixel_ink import bright, rasterize_outline, pixel_runs
 from .pixel_motion import frame_shift
-from .pixel_proof import detect_staff_lines, expected_y
+from .pixel_proof import detect_staff_lines, expected_y, playhead_x
 from .proof import read_written_score
 from .raster_matching import match_glyph, _joint_candidates, photographed_playhead_columns
 from .reference_font import feature_glyphs
@@ -156,6 +156,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
             if motion is None or motion['shift']*(clock-other_clock) <= 0:
                 continue
             heads, _ = register_noteheads(bright(other), other_staves, written, notes, glyphs,
+                                 playhead_x=playhead_x(other),
                                  occlusion_columns=photographed_playhead_columns(other))
             if len(heads) != len(notes):
                 continue
@@ -233,7 +234,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
                 else:
                     y = rail.bottom-(line-1)*rail.gap
                     proof = measure_glyph_family(bright(picture), glyphs, ('clef_g', 'clef_f', 'clef_c'), name,
-                        rail.gap, picture.width*.42, y,
+                        rail.gap, playhead_x(picture), y,
                         range(-round(26*rail.gap), -round(rail.gap)),
                         range(-max(1, round(.2*rail.gap)), max(1, round(.2*rail.gap))+1))
             else:
@@ -248,7 +249,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
                     if not clef_name or octave:
                         raise ValueError('Meter ownership requires an independently identified ordinary clef')
                     clef = measure_glyph_family(pixels, glyphs, ('clef_g', 'clef_f', 'clef_c'), clef_name,
-                        rail.gap, picture.width*.42, rail.bottom-(line-1)*rail.gap,
+                        rail.gap, playhead_x(picture), rail.bottom-(line-1)*rail.gap,
                         range(-round(26*rail.gap), -round(rail.gap)),
                         range(-max(1, round(.2*rail.gap)), max(1, round(.2*rail.gap))+1))
                     if clef['status'] != 'verified':
@@ -259,7 +260,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
                     for text, y in ((numerator, sum(rail.lines)/5-rail.gap),
                                     (denominator, sum(rail.lines)/5+rail.gap*.8)):
                         for part in _meter_sequence(pixels, glyphs, text, rail.gap,
-                                                    picture.width*.42, y, left_edge):
+                                                    playhead_x(picture), y, left_edge):
                             box = part.get('evidence', {}).get('bbox')
                             if box:
                                 boxes.append(box)
@@ -308,7 +309,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
                 raise ValueError('Opening key requires independently identified adjacent clef and meter')
             left = clefs[0]['evidence']['bbox'][2]
             right = min(box[0] for box in meters[0]['evidence']['boxes'])
-            origin = picture.width*.42
+            origin = playhead_x(picture)
             dxs = range(round(left-origin), round(right-origin))
             pixels = bright(picture)
             if not fifths:

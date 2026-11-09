@@ -11,6 +11,7 @@ from PIL import Image
 import pytest
 
 from measure_invariant_fixtures import CASES, DENSITY, ROOT, prepare_measure_fixture
+from piano_teacher.notation.pixel_proof import playhead_x
 from piano_teacher.notation.measure_pixels import verify_measure_frame
 from piano_teacher.notation.proof import read_written_score
 
@@ -188,7 +189,7 @@ def _source_head_is_present(folder, data, frame):
     measure = max(i for i, beat in enumerate(written.bars[:-1]) if beat <= frame['clock'])
     y = expected_y(staff,tuple(event['spelling']),_context(written,measure,'left')[2])
     glyph = 'head_'+(event['note_type'] if event['note_type'] in ('half','whole') else 'black')
-    score = _match_glyph(notation_ink(image),feature_glyphs()[glyph],staff.gap,image.width*.42,y,
+    score = _match_glyph(notation_ink(image),feature_glyphs()[glyph],staff.gap,playhead_x(image),y,
                          centered=True,dxs=range(-2,3),dys=range(-2,3))
     assert score >= .79, ('The independent source-head/timing control failed',score)
 

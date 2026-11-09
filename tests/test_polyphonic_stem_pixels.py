@@ -64,6 +64,9 @@ def picture(folder, groups, directions, *, one_shaft=False):
             top = min(lane)-70 if direction == 'up' else min(lane)
             bottom = max(lane) if direction == 'up' else max(lane)+70
             pen.line((x, top, x, bottom), fill=(231, 240, 232), width=2)
+    # Authored timing rule at x=420, photographed like every real capture;
+    # it spans the empty lower staff, clear of the RH heads and shafts.
+    pen.rectangle((419, 300, 420, 479), fill=(64, 214, 160))
     image.save(folder/'native-0.00000.png')
 
 
@@ -229,7 +232,7 @@ def test_actual_parallel_unison_types_need_their_own_heads_and_shafts(tmp_path, 
     from scripts.check_native_verovio_overlay import AuditCase, fixture
     from piano_teacher.notation.head_registration import register_noteheads
     from piano_teacher.notation.reference_font import feature_glyphs
-    from piano_teacher.notation.pixel_proof import detect_staff_lines
+    from piano_teacher.notation.pixel_proof import detect_staff_lines, playhead_x
     from piano_teacher.notation.proof import read_written_score
     from piano_teacher.notation.raster_matching import photographed_playhead_columns
     from piano_teacher.notation.pixel_ink import bright
@@ -263,7 +266,8 @@ def test_actual_parallel_unison_types_need_their_own_heads_and_shafts(tmp_path, 
         intact = raw.convert('RGB')
     intact.save(tmp_path/'intact.png')
     heads, _ = register_noteheads(bright(intact), detect_staff_lines(intact), written, notes,
-        feature_glyphs(), occlusion_columns=photographed_playhead_columns(intact))
+        feature_glyphs(), playhead_x=playhead_x(intact),
+        occlusion_columns=photographed_playhead_columns(intact))
     assert len(heads) == 2
     a, b = heads.values()
     assert a['support'].isdisjoint(b['support'])

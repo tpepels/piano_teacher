@@ -6,6 +6,7 @@ import cairosvg
 import pytest
 from PIL import Image, ImageDraw
 
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 from piano_teacher.notation.assets.glyphs import native_glyphs
 from piano_teacher.notation.phase3_pixels import verify_all_rest_pixels
 
@@ -23,15 +24,17 @@ def _captures(folder, *, kind="quarter", shift=0, mutation=None, gap=20):
     pen = ImageDraw.Draw(bg)
     for y in (center+step*gap for center in (160,360) for step in range(-2,3)):
         pen.line((0,y,1535,y), fill=(73,83,77))
-    # Dense neighboring ink remains identical in both images.
-    pen.ellipse((670,155,692,167),fill=(220,230,215))
+    # Dense neighboring ink, just right of the onset, remains identical in
+    # both images.
+    neighbor = round(1536*PLAYHEAD_FRACTION)+25
+    pen.ellipse((neighbor,155,neighbor+22,167),fill=(220,230,215))
     glyph = glyphs["rest_" + ("eighth" if mutation=="wrong" else kind)]
     b = glyph["bounds"]
     w,h = round(b[2]*gap/250), round(b[3]*gap/250)
     mask=Image.open(BytesIO(cairosvg.svg2png(bytestring=glyph["svg"].encode(),
                                           output_width=w,output_height=h))).convert("RGBA")
     original = bg.copy().convert("RGBA")
-    x,y = round(1536*.42)-w//2,round(160+b[1]*gap/250+shift)
+    x,y = round(1536*PLAYHEAD_FRACTION)-w//2,round(160+b[1]*gap/250+shift)
     if mutation not in ("missing","dark-addition"):
         original.alpha_composite(mask,(x,y))
     original=original.convert("RGB")

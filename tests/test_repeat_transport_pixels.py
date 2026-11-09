@@ -9,6 +9,7 @@ from PIL import Image
 import pytest
 
 from continuous_repeat_pixel_helpers import notation_ink
+from piano_teacher.notation.pixel_proof import playhead_x
 from piano_teacher.notation.reference_font import feature_glyphs
 from piano_teacher.notation.pixel_proof import detect_staff_lines
 from piano_teacher.notation.symbol_pixel_proof import _match_glyph
@@ -173,7 +174,7 @@ def test_backend_preparation_is_visibly_engraved_and_next_source_stays_attached(
         top=round(staves['right'].lines[0]);bottom=round(staves['left'].lines[-1])
         rules=[]
         for beat in (window['start_beat'],window['end_beat']):
-            anchor=image.width*.42+(beat-frame['clock'])*96
+            anchor=playhead_x(image)+(beat-frame['clock'])*96
             columns=[x for x in range(round(anchor-2*staves['right'].gap),round(anchor)+1)
                      if ink[top:bottom+1,x].mean()>=.97]
             assert columns,'Backend scheduled silence lacks a full-grand-staff boundary'

@@ -20,11 +20,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 import pytest
 
-from continuous_repeat_pixel_helpers import DENSITY, PLAYHEAD, _glyph_hits, notation_ink
+from continuous_repeat_pixel_helpers import DENSITY, _glyph_hits, notation_ink
 from piano_teacher.notation.reference_font import feature_glyphs
 from piano_teacher.notation.stem_pixels import reference_stem_extension
 from piano_teacher.notation.phase3_pixels import verify_translation_sequence
-from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
+from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y, playhead_x
 from piano_teacher.notation.proof import read_written_score
 from piano_teacher.notation.symbol_pixel_proof import _match_glyph
 from piano_teacher.notation.pixel_ink import rasterize_outline, bright
@@ -274,11 +274,10 @@ def _complete_half_stem(image, head):
 def verify_peace_register_pixels(folder, data, report):
     _assert_source(data)
     frames = {frame['name']: frame for frame in report['frames']}
-    x = 1536 * PLAYHEAD
     measured = {}
     for name, pitch in [('source-c2', 36), ('source-g2', 43)]:
         image = _image(folder, frames[name])
-        measured[pitch] = measure_bass_half(image, pitch, x)
+        measured[pitch] = measure_bass_half(image, pitch, playhead_x(image))
         _complete_half_stem(image, measured[pitch])
         _no_bridge_ladder(image,x,data,frames[name]['clock'])
         if data['hand']=='both':
@@ -362,7 +361,7 @@ def _meter_mask(image, staff, meter, interval, origins, *, scale=1., dim=False):
 def _source_meters(folder, data, frames):
     image = _image(folder, frames['opening'])
     staves = detect_staff_lines(image)
-    source_x = image.width * PLAYHEAD + .5 * DENSITY
+    source_x = playhead_x(image) + .5 * DENSITY
     first = data['peace_expected']['duration'] == 4.5
     for hand, staff in staves.items():
         middle = (staff.lines[0] + staff.bottom) / 2
@@ -410,7 +409,8 @@ def verify_peace_preparation_pixels(folder, data, report):
     assert motion['passed'] and motion['pixel_steps'] == [12, 12], motion
     # Voice-column displacement is measured in the original PNG; it cannot
     # authorize a horizontal shift of the incoming copy.
-    source = measure_bass_half(_image(folder, frames['source-c2']), 36, 1536 * PLAYHEAD)
+    source_image = _image(folder, frames['source-c2'])
+    source = measure_bass_half(source_image, 36, playhead_x(source_image))
     incoming = frames['repeat-c2']
     assert incoming['clock'] == duration + GAP + expected['onsets'][0]
     measure_bass_half(_image(folder, incoming), 36, source['x'], tolerance=2)
@@ -440,7 +440,7 @@ def test_actual_register_pixel_corruptions_fail(peace_captures, tmp_path, corrup
     verify_peace_register_pixels(*capture)
     frame = next(frame for frame in report['frames'] if frame['name'] == 'source-c2')
     image = _image(folder, frame)
-    measured = measure_bass_half(image, 36, image.width * PLAYHEAD)
+    measured = measure_bass_half(image, 36, playhead_x(image))
     staves = detect_staff_lines(image)
     pen = ImageDraw.Draw(image)
     if corruption == 'erase-half-head':
@@ -483,7 +483,7 @@ def test_actual_preparation_pixel_corruptions_fail(peace_captures, tmp_path, cor
         else:
             pixels[:, col:] = pixels[:, col - 96:pixels.shape[1] - 96]
     else:
-        col = round(image.width * PLAYHEAD) - 40
+        col = round(playhead_x(image)) - 40
         pixels[:, col + 24:] = pixels[:, col:-24]
         pixels[:, col:col + 24] = pixels[:, col - 20:col - 19]
     Image.fromarray(pixels).save(folder / frame['base'])

@@ -18,6 +18,19 @@ def bright(image: Image.Image) -> np.ndarray:
     return ((rgb[:,:,0] > 155) & (rgb[:,:,1] > 160) & (rgb[:,:,2] > 150))
 
 
+def translating_ink(image: Image.Image) -> np.ndarray:
+    """Pale score ink without the fixed, coloured timing overlay.
+
+    Since 13598000/39caeee0 the timing rule's core and its beat knob are pale
+    enough to pass bright(). They stay put while the score moves, so motion
+    estimates must not let them vote. Neutral score ink is never coloured in
+    a canonical capture.
+    """
+    rgb = np.asarray(image.convert("RGB")).astype(np.int16)
+    overlay = (rgb[:,:,1]-rgb[:,:,0] > 30) & (rgb[:,:,2]-rgb[:,:,0] > 15)
+    return bright(image) & ~overlay
+
+
 @lru_cache(maxsize=256)
 def rasterize_outline(svg: str, width: int, height: int) -> np.ndarray:
     png = cairosvg.svg2png(bytestring=svg.encode(),

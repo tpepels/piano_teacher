@@ -16,9 +16,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from continuous_repeat_pixel_helpers import DENSITY, PLAYHEAD, _glyph_hits, notation_ink
+from continuous_repeat_pixel_helpers import DENSITY, _glyph_hits, notation_ink
 from piano_teacher.notation.reference_font import feature_glyphs
-from piano_teacher.notation.pixel_proof import detect_staff_lines
+from piano_teacher.notation.pixel_proof import detect_staff_lines, playhead_x
 from piano_teacher.notation.symbol_pixel_proof import _match_glyph
 from piano_teacher.notation.pixel_ink import bright
 
@@ -131,7 +131,7 @@ def _boundaries(image, expected, clock):
     top, bottom = round(staves['right'].lines[0]), round(staves['left'].lines[-1])
     result = []
     for beat in (expected['start'], expected['end']):
-        x = image.width * PLAYHEAD + (beat - clock) * DENSITY
+        x = playhead_x(image) + (beat - clock) * DENSITY
         columns = [col for col in range(round(x - 2 * staves['right'].gap), round(x) + 2)
                    if ink[top:bottom + 1, col].mean() >= .97]
         assert columns and max(columns) - min(columns) <= 3, f'Missing or extra recovery boundary near beat {beat}: {columns}'

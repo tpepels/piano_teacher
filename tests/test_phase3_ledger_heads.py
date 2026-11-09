@@ -36,6 +36,9 @@ def test_detached_ledger_mark_cannot_mask_a_filled_head_as_half_at_8_5_gap(tmp_p
     left, top = round(168-b[2]*8.5/500), round(108.5+b[1]*8.5/250)
     pixels = np.asarray(picture).copy()
     pixels[top:top+height, left:left+width][rasterize_outline(glyph["svg"], width, height)] = (229, 242, 234)
+    # Authored timing rule at x=168, photographed like every real capture;
+    # it runs below the treble ledger region, clear of the head and ledger.
+    pixels[150:240, 167:169] = (64, 214, 160)
     path = tmp_path/"native-0.00000.png"
     Image.fromarray(pixels).save(path)
     control = verify_all_notehead_pixels(xml, tmp_path, hand="right")
@@ -71,6 +74,9 @@ def test_spanning_ledger_cannot_mask_a_filled_head_as_half_at_8_5_gap(tmp_path):
     left, top = round(168-b[2]*8.5/500), round(108.5+b[1]*8.5/250)
     pixels = np.asarray(picture).copy()
     pixels[top:top+height, left:left+width][rasterize_outline(glyph["svg"], width, height)] = (229, 242, 234)
+    # Authored timing rule at x=168, photographed like every real capture;
+    # it runs below the treble ledger region, clear of the head and ledger.
+    pixels[150:240, 167:169] = (64, 214, 160)
     # A genuine thin C4 ledger spans the entire candidate head. Correct
     # ownership permits occlusion handling, but cannot change a filled head
     # into the source-required hollow family at this supported small scale.

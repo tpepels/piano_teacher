@@ -157,9 +157,11 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                 else:
                     aligned = pixels
                 notes = frames.notes_by_beat[beat]
-                heads, errors = register_noteheads(aligned, frame['staves'], written, notes, glyphs)
+                heads, errors = register_noteheads(aligned, frame['staves'], written, notes, glyphs,
+                                                   playhead_x=frame['playhead_x'])
                 contexts = {staff: ledger_context_rows(aligned, rail, written,
-                    [n for n in notes if n['staff'] == staff]) for staff, rail in frame['staves'].items()}
+                    [n for n in notes if n['staff'] == staff], playhead_x=frame['playhead_x'])
+                    for staff, rail in frame['staves'].items()}
                 for note, row in required:
                     sid = note['source']['id']
                     if sid in source_errors or sid not in heads:

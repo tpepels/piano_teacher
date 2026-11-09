@@ -17,7 +17,7 @@ def clef_at(reference, bar: int, hand: str):
     return sign,line,octave
 
 
-def ledger_context_rows(pixels, rail, written, notes):
+def ledger_context_rows(pixels, rail, written, notes, *, playhead_x):
     """Recover thin ledger rules at source-required diatonic positions.
 
     A line must have real continuous bright ink beyond a head's width.
@@ -33,7 +33,7 @@ def ledger_context_rows(pixels, rail, written, notes):
         step=round((rail.bottom-y)*2/rail.gap)
         steps=range(-2,step-1,-2) if step<0 else range(10,step+1,2)
         expected.update(rail.bottom-s*rail.gap/2 for s in steps)
-    origin=round(pixels.shape[1]*.42)
+    origin=round(playhead_x)
     left,right=max(0,origin-round(3*rail.gap)),min(pixels.shape[1],origin+round(3*rail.gap))
     rows=set()
     for y in expected:

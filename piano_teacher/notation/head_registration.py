@@ -50,7 +50,7 @@ def _shared_unison_directions(notes):
     return directions if set(directions.values())=={'up','down'} else {}
 
 
-def register_noteheads(pixels, staves, written, notes, glyphs, *, occlusion_columns=()):
+def register_noteheads(pixels, staves, written, notes, glyphs, *, playhead_x, occlusion_columns=()):
     requests, heads, errors = [], {}, {}
     displaced=set()
     for group in source_chord_groups(notes):
@@ -74,7 +74,7 @@ def register_noteheads(pixels, staves, written, notes, glyphs, *, occlusion_colu
                     if any(n is note or n is other for n in group):
                         displaced.update(n['source']['id'] for n in group)
     ledgers={staff:ledger_context_rows(pixels,rail,written,
-        [n for n in notes if n['staff']==staff]) for staff,rail in staves.items()}
+        [n for n in notes if n['staff']==staff],playhead_x=playhead_x) for staff,rail in staves.items()}
     for note in notes:
         sid = note['source']['id']
         try:
@@ -92,7 +92,7 @@ def register_noteheads(pixels, staves, written, notes, glyphs, *, occlusion_colu
                                  background_rows=ledgers[note['staff']] if name!='head_black' else ()))
         except (KeyError, ValueError, AssertionError, TypeError) as exc:
             errors[sid] = str(exc)
-    origin = round(pixels.shape[1] * .42)
+    origin = round(playhead_x)
     for indices in glyph_search_components(requests, dys=range(0, 1)):
         group = [requests[i] for i in indices]
         registration = {}

@@ -47,6 +47,9 @@ def pictures(folder, *, curve='arc', displacement=0, bow=24):
         for base in (120, 320):
             for i in range(5):
                 pen.line((0, base+20*i, 999, base+20*i), fill=(73, 83, 77))
+        # Authored timing rule at x=420, photographed like every real
+        # capture; it spans the empty lower staff, clear of the RH ink.
+        pen.rectangle((419, 200, 420, 479), fill=(64, 214, 160))
         _stamp(image, 'head_half', 420+shift)
         _stamp(image, 'head_black', 660+shift)
         if curve != 'none':

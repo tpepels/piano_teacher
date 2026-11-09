@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from PIL import Image, ImageDraw
 
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 from piano_teacher.notation.pixel_proof import (
     detect_staff_lines, expected_y, observed_notehead_y, observed_notehead_ys, verify_pixel_frames,
 )
@@ -23,7 +24,7 @@ def frame(*, shift=0, missing=None):
         for dy in (-40, -20, 0, 20, 40):
             draw.line((0, center + dy, 1535, center + dy),
                       fill=(73, 83, 77), width=1)
-    x = round(image.width * .42)
+    x = round(image.width * PLAYHEAD_FRACTION)
     # Source beat zero: E4 at lower treble rail, G2 at lower bass rail.
     for hand, y in (("right", 200), ("left", 400)):
         if hand == missing:
@@ -106,7 +107,7 @@ def test_image_validator_ignores_native_reported_positions(tmp_path):
 def test_chord_pixels_produce_multiple_independent_image_centres():
     image = frame()
     draw = ImageDraw.Draw(image)
-    x = round(image.width * .42)
+    x = round(image.width * PLAYHEAD_FRACTION)
     # A written C-E-G chord has heads two staff steps (one gap) apart.
     for y in (180, 160):
         draw.ellipse((x-10, y-5, x+10, y+5), fill=(230, 240, 234))
@@ -117,7 +118,7 @@ def test_chord_pixels_produce_multiple_independent_image_centres():
 def test_erasing_one_chord_tone_changes_measured_pixel_inventory():
     image = frame()
     draw = ImageDraw.Draw(image)
-    x = round(image.width * .42)
+    x = round(image.width * PLAYHEAD_FRACTION)
     draw.ellipse((x-10, 175, x+10, 185), fill=(230, 240, 234))
     draw.ellipse((x-10, 155, x+10, 165), fill=(230, 240, 234))
     staffs = detect_staff_lines(image)

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PIL import Image
 import pytest
+from piano_teacher.notation.pixel_proof import playhead_x
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/hanon_boundary_clearance"
@@ -60,7 +61,7 @@ def _assert_flag_clearance(image):
     from piano_teacher.notation.pixel_ink import bright
     found = detect_barline_strokes(image)
     assert found["passed"], found
-    target = image.width * .42 - 1.35 * found["staff_gap"]
+    target = playhead_x(image) - 1.35 * found["staff_gap"]
     strokes = [s for s in found["strokes"] if abs(s["center"] - target) < 2]
     assert len(strokes) == 1, (target, found)
     stroke, = strokes
@@ -161,7 +162,7 @@ def test_written_outgoing_heads_and_photographed_flags_are_preserved(boundary_fr
         notes = [n for n in written.symbols if n["kind"] == "note" and n["beat"] == boundary-.25]
         assert len(notes) == 2
         for note in notes:
-            head = _connector_head(picture,written,note,picture.width*.42-.25*frame["density"])
+            head = _connector_head(picture,written,note,playhead_x(picture)-.25*frame["density"])
             assert head, (frame["file"],note)
             if boundary == 8:
                 # 582.8 is the retained PNG's independently observed final

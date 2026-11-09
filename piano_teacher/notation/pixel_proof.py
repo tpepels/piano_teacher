@@ -256,9 +256,28 @@ def ink_row_profile(picture: Image.Image, x: int, lo: int, hi: int) -> list[int]
             for yy in range(lo, hi)]
 
 
+def playhead_x(image: Image.Image) -> float:
+    """X of the fixed timing line, measured from the photographed frame.
+
+    The coloured timing rule is itself image evidence: an onset sounding
+    "now" is engraved under it. Reading it from pixels keeps every verifier
+    bound to the capture it inspects instead of to a remembered fraction
+    (the line moved from 42% to 33% in 3121b755, and archived captures
+    retain the line they were photographed with). Column indices are pixel
+    cells, so the rule's continuous centre is their mean plus half a pixel.
+    A raster without a photographed rule (fabricated probes, crops) uses the
+    production fraction.
+    """
+    from .raster_matching import photographed_playhead_columns
+    columns = photographed_playhead_columns(image)
+    if columns:
+        return float(np.mean(list(columns))) + .5
+    return image.width * PLAYHEAD_FRACTION
+
+
 def observed_notehead_ys(image: Image.Image, hand: str,
                          staff: RasterStaff) -> list[float]:
-    x = round(image.width * PLAYHEAD_FRACTION)
+    x = round(playhead_x(image))
     if x - 13 < 0 or x + 13 >= image.width:
         raise AssertionError("Playhead outside captured frame")
     # The two staff zones are disjoint; one notehead must be identifiable at

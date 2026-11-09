@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,7 +43,7 @@ def diagnostic_captures(folder):
         mask = Image.open(BytesIO(cairosvg.svg2png(bytestring=glyph["svg"].encode(),
                          output_width=width, output_height=height))).convert("RGBA")
         image = bg.convert("RGBA")
-        image.alpha_composite(mask, (round(1536*.42-width/2), round(y+bounds[1]*20/250)))
+        image.alpha_composite(mask, (round(1536*PLAYHEAD_FRACTION-width/2), round(y+bounds[1]*20/250)))
         image.convert("RGB").save(folder / f"native-{beat:.5f}.png")
         if beat == 1:
             image.convert("RGB").save(folder / "repeat.png")

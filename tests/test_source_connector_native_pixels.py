@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
+from piano_teacher.notation.pixel_proof import playhead_x
 from piano_teacher.notation.symbol_pixel_proof import verify_connector_pixels
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,7 +109,7 @@ def test_actual_png_erasure_wrong_attachments_and_line_cannot_prove_a_curve(capt
             source_path = next(p for p in folder.glob('native-*.png')
                                if abs(float(p.stem[7:])-onset) < 1e-7)
             source = Image.open(source_path).convert('RGB')
-            own = proof._connector_head(source, written, note, source.width*.42)
+            own = proof._connector_head(source, written, note, playhead_x(source))
             shift = proof._connector_shift(original, source)
             assert own and shift
             head = proof._connector_head(original, written, note, own['x']+shift['shift'])

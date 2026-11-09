@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
+from piano_teacher.notation.pixel_proof import playhead_x
 from piano_teacher.notation import symbol_pixel_proof as proof
 from piano_teacher.notation.proof import read_written_score
 
@@ -96,7 +97,7 @@ def test_real_autumn_damaged_tie_is_not_authorized_by_intact_heads(
                                if abs(float(p.stem[7:])-float(note['beat'])) < 5e-6)
             with Image.open(source_path) as raw:
                 source = raw.convert('RGB')
-            own = proof._connector_head(source, written, note, source.width*.42)
+            own = proof._connector_head(source, written, note, playhead_x(source))
             shift = proof._connector_shift(original, source)
             if own is None or shift is None:
                 break

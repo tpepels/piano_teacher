@@ -30,7 +30,7 @@ from .glyph_evidence import closed_component
 from .head_registration import register_noteheads
 from .reference_font import feature_glyphs
 from .pixel_context import rectangular_rest_orientation
-from .pixel_proof import RasterStaff, detect_staff_lines
+from .pixel_proof import PLAYHEAD_FRACTION, RasterStaff, detect_staff_lines
 from .proof import read_written_score
 from .pixel_ink import rasterize_outline, bright
 
@@ -437,7 +437,7 @@ def _areas(photo, previous, shift, whole):
     H, W = photo['shape']
     if whole or previous is None or shift is None:
         return [[0, 0, W, H]]
-    x = round(photo['camera'] if photo['camera'] is not None else W*.42)
+    x = round(photo['camera'] if photo['camera'] is not None else W*PLAYHEAD_FRACTION)
     areas = [[max(0, x-STRIPE_HALF_WIDTH), 0, min(W, x+STRIPE_HALF_WIDTH), H]]
     old = _shifted(previous['layers'][0], shift)
     # One-pixel registration tolerance selects expensive SEARCH regions only.
@@ -480,17 +480,16 @@ def _bind(written, events, photo, objects, owners, errors, *, next_track=None):
         errors.extend(e['source']['id'] for e in events)
         return next_track
     notes = [e for e in events if e['kind'] == 'note' and e['visible']]
-    # Existing strict joint registration uses the public fixed playhead.
-    # Reindex to the actual PNG playhead (integer pixels, no resampling).
-    dx = round(photo['shape'][1]*.42-camera)
+    # Strict joint registration searches around the photographed playhead
+    # (column cells, so the rule's continuous centre is half a pixel on).
     heads, failures = {}, {}
     # Use the same pale-ink calibration as the independent pitch oracle;
     # neutral contrast layers additionally expose inactive-hand ink. The
     # original strict joint/family/ledger/occlusion rules still apply.
     for layer in (photo['head_pixels'], *reversed(photo['layers'])):
-        pixels = _shifted(layer, dx)
-        matched, failed = register_noteheads(pixels, photo['staves'], written, notes, feature_glyphs(),
-            occlusion_columns=tuple(int(c+dx) for c in photo['occlusion_columns']))
+        matched, failed = register_noteheads(layer, photo['staves'], written, notes, feature_glyphs(),
+            playhead_x=camera+.5,
+            occlusion_columns=tuple(int(c) for c in photo['occlusion_columns']))
         for sid, head in matched.items():
             heads.setdefault(sid, head)
         failures.update(failed)
@@ -504,7 +503,7 @@ def _bind(written, events, photo, objects, owners, errors, *, next_track=None):
             if sid not in heads:
                 continue
             head = heads[sid]
-            target_x, target_y = head['x']-dx, head['y']
+            target_x, target_y = head['x'], head['y']
             name = ('head_whole' if event['note_type'] == 'whole' else
                     'head_half' if event['note_type'] == 'half' else 'head_black')
             candidates = [o for o in objects if o['family'] == 'head'
@@ -516,8 +515,7 @@ def _bind(written, events, photo, objects, owners, errors, *, next_track=None):
                 # measured ledger/playhead context that the generic family
                 # scan cannot classify. Retain that actual strict contour;
                 # do not require a second, context-free detection to bind it.
-                box = [head['bbox'][0]-dx, head['bbox'][1],
-                       head['bbox'][2]-dx, head['bbox'][3]]
+                box = list(head['bbox'])
                 observation = dict(name=name, family='head', bbox=box,
                     score=head['score'], gap=head['gap'], track=next_track,
                     source_registration=sid)

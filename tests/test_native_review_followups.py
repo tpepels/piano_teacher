@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
+from piano_teacher.notation.pixel_proof import playhead_x
 from piano_teacher.notation.feature_pixels import verify_note_feature_pixels, verify_structure_pixels
 from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
 from piano_teacher.notation.pixel_proof import detect_staff_lines
@@ -139,7 +140,7 @@ def test_erased_barline_cannot_borrow_a_nearby_full_staff_stem(tmp_path):
         for y in range(round(staff.lines[0])+2, round(staff.lines[-1])-2):
             if min(abs(y-line) for line in staff.lines) >= 2:
                 draw.line((555, y, 735, y), fill="#102923")
-        x = round(picture.width*.42+3*staff.gap)
+        x = round(playhead_x(picture)+3*staff.gap)
         draw.line((x, round(staff.lines[0]), x, round(staff.lines[-1])), fill="#E5F2EA", width=2)
     picture.save(path)
     rules = [r for r in structures(tmp_path) if r["construct"] in {"measure", "barline"}]

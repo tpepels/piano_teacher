@@ -9,6 +9,7 @@ import cairosvg
 from PIL import Image
 import pytest
 
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 from piano_teacher.notation.phase3_pixels import verify_all_rest_pixels
 from piano_teacher.notation.assets.glyphs import native_glyphs
 from test_phase3_rest_differences import _captures
@@ -107,13 +108,14 @@ def _dotted_capture(folder, *, kind="quarter", written=1, drawn=1, mutation=None
     for name in ("native-0.00000", "repeat-0.00000", "restored-0.00000", "without"):
         path = folder / f"{name}.png"
         image = Image.open(path).convert("RGBA")
-        image.paste((16, 41, 35, 255), (660, 145, 710, 175))
+        onset = round(1536*PLAYHEAD_FRACTION)
+        image.paste((16, 41, 35, 255), (onset+15, 145, onset+65, 175))
         if name != "without" or mutation == "unchanged-neighbor":
             for i in range(drawn):
                 # Authored spatial relation: detached dots to the right of
                 # the body, separated by .65 staff spaces.
                 y = 165 if kind == "whole" else 155
-                x = 666 + i*13
+                x = onset + 21 + i*13
                 if mutation == "wrong-shape":
                     image.paste((235, 242, 234, 255), (x-1, y-6, x+1, y+6))
                 else:

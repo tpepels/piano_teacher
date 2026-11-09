@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 import pytest
 
+from piano_teacher.notation.pixel_proof import playhead_x
 from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
 from piano_teacher.notation.reference_font import reference_glyphs
 from piano_teacher.notation.pixel_ink import rasterize_outline
@@ -28,7 +29,7 @@ def test_same_photographed_half_head_can_anchor_a_connector():
     written = read_written_score((FIXTURE/'score.musicxml').read_text())
     note = next(n for n in written.symbols if n['beat']==3 and n.get('spelling')==('F',0,4))
     with Image.open(FIXTURE/'native-3.00000.png') as image:
-        assert _connector_head(image,written,note,image.width*.42) is not None
+        assert _connector_head(image,written,note,playhead_x(image)) is not None
 
 
 def test_timing_rule_never_censors_uncovered_pixels_in_the_same_column():

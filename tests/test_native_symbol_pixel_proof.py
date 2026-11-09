@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw
 import cairosvg
 import pytest
 
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 from piano_teacher.notation.assets.glyphs import native_glyphs
 from piano_teacher.notation.symbol_pixel_proof import (
     classify_symbol, REST_TYPES, ACCIDENTAL_GLYPH, bridge_ink,
@@ -68,7 +69,9 @@ def test_erased_rest_cannot_be_identified():
 def test_beam_tie_bridge_reacts_to_erased_real_image_ink():
     im=Image.new("RGB",(1536,520),(16,41,35))
     pen=ImageDraw.Draw(im)
-    pen.rectangle((649,222,660,224),fill=(231,240,232))
+    # Fabricated raster without a timing rule: the production line applies.
+    x=round(1536*PLAYHEAD_FRACTION)
+    pen.rectangle((x+4,222,x+15,224),fill=(231,240,232))
     assert bridge_ink(im,range(216,232))==9
-    pen.rectangle((649,222,660,224),fill=(16,41,35))
+    pen.rectangle((x+4,222,x+15,224),fill=(16,41,35))
     assert bridge_ink(im,range(216,232))==0

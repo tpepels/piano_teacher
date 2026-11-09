@@ -18,10 +18,10 @@ from PIL import Image
 
 from .proof import read_written_score
 from .pixel_context import clef_at, ledger_context_rows
-from .pixel_proof import detect_staff_lines, expected_y
-from .pixel_ink import bright, rasterize_outline
+from .measure_pixels import GUTTER
+from .pixel_proof import detect_staff_lines, expected_y, playhead_x
+from .pixel_ink import bright, rasterize_outline, translating_ink
 
-PLAYHEAD = .42
 REST_TYPES = ("whole","half","quarter","eighth","16th","32nd","64th","128th")
 ACCIDENTAL_TYPES = ("flat","natural","sharp","double-flat","double-sharp")
 ACCIDENTAL_GLYPH = {"flat":"acc_flat","natural":"acc_natural","sharp":"acc_sharp",
@@ -109,7 +109,7 @@ def prove_rest_ink(original_xml: str, generated_xml: str,
         image=Image.open(frame)
         staff=detect_staff_lines(image)["right"]
         y=(staff.lines[0]+staff.lines[-1])/2
-        x=round(image.width*PLAYHEAD)
+        x=round(playhead_x(image))
         ranked=classify_symbol(image,fonts,tuple("rest_"+t for t in REST_TYPES),
                x,y,staff.gap,centered=True,dxs=range(-3,4),
                dys=range(-30,31,2))
@@ -144,7 +144,7 @@ def prove_accidental_ink(original_xml: str, generated_xml: str,
         image=Image.open(frame)
         staff=detect_staff_lines(image)["right"]
         y=expected_y(staff,e["spelling"],clefs["right"])
-        x=round(image.width*PLAYHEAD)-staff.gap*1.15
+        x=round(playhead_x(image))-staff.gap*1.15
         ranked=classify_symbol(image,fonts,tuple(ACCIDENTAL_GLYPH.values()),
                x,y,staff.gap,centered=True,dxs=range(-9,10),
                dys=range(-10,11,2))
@@ -161,7 +161,7 @@ def prove_accidental_ink(original_xml: str, generated_xml: str,
 
 def bridge_ink(image: Image.Image, row_range: range, *, x_pad: int=5) -> int:
     mask=bright(image)
-    x=round(image.width*PLAYHEAD)
+    x=round(playhead_x(image))
     # A beam/tie crosses the *middle* of a note interval: isolated flags
     # and note stems at endpoints cannot satisfy the full-width bridge.
     horizontal=mask[max(0,row_range.start):min(image.height,row_range.stop),
@@ -279,7 +279,7 @@ def prove_note_rhythm_ink(original_xml: str, generated_xml: str,folder: Path) ->
         image=Image.open(image_path)
         staff=detect_staff_lines(image)["right"]
         y=expected_y(staff,item["spelling"],clef)
-        x=round(image.width*PLAYHEAD)
+        x=round(playhead_x(image))
         pixels=bright(image)
         ranked=sorted(((name,round(_match_note_template(
             pixels,note_templates[name],staff.gap,x,y),4))
@@ -489,7 +489,8 @@ def _connector_head(picture, written, note, origin_x):
                    occlusion_columns=photographed_playhead_columns(picture),
                    alternatives=tuple((name,reference_glyphs()[name])
                        for name in ('head_black','head_half','head_whole') if name!=kind),
-                   background_rows=ledger_context_rows(pixels, rail, written, [note])
+                   background_rows=ledger_context_rows(pixels, rail, written, [note],
+                                                       playhead_x=playhead_x(picture))
                    if kind != 'head_black' else ())
     candidates = _joint_candidates(pixels, request, origin_x, request['dys'], .79)
     if not candidates:
@@ -505,11 +506,20 @@ def _connector_head(picture, written, note, origin_x):
                 gap=rail.gap, contour_score=chosen['score'])
 
 
+def _translating_ink(image):
+    ink = translating_ink(image).copy()
+    ink[:, :GUTTER] = False
+    return ink
+
+
 def _connector_shift(first, second):
     """Unique whole-ink translation between PNGs, independent of beat spacing."""
     if first.size != second.size:
         return None
-    a, b = bright(first), bright(second)
+    # Fixed overlays do not translate with the score and must not vote:
+    # the system brace inside the public left gutter, and the coloured
+    # timing rule with its beat knob.
+    a, b = _translating_ink(first), _translating_ink(second)
     if min(int(a.sum()), int(b.sum())) < 24:
         return None
     left, right = a.sum(axis=0).astype(float), b.sum(axis=0).astype(float)
@@ -775,7 +785,7 @@ def verify_connector_pixels(xml: str, folder: Path, *, hand='both', constructs=(
                 raise ValueError('Distinct source endpoints collide at five decimal capture precision')
             if any(not n['visible'] for n in notes) or notes[0]['staff'] != notes[1]['staff']:
                 raise ValueError('Invisible or cross-staff endpoints require separate image evidence')
-            own = [head(n, beat, picture(beat).width*PLAYHEAD) for n, beat in zip(notes, beats)]
+            own = [head(n, beat, playhead_x(picture(beat))) for n, beat in zip(notes, beats)]
             if any(h is None for h in own):
                 raise ValueError('Source endpoint head is unavailable, offscreen or lacks unique contour evidence')
             common = sorted((beat for beat in frames if beats[0] <= beat <= beats[1]),
@@ -813,7 +823,7 @@ def verify_connector_pixels(xml: str, folder: Path, *, hand='both', constructs=(
         from .connector_difference_pixels import measure_slur_interventions
         causal = measure_slur_interventions(
             xml, written, pairs, folder, register_head=_connector_head,
-            measure_shift=_connector_shift, playhead=PLAYHEAD)
+            measure_shift=_connector_shift, locate_playhead=playhead_x)
         for pair,row in zip(pairs,observations):
             if row['construct'] != 'slur' or pair.get('reason'):
                 continue

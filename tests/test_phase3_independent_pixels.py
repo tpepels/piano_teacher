@@ -7,6 +7,7 @@ import cairosvg
 from PIL import Image, ImageDraw
 import pytest
 
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION, playhead_x
 from piano_teacher.notation.assets.glyphs import native_glyphs
 from piano_teacher.notation.pixel_proof import RasterStaff, expected_y, detect_staff_lines
 from piano_teacher.notation.reference_font import reference_glyphs
@@ -54,7 +55,7 @@ def _score_frames(tmp_path: Path, *, move: tuple[str, int] | None = None,
             yy=expected_y(staves[hand],sym["spelling"],clefs[hand])
             if move==(hand,int(beat)):
                 yy-=gap/2  # one complete diatonic staff step
-            x=round(width*.42)-w//2
+            x=round(width*PLAYHEAD_FRACTION)-w//2
             y=round(yy+bounds[1]*gap/250)
             picture.alpha_composite(mask,(x,y))
         picture.convert("RGB").save(tmp_path/f"native-{beat:.5f}.png")
@@ -134,7 +135,7 @@ def test_seconds_can_displace_an_entire_chord_stem_group(tmp_path):
                                           output_width=w,output_height=h))).convert("RGBA")
     for step,octave,dx in (("G",3,0),("A",3,24),("D",4,24)):
         y=expected_y(staff,(step,0,octave),("F",4,0))
-        picture.alpha_composite(mask,(round(1536*.42)-w//2+dx,round(y+b[1]*20/250)))
+        picture.alpha_composite(mask,(round(1536*PLAYHEAD_FRACTION)-w//2+dx,round(y+b[1]*20/250)))
     picture.convert("RGB").save(tmp_path/"native-0.00000.png")
     result=verify_all_notehead_pixels(xml,tmp_path)
     assert result["passed"],result["failures"]
@@ -180,7 +181,7 @@ def test_wrong_staff_step_in_adjacent_chord_cannot_be_certified(tmp_path):
     staff=RasterStaff("right",(120,140,160,180,200),20)
     for step,dx,dy in (("C",0,10),("D",20,0)):
         yy=expected_y(staff,(step,0,5),("G",2,0))+dy
-        picture.alpha_composite(mask,(round(1536*.42)-w//2+dx,round(yy+b[1]*20/250)))
+        picture.alpha_composite(mask,(round(1536*PLAYHEAD_FRACTION)-w//2+dx,round(yy+b[1]*20/250)))
     picture.convert("RGB").save(tmp_path/"native-0.00000.png")
     result=verify_all_notehead_pixels(xml,tmp_path)
     assert not result["complete"]
@@ -245,7 +246,7 @@ def _dense_chord_frame(tmp_path, *, omit=None, move=None, gap=20, kind="quarter"
         y=expected_y(staff,(step,0,5),("G",2,0))
         if step==move:
             y+=move_steps*gap/2
-        image.alpha_composite(mask,(round(1536*.42)-w//2+dx,round(y+b[1]*gap/250)))
+        image.alpha_composite(mask,(round(1536*PLAYHEAD_FRACTION)-w//2+dx,round(y+b[1]*gap/250)))
     image.convert("RGB").save(tmp_path/"native-0.00000.png")
     return xml
 
@@ -340,7 +341,7 @@ def test_retained_dense_chord_cannot_borrow_an_erased_heads_neighbors(tmp_path,s
     # lie one gap away, outside this mutation. Dim rails/playhead are kept.
     pixels=np.asarray(image).copy()
     erase=np.zeros(pixels.shape[:2],dtype=bool)
-    x=round(image.width*.42)
+    x=round(playhead_x(image))
     erase[round(target-.35*staff.gap):round(target+.35*staff.gap),
           x-round(2*staff.gap):x+round(2*staff.gap)]=True
     pixels[erase & bright(image)]=(16,41,35)

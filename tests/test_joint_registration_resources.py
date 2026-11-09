@@ -17,7 +17,7 @@ from pathlib import Path
 from PIL import Image
 from piano_teacher.notation.head_registration import register_noteheads
 from piano_teacher.notation.reference_font import feature_glyphs
-from piano_teacher.notation.pixel_proof import detect_staff_lines
+from piano_teacher.notation.pixel_proof import detect_staff_lines, playhead_x
 from piano_teacher.notation.proof import read_written_score
 from piano_teacher.notation.raster_matching import photographed_playhead_columns
 from piano_teacher.notation.pixel_ink import bright
@@ -28,7 +28,7 @@ assert len(notes)==5
 with Image.open(root/"native_dense_registration.png") as raw:
     image=raw.convert("RGB")
 heads,errors=register_noteheads(bright(image),detect_staff_lines(image),written,notes,
-    feature_glyphs(),occlusion_columns=photographed_playhead_columns(image))
+    feature_glyphs(),playhead_x=playhead_x(image),occlusion_columns=photographed_playhead_columns(image))
 assert set(heads).isdisjoint(errors)
 assert len(heads)+len(errors)==5
 owned=set()

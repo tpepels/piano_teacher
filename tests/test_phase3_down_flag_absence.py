@@ -35,6 +35,9 @@ def quarter(tmp_path, direction="down"):
     width, height = round(b[2]*16/250), round(b[3]*16/250)
     left, top = round(168-b[2]*16/500), round(212+b[1]*16/250)
     head = rasterize_outline(glyph["svg"], width, height)
+    # Authored timing rule at x=168, photographed like every real capture;
+    # it spans the empty lower staff, clear of the RH head, stem and flags.
+    draw.rectangle((167, 290, 168, 559), fill=(64, 214, 160))
     pixels = np.array(picture)
     pixels[top:top+height, left:left+width][head] = INK
     xs = np.nonzero(head)[1]

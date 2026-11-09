@@ -11,13 +11,12 @@ import numpy as np
 from PIL import Image
 
 from piano_teacher.notation.reference_font import feature_glyphs
-from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
+from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y, playhead_x
 from piano_teacher.notation.proof import read_written_score
 from piano_teacher.notation.symbol_pixel_proof import _match_glyph
 from piano_teacher.notation.phase3_pixels import verify_translation_sequence
 
 DENSITY = 96.0
-PLAYHEAD = .42
 
 
 def repeat_expectations(data):
@@ -78,7 +77,7 @@ def _load(folder, frame):
 
 
 def _boundaries(image, duration, gap, clock):
-    return [image.width * PLAYHEAD + (beat - clock) * DENSITY
+    return [playhead_x(image) + (beat - clock) * DENSITY
             for beat in (duration, duration + gap)]
 
 
@@ -196,7 +195,7 @@ def verify_next_source_arrival(folder, data, report):
         y = expected_y(staff, tuple(event['spelling']), clef)
         kind = event['note_type'] if event['note_type'] in ('whole', 'half') else 'black'
         score = _match_glyph(ink, glyphs[f'head_{kind}'], staff.gap,
-                             image.width * PLAYHEAD, y, centered=True,
+                             playhead_x(image), y, centered=True,
                              dxs=range(-2, 3), dys=range(-2, 3))
         assert score >= .79, (f"Incoming {event['staff']} source head misses D+G+q playhead "
                                f"({score:.3f}); pause duration or source position changed")
@@ -254,7 +253,7 @@ def verify_context_headers(folder, data, report):
         image = _load(folder, frames[name])
         ink = notation_ink(image)
         staves = detect_staff_lines(image)
-        end = image.width * PLAYHEAD + (beat - frames[name]['clock']) * DENSITY
+        end = playhead_x(image) + (beat - frames[name]['clock']) * DENSITY
         restoration_rule = verify_gap_boundaries(folder, data, frames[name])[0] if name == 'rest' else None
         previous_index = len(written.bars) - 2 if beat == duration else index - 1
         for hand, staff in staves.items():
@@ -319,8 +318,8 @@ def verify_source_body(folder, data, report):
     reference = frames.get('baseline', frames['opening'])
     canonical = _load(folder, reference)
     repeated = _load(folder, frames['repeat'])
-    first_x = canonical.width * PLAYHEAD - reference['clock'] * DENSITY
-    next_x = repeated.width * PLAYHEAD + (duration + gap - frames['repeat']['clock']) * DENSITY
+    first_x = playhead_x(canonical) - reference['clock'] * DENSITY
+    next_x = playhead_x(repeated) + (duration + gap - frames['repeat']['clock']) * DENSITY
     # Include every visible source onset, including beat zero and source rests;
     # only measure-boundary strokes have independent practice geometry.
     width = min(round(duration * DENSITY), canonical.width - round(first_x) - 2,

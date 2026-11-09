@@ -36,7 +36,7 @@ def _runs(mask):
 
 
 def measure_slur_interventions(xml, written, pairs, folder, *,
-                               register_head, measure_shift, playhead):
+                               register_head, measure_shift, locate_playhead):
     """Return physically verified per-source slur differences, or nothing.
 
     All expected source slurs must have unique controls, because a missing
@@ -106,7 +106,7 @@ def measure_slur_interventions(xml, written, pairs, folder, *,
                     with Image.open(source_file) as img:
                         source = img.convert("RGB")
                     anchor = register_head(source, written, note,
-                                           source.width*playhead)
+                                           locate_playhead(source))
                     if anchor is None:
                         return {}
                     if onset not in shifts:

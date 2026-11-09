@@ -160,8 +160,9 @@ def test_each_source_slur_contributes_separate_native_ink(overlap_native):
     from PIL import Image
     from piano_teacher.notation.pixel_ink import bright
     from piano_teacher.notation.proof import read_written_score
+    from piano_teacher.notation.pixel_proof import playhead_x
     from piano_teacher.notation.symbol_pixel_proof import (
-        PLAYHEAD, _connector_head, _connector_pairs, _connector_shift,
+        _connector_head, _connector_pairs, _connector_shift,
     )
 
     _case, xml, folder = overlap_native
@@ -205,7 +206,7 @@ def test_each_source_slur_contributes_separate_native_ink(overlap_native):
             with Image.open(folder / f"native-{beat:.2f}.png") as frame:
                 onset_image = frame.convert("RGB")
             anchor = _connector_head(onset_image, written, note,
-                                     onset_image.width * PLAYHEAD)
+                                     playhead_x(onset_image))
             assert anchor is not None, identity
             if beat not in shift_cache:
                 shift_cache[beat] = (

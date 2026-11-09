@@ -22,7 +22,7 @@ from .head_registration import (register_noteheads, source_chord_groups,
 from .ledger_pixels import verify_ledger_pixels
 from .pixel_context import ledger_context_rows
 from .pixel_ink import bright
-from .pixel_proof import detect_staff_lines
+from .pixel_proof import detect_staff_lines, playhead_x
 from .proof import read_written_score
 from .raster_matching import photographed_playhead_columns
 from .reference_font import feature_glyphs
@@ -87,7 +87,8 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
                 for construct in row['features']:
                     row['features'][construct] = feature_result('unverified', f'Missing PNG or actual five-line staff evidence: {exc}', frame=filename.name)
             continue
-        heads, errors = register_noteheads(pixels, staves, written, notes, glyphs,
+        timing_x = playhead_x(image)
+        heads, errors = register_noteheads(pixels, staves, written, notes, glyphs, playhead_x=timing_x,
                                   occlusion_columns=photographed_playhead_columns(image))
         groups = source_chord_groups(notes)
         owned_stems = measure_stem_ownership(pixels, groups, heads, marks)
@@ -143,7 +144,7 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
                         else:
                             features[construct] = measure_accidental(pixels,glyphs,head,required,
                                 [heads[n['source']['id']] for n in group if n['source']['id'] in heads],
-                                ledger_context_rows(pixels,staves[note['staff']],written,group))
+                                ledger_context_rows(pixels,staves[note['staff']],written,group,playhead_x=timing_x))
                 # Mid-measure changes have no time-resolved clef/key API in
                 # the existing pitch reader. Do not certify against a final
                 # bar-level attribute when its onset order is ambiguous.

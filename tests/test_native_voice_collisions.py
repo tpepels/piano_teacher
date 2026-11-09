@@ -142,14 +142,14 @@ def registered_heads(xml,folder):
     from piano_teacher.notation.head_registration import register_noteheads
     from piano_teacher.notation.reference_font import feature_glyphs
     from piano_teacher.notation.proof import read_written_score
-    from piano_teacher.notation.pixel_proof import detect_staff_lines
+    from piano_teacher.notation.pixel_proof import detect_staff_lines, playhead_x
     from piano_teacher.notation.raster_matching import photographed_playhead_columns
     from piano_teacher.notation.pixel_ink import bright
     written=read_written_score(xml)
     notes=[n for n in written.symbols if n['kind']=='note' and n['beat']==0]
     with Image.open(folder/'native-0.00000.png') as raw:image=raw.convert('RGB')
     heads,_=register_noteheads(bright(image),detect_staff_lines(image),written,notes,feature_glyphs(),
-                      occlusion_columns=photographed_playhead_columns(image))
+                      playhead_x=playhead_x(image),occlusion_columns=photographed_playhead_columns(image))
     return heads
 
 

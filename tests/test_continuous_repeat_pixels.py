@@ -12,12 +12,12 @@ from PIL import Image, ImageFilter
 import pytest
 
 from continuous_repeat_pixel_helpers import (
-    PLAYHEAD, repeat_expectations, verify_repeat_pixels,
+    repeat_expectations, verify_repeat_pixels,
     verify_rest_frame, verify_gap_boundaries, verify_clean_gap, verify_repeat_motion,
     verify_context_headers, verify_source_body, verify_next_source_arrival,
 )
 from piano_teacher.notation.reference_font import feature_glyphs
-from piano_teacher.notation.pixel_proof import detect_staff_lines
+from piano_teacher.notation.pixel_proof import detect_staff_lines, playhead_x
 from piano_teacher.notation.pixel_ink import rasterize_outline
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -277,7 +277,7 @@ def test_inserted_authentic_clef_inside_gap_fails(repeated_capture, tmp_path):
     bounds = glyph['bounds']
     unit = staff.gap / 250
     mask = rasterize_outline(glyph['svg'], round(bounds[2] * unit), round(bounds[3] * unit))
-    left = round(image.width * PLAYHEAD + 2.5 * staff.gap - mask.shape[1] / 2)
+    left = round(playhead_x(image) + 2.5 * staff.gap - mask.shape[1] / 2)
     top = round(staff.lines[-2] + bounds[1] * unit)
     pixels = np.asarray(image).copy()
     pixels[top:top + mask.shape[0], left:left + mask.shape[1]][mask] = (234, 244, 237)
@@ -304,7 +304,7 @@ def test_shifted_incoming_pass_fails_even_with_unchanged_report(repeated_capture
     path = folder / frame['base']
     with Image.open(path) as raw:
         image = raw.convert('RGB')
-    x = round(image.width * PLAYHEAD) - 30
+    x = round(playhead_x(image)) - 30
     tile = image.crop((x, 0, image.width - 24, image.height))
     changed = _erase_keep_rails(image, (x, 0, image.width, image.height), x - 24)
     changed.paste(tile, (x + 24, 0))

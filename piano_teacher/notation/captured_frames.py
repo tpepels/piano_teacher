@@ -13,9 +13,9 @@ from PIL import Image
 
 from .head_registration import register_noteheads
 from .pixel_context import rectangular_rest_orientation
-from .pixel_ink import bright
+from .pixel_ink import bright, translating_ink
 from .pixel_motion import register_translation
-from .pixel_proof import detect_staff_lines
+from .pixel_proof import detect_staff_lines, playhead_x
 from .raster_matching import _joint_candidates, match_glyph
 from .reference_font import reference_glyphs
 
@@ -67,8 +67,9 @@ class CapturedFrames:
             rgb = np.asarray(image).astype(int)
             cyan = (rgb[:, :, 1]-rgb[:, :, 0] > 30) & (rgb[:, :, 2]-rgb[:, :, 0] > 15) & (rgb[:, :, 1] > 150)
             occluded = np.flatnonzero(cyan.sum(axis=0) > image.height*.35)
-            self.frames[beat] = dict(name=name, pixels=bright(image), staves=detect_staff_lines(image),
-                                     occluded_columns=occluded)
+            self.frames[beat] = dict(name=name, pixels=bright(image), motion=translating_ink(image),
+                                     staves=detect_staff_lines(image),
+                                     occluded_columns=occluded, playhead_x=playhead_x(image))
             if len(self.frames) > FRAME_CACHE_LIMIT:
                 self.frames.popitem(last=False)
         self.frames.move_to_end(beat)
@@ -79,7 +80,8 @@ class CapturedFrames:
         if beat not in self.registrations:
             frame = self.frame(beat)
             heads, errors = register_noteheads(frame['pixels'], frame['staves'], self.written,
-                                     self.notes_by_beat[beat], reference_glyphs())
+                                     self.notes_by_beat[beat], reference_glyphs(),
+                                     playhead_x=frame['playhead_x'])
             # Assignment support pixels are needed only during registration;
             # keep scalar anchors, never an image-sized support set per note.
             self.registrations[beat] = ({sid: {key: head[key] for key in ('x', 'y', 'bbox', 'score', 'gap')}
@@ -105,7 +107,7 @@ class CapturedFrames:
         center = (staff.lines[0]+staff.lines[-1])/2
         request = dict(glyph=glyph, gap=gap, origin_y=center, dxs=range(-3, 4))
         candidates = _joint_candidates(frame['pixels'], request,
-            round(frame['pixels'].shape[1]*.42), range(-round(4*gap), round(4*gap)+1), .79)
+            round(frame['playhead_x']), range(-round(4*gap), round(4*gap)+1), .79)
         if not candidates:
             raise ValueError('Actual rest contour lacks a bounded external-font match')
         best = candidates[0]
@@ -116,7 +118,7 @@ class CapturedFrames:
         baseline = best['y']-b[1]*gap/250
         family = {'whole', 'half'} if event['note_type'] in {'whole', 'half'} else {event['note_type']}
         rivals = [match_glyph(frame['pixels'], other, gap,
-                    round(frame['pixels'].shape[1]*.42), baseline, centered=True,
+                    round(frame['playhead_x']), baseline, centered=True,
                     dxs=range(-3, 4), dys=range(-2, 3))
                   for name, other in reference_glyphs().items()
                   if name.startswith('rest_') and name.removeprefix('rest_') not in family]
@@ -147,7 +149,7 @@ class CapturedFrames:
             if max(abs(x-y) for x, y in zip(sa.lines, sb.lines)) > 1:
                 raise ValueError('Staff rails changed between endpoint witnesses')
             top, bottom = max(0, round(sa.lines[0]-5*sa.gap)), min(a['pixels'].shape[0], round(sa.bottom+5*sa.gap))
-            self.translations[key] = register_translation(a['pixels'][top:bottom], b['pixels'][top:bottom], sa.gap)
+            self.translations[key] = register_translation(a['motion'][top:bottom], b['motion'][top:bottom], sa.gap)
         return self.translations[key]
 
     def anchors(self, events, target):

@@ -16,10 +16,9 @@ import math
 import numpy as np
 from PIL import Image
 
-from .pixel_proof import detect_staff_lines
+from .pixel_proof import detect_staff_lines, playhead_x
 
 GUTTER = 32
-PLAYHEAD = .42
 _STYLES = {
     "regular": ("thin",), "heavy": ("heavy",),
     "light-light": ("thin", "thin"), "light-heavy": ("thin", "heavy"),
@@ -96,7 +95,8 @@ def _groups(strokes, weights, gap):
 
 def verify_measure_frame(image: Image.Image, boundaries, *, clock_beat: float,
                          density: float, clearance_px: float | None = None,
-                         tolerance_px: float = 1.5, pixel_scale: float = 1.0) -> dict:
+                         tolerance_px: float = 1.5, pixel_scale: float = 1.0,
+                         timing_x: float | None = None) -> dict:
     """Require a one-to-one visible boundary inventory and invariant widths.
 
     ``boundaries`` contains independent ``beat``, MusicXML ``style`` (default
@@ -125,6 +125,9 @@ def verify_measure_frame(image: Image.Image, boundaries, *, clock_beat: float,
         result["errors"].append("Shared clearance must be finite and within [0, 2 * measured staff gap]")
         return result
     expected = []
+    # The photographed timing rule anchors musical X. ``timing_x`` exists
+    # only for archived captures that show no coloured rule.
+    origin = playhead_x(image) if timing_x is None else float(timing_x)
     for boundary in boundaries:
         beat = float(boundary["beat"])
         style = boundary.get("style", "regular")
@@ -133,7 +136,7 @@ def verify_measure_frame(image: Image.Image, boundaries, *, clock_beat: float,
             result["errors"].append(f"Unproved boundary beat/style/repeat: {boundary}")
             continue
         expected.append({"beat": beat, "style": style, "repeat": repeat,
-                         "anchor_x": image.width*PLAYHEAD + (beat-clock_beat)*density})
+                         "anchor_x": origin + (beat-clock_beat)*density})
     expected.sort(key=lambda boundary: boundary["beat"])
     if not expected or any(a["beat"] == b["beat"] for a, b in zip(expected, expected[1:])):
         result["errors"].append("Expected boundaries must contain distinct musical beats")

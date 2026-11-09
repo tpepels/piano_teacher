@@ -124,7 +124,7 @@ def create_diagnostics(folder, output, *, hand="both", limit=3) -> dict:
         try:
             import numpy as np
             from PIL import Image
-            from .pixel_proof import detect_staff_lines, expected_y
+            from .pixel_proof import detect_staff_lines, expected_y, playhead_x
             from .proof import read_written_score
             from .reference_font import reference_glyphs
             from .pixel_ink import bright
@@ -173,7 +173,7 @@ def create_diagnostics(folder, output, *, hand="both", limit=3) -> dict:
                 target = expected_y(staff, event["spelling"], (sign, line, octave))
                 observed = bright(native)
                 score, left, top = _register(observed, template,
-                    native.width*.42-template.shape[1]/2, target+glyph["bounds"][1]*staff.gap/250,
+                    playhead_x(native)-template.shape[1]/2, target+glyph["bounds"][1]*staff.gap/250,
                     range(-32, 33), range(-4, 5))
             else:
                 overlay = json.loads(_file(folder, "native-overlay-report.json").read_text())
@@ -202,7 +202,7 @@ def create_diagnostics(folder, output, *, hand="both", limit=3) -> dict:
                 if len(xs) < 12 or np.any(delta & bright(suppressed) & ~bright(native)):
                     raise ValueError("control did not exclusively remove visible original ink")
                 changed_y, changed_x = np.nonzero(delta)
-                if (changed_x.min() < native.width*.42-80 or changed_x.max() >= native.width*.42+80
+                if (changed_x.min() < playhead_x(native)-80 or changed_x.max() >= playhead_x(native)+80
                         or changed_x.max()-changed_x.min() > staff.gap*4 or changed_y.max()-changed_y.min() > staff.gap*9):
                     raise ValueError("uncontrolled rest intervention outside bounded onset region")
                 exemplar.update(control=row["delta_file"], control_sha256=_hash(path))
