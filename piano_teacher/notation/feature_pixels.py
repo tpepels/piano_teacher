@@ -22,7 +22,8 @@ from .head_registration import (register_noteheads, source_chord_groups,
 from .ledger_pixels import verify_ledger_pixels
 from .pixel_context import ledger_context_rows
 from .pixel_ink import bright
-from .pixel_proof import detect_staff_lines, playhead_x
+from .pixel_proof import playhead_x
+from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
 from .raster_matching import photographed_playhead_columns
 from .reference_font import feature_glyphs
@@ -53,6 +54,7 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
     for note in written.symbols:
         if note['kind'] == 'note' and note['visible']:
             by_clock[round(float(note['beat']), 8)].append(note)
+    rail_witness = PhotographedStaffRails(folder)
     measured = []
     for beat, notes in sorted(by_clock.items()):
         rows = {}
@@ -81,7 +83,7 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
         try:
             with Image.open(filename) as raw:
                 image = raw.convert('RGB')
-            staves, pixels = detect_staff_lines(image), bright(image)
+            staves, pixels = rail_witness.detect(image), bright(image)
         except (OSError, AssertionError, ValueError) as exc:
             for row in rows.values():
                 for construct in row['features']:
