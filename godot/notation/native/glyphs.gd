@@ -548,7 +548,12 @@ func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
         var source: Texture2D = textures["bracket"]
         var img_width: float = float(source.get_width())
         var img_height: float = float(source.get_height())
-        var midpoint: float = float(info["span"])*.5
+        # The bracket is cut at the ACTUAL source numeral centre, not at
+        # half the note-attack span. Verovio can offset the numeral relative
+        # to those endpoints (especially nested/uneven tuplets). Splitting at
+        # span/2 cuts through a genuine bracket arm and stretches a missing
+        # segment around the visible number.
+        var midpoint: float = float(nb[0])+float(nb[2])*.5
         var left_pixel: float = clampf(
             (midpoint-float(box[0]))/float(box[2])*img_width,
             0.0,img_width)
