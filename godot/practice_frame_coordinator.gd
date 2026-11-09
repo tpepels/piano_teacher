@@ -77,8 +77,7 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
         # Musical assessment follows beat; score rendering follows one
         # global, uninterruptible forward world coordinate. Old ink leaves
         # the stage naturally while a new take is admitted to the right.
-        stage.renderer.present_flow(
-            visual_beat,state,beat,bool(state.get("loaded",false)))
+        stage.renderer.present_flow(visual_beat,state,beat)
         if stage.runway_steps != null:
             # Stage labels/markers are bound to the same retained source
             # world origin, not a second progression clock. Never hide this
