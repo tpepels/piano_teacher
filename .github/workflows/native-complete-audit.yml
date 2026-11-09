@@ -1,0 +1,85 @@
+name: Complete native notation audit (24 source shards)
+
+# Explicit full-corpus acceptance. The one-time self-path push bootstraps
+# this audit; routine source changes never run 24 long framebuffer jobs.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/native-complete-audit.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: complete-native-notation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-source-shard:
+    name: Source and framebuffer shard ${{ matrix.shard }}/24
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+      PIANO_REAL_PIXEL_TESTS: '1'
+      SHARD: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact native audit dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]'
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o /tmp/godot.zip
+          mkdir -p /tmp/godot-bin
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 755 /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          godot --headless --version
+      - name: Run complete canonical source-and-ink audit partition
+        run: |
+          OUT="$RUNNER_TEMP/native-audit/shard-$SHARD"
+          mkdir -p "$OUT"
+          printf '%s\n' "${{ github.sha }}" > "$OUT/revision.txt"
+          set -o pipefail
+          timeout 1680s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -u scripts/check_native_verovio_overlay.py \
+              --shard-index "$SHARD" --shard-count 24 \
+              --workers 2 --case-timeout 600 --worker-memory-mib 3072 \
+              --no-package-diagnostics --out "$OUT" \
+            2>&1 | tee "$OUT/run.log"
+          python - "$OUT/summary.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          summary = json.loads(Path(sys.argv[1]).read_text())
+          assert summary['passed'] and summary['denominators_complete'], summary
+          assert summary['cases_checked'] == summary['cases_expected'] > 0, summary
+          print('FULL_NATIVE_SHARD_VERIFIED', summary['cases_checked'])
+          PY
+      - name: Preserve per-shard revision, denominators and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-complete-shard-${{ matrix.shard }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/revision.txt
+            ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/summary.json
+            ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/run.log
+            ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/coordinator-error.log
+          if-no-files-found: warn
+          retention-days: 14
