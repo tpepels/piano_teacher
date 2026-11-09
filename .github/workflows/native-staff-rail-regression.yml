@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/native-staff-rail-regression.yml'
       - 'tests/test_native_staff_rail_recovery.py'
+      - 'tests/test_full_notation_difficult_cases.py'
       - 'piano_teacher/notation/phase3_pixels.py'
       - 'piano_teacher/notation/pixel_proof.py'
 
@@ -21,7 +22,7 @@ jobs:
   exact-frames:
     name: Hanon, Chopin, Debussy + deleted-rail negatives
     runs-on: ubuntu-24.04
-    timeout-minutes: 14
+    timeout-minutes: 25
     env:
       LIBGL_ALWAYS_SOFTWARE: '1'
       OPENBLAS_NUM_THREADS: '1'
@@ -53,11 +54,23 @@ jobs:
               --junitxml="$RUNNER_TEMP/rail-proof/junit.xml" \
               tests/test_native_staff_rail_recovery.py \
               2>&1 | tee "$RUNNER_TEMP/rail-proof/pytest.txt"
+      - name: Run full symbol inventory, not just sampled staff rails
+        run: |
+          mkdir -p "$RUNNER_TEMP/full-symbol-proof"
+          set -o pipefail
+          timeout 940s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -m pytest -q -rx --tb=short \
+              --basetemp="$RUNNER_TEMP/full-symbol-proof/captures" \
+              --junitxml="$RUNNER_TEMP/full-symbol-proof/junit.xml" \
+              tests/test_full_notation_difficult_cases.py \
+              2>&1 | tee "$RUNNER_TEMP/full-symbol-proof/pytest.txt"
       - name: Retain source score, actual screenshots and corrupted controls
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dense-rails-${{ github.sha }}
-          path: ${{ runner.temp }}/rail-proof/
+          path: |
+            ${{ runner.temp }}/rail-proof/
+            ${{ runner.temp }}/full-symbol-proof/
           if-no-files-found: warn
           retention-days: 14
