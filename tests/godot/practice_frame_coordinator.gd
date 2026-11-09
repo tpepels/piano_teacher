@@ -73,6 +73,10 @@ func _initialize() -> void:
         failures += 1
     if settings.calls != 1 or practice.calls != 1 or lesson.calls != 1:
         failures += 1
+    if practice.stage.renderer.flow_calls != 1 or \
+            practice.stage.renderer.flow_world != 9.25:
+        # An unloaded/empty score must still receive the one moving bar.
+        failures += 1
 
     var state := {"mode":"listen","running":true,"paused":false,
         "loaded":true,"transport_id":7,"play_from_beat":0.0}
@@ -85,7 +89,7 @@ func _initialize() -> void:
     if settings.calls != 2 or practice.calls != 2 or lesson.calls != 2:
         failures += 1
     if demo.synchronized != 1.25 or demo.kept != 1.25 or \
-            practice.stage.renderer.flow_calls != 2 or \
+            practice.stage.renderer.flow_calls != 3 or \
             practice.stage.renderer.flow_world != 9.25 or \
             practice.stage.renderer.last_beat != 1.25 or \
             practice.stage.renderer.last_visual != 9.25 or \
@@ -97,12 +101,12 @@ func _initialize() -> void:
     paused_state["paused"] = true
     coordinator.advance(paused_state,1.25,9.25,1048,.016,
         false,"practice",true,[])
-    if practice.stage.renderer.flow_calls != 3 or \
+    if practice.stage.renderer.flow_calls != 4 or \
             practice.stage.renderer.flow_world != 9.25:
         failures += 1
     coordinator.advance(state,1.25,10.25,1064,.016,
         false,"practice",true,[])
-    if practice.stage.renderer.flow_calls != 4 or \
+    if practice.stage.renderer.flow_calls != 5 or \
             practice.stage.renderer.flow_world != 10.25:
         failures += 1
     print("PRACTICE_FRAME_COORDINATOR_FAILURES:",failures)
