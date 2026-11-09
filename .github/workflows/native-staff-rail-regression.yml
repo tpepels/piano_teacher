@@ -17,6 +17,10 @@ on:
       - 'piano_teacher/notation/rest_intervention.py'
       - 'piano_teacher/notation/extra_symbol_pixels.py'
       - 'piano_teacher/notation/connector_pixels.py'
+      - 'piano_teacher/notation/assets/beams.py'
+      - 'piano_teacher/notation/assets/tuplets.py'
+      - 'tests/test_verovio_beam_fragments.py'
+      - 'tests/test_tuplet_adaptive_raster_bounds.py'
       - 'tests/test_connector_beam_pixel_profile.py'
 
 permissions:
@@ -58,7 +62,9 @@ jobs:
             tests/test_photo_cache.py \
             tests/test_native_pixel_proof.py \
             tests/test_feature_pixel_ownership.py \
-            tests/test_connector_beam_pixel_profile.py
+            tests/test_connector_beam_pixel_profile.py \
+            tests/test_verovio_beam_fragments.py \
+            tests/test_tuplet_adaptive_raster_bounds.py
       - name: Capture authentic multi-frame rail evidence
         run: |
           mkdir -p "$RUNNER_TEMP/rail-proof"
