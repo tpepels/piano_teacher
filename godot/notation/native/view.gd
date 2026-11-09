@@ -74,6 +74,7 @@ const ContextPainter := preload("res://notation/native/context_painter.gd")
 const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
+const MovingMeterGrid := preload("res://moving_meter_grid.gd")
 const TransportReservation := preload("res://score_transport_reservation.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
@@ -588,6 +589,10 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
             Rect2(6,staff_top-2,18,staff_bottom-staff_top+4),false,NOTE_INK)
     canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
         Color(NOTE_INK,.50),1.2,true)
+
+# Last actual source origin anchors the empty moving bar after its
+# clips have expired. New copies reanchor only at an authored source entry.
+var _ambient_anchor_world := 0.0
 
 var _stream_last_admitted := -1
 # Each backend decision has a stable identity. Repeated state polls cannot
@@ -1524,35 +1529,35 @@ func _draw() -> void:
     # Empty idle and paused canvas: source ink is hidden while barlines
     # continue to move. Staff and playhead remain fixed and legible.
     if not runway_overlay:
-        var measure_beats: float = 4.0
-        if not timeline.measures.is_empty():
-            var opening: Dictionary = timeline.measures[0]
-            measure_beats = maxf(.25, float(opening.get("end_beat",4.0)) -
-                float(opening.get("start_beat",0.0)))
-        var bar_width: float = maxf(64.0,measure_beats*timeline.pixels_per_beat)
-        var offset: float = fposmod(stream_world_beat*
-            timeline.pixels_per_beat,bar_width)
+        var density: float = maxf(1.0,timeline.pixels_per_beat)
+        # Blank measures follow the actual MusicXML meter changes and the
+        # same source world origin as the notation. The old fixed 4/4
+        # modulo grid drifted through 3/4, 6/8 and pickup passages.
+        for item in _stream_queue.online:
+            if str(item.get("kind","")) == "source":
+                _ambient_anchor_world = float(item["world_origin"])
+                break
         var barline_top_y: float = layout.barline_top(gap)
         var barline_bottom_y: float = layout.barline_bottom(gap)
-        for index in range(-1,ceili(size.x/bar_width)+3):
-            var x: float = playhead_x-offset+float(index)*bar_width
-            if x >= 0.0 and x <= size.x:
-                var inside_source := false
-                var density: float = maxf(1.0,timeline.pixels_per_beat)
-                for item in _stream_queue.online:
-                    var source_left: float = playhead_x + (
-                        float(item["world_origin"])-stream_world_beat)*density
-                    var bounds: Vector2 = StreamAdmission.engraved_clip_bounds(
-                        float(item["source_floor"]),
-                        float(item["source_ceiling"]),
-                        density,gap,timeline.duration_beats)
-                    if x >= source_left+bounds.x and x <= source_left+bounds.y:
-                        inside_source = true
-                        break
-                if not inside_source:
-                    draw_line(Vector2(x,barline_top_y),
-                        Vector2(x,barline_bottom_y),
-                        Color(NOTE_INK,.20),1.0,true)
+        var world_bars: Array[float] = MovingMeterGrid.visible_lines(
+            stream_world_beat,size.x,playhead_x,density,
+            _ambient_anchor_world,timeline.measures)
+        for bar_world in world_bars:
+            var x: float = playhead_x+(bar_world-stream_world_beat)*density
+            var inside_printed_strip := false
+            for item in _stream_queue.online:
+                var source_left: float = playhead_x+(
+                    float(item["world_origin"])-stream_world_beat)*density
+                var bounds: Vector2 = StreamAdmission.clip_bounds(
+                    item,density,gap,timeline.duration_beats)
+                if x >= source_left+bounds.x-.01 and
+                        x <= source_left+bounds.y+.01:
+                    inside_printed_strip = true
+                    break
+            if not inside_printed_strip:
+                draw_line(Vector2(x,barline_top_y),
+                    Vector2(x,barline_bottom_y),
+                    Color(NOTE_INK,.20),1.0,true)
     # Keep the fixed playhead visible but BEHIND source ink. At exact
     # onset a foreground cursor previously covered small eighth-rest dots,
     # flagged stems and noteheads, preventing independent contour recovery.
