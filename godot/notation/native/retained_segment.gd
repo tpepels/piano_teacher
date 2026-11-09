@@ -5,6 +5,10 @@ extends Node2D
 const NoteStatusLayer := preload("res://notation/native/note_status_layer.gd")
 var owner_view
 var kind := "source"
+# A retained source CanvasItem owns one immutable source interval. Its draw
+# commands are never the whole piece when only one measure is visible.
+var source_floor := -INF
+var source_ceiling := INF
 # Immutable engraved heads of this strip in strip-local coordinates, sorted
 # by X, each with its paint metadata (head mask, ink, staff space).
 var note_instances: Array = []
@@ -24,6 +28,22 @@ func configure(view: Control, segment_kind: String) -> void:
         status_layer = NoteStatusLayer.new(self)
         add_child(status_layer)
     queue_redraw()
+
+func set_source_window(first: float, last: float) -> void:
+    if kind != "source" or not is_finite(first) or \
+            not is_finite(last) or first >= last:
+        return
+    if absf(source_floor-first) < .00001 and \
+            absf(source_ceiling-last) < .00001:
+        return
+    source_floor = first
+    source_ceiling = last
+    # A differently cropped source window cannot reuse the previous
+    # CanvasItem command list. The owner places it offscreen to compile
+    # before its actual viewport clip can become visible.
+    compiled = false
+    queue_redraw()
+
 
 ## Bind the strip's current take and the ledger; repaints only on change.
 func sync_note_status(take_key: String, source, visible_ink: bool) -> void:
