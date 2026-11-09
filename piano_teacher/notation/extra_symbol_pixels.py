@@ -38,7 +38,10 @@ from .pixel_ink import rasterize_outline, bright
 STRIPE_HALF_WIDTH = 64
 MAX_CLOCK_STEP = .15
 MAX_POSITION_ERROR = 3.
-MAX_CANDIDATES = 256
+# Resource limit on distinct photographic candidates, never a score threshold.
+# 256 prematurely rejects ordinary dense full-width views. A cell-indexed
+# exact NMS below makes a bounded 2048-entry inventory feasible.
+MAX_CANDIDATES = 2048
 MAX_FRAME_PIXELS = 2_000_000
 TEMPLATE_FFT_CACHE_BYTES = 224*1024**2
 PHOTO_CACHE_BYTES = 96*1024**2
@@ -277,6 +280,43 @@ def _search_crop(layers, template, minimum, bounds=None):
     return [ranges[1][0], ranges[0][0], ranges[1][1], ranges[0][1]]
 
 
+def _distinct_candidates(found, *, limit=None):
+    """Exact same-family non-maximum suppression with an overlap cell index.
+
+    Every candidate is processed in the identical descending-score order.
+    Two overlapping pixel rectangles necessarily share at least one 64px
+    cell; candidates outside those cells cannot influence suppression.
+    The index changes *only* CPU work and the bounded resource ceiling,
+    never Dice, glyph families, pixel ownership or pass/unknown status.
+    Overflow still fails closed instead of silently discarding candidates.
+    """
+    if limit is None:
+        limit = MAX_CANDIDATES
+    if limit < 1:
+        raise ValueError("Candidate memory budget must be positive")
+    selected = []
+    cells = defaultdict(list)
+    for row in sorted(found, key=lambda r: -r["score"]):
+        a = row["bbox"]
+        boxes = [(x, y) for x in range(a[0]//64, (a[2]-1)//64+1)
+                 for y in range(a[1]//64, (a[3]-1)//64+1)]
+        neighbors = {index for cell in boxes for index in cells[cell]}
+        if any(row["family"] == selected[index]["family"] and
+               _overlap(a, selected[index]["bbox"]) >
+               .65*min((a[2]-a[0])*(a[3]-a[1]),
+                       (selected[index]["bbox"][2]-selected[index]["bbox"][0]) *
+                       (selected[index]["bbox"][3]-selected[index]["bbox"][1]))
+               for index in neighbors):
+            continue
+        identity = len(selected)
+        selected.append(row)
+        if len(selected) > limit:
+            raise ValueError("Family candidate budget exceeded; no absence claim")
+        for cell in boxes:
+            cells[cell].append(identity)
+    return selected
+
+
 def _scan(photo, areas, controls=None):
     """Source-independent family search on original ink, before any claims.
 
@@ -351,18 +391,7 @@ def _scan(photo, areas, controls=None):
                             continue
                     found.append(dict(name=name, family=_family(name), bbox=box,
                                       score=round(float(best[y, x]), 5), gap=gap))
-    # Suppress only alternate raster phases of the SAME family. Different
-    # families are kept for ambiguity checks before any ownership masking.
-    selected = []
-    for row in sorted(found, key=lambda r: -r['score']):
-        a = row['bbox']
-        if any(row['family'] == b['family'] and _overlap(a, b['bbox']) >
-               .65*min((a[2]-a[0])*(a[3]-a[1]),
-                       (b['bbox'][2]-b['bbox'][0])*(b['bbox'][3]-b['bbox'][1])) for b in selected):
-            continue
-        selected.append(row)
-        if len(selected) > MAX_CANDIDATES:
-            raise ValueError('Family candidate budget exceeded; no absence claim')
+    selected = _distinct_candidates(found)
     return [row for row in selected if any(_overlap(row['bbox'], area) for area in requested)]
 
 
