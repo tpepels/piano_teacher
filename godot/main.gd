@@ -1027,9 +1027,18 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
             var deadline_ms: int = roundi(
                 float(next_plan["deadline_at_ms"]) +
                 visual_transport_clock.backend_offset_ms)
+            var future_segments: Array = (
+                parsed.get("tempo_segments",[])
+                if bool(parsed.get("running",false)) and
+                    not bool(parsed.get("paused",false)) and
+                    str(parsed.get("phase","")) == "playing"
+                else [])
+            var authored_world: float = score_flow.project_authored_future(
+                deadline_ms,received_ms,beat,float(parsed.get("bpm",40.0)),
+                future_segments)
             renderer.enqueue_recovery_queue(world,
                 float(next_plan["source_from_beat"]),
-                score_flow.project(deadline_ms),str(next_plan["plan_id"]))
+                authored_world,str(next_plan["plan_id"]))
         # Atomically bind an acknowledged transport ID to the already armed
         # source BEFORE publishing the new backend state. Otherwise the UI
         # may observe a running Retry while its note copy still has the
