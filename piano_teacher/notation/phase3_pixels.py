@@ -114,24 +114,38 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
             continue
         by_clock[round(float(symbol["beat"]),8)][staff].append(symbol)
     glyphs=reference_glyphs()
-    # On dense real-score frames a long beam may obscure the thin gray
-    # rail core in one viewport quarter. Intersect ACTUAL independent
-    # framebuffers pixel-by-pixel: the darker common ink cannot invent a
-    # staff rail absent from either frame, and the strict original five-line
-    # rail detector still decides whether the evidence is sufficient.
-    # The current image supplies the head contours, never this composite.
-    shared_rails=None
+    # In the full corpus audit, source beams/heads regularly obscure a
+    # quarter of a photographed gray rail. Recover the *stationary* rails
+    # from two or three separate real frames, just as the focused real-score
+    # negative-control test does. Never use native renderer coordinates.
+    #
+    # IMPORTANT: also intersect the CURRENT frame before detecting rails.
+    # Erasing a rule in any tested screenshot must still invalidate that
+    # screenshot; a clean reference cannot grant it missing pixels.
+    import numpy as np
     if rail_clocks:
-        import numpy as np
-        if len(rail_clocks)<2:
+        anchors = tuple(sorted(set(float(t) for t in rail_clocks)))
+        if len(anchors) < 2:
             raise ValueError("Independent staff evidence needs two distinct current frames")
-        pixels=[]
-        for at in rail_clocks:
+    else:
+        clocks = []
+        for path in Path(folder).glob("native-*.png"):
+            try:
+                clocks.append(float(path.stem.removeprefix("native-")))
+            except ValueError:
+                continue
+        clocks = sorted(set(clocks))
+        anchors = tuple(sorted({clocks[0], clocks[len(clocks)//2], clocks[-1]})) \
+            if len(clocks) >= 2 else ()
+    shared_rails = None
+    if anchors:
+        pixels = []
+        for at in anchors:
             with Image.open(Path(folder)/f"native-{at:.5f}.png") as frame:
-                pixels.append(np.asarray(frame.convert("RGB"),dtype=np.uint8))
-        if len({image.shape for image in pixels}) != 1:
+                pixels.append(np.asarray(frame.convert("RGB"), dtype=np.uint8))
+        if len({array.shape for array in pixels}) != 1:
             raise ValueError("Staff reference frame sizes differ")
-        shared_rails=Image.fromarray(np.minimum.reduce(pixels))
+        shared_rails = np.minimum.reduce(pixels)
     verified=0
     failures=[]
     details=[]
@@ -150,7 +164,14 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
         with Image.open(filename) as raw:
             image=raw.convert("RGB")
         try:
-            staves=detect_staff_lines(shared_rails if shared_rails is not None else image)
+            if shared_rails is not None:
+                current = np.asarray(image, dtype=np.uint8)
+                if current.shape != shared_rails.shape:
+                    raise AssertionError("Staff reference frame sizes differ")
+                rail_witness = Image.fromarray(np.minimum(shared_rails, current))
+            else:
+                rail_witness = image
+            staves=detect_staff_lines(rail_witness)
         except AssertionError as exc:
             failures.append(f"{clock}: five-line staff detection failed: {exc}")
             for notes in hands.values():
