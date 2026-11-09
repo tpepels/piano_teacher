@@ -370,7 +370,9 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     stage.present(parsed,busy)
     game_input_indicator.present(parsed)
     if not bool(parsed.get("loaded",false)):
-        stage.renderer.visible = false
+        # A source picker / load failure must not blank the visual timeline.
+        # NativeView draws an ungraded empty staff while music is absent.
+        stage.renderer.visible = true
         game_streak.present({})
         feedback_label.text = str(parsed.get("feedback","Open a score"))
         present_score(_score_status)
