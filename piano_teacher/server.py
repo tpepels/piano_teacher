@@ -3021,6 +3021,15 @@ class PracticeEngine:
                     next_floor = float(floor)
                     next_deadline = float(run_at) * 1000.0
                     next_transport = self.transport_id
+            elif (self.mode in ("listen", "perform") and self.running
+                    and not self.visual_transport.paused and self.plan is not None):
+                # Listen and graded whole-piece performance must publish
+                # the same absolute source deadline as timed practice.
+                # Otherwise their audio/assessment can start while the
+                # continuous native staff has no admitted source copy.
+                next_floor = float(self.visual_transport.play_from_beat)
+                next_deadline = float(self.visual_transport.run_at)*1000.0
+                next_transport = self.transport_id
             if (self.plan is not None and next_floor is not None
                     and next_deadline is not None):
                 state["score_queue_next"] = {
