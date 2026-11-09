@@ -15,7 +15,8 @@ from .head_registration import register_noteheads
 from .pixel_context import rectangular_rest_orientation
 from .pixel_ink import bright, translating_ink
 from .pixel_motion import register_translation
-from .pixel_proof import detect_staff_lines, playhead_x
+from .pixel_proof import playhead_x
+from .photographed_staff_rails import PhotographedStaffRails
 from .raster_matching import _joint_candidates, match_glyph
 from .reference_font import reference_glyphs
 
@@ -26,6 +27,7 @@ class CapturedFrames:
     def __init__(self, folder, written):
         self.folder, self.written = Path(folder), written
         self.frames, self.registrations, self.translations = OrderedDict(), {}, {}
+        self.staff_rails = PhotographedStaffRails(self.folder)
         self.notes_by_beat, self.rests_by_onset = defaultdict(list), defaultdict(list)
         for event in written.symbols:
             if not event['visible']:
@@ -68,7 +70,7 @@ class CapturedFrames:
             cyan = (rgb[:, :, 1]-rgb[:, :, 0] > 30) & (rgb[:, :, 2]-rgb[:, :, 0] > 15) & (rgb[:, :, 1] > 150)
             occluded = np.flatnonzero(cyan.sum(axis=0) > image.height*.35)
             self.frames[beat] = dict(name=name, pixels=bright(image), motion=translating_ink(image),
-                                     staves=detect_staff_lines(image),
+                                     staves=self.staff_rails.detect(image),
                                      occluded_columns=occluded, playhead_x=playhead_x(image))
             if len(self.frames) > FRAME_CACHE_LIMIT:
                 self.frames.popitem(last=False)
