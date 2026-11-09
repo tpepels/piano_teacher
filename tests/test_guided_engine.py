@@ -247,3 +247,27 @@ def test_engine_guided_session_is_the_single_controller_and_recovery_owner(learn
     assert e.guided_session.fragment is None
     # A source-bound recovery cursor may survive the Learn->Practice handoff.
     assert e._guided_return == (e.plan.identity, 0.0)
+
+def test_guided_learning_owns_its_future_visual_score_decisions(learner):
+    engine, now = learner
+    state = begin(engine)
+    assert state["phase"] == "guided_wait"
+    first = state.get("score_queue_next")
+    assert first is not None
+    assert first["source_from_beat"] == 0.0
+    assert first["deadline_at_ms"] > now[0] * 1000
+    assert engine.state()["score_queue_next"]["plan_id"] == first["plan_id"]
+    engine.control("pause")
+    assert "score_queue_next" not in engine.state()
+    now[0] += 25
+    engine.control("resume")
+    second = engine.state().get("score_queue_next")
+    assert second is not None
+    # A past visual decision must be replaced instead of endlessly
+    # publishing a retry whose world deadline was withdrawn by Pause.
+    assert second["deadline_at_ms"] >= now[0] * 1000
+    now[0] = second["deadline_at_ms"] / 1000 + 30
+    third = engine.state()["score_queue_next"]
+    assert third["plan_id"] != second["plan_id"]
+    assert third["deadline_at_ms"] > now[0] * 1000
+    assert engine.plan.streak == 0 and not engine.plan.mastered
