@@ -18,18 +18,38 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
     var gap: float = view.staff_gap()
     var camera_clock: float = -play_from_beat
     var playhead_x := 0.0
+    var first_value: Variant = canvas.get("source_floor")
+    var last_value: Variant = canvas.get("source_ceiling")
+    var source_first: float = (
+        float(first_value) if first_value is float or first_value is int
+        else 0.0)
+    var source_last: float = (
+        float(last_value) if last_value is float or last_value is int
+        else timeline.duration_beats)
+    source_first = clampf(source_first,0.0,timeline.duration_beats)
+    source_last = clampf(source_last,source_first,timeline.duration_beats)
+    # Each CanvasItem compiles only its own measure (plus a small connector
+    # margin). This bounds total drawing work to O(source length), rather
+    # than one entire-piece command list for EVERY measure strip.
+    var left: float = maxf(0.0,source_first-.25)
+    var right: float = minf(timeline.duration_beats,source_last+.25)
     var retained_width: float = maxf(view.size.x,
-        (timeline.duration_beats+1.0)*timeline.pixels_per_beat+view.size.x)
+        (right+1.0)*timeline.pixels_per_beat+view.size.x)
     var frame: RenderPass = view._new_paint_frame(
         camera_clock,playhead_x,gap,0,0.0)
+    frame.source_floor = source_first
+    frame.source_ceiling = source_last
     layout.set_viewport(Vector2(retained_width,view.size.y))
     var font: Font = ThemeDB.fallback_font
-    var left := 0.0
-    var right: float = retained_width/timeline.pixels_per_beat
     var previous_measure: Dictionary = {}
     for measure in timeline.measures:
         var at: float = float(measure.get("start_beat",0.0))
         var first: bool = measure == timeline.measures[0]
+        if at < left-.00001:
+            previous_measure = measure
+            continue
+        if at > right+.00001:
+            break
         if not frame.event_visible(measure):
             previous_measure = measure
             continue
@@ -49,8 +69,10 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
         previous_measure = measure
     # The actual ending of the last measure has its own terminal barline.
     # It must not disappear simply because no following measure exists.
-    var terminal: Dictionary = layout.terminal_barline_geometry(
-        camera_clock,playhead_x,gap,play_from_beat)
+    var terminal: Dictionary = (
+        layout.terminal_barline_geometry(
+            camera_clock,playhead_x,gap,play_from_beat)
+        if source_last >= timeline.duration_beats-.00001 else {})
     if not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
             float(terminal["x"]) <= retained_width+gap*2.0:
         context_painter.paint_barline(target,frame,terminal,gap)
