@@ -1,13 +1,20 @@
 extends SceneTree
-# Exercise the production view's contour painter at a compressed head span.
+# Exercise the production tie contour at a compressed head span. Production
+# prepares each tie once (ConnectorGeometry.prewarm_tie_clearances: template
+# key + contour rect) and paint_ties only translates and draws that texture.
 # The Python test measures the framebuffer; no reported geometry proves ink.
 class TieView extends "res://notation/native/view.gd":
     var last_kind := "whole"
     func _draw() -> void:
         var first := {"note_type":"eighth","staff":"right"}
         var last := {"note_type":last_kind,"staff":"right"}
-        _paint_tie_contour(first,last,
-            {"x0":80.0,"x1":118.0,"y":80.0,"down":true},21.875)
+        var place := {"x0":80.0,"x1":118.0,"y":80.0,"down":true}
+        var gap := 21.875
+        var direction: String = connector_geometry.tie_template_key(first,last,place,gap)
+        var texture: Texture2D = glyphs.tie_textures.get(direction)
+        var rect: Rect2 = connector_geometry.tie_contour_rect(first,last,place,gap)
+        if texture != null and rect.has_area():
+            draw_texture_rect(texture,rect,false,Color.WHITE)
 
 func _initialize() -> void:
     call_deferred("run")

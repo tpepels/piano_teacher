@@ -1,5 +1,8 @@
 extends SceneTree
 # Dedicated production-view capture only: no renderer geometry is exported.
+# A loaded score shows no ink until a take is admitted to the stream queue;
+# FramebufferTake admits it offscreen and presents it as production does.
+const FramebufferTake := preload("framebuffer_take.gd")
 
 func _initialize() -> void:
     call_deferred("capture")
@@ -25,8 +28,8 @@ func capture() -> void:
         quit(1)
         return
     for clock in [0.0, 1.0/3.0, 2.0/3.0, 1.0]:
-        renderer.present({"running":true,"paused":true,"bpm":40.0,"hand":"right",
-            "transport_id":19,"count_in_beats":0.0,"play_from_beat":0.0},clock)
+        await FramebufferTake.show(self, renderer, {"running":true,"paused":true,"bpm":40.0,
+            "hand":"right","transport_id":19,"count_in_beats":0.0,"play_from_beat":0.0},clock)
         await process_frame
         await process_frame
         await RenderingServer.frame_post_draw
