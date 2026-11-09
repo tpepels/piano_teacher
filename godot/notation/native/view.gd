@@ -1068,7 +1068,8 @@ func _restore_future_suffix(saved: Array, world: float) -> bool:
 
 
 func enqueue_recovery_queue(world: float, source_opening: float,
-        graded_deadline_world: float, plan_id: String = "") -> bool:
+        graded_deadline_world: float, plan_id: String = "",
+        allow_count_in: bool = false, count_in_beats: float = 0.0) -> bool:
     # Recovery decisions arrive from the engine with an absolute graded
     # deadline. Reuse a compatible offline-planned future if possible;
     # otherwise withdraw the maximal safe suffix, then APPEND new source
@@ -1118,6 +1119,22 @@ func enqueue_recovery_queue(world: float, source_opening: float,
         _stream_header_beats(source_opening),
         graded_deadline_world,0.0,timeline.pixels_per_beat,
         staff_gap(),timeline.duration_beats)
+    var on_empty := false
+    if not is_finite(checked) and allow_count_in:
+        # Listen/Perform use the same engine-authored first note deadline.
+        # The source can appear during ONE count-in on an entirely empty
+        # staff; the existing source/rest/peer exposure rules still apply.
+        var peer_floor: float = _stream_queue.minimum_peer_opening(
+            timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION)
+        var onset: float = StreamAdmission.empty_strip_start(
+            remaining,stream_world_beat,count_in_beats,
+            _stream_header_beats(source_opening),peer_floor,
+            timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+        if is_finite(onset) and \
+                absf(onset-graded_deadline_world) <= \
+                    StreamAdmission.AUTOMATIC_DUE_EPSILON_BEATS:
+            checked = graded_deadline_world
+            on_empty = true
     if not is_finite(checked):
         return false
     var incoming_left: float = checked - _stream_header_beats(source_opening)
@@ -1138,7 +1155,8 @@ func enqueue_recovery_queue(world: float, source_opening: float,
         return false
     var before: int = _stream_serial
     var original_live: int = _stream_live_serial
-    _stream_add_take(source_opening,checked,source_opening,"autopending")
+    _stream_add_take(source_opening,checked,source_opening,
+        "autopending",on_empty)
     _stream_live_serial = original_live
     if _stream_serial > before:
         _scheduled_score_plan_ids[identity] = _stream_last_admitted
@@ -1250,7 +1268,8 @@ func present_flow(world_beat: float, state: Dictionary,
                         _stream_armed_serial = -1
                     else:
                         cancel_stream_arm()
-            elif key != _stream_last_take and mode == "practice":
+            elif key != _stream_last_take and mode in [
+                    "practice","perform","listen"]:
                 # Polling can bind only an already-present automatic owner
                 # whose world-time onset matches the graded backend deadline.
                 var expected: float = stream_world_beat-graded_beat
