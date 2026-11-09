@@ -50,6 +50,12 @@ jobs:
           mkdir -p /tmp/godot-bin
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           sudo install -m 755 /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Check independent pixel and lossless photo-cache contracts
+        run: |
+          timeout 100s python -m pytest -q --tb=short \
+            tests/test_photo_cache.py \
+            tests/test_native_pixel_proof.py \
+            tests/test_feature_pixel_ownership.py
       - name: Capture authentic multi-frame rail evidence
         run: |
           mkdir -p "$RUNNER_TEMP/rail-proof"
