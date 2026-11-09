@@ -19,6 +19,8 @@ var paused_head_id := ""
 var paused_head_x := NAN
 var retry_reversed := false
 var retry_prepared := false
+var retry_countdown_seen := false
+var retry_silent_lead_seen := false
 var resumed_bpm := 0.0
 var selected_bpm := 0.0
 var selected_revision := -1
@@ -192,14 +194,32 @@ func _process(_delta: float) -> bool:
                 if view.stream_world_beat < retry_world_start:
                     _fail("Retry rest reversed the perpetual display")
                     return true
-                if app.visual_transport_clock.retry_preparing(now) and                         not app.practice_view.stage.count_in.visible:
-                    _fail("Retry rest has no visible count-in")
-                    return true
+                if app.visual_transport_clock.retry_preparing(now):
+                    # A retry may have a longer silent preparation lead.
+                    # The owner decision of 2026-11-08 requires exactly one
+                    # count-in bar immediately before the next graded take.
+                    var retry_beat: float = app.visual_transport_clock.retry_count_in_beat(now)
+                    var meter: int = maxi(1,int(round(float(
+                        state.get("count_in_bar_beats",4)))))
+                    var count_visible: bool = app.practice_view.stage.count_in.visible
+                    if retry_beat < -float(meter)-0.12:
+                        retry_silent_lead_seen = true
+                        if count_visible:
+                            _fail("Retry spoke/displayed an extra count-in before the final bar")
+                            return true
+                    elif retry_beat > -float(meter)+0.12 and retry_beat < -0.12:
+                        if not count_visible:
+                            _fail("Retry final count-in bar is not visible")
+                            return true
+                        retry_countdown_seen = true
             if not bool(state.get("running",false)):
                 return false
             restarted_transport = int(state.get("transport_id",-1))
             if restarted_transport <= initial_transport or not retry_prepared or                     int(state.get("revision",-1)) != initial_revision:
                 _fail("Retry changed the score or skipped the full rest")
+                return true
+            if not retry_countdown_seen:
+                _fail("Retry began without displaying its final one-bar count-in")
                 return true
             var reserved_match := false
             var wrong_side := false
