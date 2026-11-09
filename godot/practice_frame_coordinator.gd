@@ -69,7 +69,7 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
             print("PHASE8B_LISTEN_SOFTWARE_SYNC:",JSON.stringify(demo_player.sync_report()))
 
     var stage = practice_view.stage
-    if stage.renderer != null and bool(state.get("loaded",false)):
+    if stage.renderer != null:
         stage.renderer.present_clock(beat,visual_beat -
             float(stage.renderer.runway_origin_beat))
         if stage.has_method("present_playhead_glow"):
