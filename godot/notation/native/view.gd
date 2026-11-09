@@ -1550,7 +1550,7 @@ func _draw() -> void:
                     float(item["world_origin"])-stream_world_beat)*density
                 var bounds: Vector2 = StreamAdmission.clip_bounds(
                     item,density,gap,timeline.duration_beats)
-                if x >= source_left+bounds.x-.01 and
+                if x >= source_left+bounds.x-.01 and \
                         x <= source_left+bounds.y+.01:
                     inside_printed_strip = true
                     break
