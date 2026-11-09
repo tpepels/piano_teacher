@@ -85,6 +85,12 @@ jobs:
         run: |
           bash scripts/godot-test.sh 20s --headless --path godot \
             --script "$PWD/tests/godot/stream_score_queue.gd"
+      - name: Verify perpetual blank barline meter and source origin
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          bash scripts/godot-test.sh 15s --headless --path godot \
+            --script "$PWD/tests/godot/moving_meter_grid.gd"
       - name: Validate projected notehead nonoverlap across pause resume and retry
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
