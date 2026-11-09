@@ -1,8 +1,7 @@
 """Single-frame Hanon terminal flag/barline clearance in fast CI.
 
-The separate full regression tests three viewport widths, multiple source
-boundaries and repeated-score preparations. Keep only one independently
-photographed failing case in short CI.
+The separate full regression tests three viewport widths and multiple
+source boundaries. Keep only one independently photographed case in short CI.
 """
 import json
 

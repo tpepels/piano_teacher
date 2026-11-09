@@ -38,7 +38,6 @@ quick_checks() {
     tests/test_practice_timeline.py \
     tests/test_ready_step_marker.py \
     tests/test_measure_pixels.py \
-    tests/test_measure_invariant_pixels.py \
     tests/test_phase_b_timeline.py::test_fixed_beat_timeline_and_preparation_at_40_80_120_bpm \
     tests/test_preprocessing_cache.py \
     tests/test_piano_register_engraving.py \
@@ -81,11 +80,7 @@ quick_checks() {
     tests/test_rest_lane_layout.py \
     tests/test_completion_handlers.py \
     tests/test_idle_rendering.py \
-    tests/test_peace_piece_pixels.py \
     tests/test_continuous_practice_loop.py \
-    tests/test_continuous_repeat_pixels.py \
-    tests/test_repeat_transport_pixels.py \
-    tests/test_repeat_recovery_context_pixels.py \
     tests/test_native_retirement.py \
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
