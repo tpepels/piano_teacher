@@ -1103,14 +1103,16 @@ func present_flow(world_beat: float, state: Dictionary,
             _stream_paused_owner = _stream_transport_owner(
                 opening,bool(state.get("running",false)))
         if allow_admission:
-            if _stream_paused_owner >= 0:
-                trim_future_queue("pause",_stream_paused_owner)
-            elif not bool(state.get("running",false)):
-                # A paused non-running feedback state has no graded source
-                # to protect; its unexposed future copies are retractable.
-                trim_future_queue("pause")
-            # If a running transport's owner remains unresolved, preserve
-            # all ink until it can be reconciled. Deletion is irreversible.
+            # Protect only ink that has been exposed, including an already
+            # visible prefix of the active graded take. Protecting the whole
+            # take_owner stranded its invisible future measure strips:
+            # those notes could appear AFTER Pause, violating the pause
+            # admission contract. The queue's exact ever_visible / current
+            # viewport check is the sole exposure boundary, independent of
+            # backend transport identity. Withdraw and journal the maximum
+            # unexposed right-hand suffix, even when it shares the graded
+            # owner with an already visible prefix.
+            trim_future_queue("pause")
         _stream_was_paused = true
         _stream_live_serial = -1
     elif allow_admission and not running_now and phase in [
