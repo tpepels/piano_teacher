@@ -101,17 +101,26 @@ func _initialize() -> void:
     state["paused"]=true
     state["phase"]="paused"
     v.present_flow(world+.1,state,-float(prepared["start_world"]))
+    # No note has entered the viewport; Pause must remove the entire
+    # unexposed old take, not leave it to enter during silence.
+    check(v.stream_passes.is_empty(),
+        "Pause withdraws all unexposed active notation into the offline queue")
     var live_count: int = v.admissions.size()
-    var unchanged: Dictionary = v.arm_stream_take(world+.1,0.0,NAN,true)
-    check(bool(unchanged.get("reused",false)) and
-            v.admissions.size()==live_count,
-        "Pause before the first source note must not create a duplicate")
+    var resumed_from_pause: Dictionary = v.reserve_transport_action(
+        "resume",world+.1,0.0,COUNT_IN)
+    check(not resumed_from_pause.is_empty() and
+            v.admissions.size()==live_count+1,
+        "Resume on empty staff places one new take, never duplicate old ink")
+    check(float(resumed_from_pause["start_world"]) > world+.1,
+        "the resumed count-in stays in the future")
+    prepared = resumed_from_pause
+    initial_origin = float(resumed_from_pause["start_world"])
     state["paused"]=false
     state["phase"]="count_in"
     check(v.acknowledge_stream_arm(),"backend Resume acknowledgement is required")
     v.present_flow(world+.1,state,-float(prepared["start_world"]))
     check(is_equal_approx(float(v.stream_passes[0]["world_origin"]),initial_origin),
-        "the Play state transition cannot seek or move the score")
+        "the newly resumed world placement stays immutable")
     var previous_x := INF
     for frame in range(120):
         world += .12
@@ -305,9 +314,9 @@ func _initialize() -> void:
     race_state["paused"] = true
     race_state["phase"] = "paused"
     racing.present_flow(.23,race_state,0.0)
-    check(racing._stream_paused_owner==1 and
-        racing._stream_queue.has_take(1),
-        "Pause resolves an existing source from its bound transport key")
+    check(not racing._stream_queue.has_take(1) and
+        racing._stream_paused_owner==-1,
+        "Pause withdraws a bound take when none of its ink was exposed")
     racing._stream_add_take(0.0,40.0,0.0,"autopending")
     var race_future: int = racing._stream_serial
     check(racing._stream_queue.has_take(racing._stream_last_admitted),
@@ -316,8 +325,8 @@ func _initialize() -> void:
         racing,"resume",.24,3.0,COUNT_IN)
     check(bool(changed_plan.get("ok",false)) and
         int(changed_plan.get("remaining_count",-1))==0 and
-        racing._stream_queue.has_take(1),
-        "changed-opening preflight sees the complete unseen suffix without mutating it")
+        not racing._stream_queue.has_take(1),
+        "changed-opening preflight preserves the already withdrawn paused state")
     var changed_take: Dictionary = racing.reserve_transport_action(
         "resume",.24,3.0,COUNT_IN)
     check(not changed_take.is_empty() and
@@ -377,8 +386,8 @@ func _initialize() -> void:
         long_take,"resume",1.2,2.2,COUNT_IN)
     check(bool(long_plan.get("ok",false)) and
         int(long_plan.get("remaining_count",-1))==1 and
-        long_take.stream_passes.size()==4,
-        "long-passage preflight predicts only the visible measure survives")
+        long_take.stream_passes.size()==1,
+        "Pause already withdrew all three invisible measures; Resume keeps the visible prefix")
     var early_continue: Dictionary = long_take.reserve_transport_action(
         "resume",1.2,2.2,COUNT_IN)
     check(is_equal_approx(float(long_take.stream_passes[0]["world_origin"]),
