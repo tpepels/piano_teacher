@@ -101,6 +101,14 @@ static func _admit(owner: Control, passes: Array, specs: Array,
             # contract, regardless of whether the content is notes or rests.
             choice = owner._new_retained_segment(role)
             pool.append(choice)
+        # Reusing a source CanvasItem for a different measure must first
+        # replace its recorded drawing commands with that measure's actual
+        # engraving. Until its new command list is compiled the new clip
+        # remains hidden. An already-matching source window does no work.
+        if role == "source" and choice.has_method("set_source_window"):
+            choice.set_source_window(
+                float(spec.get("clip_floor",spec["source_floor"])),
+                float(spec.get("clip_ceiling",spec["source_ceiling"])))
         used[choice] = true
         var owner_serial: int = int(spec["owner_serial"])
         var serial: int = owner_serial if role == "source" else -owner_serial
