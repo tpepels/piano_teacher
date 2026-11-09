@@ -31,6 +31,7 @@ from .head_registration import register_noteheads
 from .reference_font import feature_glyphs
 from .pixel_context import rectangular_rest_orientation
 from .pixel_proof import PLAYHEAD_FRACTION, RasterStaff, detect_staff_lines
+from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
 from .pixel_ink import rasterize_outline, bright
 
@@ -81,13 +82,14 @@ def _modal_rule_row(rgb):
     return packed == colors[np.argmax(counts)] if counts.max() > len(row)*.4 else np.zeros(len(row), bool)
 
 
-def _photo(path):
+def _photo(path, rail_witness=None):
     with Image.open(path) as raw:
         image = raw.convert('RGB')
     if image.width*image.height > MAX_FRAME_PIXELS:
         raise ValueError('Framebuffer exceeds bounded pixel budget')
     rgb = np.asarray(image).astype(np.int16)
-    staves = detect_staff_lines(image)
+    staves = (rail_witness.detect(image) if rail_witness is not None
+              else detect_staff_lines(image))
     # Per-column background accommodates the photographed playhead glow.
     background = np.median(rgb, axis=0)
     contrast = np.min(rgb-background[None, :, :], axis=2)
@@ -119,7 +121,8 @@ class _PhotoCache:
     analysis. No photo error is cached, and no mutable decoded arrays escape
     into retained entries.
     """
-    def __init__(self):
+    def __init__(self, rail_witness=None):
+        self.rail_witness = rail_witness
         self.entries = OrderedDict()
         self.bytes_used = 0
 
@@ -130,14 +133,21 @@ class _PhotoCache:
             data = stream.read(PHOTO_CACHE_PNG_BYTES+1)
         return data if len(data) <= PHOTO_CACHE_PNG_BYTES else None
 
-    @staticmethod
-    def _decode(path, data):
+    def _decode(self, path, data):
         try:
-            return _photo(BytesIO(data))
+            return self._photo(BytesIO(data))
         except UnidentifiedImageError:
             # Preserve PIL's path-based failure evidence, rather than exposing
             # the temporary byte stream's nondeterministic object address.
             raise UnidentifiedImageError(f'cannot identify image file {str(path)!r}') from None
+
+    def _photo(self, source):
+        # Legacy single-frame callers keep their unchanged public _photo(path)
+        # contract. In a full multi-frame audit, use the same strict current-
+        # frame-intersected staff witness as the other independent verifiers.
+        if self.rail_witness is None:
+            return _photo(source)
+        return _photo(source, rail_witness=self.rail_witness)
 
     @staticmethod
     def _pack(photo):
@@ -167,14 +177,14 @@ class _PhotoCache:
 
     def capture(self, path):
         if PHOTO_CACHE_BYTES <= 0 or PHOTO_CACHE_ENTRIES <= 0:
-            return _photo(path)
+            return self._photo(path)
         key = str(path)
         old = self.entries.pop(key, None)
         if old is not None:
             self.bytes_used -= old[2]
         data = self._png(path)
         if data is None:
-            return _photo(path)
+            return self._photo(path)
         photo = self._decode(path, data)
         digest, blob = hashlib.sha256(data).digest(), self._pack(photo)
         # Include the flat Python objects and conservative per-map-entry
@@ -191,12 +201,12 @@ class _PhotoCache:
     def restore(self, path):
         entry = self.entries.pop(str(path), None)
         if entry is None:
-            return _photo(path)
+            return self._photo(path)
         digest, blob, charge = entry
         self.bytes_used -= charge
         data = self._png(path)
         if data is None:
-            return _photo(path)
+            return self._photo(path)
         if hashlib.sha256(data).digest() != digest:
             return self._decode(path, data)
         return self._unpack(blob)
@@ -709,7 +719,9 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
     ending = float(written.bars[-1]) if written.bars else 0.
     gaps = [[a, b] for a, b in zip(clocks, clocks[1:]) if b-a > MAX_CLOCK_STEP+.000011]
     missing = [clock for clock in events if clock not in paths]
-    photo_cache = _PhotoCache()
+    rail_witness = PhotographedStaffRails(folder)
+    photo_cache = _PhotoCache(
+        rail_witness if rail_witness.reference is not None else None)
     owners, binding_errors, tracks, snapshots, motions = {}, [], 0, [], []
     source_anchors = {}
     travel, travel_error = 0, 0.
