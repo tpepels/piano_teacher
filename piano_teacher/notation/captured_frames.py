@@ -60,6 +60,31 @@ class CapturedFrames:
                 selected.append(clock)
         return selected
 
+    def post_group_clocks(self, targets, limit=4):
+        """Additional REAL source-window photos after the final attack.
+
+        A fixed playhead covers a beam's rightmost attachment at every
+        onset in the group. At the first later photographed clock the whole
+        group has moved left of that coloured line; only then can its actual
+        uninterrupted body be inspected. Select existing PNG clocks only,
+        within half a beat of the last authored event. The independent
+        head/translation/visibility checks still decide if each photograph
+        is usable. Never manufacture a frame, position or source obligation.
+        """
+        if not targets or limit < 1:
+            return []
+        end = max(float(value) for value in targets)
+        selected = []
+        for clock in self.clocks:
+            if clock <= end + 1e-5:
+                continue
+            if clock > end + .5 + 1e-5:
+                break
+            selected.append(clock)
+            if len(selected) >= limit:
+                break
+        return selected
+
     def frame(self, beat):
         beat = float(beat)
         if beat not in self.frames:
