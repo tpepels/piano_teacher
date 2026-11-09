@@ -10,7 +10,8 @@ from collections import defaultdict
 from pathlib import Path
 from .pixel_context import rectangular_rest_orientation
 from .pixel_ink import bright
-from .pixel_proof import detect_staff_lines, playhead_x
+from .pixel_proof import playhead_x
+from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
 from .reference_font import reference_glyphs
 from .rest_contours import compare_isolated_masks, partition_rest_body_dots, rest_delta_parts, rest_dot_evidence, rest_template_mask
@@ -37,6 +38,7 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
     score = read_written_score(generated_xml)
     written = [s for s in score.symbols if s["kind"] == "rest"
                and s["visible"] and (hand == "both" or s["staff"] == hand)]
+    rail_witness = PhotographedStaffRails(folder)
     diagnostics = json.loads((folder/"native-overlay-report.json").read_text())
     glyphs = reference_glyphs()
     controls = defaultdict(list)
@@ -80,7 +82,7 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                 raise ValueError("unchanged frame drifted; subtraction is uncontrolled")
             if not np.array_equal(original, restored):
                 raise ValueError("restored frame drifted; intervention changed other state")
-            rails = detect_staff_lines(Image.fromarray(original.astype("uint8")))
+            rails = rail_witness.detect(Image.fromarray(original.astype("uint8")))
             gap = rails[staff].gap
         except (ValueError, AssertionError, OSError) as exc:
             frame_error = str(exc)
