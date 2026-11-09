@@ -799,3 +799,50 @@ so #45 must not be closed solely from these two source samples.
 The full 24-shard corpus has **not** passed at the repaired revision.
 Software native acceptance, physical MIDI and genuine learner effectiveness
 are independent unfulfilled exit conditions.
+
+
+### 2026-11-09 — continuous-rest photographic ownership / CI execution blocker
+
+The latest **executed** original-case full-symbol run is
+[42668217876](https://github.com/tpepels/piano_teacher/actions/runs/42668217876)
+at `97ff7531`: independent contracts **81 passed**, real Hanon/Chopin/
+Debussy rails and damaged-rail controls **3 passed**. The complete Hanon/
+Chopin proof remained **RED** with respectively **34 and 231** error entries.
+The Hanon change from 5 to 34 was introduced by the exact dense-candidate
+search retaining additional real whole-rest detections, not by the source
+drawing becoming less accurate. The original fixture's PNG and independent
+unexpected-symbol report show **34 frames** with precisely two identical,
+meter-correct whole rests beyond the original last source bar (tracks 4856
+and 4857, stable Y 170.5 / 342.5 and about 242 px per beat). Neither rest
+is an extra *source* note or an invented barline. Unrelated residual ink
+must remain unverified.
+
+On `main`, `procedural_rest_ownership.py` now distinguishes such printed
+practice silence from source MusicXML events. It derives the source-end beat
+and first complete meter from the independent XML reader, checks absolute
+photographic staff position, measured camera position and frame-to-frame
+travel, requires the same complete left/right rest pair across at least
+three distinct actual frames, and rechecks both on every current PNG.
+It never exempts unmatched rests or other residual ink. Source-independent
+negative controls cover missing/duplicate/wrong-height/wrong-time/low-Dice/
+unstable-track rests, invalid meter and impossible photo translation.
+The finite current-frame ownership mask claims only the authentic whole-rest
+template's actual pixels.
+
+**Not yet accepted:** After `2d3c3a9`, GitHub Actions began returning
+`conclusion=failure` with **zero created jobs and no runnable logs** for
+both normal and dense CI, including runs
+[42671494209](https://github.com/tpepels/piano_teacher/actions/runs/42671494209)
+and [42671662913](https://github.com/tpepels/piano_teacher/actions/runs/42671662913).
+This is a runner/workflow-start gate, not a Python assertion or a validated
+new source failure. The changes made after the last executed CI run therefore
+remain **unverified**. Restore runnable CI and rerun both fast and dense
+checks before using their outcome as proof.
+
+**Still open:** 231 Chopin error entries at the last executable revision,
+principally beam-attachment/common-witness, tuplet bracket, stem/flag and
+full-frame symbol-ownership obligations. The original 24-shard complete
+corpus, affected Beethoven/imported score, USB/Bluetooth/audio physical
+measurement, Coda/Fukuda complete policy decision ownership and human
+instructional-efficacy acceptance are all **open**. Neither Phase 2 nor
+Phase 6 is certified complete.
