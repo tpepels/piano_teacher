@@ -10,6 +10,8 @@ on:
       - '.github/workflows/phase6-score-performance.yml'
       - 'tests/test_phase6_score_performance.py'
       - 'piano_teacher/application/score_artifacts.py'
+      - 'piano_teacher/notation/assets/beams.py'
+      - 'piano_teacher/notation/assets/tuplets.py'
       - 'piano_teacher/runtime_timings.py'
       - 'piano_teacher/learning.py'
       - 'piano_teacher/lesson_generators.py'
