@@ -1015,6 +1015,14 @@ func trim_future_queue(reason: String,
         if _stream_live_serial >= 0 and \
                 not _stream_queue.has_take(_stream_live_serial):
             _stream_live_serial = -1
+        if _stream_armed_serial >= 0 and \
+                not _stream_queue.has_take(_stream_armed_serial):
+            _stream_armed_serial = -1
+            _stream_arm_acknowledged = false
+            _stream_arm_rollback.clear()
+        if _stream_paused_owner >= 0 and \
+                not _stream_queue.has_take(_stream_paused_owner):
+            _stream_paused_owner = -1
         queue_redraw()
     return removed
 
@@ -1189,16 +1197,14 @@ func present_flow(world_beat: float, state: Dictionary,
             _stream_paused_owner = _stream_transport_owner(
                 opening,bool(state.get("running",false)))
         if allow_admission:
-            # Protect only ink that has been exposed, including an already
-            # visible prefix of the active graded take. Protecting the whole
-            # take_owner stranded its invisible future measure strips:
-            # those notes could appear AFTER Pause, violating the pause
-            # admission contract. The queue's exact ever_visible / current
-            # viewport check is the sole exposure boundary, independent of
-            # backend transport identity. Withdraw and journal the maximum
-            # unexposed right-hand suffix, even when it shares the graded
-            # owner with an already visible prefix.
-            trim_future_queue("pause")
+            # An in-flight Play/Resume may not have received its ACK yet.
+            # Do not discard that provisional owner BEFORE the command
+            # result determines whether it was ever authorized. On the
+            # first paused frame AFTER ACK, retract the maximal unseen
+            # suffix (even from the active take), leaving exposed ink.
+            if not (_stream_armed_serial >= 0 and
+                    not _stream_arm_acknowledged):
+                trim_future_queue("pause")
         _stream_was_paused = true
         _stream_live_serial = -1
     elif allow_admission and not running_now and phase in [
