@@ -73,7 +73,14 @@ def test_real_autumn_chord_ties_attach_without_borrowing_the_flag(autumn_ties):
         row = next(row for row in result['observations'] if row['source_ids'][0] == identity)
         assert row['status'] == 'verified'
         assert row['evidence']['pixel_runs']
-        assert max(row['evidence']['endpoint_distances_spaces']) <= .9
+        # Each end attaches within .9 staff spaces of its head, or, where it
+        # clears that head's own flag (tie_clear_flag), within the engraved
+        # .08-space flag clearance plus one pixel, measured from the flag.
+        gap = min(head['gap'] for head in row['evidence']['heads'])
+        for head_distance, flag_distance in zip(row['evidence']['endpoint_distances_spaces'],
+                                                row['evidence']['flag_edge_distances_spaces']):
+            assert head_distance <= .9 or (
+                flag_distance is not None and 0 <= flag_distance <= .08+1/gap), row['evidence']
 
 
 @pytest.mark.parametrize('identity', TARGETS)

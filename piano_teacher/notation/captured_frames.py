@@ -149,6 +149,9 @@ class CapturedFrames:
             if max(abs(x-y) for x, y in zip(sa.lines, sb.lines)) > 1:
                 raise ValueError('Staff rails changed between endpoint witnesses')
             top, bottom = max(0, round(sa.lines[0]-5*sa.gap)), min(a['pixels'].shape[0], round(sa.bottom+5*sa.gap))
+            # register_translation already ignores the left 20% of the width,
+            # which contains the fixed 32 px system gutter and brace, so only
+            # the mint timing overlay has to be removed here.
             self.translations[key] = register_translation(a['motion'][top:bottom], b['motion'][top:bottom], sa.gap)
         return self.translations[key]
 

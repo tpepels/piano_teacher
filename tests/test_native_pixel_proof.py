@@ -9,9 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from PIL import Image, ImageDraw
 
-from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION
 from piano_teacher.notation.pixel_proof import (
-    detect_staff_lines, expected_y, observed_notehead_y, observed_notehead_ys, verify_pixel_frames,
+    PLAYHEAD_FRACTION, detect_staff_lines, expected_y, observed_notehead_y, observed_notehead_ys, verify_pixel_frames,
 )
 
 SOURCE = Path(__file__).parent / "fixtures" / "native_pixel_pitch_probe.musicxml"

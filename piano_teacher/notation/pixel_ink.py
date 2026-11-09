@@ -19,12 +19,14 @@ def bright(image: Image.Image) -> np.ndarray:
 
 
 def translating_ink(image: Image.Image) -> np.ndarray:
-    """Pale score ink without the fixed, coloured timing overlay.
+    """Pale score ink without the fixed, pale-mint timing overlay.
 
-    Since 13598000/39caeee0 the timing rule's core and its beat knob are pale
-    enough to pass bright(). They stay put while the score moves, so motion
-    estimates must not let them vote. Neutral score ink is never coloured in
-    a canonical capture.
+    bright() once excluded the playhead because it was saturated mint with
+    too little red. Since 13598000/39caeee0 the rule's core (about
+    201,248,230) and its beat knob are pale mint and pass bright(). They stay
+    put while the score moves, so motion estimates must not let them vote.
+    This drops every mint-tinted pixel (green and blue clearly above red);
+    neutral score ink is never tinted in a canonical capture.
     """
     rgb = np.asarray(image.convert("RGB")).astype(np.int16)
     overlay = (rgb[:,:,1]-rgb[:,:,0] > 30) & (rgb[:,:,2]-rgb[:,:,0] > 15)

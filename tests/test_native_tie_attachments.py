@@ -11,6 +11,8 @@ from PIL import Image
 import numpy as np
 import pytest
 
+from piano_teacher.notation.pixel_proof import PLAYHEAD_FRACTION, playhead_x
+from piano_teacher.notation.raster_matching import photographed_playhead_columns
 from piano_teacher.notation.symbol_pixel_proof import verify_connector_pixels
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +106,14 @@ def test_native_tie_clearance_does_not_stretch_with_beat_distance(
     (tmp_path/"godot.log").write_text(result.stdout+result.stderr)
     assert result.returncode == 0, (result.stdout+result.stderr)[-4000:]
     assert "NATIVE_VEROVIO_OVERLAY_FAILURES:0" in result.stdout
+    # The verifiers anchor on the photographed timing rule. A fresh
+    # production capture must show that rule at the production X, so a
+    # renderer that moved or dropped the line cannot silently re-anchor them.
+    for frame in sorted(tmp_path.glob("native-*.png")):
+        with Image.open(frame) as raw:
+            picture = raw.convert("RGB")
+        assert photographed_playhead_columns(picture), frame.name
+        assert abs(playhead_x(picture)-picture.width*PLAYHEAD_FRACTION) <= 1.5, frame.name
     proof = verify_connector_pixels(xml, tmp_path, hand="right", constructs=("tie",))
     (tmp_path/"connector-proof.json").write_text(json.dumps(proof, indent=2))
     assert proof["coverage"]["expected"] == 1

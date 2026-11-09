@@ -593,6 +593,57 @@ def _connector_neighbor_heads(picture, heads):
     return neighbors
 
 
+def _flag_edge_distance(pixels, component, head, tips, x, y, gap, start):
+    """Distance in staff spaces from a tie end to its head's own flag edge.
+
+    Only ink lying horizontally between the head and the tie end, at the
+    tie end's height, counts, and only if it is connected to the outer tip
+    of this head's photographed stem: a flag hangs from the shaft's far end.
+    Ledger stubs and chord neighbours at the near end do not qualify.
+    Without such a flag the ordinary head distance rules.
+    """
+    from collections import deque
+    if not tips:
+        return None
+    l, t, r, d = head['bbox']
+    centre = (t+d)/2
+    tips = [max(tips, key=lambda tip: abs(tip[1]-centre))]
+    lo, hi = (r, x) if start else (x+1, l)
+    if hi-lo < 1:
+        return None
+    own = {(py, px) for py, px in component}
+    rows = range(max(0, round(y-.5*gap)), min(pixels.shape[0], round(y+.5*gap)+1))
+    seeds = [(row, col) for row in rows for col in range(max(0, lo), min(pixels.shape[1], hi))
+             if pixels[row, col] and (row, col) not in own]
+    if not seeds:
+        return None
+    # Follow the seed ink back towards the shaft within a bounded box.
+    sx = [tx for tx, _ in tips]
+    tip_y = tips[0][1]
+    top = max(0, min(tip_y, rows.start)-round(gap))
+    bottom = min(pixels.shape[0], max(tip_y, rows.stop)+round(gap)+1)
+    left = max(0, min(sx)-3 if start else lo)
+    right = min(pixels.shape[1], hi if start else max(sx)+4)
+    seen, queue, attached = set(seeds), deque(seeds), False
+    while queue:
+        py, px = queue.popleft()
+        if any(abs(px-tx) <= 2 and abs(py-ty) <= gap for tx, ty in tips):
+            attached = True
+            break
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                item = (py+dy, px+dx)
+                if (item not in seen and top <= item[0] < bottom and left <= item[1] < right
+                        and pixels[item] and item not in own):
+                    seen.add(item)
+                    queue.append(item)
+    if not attached:
+        return None
+    cols = [col for _, col in seeds]
+    edge = max(cols)+1 if start else min(cols)
+    return (x-edge)/gap if start else (edge-x)/gap
+
+
 def _connector_curve(picture, heads, construct, placement=None):
     """Connected, thin, curved ink must terminate at both measured heads.
 
@@ -603,6 +654,11 @@ def _connector_curve(picture, heads, construct, placement=None):
     a, b = heads
     gap = min(a['gap'], b['gap'])
     endpoint_limit = .9
+    # A tie whose end clears a flag of its own head is engraved a fixed
+    # ink-to-ink gap from that flag (ConnectorGeometry.tie_clear_flag: 20
+    # units = .08 staff spaces), not from the head. Allow that clearance
+    # plus one pixel of quantisation, measured from the photographed flag.
+    flag_clearance = .08+1/gap
     if b['x']-a['x'] < 1.5*gap:
         return dict(status='unverified', reason='Endpoint silhouettes overlap or leave insufficient separable curve ink')
     pixels = bright(picture).copy()
@@ -654,17 +710,23 @@ def _connector_curve(picture, heads, construct, placement=None):
             thickness.append(int(column.max()-column.min()+1))
         if len(centers) != x1-x0+1:
             continue
-        distances = []
-        for head, tips, x, y in ((a, stem_tips[0], x0, centers[0]),
-                                  (b, stem_tips[1], x1, centers[-1])):
+        distances, flag_distances = [], []
+        for head, tips, x, y, start in ((a, stem_tips[0], x0, centers[0], True),
+                                         (b, stem_tips[1], x1, centers[-1], False)):
             l, t, r, d = head['bbox']
             options = [float(np.hypot(max(l-x, 0, x-r), max(t-y, 0, y-d)))]
             if construct == 'slur':
                 options += [float(np.hypot(tx-x, ty-y)) for tx, ty in tips]
             distances.append(min(options)/gap)
-        if max(distances) > endpoint_limit:
+            flag_distances.append(_flag_edge_distance(
+                pixels, component, head, tips, x, y, gap, start) if construct == 'tie' else None)
+        within = [distance <= endpoint_limit or (flag is not None and flag <= flag_clearance)
+                  for distance, flag in zip(distances, flag_distances)]
+        if not all(within):
             rejected.append(dict(component_bbox=[x0, int(ys.min()), x1+1, int(ys.max())+1],
-                                 endpoint_distances_spaces=[round(d, 4) for d in distances]))
+                                 endpoint_distances_spaces=[round(d, 4) for d in distances],
+                                 flag_edge_distances_spaces=[None if f is None else round(f, 4)
+                                                             for f in flag_distances]))
             continue
         if (x0 <= left or x1 >= right-1 or ys.min() <= top or ys.max() >= bottom-1):
             overlap = True
@@ -706,6 +768,8 @@ def _connector_curve(picture, heads, construct, placement=None):
                     component_bbox=[x0, int(ys.min()), x1+1, int(ys.max())+1],
                     connected_pixels=len(component), curvature_spaces=round(sag/gap, 4),
                     endpoint_distances_spaces=[round(d, 4) for d in distances],
+                    flag_edge_distances_spaces=[None if f is None else round(f, 4)
+                                                for f in flag_distances],
                     max_thickness_spaces=round(max(thickness)/gap, 4), pixel_runs=runs))
     if len(accepted) == 1:
         return accepted[0]
