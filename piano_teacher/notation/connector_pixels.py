@@ -721,11 +721,16 @@ def _verify(xml, folder, hand, reference_svgs, kind):
             # actual connector ink in every common, visible group witness.
             witnesses = []
             failures = []
-            targets = sorted({e['beat'] for e in row.get('leaders', events)})
-            # Singleton numerals often cross the playhead at their onset.
-            # A nearby saved frame can expose the original ink without
-            # fabricating a second source event or renderer coordinate.
-            targets += frames.nearby_clocks(targets)
+            source_targets = sorted({e['beat'] for e in row.get('leaders', events)})
+            # Source-onset witnesses alone can ALL place the fixed mint
+            # playhead directly over this beam's final real stem. Use the
+            # existing genuine post-onset PNGs after the group has moved
+            # left of that line. Optical registration and source endpoints
+            # remain mandatory; an offscreen/ambiguous frame never passes.
+            # Likewise a singleton numeral needs a non-occluded photo.
+            targets = list(dict.fromkeys(
+                source_targets + frames.nearby_clocks(source_targets) +
+                frames.post_group_clocks(source_targets)))
             for target in targets:
                 try:
                     status, reason, evidence = (_beam if kind == 'beam' else _tuplet)(row, frames, target)
