@@ -196,6 +196,14 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_NO_STANDALONE_SHAPE:",ids)
                 continue
+            # SVG layout anchors are normalized separately by viewport
+            # width/height. Convert X via width/height before expressing it
+            # in staff-space units; Y already uses normalized viewport height.
+            viewport = [float(value) for value in
+                        ET.fromstring(page).get("viewBox","").replace(","," ").split()]
+            if len(viewport) != 4 or min(viewport[2:]) <= 0:
+                continue
+            aspect = viewport[2]/viewport[3]
             # Rasterize the ACTUAL isolated Verovio beam polygon, at a
             # bounded local scale. A 1600px full-page screenshot previously
             # yielded a 63x3 source mask that was enlarged fivefold in
@@ -217,7 +225,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             with Image.open(BytesIO(base64.b64decode(art["png_base64"]))) as decoded:
                 rgba = decoded.convert("RGBA")
             alpha = rgba.getchannel("A")
-            intrinsic_span = (x1-x0)*250/space
+            intrinsic_span = (x1-x0)*aspect*250/space
             if (intrinsic_span <= 4 or bounds[2] > intrinsic_span*2.2
                     or rgba.width <= 1 or rgba.height <= 1):
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
@@ -236,9 +244,9 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 reference_y = (max(head[1] for head in source_heads) if up
                                else min(head[1] for head in source_heads))
                 source_stem = getattr(geom,"stem_x",{}).get(ids[index])
-                stem_units = (((source_stem-x0)*250/space)
+                stem_units = (((source_stem-x0)*aspect*250/space)
                     if source_stem is not None else
-                    (note_x-x0)*250/space+(.54 if up else -.54)*250)
+                    (note_x-x0)*aspect*250/space+(.54 if up else -.54)*250)
                 position = round((stem_units-bounds[0])*x_scale)
                 sample = []
                 for distance in range(round(1.1*250*x_scale)+1):
@@ -268,7 +276,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 "bounds":bounds, "span":intrinsic_span,
                 "note_ids":list(ids), "chord_note_ids":[list(g) for g in chord_ids],
                 "stem_up":up, "tip_offsets":edges,
-                "head_offsets":[(x-x0)*250/space for x,_,_ in anchors],
+                "head_offsets":[(x-x0)*aspect*250/space for x,_,_ in anchors],
                 "png_base64":art["png_base64"],
             }
         except (KeyError,ValueError,TypeError,ET.ParseError,RuntimeError,
