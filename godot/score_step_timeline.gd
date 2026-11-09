@@ -128,6 +128,8 @@ func _draw() -> void:
     # Keep future-stage pins off the fixed playhead. A pin projected only a
     # few pixels from the glowing strike looked like a stray dot above it.
     var playhead_x: float = size.x * ScoreView.PLAYHEAD_FRACTION
+    if current_visible and current_x >= playhead_x + 110.0:
+        _marker(_current_start,Design.STONE,_density,_current_beat)
     if is_finite(next_x) and next_x >= playhead_x + 110.0 and (
             next_x < size.x - 10.0) and (
             not current_visible or markers_separated(current_x,next_x)):
