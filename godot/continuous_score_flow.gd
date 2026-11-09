@@ -26,6 +26,29 @@ func sample(at_ms: int, selected_bpm: float = NAN) -> float:
 func project(at_ms: int) -> float:
     return beat + float(maxi(0,at_ms-last_ms)) * bpm / 60000.0 if initialized else 0.0
 
+func project_authored_future(at_ms: int, sampled_ms: int,
+        source_beat: float, nominal_bpm: float,
+        authored_segments: Array) -> float:
+    # At the future engine-authored deadline, predict this SAME forward
+    # world axis through original source tempo changes. A constant-BPM
+    # projection incorrectly places copies whenever a tempo-map boundary
+    # lies between the sampled state and the retry deadline.
+    # Only snapshots from a currently playing source supply tempo segments.
+    # Feedback/paused preparation continues at the selected rest BPM.
+    var local_world: float = project(sampled_ms)
+    var delta_seconds: float = maxf(0.0,float(at_ms-sampled_ms)/1000.0)
+    if delta_seconds <= 0.0 or authored_segments.is_empty() or \
+            not is_finite(source_beat) or not is_finite(nominal_bpm) or \
+            nominal_bpm <= 0.0:
+        return local_world + delta_seconds*bpm/60.0
+    var timing = preload("res://tempo_timeline.gd")
+    var before: float = timing.seconds_at_beat(
+        source_beat,nominal_bpm,authored_segments)
+    var after: float = timing.beat_at_seconds(
+        before+delta_seconds,nominal_bpm,authored_segments)
+    return local_world+maxf(0.0,after-source_beat)
+
+
 func reset() -> void:
     # Called only when the application closes or an explicit test sets up a
     # new process, never by lesson changes or Play/Pause/Retry actions.
