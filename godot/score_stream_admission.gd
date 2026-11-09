@@ -15,6 +15,9 @@ const READY_TRAVEL_BEATS := 0.30
 const REST_GAP_BEATS := 1.0
 # "Strictly ahead of the playhead" for reusing a paused take.
 const PAUSED_REUSE_EPSILON_BEATS := .001
+# A world/graded onset may differ by one display-frame's measured jitter,
+# but never by a fraction of a source note. At 96 px/beat this is 2.4 px.
+const AUTOMATIC_DUE_EPSILON_BEATS := .025
 
 static func clip_bounds(item: Dictionary, density: float,
         gap: float, score_duration: float) -> Vector2:
@@ -105,7 +108,7 @@ static func select(passes: Array, purpose: String, opening: float,
                 onset < earliest-.00001:
             continue
         if purpose == "automatic_due" and (not is_finite(expected_world) or \
-                absf(onset-expected_world)>.75):
+                absf(onset-expected_world)>AUTOMATIC_DUE_EPSILON_BEATS):
             continue
         # Active transport resumes may have two different source windows
         # attached to the same transport ID. Prefer the newest continuation;
