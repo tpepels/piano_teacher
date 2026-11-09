@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 9
+VERSION = 10
 MAX_RASTER_PIXELS = 8_000_000
 
 
@@ -83,7 +83,14 @@ def crop_art(svg: str, staff_space: float,
         return None
     width = 1600
     height = width*viewport[3]/viewport[2]
-    if staff_space*round(height) <= 4:
+    # A page-sized 1600px SVG can reduce a real 6px numeral to a 6x6
+    # bitmap, which Godot then enlarges to a ~30px staff-space glyph.
+    # That loses its outline, makes an actual '3' gray and unreadable and
+    # fails the independent authored-font contour. Use the original vector
+    # on a bounded local Cairo recording at 32 px per staff space whenever
+    # the whole-page raster supplies less than one native-resolution space.
+    # There is no alternative shape or synthesized numeral.
+    if staff_space*height < 24:
         return _local_vector_art(svg, staff_space, origin, source)
     if width*math.ceil(height) > MAX_RASTER_PIXELS:
         return None
