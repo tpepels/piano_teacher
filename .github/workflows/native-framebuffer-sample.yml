@@ -59,10 +59,10 @@ jobs:
               'tests/test_native_voice_collisions.py::test_actual_voice_columns_have_distinct_required_shafts[three-voice-neighbors]' \
               'tests/test_native_voice_collisions.py::test_erasing_one_voice_shaft_cannot_borrow_the_other[three-voice-neighbors]' \
               'tests/test_native_voice_collisions.py::test_erased_head_cannot_be_replaced_by_the_other_voice[three-voice-neighbors]' \
-              'tests/test_native_audit_ties.py \
+              tests/test_native_audit_ties.py \
               tests/test_native_boundary_clearance.py \
               tests/test_hanon_boundary_smoke.py \
-              tests/test_native_tie_attachments.py' \
+              tests/test_native_tie_attachments.py \
               'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[default]' \
               'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[separated]' \
               'tests/test_real_source_connector_overlap.py::test_each_source_slur_contributes_separate_native_ink' \
