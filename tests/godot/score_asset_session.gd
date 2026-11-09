@@ -291,8 +291,8 @@ func test_failure() -> void:
                     renderer.model_ok = false
                     finish_model(session,9,2)
         var accepted_message := not session.score_error.is_empty()
-        check(accepted_message and not session.is_ready() and not renderer.visible,
-            "score failure must reject partial score: "+kind)
+        check(accepted_message and not session.is_ready() and renderer.visible,
+            "score failure revokes note ink but keeps the empty bar visible: "+kind)
         check(actions.is_empty() and publications.is_empty(),
             "failed score must never acknowledge MIDI start: "+kind)
         check(session.status()["retry_visible"] and session.status()["browse_visible"],
@@ -320,9 +320,9 @@ func test_native() -> void:
     finish_layout(session,13,1)
     check(not session.score_error.is_empty() and not session.is_ready(),
         "real native renderer must reject missing authentic brace glyph")
-    check(not renderer.visible and feedback.score_revision == -1 and
+    check(renderer.visible and feedback.score_revision == -1 and
         feedback.bound_revisions().is_empty(),
-        "real native feedback must be detached on glyph rejection")
+        "real native feedback detaches while empty moving staff remains visible")
     check(session.retry(2),"native failure can restart canonical asset lifecycle")
     feedback.free()
     renderer.free()
