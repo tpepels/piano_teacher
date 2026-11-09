@@ -366,7 +366,8 @@ func _reset_assets() -> void:
 func _hide_renderer() -> void:
     if is_instance_valid(_renderer):
         _renderer.clear_score()
-        _renderer.visible = false
+        # Loading/failure revokes score ink, not the endless empty staff.
+        _renderer.visible = true
         if is_instance_valid(_feedback):
             _feedback.bind_score(_renderer,-1)
 
