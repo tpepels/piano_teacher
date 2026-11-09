@@ -59,6 +59,12 @@ jobs:
         run: |
           bash scripts/godot-test.sh 20s --headless --path godot \
             --script "$PWD/tests/godot/transport_reservation_integration.gd"
+      - name: Verify transactional retry admission and stale plan recovery
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          bash scripts/godot-test.sh 20s --headless --path godot \
+            --script "$PWD/tests/godot/score_recovery_transaction.gd"
       - name: Verify graded per-note status and tiny glyph-shaped glow
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
