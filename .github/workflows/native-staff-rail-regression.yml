@@ -1,0 +1,63 @@
+name: Dense real-source staff-rail regression (Godot 4.7.2)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-staff-rail-regression.yml'
+      - 'tests/test_native_staff_rail_recovery.py'
+      - 'piano_teacher/notation/phase3_pixels.py'
+      - 'piano_teacher/notation/pixel_proof.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staff-rail-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-frames:
+    name: Hanon, Chopin, Debussy + deleted-rail negatives
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install framebuffer dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]'
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o /tmp/godot.zip
+          mkdir -p /tmp/godot-bin
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 755 /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Capture authentic multi-frame rail evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/rail-proof"
+          set -o pipefail
+          timeout 650s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -m pytest -q -rx --tb=short \
+              --basetemp="$RUNNER_TEMP/rail-proof/captures" \
+              --junitxml="$RUNNER_TEMP/rail-proof/junit.xml" \
+              tests/test_native_staff_rail_recovery.py \
+              2>&1 | tee "$RUNNER_TEMP/rail-proof/pytest.txt"
+      - name: Retain source score, actual screenshots and corrupted controls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dense-rails-${{ github.sha }}
+          path: ${{ runner.temp }}/rail-proof/
+          if-no-files-found: warn
+          retention-days: 14
