@@ -117,8 +117,18 @@ def test_real_score_cold_and_cached_native_pipeline(
         assert reopened["native_glyphs"] and reopened["native_note_templates"]
         assert reopened["native_beams_complete"] and reopened["native_slurs_complete"]
         assert reopened_semantic["notes"] and reopened["notes"]
-        assert {n["id"] for n in reopened_semantic["notes"]} == {
-            n["id"] for n in reopened["notes"]}
+        # Semantic notes retain immutable source MIDI attack IDs; native
+        # engraving uses distinct written note IDs (including tied segments).
+        # Compare through the explicit source binding, not unrelated IDs.
+        source_ids = {n["id"] for n in reopened_semantic["notes"]}
+        written_sources = {
+            event["source_id"] for event in reopened["notation_events"]
+            if event["kind"] == "note" and event.get("source_id")
+        }
+        assert source_ids == written_sources, {
+            "source_only": sorted(source_ids - written_sources),
+            "engraving_only": sorted(written_sources - source_ids),
+        }
         assert engine.state()["loaded"] and not engine.state()["running"]
         report["reopen"] = {
             "identity":engine.plan.identity,"revision":engine.score_revision,
