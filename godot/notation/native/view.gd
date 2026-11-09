@@ -1461,6 +1461,31 @@ func _paint_cursor_behind_ink(x: float, top: float, bottom: float,
             Color(Design.STONE,.62),.9,true)
 
 
+func _paint_empty_moving_staff() -> void:
+    # An unprepared or unloaded score still has the SAME world axis.
+    # Never draw a static loading card in place of the moving bar.
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var line_gap: float = clampf(size.y/23.0,13.0,25.0)
+    var centers: Array[float] = [size.y*.40,size.y*.70]
+    for center in centers:
+        for rule in range(5):
+            var y: float = center+(float(rule)-2.0)*line_gap
+            draw_line(Vector2(0.0,y),Vector2(size.x,y),
+                Color(NOTE_INK,.43),1.15,true)
+    var ph: float = size.x*PLAYHEAD_FRACTION
+    var pulse_width: float = 4.0*density
+    var phase: float = fposmod(stream_world_beat*density,pulse_width)
+    for index in range(-2,ceili(size.x/pulse_width)+3):
+        var x: float = ph-phase+float(index)*pulse_width
+        if x >= 0.0 and x <= size.x:
+            draw_line(Vector2(x,centers[0]-line_gap*2.0),
+                Vector2(x,centers[1]+line_gap*2.0),
+                Color(NOTE_INK,.22),1.0,true)
+    draw_line(Vector2(ph,centers[0]-line_gap*2.9),
+        Vector2(ph,centers[1]+line_gap*2.9),
+        Color(Design.MINT,.72),2.4,true)
+
+
 func _draw() -> void:
     if layout.size != size:
         layout.set_viewport(size)
@@ -1479,9 +1504,7 @@ func _draw() -> void:
         draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
     var font: Font = ThemeDB.fallback_font
     if not native_ready or not timeline.has_score():
-        draw_string(font,Vector2(20.0,size.y*.5),
-            notice if not notice.is_empty() else "Loading native score",
-            HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
+        _paint_empty_moving_staff()
         return
     var gap: float = staff_gap()
     var playhead_x: float = size.x * PLAYHEAD_FRACTION
