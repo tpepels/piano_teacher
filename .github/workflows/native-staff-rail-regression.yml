@@ -27,8 +27,6 @@ on:
       - 'tests/test_extra_symbol_candidate_index.py'
       - 'tests/test_procedural_rest_ownership.py'
       - 'piano_teacher/notation/procedural_rest_ownership.py'
-      - 'piano_teacher/notation/connector_pixels.py'
-      - 'piano_teacher/notation/captured_frames.py'
       - 'tests/test_post_group_connector_photos.py'
 
 permissions:
