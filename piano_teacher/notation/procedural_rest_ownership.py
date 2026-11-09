@@ -56,7 +56,7 @@ def _photographic_density(snapshots) -> float | None:
             return None
         prediction = -delta*density
         tolerance = max(2.0, float(after["motion"].get("position_error", 0.0))*2.0)
-        if abs(float(after["motion"]["pixels"])-prediction) > tolerance:
+        if after.get("shift") is None or abs(float(after["shift"])-prediction) > tolerance:
             return None
     return density
 
