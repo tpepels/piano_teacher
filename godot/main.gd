@@ -1014,7 +1014,8 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
             str(parsed.get("mode","practice"))]
         if next_plan is Dictionary and \
                 visual_transport_clock.has_backend_offset and \
-                str(parsed.get("mode","")) == "practice" and \
+                str(parsed.get("mode","")) in [
+                    "practice","perform","listen"] and \
                 not bool(parsed.get("paused",false)) and \
                 not promoted_this_snapshot and \
                 renderer._stream_armed_serial < 0 and \
@@ -1036,9 +1037,12 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
             var authored_world: float = score_flow.project_authored_future(
                 deadline_ms,received_ms,beat,float(parsed.get("bpm",40.0)),
                 future_segments)
+            var playback_mode: String = str(parsed.get("mode","practice"))
             renderer.enqueue_recovery_queue(world,
                 float(next_plan["source_from_beat"]),
-                authored_world,str(next_plan["plan_id"]))
+                authored_world,str(next_plan["plan_id"]),
+                playback_mode in ["listen","perform"],
+                float(parsed.get("next_count_in_beats",0.0)))
         # Atomically bind an acknowledged transport ID to the already armed
         # source BEFORE publishing the new backend state. Otherwise the UI
         # may observe a running Retry while its note copy still has the
