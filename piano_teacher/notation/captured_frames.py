@@ -69,7 +69,17 @@ class CapturedFrames:
             rgb = np.asarray(image).astype(int)
             cyan = (rgb[:, :, 1]-rgb[:, :, 0] > 30) & (rgb[:, :, 2]-rgb[:, :, 0] > 15) & (rgb[:, :, 1] > 150)
             occluded = np.flatnonzero(cyan.sum(axis=0) > image.height*.35)
-            self.frames[beat] = dict(name=name, pixels=bright(image), motion=translating_ink(image),
+            # Texture resampling can leave a one-pixel subthreshold edge
+            # inside a continuous beam. Retain that *photographed* dim ink
+            # separately, never infer a missing beam from source geometry.
+            # It is only consulted where two full-bright neighbors enclose
+            # the same physical pixel; a genuinely erased pixel stays dark.
+            beam_edge = ((rgb[:, :, 0] >= 115) &
+                         (rgb[:, :, 1] >= 130) &
+                         (rgb[:, :, 2] >= 120))
+            self.frames[beat] = dict(name=name, pixels=bright(image),
+                                     beam_edge=beam_edge,
+                                     motion=translating_ink(image),
                                      staves=self.staff_rails.detect(image),
                                      occluded_columns=occluded, playhead_x=playhead_x(image))
             if len(self.frames) > FRAME_CACHE_LIMIT:
