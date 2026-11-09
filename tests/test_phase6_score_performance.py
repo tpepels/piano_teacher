@@ -121,13 +121,24 @@ def test_real_score_cold_and_cached_native_pipeline(
         # engraving uses distinct written note IDs (including tied segments).
         # Compare through the explicit source binding, not unrelated IDs.
         source_ids = {n["id"] for n in reopened_semantic["notes"]}
+        written_events = [
+            event for event in reopened_semantic["notation_events"]
+            if event["kind"] == "note"
+        ]
         written_sources = {
-            event["source_id"] for event in reopened["notation_events"]
-            if event["kind"] == "note" and event.get("source_id")
+            event["source_id"] for event in written_events if event.get("source_id")
         }
         assert source_ids == written_sources, {
             "source_only": sorted(source_ids - written_sources),
             "engraving_only": sorted(written_sources - source_ids),
+        }
+        # The native Verovio layout's IDs belong to the *written* layer.
+        # Each must identify an explicit semantic engraving event.
+        layout_written = {event["id"] for event in reopened["notes"]}
+        declared_written = {event["id"] for event in written_events}
+        assert layout_written == declared_written, {
+            "layout_only": sorted(layout_written - declared_written),
+            "semantic_only": sorted(declared_written - layout_written),
         }
         assert engine.state()["loaded"] and not engine.state()["running"]
         report["reopen"] = {
