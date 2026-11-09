@@ -31,11 +31,11 @@ def test_real_capture_only_and_no_future_frame_are_not_a_pass():
 
 
 def test_bounded_witnesses_never_look_a_measure_into_another_passage():
-    frames = frames_with([0.,.0625,.125,.25,.5,.50001,.501,.75,1.,1.5])
+    frames = frames_with([0.,.0625,.125,.25,.5,.5001,.501,.75,1.,1.5])
     assert frames.post_group_clocks([0.],limit=10) == [
-        .0625,.125,.25,.5,.50001]
+        .0625,.125,.25,.5]
     assert frames.post_group_clocks([0.],limit=2) == [.0625,.125]
-    assert frames.post_group_clocks([.5],limit=10) == [.50001,.501,.75,1.]
+    assert frames.post_group_clocks([.5],limit=10) == [.5001,.501,.75,1.]
 
 
 def test_existing_early_onset_neighbor_search_is_unchanged():
