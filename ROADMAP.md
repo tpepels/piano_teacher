@@ -846,3 +846,30 @@ corpus, affected Beethoven/imported score, USB/Bluetooth/audio physical
 measurement, Coda/Fukuda complete policy decision ownership and human
 instructional-efficacy acceptance are all **open**. Neither Phase 2 nor
 Phase 6 is certified complete.
+
+
+### 2026-11-09 — post-onset connector witnesses (not accepted)
+
+The independent full-connector verifier originally tried source onsets and
+four nearest-to-mean supplementary clocks. For Chopin bars 13–16, the six-note
+beam beginning at beat 7.5 ends at 8.875; its current screenshot captures
+9.0/9.15/9.3/9.45 are genuine saved PNGs, but the verifier never inspected
+them. All earlier candidates were either obstructed by the fixed playhead or
+had ambiguous optical translation, leaving the source beam unverified even
+though a clean later photograph may exist. The same onset-only limitation
+applied to other multi-note beam groups and to singleton tuplet brackets.
+
+`CapturedFrames.post_group_clocks` now selects at most four actually captured
+times strictly AFTER the final source attack and within one half-beat.
+`connector_pixels._verify` includes those images in the mandatory source-
+anchored contour and independent motion checks, without accepting offscreen
+endpoints, missing raster ink, invented clocks or weakened pixel thresholds.
+`tests/test_post_group_connector_photos.py` covers actual retained Chopin
+clock positions, boundedness, exhaustion and preservation of old neighbor
+scheduling. **The runtime full-symbol result remains unverified** at this
+revision; these tests have been committed but the subsequent GitHub Actions
+runs have not supplied an executable all-symbol success. Do not claim the
+three previously unverified Chopin beam groups or the bracket are fixed until
+the actual new captured PNG reports establish it.
+
+All physical-device and learner-study gates remain open.
