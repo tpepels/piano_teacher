@@ -67,6 +67,12 @@ def test_listen_is_audible_exact_full_variant_and_cannot_grade_midi(lesson, bpm)
     e.control('demo_ready', token=demo['token'], revision=loading['revision'])
     listening = e.state()
     assert listening['phase'] == 'count_in' and listening['running']
+    # Listen source notation enters the same immutable future queue with the
+    # exact backend audio onset, not a separately animated camera.
+    queued = listening['score_queue_next']
+    assert queued['source_from_beat'] == 0.0
+    assert queued['deadline_at_ms'] == pytest.approx(
+        e.visual_transport.run_at * 1000.0)
     assert listening['clock_beat'] == pytest.approx(-listening['count_in_beats'])
     assert listening['count_in_beats'] > 0 and listening['demo']['ready']
     assert e.recorder is None and not e.auto and not listening['preview_only']
