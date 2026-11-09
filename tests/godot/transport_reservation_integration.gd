@@ -90,6 +90,11 @@ func _run() -> void:
     state["paused"] = true
     state["phase"] = "paused"
     v.present_flow(entry_world+.02,state,3.25)
+    # Pause now withdraws the never-exposed suffix of the ACTIVE attempt,
+    # not just unrelated automatic copies. Preserve the one visible prefix.
+    var paused_count: int = v.stream_passes.size()
+    check(paused_count >= 1 and paused_count < original_count,
+        "Pause retracts unseen later measures while retaining visible ink")
     var resume_world: float = entry_world+.03
     var resume_plan: Dictionary = Reservation.plan(
         v,"resume",resume_world,3.25,COUNT_IN)
@@ -97,10 +102,10 @@ func _run() -> void:
         str(resume_plan.get("mode",""))=="append" and
         int(resume_plan.get("remaining_count",-1))==1,
         "Resume preflight withdraws only unseen future measure strips")
-    check(v.stream_passes.size()==4 and
+    check(v.stream_passes.size()==paused_count and
         is_equal_approx(float(v.stream_passes[0]["world_origin"]),
             original_origin),
-        "preflight leaves the actual online queue untouched")
+        "Resume preflight leaves the paused online queue untouched")
     check(not bool(resume_plan.get("empty_strip",true)),
         "with the paused take still ahead of the playhead Resume stays append-only")
     var resumed: Dictionary = v.reserve_transport_action(
