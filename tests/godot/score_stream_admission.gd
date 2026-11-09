@@ -64,6 +64,12 @@ func _initialize() -> void:
     check(Admission.select(passes,"automatic_due",0.0,second_world,
         0.0,0.0,"",second_world+1.0)==-1,
         "backend deadlines cannot bind a different automatic passage")
+    check(Admission.select(passes,"automatic_due",0.0,second_world,
+        0.0,0.0,"",second_world+.02)==2 and
+        Admission.select(passes,"automatic_due",0.0,second_world,
+            0.0,0.0,"",second_world+.1)==-1,
+        "automatic binding accepts sub-frame jitter, never a tenth beat");
+
     check(Admission.select(passes,"bound",0.0,world,0.0,0.0,
         "transport-one")==0,"first backend attempt selects its bound source")
     passes.append({"serial":3,"owner_serial":3,"kind":"source",
