@@ -102,6 +102,28 @@ def test_real_score_cold_and_cached_native_pipeline(
         assert paused["paused"]
         engine.control("resume")
         assert not engine.state()["paused"]
+        # Issue #45: a second open of the *same real MIDI* must complete
+        # through source import, native layout and semantic score rather than
+        # falling back into a deterministic Retry Score failure loop.
+        previous_revision = engine.score_revision
+        expected_reopened_identity = engine.plan.identity
+        time_call("reopen_load_ms",lambda: engine.load(str(path)))
+        assert engine.fingerprint == expected_fingerprint
+        assert engine.plan.identity == expected_reopened_identity
+        assert engine.score_revision > previous_revision
+        reopened = time_call("reopen_native_ms",engine.geometry)
+        reopened_semantic = time_call("reopen_semantic_ms",engine.semantic_score)
+        assert reopened["revision"] == reopened_semantic["revision"] == engine.score_revision
+        assert reopened["native_glyphs"] and reopened["native_note_templates"]
+        assert reopened["native_beams_complete"] and reopened["native_slurs_complete"]
+        assert reopened_semantic["notes"] and reopened["notes"]
+        assert {n["id"] for n in reopened_semantic["notes"]} == {
+            n["id"] for n in reopened["notes"]}
+        assert engine.state()["loaded"] and not engine.state()["running"]
+        report["reopen"] = {
+            "identity":engine.plan.identity,"revision":engine.score_revision,
+            "verified_notes":len(reopened_semantic["notes"]),
+            "same_source_fingerprint":engine.fingerprint == expected_fingerprint}
         report["polls"] = {
             "samples":len(samples),
             "p95_ms":round(_percentile(samples,.95),3),
@@ -119,6 +141,10 @@ def test_real_score_cold_and_cached_native_pipeline(
         output.mkdir(parents=True,exist_ok=True)
         (output / (label+".json")).write_text(json.dumps(report,indent=2)+"\n")
         print("PHASE6_PERFORMANCE:",json.dumps(report,sort_keys=True))
+        # Reopening a real source may rebind the selected stage, but must
+        # not incur more than the original bounded cold source/ink budgets.
+        assert elapsed["reopen_load_ms"] <= report["limits"]["cold_load_ms"], report
+        assert elapsed["reopen_native_ms"] <= report["limits"]["cold_ink_ms"], report
         for field in ("cold_load_ms","cold_ink_ms","warm_ink_ms",
                       "next_stage_ink_ms"):
             assert elapsed[field] <= report["limits"][field], (field,report)
