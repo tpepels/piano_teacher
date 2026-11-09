@@ -24,6 +24,7 @@ on:
       - 'tests/test_verovio_beam_fragments.py'
       - 'tests/test_tuplet_adaptive_raster_bounds.py'
       - 'tests/test_connector_beam_pixel_profile.py'
+      - 'tests/test_extra_symbol_candidate_index.py'
 
 permissions:
   contents: read
@@ -65,6 +66,7 @@ jobs:
             tests/test_native_pixel_proof.py \
             tests/test_feature_pixel_ownership.py \
             tests/test_connector_beam_pixel_profile.py \
+            tests/test_extra_symbol_candidate_index.py \
             tests/test_verovio_beam_fragments.py \
             tests/test_tuplet_adaptive_raster_bounds.py
       - name: Capture authentic multi-frame rail evidence
