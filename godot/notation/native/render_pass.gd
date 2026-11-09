@@ -13,6 +13,10 @@ var focused_staff: String
 var pass_index: int
 var pass_start: float
 var visual_scroll_beat: float
+# Each retained measure strip compiles only the source window it actually
+# owns; this is physical paint culling, not a change to source beat positions.
+var source_floor := -INF
+var source_ceiling := INF
 var drawn_noteheads: Dictionary = {}
 var pass_noteheads: Dictionary = {}
 var drawn_note_instances: Array = []
@@ -34,11 +38,16 @@ func _init(context: Dictionary = {}) -> void:
 func screen_x(axis, beat: float) -> float:
     return axis.screen_x(beat,clock,playhead_x,play_from_beat)
 
-func event_visible(_event: Dictionary) -> bool:
-    return true
+func event_visible(event: Dictionary) -> bool:
+    var at: float = float(event.get("beat",event.get("start_beat",0.0)))
+    return at >= source_floor-.25 and at <= source_ceiling+.25
 
-func span_visible(_first: Dictionary, _last: Dictionary) -> bool:
-    return true
+func span_visible(first: Dictionary, last: Dictionary) -> bool:
+    # A source connector crossing a measure split belongs to BOTH clip
+    # buffers, so the visible half is painted by each independent strip.
+    var begin: float = float(first.get("beat",first.get("start_beat",0.0)))
+    var end: float = float(last.get("beat",last.get("end_beat",begin)))
+    return end >= source_floor-.25 and begin <= source_ceiling+.25
 
 static func intervals_overlap(first: Dictionary, second: Dictionary) -> bool:
     return float(first["start_beat"]) < float(second["end_beat"])-.00001 and \
