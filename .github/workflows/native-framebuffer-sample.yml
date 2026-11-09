@@ -14,7 +14,7 @@ permissions:
 jobs:
   focused-pixels:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
       OPENBLAS_NUM_THREADS: "1"
@@ -38,6 +38,9 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           sudo install -m 755 /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           godot --headless --version
+      # Include full Autumn tie flag and damaged-image negatives, the retained
+      # boundary/Hanon checks, and fresh-production playhead position alongside
+      # the voice/slur controls. Removed looping-score tests are not restored.
       # Current renderer paints playhead below engraving. Recapture actual
       # overlapping-slur controls at this revision; old PNGs cannot pass.
       - name: Fresh independent score pixels (bounded)
@@ -49,14 +52,17 @@ jobs:
           # The Xvfb display is real native Godot output in software OpenGL.
           # All proof functions inspect source-registered PNG ink, not painter
           # layout telemetry. -rx reports any still-unresolved overlap cases.
-          timeout 155s xvfb-run -a -s '-screen 0 1700x1000x24' \
+          timeout 480s xvfb-run -a -s '-screen 0 1700x1000x24' \
             python -m pytest -q -rx --tb=short \
               --basetemp="$RUNNER_TEMP/framebuffer-sample/captures" \
               --junitxml="$RUNNER_TEMP/framebuffer-sample/junit.xml" \
               'tests/test_native_voice_collisions.py::test_actual_voice_columns_have_distinct_required_shafts[three-voice-neighbors]' \
               'tests/test_native_voice_collisions.py::test_erasing_one_voice_shaft_cannot_borrow_the_other[three-voice-neighbors]' \
               'tests/test_native_voice_collisions.py::test_erased_head_cannot_be_replaced_by_the_other_voice[three-voice-neighbors]' \
-              'tests/test_native_audit_ties.py::test_real_autumn_chord_ties_attach_without_borrowing_the_flag[standard]' \
+              'tests/test_native_audit_ties.py \
+              tests/test_native_boundary_clearance.py \
+              tests/test_hanon_boundary_smoke.py \
+              tests/test_native_tie_attachments.py' \
               'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[default]' \
               'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[separated]' \
               'tests/test_real_source_connector_overlap.py::test_each_source_slur_contributes_separate_native_ink' \
