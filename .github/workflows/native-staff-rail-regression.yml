@@ -10,6 +10,12 @@ on:
       - 'tests/test_full_notation_difficult_cases.py'
       - 'piano_teacher/notation/phase3_pixels.py'
       - 'piano_teacher/notation/pixel_proof.py'
+      - 'piano_teacher/notation/photographed_staff_rails.py'
+      - 'piano_teacher/notation/captured_frames.py'
+      - 'piano_teacher/notation/feature_pixels.py'
+      - 'piano_teacher/notation/structure_pixels.py'
+      - 'piano_teacher/notation/rest_intervention.py'
+      - 'piano_teacher/notation/extra_symbol_pixels.py'
 
 permissions:
   contents: read
