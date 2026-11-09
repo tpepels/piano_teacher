@@ -1009,6 +1009,41 @@ func trim_future_queue(reason: String,
     return removed
 
 
+func _restore_future_suffix(saved: Array, world: float) -> bool:
+    # Compensation for a failed append after a validated preflight.
+    # Re-enqueue the exact previously withdrawn source/rest batches in
+    # chronological order; do not create any new world time or note content.
+    var cursor := 0
+    var restored := true
+    while cursor < saved.size():
+        var old: Dictionary = saved[cursor]
+        var serial: int = int(old.get("owner_serial",-1))
+        var batch: Array = []
+        while cursor < saved.size() and \
+                int(saved[cursor].get("owner_serial",-1)) == serial:
+            var item: Dictionary = saved[cursor]
+            var spec: Dictionary = _stream_queue._record(item)
+            spec["pending"] = bool(item.get("pending",false))
+            spec["hidden_until_armed"] = bool(item.get("hidden_until_armed",false))
+            batch.append(spec)
+            cursor += 1
+        if not _stream_queue.enqueue(self,batch,
+                retained_repeat_segments,retained_rest_segments,
+                retained_first_once,world,size.x,size.x*PLAYHEAD_FRACTION,
+                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats):
+            push_error("RECOVERY_TRANSACTION: rollback admission failed for "+str(serial))
+            restored = false
+            break
+        for item in _stream_queue.online:
+            if int(item.get("owner_serial",-1)) == serial:
+                for original in saved:
+                    if int(original.get("serial",0)) == int(item.get("serial",0)):
+                        item["armed"] = bool(original.get("armed",false))
+                        item["ever_visible"] = bool(original.get("ever_visible",false))
+                        break
+    return restored
+
+
 func enqueue_recovery_queue(world: float, source_opening: float,
         graded_deadline_world: float, plan_id: String = "") -> bool:
     # Recovery decisions arrive from the engine with an absolute graded
@@ -1024,7 +1059,21 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     var identity: String = plan_id if not plan_id.is_empty() else \
         "%.6f:%.6f" % [source_opening,graded_deadline_world]
     if _scheduled_score_plan_ids.has(identity):
-        return true
+        var claimed: int = int(_scheduled_score_plan_ids[identity])
+        # A tail withdrawal can invalidate an earlier speculative plan.
+        # An identity ledger alone is never proof that notes still exist.
+        for item in _stream_queue.online:
+            if str(item.get("kind","")) == "source" and \
+                    int(item.get("take_owner",-1)) == claimed and \
+                    absf(float(item.get("source_floor",-INF))-source_opening) < .00001 and \
+                    absf(float(item["world_origin"])+source_opening-
+                        graded_deadline_world) <= StreamAdmission.AUTOMATIC_DUE_EPSILON_BEATS:
+                return true
+        _scheduled_score_plan_ids.erase(identity)
+    # An already elapsed plan may no longer be reinserted: it would
+    # introduce notes behind the real playhead.
+    if graded_deadline_world <= stream_world_beat:
+        return false
     var existing: int = StreamAdmission.select(_stream_queue.online,
         "automatic_due",source_opening,stream_world_beat,
         0.0,0.0,"",graded_deadline_world)
@@ -1033,13 +1082,36 @@ func enqueue_recovery_queue(world: float, source_opening: float,
             _stream_queue.online[existing].get("take_owner",
                 _stream_queue.online[existing]["serial"]))
         return true
-    trim_future_queue("recovery_replan")
-    var checked: float = StreamAdmission.position(_stream_queue.online,
+    # PREPARE: check the actual exact deadline against the queue AFTER
+    # maximal safe tail withdrawal, without mutating the live queue.
+    # Previously this check ran AFTER trim_future_queue(), so a late or
+    # impossible engine deadline deleted valid pending music first.
+    var preview: Dictionary = _stream_queue.preview_tail_withdrawal(
+        stream_world_beat,timeline.pixels_per_beat,staff_gap(),
+        timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
+    var remaining: Array = preview["remaining"]
+    var checked: float = StreamAdmission.position(remaining,
         stream_world_beat,_stream_right_beats(),
         _stream_header_beats(source_opening),
         graded_deadline_world,0.0,timeline.pixels_per_beat,
         staff_gap(),timeline.duration_beats)
     if not is_finite(checked):
+        return false
+    var incoming_left: float = checked - _stream_header_beats(source_opening)
+    if not _stream_queue._clears_prior_layers(incoming_left,
+            timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION):
+        return false
+    # COMMIT: the exact same exposure snapshot and world coordinate must
+    # still hold. No yield/poll/other input runs between preview and commit.
+    var saved_suffix: Array = []
+    for index in range(remaining.size(),_stream_queue.online.size()):
+        saved_suffix.append(_stream_queue.online[index].duplicate())
+    var prior_live: int = _stream_live_serial
+    trim_future_queue("recovery_replan")
+    if _stream_queue.online.size() != remaining.size():
+        push_error("RECOVERY_TRANSACTION: tail was not safely withdrawn")
+        _restore_future_suffix(saved_suffix,stream_world_beat)
+        _stream_live_serial = prior_live
         return false
     var before: int = _stream_serial
     var original_live: int = _stream_live_serial
@@ -1048,6 +1120,10 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     if _stream_serial > before:
         _scheduled_score_plan_ids[identity] = _stream_last_admitted
         return true
+    # No committed replacement: restore exactly the withdrawn source/rest
+    # metadata and immutable world positions through the journaled queue.
+    _restore_future_suffix(saved_suffix,stream_world_beat)
+    _stream_live_serial = prior_live
     return false
 
 
