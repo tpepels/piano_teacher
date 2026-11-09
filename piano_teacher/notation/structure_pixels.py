@@ -22,7 +22,8 @@ from .head_registration import register_noteheads
 from .pixel_context import clef_at
 from .pixel_ink import bright, rasterize_outline, pixel_runs
 from .pixel_motion import frame_shift
-from .pixel_proof import detect_staff_lines, expected_y, playhead_x
+from .pixel_proof import expected_y, playhead_x
+from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
 from .raster_matching import match_glyph, _joint_candidates, photographed_playhead_columns
 from .reference_font import feature_glyphs
@@ -132,11 +133,13 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
                     for path in Path(folder).glob('native-*.png')
                     if re.fullmatch(r'native--?\d+\.\d+', path.stem))
 
+    rail_witness = PhotographedStaffRails(folder)
+
     @lru_cache(maxsize=4)
     def frame(clock):
         with Image.open(Path(folder)/f'native-{clock:.5f}.png') as raw:
             picture = raw.convert('RGB')
-        return picture, detect_staff_lines(picture)
+        return picture, rail_witness.detect(picture)
 
     def boundary(clock, staff):
         key = clock, staff
