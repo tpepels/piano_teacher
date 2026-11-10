@@ -589,5 +589,53 @@ func _initialize() -> void:
                 not bool(item.get("armed",false))),
         "failed Play leaves or rebuilds a hidden READY source without ghost notes")
     idle.free()
+    # Real queue integration: a musical notehead straddles the authored
+    # barline at beat 4.0. Move the *retractable clip seam* into nearby empty
+    # ink space; Pause may withdraw bar 2 without leaving a half-note on bar 1.
+    var seam := InstrumentedView.new()
+    seam.size = Vector2(800,440)
+    seam.native_ready = true
+    seam.timeline.duration_beats = 8.0
+    seam.timeline.measures = [
+        {"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    seam.timeline.pixels_per_beat = 96.0
+    seam._source_ink_intervals = [Vector2(3.94,4.07)]
+    seam.present_flow(0.0,{
+        "loaded":true,"running":false,"paused":false,
+        "phase":"ready","mode":"practice","piece_fingerprint":"seam",
+        "revision":1,"transport_id":0,"play_from_beat":0.0},0.0)
+    check(seam.stream_passes.size()==2 and
+        float(seam.stream_passes[0]["clip_ceiling"]) < 3.94 and
+        float(seam.stream_passes[1]["clip_floor"]) ==
+            float(seam.stream_passes[0]["clip_ceiling"]),
+        "notehead at a measure boundary belongs wholly to one clip")
+    seam._stream_queue.online[0]["ever_visible"] = true
+    seam.present_flow(.1,{
+        "loaded":true,"running":true,"paused":true,
+        "phase":"paused","mode":"practice","piece_fingerprint":"seam",
+        "revision":1,"transport_id":1,"play_from_beat":0.0},0.0)
+    check(seam.stream_passes.size()==1 and
+        float(seam.stream_passes[0]["clip_ceiling"]) < 3.94,
+        "Pause removes unseen next-measure notehead without retaining its left half")
+    seam.free()
+
+    var connected := InstrumentedView.new()
+    connected.size = Vector2(800,440)
+    connected.native_ready = true
+    connected.timeline.duration_beats = 8.0
+    connected.timeline.measures = [
+        {"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    connected.timeline.pixels_per_beat = 96.0
+    connected._source_ink_intervals = [Vector2(3.0,5.0)]
+    connected.present_flow(0.0,{
+        "loaded":true,"running":false,"paused":false,
+        "phase":"ready","mode":"practice","piece_fingerprint":"tie",
+        "revision":1,"transport_id":0,"play_from_beat":0.0},0.0)
+    check(connected.stream_passes.size()==1 and
+        is_equal_approx(float(connected.stream_passes[0]["clip_ceiling"]),8.0),
+        "a real cross-measure tie is one indivisible future unit")
+    connected.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
