@@ -9,6 +9,7 @@ on:
       - 'piano_teacher/fingering/**'
       - 'tests/test_fingering_provider.py'
       - 'tests/test_lumikey_fixed_overlap_index.py'
+      - 'tests/test_full_native_open_with_lumikey.py'
       - 'scripts/setup-fingering.sh'
       - '.github/workflows/lumikey-production-inference.yml'
   workflow_dispatch:
@@ -47,3 +48,7 @@ jobs:
           timeout 195s python -m pytest -q --tb=short \
             tests/test_lumikey_fixed_overlap_index.py \
             tests/test_fingering_provider.py
+      - name: Import and reopen a complete original MIDI via the production command bus
+        run: |
+          timeout 200s python -m pytest -q -s --tb=short \
+            tests/test_full_native_open_with_lumikey.py
