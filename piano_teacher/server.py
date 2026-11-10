@@ -2283,8 +2283,14 @@ class PracticeEngine:
                 # A visual stage must be completely outside the right edge
                 # when the next graded clock starts counting down. Extend
                 # that SAME Python deadline; no second frontend clock.
+                # Timer callbacks can arrive after the previous stage's
+                # scheduled settlement (CPU/engraving load, OS suspension).
+                # Do not create a *past* start and then let the frontend
+                # reject the already prepared next score at graded beat >= 0.
+                # Use the same backend monotonic clock and preserve the full
+                # authored offscreen lead at the moment of commitment.
                 next_deadline = scheduled_offscreen_start(
-                    deadline, lead_beats, self.plan.bpm)
+                    max(deadline, now), lead_beats, self.plan.bpm)
                 self._continue_at(next_deadline)
                 # One count-in bar before the handed-off stage starts; the
                 # rest of its offscreen lead is silent (owner, 2026-11-08).
