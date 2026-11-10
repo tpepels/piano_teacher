@@ -44,6 +44,12 @@ var _state: Dictionary = {}
 var _layout: Dictionary = {}
 var _generation := 0
 var _model_failures := 0
+# Retry is a genuine replay of the same source/layout request. If a
+# deterministic native failure repeats unchanged, surface that fact and
+# keep Browse visible rather than presenting an identical mysterious Retry.
+var _last_native_failure := ""
+var _retry_attempted := false
+var _identical_failure_repeats := 0
 var _retained_started_ms := -1
 var _preparing_since_ms := -1
 var _next_request_id := 0
@@ -82,6 +88,9 @@ func update_context(state: Dictionary, now_ms: int) -> void:
     _loaded = loaded
     _fingerprint = fingerprint
     if changed:
+        _last_native_failure = ""
+        _retry_attempted = false
+        _identical_failure_repeats = 0
         revision = next_revision
         _generation += 1
         _reset_assets()
@@ -113,6 +122,9 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     _retained_started_ms = -1
     _preparing_since_ms = -1
     score_error = ""
+    _last_native_failure = ""
+    _retry_attempted = false
+    _identical_failure_repeats = 0
     _renderer.visible = true
     if _renderer.has_signal("retained_ink_compiled") and not \
             _renderer.is_connected("retained_ink_compiled",_finish_native_score):
@@ -197,6 +209,9 @@ func retry(now_ms: int) -> bool:
     if not _loaded:
         return false
     # Explicit Retry cancels a pending layout as well as failed attempts.
+    # Persist the prior raw error across _reset_assets() for exact failure
+    # comparison, but never carry it into a different score revision.
+    _retry_attempted = true
     _generation += 1
     _reset_assets()
     _preparing_since_ms = now_ms
@@ -329,6 +344,9 @@ func _finish_native_score() -> void:
     _preparing_since_ms = -1
     _retained_started_ms = -1
     score_error = ""
+    _last_native_failure = ""
+    _retry_attempted = false
+    _identical_failure_repeats = 0
     _publish_status()
     score_published.emit(revision)
     if str(_state.get("phase","")) == "loading" and \
@@ -373,12 +391,23 @@ func _hide_renderer() -> void:
 
 func _fail(message: String) -> void:
     push_error("SCORE_ASSET_FAILURE: " + message)
+    var repeated: bool = _retry_attempted and \
+        message == _last_native_failure and not message.is_empty()
+    _identical_failure_repeats = (
+        _identical_failure_repeats+1 if repeated else 0)
+    _last_native_failure = message
+    _retry_attempted = false
     score_error = message
+    if repeated:
+        score_error += ("\nRetry reproduced the same engraving failure " +
+            "(%d repeat%s). Inspect SCORE_ASSET_FAILURE or choose music." % [
+                _identical_failure_repeats,
+                "" if _identical_failure_repeats == 1 else "s"])
     _retained_started_ms = -1
     rendered_revision = -1
     timeline_model_revision = -1
     _hide_renderer()
-    score_failed.emit(message)
+    score_failed.emit(score_error)
     _publish_status()
 
 func _publish_status() -> void:
