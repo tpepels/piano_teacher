@@ -1210,20 +1210,37 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     var prior_live: int = _stream_live_serial
     trim_future_queue("recovery_replan")
     if _stream_queue.online.size() != remaining.size():
-        push_error("RECOVERY_TRANSACTION: tail was not safely withdrawn")
-        _restore_future_suffix(saved_suffix,stream_world_beat)
+        # The archive may refuse one of several suffix withdrawals after
+        # earlier owners were already removed. Restore ONLY the missing
+        # original tail; re-enqueueing the still-online survivors would
+        # duplicate their immutable notes and fail recovery altogether.
+        var still_present: int = maxi(0,
+            _stream_queue.online.size()-remaining.size())
+        push_error("RECOVERY_TRANSACTION: tail withdrawal incomplete")
+        _restore_future_suffix(saved_suffix.slice(still_present),
+            stream_world_beat)
         _stream_live_serial = prior_live
         return false
     var before: int = _stream_serial
-    var original_live: int = _stream_live_serial
     _stream_add_take(source_opening,checked,source_opening,
         "autopending",on_empty)
-    _stream_live_serial = original_live
+    _stream_live_serial = prior_live
     if _stream_serial > before:
         _scheduled_score_plan_ids[identity] = _stream_last_admitted
         return true
-    # No committed replacement: restore exactly the withdrawn source/rest
-    # metadata and immutable world positions through the journaled queue.
+    # If a retained segment/asset failed halfway through its measure batch,
+    # eliminate that exact unexposed newly allocated owner first. Its serial
+    # was not committed by _stream_add_take; the pre-existing suffix retains
+    # the only authoritatively valid music at its original world positions.
+    var partial_owner: int = before+1
+    if _stream_queue.has_take(partial_owner):
+        _stream_queue.withdraw_take_tail(self,partial_owner,
+            stream_world_beat,timeline.pixels_per_beat,staff_gap(),
+            timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION,
+            "recovery_incomplete_append")
+    if _stream_queue.has_take(partial_owner):
+        push_error("RECOVERY_TRANSACTION: incomplete take cannot be rolled back")
+        return false
     _restore_future_suffix(saved_suffix,stream_world_beat)
     _stream_live_serial = prior_live
     return false
