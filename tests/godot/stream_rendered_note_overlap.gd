@@ -668,5 +668,27 @@ func _initialize() -> void:
     check(not str(far._stream_queue.online[0]["segment"].synced_take).is_empty(),
         "same far-ahead source becomes projected when its real world time reaches viewport")
     far.free()
+    # A changed time/key header begins to the LEFT of its MusicXML
+    # measure start. The production geometry collector must merge its
+    # preceding strip, not silently clip half the authentic clef/meter.
+    var context := InstrumentedView.new()
+    context.size = Vector2(800,440)
+    context.native_ready = true
+    context.timeline.duration_beats = 8.0
+    context.timeline.pixels_per_beat = 96.0
+    context.timeline.measures = [
+        {"start_beat":0.0,"end_beat":4.0,
+         "meter":[4,4],"keys":{"right":0,"left":0}},
+        {"start_beat":4.0,"end_beat":8.0,
+         "meter":[3,4],"keys":{"right":2,"left":0}}]
+    context._source_ink_intervals = context._build_ink_safe_boundaries(17.0)
+    context.present_flow(0.0,{
+        "loaded":true,"running":false,"paused":false,
+        "phase":"ready","mode":"practice","piece_fingerprint":"meter-context",
+        "revision":1,"transport_id":0,"play_from_beat":0.0},0.0)
+    check(context.stream_passes.size()==1 and
+        is_equal_approx(float(context.stream_passes[0]["clip_ceiling"]),8.0),
+        "changed clef/key/meter cannot be severed at its barline during Pause")
+    context.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
