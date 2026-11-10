@@ -35,9 +35,11 @@ def test_native_view_uses_authentic_source_assets_and_indexed_notation():
     assert 'timeline.screen_x(' in painters  # screen mapping moved from view.gd into the pass painters
     assert 'var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)' in layout
     assert 'var ordered_events: Array = model.get("notation_events", []).duplicate()' in index
-    assert 'foreventin_visible_events(left,right,frame):' in ''.join(native.split())
+    # Only indexed, viewport-visible events are visited (source_pass_painter, event_window.gd).
+    assert 'foreventinEventWindow.visible(layout.ordered_events,left,right,frame):' in ''.join(
+        (ROOT / "godot/notation/native/source_pass_painter.gd").read_text().split())
     assert 'cached_staff_gap' in layout
-    assert 'tie_pairs' in layout and 'score_layout.tie_pairs' in symbols
+    assert 'tie_pairs' in layout and 'visible_source_spans(' in symbols and '"ties"' in symbols
     assert 'paint_meter_number(canvas,frame,int(meter[0])' in context
     assert 'paint_meter_number(canvas,frame,int(meter[1])' in context
     assert 'glyphs.paint(canvas, "head_black"' in symbols
@@ -48,22 +50,25 @@ def test_native_view_uses_authentic_source_assets_and_indexed_notation():
     assert 'func paint_flag(' not in renderers
     assert 'func paint_ellipse(' not in renderers
     assert 'glyphs.paint_note_stem(' in symbols
-    assert 'draw_arc(' not in renderers
-    assert 'draw_circle(' not in renderers
+    # Playhead dot/pulse circles in view.gd are the only allowed ones; the exact
+    # rule lives in test_notation_symbols (owner decision: no rings on noteheads).
+    assert 'draw_arc(' not in symbols+context
+    assert 'draw_circle(' not in symbols+context
     assert 'def native_glyphs' in (ROOT / "piano_teacher/notation/assets/glyphs.py").read_text()
     assert 'from ..notation.assets.glyphs import native_glyphs, preparation_symbols' in preparation
-    assert 'parsed.get("native_glyphs", {})' in app
-    assert 'parsed.get("native_chord_templates", {})' in app
+    assets = (ROOT / "godot" / "native_score_assets.gd").read_text()  # asset parsing moved out of main.gd
+    assert 'source.get("native_glyphs", {})' in assets
+    assert 'source.get("native_chord_templates", {})' in assets
     assert 'glyphs.paint_note(canvas, kind, normal_up, x, y, gap, ink)' in symbols
     assert 'note_templates(cache)' in preparation
-    assert 'score_preparation.assemble_layout(score, native_notes=True,' in (
+    assert 'score_preparation.assemble_layout(score,' in (
         ROOT / "piano_teacher/application/score_artifacts.py").read_text()
-    assert 'self.score_artifacts.geometry(self._score_selection(), native_notes=native_notes)' in (
+    assert 'artifacts.geometry(selection)' in (
         ROOT / "piano_teacher/server.py").read_text()
-    assert 'str(int(measure.get("number",0)))' in ''.join(native.split())
+    assert 'str(int(measure.get("number",0)))' in ''.join(painters.split())
     assert 'func _beam_segment(' not in renderers
     assert 'func beam_segment(' not in renderers
-    assert 'glyphs.paint_beam(' in symbols
+    assert 'paint_beams(' in painters and 'func paint_beam(' in (ROOT / 'godot/notation/native/glyphs.gd').read_text()
     assert 'preload("res://notation/legacy/strip.gd")' not in renderers
     assert 'preload("res://notation/legacy/motion_curve.gd")' not in renderers
     assert 'MIN_ATTACK_SEPARATION' in geometry

@@ -73,7 +73,7 @@ godot --headless --path godot --script "$PWD/tests/godot/visual_transport_clock.
 
 `scripts/ci-smoke.sh` is the push gate (fast, cheap contracts).
 `scripts/ci-full.sh` is the release gate: the whole Python suite (25-45
-minutes, run it before a release). Known-red tests are listed with a reason
+minutes, run it before a release; run it on an otherwise idle machine, wall-clock budget tests are `flaky:` entries otherwise; pass `--durations=60 --junitxml=...` through to pytest). Known-red tests are listed with a reason
 in `tests/quarantine.txt` and run as strict xfails: a quarantined test that
 starts passing fails the gate until its line is removed, and a line naming a
 test that no longer exists aborts the run.
