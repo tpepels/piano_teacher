@@ -97,6 +97,12 @@ jobs:
         run: |
           bash scripts/godot-test.sh 15s --headless --path godot \
             --script "$PWD/tests/godot/moving_meter_grid.gd"
+      - name: Verify safe retractable measure seams and complete source connectors
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          bash scripts/godot-test.sh 20s --headless --path godot \
+            --script "$PWD/tests/godot/score_stream_window_cuts.gd"
       - name: Validate projected notehead nonoverlap across pause resume and retry
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
