@@ -523,8 +523,15 @@ func _build_ink_safe_boundaries(gap: float) -> Array[Vector2]:
         if context_changed:
             var header_left_px: float = (
                 (86.0+float(key_columns)*14.0)*gap/17.0+gap*2.5)
+            # A context change belongs semantically to its NEW measure.
+            # If its leftward header is too wide to move the clip seam
+            # before all that ink, do not move the seam slightly RIGHT and
+            # keep the entire new header attached to the old measure.
+            # Reserve beyond the allowable right-shift solely to force an
+            # indivisible two-measure visual group in that case.
             intervals.append(Vector2(
-                at-header_left_px/density-pad,at+maxf(2.0/density,pad)))
+                at-header_left_px/density-pad,
+                at+ScoreStreamWindowCuts.MAX_SHIFT_BEATS+pad))
         previous = measure
     return intervals
 
