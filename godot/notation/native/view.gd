@@ -489,6 +489,43 @@ func _build_ink_safe_boundaries(gap: float) -> Array[Vector2]:
     for expression in layout.source_expressions:
         var at: float = float(expression.get("beat",0.0))
         _source_ink_interval(intervals,at,at,maxf(pad,gap*2.5/density))
+    # A measure's clef/key/meter is engraved BEFORE its nominal barline
+    # in source X. Two measure clips with a seam exactly at that barline
+    # would silently sever its header. The same applies to the regular
+    # barline stroke itself. Preserve connected context as indivisible ink.
+    var previous: Dictionary = {}
+    for i in range(timeline.measures.size()):
+        var measure: Dictionary = timeline.measures[i]
+        var at: float = float(measure.get("start_beat",0.0))
+        if i == 0:
+            previous = measure
+            continue
+        # Every regular barline has finite thickness around its beat;
+        # move the retractable seam a few pixels left of the stroke.
+        _source_ink_interval(intervals,at,at,maxf(pad,2.0/density))
+        var context_changed: bool = (
+            measure.get("meter",[]) != previous.get("meter",[]) or
+            measure.get("keys",{}) != previous.get("keys",{}))
+        var key_columns := 0
+        for staff in layout.visible_staves():
+            if layout.clef_for(staff,measure) != \
+                    layout.clef_for(staff,previous):
+                context_changed = true
+            var new_key: int = int(measure.get("keys",{}).get(staff,0))
+            var old_key: int = int(previous.get("keys",{}).get(staff,0))
+            if new_key != old_key:
+                # The original cancellation naturals occupy additional
+                # columns BEFORE the incoming signature.
+                key_columns = maxi(key_columns,
+                    absi(new_key)+absi(old_key))
+            else:
+                key_columns = maxi(key_columns,absi(new_key))
+        if context_changed:
+            var header_left_px: float = (
+                (86.0+float(key_columns)*14.0)*gap/17.0+gap*2.5)
+            intervals.append(Vector2(
+                at-header_left_px/density-pad,at+maxf(2.0/density,pad)))
+        previous = measure
     return intervals
 
 
