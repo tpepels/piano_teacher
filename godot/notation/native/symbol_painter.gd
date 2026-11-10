@@ -67,7 +67,8 @@ func paint_tuplet_brackets(canvas, frame: RenderPass, clock: float, playhead_x: 
         gap: float) -> void:
     # Authentic separated Verovio number/bracket masks only. Every group
     # was validated on lesson load; no Godot-drawn ratio, digit or hook.
-    for group in score_layout.notation_tuplets:
+    for group in score_layout.visible_source_spans(
+            "tuplets",frame.source_floor-.25,frame.source_ceiling+.25):
         if tuplet_hidden(group):
             continue
         var events: Array = group.get("events",[])
@@ -241,7 +242,8 @@ func paint_beams(canvas, frame: RenderPass, data: Dictionary, gap: float) -> voi
 
 
 func paint_ties(canvas, frame: RenderPass, playhead_x: float, clock: float, gap: float) -> void:
-    for pair in score_layout.tie_pairs:
+    for pair in score_layout.visible_source_spans(
+            "ties",frame.source_floor-.25,frame.source_ceiling+.25):
         var previous: Dictionary = pair["first"]
         var event: Dictionary = pair["last"]
         if not frame.span_visible(previous,event):
@@ -267,7 +269,8 @@ func paint_ties(canvas, frame: RenderPass, playhead_x: float, clock: float, gap:
 
 
 func paint_slurs(canvas, frame: RenderPass, playhead_x: float,clock: float,gap: float) -> void:
-    for pair in score_layout.slur_pairs:
+    for pair in score_layout.visible_source_spans(
+            "slurs",frame.source_floor-.25,frame.source_ceiling+.25):
         var first: Dictionary = pair["first"]
         var last: Dictionary = pair["last"]
         if not frame.span_visible(first,last):
