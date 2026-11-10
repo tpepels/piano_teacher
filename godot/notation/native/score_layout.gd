@@ -6,6 +6,7 @@ const ScoreIndex := preload("res://notation/native/score_index.gd")
 const VoiceLayout := preload("res://notation/native/voice_layout.gd")
 const RestLanePlanning := preload("res://notation/native/rest_lane_planning.gd")
 const SourceSpans := preload("res://notation/native/source_spans.gd")
+const SourceSpanIndex := preload("res://notation/native/source_span_index.gd")
 var timeline
 var glyphs
 var size := Vector2.ZERO
@@ -22,6 +23,7 @@ var attached_grace_notes: Array = []
 var source_expressions: Array = []
 var prepared_hairpins: Array = []
 var prepared_voltas: Array = []
+var source_span_indices: Dictionary = {}
 var expression_note_index: Dictionary = {}
 var tie_pairs: Array = []
 var slur_pairs: Array = []
@@ -110,6 +112,43 @@ func rebuild_index() -> void:
     previous_attack_before_measure = index["previous_attack_before_measure"]
     tie_pairs = index["tie_pairs"]
     slur_pairs = index["slur_pairs"]
+    _index_source_spans("beams",beam_groups)
+    _index_source_spans("tuplets",notation_tuplets)
+    _index_source_spans("ties",tie_pairs)
+    _index_source_spans("slurs",slur_pairs)
+    _index_source_spans("hairpins",prepared_hairpins)
+    _index_source_spans("voltas",prepared_voltas)
+
+
+func _index_source_spans(kind: String, originals: Array) -> void:
+    var indexed = SourceSpanIndex.new()
+    for i in range(originals.size()):
+        var entry: Variant = originals[i]
+        var first := NAN
+        var last := NAN
+        if kind in ["beams","tuplets"]:
+            var notes: Array = (
+                entry if kind == "beams" else entry.get("events",[]))
+            if not notes.is_empty():
+                first = float(notes[0].get("beat",0.0))
+                last = float(notes[-1].get("beat",first))
+        elif kind in ["ties","slurs"]:
+            first = float(entry["first"].get("beat",0.0))
+            last = float(entry["last"].get("beat",first))
+        elif kind == "hairpins":
+            first = float(entry.get("begin",NAN))
+            last = float(entry.get("end",NAN))
+        elif kind == "voltas":
+            first = float(entry.get("start",NAN))
+            last = float(entry.get("end",NAN))
+        indexed.add(first,last,entry,i)
+    indexed.finish()
+    source_span_indices[kind] = indexed
+
+
+func visible_source_spans(kind: String, left: float, right: float) -> Array:
+    var index = source_span_indices.get(kind)
+    return index.query(left,right) if index != null else []
 
 
 func clef_for(staff: String, measure: Dictionary) -> Dictionary:
