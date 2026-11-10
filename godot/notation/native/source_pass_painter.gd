@@ -6,6 +6,20 @@ const RenderPass := preload("res://notation/native/render_pass.gd")
 const EventWindow := preload("res://notation/native/event_window.gd")
 const Design := preload("res://practice_theme.gd")
 
+static func _measure_index_at_or_after(measures: Array, beat: float) -> int:
+    # Per-measure retained canvases must not re-scan the whole original
+    # composition just to locate their own one measure of barline/context.
+    var lo := 0
+    var hi: int = measures.size()
+    while lo < hi:
+        var mid: int = (lo+hi)>>1
+        if float(measures[mid].get("start_beat",0.0)) < beat:
+            lo = mid+1
+        else:
+            hi = mid
+    return lo
+
+
 static func paint(view, canvas: CanvasItem) -> RenderPass:
     # Every source copy is identical immutable native score ink. Source
     # context is not rebuilt on Play, Retry, Pause or the arrival of a note.
@@ -41,13 +55,14 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
     frame.source_ceiling = source_last
     layout.set_viewport(Vector2(retained_width,view.size.y))
     var font: Font = ThemeDB.fallback_font
-    var previous_measure: Dictionary = {}
-    for measure in timeline.measures:
+    var measure_index: int = _measure_index_at_or_after(
+        timeline.measures,left-.00001)
+    var previous_measure: Dictionary = (
+        timeline.measures[measure_index-1] if measure_index > 0 else {})
+    for index in range(measure_index,timeline.measures.size()):
+        var measure: Dictionary = timeline.measures[index]
         var at: float = float(measure.get("start_beat",0.0))
-        var first: bool = measure == timeline.measures[0]
-        if at < left-.00001:
-            previous_measure = measure
-            continue
+        var first: bool = index == 0
         if at > right+.00001:
             break
         if not frame.event_visible(measure):
