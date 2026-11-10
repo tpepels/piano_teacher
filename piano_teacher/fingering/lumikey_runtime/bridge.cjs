@@ -8,12 +8,12 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const ort = require('onnxruntime-node');
 const {predictHandFingerings} = require('@lumikey/piano-fingering-model');
+const {FixedOverlapIndex, overlaps} = require('./fixed_overlap_index.cjs');
 const expected = {
   left: '246f2fed013c27ca8c32ce9d070002afcc49da4f1dfb0c43e09a4a3f9f2fb86e',
   right: 'f931288302b87f5eec1c8af29a570ee0213a272a13eeb590991a285e1f1b67eb'
 };
 const EPS = 1e-5;
-const overlaps = (a,b) => a.time < b.time+b.duration-EPS && b.time < a.time+a.duration-EPS;
 
 async function handInference(notes, left, session) {
   const sorted = notes.filter(n => n.left===left).sort((a,b)=>a.time-b.time || a.note-b.note);
@@ -25,6 +25,11 @@ async function handInference(notes, left, session) {
     chords.get(n.time).push(n);
   }
   const fixed = sorted.filter(n=>n.finger);
+  // Original exhaustive fixed.some/filter checks scanned the complete
+  // piece for EACH attack and every candidate/chord backtracking branch.
+  // Query original fixed objects by source-time interval instead.
+  const indexedFixed = new FixedOverlapIndex(fixed);
+  const chordFixed = new Map();
   const held = [];
   let index=0;
   const wrapper = {run: async inputs => {
@@ -37,10 +42,20 @@ async function handInference(notes, left, session) {
     held.splice(0,held.length,...active);
     const chord=chords.get(n.time);
     const keys=[...new Set(chord.map(a=>a.note))].sort((a,b)=>a-b);
-    const futureFixed=fixed.filter(a=>a!==n && overlaps(a,n));
+    const overlappingFixed = indexedFixed.overlapping(n);
+    const futureFixed = overlappingFixed.filter(a=>a!==n);
     const shared=active.find(a=>a.note===n.note);
+    let groupFixed = chordFixed.get(n.time);
+    if (!groupFixed) {
+      const all = new Set();
+      for (const member of chord) {
+        for (const match of indexedFixed.overlapping(member)) all.add(match);
+      }
+      groupFixed = [...all];
+      chordFixed.set(n.time, groupFixed);
+    }
     const allowed = finger => {
-      if(fixed.some(a=>a.note===n.note && overlaps(a,n) && a.finger!==finger)) return false;
+      if(overlappingFixed.some(a=>a.note===n.note && a.finger!==finger)) return false;
       if (active.some(a=>a.note!==n.note && a.finger===finger)) return false;
       if (futureFixed.some(a=>a.note!==n.note && a.finger===finger)) return false;
       if (shared && shared.finger!==finger) return false;
@@ -67,9 +82,9 @@ async function handInference(notes, left, session) {
         for(let next=previous+1; next<=5; next++) {
           const f=left?6-next:next;
           if(bound && bound.finger!==f || existing && existing.finger!==f) continue;
-          if(fixed.some(a=>a.note===pitch && a.finger!==f && members.some(b=>overlaps(a,b)))) continue;
+          if(groupFixed.some(a=>a.note===pitch && a.finger!==f)) continue;
           if(active.some(a=>a.note!==pitch && a.finger===f)) continue;
-          if(fixed.some(a=>a.note!==pitch && a.finger===f && members.some(b=>overlaps(a,b)))) continue;
+          if(groupFixed.some(a=>a.note!==pitch && a.finger===f)) continue;
           if(visit(position+1,next)) return true;
         }
         return false;
