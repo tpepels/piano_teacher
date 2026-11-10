@@ -97,3 +97,48 @@ def test_real_moonlight_import_and_reopen_with_original_fingering_models(tmp_pat
     finally:
         engine.listen.cancel()
         engine.db.close()
+
+
+def test_original_large_midi_saved_coda_starts_bounded_not_whole_score(tmp_path):
+    """Issue #46's initial blank/fast-scroll class with actual original MIDI.
+
+    The desktop Coda preference must enter a bounded lesson, preserving the
+    complete original performance only as the separately selectable ending.
+    This test does not substitute for the unavailable affected Pathétique file
+    or physical-screen velocity measurement.
+    """
+    path = ROOT / "midi" / "Moonlight_Sonata_I.midi"
+    engine = PracticeEngine(tmp_path / "coda", enable_midi=False)
+    try:
+        engine.set_preferences(exercise_strategy="coda-midi")
+        engine.load(str(path))
+        plan = engine.plan
+        piece = plan.piece
+        assert len(piece.notes) >= 1000
+        assert plan.lesson_generator.name == "coda-midi"
+        assert len(piece.bar_boundaries) > 15
+        assert plan.exercises[0].kind == "learn"
+        first = plan.exercises[0].phrase
+        assert 1 <= first.last_bar - first.first_bar + 1 <= 8
+        assert (first.first_bar, first.last_bar) != (
+            1, len(piece.bar_boundaries)-1)
+        assert all(ex.phrase.last_bar-ex.phrase.first_bar+1 <= 8
+                   for ex in plan.exercises if ex.kind == "learn")
+        assert plan.exercises[-1].kind == "perform"
+        assert plan.exercises[-1].phrase.notes == piece.notes
+        assert plan.exercises[-1].phrase.last_bar == (
+            len(piece.bar_boundaries)-1)
+        plan.set_bpm(20)
+        assert plan.bpm == 20
+        engine.start()
+        state = engine.state()
+        assert state["bpm"] == 20
+        assert state["revision"] == engine.score_revision
+        # Native ink still has to pass its own dynamic density/viewport fit.
+        # This verifies that the backend has not silently accelerated the
+        # musical clock or substituted the whole-score first passage.
+        assert engine.plan.active_phrase.last_bar - (
+            engine.plan.active_phrase.first_bar) < 8
+    finally:
+        engine.listen.cancel()
+        engine.db.close()
