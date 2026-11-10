@@ -1385,8 +1385,19 @@ func present_flow(world_beat: float, state: Dictionary,
 
 func _project_stream(playhead_x: float) -> void:
     var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var gap: float = staff_gap()
     var used: Dictionary = {}
+    # The immutable online queue is chronologically ordered by printed
+    # left edge; once one source/rest clip is entirely to the right of the
+    # viewport, every later clip is too. Long pieces therefore do not
+    # project thousands of offscreen measures on every animation frame.
     for item in _stream_queue.online:
+        var bounds: Vector2 = StreamLifecycle.screen_bounds(
+            item,density,gap,timeline.duration_beats)
+        var screen_left: float = playhead_x + (
+            float(item["world_origin"])-stream_world_beat)*density+bounds.x
+        if screen_left > size.x+1.0:
+            break
         var segment = item.get("segment")
         var clip = item.get("clip")
         # Invalid records are retired by present_flow(), never mutated or
@@ -1395,7 +1406,7 @@ func _project_stream(playhead_x: float) -> void:
                 clip == null or not is_instance_valid(clip):
             continue
         if not StreamLifecycle.project(item,stream_world_beat,playhead_x,
-                density,staff_gap(),size,timeline.duration_beats):
+                density,gap,size,timeline.duration_beats):
             continue
         used[segment] = true
         if str(item.get("kind","source")) == "rest":
@@ -1406,8 +1417,7 @@ func _project_stream(playhead_x: float) -> void:
         # Status ink is a child of this strip: it inherits the strip's exact
         # transform and clip window. Repaints only when its take changes.
         segment.sync_note_status(take_key,note_status_source,note_status_visible)
-        var clip_bounds: Vector2 = StreamLifecycle.screen_bounds(
-            item,density,staff_gap(),timeline.duration_beats)
+        var clip_bounds: Vector2 = bounds
         # Register every head the strip actually shows, including heads a
         # voice column displaced left of its source floor into the clip's
         # leading margin: they are painted, so they must stay interactive.
