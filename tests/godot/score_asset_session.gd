@@ -253,6 +253,36 @@ func test_retry() -> void:
     session.update_context(context(5),6340)
     check(actions.size() == 2,
         "loading poll may repeat acknowledgement when command port was busy")
+    # A deterministic native rejection is actionable after manual Retry.
+    # Do not cycle forever through the same obscure failure message while
+    # erasing the fact that the identical request has already been retried.
+    var broken := Renderer.new()
+    var session_again := Session.new(broken)
+    session_again.update_context(context(6),0)
+    session_again.request_start_result("layout",
+        session_again.pending_id("layout"),ERR_CANT_CONNECT,1)
+    var original: String = session_again.score_error
+    check(not original.is_empty() and
+        not original.contains("Retry reproduced"),
+        "first native failure reports original error without false repeats")
+    check(session_again.retry(2),"failed score exposes real manual retry")
+    session_again.request_start_result("layout",
+        session_again.pending_id("layout"),ERR_CANT_CONNECT,3)
+    check(session_again.score_error.begins_with(original) and
+        session_again.score_error.contains("Retry reproduced the same") and
+        session_again.status()["browse_visible"] and
+        session_again.status()["retry_visible"],
+        "second identical rejection reports repeated failure and keeps Browse")
+    check(session_again.retry(4),"a changed runtime may still recover on retry")
+    finish_layout(session_again,6,5)
+    finish_model(session_again,6,6)
+    check(session_again.is_ready() and session_again.score_error.is_empty() and
+        session_again._identical_failure_repeats == 0,
+        "successful retry clears repeated-error state and publishes score")
+    session_again.update_context(context(7),7)
+    check(session_again._last_native_failure.is_empty() and
+        session_again._identical_failure_repeats == 0,
+        "source revision change cannot inherit an old error signature")
 
 func test_failure() -> void:
     for kind in ["start","rejected","empty","positions","wrong-revision",
