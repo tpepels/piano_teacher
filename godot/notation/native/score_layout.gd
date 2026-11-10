@@ -68,6 +68,7 @@ func clear() -> void:
     source_expressions.clear()
     prepared_hairpins.clear()
     prepared_voltas.clear()
+    source_span_indices.clear()
     expression_note_index.clear()
     tie_pairs.clear()
     slur_pairs.clear()
