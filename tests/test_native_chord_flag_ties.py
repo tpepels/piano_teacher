@@ -55,6 +55,7 @@ class Probe extends "res://notation/native/view.gd":
         var first: Dictionary = events[int(spec["tone"])]
         var last: Dictionary = events[2+int(spec["tone"])]
         layout.tie_pairs = [{"first":first,"last":last}]
+        layout._index_source_spans("ties",layout.tie_pairs)  # painters query the span index
         connector_geometry.prewarm_tie_clearances(gap)
         symbols.paint_engraved_chord(self,RenderPass.new(),events[0],100.0,gap,NOTE_INK)
         symbols.paint_engraved_chord(self,RenderPass.new(),events[2],181.0,gap,NOTE_INK)

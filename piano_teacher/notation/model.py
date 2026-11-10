@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass
+from fractions import Fraction
 from xml.etree import ElementTree as ET
 
 from .lesson import DIVISIONS, LessonScore
@@ -344,7 +345,7 @@ def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
                     "note_type": item.findtext("type"),
                     "spelling": {
                         "step": pitch.findtext("step"),
-                        "alter": int(pitch.findtext("alter", "0")),
+                        "alter": int(Fraction(pitch.findtext("alter", "0"))),
                         "octave": int(pitch.findtext("octave")),
                     },
                 })

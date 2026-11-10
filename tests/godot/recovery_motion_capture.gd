@@ -4,12 +4,10 @@ const Design := preload("res://practice_theme.gd")
 
 # Desktop native capture with a backend-derived clock. Saves every frame and
 # its projection, so motion can be inspected as video and measured separately.
+# The shared fixture's _ready builds the interface and every frame/state
+# coordinator the production main.gd owns.
 class FixtureApp extends "native_production_fixture.gd":
-    func _ready() -> void:
-        _build_interface()
-        _navigate("practice")
-        _update_responsive_layout()
-        set_process(false)
+    pass
 
 func _initialize() -> void:
     run.call_deferred()
@@ -69,14 +67,18 @@ func run() -> void:
             if not checking:
                 pixels.save_png(output + "/%d-%03d.png" % [bpm, frame])
             var pixel_scale := Vector2(pixels.get_size()) / root.get_visible_rect().size
-            var expected_x: float = (app.practice_view.stage.renderer.global_position.x + app.practice_view.stage.renderer.size.x * .42) * pixel_scale.x
+            var expected_x: float = (app.practice_view.stage.renderer.global_position.x + app.practice_view.stage.renderer.size.x * app.practice_view.stage.renderer.PLAYHEAD_FRACTION) * pixel_scale.x
             var line_y: int = roundi(app.practice_view.stage.renderer.get_global_rect().get_center().y * pixel_scale.y)
             var line_x := -1
             var best := 1.0
             for x in range(maxi(0,roundi(expected_x)-35), mini(pixels.get_width(),roundi(expected_x)+36)):
                 var color: Color = pixels.get_pixel(x,line_y)
-                var distance: float = absf(color.r - Design.MINT.r) \
-                    + absf(color.g - Design.MINT.g) + absf(color.b - Design.MINT.b)
+                # The timing rule is a HIGHLIGHT line with a pale STONE core
+                # (13598000): accept either of its two painted colours.
+                var core: Color = Design.HIGHLIGHT.lerp(Design.STONE,.62)
+                var distance: float = minf(
+                    absf(color.r - Design.HIGHLIGHT.r) + absf(color.g - Design.HIGHLIGHT.g) + absf(color.b - Design.HIGHLIGHT.b),
+                    absf(color.r - core.r) + absf(color.g - core.g) + absf(color.b - core.b))
                 if distance < best:
                     best = distance
                     line_x = x

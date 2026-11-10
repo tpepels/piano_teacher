@@ -331,7 +331,7 @@ def _printed(a):
                 spelling = None
                 pitch = None
                 if pitch_tag is not None:
-                    spelling = dict(step=pitch_tag.findtext('step'), alter=int(pitch_tag.findtext('alter','0')),
+                    spelling = dict(step=pitch_tag.findtext('step'), alter=int(Fraction(pitch_tag.findtext('alter','0'))),
                                     octave=int(pitch_tag.findtext('octave')))
                     pitch = (spelling['octave']+1)*12 + dict(C=0,D=2,E=4,F=5,G=7,A=9,B=11)[spelling['step']] + spelling['alter']
                 a.check('printed_rhythm', identity+':kind', True, rest != (pitch_tag is not None))

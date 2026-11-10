@@ -20,6 +20,8 @@ def test_auto_advance_waits_for_correct_revision(tmp_path, monkeypatch):
         previous=e.transport_id
         class Result:
             correct=1
+            clean=True
+            passed=True
             extra_notes=0
             notes=[1]
         e.pending_result=Result()
@@ -29,21 +31,23 @@ def test_auto_advance_waits_for_correct_revision(tmp_path, monkeypatch):
         e.plan.hand_index=len(e.plan.hands)-1
         e.plan.bpm=e.plan.piece.bpm
         e.plan.streak=2
-        state=e.state()
-        assert state['phase']=='loading'
-        assert state['exercise']==2
-        revision=state['revision']
-        assert state['awaiting_score_revision']==revision
-        e.control('score_ready', revision=revision-1)
-        assert e.state()['phase']=='loading'
-        now[0]+=900
-        assert e.state()['phase']=='loading'
-        assert e.transport_id==previous
-        e.control('score_ready', revision=revision)
-        ready=e.state()
-        assert ready['phase']=='count_in' and ready['running']
-        assert ready['transport_id']==previous+1
-        assert ready['awaiting_score_revision'] is None
+        # Continuous handoff: while the next stage's native ink is not yet
+        # prepared and acknowledged the current score keeps scrolling. The
+        # engine must neither swap the score revision (blanking the viewport)
+        # nor start the next transport on an unmatched revision.
+        revision=e.score_revision
+        for _ in range(3):
+            now[0]+=900
+            state=e.state()
+            assert state['phase']=='feedback'
+            assert state['awaiting_score_revision'] is None
+            assert state['transport_id']==previous
+            assert e.score_revision==revision
+        # An acknowledgement for ink that was never prepared is refused.
+        import pytest
+        with pytest.raises(ValueError):
+            e.acknowledge_preloaded_stage(stage_key='unprepared', revision=revision+1)
+        assert e.state()['transport_id']==previous
     finally:
         e.db.close()
 

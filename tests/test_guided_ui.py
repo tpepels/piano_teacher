@@ -1,4 +1,4 @@
-"""Real Godot guided controls, hint placement and untimed score projection."""
+"""Real Godot guided controls, hint placement and the guided target on the shared score axis."""
 from pathlib import Path
 import shutil
 import subprocess
@@ -9,7 +9,7 @@ from test_recovery_motion import make_midi_fixture
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def test_guided_learning_uses_real_controls_and_static_target_score(tmp_path):
+def test_guided_learning_uses_real_controls_and_presents_target_on_the_shared_score_axis(tmp_path):
     godot=shutil.which('godot') or shutil.which('godot4')
     if not godot:
         pytest.skip('Godot unavailable')

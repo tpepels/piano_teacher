@@ -23,6 +23,12 @@ func run() -> void:
         quit(1)
         return
     var view = app.practice_view.stage.renderer
+    # READY deliberately shows no source ink; Play arms the continuous stream
+    # that admits the notation inspected in the moving phases below.
+    app._send_action({"action":"start"})
+    for settle_frame in range(8):
+        app._process(0.0)
+        await process_frame
     for dimensions in [Vector2i(1536,960),Vector2i(1024,768),Vector2i(800,600)]:
         root.size = dimensions
         await process_frame
@@ -47,7 +53,7 @@ func run() -> void:
                 "%s %s: transport preserves actual notation scale" % [dimensions,phase])
             check(app.practice_view.stage.score_frame.get_global_rect().encloses(view.get_global_rect()),
                 "Native notation stays inside the music stage")
-            check(view.size.y >= 135.0 and not view.drawn_noteheads.is_empty(),
+            check(view.size.y >= 135.0 and (phase == "ready" or not view.drawn_noteheads.is_empty()),
                 "Compact stage contains real painted source notes")
             for point in view.drawn_noteheads.values():
                 check(point.y > view.staff_gap() and point.y < view.size.y-view.staff_gap(),

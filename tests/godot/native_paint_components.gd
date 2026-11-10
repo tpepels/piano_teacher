@@ -216,6 +216,7 @@ func check_symbols() -> void:
     check(frame.pass_noteheads["b"] == Vector2(309,220),"beamed heads retain real displacement")
     check(score.glyphs.calls[-1][0] == "stem:quarter","beamed notes use authentic stem mask")
     score.tie_pairs = [{"first":a,"last":b}]
+    score._index_source_spans("ties",score.tie_pairs)  # painters query the span index
     var image := Image.create(2,2,false,Image.FORMAT_RGBA8)
     image.fill(Color.WHITE)
     score.glyphs.tie_textures = {"up":ImageTexture.create_from_image(image),"down":ImageTexture.create_from_image(image)}
@@ -224,6 +225,7 @@ func check_symbols() -> void:
     painter.paint_ties(canvas,frame,100.0,0.0,20.0)
     check(canvas.textures.size() == 1 and canvas.textures[0][1].is_equal_approx(Rect2(109,222.4,196,3.2)),"ties translate cached authentic ink")
     score.slur_pairs = [{"first":a,"last":b,"key":"a|b"}]
+    score._index_source_spans("slurs",score.slur_pairs)
     score.glyphs.slur_textures["a|b"] = ImageTexture.create_from_image(image)
     painter.connector_geometry.prepared_slurs["a|b|a|b"] = PackedVector2Array([
         Vector2(5,220),Vector2(209,220),Vector2(209,223),Vector2(5,223)])
@@ -232,6 +234,7 @@ func check_symbols() -> void:
         canvas.polygons[0][0][0] == Vector2(5,220) and \
         canvas.transforms[-2] == Vector2(100,0),"slurs draw prepared Verovio polygons with X translation")
     score.notation_tuplets = [{"events":[a,b]},{"events":[a,b],"show_number":"none","bracket":"no"}]
+    score._index_source_spans("tuplets",score.notation_tuplets)  # painters query the span index
     painter.paint_tuplet_brackets(canvas,frame,0.0,100.0,20.0)
     check(score.glyphs.calls[-1][0] == "tuplet:a|b","visible source tuplet painted")
     var count: int = score.glyphs.calls.size()
@@ -326,6 +329,7 @@ func check_context() -> void:
     check(score.glyphs.calls[-1][0] == "artic_staccato_above" and score.glyphs.calls[-1][1] == Vector2(155,259),"linked articulation uses painted actual head")
     score.source_expressions = [{"kind":"hairpin","value":"crescendo","staff":"right","beat":0.0},{"kind":"hairpin","value":"stop","staff":"right","beat":2.0}]
     score.prepared_hairpins = load("res://notation/native/source_spans.gd").hairpins(score.source_expressions,score)
+    score._index_source_spans("hairpins",score.prepared_hairpins)
     var line_start := canvas.lines.size()
     painter.paint_hairpins(canvas,frame,-2.0,4.0,.5,200.0,20.0)
     check(canvas.lines.size() == line_start+2 and canvas.lines[-2][0].is_equal_approx(Vector2(59.6,250.4)) and canvas.lines[-2][1].is_equal_approx(Vector2(245,246.3)),"hairpin endpoints preserve source axis and wedge slope")
@@ -336,6 +340,7 @@ func check_context() -> void:
     score.timeline.measures[0]["left_barline"] = {"ending":{"type":"start","number":"1"}}
     score.timeline.measures[0]["right_barline"] = {"ending":{"type":"stop","number":"1"}}
     score.prepared_voltas = load("res://notation/native/source_spans.gd").voltas(score.timeline.measures,score.timeline.duration_beats)
+    score._index_source_spans("voltas",score.prepared_voltas)
     painter.paint_volta_endings(canvas,frame,-2.0,5.0,.5,200.0,20.0)
     check(canvas.strings[-1][1] == "1.","source volta text retains closed endpoint label")
 

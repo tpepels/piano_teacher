@@ -28,7 +28,7 @@ func check(condition: bool, label: String) -> void:
         print("FAIL: ",label)
 
 func _initialize() -> void:
-    for path in ["fingering_annotations.gd","fingering_obstacles.gd","source_visibility.gd"]:
+    for path in ["fingering_annotations.gd","fingering_obstacles.gd"]:
         if not FileAccess.file_exists("res://notation/native/"+path):
             check(false,"missing independent component "+path)
     if failures:
@@ -67,7 +67,6 @@ func fixture(events: Array):
 
 func run_contract() -> void:
     var Placement = load("res://notation/native/fingering_placement.gd")
-    var Visibility = load("res://notation/native/source_visibility.gd")
     var Annotations = load("res://notation/native/fingering_annotations.gd")
     var Obstacles = load("res://notation/native/fingering_obstacles.gd")
     var first := note("a",1.0)
@@ -86,16 +85,6 @@ func run_contract() -> void:
     check(Placement.source(unknown) == "source-unknown","manual unknown remains editable")
     check(Placement.source({"source_id":"fallback"}) == "fallback","event source fallback")
     check(Placement.source({"source_id":123}).is_empty(),"non-string source rejected")
-
-    var history := {8.0:{"measure":{"start_beat":10.0,"end_beat":12.0}}}
-    for sample in [[1.99998,true],[2.0,false],[3.99998,false],[4.0,true]]:
-        check(Visibility.event_visible({"beat":sample[0]},8.0,true,history) == sample[1],"event boundary "+str(sample[0]))
-    check(Visibility.event_visible({"start_beat":2.0},8.0,false,history),"disabled loop ignores recovery")
-    check(not Visibility.event_visible({"start_beat":2.0},8.0,true,history),"measure start fallback")
-    check(not Visibility.span_visible({"beat":1.0},{"beat":2.0},8.0,true,history),"span touching silence start hidden")
-    check(Visibility.span_visible({"beat":4.0},{"beat":5.0},8.0,true,history),"span at silence end visible")
-    check(not Visibility.intervals_overlap({"start_beat":0.0,"end_beat":2.0},{"start_beat":2.0,"end_beat":4.0}),"touching intervals do not overlap")
-    check(Visibility.intervals_overlap({"start_beat":0.0,"end_beat":2.1},{"start_beat":2.0,"end_beat":4.0}),"crossing intervals overlap")
 
     var twin := note("twin",1.0)
     var left := note("left",2.0,4)
@@ -146,9 +135,6 @@ func run_contract() -> void:
     check(canvas.strings[0]["ink"] == Design.SCORE_INK,"selected right-hand ink")
     check(canvas.strings[1]["ink"] == Color(Design.STAFF_MUTED,.46).lerp(Design.BLUE,.32),"inactive left-hand tint")
     check(annotations.fingering_layout == source_layout,"painting does not move cached annotation cells")
-    annotations.begin_frame()
-    annotations.paint(canvas,0.0,400.0,20.0,0,8.0,{"score_loop_enabled":true,"preparation_history":{8.0:{"measure":{"start_beat":9.0,"end_beat":10.0}}}})
-    check(annotations.drawn_fingerings.size() == 1 and annotations.drawn_fingerings[0]["hand"] == "left","recovery visibility comes from explicit frame data")
     annotations.begin_frame()
     annotations.paint(canvas,0.0,-100.0,20.0)
     check(annotations.drawn_fingerings.size() == 1,"partly clipped numeral omitted as a whole")

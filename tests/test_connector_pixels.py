@@ -288,6 +288,7 @@ def test_no_usable_reference_frame_cannot_be_certified(monkeypatch):
     class Frames:
         def __init__(self, *_): pass
         def nearby_clocks(self, *_): return []
+        def post_group_clocks(self, *_): return []
         def anchors(self, events, target):
             # This is the public image-witness interface used by _beam.
             # An unavailable capture must fail closed, not raise AttributeError

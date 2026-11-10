@@ -43,6 +43,14 @@ func run() -> void:
     check(view.layout.ordered_events.size() >= 300, "Stress fixture contains a long source score")
     check(not atlas.is_empty(), "Residency checks actual authentic texture resources")
     var duration: float = view.timeline.duration_beats
+    # READY deliberately shows no source ink; Play arms the continuous stream
+    # that admits the notation the rapid-seek probes below inspect.
+    app._send_action({"action":"start"})
+    for settle_frame in range(8):
+        app._process(0.0)
+        await process_frame
+    # Strips admitted by Play are the resident baseline; seeks must not add to it.
+    child_count = app.find_children("*","",true,false).size()
     for fraction in [0.0,.9,.1,.75,.4,.99,.2,.8,0.0,.99]:
         var beat: float = minf(duration-1.0,duration*float(fraction))
         app.last_state = {"loaded":true,"revision":app.revision,"running":true,

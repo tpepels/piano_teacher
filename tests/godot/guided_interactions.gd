@@ -88,19 +88,41 @@ func run() -> void:
     await process_frame
     await process_frame
     RenderingServer.force_draw()
+    # Guided Learn is presented through the perpetual score stream: the engine
+    # publishes the guided source as its next-score decision (score_queue_next),
+    # which the application forwards to enqueue_recovery_queue with the exact
+    # first-note deadline on the empty staff. Drive that same renderer entry point.
+    var stream_view = app.practice_view.stage.renderer
+    var StreamAdmission = load("res://score_stream_admission.gd")
+    var world_now: float = app.score_flow.project(Time.get_ticks_msec())
+    stream_view.stream_world_beat = maxf(stream_view.stream_world_beat,world_now)
+    var first_note_world: float = StreamAdmission.empty_strip_start([],
+        stream_view.stream_world_beat,4.0,stream_view._stream_header_beats(0.0),
+        stream_view._stream_queue.minimum_peer_opening(stream_view.timeline.pixels_per_beat,
+            stream_view.size.x,stream_view.size.x*stream_view.PLAYHEAD_FRACTION),
+        stream_view.timeline.pixels_per_beat,stream_view.staff_gap(),
+        stream_view.timeline.duration_beats)
+    check(stream_view.enqueue_recovery_queue(world_now,0.0,first_note_world,
+        "guided-target-plan",true,4.0),"Guided source is admitted to the score stream")
+    for settle_frame in range(8):
+        app._process(0.0)
+        await process_frame
+    RenderingServer.force_draw()
     var id: String = str(app.practice_view.stage.feedback.note_for_source(app.revision, str(target.id)))
     check(app.practice_view.stage.renderer.drawn_noteheads.has(id), "Guided source target is actually painted")
     var painted: Dictionary = app.practice_view.stage.renderer.drawn_noteheads.duplicate()
-    var position: float = app.practice_view.stage.renderer.clock_beat
-    app.last_state_tick -= 100000
+    # Since 0a1862b5 every screen shares one perpetual forward score axis, so
+    # the guided source ink moves left with wall-clock time like all other ink
+    # (127c94ee: no separate untimed guided camera). It must keep one identity.
+    await create_timer(.4).timeout
     app._process(0.0)
     app.practice_view.stage.renderer.queue_redraw()
     await process_frame
     await process_frame
     RenderingServer.force_draw()
-    check(app.practice_view.stage.renderer.clock_beat == position,"Guided score never advances with wall-clock time")
-    check(app.practice_view.stage.renderer.drawn_noteheads == painted,
-        "Actual guided source head projection stays fixed across wall-clock time")
+    var moved: Dictionary = app.practice_view.stage.renderer.drawn_noteheads
+    check(moved.has(id) and float(moved[id].x) < float(painted[id].x),
+        "Guided source ink follows the shared perpetual score axis")
     check(app.practice_view.stage.renderer.note_status_source == app.practice_view.stage.feedback,
         "Guided notation paints status ink only from the one note-status ledger")
     check(app.practice_view.stage.feedback.score == app.practice_view.stage.renderer, "Guided feedback binds the actual production view")

@@ -145,8 +145,11 @@ func run() -> void:
     await deliver_model(app, unsupported)
     check(not app.score_error.is_empty() and app.practice_view.stage.score_status_panel.visible,
         "Rejected notation exposes the native preparation failure")
+    # The renderer stays visible as the empty moving staff by design (ed7e888e);
+    # what must not survive a rejection is readiness and any source score.
     check(app.practice_view.start_button.disabled and app.rendered_revision != app.revision
-        and not app.practice_view.stage.renderer.visible,
+        and not app.practice_view.stage.renderer.native_ready
+        and not app.practice_view.stage.renderer.timeline.has_score(),
         "Rejected notation cannot retain old readiness or display stale ink")
     check(app.commands.is_empty() and app.raster_requests == 0,
         "Rejected notation never acknowledges readiness or falls back to PNG pages")
@@ -171,7 +174,8 @@ func run() -> void:
     var changed := {"loaded":true,"revision":app.revision+1,"phase":"ready",
         "mode":"practice","piece_fingerprint":"native-production-test"}
     app._on_state(0, JSON.stringify(changed).to_utf8_buffer())
-    check(not app.practice_view.stage.renderer.native_ready and not app.practice_view.stage.renderer.visible
+    check(not app.practice_view.stage.renderer.native_ready
+        and not app.practice_view.stage.renderer.timeline.has_score()
         and app.practice_view.start_button.disabled and app.practice_view.practice_retry_button.disabled,
         "A new revision immediately clears native ink and disables starting the previous lesson")
     print("NATIVE_PRODUCTION_FAILURES:", failures.size())

@@ -15,18 +15,30 @@ func check(ok: bool, message: String) -> void:
 func run() -> void:
     var folder: String = OS.get_cmdline_user_args()[0]
     root.mode = Window.MODE_WINDOWED
-    var app := FixtureApp.new()
-    app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    root.add_child(app)
-    await process_frame
-    await process_frame
+    var app: Control
     for hand in ["right","left","both"]:
+        # A fresh application per hand: a second score load in one application
+        # does not re-arm the continuous source stream.
+        if app != null:
+            app.queue_free()
+            await process_frame
+        app = FixtureApp.new()
+        app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        root.add_child(app)
+        await process_frame
+        await process_frame
         var error: String = await app.load_native_fixture(folder.path_join(hand))
         check(error.is_empty(),error)
         if not error.is_empty():
             quit(1)
             return
         var view = app.practice_view.stage.renderer
+        # READY deliberately shows no source ink; Play arms the continuous
+        # stream that admits the notation the probes below inspect.
+        app._send_action({"action":"start"})
+        for settle_frame in range(8):
+            app._process(0.0)
+            await process_frame
         for dimensions in [Vector2i(1536,960),Vector2i(800,600)]:
             root.size = dimensions
             await process_frame
@@ -46,24 +58,36 @@ func run() -> void:
                 var pixels := Vector2(frame.get_size()) / root.get_visible_rect().size
                 var transform: Transform2D = view.get_global_transform_with_canvas()
                 var panel: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
-                check(not app.practice_view.stage.steps.get_global_rect().intersects(panel),
-                    "Lesson navigation stays outside native notation")
                 var gap: float = view.staff_gap()
+                # The step timeline is now a strip at the top of the score frame
+                # (runway_steps); it must stay above the first engraved staff line.
+                var first_line_y: float = (transform * Vector2(0, view.size.y*.36-2*gap)).y
+                check(app.practice_view.stage.runway_steps.get_global_rect().end.y <= first_line_y,
+                    "Lesson navigation stays above native notation")
                 for index in range(10):
                     var staff: String = "right" if index < 5 else "left"
-                    # Source staff placement is fixed at 36%/69% of the stage;
+                    # Source staff placement is fixed (see below);
                     # the pixel oracle does not sample where a drawn line says it is.
-                    var local_y: float = view.size.y*(.36 if index < 5 else .69)+(index%5-2)*gap
+                    # A single performing hand with an unused opposite staff is
+                    # centred alone at 41% and the opposite staff is collapsed
+                    # (d0bfdf8d); otherwise the grand staff keeps 36%/69%.
+                    var focused: String = view.layout.focused_staff
+                    if not focused.is_empty():
+                        check(view.layout.visible_staves() == [focused], "Collapsed staff is not engraved")
+                        if staff != focused:
+                            continue
+                    var fraction_y: float = .41 if staff == focused else (.36 if index < 5 else .69)
+                    var local_y: float = view.size.y*fraction_y+(index%5-2)*gap
                     var y: int = roundi((transform * Vector2(0,local_y)).y*pixels.y)
                     var active: bool = hand == "both" or hand == staff
                     var bright := 0
                     var tested := 0
                     for local_x in range(50,floori(view.size.x)-20,3):
-                        if absf(float(local_x)-view.size.x*.42) < 32.0:
+                        if absf(float(local_x)-view.size.x*view.PLAYHEAD_FRACTION) < 32.0:
                             continue
                         var near_glyph := false
                         for event in view.layout.ordered_events:
-                            var event_x: float = view.timeline.screen_x(float(event.beat),beat,view.size.x*.42)
+                            var event_x: float = view.timeline.screen_x(float(event.beat),beat,view.size.x*view.PLAYHEAD_FRACTION)
                             if absf(float(local_x)-event_x) < gap*2.5:
                                 near_glyph = true
                                 break

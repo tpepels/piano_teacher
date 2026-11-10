@@ -11,6 +11,8 @@ LIBRARY = (ROOT / 'godot' / 'library_screen.gd').read_text(encoding='utf-8')
 HOME = (ROOT / 'godot' / 'home_screen.gd').read_text(encoding='utf-8')
 LESSON = (ROOT / 'godot' / 'lesson_screen.gd').read_text(encoding='utf-8')
 PRACTICE = (ROOT / 'godot' / 'practice_screen.gd').read_text(encoding='utf-8')
+DRAWER = (ROOT / 'godot' / 'navigation_drawer.gd').read_text(encoding='utf-8')
+FAILURE_PRESENTER = (ROOT / 'godot' / 'command_failure_presenter.gd').read_text(encoding='utf-8')
 
 
 def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
@@ -22,7 +24,7 @@ def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
     # narrow drawer, hiding Browse/Save on the user's 1536x960 screen.
     assert 'folder_controls = VBoxContainer.new()' in SETTINGS
     assert 'var folder_actions := HFlowContainer.new()' in SETTINGS
-    assert 'overlay_drawer.offset_left = inset' in SCRIPT
+    assert 'drawer.offset_left = inset' in DRAWER  # navigation_drawer.gd owns the drawer inset
     assert 'margin_left' in SCRIPT and 'margin_right' in SCRIPT
     assert 'folder_edit.custom_minimum_size = Vector2(0, 40)' in SETTINGS
     assert 'horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED' in LESSON
@@ -49,6 +51,6 @@ def test_score_error_does_not_disappear_during_state_polling(tmp_path):
 
 
 def test_failed_library_import_keeps_error_in_library():
-    assert 'library_view.present_open_status("Cannot open score: " + message, true)' in SCRIPT
+    assert 'library_view.present_open_status("Cannot open score: " + message, true)' in FAILURE_PRESENTER
     assert 'if not library_error.is_empty():' in LIBRARY
     assert 'library_message.text = library_error' in LIBRARY

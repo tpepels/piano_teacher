@@ -1,4 +1,5 @@
 """Preparation uses the installed engraving font's real musical symbols."""
+import re
 from io import BytesIO
 import xml.etree.ElementTree as ET
 
@@ -56,8 +57,36 @@ def test_native_renderer_has_no_original_hand_drawn_musical_glyphs():
     assert "const VerovioGlyphs" in view
     assert "func _paint_ellipse(" not in renderers
     assert "func paint_ellipse(" not in renderers
-    assert "draw_circle(" not in renderers
-    assert "draw_arc(" not in renderers
+    # Owner decision: circles around noteheads were an old implementation.
+    # Note status is delivered by softly recolouring the notehead itself
+    # (note_status_layer.gd, 6858f62b), never by a ring, halo or badge.
+    assert "draw_circle(" not in gd and "draw_arc(" not in gd
+    context = (native / "context_painter.gd").read_text()
+    assert "draw_circle(" not in context and "draw_arc(" not in context
+    # The only circles in the native view are the fixed playhead dot and beat
+    # pulse, anchored at playhead_x inside the transport-overlay block.
+    start = view.index("if transport_overlay_enabled and not runway_overlay:")
+    end = view.index("# The count-in runs on the same clock", start)
+    overlay = view[start:end]
+    assert view.count("draw_circle(") + view.count("draw_arc(") == overlay.count("draw_circle(") + overlay.count("draw_arc(")
+    for call in re.findall(r"draw_(?:circle|arc)\(([^,]+),", overlay):
+        assert "playhead_x" in call or call.strip() == "center", call
+    assert "var center := Vector2(playhead_x," in overlay
+    # No other native-notation file, and no non-score widget outside the
+    # reviewed list, draws a circle or arc that could sit at a notehead.
+    reviewed = {"hint_keyboard.gd", "calibration_beat_pulse.gd", "game_input_indicator.gd",
+                "game_impact_callout.gd", "action_button.gd", "practice_objective_glyph.gd",
+                "game_countin.gd", "game_phase_cue.gd", "game_stage.gd", "game_streak.gd",
+                "game_transport_button.gd", "practice_metrics.gd", "score_step_timeline.gd"}
+    found = set()
+    for path in (root / "godot").rglob("*.gd"):
+        relative = path.relative_to(root / "godot")
+        if relative.parts[0] == "addons" or "diagnostics" in relative.parts:
+            continue
+        text = path.read_text()
+        if "draw_circle(" in text or "draw_arc(" in text:
+            found.add(path.name if relative.parts[0:2] != ("notation", "native") else str(relative))
+    assert found == reviewed | {"notation/native/view.gd"}, found
     assert "glyphs.paint(canvas, \"head_black\"" in gd
     assert "glyphs.paint(canvas, \"rest_\" + note_type" in gd
     assert "load_svg_from_buffer(" in atlas

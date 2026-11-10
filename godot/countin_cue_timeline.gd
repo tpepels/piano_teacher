@@ -15,8 +15,14 @@ func hold(token: String, beat: float) -> void:
     if token.is_empty() or not is_finite(beat):
         reset()
         return
+    var tick := floori(beat + .00001)
+    if token == _token and tick < 0:
+        # A count-in beat that was never observed (Pause landed just after its
+        # boundary, before any frame spoke it) is still owed to Resume: only
+        # beats actually observed count as heard, never the frozen one.
+        return
     _token = token
-    _last_tick = floori(beat + .00001)
+    _last_tick = tick
 
 func continues(token: String, beat: float) -> bool:
     # True when beat moves forward within the held epoch: a reused Resume

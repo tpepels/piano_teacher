@@ -63,8 +63,8 @@ def test_real_chord_silent_rest_and_inactive_ink_are_inventoried(captured, monke
     from piano_teacher.notation import extra_symbol_pixels as checker
     original = checker._photo
     live = []
-    def bounded_photo(path):
-        photo = original(path)
+    def bounded_photo(path, **kwargs):
+        photo = original(path, **kwargs)
         live.append(weakref.ref(photo['ink']))
         assert sum(ref() is not None for ref in live) <= 2
         return photo

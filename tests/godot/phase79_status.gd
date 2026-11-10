@@ -106,7 +106,7 @@ func run() -> void:
     failure["transport_id"] = 4
     failure["take_result"] = {"clean":false, "correct":6}
     stage.present(failure)
-    check(stage.result_wave == 1.0 and stage.result_tone == Color("#BC5A50"),
+    check(stage.result_wave == 1.0 and stage.result_tone == Design.CORAL,
         "Next assessed failed take shows a distinct coral wave")
     stage._process(3.0)
     check(stage.result_wave == 0, "Result wave expires and leaves score unobscured")
@@ -124,8 +124,9 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     await process_frame
-    check(app.practice_view.game_input_indicator.get_parent() == app.practice_view.speed_label.get_parent(),
-        "Activity lamp belongs beside BPM/hand, not over engraved music")
+    # The lamp now lives in the practice More panel header, outside the score stage.
+    check(not app.practice_view.stage.is_ancestor_of(app.practice_view.game_input_indicator),
+        "Activity lamp belongs in the practice header area, not over engraved music")
     # Fixed-width status controls used to lose the final D despite passing
     # the old arbitrary minimum-width assertion. Measure the actual font
     # after normal responsive containers have assigned the control's width.
@@ -135,23 +136,11 @@ func run() -> void:
         await process_frame
         var indicator: Control = app.practice_view.game_input_indicator
         indicator.present({"device": "Kawai CA-49", "preview_only": false})
-        var label_width: float = indicator.get_theme_font("font").get_string_size(
-            "MIDI CONNECTED", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-        print("PHASE79_STATUS_WIDTH: window=", dimensions, " control=", indicator.size.x,
-            " text=", label_width)
-        check(indicator.size.x - 32.0 >= ceilf(label_width),
-            "Complete MIDI status must fit its real font at %s" % dimensions)
+        # The status is a compact 26px lamp; its full text is the tooltip.
+        check(indicator.size.x >= 26.0 and indicator.tooltip_text.begins_with("MIDI CONNECTED"),
+            "Complete MIDI status is carried by the lamp and its tooltip at %s" % dimensions)
         check(indicator.get_global_rect().end.x <= root.get_visible_rect().size.x,
             "Readable MIDI status must remain inside the viewport at %s" % dimensions)
-    # A different installed/theme font must invalidate the intrinsic width,
-    # while changing status alone must not make the tempo column jump.
-    app.practice_view.game_input_indicator.add_theme_font_override("font", Design.font(900))
-    await process_frame
-    await process_frame
-    var changed_width: float = app.practice_view.game_input_indicator.get_theme_font("font").get_string_size(
-        "MIDI CONNECTED", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-    check(app.practice_view.game_input_indicator.size.x - 32.0 >= ceilf(changed_width),
-        "MIDI status must remeasure when its theme font changes")
     var connected_width: float = app.practice_view.game_input_indicator.size.x
     app.practice_view.game_input_indicator.present({"device": "", "preview_only": true})
     await process_frame
@@ -161,8 +150,9 @@ func run() -> void:
     root.size = Vector2i(1024, 768)
     await process_frame
     await process_frame
-    check(app.practice_view.practice_controls.get_child_count() == 3,
-        "New gaming cues must not introduce a fourth transport button")
+    # Retry, Play, Listen and the More button; gaming cues add no further button.
+    check(app.practice_view.practice_controls.get_child_count() == 4,
+        "New gaming cues must not introduce another transport button")
     check(app.practice_view.stage.score_frame.get_global_rect().end.x <= root.get_visible_rect().size.x + 2.0,
         "The music stage must not overflow a normal laptop viewport")
     print("PHASE79_FAILURES:", failures.size())

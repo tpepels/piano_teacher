@@ -207,6 +207,7 @@ func _audit() -> void:
                         if other_index != slur_index:
                             retained_slurs.append(original_slurs[other_index])
                     renderer.layout.slur_pairs = retained_slurs
+                    renderer.layout._index_source_spans("slurs",retained_slurs)  # painters query the span index
                     await _recompile_retained_source(renderer)
                     var slur_file := "slur-without-%d-%.5f.png" % [slur_index,at]
                     if view.get_texture().get_image().save_png(
@@ -217,6 +218,7 @@ func _audit() -> void:
                         "clock":at, "baseline_file":filename, "file":slur_file
                     })
                 renderer.layout.slur_pairs = original_slurs
+                renderer.layout._index_source_spans("slurs",original_slurs)
                 await _recompile_retained_source(renderer)
                 var slur_restored_file := "slur-restored-%.5f.png" % at
                 if view.get_texture().get_image().save_png(

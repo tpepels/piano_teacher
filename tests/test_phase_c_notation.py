@@ -31,7 +31,8 @@ def test_native_view_uses_authentic_source_assets_and_indexed_notation():
     context = (ROOT / "godot/notation/native/context_painter.gd").read_text()
     renderers = native+symbols+context
     preparation = (ROOT / "piano_teacher/application/score_preparation.py").read_text()
-    assert 'timeline.screen_x(' in native
+    painters = native + (ROOT / "godot/notation/native/render_pass.gd").read_text() + (ROOT / "godot/notation/native/source_pass_painter.gd").read_text()
+    assert 'timeline.screen_x(' in painters  # screen mapping moved from view.gd into the pass painters
     assert 'var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)' in layout
     assert 'var ordered_events: Array = model.get("notation_events", []).duplicate()' in index
     assert 'foreventin_visible_events(left,right,frame):' in ''.join(native.split())

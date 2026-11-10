@@ -497,7 +497,7 @@ def _write_accidentals(measure: ET.Element, fifths: int = 0) -> None:
     for _, _, note in sorted(events):
         pitch = note.find("pitch")
         key = (pitch.findtext("step"), pitch.findtext("octave"))
-        alteration = int(pitch.findtext("alter", "0"))
+        alteration = int(Fraction(pitch.findtext("alter", "0")))
         # A continuation carries the visible pitch from its tied attack.
         # It does not establish a new accidental after a barline.
         if any(tie.get("type") == "stop" for tie in note.findall("tie")):

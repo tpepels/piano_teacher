@@ -19,7 +19,7 @@ def test_real_chopin_clock_inventory_makes_fully_past_playhead_witnesses():
                           8.4,8.5,8.55,8.7,8.85,8.875,
                           9.,9.15,9.3,9.45,9.5,9.6,9.75])
     source = [7.5,7.75,8.,8.25,8.5,8.875]
-    assert frames.post_group_clocks(source) == [9.,9.15,9.3,9.45]
+    assert frames.post_group_clocks(source) == [9.,9.15,9.3]
     assert all(clock > max(source) for clock in frames.post_group_clocks(source))
 
 

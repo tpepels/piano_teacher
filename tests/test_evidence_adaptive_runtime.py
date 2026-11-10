@@ -82,26 +82,12 @@ def test_error_pattern_isolates_slows_guides_and_reintegrates_without_partial_ma
     original = source.read_bytes()
     initial_stage = engine.plan.identity
     actions = [take(engine, now)["selected"]["action"] for _ in range(6)]
-    assert actions == ["repeat", "isolate", "repeat", "slow", "repeat", "guided"]
-    assert engine.mode == "learn" and engine.plan.identity == initial_stage
+    # 127c94ee: a second failure at the slower setting repeats in place; no
+    # guided wait is entered automatically during perpetual score flow.
+    assert actions == ["repeat", "isolate", "repeat", "slow", "repeat", "repeat"]
+    assert engine.mode != "learn" and engine.plan.identity == initial_stage
     assert engine.plan.bpm == 54
     assert engine.plan.streak == 0 and not engine.plan.mastered
-    engine.geometry()
-    engine.control("score_ready", revision=engine.score_revision)
-    for _ in range(32):
-        snapshot = engine.teaching.snapshot(now=now[0])
-        if snapshot["completed"]:
-            break
-        now[0] += .5
-        for note in snapshot["expected_notes"]:
-            engine._receive(mido.Message("note_on", note=note["pitch"], velocity=80))
-            engine._receive(mido.Message("note_off", note=note["pitch"], velocity=0))
-    assert engine.teaching.snapshot(now=now[0])["completed"]
-    engine.control("learn_next")
-    # Existing score-ready handshake starts the unsupported retry.
-    if engine.awaiting_score_revision is not None:
-        engine.geometry()
-        engine.control("score_ready", revision=engine.score_revision)
     recovered = []
     for _ in range(6):
         if engine.visual_transport.play_from_beat == 0 and engine.review_end_beat is None and engine.plan.bpm >= 60:

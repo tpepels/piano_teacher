@@ -25,10 +25,12 @@ func _verify() -> void:
     var stage := Design.stage_surface()
     check(card.bg_color == Design.PANEL and drawer.bg_color == Design.FOREST,
         "Cards sit on the forest navigation shell through the shared palette")
-    check(drawer.bg_color == Color("#1E3A34") and card.bg_color == Color("#2D3532")
-        and modal.bg_color == Color("#2E4D46"),
-        "Rendered surfaces retain the approved forest, charcoal and pine palette")
-    check(modal.bg_color == Design.PANEL_RAISED and
+    # Moodboard palette (4804698c): forest drawer; cards and the modal share the
+    # charcoal panel colour and the modal is raised by its stronger border.
+    check(drawer.bg_color == Color("#0D302A") and card.bg_color == Color("#102C27")
+        and modal.bg_color == Color("#102C27"),
+        "Rendered surfaces retain the approved forest and charcoal palette")
+    check(modal.border_color.a > card.border_color.a and
         modal.corner_radius_top_left >= card.corner_radius_top_left,
         "Modal rises above cards through the same elevation system")
     check(stage.bg_color == Design.STAGE and
@@ -74,7 +76,7 @@ func _verify() -> void:
     host.add_child(row)
     await process_frame
     row.set_entry("A very long music title", "MIDI · imported")
-    check(row.title_label.get_theme_color("font_color") == Color("#C4CDC6")
+    check(row.title_label.get_theme_color("font_color") == Color("#F3F7F3")
         and row.detail_label.get_theme_color("font_color") == Color("#8B9A92"),
         "Real music tiles use approved stone titles and slate metadata")
     var title_face: Font = row.title_label.get_theme_font("font")

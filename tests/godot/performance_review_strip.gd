@@ -32,8 +32,9 @@ func _check(strip: VBoxContainer) -> void:
     summary["weakest_bars"].clear()
     if received.size() == 1 and received[0]["weakest_bars"].is_empty():
         failures += 1
+    # 9a841747: with no weak bars there is nothing to review, so the strip hides.
     strip.call("present", {"total":4,"weakest_bars":[]})
-    if not strip.visible or button.visible or not button.disabled:
+    if strip.visible:
         failures += 1
     strip.call("present", {})
     if strip.visible:

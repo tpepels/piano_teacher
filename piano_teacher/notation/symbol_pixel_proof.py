@@ -622,12 +622,18 @@ def _flag_edge_distance(pixels, component, head, tips, x, y, gap, start):
     tip_y = tips[0][1]
     top = max(0, min(tip_y, rows.start)-round(gap))
     bottom = min(pixels.shape[0], max(tip_y, rows.stop)+round(gap)+1)
-    left = max(0, min(sx)-3 if start else lo)
-    right = min(pixels.shape[1], hi if start else max(sx)+4)
+    # A flag's curve can bulge past the column where the tie starts, so the
+    # search may run half a staff space beyond the tie end (never into the tie).
+    reach = round(.5*gap)
+    left = max(0, min(sx)-3 if start else lo-reach)
+    right = min(pixels.shape[1], hi+reach if start else max(sx)+4)
     seen, queue, attached = set(seeds), deque(seeds), False
     while queue:
         py, px = queue.popleft()
-        if any(abs(px-tx) <= 2 and abs(py-ty) <= gap for tx, ty in tips):
+        # The shaft itself was erased (the caller clears each stem run and one
+        # pixel either side), so the flag's root is ink adjoining that cleared
+        # band: accept ink within the band's width of the photographed tip.
+        if any(abs(px-tx) <= 3 and abs(py-ty) <= gap for tx, ty in tips):
             attached = True
             break
         for dy in (-1, 0, 1):

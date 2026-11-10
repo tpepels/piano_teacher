@@ -106,7 +106,9 @@ def test_singleton_fragment_retains_its_actual_offset_instead_of_recentering():
     # Numeral left edge is 30px right of the sole source anchor, not centred
     # on it. One staff space is 10px, or 250 normalized units.
     assert item["number"]["bounds"][0] == pytest.approx(750)
-    assert item["number"]["bounds"][2] == pytest.approx(1000)
+    # Since 25a4f6f5 the numeral is cropped from a native-resolution raster, so its
+    # extent is quantised to whole pixels: within 1/16 staff space (16 units).
+    assert item["number"]["bounds"][2] == pytest.approx(1000, abs=16)
 
 
 def test_hidden_singleton_does_not_acquire_invented_artwork():

@@ -285,13 +285,16 @@ def test_status_pixels_stay_inside_their_own_strip_clip(capture):
         if item["status"] != "unplayed":
             inside[max(0, int(np.floor(left))):max(0, int(np.ceil(right)))] = True
     assert not changed[:, ~inside].any()
-    # Downbeat heads sit exactly on a strip boundary; each strip paints its
-    # clipped part and together they form one whole, single recolored head.
-    boundary = [item for item in _colored(frames["graded"])
-                if abs(item["position"][0] - item["clip_x"][0]) < .5]
-    assert any(item["head"] == "head_black" for item in boundary), (
-        "a solid colored head straddles two clipped source strips")
-    for item in boundary:
+    # Strips are cut only where no authentic notehead or connector ink is split
+    # (9dbd28ed, e295407f), so every recolored head lies wholly inside the one
+    # strip that owns it and is tinted completely in its own clip.
+    colored = _colored(frames["graded"])
+    assert colored
+    for item in colored:
+        left, right = item["clip_x"]
+        half = (0.92 if item["head"] == "head_whole" else 0.68) * item["gap"]
+        assert left <= item["position"][0] - half and item["position"][0] + half <= right, (
+            "a recolored head straddles a clipped strip boundary", item)
         full, tinted = _interior(item, report, base, graded)
         assert full > 0 and tinted == full
         if item["head"] != "head_black":

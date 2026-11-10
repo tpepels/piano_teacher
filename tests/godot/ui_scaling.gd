@@ -90,13 +90,13 @@ func measure(app: Control, dimensions: Vector2i) -> Dictionary:
         check(in_screen(button, dimensions), "%s: practice action fits: %s" % [dimensions, button.text])
     app._navigate("library")
     await settle()
-    var library_button: Control = app.screen_navigation["library"]
-    result["sidebar_width"] = screen_rect(app.navigation_rail).size.x
+    var library_button: Control = app.navigation_drawer.navigation["library"]
+    result["sidebar_width"] = screen_rect(app.navigation_drawer.rail).size.x
     result["sidebar_button_height"] = screen_rect(library_button).size.y
     result["sidebar_font"] = screen_font(library_button)
     result["search_height"] = screen_rect(app.library_view.library_search).size.y
     result["search_font"] = screen_font(app.library_view.library_search)
-    for button in app.screen_navigation.values():
+    for button in app.navigation_drawer.navigation.values():
         check(in_screen(button, dimensions), "%s: sidebar action fits: %s" % [dimensions, button.text])
     check(in_screen(app.library_view.library_search, dimensions), "%s: library search fits" % dimensions)
     app._navigate("settings")
@@ -164,6 +164,10 @@ func run() -> void:
         if dimensions.x >= 1280:
             for metric in baseline:
                 var expected: float = float(baseline[metric]) * factor
+                if metric == "transport_width":
+                    # The Play button width is deliberately responsive:
+                    # clamp(logical width * .16, 170, 225) (practice_screen.gd).
+                    expected = minf(225.0, maxf(170.0, float(dimensions.x) / factor * .16)) * factor
                 check(absf(float(metrics[metric])-expected) <= maxf(2.0, expected*.015),
                     "%s: %s grows once (%.2f vs %.2f)" % [dimensions, metric, float(metrics[metric]), expected])
         if seen.has(key):

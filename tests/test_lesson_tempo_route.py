@@ -45,10 +45,12 @@ def test_manual_tempo_skips_rungs_not_clean_credit_and_is_bounded():
     assert p.target_bpm == 110
     assert p.identity == identity
     assert p.streak == 0 and not p.mastered
-    while p.bpm < p.target_bpm:
+    # 127c94ee: manual tempo may exceed the source target and is bounded only
+    # by the global maximum.
+    while p.bpm < SETTINGS.maximum_bpm:
         p.increase_tempo()
-    assert p.bpm == p.target_bpm
-    assert p.increase_tempo() == p.target_bpm
+    assert p.bpm == SETTINGS.maximum_bpm and p.bpm > p.target_bpm
+    assert p.increase_tempo() == SETTINGS.maximum_bpm
     for i in range(SETTINGS.clean_runs_to_master - 1):
         assert "Clean pass" in p.apply_result(correct=2,total=2)
         assert p.identity == identity

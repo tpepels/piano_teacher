@@ -7,7 +7,7 @@ import time
 import mido
 
 from piano_teacher.server import PracticeEngine
-from piano_teacher.inprocess import EngineCommands
+from piano_teacher.inprocess import EngineCommands, OK
 
 
 def _midi(path, *, zero_note=False):
@@ -119,15 +119,15 @@ def test_queue_health_start_is_nonblocking_and_does_not_load_a_piece(tmp_path):
     commands = EngineCommands(engine=engine)
     engine.set_preferences(music_dir=str(music))
     try:
-        status, body = commands.request("GET", "/library/health")
-        assert status == 200 and json.loads(body)["started"] is False
-        status, body = commands.request("POST", "/library/health", "{}")
-        assert status == 200 and json.loads(body)["started"] is True
+        status, body = commands.request("library.health_status")
+        assert status == OK and json.loads(body)["started"] is False
+        status, body = commands.request("library.health.start", "{}")
+        assert status == OK and json.loads(body)["started"] is True
         result = _finished(engine.library_health)
         assert result["ok"] == 1
         assert engine.plan is None
-        status, body = commands.request("GET", "/library/health")
-        assert status == 200
+        status, body = commands.request("library.health_status")
+        assert status == OK
         assert json.loads(body)["items"]["study.mid"]["notes"] == 1
     finally:
         engine.db.close()

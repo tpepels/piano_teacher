@@ -200,6 +200,7 @@ class TieView extends "res://notation/native/view.gd":
         # Draw through the production path: tie shapes are prepared once per
         # score, then painted translated.
         layout.tie_pairs = [{"first":first,"last":last}]
+        layout._index_source_spans("ties",layout.tie_pairs)  # painters query the span index
         connector_geometry.prewarm_tie_clearances(gap)
         symbols.paint_ties(self,RenderPass.new(),0.0,0.0,gap)
         labels.clear()
@@ -209,6 +210,7 @@ class TieView extends "res://notation/native/view.gd":
             first["fingering"] = {"source_id":"authored-first","hand":"right","finger":3,"origin":"authored",
                 "placement":{"default_x":float(spec.get("hint_x",20.0)),"default_y":-18.0}}
             layout.tie_pairs = [{"first":first,"last":last}]
+            layout._index_source_spans("ties",layout.tie_pairs)  # painters query the span index
             layout.expression_note_index = {"first":first,"last":last}
             layout.set_viewport(size)
             annotations.layout_fingerings(gap,play_from_beat)

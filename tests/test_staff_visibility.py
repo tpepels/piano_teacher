@@ -26,5 +26,7 @@ def test_native_staves_retain_hand_contrast_through_countin_and_scrolling(tmp_pa
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "SCRIPT ERROR" not in result.stdout + result.stderr, result.stdout + result.stderr
-    assert "STAFF_VISIBILITY_PIXEL_CHECKS:180" in result.stdout
+    # Single-hand lessons collapse the unused staff (d0bfdf8d): 2 hands x 2 sizes
+    # x 3 beats x 5 rails + 'both' 2 x 3 x 10 rails = 120 engraved rail probes.
+    assert "STAFF_VISIBILITY_PIXEL_CHECKS:120" in result.stdout
     assert "STAFF_VISIBILITY_FAILURES:0" in result.stdout

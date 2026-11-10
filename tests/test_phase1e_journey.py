@@ -11,6 +11,7 @@ from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import PlayedNote
 from piano_teacher.engraving.engraving import EngravedScore
 from piano_teacher.server import PracticeEngine
+from test_seamless_stage_runway import Prepared
 
 
 def music():
@@ -59,6 +60,14 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         assert waiting["awaiting_score_revision"] is None
         assert waiting["revision"] == failed["revision"]
         assert waiting["count_in_beats"] == 0
+        # The next lesson step is pre-engraved and acknowledged before the
+        # third clean take (continuous handoff): the score is replaced at the
+        # take boundary without a loading gap. An unprepared stage is covered
+        # by test_phase1_score_handoff and test_seamless_stage_runway.
+        e.future_score=Prepared(e)
+        selection,_number=e._next_stage_selection()
+        assert e.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key,revision=selection.revision)["accepted"]
         # Clean takes climb successive equal BPM rungs; only target-speed
         # takes count toward the three repetitions needed for mastery.
         for _ in range(20):
@@ -72,16 +81,21 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
                            (n.end-phrase.start)*seconds) for n in phrase.notes
             ]
             t[0]=e.visual_transport.run_at+8*seconds+.3
+            final_take=before >= e.plan.target_bpm and e.plan.streak == 2
             feedback=e.state()
-            assert feedback["phase"]=="feedback"
-            assert feedback["feedback_marks"]
-            assert all(mark["status"]=="correct" for mark in feedback["feedback_marks"])
+            # A fully prepared next step may advance on the first post-grading
+            # tick (_finish... "prepared_on_time"); every other take shows feedback.
+            if not final_take:
+                assert feedback["phase"]=="feedback"
+                assert feedback["feedback_marks"]
+                assert all(mark["status"]=="correct" for mark in feedback["feedback_marks"])
             t[0]=e.visual_transport.next_at+.01
             after=e.state()
             if e.plan.active_variant.level == "outline":
                 # A harder generated level starts at the novice pace.
                 assert expected_bpm==80
-                assert after["phase"]=="loading"
+                # The prepared harder level starts on its reading runway.
+                assert after["phase"] in ("count_in","playing")
                 assert after["bpm"] == e.plan.start_bpm
                 break
             assert after["bpm"]==expected_bpm
@@ -92,19 +106,11 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         else:
             pytest.fail("Three clean target-speed repeats did not unlock the next level")
         assert e.plan.active_variant.level=="outline"
-        assert after["awaiting_score_revision"]==after["revision"]
+        assert after["awaiting_score_revision"] is None
+        assert after["revision"]==selection.revision
         assert after["lesson_step"]==2
         assert after["lesson_steps_mastered"]==1
-        revision=after["revision"]
-        transport=e.transport_id
-        # A stale visual acknowledgement cannot start a different lesson.
-        e.control("score_ready",revision=revision-1)
-        assert e.state()["phase"]=="loading"
-        e.control("score_ready",revision=revision)
-        started=e.state()
-        assert started["phase"]=="count_in"
-        assert started["transport_id"]==transport+1
-        assert started["required_notes"]>8
+        assert after["required_notes"]>8
     finally:
         e.midi.port=None
         e.db.close()

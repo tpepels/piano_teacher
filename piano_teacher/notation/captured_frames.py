@@ -27,7 +27,6 @@ class CapturedFrames:
     def __init__(self, folder, written):
         self.folder, self.written = Path(folder), written
         self.frames, self.registrations, self.translations = OrderedDict(), {}, {}
-        self.staff_rails = PhotographedStaffRails(self.folder)
         self.notes_by_beat, self.rests_by_onset = defaultdict(list), defaultdict(list)
         for event in written.symbols:
             if not event['visible']:
@@ -43,6 +42,7 @@ class CapturedFrames:
             except ValueError:
                 continue
         self.clocks = tuple(sorted(clocks))
+        self.staff_rails = PhotographedStaffRails(self.folder, captured_clocks=self.clocks)
 
     def nearby_clocks(self, targets, limit=4):
         center = float(sum(targets)/len(targets)) if targets else 0.

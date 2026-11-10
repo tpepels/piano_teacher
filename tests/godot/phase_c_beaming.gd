@@ -231,7 +231,7 @@ func run() -> void:
         ["t0","t1","t2","t3","t4"]],
         "Short notes retain every source beam identity and boundary")
     check(renderer.timeline.pixels_per_beat >= 112.0
-        and renderer.timeline.pixels_per_beat <= 400.0,
+        and renderer.timeline.pixels_per_beat <= 520.0,  # 64th pair at 26 px glyph pitch = 416
         "Native score fits genuine glyph ink at one fixed scale, without duration-only inflation")
     var fixed: float = renderer.timeline.pixels_per_beat
     for tempo in [40.0, 80.0, 120.0]:

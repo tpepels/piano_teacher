@@ -1,5 +1,33 @@
 extends SceneTree
 
+func _compile(renderer) -> void:
+    var deadline := Time.get_ticks_msec()+8000
+    while not renderer.retained_ready() and Time.get_ticks_msec() < deadline:
+        renderer.queue_redraw()
+        await process_frame
+
+func _settle_stream(renderer, state: Dictionary) -> void:
+    # The frame coordinator (present_flow) attaches compiled strips to their
+    # presentation clips; this harness has no backend frames.
+    var deadline := Time.get_ticks_msec()+8000
+    while Time.get_ticks_msec() < deadline:
+        renderer.stream_world_beat = 1.0
+        renderer.present_flow(1.0,state,0.0,false)
+        await process_frame
+        var attached: bool = not renderer._stream_queue.online.is_empty()
+        for strip in renderer._stream_queue.online:
+            if strip.get("segment") == null or strip["segment"].get_parent() != strip["clip"]:
+                attached = false
+        if attached:
+            break
+
+func _capture(viewport: SubViewport, renderer, path: String) -> void:
+    renderer.queue_redraw()
+    await process_frame
+    await process_frame
+    await RenderingServer.frame_post_draw
+    viewport.get_texture().get_image().save_png(path)
+
 func _initialize() -> void:
     call_deferred("_check")
 
@@ -42,19 +70,24 @@ func _check() -> void:
         quit(1)
         return
     if args.size() > 1:
-        renderer.present({"running":false,"paused":true,"hand":"right",
-            "count_in_beats":0.0,"play_from_beat":0.0},0.0)
-        await process_frame
-        await process_frame
-        await RenderingServer.frame_post_draw
-        viewport.get_texture().get_image().save_png(args[1].path_join("with-tuplet.png"))
-    renderer.glyphs.tuplet_textures.clear()
-    if args.size() > 1:
-        renderer.queue_redraw()
-        await process_frame
-        await process_frame
-        await RenderingServer.frame_post_draw
-        viewport.get_texture().get_image().save_png(args[1].path_join("without-tuplet.png"))
+        # READY/paused frames paint no source ink (perpetual score stream). Admit one
+        # source take into the stream exactly as the verovio overlay audit does.
+        var state := {"running":false,"paused":true,"hand":"right",
+            "count_in_beats":0.0,"play_from_beat":0.0}
+        renderer.present(state,0.0)
+        await _compile(renderer)
+        renderer.stream_world_beat = -40.0
+        renderer._stream_add_take(0.0,0.0,0.0,"singleton-probe")
+        await _settle_stream(renderer,state)
+        await _capture(viewport,renderer,args[1].path_join("with-tuplet.png"))
+        renderer.glyphs.tuplet_textures.clear()
+        # Retained ink is cached in child CanvasItems: re-record it so the
+        # removed artwork is actually absent from the second capture.
+        renderer._invalidate_retained_segments()
+        await _settle_stream(renderer,state)
+        await _capture(viewport,renderer,args[1].path_join("without-tuplet.png"))
+    else:
+        renderer.glyphs.tuplet_textures.clear()
     if renderer.load_score(data["model"]):
         push_error("A visible singleton with missing artwork was silently accepted")
         quit(1)

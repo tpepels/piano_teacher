@@ -18,7 +18,7 @@ def _pitch(note: ET.Element) -> int:
     step = element.findtext("step")
     return ((int(element.findtext("octave")) + 1) * 12
             + dict(C=0, D=2, E=4, F=5, G=7, A=9, B=11)[step]
-            + int(element.findtext("alter", "0")))
+            + int(Fraction(element.findtext("alter", "0"))))
 
 
 def project_authored_ties(source_parts: list[ET.Element],

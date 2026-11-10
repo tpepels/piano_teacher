@@ -23,7 +23,7 @@ from .pixel_proof import detect_staff_lines
 class PhotographedStaffRails:
     """One verifier call owns one bounded reference (never a global cache)."""
 
-    def __init__(self, folder: Path, *, anchors=()):
+    def __init__(self, folder: Path, *, anchors=(), captured_clocks=None):
         directory = Path(folder)
         if anchors:
             clocks = sorted({float(t) for t in anchors})
@@ -31,11 +31,16 @@ class PhotographedStaffRails:
                 raise ValueError("Independent rail evidence needs two distinct source clocks")
         else:
             clocks = []
-            for path in directory.glob("native-*.png"):
-                try:
-                    clocks.append(float(path.stem.removeprefix("native-")))
-                except ValueError:
-                    continue
+            # A caller that already scanned the capture folder passes its
+            # clocks so one verifier call lists the directory exactly once.
+            if captured_clocks is not None:
+                clocks = list(captured_clocks)
+            else:
+                for path in directory.glob("native-*.png"):
+                    try:
+                        clocks.append(float(path.stem.removeprefix("native-")))
+                    except ValueError:
+                        continue
             clocks = sorted(set(clocks))
             if len(clocks) >= 3:
                 clocks = [clocks[0], clocks[len(clocks)//2], clocks[-1]]

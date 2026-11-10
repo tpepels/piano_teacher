@@ -47,7 +47,37 @@ func _difference(before: Image, after: Image,
     return {"count":count,"average":sum_y/maxf(1.0,float(count)),
         "minimum":minimum,"maximum":maximum}
 
+var renderer
+# READY/paused frames paint no source ink (perpetual score stream), so every
+# capture admits one source take into the stream and views it at this world beat.
+const WORLD := -2.0
+
+func _x(beat: float) -> int:
+    return roundi(renderer.size.x*renderer.PLAYHEAD_FRACTION+
+        (beat-WORLD)*renderer.timeline.pixels_per_beat)
+
 func _image(view: SubViewport) -> Image:
+    var state := {"running":false,"paused":true,"hand":"both",
+        "count_in_beats":0.0,"play_from_beat":0.0}
+    renderer.present(state,0.0)
+    var deadline := Time.get_ticks_msec()+8000
+    while not renderer.retained_ready() and Time.get_ticks_msec() < deadline:
+        renderer.queue_redraw()
+        await process_frame
+    renderer.stream_world_beat = -40.0
+    renderer._stream_add_take(0.0,0.0,0.0,"rest-probe")
+    deadline = Time.get_ticks_msec()+8000
+    while Time.get_ticks_msec() < deadline:
+        renderer.stream_world_beat = WORLD
+        renderer.present_flow(WORLD,state,0.0,false)
+        await process_frame
+        var attached: bool = not renderer._stream_queue.online.is_empty()
+        for strip in renderer._stream_queue.online:
+            if strip.get("segment") == null or strip["segment"].get_parent() != strip["clip"]:
+                attached = false
+        if attached:
+            break
+    renderer.queue_redraw()
     await process_frame
     await process_frame
     await RenderingServer.frame_post_draw
@@ -70,7 +100,8 @@ func run() -> void:
     view.transparent_bg = true
     view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
     get_root().add_child(view)
-    var renderer = load("res://notation/native/view.gd").new()
+    renderer = load("res://notation/native/view.gd").new()
+    renderer.set_transport_overlay_enabled(false)
     renderer.size = Vector2(1600,480)
     view.add_child(renderer)
     if not renderer.set_verovio_glyphs(assets["glyphs"],assets["notes"],
@@ -97,8 +128,7 @@ func run() -> void:
         var center: float = renderer.layout.staff_center(staff)
         var expected_origin: float = center+Geometry.rest_staff_offset(kind)*gap
         var font_box: Array = renderer.glyphs.bounds["rest_"+kind]
-        var x: int = roundi(renderer.size.x*.42+
-            float(event["beat"])*density)
+        var x: int = _x(float(event["beat"]))
         var unit: float = gap/250.0
         var metrics: Dictionary = _difference(empty_ink,with_rests,
             x-35,x+36,
@@ -131,8 +161,7 @@ func run() -> void:
         var staff: String = str(event["staff"])
         var origin_y: float = renderer.layout.staff_center(staff)+(
             Geometry.rest_staff_offset(kind)+Geometry.rest_dot_offset(kind))*gap
-        var x: int = roundi(renderer.size.x*.42+
-            float(event["beat"])*renderer.timeline.pixels_per_beat)
+        var x: int = _x(float(event["beat"]))
         var pixels: Dictionary = _difference(with_rests,dotted_image,
             x+roundi(gap*.75),x+roundi(gap*2.35),
             floori(origin_y-gap*.6),ceili(origin_y+gap*.45))
@@ -190,8 +219,7 @@ func run() -> void:
     var ledger_gap: float = renderer.staff_gap()
     var high_center: float = renderer.layout.staff_center("right")
     var c6_y: float = high_center-4.0*ledger_gap
-    var note_x: int = roundi(renderer.size.x*.42+
-        renderer.timeline.pixels_per_beat)
+    var note_x: int = _x(1.0)
     var rail: Dictionary = _difference(empty_ink,ledger_image,
         note_x+roundi(ledger_gap*.75), note_x+roundi(ledger_gap*.98)+1,
         roundi(c6_y)-2,roundi(c6_y)+3)

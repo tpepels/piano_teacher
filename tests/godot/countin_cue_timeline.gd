@@ -21,6 +21,15 @@ func _initialize() -> void:
     cues.hold("play:1",1.0)
     check(cues.observe("play:1",1.0,4).is_empty(),
         "Pause and unchanged Resume cannot replay the frozen beat")
+    # Pause just after a count-in boundary no frame had observed: the beat is
+    # still owed to Resume (no skipped syllable), and spoken exactly once.
+    var paused := Cues.new()
+    check(int(paused.observe("play:p",-4.0,4).get("syllable",0)) == 1, "pause setup speaks 1")
+    paused.hold("play:p",-2.98)
+    check(paused.continues("play:p",-2.98), "a reused Resume continues the held epoch")
+    check(int(paused.observe("play:p",-2.98,4).get("syllable",0)) == 2,
+        "the unobserved boundary beat is spoken on Resume, not skipped")
+    check(paused.observe("play:p",-2.97,4).is_empty(), "and never twice")
     check(not cues.observe("resume:1",-4.0,4).is_empty(),
         "a genuine Resume countdown is an independent preparation epoch")
     check(cues.observe("resume:1",-4.0,4).is_empty(),

@@ -421,12 +421,11 @@ def test_legacy_timed_recovery_does_not_enable_guided_course_progression(course)
     fail_second_unit(e, now)
     advance(e, now)
     now[0] = e.visual_transport.run_at+(16-e.visual_transport.play_from_beat)*60/e.plan.bpm+.03
-    assert e.state()['guided_recovery']
-    assert advance(e, now)['mode'] == 'learn'
+    # 127c94ee: failed timed takes never enter a guided wait automatically,
+    # so the legacy recovery stays in practice and cannot enable guided progression.
+    assert not e.state()['guided_recovery']
+    assert advance(e, now)['mode'] == 'practice'
     assert not e.state()['learner']['course_guided']
-    find_notes(e, now)
-    e.control('practice')
-    ack(e)
     e.control('tempo', bpm=80)
     e.control('practice')
     ack(e)
@@ -558,14 +557,18 @@ def test_tempo_during_guided_recovery_keeps_failed_fragment_and_rhythm_return_wi
     fail_second_unit(e, now)
     advance(e, now)
     now[0] = e.visual_transport.run_at+(16-e.visual_transport.play_from_beat)*60/e.plan.bpm+.03
-    assert e.state()['guided_recovery']
-    recovered = advance(e, now)
+    # 127c94ee: guided practice is no longer entered automatically after a
+    # failed timed take; the learner enters it on the failed fragment (Learn).
+    assert not e.state()['guided_recovery']
+    assert advance(e, now)['retry_range']['first_bar'] == 3
+    e.control('learn')
+    recovered = ack(e)
     assert recovered['mode'] == 'learn' and recovered['first_bar'] == 3
     pitch = recovered['teaching']['expected_notes'][0]['pitch']
     midi(e, now, pitch)  # This key remains physically held through the tempo change.
     e.control('tempo', bpm=60)
     changed = ack(e)
-    assert changed['guided_recovery'] and changed['first_bar'] == 3 and changed['last_bar'] == 4
+    assert changed['mode'] == 'learn' and changed['first_bar'] == 3 and changed['last_bar'] == 4
     assert changed['bpm'] == changed['target_bpm'] == 60
     midi(e, now, pitch)
     assert e.state()['teaching']['target_index'] == 0
@@ -575,7 +578,9 @@ def test_tempo_during_guided_recovery_keeps_failed_fragment_and_rhythm_return_wi
     find_notes(e, now)
     e.control('practice')
     ready = ack(e)
-    assert ready['phase'] == 'count_in' and ready['play_from_beat'] == 8
+    # A learner-entered guided pass is not an automatic recovery: the return to
+    # practice replays the whole stage rather than resuming at the failed bar.
+    assert ready['phase'] == 'count_in' and ready['play_from_beat'] == 0
     assert ready['bpm'] == ready['target_bpm'] == 60
     assert not e.plan.mastered and e.plan.streak == 0
 

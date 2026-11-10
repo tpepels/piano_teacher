@@ -47,10 +47,11 @@ def steps_using(job, action):
     return [step for step in job.get("steps", []) if step.get("uses", "").startswith(action + "@")]
 
 
-CANONICAL_COMMAND = ".venv/bin/python scripts/check_native_verovio_overlay.py --out /tmp/native-notation"
-
-
-def test_native_notation_runs_for_every_pr_and_main_push_and_is_reusable():
+# Workflow topology since 6a965d52 ("cap push gate at two minutes; move Godot and
+# pixel regressions to manual suite"): native-notation.yml is the fast Python
+# contract gate (scripts/ci-smoke.sh); the exhaustive notation command and the
+# Godot regressions run only from explicit workflows.
+def test_fast_contract_gate_runs_for_every_pr_and_main_push_and_is_reusable():
     ci = workflow("native-notation.yml")
     assert {"pull_request", "push", "workflow_call"} <= set(ci["on"])
     assert ci["on"]["push"]["branches"] == ["main"]
@@ -58,14 +59,16 @@ def test_native_notation_runs_for_every_pr_and_main_push_and_is_reusable():
         filters = ci["on"][event] or {}
         assert not {"paths", "paths-ignore", "branches-ignore"} & set(filters)
     assert ci["on"]["pull_request"] in ("", {}, None)
-    assert set(ci["jobs"]) == {"native-notation"}
-    job = ci["jobs"]["native-notation"]
+    assert set(ci["jobs"]) == {"native-gate"}
+    job = ci["jobs"]["native-gate"]
     assert "if" not in job and "strategy" not in job
     assert job.get("continue-on-error", "false") == "false"
+    assert int(job["timeout-minutes"]) <= 2
     assert ci["permissions"] == {"contents": "read"}
+    assert any(step.get("run") == "bash scripts/ci-smoke.sh" for step in job["steps"])
 
 
-def test_one_unfiltered_notation_command_replaces_phase_and_scorestrip_gates():
+def test_one_explicit_notation_command_owns_exhaustive_coverage():
     invocations = []
     retired = (
         "check_user_midi_visual_regression.py", "check_user_midi_desktop.py",
@@ -81,48 +84,50 @@ def test_one_unfiltered_notation_command_replaces_phase_and_scorestrip_gates():
         for job in data["jobs"].values():
             for step in job.get("steps", []):
                 if "scripts/check_native_verovio_overlay.py" in step.get("run", ""):
-                    invocations.append((job, step))
+                    invocations.append((path.name, data, job, step))
     assert len(invocations) == 1, "one shared command owns exhaustive notation coverage"
-    job, step = invocations[0]
+    name, data, job, step = invocations[0]
+    assert name == "native-complete-audit.yml"
+    # Explicit only: never a pull_request or an unfiltered main push.
+    assert "pull_request" not in data["on"] and "workflow_dispatch" in data["on"]
+    assert data["on"]["push"]["paths"] == [".github/workflows/native-complete-audit.yml"]
     command = " ".join(step["run"].replace("\\\n", " ").split())
-    assert command.endswith(CANONICAL_COMMAND)
     assert "--only" not in command and "--headless" not in command
-    assert "xvfb-run -a" in command
-    assert '1600x1000x24' in command
+    assert "xvfb-run -a" in command and "1700x1000x24" in command
+    assert "--shard-count 24" in command
     assert "if" not in step and "continue-on-error" not in step
-    assert step.get("env", {}).get("LIBGL_ALWAYS_SOFTWARE") == "1"
+    assert job["env"].get("LIBGL_ALWAYS_SOFTWARE") == "1"
     assert "PIANO_TEACHER_NATIVE_NOTATION" not in {**job.get("env", {}), **step.get("env", {})}
-    assert "PIANO_TEACHER_NATIVE_NOTATION" not in workflow("native-notation.yml").get("env", {})
 
 
-def test_native_notation_installs_real_framebuffer_dependencies_and_preserves_failures():
-    job = workflow("native-notation.yml")["jobs"]["native-notation"]
-    assert job["container"] == "archlinux:latest"
-    assert int(job["timeout-minutes"]) >= 120
+def test_complete_audit_installs_real_framebuffer_dependencies_and_preserves_failures():
+    job = workflow("native-complete-audit.yml")["jobs"]["independent-source-shard"]
+    assert int(job["timeout-minutes"]) >= 30
+    assert job["strategy"]["fail-fast"] == "false"
     commands = "\n".join(step.get("run", "") for step in job["steps"])
-    for dependency in ("godot", "xorg-server-xvfb", "xorg-xauth", "mesa", "cairo", "pango", "alsa-lib"):
+    for dependency in ("xvfb", "xauth", "libgl1-mesa-dri", "Godot_v4.7.2-stable_linux"):
         assert dependency in commands
     assert "pip install -e '.[godot,test]'" in commands
     assert steps_using(job, "actions/checkout")[0]["with"]["ref"] == "${{ github.sha }}"
     uploads = steps_using(job, "actions/upload-artifact")
     assert len(uploads) == 1
     assert uploads[0]["if"] == "always()"
-    assert uploads[0]["with"]["path"] == "/tmp/native-notation/"
     assert not steps_using(job, "actions/download-artifact")
 
 
-def test_release_reuses_canonical_gate_and_only_exports_revision_after_success():
-    ci = workflow("native-notation.yml")
+def test_release_reuses_the_regression_gate_and_only_exports_revision_after_success():
+    regression = workflow("native-release-regressions.yml")
     release = workflow("native-release.yml")
     gate = release["jobs"]["exact-release-gate"]
-    assert gate["uses"] == "./.github/workflows/native-notation.yml"
+    assert gate["uses"] == "./.github/workflows/native-release-regressions.yml"
     assert "with" not in gate, "both event and release check the current event SHA"
-    job = ci["jobs"]["native-notation"]
-    assert ci["on"]["workflow_call"]["outputs"]["revision"]["value"] == "${{ jobs.native-notation.outputs.revision }}"
+    job = regression["jobs"]["release-regression"]
+    assert regression["on"]["workflow_call"]["outputs"]["revision"]["value"] == "${{ jobs.release-regression.outputs.revision }}"
+    assert "pull_request" not in regression["on"] and "push" not in regression["on"]
     assert job["outputs"]["revision"] == "${{ steps.passed.outputs.revision }}"
     passed = next(step for step in job["steps"] if step.get("id") == "passed")
-    audit = next(step for step in job["steps"] if "check_native_verovio_overlay.py" in step.get("run", ""))
-    assert job["steps"].index(passed) > job["steps"].index(audit)
+    regress = next(step for step in job["steps"] if "verify-notation.sh" in step.get("run", ""))
+    assert job["steps"].index(passed) > job["steps"].index(regress)
     assert "if" not in passed and "continue-on-error" not in passed
     assert passed["env"]["REVISION"] == "${{ github.sha }}"
     downloads = steps_using(release["jobs"]["publish-draft"], "actions/download-artifact")
@@ -130,14 +135,10 @@ def test_release_reuses_canonical_gate_and_only_exports_revision_after_success()
     assert "--notes" in release["jobs"]["publish-draft"]["steps"][-1]["run"]
 
 
-def test_general_app_integration_remains_separate_and_local_workflow_calls_resolve():
-    integration = workflow("phase0.yml")
-    commands = "\n".join(step.get("run", "") for job in integration["jobs"].values()
-                         for step in job.get("steps", []))
-    for command in ("-m pytest -q", "./scripts/check_godot.sh", "scripts/smoke_godot.py",
-                    "scripts/smoke_adaptive_godot.py", "scripts/verify_library_pipeline.py",
-                    "scripts/smoke_learning_ui.py", "scripts/review_art_direction.py"):
-        assert command in commands
+def test_local_reusable_workflow_calls_resolve_and_ci_smoke_is_the_push_gate():
+    # phase0.yml and its network smoke scripts were retired (bcce6ab4, c5c06467);
+    # the push gate is scripts/ci-smoke.sh, referenced by the fast workflow.
+    assert "scripts/ci-smoke.sh" in workflow("native-notation.yml")["jobs"]["native-gate"]["steps"][-2]["run"]
     for path in (ROOT / ".github/workflows").glob("*.yml"):
         for job in workflow(path.name)["jobs"].values():
             if job.get("uses", "").startswith("./.github/workflows/"):

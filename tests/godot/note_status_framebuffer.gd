@@ -99,6 +99,22 @@ func _run() -> void:
     assert(renderer.visible_take_keys().count(key_a) == 2 and
         renderer.visible_take_keys().count(key_b) == 2,
         "both physical copies are admitted as two measure strips each")
+    # Newly admitted strips compile lazily; wait until every copy is attached.
+    var compile_deadline := Time.get_ticks_msec()+8000
+    while Time.get_ticks_msec() < compile_deadline:
+        renderer.stream_world_beat = 6.0
+        renderer.queue_redraw()
+        await process_frame
+        # The frame coordinator (present_flow) attaches compiled strips to
+        # their presentation clips; this harness has no backend frames.
+        load("res://notation/native/stream_lifecycle.gd").attach_compiled(renderer._stream_queue.online)
+        var all_compiled := true
+        for strip in renderer._stream_queue.online:
+            if strip.get("segment") == null or strip["segment"].get_parent() != strip["clip"]:
+                all_compiled = false
+        if all_compiled:
+            break
+    renderer.stream_world_beat = -40.0
     feedback.present({"piece_fingerprint":"status-probe","revision":revision,
         "transport_id":2,"mode":"practice"})
     var ids: Dictionary = {} # source ID -> engraved note ID

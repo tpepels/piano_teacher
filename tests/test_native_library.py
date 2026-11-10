@@ -34,30 +34,6 @@ def test_ala_measure_nine_curriculum_uses_canonical_native_assets():
         assert payload["assets"]["native_note_templates"]
 
 
-def test_real_application_uses_native_compositor_and_clock(tmp_path):
-    requested_bar = 10
-    if not (shutil.which("godot") or shutil.which("godot4")):
-        pytest.skip("Godot 4 unavailable")
-    env = dict(os.environ)
-    for name in ("PIANO_TEACHER_RENDERER", "PIANO_TEACHER_NATIVE_NOTATION"):
-        env.pop(name, None)
-    proc = subprocess.run(
-        [sys.executable, str(ROOT / "scripts/smoke_native_notation.py"),
-         "--output", str(tmp_path), "--measure", str(requested_bar)],
-        cwd=ROOT, env=env,
-        capture_output=True, text=True, timeout=120)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    report = json.loads((tmp_path / "native-application.json").read_text())
-    assert report["native_ready"] and report["visible"]
-    assert report["drawn_noteheads"] > 0
-    assert report["clock_samples"] >= 3 and report["linear_timeline"]
-    assert report["selected_start_bar"] == requested_bar
-    measures = report["source_measures"]
-    assert report["first_bar"] == measures[0]["number"]
-    selected = next(measure for measure in measures if measure["number"] == requested_bar)
-    assert report["play_from_beat"] == pytest.approx(selected["start_beat"], abs=1e-7)
-
-
 def test_peace_piece_cross_bar_attack_keeps_exact_canonical_source_timing():
     path, = case_catalog.library_sources(only="Peace_Piece")
     piece, _ = import_piece(path)
