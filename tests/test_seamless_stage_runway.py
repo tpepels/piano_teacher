@@ -433,3 +433,42 @@ def test_next_stage_runway_label_never_leaks_internal_generator_keys(tmp_path):
         assert "coda" not in human.lower()
     finally:
         engine.db.close()
+
+
+def test_late_feedback_callback_preserves_full_future_stage_reading_runway(
+        tmp_path, monkeypatch):
+    """A delayed backend tick must not commit a preloaded score in the past.
+
+    The native forward-only queue cannot place notes backwards when Godot
+    receives the next state late. All required lead remains future time.
+    """
+    engine = _engine(tmp_path)
+    try:
+        future = Prepared(engine)
+        engine.future_score = future
+        selection, target = engine._next_stage_selection()
+        first_finished = _finish(engine)
+        assert engine.pending_result is not None
+        clock = [first_finished + .02]
+        monkeypatch.setattr("piano_teacher.server.time.monotonic",
+                            lambda: clock[0])
+        assert engine.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key, revision=selection.revision,
+            presentation_lead_beats=7.0)["accepted"]
+        assert engine.pending_result is not None
+        future_settlement = engine.visual_transport.next_at
+        assert future_settlement > clock[0]
+        # Simulate an OS suspension/overloaded engraving worker that skipped
+        # the expected next-step settlement deadline by an entire minute.
+        clock[0] = future_settlement + 60.0
+        engine._advance_pending_feedback(clock[0])
+        state = engine.state()
+        assert engine.plan.lesson_step_number == target
+        assert state["running"] and state["phase"] == "count_in"
+        assert engine.visual_transport.run_at >= (
+            clock[0] + 7.0 * 60.0 / engine.plan.bpm - 1e-6)
+        assert state["clock_beat"] < -6.99
+        assert engine.awaiting_score_revision is None
+        assert engine.score_artifacts is future.assets
+    finally:
+        engine.db.close()
