@@ -1465,7 +1465,8 @@ func beam_plan(gap: float, clock: float, playhead_x: float,
     frame.clock = clock
     frame.playhead_x = playhead_x
     var groups: Array = []
-    for group in layout.beam_groups:
+    for group in layout.visible_source_spans(
+            "beams",frame.source_floor-.25,frame.source_ceiling+.25):
         if group.size() >= 2 and frame.span_visible(group[0],group[-1]):
             groups.append(group)
     var result: Dictionary = symbols.beam_layout(frame,head_offsets,groups)
