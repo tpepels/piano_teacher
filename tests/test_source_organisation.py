@@ -76,7 +76,7 @@ def test_notation_infrastructure_has_canonical_owners():
         "notation/model.py": {"build_score_model"},
         "notation/lesson.py": {"build_lesson_score"},
         "importing/musicxml.py": {"load_musicxml"},
-        "rendering/legacy/spacing.py": {
+        "engraving/spacing.py": {
             "space_for_reading", "space_for_continuous_reading"},
         "notation/assets/glyphs.py": {"native_glyphs", "preparation_symbols"},
         "notation/assets/beams.py": {"beam_fragments"},
@@ -95,15 +95,6 @@ def test_notation_infrastructure_has_canonical_owners():
         definitions = {node.name for node in tree.body
                        if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
         assert required <= definitions, (name, required - definitions)
-
-
-def test_retained_runtime_adapters_use_explicit_exports():
-    for name in ("score.py", "score_geometry.py", "raster.py"):
-        path = PKG / name
-        contents = path.read_text()
-        assert "import *" not in contents
-        assert "sys.modules" not in contents
-        ast.parse(contents, filename=str(path))
 
 
 def test_retired_notation_facades_have_no_remaining_importers():

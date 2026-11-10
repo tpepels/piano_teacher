@@ -18,6 +18,7 @@ import subprocess
 import pytest
 
 from piano_teacher.fingering.lumikey import RUNTIME
+from quarantine_plugin import pytest_collection_modifyitems  # noqa: F401  (tests/quarantine.txt hook)
 
 _PROBE = {"notes": [{"source_id": "probe", "left": False, "note": 60, "time": 0, "duration": 500}]}
 

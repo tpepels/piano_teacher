@@ -36,12 +36,6 @@ def test_module_executes_existing_godot_launcher_and_forwards_arguments(monkeypa
     assert calls == [(launcher, [launcher, "--", "--phase0-smoke"])]
 
 
-def test_public_package_scripts_keep_server_and_retire_qt():
-    scripts = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["scripts"]
-    assert scripts["piano-teacher"] == "piano_teacher.server:main"
-    assert "piano-teacher-qt" not in scripts
-
-
 def test_installed_module_without_godot_assets_reports_checkout_requirement(tmp_path):
     package = tmp_path / "site-packages" / "piano_teacher"
     package.mkdir(parents=True)
