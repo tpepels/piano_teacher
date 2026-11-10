@@ -17,7 +17,9 @@ static func _merged(ink: Array[Vector2]) -> Array[Vector2]:
         if not is_finite(raw.x) or not is_finite(raw.y) or raw.y <= raw.x:
             continue
         if not output.is_empty() and raw.x <= output[-1].y:
-            output[-1].y = maxf(output[-1].y,raw.y)
+            var merged: Vector2 = output[-1]
+            merged.y = maxf(merged.y,raw.y)
+            output[-1] = merged
         else:
             output.append(raw)
     return output
