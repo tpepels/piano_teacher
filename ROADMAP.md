@@ -873,3 +873,72 @@ three previously unverified Chopin beam groups or the bracket are fixed until
 the actual new captured PNG reports establish it.
 
 All physical-device and learner-study gates remain open.
+
+
+### 2026-11-10 — continuous moving-bar P0/P1/P2 implementation audit
+
+The moving bar keeps **one forward-only visual world clock**. Score edits are
+not allowed to reposition admitted notation: it can only enter strictly in
+the future, be withdrawn as the maximal unseen suffix, and expire from the
+front. These changes implement the P0/P1/P2 findings from the November
+moving-bar architecture audit:
+
+**P0:**
+- Pause withdraws still-unseen later measures of the active attempt, rather
+  than protecting an entire graded take merely by owner ID. In-flight Play
+  acknowledgments remain protected until their authoritative result arrives.
+- Automatic Retry checks the engine's exact placement before withdrawing any
+  music, restores only **actually missing** original strips after a partial
+  journal failure, cleans incomplete newly allocated strips before restoration,
+  and verifies cached plan IDs against the live FIFO. Repeated requests cannot
+  claim a non-existent passage.
+- Backend-scheduled automatic passages use the single authored tempo map and
+  accept at most .025 source beat of visual/onset jitter, not .75 beat.
+- Native retained source segments draw only their source windows, not the
+  entire piece per measure. Barline context seeks by binary search. The
+  immutable source-span index selects source Verovio beams, tuplets, ties,
+  slurs, hairpins and voltas by time interval, preserving original paint
+  order even for nested long spans. The draw frame stops projecting the
+  chronological queue once its next strip is beyond the right viewport edge.
+
+**P1:**
+- A notehead's authentic horizontal ink must belong to exactly one
+  retractable strip. Boundary seams move only within observed/source-derived
+  blank space, with *no* source beat adjustment. Cross-measure ties/beams,
+  slurs, tufted tuplets, hairpins and voltas that cannot be safely cut are
+  coalesced into a single indivisible visual unit; Pause can remove only
+  safe independent suffixes.
+- Listen, Perform and untimed Learn publish their source-bound schedules to
+  the same engine-authored future admission route. Learn repeats an unfinished
+  idea only at distinct engine-scheduled epochs; Pause prevents new admission.
+- After a late Python callback, a fully prepared next lesson is scheduled
+  with its complete reading lead **from the actual backend clock**, never
+  with an already expired downbeat. Already visible preceding source continues
+  scrolling on the original world axis until it has left.
+
+**P2:**
+- Startup, unloaded and score-error screens retain the empty moving two-staff
+  notation and playhead; their global visual clock is updated every frame.
+- Empty measures use the actual source time-signature boundaries with pickup
+  and final-meter continuation, and a bounded logarithmic viewport seek.
+- On-score lesson-step markers use the same queued source origin; the prior
+  unconditional per-frame suppression was removed.
+
+**Verification:**
+- [Godot 4.7.2 startup/behavior tests — run 42740196454](https://github.com/tpepels/piano_teacher/actions/runs/42740196454):
+  **passed** after adding real FIFO seam/Pause, late-stage, exact recovery
+  rollback, continuous tempo-map, meter, source-span and projection tests.
+- [Python fast contracts — run 42740196541](https://github.com/tpepels/piano_teacher/actions/runs/42740196541):
+  **passed**, including engine-owned Listen/Learn stage scheduling and
+  minute-late preloaded handoff deadlines.
+- [Real-score framebuffer — run 42740090984](https://github.com/tpepels/piano_teacher/actions/runs/42740090984)
+  and [repeat/rest/header pixel capture — run 42740090826](https://github.com/tpepels/piano_teacher/actions/runs/42740090826):
+  **passed** at the latest production-code revision (the subsequent commit
+  modified only Godot regression tests).
+
+This is a **focused software integration acceptance**, not full scientific
+or physical acceptance. It does not waive the independent 24-shard original
+notation audit (including unresolved Chopin symbols), USB/Bluetooth MIDI/audio
+latency and disconnect/reconnect trials, the affected real Beethoven/imported
+source-file reproductions, or genuine learner effectiveness. Phase 2 and
+Phase 6 remain open against those independent exit conditions.
