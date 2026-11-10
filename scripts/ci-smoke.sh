@@ -67,6 +67,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_seamless_stage_runway.py \
   tests/test_future_score_lookahead.py \
   tests/test_library_load_atomicity.py \
+  tests/test_lumikey_fixed_overlap_index.py \
   tests/test_snapshot_capture_ports.py \
   tests/test_manual_tempo_ux_regression.py \
   tests/test_course_navigation.py \
