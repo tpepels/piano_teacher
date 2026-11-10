@@ -75,6 +75,7 @@ const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const MovingMeterGrid := preload("res://moving_meter_grid.gd")
+const ScoreStreamWindowCuts := preload("res://score_stream_window_cuts.gd")
 const TransportReservation := preload("res://score_transport_reservation.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
@@ -98,6 +99,10 @@ var compact_inactive_staff := false
 # One infinite front-of-house camera. Grading never reads this axis.
 var stream_world_beat := 0.0
 var _stream_queue = StreamQueue.new()
+# Precomputed genuine horizontal glyph/connector ink; cut decisions are
+# source-revision geometry, never recalculated during the animation loop.
+var _source_ink_intervals: Array[Vector2] = []
+
 # Compatibility getter for the read-only renderer/test interface. Only
 # StreamQueue may structurally mutate the underlying online FIFO.
 # External UI, HUD and diagnostics receive a snapshot. They cannot
@@ -438,6 +443,60 @@ func _prepare_static_geometry() -> void:
     connector_geometry.prewarm_tie_clearances(prepared_gap)
     connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
     connector_geometry.prewarm_slur_geometry(prepared_gap)
+    _source_ink_intervals = _build_ink_safe_boundaries(prepared_gap)
+
+
+func _build_ink_safe_boundaries(gap: float) -> Array[Vector2]:
+    # Pixel-accurate authored note/rest envelopes and exact source-connected
+    # Verovio groups. None depends on Play/Pause/Retry or world position.
+    var intervals: Array[Vector2] = []
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var pad: float = 1.5/density
+    for event in layout.ordered_events:
+        var kind: String = str(event.get("kind",""))
+        if kind not in ["note","rest"]:
+            continue
+        var envelope: Rect2 = layout.event_ink_rect(
+            event,gap,layout.cached_head_offsets,
+            layout.cached_accidental_offsets)
+        var beat: float = float(event.get("beat",0.0))
+        if envelope.size.x > 0.0:
+            intervals.append(Vector2(
+                beat+envelope.position.x/density-pad,
+                beat+envelope.end.x/density+pad))
+    for group in layout.beam_groups:
+        if group.size() >= 2:
+            _source_ink_interval(intervals,float(group[0]["beat"]),
+                float(group[-1]["beat"]),pad)
+    for group in layout.notation_tuplets:
+        var events: Array = group.get("events",[])
+        if events.size() >= 2:
+            _source_ink_interval(intervals,float(events[0]["beat"]),
+                float(events[-1]["beat"]),pad)
+    for pairs in [layout.tie_pairs,layout.slur_pairs]:
+        for pair in pairs:
+            _source_ink_interval(intervals,
+                float(pair["first"]["beat"]),float(pair["last"]["beat"]),pad)
+    for hairpin in layout.prepared_hairpins:
+        _source_ink_interval(intervals,float(hairpin["begin"]),
+            float(hairpin["end"]),pad)
+    for volta in layout.prepared_voltas:
+        _source_ink_interval(intervals,float(volta["start"]),
+            float(volta["end"]),pad)
+    # A genuine expression can have a single graphic larger than one note
+    # (e.g. rehearsal marks or multi-word tempo text); keep its authored
+    # source context together when an otherwise movable seam crosses it.
+    for expression in layout.source_expressions:
+        var at: float = float(expression.get("beat",0.0))
+        _source_ink_interval(intervals,at,at,maxf(pad,gap*2.5/density))
+    return intervals
+
+
+func _source_ink_interval(intervals: Array[Vector2],first: float,
+        last: float,margin: float) -> void:
+    if is_finite(first) and is_finite(last) and last >= first:
+        intervals.append(Vector2(first-margin,last+margin))
+
 
 func _stream_release_all() -> void:
     _stream_queue.reset(self)
@@ -612,11 +671,13 @@ func _stream_source_windows(opening: float) -> Array[Vector2]:
             edges.append(beat)
     edges.append(timeline.duration_beats)
     edges.sort()
-    var strips: Array[Vector2] = []
-    for i in range(1,edges.size()):
-        if edges[i] > edges[i-1]+.00001:
-            strips.append(Vector2(edges[i-1],edges[i]))
-    return strips
+    # Shift retractable seams into genuine source-ink whitespace. If a
+    # slur/tie/beam spans a measure boundary, merge that visual unit rather
+    # than let Pause remove half of a source glyph. World-note deadlines and
+    # authored measure positions do not change.
+    return ScoreStreamWindowCuts.safe_windows(
+        opening,timeline.duration_beats,timeline.measures,
+        _source_ink_intervals)
 
 
 func _stream_add_take(source_beat: float, start_world: float,
