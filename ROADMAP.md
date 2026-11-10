@@ -942,3 +942,57 @@ notation audit (including unresolved Chopin symbols), USB/Bluetooth MIDI/audio
 latency and disconnect/reconnect trials, the affected real Beethoven/imported
 source-file reproductions, or genuine learner effectiveness. Phase 2 and
 Phase 6 remain open against those independent exit conditions.
+
+
+### 2026-11-10 — exact original-model import and measure-context safety
+
+The earlier moving-bar audit is now supported by additional **original production
+source** evidence and explicit deterministic Retry diagnostics, without claiming
+the unavailable developer's affected Pathétique file or USB piano tests.
+
+1. The Lumikey 0.3.0 original LH/RH ONNX providers retain their source
+   ordering, hard manual/authored finger constraints, and authentic
+   logits. Indexed overlap searches replace the previous repeated whole-piece
+   `fixed.some/filter` scans, including recursive chord-completion rules.
+   Independent left/right sessions run concurrently with one CPU thread each;
+   output ordering remains left then right. Exhaustive overlapping/fixed-finger
+   parity and all genuine provider tests run in
+   [real-model CI](https://github.com/tpepels/piano_teacher/actions/runs/42792150649):
+   **22 passed**, including both published model weight checks.
+2. A full **1,164-note Moonlight Sonata I** `library.open` ->
+   `score.native_layout` -> `score.semantic` -> repeated `library.open`
+   test with those REAL providers is green in
+   [run 42793022223](https://github.com/tpepels/piano_teacher/actions/runs/42793022223):
+   869 ms cold import, 3,872 ms authentic native ink plus model, 282 ms
+   cached import. The later run
+   [42793776301](https://github.com/tpepels/piano_teacher/actions/runs/42793776301)
+   additionally verifies that the original desktop `coda-midi` preference
+   starts with a bounded learning stage (no whole-piece first lesson) at
+   manual 20 BPM and retains the complete original piece as the final
+   performance stage. Its measured cold import was 569 ms, native geometry
+   2,887 ms and cached reopen 203 ms on the CI runner. No fingering algorithm
+   or lesson source is silently disabled.
+3. The immutable measure-strip seam index now protects the **leftward extent
+   of actual clef/key/meter context at a later measure boundary**, as well as
+   notehead, beam, slur, tie, hairpin, volta and finite barline ink. If the
+   new header cannot be assigned wholly to its own future strip, that
+   connected visual unit is merged. Godot's integration test catches the
+   previously failing split; the updated
+   [Godot run 42793455356](https://github.com/tpepels/piano_teacher/actions/runs/42793455356)
+   and [real-score framebuffer run 42793455304](https://github.com/tpepels/piano_teacher/actions/runs/42793455304)
+   pass.
+4. Native `ScoreAssetSession` tracks exact errors across explicit Retry:
+   an identical second failure is reported as repeated (while Browse
+   remains available), successful retries clear the warning, and a new
+   source revision resets its identity. The new regression is included in
+   the [Godot run 42794260890](https://github.com/tpepels/piano_teacher/actions/runs/42794260890),
+   **passed**.
+
+**Status constraints:** issue #45's exact failing original MIDI was not
+supplied, so its physical reproduction and remediation remain unverified.
+Issue #46's specific Beethoven Pathétique input/screen/readability also
+remains unverified; the long Moonlight representative covers real Coda
+passage boundaries and backend tempo, not physical display speed. Full
+24-shard scientific notation proof, original Chopin drawing failures,
+long-run input/reconnection/audio latency and learner trials remain open.
+**Phase 2 and Phase 6 are not certified complete.**
