@@ -637,5 +637,36 @@ func _initialize() -> void:
         is_equal_approx(float(connected.stream_passes[0]["clip_ceiling"]),8.0),
         "a real cross-measure tie is one indivisible future unit")
     connected.free()
+    # Far-right future strips are immutable but must not be projected,
+    # recolored or entered into visible-note feedback on each frame.
+    var far := InstrumentedView.new()
+    far.size = Vector2(800,440)
+    far.native_ready = true
+    far.timeline.duration_beats = 8.0
+    far.timeline.measures = [
+        {"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    far.timeline.pixels_per_beat = 96.0
+    var future_state := {
+        "loaded":true,"running":false,"paused":false,
+        "phase":"ready","mode":"practice","piece_fingerprint":"far",
+        "revision":1,"transport_id":0,"play_from_beat":0.0}
+    far.present_flow(0.0,future_state,0.0)
+    var distant_segment = far._stream_queue.online[-1]["segment"]
+    far._project_stream(800.0*.33)
+    check(str(distant_segment.synced_take).is_empty(),
+        "future strip beyond viewport receives no per-frame note-status projection")
+    var far_arm := far.arm_stream_take(0.0,0.0)
+    check(not far_arm.is_empty() and far.acknowledge_stream_arm(),
+        "future strip becomes available through ordinary armed transport")
+    future_state["running"] = true
+    future_state["phase"] = "count_in"
+    future_state["transport_id"] = 1
+    far.present_flow(float(far_arm["start_world"])-7.0,
+        future_state,-7.0)
+    far._project_stream(800.0*.33)
+    check(not str(far._stream_queue.online[0]["segment"].synced_take).is_empty(),
+        "same far-ahead source becomes projected when its real world time reaches viewport")
+    far.free()
     print("STREAM_PROJECTED_OVERLAP_FAILURES:",failures)
     quit(0 if failures==0 else 1)
