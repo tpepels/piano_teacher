@@ -194,7 +194,8 @@ func paint_hairpins(canvas, frame: RenderPass, left: float, right: float, clock:
     # Wedge lines are structural ink, like pedal lines and volta brackets.
     # Original endpoints stay on the score's fixed beat score_layout.timeline, and a
     # clipped screen viewport displays the exact same interpolated slope.
-    for span in score_layout.prepared_hairpins:
+    for span in score_layout.visible_source_spans(
+            "hairpins",left,right):
         var start: Dictionary = span["first"]
         var stop: Dictionary = span["last"]
         if not frame.span_visible(start,stop):
@@ -232,7 +233,8 @@ func paint_volta_endings(canvas, frame: RenderPass, left: float, right: float, c
     # neither the repeat marks nor the transport clock causes an auto-repeat.
     # Matching and open-ending resolution are score preparation work.
     var y: float = score_layout.staff_center("right")-gap*5.05
-    for ending in score_layout.prepared_voltas:
+    for ending in score_layout.visible_source_spans(
+            "voltas",left,right):
         var first: float = float(ending["start"])
         var last: float = float(ending["end"])
         if first > right+.5 or last < left-.5 or last <= first:
