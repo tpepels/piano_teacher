@@ -13,6 +13,8 @@ class Segment:
 class View:
     extends "res://notation/native/view.gd"
     var reject_one := false
+    var fail_after_first_strip := false
+    var withdraw_only_one := false
     func retained_ready() -> bool:
         return true
     func _new_retained_segment(_kind: String):
@@ -26,8 +28,39 @@ class View:
         if reject_one:
             reject_one = false
             return
+        if fail_after_first_strip:
+            fail_after_first_strip = false
+            var windows: Array[Vector2] = _stream_source_windows(from_beat)
+            var owner_serial: int = _stream_serial+1
+            if not windows.is_empty():
+                var first: Vector2 = windows[0]
+                _stream_queue.enqueue(self,[{
+                    "kind":"source","owner_serial":owner_serial,
+                    "take_owner":owner_serial,
+                    "world_origin":start_world-source_beat,
+                    "source_floor":first.x,"source_ceiling":first.y,
+                    "clip_floor":first.x,"clip_ceiling":first.y,
+                    "clip_leading_spaces":15.0,
+                    "piece_duration":timeline.duration_beats,
+                    "take_key":take_key,"pending":true
+                }],retained_repeat_segments,retained_rest_segments,
+                    retained_first_once,stream_world_beat,size.x,
+                    size.x*PLAYHEAD_FRACTION,timeline.pixels_per_beat,
+                    staff_gap(),timeline.duration_beats,empty_strip)
+            return
         super._stream_add_take(source_beat,start_world,from_beat,
             take_key,empty_strip)
+    func trim_future_queue(reason: String,
+            protected_take: int = -1) -> Array[int]:
+        if withdraw_only_one:
+            withdraw_only_one = false
+            # Emulate a second archive writer refusal after the first
+            # right-hand strip was already journaled and removed.
+            return _stream_queue.withdraw_tail(self,stream_world_beat,
+                timeline.pixels_per_beat,staff_gap(),
+                timeline.duration_beats,size.x,
+                size.x*PLAYHEAD_FRACTION,reason,true,protected_take)
+        return super.trim_future_queue(reason,protected_take)
 
 var failures := 0
 func check(ok: bool, why: String) -> void:
@@ -92,5 +125,39 @@ func _run() -> void:
             float(before[-1]["source_ceiling"]),
         "failed append restores the exact previous source/rest suffix")
     broken.free()
+
+    var partial_archive := fixture()
+    var original_partial := partial_archive.stream_passes.duplicate(true)
+    partial_archive.withdraw_only_one = true
+    check(not partial_archive.enqueue_recovery_queue(
+        0.0,0.0,15.0,"partial_archive"),
+        "partially journaled suffix refusal aborts the automatic transaction")
+    check(partial_archive.stream_passes.size() == original_partial.size() and
+        is_equal_approx(
+            float(partial_archive.stream_passes[0]["world_origin"]),
+            float(original_partial[0]["world_origin"])) and
+        is_equal_approx(
+            float(partial_archive.stream_passes[-1]["clip_ceiling"]),
+            float(original_partial[-1]["clip_ceiling"])),
+        "partial withdrawal restores only absent tail, never duplicates live strip")
+    partial_archive.free()
+
+    var partial_append := fixture()
+    var original_append := partial_append.stream_passes.duplicate(true)
+    partial_append.fail_after_first_strip = true
+    check(not partial_append.enqueue_recovery_queue(
+        0.0,0.0,15.0,"partial_append"),
+        "partial two-measure replacement may not claim a committed take")
+    check(partial_append.stream_passes.size() == original_append.size() and
+        is_equal_approx(
+            float(partial_append.stream_passes[0]["world_origin"]),
+            float(original_append[0]["world_origin"])) and
+        is_equal_approx(
+            float(partial_append.stream_passes[-1]["clip_ceiling"]),
+            float(original_append[-1]["clip_ceiling"])) and
+        not partial_append._stream_queue.has_take(
+            partial_append._stream_serial+1),
+        "partially admitted new owner is removed before originals are restored")
+    partial_append.free()
     print("SCORE_RECOVERY_TRANSACTION_FAILURES:",failures)
     quit(0 if failures==0 else 1)
