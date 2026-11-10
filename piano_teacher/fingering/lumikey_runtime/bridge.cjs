@@ -118,15 +118,20 @@ async function handInference(notes, left, session) {
 async function main() {
   const request=JSON.parse(fs.readFileSync(0,'utf8'));
   const directory=path.resolve(path.dirname(require.resolve('@lumikey/piano-fingering-model')),'..','models');
-  const result=[];
-  for(const hand of ['left','right']) {
+  // RH and LH have independent pretrained weights and inference histories.
+  // Loading and running them serially doubled cold/full-piece wall time on
+  // multi-core CPUs. Run each original model in its own one-thread ONNX
+  // session, preserving the original left-then-right output ordering.
+  async function inferHand(hand) {
     const file=path.join(directory,`fingering_transformer_${hand}.onnx`);
     const bytes=fs.readFileSync(file);
     if(crypto.createHash('sha256').update(bytes).digest('hex')!==expected[hand]) throw new Error('Unexpected model weights: '+hand);
     const session=await ort.InferenceSession.create(bytes,{executionProviders:['cpu'],intraOpNumThreads:1,interOpNumThreads:1});
-    try { result.push(...await handInference(request.notes,hand==='left',session)); }
+    try { return await handInference(request.notes,hand==='left',session); }
     finally { await session.release(); }
   }
-  process.stdout.write(JSON.stringify({assignments:result}));
+  const [left, right] = await Promise.all([
+    inferHand('left'), inferHand('right')]);
+  process.stdout.write(JSON.stringify({assignments:[...left,...right]}));
 }
 main().catch(error=>{console.error(error.stack||String(error));process.exitCode=1;});
