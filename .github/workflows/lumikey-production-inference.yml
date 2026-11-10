@@ -1,0 +1,49 @@
+name: Lumikey production ONNX inference (bounded)
+
+# Keep this independent of the fast Python gate: genuine Node/ONNX models
+# are mandatory for this verification and are larger than a quick unit test.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'piano_teacher/fingering/**'
+      - 'tests/test_fingering_provider.py'
+      - 'tests/test_lumikey_fixed_overlap_index.py'
+      - 'scripts/setup-fingering.sh'
+      - '.github/workflows/lumikey-production-inference.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lumikey-real-model-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-onnx-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: piano_teacher/fingering/lumikey_runtime/package-lock.json
+      - name: Install actual Python piano and MIDI runtime
+        run: python -m pip install -e '.[test]'
+      - name: Install and probe BOTH pinned original ONNX fingering models
+        run: timeout 170s bash scripts/setup-fingering.sh
+      - name: Verify indexed fixed constraints and real original-model notes
+        run: |
+          timeout 195s python -m pytest -q --tb=short \
+            tests/test_lumikey_fixed_overlap_index.py \
+            tests/test_fingering_provider.py
