@@ -15,9 +15,12 @@ const READY_TRAVEL_BEATS := 0.30
 const REST_GAP_BEATS := 1.0
 # "Strictly ahead of the playhead" for reusing a paused take.
 const PAUSED_REUSE_EPSILON_BEATS := .001
-# A world/graded onset may differ by one display-frame's measured jitter,
-# but never by a fraction of a source note. At 96 px/beat this is 2.4 px.
-const AUTOMATIC_DUE_EPSILON_BEATS := .025
+# Listen/Perform may open on an empty strip only when the one count-in-bar
+# slot computed here is the engine's own first-note deadline (one display
+# frame of jitter, never a fraction of a note; 2.4 px at 96 px/beat).
+# Automatic practice continuations do NOT use a tolerance: their source is
+# bound by the backend plan identity (NativeView._planned_owner).
+const EMPTY_STRIP_DEADLINE_EPSILON_BEATS := .025
 
 static func clip_bounds(item: Dictionary, density: float,
         gap: float, score_duration: float) -> Vector2:
@@ -62,14 +65,13 @@ static func _future_start(passes: Array, world: float,
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
     return start
 
-# All reservation claims (ready, paused, automatic, active and auto due)
-# use one identity-checked traversal. Type-specific callers must not scan
+# All reservation claims (ready, paused, automatic and active) use one
+# identity-checked traversal. Type-specific callers must not scan
 # stream_passes or calculate a different on-screen placement policy.
 static func select(passes: Array, purpose: String, opening: float,
         world: float, right_beats: float = 0.0,
-        header_beats: float = 0.0, identity: String = "",
-        expected_world: float = NAN) -> int:
-    assert(purpose in ["ready","idle","paused","automatic","automatic_due","bound"])
+        header_beats: float = 0.0, identity: String = "") -> int:
+    assert(purpose in ["ready","idle","paused","automatic","bound"])
     var earliest: float = world + maxf(MIN_READING_BEATS,
         right_beats+header_beats+OFFSCREEN_MARGIN_BEATS)
     if purpose == "paused":
@@ -97,18 +99,15 @@ static func select(passes: Array, purpose: String, opening: float,
             "paused":
                 matches = key == identity and not pending and \
                     absf(float(item.get("source_floor",-INF))-opening)<.00001
-            "automatic","automatic_due":
+            "automatic":
                 matches = pending and not armed and key == "autopending" and \
                     absf(float(item.get("source_floor",-INF))-opening)<.00001
             "bound":
                 matches = key == identity and not pending
         if not matches:
             continue
-        if purpose not in ["idle","bound","automatic_due"] and \
+        if purpose not in ["idle","bound"] and \
                 onset < earliest-.00001:
-            continue
-        if purpose == "automatic_due" and (not is_finite(expected_world) or \
-                absf(onset-expected_world)>AUTOMATIC_DUE_EPSILON_BEATS):
             continue
         # Active transport resumes may have two different source windows
         # attached to the same transport ID. Prefer the newest continuation;
@@ -184,9 +183,13 @@ static func automatic_horizon(rest_beats: float,
     # speculative automatic/preview ink. The backend's repeat deadline
     # already includes the printed rest, so it adds only (horizon-rest).
     # Never push a visual repeat later without moving the grading deadline.
+    # The repeat is announced as the take ends, so it must clear the
+    # printed rest by the same offscreen margin as any appended source:
+    # with no margin the deadline sat exactly on the admission boundary and
+    # a sub-millisecond projection error refused the repeat's ink.
     return maxf(4.0,maxf(
         right_beats+header_beats+1.5,
-        rest_beats+REST_GAP_BEATS+header_beats))
+        rest_beats+REST_GAP_BEATS+header_beats+OFFSCREEN_MARGIN_BEATS))
 
 
 static func lead_seconds(start_world: float, world: float, bpm: float) -> float:

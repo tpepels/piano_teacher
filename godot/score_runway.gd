@@ -6,6 +6,7 @@ const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
+const StreamAdmission := preload("res://score_stream_admission.gd")
 const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
@@ -354,10 +355,36 @@ func present_frame(_state: Dictionary, global_beat: float) -> void:
         var lead: float = maxf(5.0,
             _future._stream_right_beats()+
             _future._stream_header_beats(0.0)+1.5)
+        lead = maxf(lead,_outgoing_clearance_beats())
         _ack_waiting = _ack.request("score.stage_ready",{
             "stage_key":_bundle["stage_key"],
             "revision":_bundle["revision"],
             "presentation_lead_beats":lead}) == OK
+
+
+func _outgoing_clearance_beats() -> float:
+    # The handoff starts when the current take ends. Its own ink and printed
+    # rest are still on the staff then (now that every repeat is drawn), and
+    # ScoreStreamQueue.minimum_peer_opening admits ink of a different
+    # density only after that old ink has left past the left edge. Reserve
+    # that much lead from the take's end, plus the usual 1.5-beat jitter, or
+    # the prepared stage is refused and the next stage plays with no ink.
+    var old = stage.renderer if stage != null else null
+    if old == null or not is_instance_valid(old) or old == _future or \
+            old.get("timeline") == null or not old.has_method("staff_gap") or \
+            not old.get("practice_timeline") is Dictionary:
+        return 0.0
+    var old_density: float = maxf(1.0,float(old.timeline.pixels_per_beat))
+    var new_density: float = maxf(1.0,float(_future.timeline.pixels_per_beat))
+    var rest: float = float(old.practice_timeline.get("gap",{}).get(
+        "duration_beats",0.0))
+    var trailing: float = 2.2*float(old.staff_gap())/old_density
+    var tail: float = rest+trailing
+    if absf(old_density-new_density) < .0001:
+        return tail+StreamAdmission.REST_GAP_BEATS+ \
+            _future._stream_header_beats(0.0)+1.5
+    return tail+(old.size.x*.33+60.0)/old_density+ \
+        _future._stream_right_beats()+_future._stream_header_beats(0.0)+1.5
 
 
 func promote_if_ready(state: Dictionary) -> bool:

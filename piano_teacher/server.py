@@ -531,7 +531,9 @@ class PracticeEngine:
             self._begin_learn(from_beat=response.restart_beat, recovery=True)
             self.next_action = instruction
         elif deadline is not None:
-            self._continue_at(deadline, from_beat=response.restart_beat)
+            self._continue_at(
+                self._continuation_deadline(deadline, response.restart_beat),
+                from_beat=response.restart_beat)
             self.next_action = instruction
         else:
             self._schedule_preparation(response.restart_beat, now=now,
@@ -1707,26 +1709,67 @@ class PracticeEngine:
             self.transport_id, self.visual_transport.play_from_beat,
             self.visual_transport.run_at, self.plan.identity,
             self.score_revision)
+        # An announced continuation starts AT its first graded beat; Godot
+        # spoke its one count-in bar from the announced deadline during the
+        # rest. A continuation that still has a whole bar of lead counts
+        # that last bar itself (owner decision: one bar before every take).
+        lead_beats = ((self.visual_transport.run_at - self.now())
+                      * self.plan.bpm / 60.0)
+        if self.count_in_bar_beats > 0 and \
+                lead_beats >= self.count_in_bar_beats - 1e-6:
+            self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
+
+    def _continuation_deadline(self, deadline: float, from_beat: float) -> float:
+        """The ONE graded run_at of an automatic same-stage continuation.
+
+        A continuation scheduled when the previous take finished was
+        announced (score_queue_next) with this exact deadline, so Godot
+        admitted its source offscreen at that world position. It starts
+        unchanged: adding another reading lead here made the graded beat
+        follow the visible ink by (horizon - rest) beats (R1 P1/M1).
+
+        An unannounced continuation (a policy changed the source opening at
+        settlement) gets a fresh full offscreen horizon from now, so its ink
+        can still be admitted beyond the right edge before it is graded.
+        """
+        announced = self.visual_transport.announced_deadline(from_beat)
+        if announced is not None and abs(announced - deadline) <= 1e-9:
+            return deadline
+        if self._continuous_horizon_beats <= 0 or self.plan is None or not self.auto:
+            return deadline
+        return max(self._automatic_stream_deadline(deadline),
+                   self.now() + self._continuous_horizon_beats * 60.0 / self.plan.bpm)
 
     def _schedule_preparation(self, target: float, *, now: float,
-                              from_visual: float, reverse_seconds: float):
-        """Reverse on this pass, then traverse one semantic rest into target."""
+                              from_visual: float, reverse_seconds: float,
+                              reading_lead_included: bool = False):
+        """Reverse on this pass, then traverse one semantic rest into target.
+
+        The resulting next_at is the graded run_at of the next take and is
+        announced as such. reading_lead_included: reverse_seconds was
+        derived from a renderer-reserved world position (manual Retry), so
+        the deadline already IS that admitted position; adding the automatic
+        reading horizon on top made the retried ink arrive early (R1 P3).
+        """
         self.visual_transport.schedule_source_preparation(
             self._source_model(), source_from_beat=target,
             from_visual=from_visual, now=now,
             reverse_seconds=reverse_seconds, bpm=self.plan.bpm)
-        # A recovery target may differ from the speculative next passage.
-        # Its newly queued source must have the SAME offscreen reading lead
-        # as a normal automatic repeat, after the authentic printed rest.
-        # The backend moves the graded deadline; Godot never moves old ink.
-        upcoming_rest = float(
-            self.visual_transport.practice_preparation["measure"][
-                "duration_beats"])
-        missing = max(
-            0.0,
-            self._continuous_horizon_beats - upcoming_rest,
-        )
-        self.visual_transport.next_at += missing * 60.0 / self.plan.bpm
+        if not reading_lead_included:
+            # An automatic recovery target may differ from the speculative
+            # next passage. Its newly queued source must have the SAME
+            # offscreen reading lead as a normal automatic repeat, after the
+            # authentic printed rest. Godot never moves old ink.
+            upcoming_rest = float(
+                self.visual_transport.practice_preparation["measure"][
+                    "duration_beats"])
+            missing = max(
+                0.0,
+                self._continuous_horizon_beats - upcoming_rest,
+            )
+            self.visual_transport.next_at += missing * 60.0 / self.plan.bpm
+        self.visual_transport.announce_continuation(
+            target, self.visual_transport.next_at)
         self.running = False
         self.recorder = None
         self.count_in_beats = 0.0
@@ -2021,7 +2064,8 @@ class PracticeEngine:
             self._resume_grading_after = 0.0
             self._resume_ignored_pitches.clear()
             self._schedule_preparation(target, now=sampled, from_visual=position,
-                                       reverse_seconds=reverse_seconds)
+                                       reverse_seconds=reverse_seconds,
+                                       reading_lead_included=presentation_lead_seconds > 0)
             self.feedback = "Get ready to retry"
             return
         self.start(mode="perform" if self.mode == "perform" else "practice",
@@ -2323,9 +2367,9 @@ class PracticeEngine:
                         "practice_timeline"]["stride_beats"]
                 target = (self.visual_transport.practice_preparation["source_from_beat"]
                           if self.visual_transport._retry_previous_pass and self.visual_transport.practice_preparation else 0.0)
-                self._continue_at(
-                    self._automatic_stream_deadline(deadline) if self.auto else deadline,
-                    from_beat=target)
+                # The deadline already announced for this repeat, unchanged.
+                self._continue_at(self._continuation_deadline(deadline, target),
+                                  from_beat=target)
             else:
                 self.visual_transport.next_at = 0
                 self.auto = False
@@ -2357,7 +2401,9 @@ class PracticeEngine:
             self.retry_range = review.retry_range
             self.feedback = f"Retrying {assignment.focus} with the music still moving"
             self.next_action = "Play this section, then return to the complete passage."
-            self._continue_at(deadline,from_beat=review.start_beat)
+            self._continue_at(
+                self._continuation_deadline(deadline, review.start_beat),
+                from_beat=review.start_beat)
             return
         if assignment.guided:
             self._begin_learn(
@@ -2484,11 +2530,11 @@ class PracticeEngine:
             self.measurement.finish()
             self.running = False
             self.visual_transport._preview_loop_pending = True
-            self.visual_transport.next_at = self._automatic_stream_deadline(
+            self.visual_transport.announce_continuation(0.0, self._automatic_stream_deadline(
                 repeat_deadline(
                     run_at=self.visual_transport.run_at, duration=duration,
                     gap_beats=self.visual_transport.visual_gap_beats,
-                    bpm=self.plan.bpm))
+                    bpm=self.plan.bpm)))
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn progress."
             if now >= self.visual_transport.next_at:
@@ -2711,7 +2757,19 @@ class PracticeEngine:
         if decision.deadline_action == "clear":
             self.visual_transport.next_at = 0
         elif decision.deadline_action == "schedule":
-            self.visual_transport.next_at = decision.deadline_at
+            if planned is None:
+                # The clean take repeats this stage: decide its graded
+                # deadline ONCE, now, including the renderer's offscreen
+                # reading horizon, and announce it for the whole rest so the
+                # repeat's ink is admitted offscreen at exactly this world
+                # position. Settlement at that deadline starts the take with
+                # this same run_at (R1 P2: publishing it only at the start
+                # left no time to admit the ink offscreen).
+                self.visual_transport.announce_continuation(
+                    0.0, self._automatic_stream_deadline(decision.deadline_at))
+            else:
+                # A possible stage handoff keeps its own prepared lead.
+                self.visual_transport.next_at = decision.deadline_at
             if now >= self.visual_transport.next_at:
                 self._update()
 
@@ -2769,14 +2827,17 @@ class PracticeEngine:
             deadline = self.visual_transport.next_at
             self.visual_transport.visual_offset_beats += self._source_model()[
                 "practice_timeline"]["stride_beats"]
-            self._continue_at(deadline)
+            self._continue_at(self._continuation_deadline(deadline, 0.0))
         elif decision.action == "feedback":
             self._advance_pending_feedback(now)
         elif decision.action == "rewind_due":
             if self._guided_recovery_pending:
                 self._begin_learn(from_beat=self.visual_transport.pending_rewind, recovery=True)
             else:
-                self._continue_at(self.visual_transport.next_at, from_beat=self.visual_transport.pending_rewind)
+                target = self.visual_transport.pending_rewind
+                self._continue_at(
+                    self._continuation_deadline(self.visual_transport.next_at, target),
+                    from_beat=target)
         return decision.consumed
 
     def _update(self) -> None:
@@ -3008,19 +3069,16 @@ class PracticeEngine:
             next_floor = None
             next_deadline = None
             next_transport = self.transport_id + 1
-            preparation = state.get("practice_preparation")
-            schedule = state.get("visual_preparation_schedule")
+            announced = self.visual_transport.announced_continuation
             if (self.mode == "practice" and not self.visual_transport.paused
-                    and isinstance(preparation, dict)
-                    and isinstance(schedule, dict)
-                    and "deadline_at_ms" in schedule):
-                next_floor = float(preparation["source_from_beat"])
-                next_deadline = float(schedule["deadline_at_ms"])
-            elif (self.mode == "practice" and not self.visual_transport.paused
-                    and self.visual_transport._preview_loop_pending
-                    and self.visual_transport.next_at > 0):
-                next_floor = 0.0
-                next_deadline = self.visual_transport.next_at * 1000.0
+                    and not self.running and announced is not None
+                    and self.visual_transport.announced_deadline(
+                        announced[0]) is not None):
+                # Every automatic continuation (failed-take preparation,
+                # manual Retry preparation, clean repeat, disconnected
+                # preview) is announced with the run_at it WILL start with.
+                next_floor = float(announced[0])
+                next_deadline = float(announced[1]) * 1000.0
             elif (self.mode == "practice" and self.running and
                     self._queue_scheduled_start is not None):
                 transport, floor, run_at, stage_key, revision = (
@@ -3067,12 +3125,23 @@ class PracticeEngine:
                 next_transport = self.transport_id
             if (self.plan is not None and next_floor is not None
                     and next_deadline is not None):
+                _, bar_beats, _ = self.attempt_progression.count_in_bar(
+                    phrase=self.plan.active_phrase,
+                    boundaries=self.plan.piece.bar_boundaries,
+                    time_signatures=self.plan.piece.time_signatures,
+                    position=next_floor)
                 state["score_queue_next"] = {
                     "plan_id": f"{self.fingerprint}:{self.plan.identity}:"
                                f"{self.score_revision}:{next_transport}:"
                                f"{next_floor:.6f}:{next_deadline:.3f}",
                     "source_from_beat": next_floor,
                     "deadline_at_ms": next_deadline,
+                    # The take this source is graded as, and the one
+                    # count-in bar spoken immediately before its deadline.
+                    "transport_id": next_transport,
+                    "count_in_beats": (lead_in_beats(bar_beats, self.plan.bpm)
+                                       if bar_beats > 0 and self.plan.bpm > 0
+                                       else 0.0),
                 }
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self._stage_handoff_visual_beat is not None:

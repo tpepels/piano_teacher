@@ -108,6 +108,20 @@ append exactly the engine-selected source. The backend publishes
 continuations and disconnected-MIDI preview. Godot converts that deadline
 through the shared calibrated clock and deduplicates repeated state snapshots
 by plan ID. Godot **never** computes mastery, streak, tempo or repeat choice.
+
+**One deadline per continuation (R1 F1, 2026-11-10).** The engine decides an
+automatic continuation's graded `run_at` exactly once, when the previous take
+ends (clean repeat: take end + the renderer's `continuous_horizon_beats`;
+failed take: rewind + preparation rest + the same horizon; manual Retry: the
+renderer-reserved world position, with no horizon added). It announces that
+value (`VisualTransport.announced_continuation`) as `score_queue_next` for the
+whole rest, with the graded `transport_id` and the one `count_in_beats` bar,
+and starts the take with that same `run_at`; nothing adds a lead at start.
+Godot admits the source offscreen at the projected world position and binds
+it to the take named by the plan identity (`NativeView._planned_owner`), not
+by comparing two onset estimates against a tolerance. A continuation whose
+opening changed at settlement (unannounced) gets a fresh full horizon from
+that moment, so its ink is still admitted offscreen before grading.
 Resume cannot repurpose a different source interval. A successful
 source/transport bind changes only transport status; never immutable source
 geometry. Failed controls restore every strip's provisional status or remove

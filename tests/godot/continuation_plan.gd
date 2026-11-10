@@ -1,0 +1,207 @@
+extends SceneTree
+## R1 F1 regression: an automatic continuation's source is bound to the take
+## its backend plan names (plan identity, no onset tolerance), and its one
+## count-in bar is spoken in the bar right before the announced deadline.
+const Coordinator := preload("res://metronome_frame_coordinator.gd")
+
+class FakeSegment:
+    extends Node2D
+    var compiled := true
+    var note_instances: Array = []
+    var synced_take := ""
+    func sync_note_status(take_key: String, _source, _visible_ink: bool) -> void:
+        synced_take = take_key
+
+class InstrumentedView:
+    extends "res://notation/native/view.gd"
+    func retained_ready() -> bool:
+        return true
+    func _new_retained_segment(kind: String):
+        var segment := FakeSegment.new()
+        add_child(segment)
+        retained_all_segments.append(segment)
+        if kind == "source":
+            for i in range(4):
+                segment.note_instances.append({"event_id":"attack-%d" % i,
+                    "source_id":"source-%d" % i,
+                    "position":Vector2(float(i)*96.0,200.0)})
+        return segment
+
+class CountIn:
+    extends RefCounted
+    var spoken: Array[int] = []
+    var shown := 0
+    func present(_beat: float, _bar: int, visible: bool, _paused: bool,
+            _count_in_beats: float = -1.0) -> void:
+        if visible:
+            shown += 1
+    func speak_beat(number: int) -> bool:
+        spoken.append(number)
+        return true
+
+class Stage:
+    extends RefCounted
+    var count_in := CountIn.new()
+
+class Practice:
+    extends RefCounted
+    var stage := Stage.new()
+
+class Clock:
+    extends RefCounted
+    var retry_active := false
+    var has_backend_offset := true
+    var backend_offset_ms := 250.0
+    func retry_preparing(_now: int) -> bool:
+        return false
+    func retry_count_in_beat(_now: int) -> float:
+        return NAN
+
+class Settings:
+    extends RefCounted
+    var calibration_beat_pulse = null
+    func animate_calibration_beat(_beat: float, _active: bool,
+            _bars: int = 12, _count: int = 4) -> void:
+        pass
+
+var failures := 0
+func check(ok: bool, message: String) -> void:
+    if not ok:
+        failures += 1
+        print("CONTINUATION_PLAN_FAILED:",message)
+
+func _state(phase: String, transport: int, running: bool) -> Dictionary:
+    return {"running":running,"paused":false,"phase":phase,"auto":true,
+        "mode":"practice","piece_fingerprint":"plan","revision":1,
+        "transport_id":transport,"play_from_beat":0.0}
+
+func _key(transport: int) -> String:
+    return "plan|1|%d|practice" % transport
+
+func _owner_key(v, owner_serial: int) -> String:
+    for item in v.stream_passes:
+        if int(item.get("take_owner",-1)) == owner_serial and \
+                str(item.get("kind","")) == "source":
+            return str(item.get("take_key",""))
+    return ""
+
+func _view() -> InstrumentedView:
+    var v := InstrumentedView.new()
+    v.size = Vector2(800,440)
+    v.native_ready = true
+    v.timeline.duration_beats = 8.0
+    v.timeline.measures = [{"start_beat":0.0,"end_beat":4.0},
+        {"start_beat":4.0,"end_beat":8.0}]
+    v.timeline.pixels_per_beat = 96.0
+    v.present_flow(0.0,_state("ready",0,false),0.0)
+    check(not v.arm_stream_take(0.0,0.0).is_empty() and v.acknowledge_stream_arm(),
+        "fixture plays its first take")
+    v.present_flow(.1,_state("count_in",1,true),-3.9)
+    check(_owner_key(v,v._stream_live_serial) == _key(1),"Play binds take 1")
+    return v
+
+func _plan(transport: int, deadline_world: float) -> Dictionary:
+    return {"plan_id":"plan:1:%d:0.000000:%.3f" % [transport,deadline_world],
+        "source_from_beat":0.0,"deadline_at_ms":deadline_world*1000.0,
+        "transport_id":transport,"count_in_beats":4.0}
+
+func _test_binding() -> void:
+    var v := _view()
+    # Take 1 finished; the engine announces take 2 at world 40 for the rest.
+    var plan := _plan(2,40.0)
+    var rest := _state("recovering",1,false)
+    rest["score_queue_next"] = plan
+    # A failed take's preparation for the same opening is in progress.
+    rest["practice_preparation"] = {"source_from_beat":0.0,"phase":"preparing"}
+    check(v.enqueue_recovery_queue(20.0,0.0,40.0,plan["plan_id"]),
+        "announced repeat is admitted offscreen at its deadline")
+    var owner_serial: int = v._stream_last_admitted
+    v.present_flow(20.0,rest,0.0)
+    var strips := 0
+    for item in v.stream_passes:
+        if int(item.get("take_owner",-1)) == owner_serial:
+            strips += 1
+    check(strips == 2,
+        "the whole announced two-measure repeat survives the feedback rest")
+    var again: bool = v.enqueue_recovery_queue(21.0,0.0,40.0004,plan["plan_id"])
+    var openings := 0
+    for item in v.stream_passes:
+        if str(item.get("take_key","")) == "autopending" and \
+                str(item.get("kind","")) == "source" and \
+                float(item.get("source_floor",-1.0)) == 0.0:
+            openings += 1
+    check(again and v._stream_last_admitted == owner_serial and openings == 1,
+        "re-projected polls of one plan never add a second copy")
+    # A snapshot of another take must not claim it.
+    var other := _state("playing",3,true)
+    other["score_queue_next"] = _plan(3,55.0)
+    v.present_flow(39.0,other,0.0)
+    check(_owner_key(v,owner_serial) == "autopending",
+        "a different take's plan cannot bind this repeat")
+    # Take 2 starts. The polled graded estimate is 0.1 beat off the
+    # admitted onset (> the old .025 tolerance); the plan still binds.
+    var running := _state("playing",2,true)
+    running["score_queue_next"] = plan
+    v.present_flow(40.1,running,0.0)
+    check(_owner_key(v,owner_serial) == _key(2) and
+        v._stream_live_serial == owner_serial,
+        "the take named by the plan binds its own admitted source")
+    v.free()
+
+func _test_count_in() -> void:
+    var practice := Practice.new()
+    var clock := Clock.new()
+    var owner := Coordinator.new(Settings.new(),practice,clock,
+        func(_now: int) -> float: return NAN,
+        func(_accent: bool, _beat: float) -> void: pass,
+        func(_accent: bool) -> void: pass)
+    var deadline_ms := 100000.0
+    var rest := _state("feedback",1,false)
+    rest["bpm"] = 60.0
+    rest["score_queue_next"] = {"plan_id":"p","source_from_beat":0.0,
+        "deadline_at_ms":deadline_ms,"transport_id":2,"count_in_beats":4.0}
+    var local_deadline: int = int(deadline_ms+clock.backend_offset_ms)
+    for at in range(local_deadline-12000,local_deadline,16):
+        owner.update(rest,at,NAN,at)
+    check(practice.stage.count_in.spoken == [1,2,3,4],
+        "exactly one Ichi Ni San Shi in the bar before the deadline, got %s" %
+            str(practice.stage.count_in.spoken))
+    check(practice.stage.count_in.shown > 0,"the count-in circles are shown")
+    var started := _state("playing",2,true)
+    started["bpm"] = 60.0
+    started["count_in_beats"] = 0.0
+    for at in range(local_deadline,local_deadline+3000,16):
+        owner.update(started,at,float(at-local_deadline)/1000.0,at)
+    check(practice.stage.count_in.spoken == [1,2,3,4],
+        "the take that starts at the deadline counts nothing again")
+
+func _test_flow_rate_switch() -> void:
+    var Flow := preload("res://continuous_score_flow.gd")
+    var flow = Flow.new()
+    flow.sample(0,40.0)
+    flow.sample(1000,40.0)
+    # The tempo step happened at 900 ms; this client learns it at 1000 ms.
+    flow.switch_rate_at(900.0,44.0)
+    check(is_equal_approx(flow.beat,1000.0*40.0/60000.0+100.0*4.0/60000.0),
+        "a faster take start is accounted from its exact run_at")
+    var before: float = flow.beat
+    flow.sample(2000,44.0)
+    check(is_equal_approx(flow.beat-before,44.0/60.0),"then runs at the new rate")
+    flow.switch_rate_at(1900.0,40.0)
+    var at_switch: float = flow.beat
+    var previous: float = at_switch
+    var monotonic := true
+    for at in range(2016,2400,16):
+        flow.sample(at,40.0)
+        monotonic = monotonic and flow.beat > previous
+        previous = flow.beat
+    check(monotonic,"a slower take start never moves the axis back or stops it")
+    check(is_equal_approx(flow.beat,at_switch+384.0*40.0/60000.0-100.0*4.0/60000.0),
+        "and the slower rate is repaid exactly")
+
+func _initialize() -> void:
+    _test_flow_rate_switch()
+    _test_binding()
+    _test_count_in()
+    print("CONTINUATION_PLAN_FAILURES:",failures)
+    quit(1 if failures else 0)

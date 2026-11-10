@@ -31,6 +31,24 @@ class VisualTransport:
     _preparation_pending: bool = False
     _preparation_at: float = 0.0
     visual_gap_beats: float = 4.0
+    # The one announced automatic continuation: (source_from_beat, graded
+    # run_at). Set when the engine schedules the next take of the same
+    # stage, published unchanged as score_queue_next while the rest runs,
+    # and started with exactly this run_at. Nothing adds a lead later.
+    announced_continuation: tuple[float, float] | None = None
+
+    def announce_continuation(self, source_from_beat: float,
+                              deadline: float) -> None:
+        self.announced_continuation = (float(source_from_beat), float(deadline))
+        self.next_at = float(deadline)
+
+    def announced_deadline(self, source_from_beat: float) -> float | None:
+        """The announced graded deadline of this source opening, if any."""
+        announced = self.announced_continuation
+        if (announced is None or abs(announced[0] - source_from_beat) > 1e-7
+                or not self.next_at or abs(announced[1] - self.next_at) > 1e-9):
+            return None
+        return announced[1]
 
     def reset_for_stop(self, *, rewind_seconds: float) -> None:
         """Forget the visible attempt but retain the loaded score's gap duration."""
@@ -47,6 +65,7 @@ class VisualTransport:
         self._preparation_pending = False
         self._preparation_at = 0.0
         self.next_at = 0.0
+        self.announced_continuation = None
         self.pending_rewind = None
         self.play_from_beat = 0.0
 
@@ -64,6 +83,7 @@ class VisualTransport:
         else:
             self.practice_preparation = None
         self.next_at = 0.0
+        self.announced_continuation = None
         self.pending_rewind = None
 
     def schedule_source_preparation(
@@ -119,6 +139,7 @@ class VisualTransport:
         self._preparation_pending = False
         self.practice_preparation = None
         self.pending_rewind = None
+        self.announced_continuation = None
         self._visual_rewind_from = None
         self._visual_rewind_to = None
 
@@ -158,6 +179,9 @@ class VisualTransport:
             self.run_at += duration
         if self.next_at:
             self.next_at += duration
+        if self.announced_continuation is not None:
+            floor, deadline = self.announced_continuation
+            self.announced_continuation = (floor, deadline + duration)
         if self._visual_rewind_from is not None:
             self._visual_rewind_at += duration
         if self._preparation_pending:

@@ -98,6 +98,12 @@ there is no legacy camera fallback.
    onset is still strictly ahead of the playhead (no reading floor), so
    Pause inside the count-in resumes with only the rest of that bar; the
    Resume countdown continues the same epoch and never repeats a syllable.
+9. **Automatic continuations count in too** (R1 F1). An announced repeat
+   starts at its graded deadline, so `MetronomeFrameCoordinator` speaks its
+   one count-in bar during the rest, in the bar right before
+   `score_queue_next.deadline_at_ms` (`count_in_beats`), under the same
+   deadline token as the retry-preparation clock, so the two never both
+   speak a bar. Nothing is spoken earlier in the rest.
 
 ## Required regression gates
 
@@ -119,6 +125,11 @@ there is no legacy camera fallback.
   previous transport.
 - `godot/production_ui_smoke.gd`: actual Godot scene and embedded Python
   Play/Pause/Resume with immutable notation and audible cue scheduling.
+- `tests/test_continuation_deadline.py` and `tests/godot/continuation_plan.gd`:
+  one announced deadline per continuation, identity binding, count-in bar.
+- `tests/test_readiness_continuations.py`: the real app through
+  `tests/readiness/run_sweep.sh` (repeat, Retry, tempo-step repeats); every
+  graded take has its bound strip at the graded beat and one count-in.
 
 All new presentation or transport changes must pass these gates on Godot
 4.7.2 before being considered integrated. No heuristic rewind, silent

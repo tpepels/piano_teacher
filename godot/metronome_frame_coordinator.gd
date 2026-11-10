@@ -35,6 +35,33 @@ func _dispatch_cue(token: String, beat: float, bar: int,
         if tick >= 0:
             retry_first_click_sent = false
 
+func _announced_count_in(state: Dictionary, now_ms: int) -> bool:
+    # An automatic continuation starts AT its announced graded deadline,
+    # so its one count-in bar is spoken during the rest, in the bar right
+    # before that deadline (score_queue_next: deadline and bar length). The
+    # token is the deadline's, the same one the retry preparation clock
+    # uses, so the two can never both speak the same bar.
+    var plan: Variant = state.get("score_queue_next")
+    if not plan is Dictionary or bool(state.get("running",false)) or \
+            bool(state.get("paused",false)) or \
+            not str(state.get("phase","")) in ["feedback","recovering","preview_gap"] or \
+            not bool(clock.has_backend_offset):
+        return false
+    var bar_beats: float = float(plan.get("count_in_beats",0.0))
+    if bar_beats <= 0.0:
+        return false
+    var deadline_ms: float = float(plan.get("deadline_at_ms",NAN)) + \
+        float(clock.backend_offset_ms)
+    var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
+    var beat: float = (float(now_ms)-deadline_ms)/60000.0*bpm
+    if not is_finite(beat) or not CueTimeline.counting(beat,1,bar_beats):
+        return false
+    var meter: int = maxi(1,roundi(bar_beats))
+    practice_view.stage.count_in.present(beat,meter,true,false,bar_beats)
+    _dispatch_cue("retry:%d:%s" % [int(state.get("revision",-1)),
+        str(roundi(deadline_ms))],beat,meter,true,bar_beats)
+    return true
+
 func _init(settings, practice, visual_clock, at_beat: Callable,
         on_count: Callable, on_raw: Callable) -> void:
     settings_view = settings
@@ -99,6 +126,8 @@ func update(state: Dictionary, state_tick_ms: int,
             if deadline_value != null else str(int(state.get("transport_id",0)))
         _dispatch_cue("retry:%d:%s" % [
             int(state.get("revision",-1)),retry_key],retry_beat,meter,true)
+        return
+    if _announced_count_in(state,now_ms):
         return
     # The engine's one count-in bar; a longer lead before it stays silent.
     # A hand-built snapshot without the key counts one bar of the meter.

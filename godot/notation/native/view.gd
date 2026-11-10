@@ -1188,29 +1188,17 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     var identity: String = plan_id if not plan_id.is_empty() else \
         "%.6f:%.6f" % [source_opening,graded_deadline_world]
     if _scheduled_score_plan_ids.has(identity):
-        var claimed: int = int(_scheduled_score_plan_ids[identity])
-        # A tail withdrawal can invalidate an earlier speculative plan.
-        # An identity ledger alone is never proof that notes still exist.
-        for item in _stream_queue.online:
-            if str(item.get("kind","")) == "source" and \
-                    int(item.get("take_owner",-1)) == claimed and \
-                    absf(float(item.get("source_floor",-INF))-source_opening) < .00001 and \
-                    absf(float(item["world_origin"])+source_opening-
-                        graded_deadline_world) <= StreamAdmission.AUTOMATIC_DUE_EPSILON_BEATS:
-                return true
+        # The plan identity names its source opening, graded take and exact
+        # backend deadline: the owner admitted for it IS that take's ink.
+        # A tail withdrawal can invalidate it; then admit it again.
+        if _stream_queue.has_take(int(_scheduled_score_plan_ids[identity])):
+            return true
         _scheduled_score_plan_ids.erase(identity)
     # An already elapsed plan may no longer be reinserted: it would
     # introduce notes behind the real playhead.
     if graded_deadline_world <= stream_world_beat:
+        _diagnose_plan(identity,"elapsed",graded_deadline_world)
         return false
-    var existing: int = StreamAdmission.select(_stream_queue.online,
-        "automatic_due",source_opening,stream_world_beat,
-        0.0,0.0,"",graded_deadline_world)
-    if existing >= 0:
-        _scheduled_score_plan_ids[identity] = int(
-            _stream_queue.online[existing].get("take_owner",
-                _stream_queue.online[existing]["serial"]))
-        return true
     # PREPARE: check the actual exact deadline against the queue AFTER
     # maximal safe tail withdrawal, without mutating the live queue.
     # Previously this check ran AFTER trim_future_queue(), so a late or
@@ -1237,14 +1225,17 @@ func enqueue_recovery_queue(world: float, source_opening: float,
             timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
         if is_finite(onset) and \
                 absf(onset-graded_deadline_world) <= \
-                    StreamAdmission.AUTOMATIC_DUE_EPSILON_BEATS:
+                    StreamAdmission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS:
             checked = graded_deadline_world
             on_empty = true
     if not is_finite(checked):
+        _diagnose_plan(identity,"refused_inside_or_overlap",
+            graded_deadline_world)
         return false
     var incoming_left: float = checked - _stream_header_beats(source_opening)
     if not _stream_queue._clears_prior_layers(incoming_left,
             timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION):
+        _diagnose_plan(identity,"refused_prior_layer",graded_deadline_world)
         return false
     # COMMIT: the exact same exposure snapshot and world coordinate must
     # still hold. No yield/poll/other input runs between preview and commit.
@@ -1271,6 +1262,8 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     _stream_live_serial = prior_live
     if _stream_serial > before:
         _scheduled_score_plan_ids[identity] = _stream_last_admitted
+        _diagnose_plan(identity,"admitted",checked,
+            {"owner":_stream_last_admitted,"on_empty_strip":on_empty})
         return true
     # If a retained segment/asset failed halfway through its measure batch,
     # eliminate that exact unexposed newly allocated owner first. Its serial
@@ -1288,6 +1281,48 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     _restore_future_suffix(saved_suffix,stream_world_beat)
     _stream_live_serial = prior_live
     return false
+
+
+var _diagnosed_plans: Dictionary = {}
+
+func _diagnose_plan(identity: String, outcome: String, deadline_world: float,
+        extra: Dictionary = {}) -> void:
+    # One line per plan and outcome (SCORE_PLAN_QUEUE), not one per poll.
+    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") != "1":
+        return
+    var seen: String = identity+"|"+outcome
+    if _diagnosed_plans.has(seen):
+        return
+    _diagnosed_plans[seen] = true
+    var row: Dictionary = {"plan_id":identity,"outcome":outcome,
+        "deadline_world":deadline_world,"world":stream_world_beat}
+    row.merge(extra,true)
+    print("SCORE_PLAN_QUEUE:",JSON.stringify(row))
+
+
+func _planned_owner(state: Dictionary, opening: float) -> int:
+    # The take a running snapshot names is bound to the source admitted for
+    # the backend plan of THAT take: same plan identity, hence the same
+    # graded deadline. No second estimate of the onset is compared against
+    # a tolerance (R1 C1: a repeat whose onset missed the old 0.025-beat
+    # window stayed "autopending" and never received feedback colour).
+    var plan: Variant = state.get("score_queue_next")
+    if not plan is Dictionary or \
+            int(plan.get("transport_id",-1)) != int(state.get("transport_id",-2)):
+        return -1
+    var owner_serial: int = int(_scheduled_score_plan_ids.get(
+        str(plan.get("plan_id","")),-1))
+    if owner_serial < 0:
+        return -1
+    for item in _stream_queue.online:
+        if str(item.get("kind","")) != "source" or \
+                int(item.get("take_owner",-1)) != owner_serial:
+            continue
+        if str(item.get("take_key","")) != "autopending" or \
+                absf(float(item.get("source_floor",-INF))-opening) > .00001:
+            return -1
+        return owner_serial
+    return -1
 
 
 func _stream_prune_expired() -> void:
@@ -1358,16 +1393,30 @@ func present_flow(world_beat: float, state: Dictionary,
         # scheduled automatic retry ONLY if its unmodified source opening
         # matches the engine's declared next passage.
         var prep: Variant = state.get("practice_preparation")
+        var next_plan: Variant = state.get("score_queue_next")
+        # The announced plan names the next opening. A completed
+        # preparation from an earlier retry is history, not a decision.
+        if next_plan is Dictionary:
+            prep = {"source_from_beat":float(next_plan.get("source_from_beat",0.0))}
+        elif prep is Dictionary and str(prep.get("phase","")) == "complete":
+            prep = null
         var next_opening: float = (
             float(prep.get("source_from_beat",0.0))
             if prep is Dictionary else 0.0)
         var keep_auto: bool = bool(state.get("auto",false)) or \
             bool(state.get("preview_only",false)) or prep is Dictionary
         if keep_auto and prep is Dictionary:
+            # Compare each speculative take's OPENING (its first strip), not
+            # every measure strip: a multi-measure repeat's later strips
+            # start later by construction and are not a changed decision.
+            var openings: Dictionary = {}
             for item in _stream_queue.online:
-                if str(item.get("take_key","")) == "autopending" and \
-                        absf(float(item.get("source_floor",-1.0))-
-                            next_opening) > .00001:
+                if str(item.get("take_key","")) == "autopending":
+                    var take_owner: int = int(item.get("take_owner",-1))
+                    openings[take_owner] = minf(float(openings.get(
+                        take_owner,INF)),float(item.get("source_floor",-1.0)))
+            for take_opening in openings.values():
+                if absf(float(take_opening)-next_opening) > .00001:
                     keep_auto = false
                     break
         if not keep_auto:
@@ -1392,19 +1441,23 @@ func present_flow(world_beat: float, state: Dictionary,
                         cancel_stream_arm()
             elif key != _stream_last_take and mode in [
                     "practice","perform","listen"]:
-                # Polling can bind only an already-present automatic owner
-                # whose world-time onset matches the graded backend deadline.
-                var expected: float = stream_world_beat-graded_beat
-                var candidate: int = StreamAdmission.select(_stream_queue.online,
-                    "automatic_due",opening,stream_world_beat,
-                    0.0,0.0,"",expected)
-                if candidate >= 0:
-                    var claimed: int = int(_stream_queue.online[candidate].get(
-                        "take_owner",_stream_queue.online[candidate]["serial"]))
-                    if StreamLifecycle.activate(
-                            _stream_queue.online,claimed,key,false):
-                        _stream_live_serial = claimed
-                        _stream_last_take = key
+                # Polling binds only the owner admitted for this take's own
+                # backend plan (score_queue_next names the take it grades).
+                var claimed: int = _planned_owner(state,opening)
+                if claimed >= 0 and StreamLifecycle.activate(
+                        _stream_queue.online,claimed,key,false):
+                    _stream_live_serial = claimed
+                    _stream_last_take = key
+                    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+                        var onset := NAN
+                        for item in _stream_queue.online:
+                            if int(item.get("take_owner",-1)) == claimed:
+                                onset = float(item["world_origin"])+opening
+                                break
+                        print("SCORE_PLAN_BIND:",JSON.stringify({"take":key,
+                            "owner":claimed,"onset_world":onset,
+                            "graded_world":stream_world_beat-graded_beat,
+                            "offset_beats":onset-(stream_world_beat-graded_beat)}))
             elif key == _stream_last_take and not _stream_was_paused:
                 var owned: int = StreamAdmission.select(_stream_queue.online,
                     "bound",opening,stream_world_beat,0.0,0.0,key)
