@@ -49,7 +49,7 @@ var last_capture_beat: Dictionary = {}
 var idle_since_ms := -1
 var flags: Dictionary = {}
 var pending_saves: Array = []
-var scenario := "full"   # full | plain (no pause, no retry) | noretry | nopause | cipause
+var scenario := "full"   # full | plain (no pause, no retry) | noretry | nopause | cipause | restpause | fullrest
 
 func _initialize() -> void:
     call_deferred("_boot")
@@ -64,9 +64,9 @@ func _boot() -> void:
         max_ms = int(float(args[1])*1000.0)
     if args.size() > 2:
         scenario = args[2]
-    if scenario in ["plain","nopause"]:
+    if scenario in ["plain","nopause","restpause"]:
         pause_done = true
-    if scenario in ["plain","noretry"]:
+    if scenario in ["plain","noretry","restpause"]:
         retry_done = true
     DirAccess.make_dir_recursive_absolute(out_dir.path_join("shots"))
     boot_us = Time.get_ticks_usec()
@@ -348,6 +348,8 @@ func _process(_delta: float) -> bool:
         # The performer reads the plan when it sees the NEXT take start.
         var index: int = takes.size()
         _write_control("mixed" if index < 2 else "clean","take%d" % (index+1))
+    if scenario in ["restpause","fullrest"] and _rest_pause(s,now,running,st_phase):
+        return false
     match phase:
         "boot":
             if not app.native_started or not app.startup_last_music_checked:
@@ -483,6 +485,37 @@ func _process(_delta: float) -> bool:
                 _capture("next_stage_playing")
                 _finish("next_stage_reached")
                 return true
+    return false
+
+func _rest_pause(s: Dictionary, now: int, running: bool, st_phase: String) -> bool:
+    # restpause: Pause in the rest after take 1 (failed take, preparation)
+    # and after take 3 (clean repeat), hold, then Resume. The next take must
+    # still be drawn, bound and counted in exactly once.
+    if flags.has("rp_resume_at"):
+        if bool(s.get("paused",false)) and now >= int(flags["rp_resume_at"]):
+            if _press(app.practice_view.start_button,"Resume(rest)"):
+                flags.erase("rp_resume_at")
+                _capture("rest_resumed")
+        return true
+    var rest_index: int = takes.size()
+    # fullrest = full (take Pause/Resume, Retry) plus a pause in the clean
+    # rest after take 3.
+    var after: Array = [1,3] if scenario == "restpause" else [3]
+    if running or bool(s.get("paused",false)) or not rest_index in after or \
+            not st_phase in ["feedback","recovering"] or \
+            flags.has("rp_done_%d" % rest_index):
+        return false
+    var started_key: String = "rp_start_%d" % rest_index
+    if not flags.has(started_key):
+        flags[started_key] = now
+        return false
+    if now-int(flags[started_key]) < 1200:
+        return false
+    if _press(app.practice_view.start_button,"Pause(rest)"):
+        flags["rp_done_%d" % rest_index] = true
+        flags["rp_resume_at"] = now+2500
+        _event("rest_pause",{"after_take":rest_index})
+        _capture("rest_paused")
     return false
 
 func _idle_play(s: Dictionary, now: int, label: String) -> void:

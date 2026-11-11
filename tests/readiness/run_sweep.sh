@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # R1 readiness sweep for one MIDI piece in the real application.
-# Usage: tests/readiness/run_sweep.sh <midi path> <out dir> [max seconds] [WxH] [full|plain|noretry|nopause]
+# Usage: tests/readiness/run_sweep.sh <midi path> <out dir> [max seconds] [WxH] [full|plain|noretry|nopause|cipause|restpause|fullrest]
 # Isolated HOME/XDG dirs (real learner progress is never touched), the
 # default exercise strategy, a virtual ALSA MIDI keyboard played by
 # tests/readiness/pyhook/sitecustomize.py, and a real (windowed) framebuffer.

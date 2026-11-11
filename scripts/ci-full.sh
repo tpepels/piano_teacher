@@ -5,4 +5,6 @@
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-.venv/bin/python}"
+# The in-app readiness scenario fails (not skips) when it cannot run.
+export CI_FULL=1
 exec "$PYTHON" -m pytest -q tests "$@"

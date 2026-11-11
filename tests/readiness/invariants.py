@@ -10,7 +10,8 @@ For every graded take that reached its first graded beat:
   onset_px   noteheads cross the playhead at their graded beat (<= 2 px);
   count_in   exactly one full-bar count-in ("Ichi, Ni, ...") is spoken in the
              bar immediately before the first graded beat, nothing earlier in
-             the rest;
+             the rest, cues spaced at the take's own beat (5 %) and the last
+             one a take beat before the first graded beat (0.1 beat);
   colour     a repeated copy (take 2+) shows feedback colour on its own heads.
 """
 from __future__ import annotations
@@ -22,6 +23,9 @@ from pathlib import Path
 
 SYNC_PX = 2.0
 ONSET_PX = 2.0
+CUE_SPACING_FRACTION = 0.05   # cue spacing = the take's beat within 5 %
+LAST_CUE_BEATS = 0.1          # last cue one take beat before the first beat
+FRAME_MS = 17.0               # cues and frames are observed per display frame
 
 
 def _jsonl(path: Path) -> list[dict]:
@@ -38,6 +42,15 @@ def check_run(run: Path) -> dict:
     voices = [e for e in ev if e.get("kind") == "voice"]
     takes = []
     tids = sorted(starts)
+    first_beat_notes: dict[int, int] = {}
+    for row in _jsonl(run / "performer.jsonl"):
+        if row.get("type") == "take":
+            first_beat_notes[row["transport_id"]] = sum(
+                1 for n in row.get("notes", ())
+                if n["beat"] - row.get("from_beat", 0.0) < 1.0)
+    dts = sorted(r["dt"] for r in frames[1:])
+    frame_median_ms = dts[len(dts) // 2] if dts else None
+    captures = [e for e in ev if e.get("kind") == "capture"]
     # Runs recorded before take_started carried "cib": the first count-in.
     first_beat = next((r["t"] for r in frames if r.get("run") and r.get("ph") == "playing"
                        and r.get("tb", -1) >= 0), None)
@@ -79,34 +92,54 @@ def check_run(run: Path) -> dict:
         take["onset_px_n"] = len(offsets)
         take["onset_px_max"] = max((abs(v) for v in offsets), default=None)
         take["onset_px_median"] = statistics.median(offsets) if offsets else None
-        # Count-in: syllables in the rest before this take's first graded beat.
+        # Count-in: syllables in the rest before this take's first graded beat,
+        # at this take's own tempo. The first beat's time is interpolated
+        # from the transport beat of the first phase-locked frame.
+        first_beat_t = first["t"] - first["tb"] * beat_ms
         previous_end = 0
         if index > 0:
             before = [r for r in frames if r.get("tid") == tids[index - 1]
                       and r.get("ph") == "playing" and r["t"] < first["t"]]
             previous_end = before[-1]["t"] if before else 0
-        window_start = first["t"] - (bar + 0.5) * beat_ms
+        window_start = first_beat_t - (bar + 0.5) * beat_ms
         rest = [v for v in voices if previous_end < v["t"] <= first["t"]]
         in_bar = [v for v in rest if v["t"] >= window_start]
+        cue_t = [v["t"] for v in in_bar]
+        spacing = [b - a for a, b in zip(cue_t, cue_t[1:])]
+        allowed = max(CUE_SPACING_FRACTION * beat_ms, FRAME_MS)
         take["count_in_numbers"] = [v["number"] for v in in_bar]
         take["early_cues"] = [v["number"] for v in rest if v["t"] < window_start]
+        take["cue_spacing_beats"] = [round(d / beat_ms, 3) for d in spacing]
         take["last_cue_to_first_beat_beats"] = (
-            round((first["t"] - in_bar[-1]["t"]) / beat_ms, 3) if in_bar else None)
+            round((first_beat_t - cue_t[-1]) / beat_ms, 3) if cue_t else None)
         expected_cues = list(range(1, int(round(bar)) + 1)) if bar > 0 else []
         take["count_in_ok"] = (take["count_in_numbers"] == expected_cues
-                               and not take["early_cues"]
-                               and in_bar != []
-                               and abs(take["last_cue_to_first_beat_beats"] - 1.0) <= 0.35)
+                               and not take["early_cues"] and bool(cue_t)
+                               and all(abs(d - beat_ms) <= allowed for d in spacing)
+                               and abs(take["last_cue_to_first_beat_beats"] - 1.0)
+                               <= LAST_CUE_BEATS + FRAME_MS / beat_ms)
+        # A take with notes in its first beat must have measured onsets.
+        take["notes_in_first_beat"] = first_beat_notes.get(tid, 0)
+        take["onsets_measured"] = take["onset_px_n"] > 0 or not take["notes_in_first_beat"]
         take["ok"] = bool(take["bound"] and take["visible_heads"] > 0
                           and take["sync_px_max"] is not None
                           and take["sync_px_max"] <= SYNC_PX
+                          and take["onsets_measured"]
                           and (take["onset_px_max"] is None or take["onset_px_max"] <= ONSET_PX)
                           and take["count_in_ok"])
         takes.append(take)
     colour = _repeat_colour(run)
+    starts_t = sorted((starts[t]["t"], t) for t in tids)
     for take in takes:
         take["coloured_heads"] = colour.get(take["tid"], 0)
-    return {"run": str(run), "takes": takes,
+        # Colour is judged only where a capture shows this take's heads at
+        # least a beat after its first graded beat (left of the playhead).
+        if "first_beat_t" in take:
+            end = next((t for t, tid in starts_t if tid > take["tid"]), float("inf"))
+            take["captures_after_first_beat"] = sum(
+                1 for c in captures
+                if take["first_beat_t"] < c["t"] < end and float(c.get("tb", -1)) >= 1.0)
+    return {"run": str(run), "takes": takes, "frame_median_ms": frame_median_ms,
             "graded_takes": sum(t["reached_first_beat"] for t in takes),
             "all_ok": all(t.get("ok", True) for t in takes if t["reached_first_beat"])}
 
