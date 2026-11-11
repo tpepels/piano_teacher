@@ -82,6 +82,15 @@ early. Both are provisional. A settled `assessment` replaces the whole record
 and locks it against provisional evidence; a later settled result (for
 example after the real key-up of a held note) may replace it again.
 
+**Pause/Resume (R1 F2).** The Recorder and `LiveInputView` time key events
+on one graded musical clock, `PracticeEngine._musical_seconds` (seconds since
+`run_at`). It stands still from the Pause moment until grading resumes after
+Resume's lead. A key held across the pause is measured on that clock, so the
+paused interval and the lead do not count. A key-up while paused or during the
+lead counts as released at the pause moment and is never dropped. A paused
+take therefore grades every note exactly as the same performance without the
+pause, and the live release verdict always agrees with the settled one.
+
 | Canonical status | Note ink | Glyph glow |
 | --- | --- | --- |
 | `unplayed` | Original score white | None |

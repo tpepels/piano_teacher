@@ -160,6 +160,10 @@ class PracticeEngine:
         # No MIDI attack during that lead-in can alter a graded attempt.
         self._resume_grading_after = 0.0
         self._resume_ignored_pitches: set[int] = set()
+        # Graded musical position (seconds since run_at) at the Pause moment.
+        # The graded timeline stands still there until grading resumes after
+        # Resume's lead; see _musical_seconds (R1 F2).
+        self._pause_floor: float | None = None
         self._deferred_score_ack: int | None = None
         self.next_action = "Open a MIDI file."
         self.retry_range: dict | None = None
@@ -792,14 +796,13 @@ class PracticeEngine:
                 self.midi.observe(message, now=now)
             # Manual resume temporarily revisits source-time positions for
             # reading. Suppress that ungraded pre-roll, including the eventual
-            # releases of keys first pressed during it.
+            # releases of keys first pressed during it. A key-up of a key
+            # pressed before the Pause is not pre-roll: it is graded at the
+            # pause moment on the musical clock (R1 F2).
             if message.type in ("note_on","note_off"):
                 is_on = message.type == "note_on" and message.velocity > 0
-                if now < self._resume_grading_after and self.running:
-                    if is_on:
-                        self._resume_ignored_pitches.add(message.note)
-                    else:
-                        self._resume_ignored_pitches.discard(message.note)
+                if is_on and now < self._resume_grading_after and self.running:
+                    self._resume_ignored_pitches.add(message.note)
                     return
                 if message.note in self._resume_ignored_pitches:
                     if not is_on:
@@ -807,6 +810,8 @@ class PracticeEngine:
                     return
             corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
                             if corrected_at is None else corrected_at)
+            # One graded musical clock for the Recorder and the live view.
+            musical_at = self._musical_seconds(corrected_at)
             # A key can reach the next attempt's musical deadline before the
             # next frame-state snapshot, even if none observed the source ending.
             # Settle only a due handoff; retain the hardware timestamp above.
@@ -840,6 +845,7 @@ class PracticeEngine:
                     preview=self.preview_only, mode=self.mode,
                     transport_id=self.transport_id,
                     tempo_map=self._active_tempo_map(),
+                    at=musical_at,
                 )
                 if live_event is not None:
                     self.feedback_events.publish(
@@ -857,11 +863,15 @@ class PracticeEngine:
                 return
             if self.mode == "listen":
                 return
-            if self.running and not self.visual_transport.paused and now >= self.visual_transport.run_at and self.recorder:
-                if message.type == "note_on":
-                    self.recorder.add(message.note, message.velocity > 0, corrected_at - self.visual_transport.run_at)
-                elif message.type == "note_off":
-                    self.recorder.add(message.note, False, corrected_at - self.visual_transport.run_at)
+            if self.running and self.recorder:
+                if message.type == "note_on" and message.velocity > 0:
+                    if not self.visual_transport.paused and now >= self.visual_transport.run_at:
+                        self.recorder.add(message.note, True, musical_at)
+                elif message.type in ("note_on", "note_off"):
+                    # A key-up is never dropped: while paused or during the
+                    # resume lead it releases its pre-pause press at the
+                    # pause moment. One without a recorded press is ignored.
+                    self.recorder.add(message.note, False, musical_at)
 
     def load(self, path: str, *, warmup: bool = False):
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
@@ -1032,6 +1042,7 @@ class PracticeEngine:
         self._deferred_midi.clear()
         self._resume_grading_after = 0.0
         self._resume_ignored_pitches.clear()
+        self._pause_floor = None
         # Stopping/restarting a take does not invalidate precompiled next
         # notation. Its stage-key + score revision remain authoritative:
         # navigation, library changes and generation mismatches fail that
@@ -1622,6 +1633,7 @@ class PracticeEngine:
             self._policy_retry = None
             self._resume_grading_after = 0.0
             self._resume_ignored_pitches.clear()
+            self._pause_floor = None
             self.mode = mode
             self.teaching = None
             self.guided_range = None
@@ -2063,6 +2075,7 @@ class PracticeEngine:
             self._guided_recovery_pending = False
             self._resume_grading_after = 0.0
             self._resume_ignored_pitches.clear()
+            self._pause_floor = None
             self._schedule_preparation(target, now=sampled, from_visual=position,
                                        reverse_seconds=reverse_seconds,
                                        reading_lead_included=presentation_lead_seconds > 0)
@@ -2072,12 +2085,35 @@ class PracticeEngine:
                    presentation_lead_seconds=presentation_lead_seconds)
         return
 
+    def _musical_seconds(self, at: float) -> float:
+        """Graded musical time of wall instant ``at``, in seconds since run_at.
+
+        The one clock the Recorder and the live input view share (R1 F2).
+        It stands still from the Pause moment until grading resumes after
+        Resume's lead (Resume moves run_at by the paused time plus that
+        lead): a key held across the pause excludes the paused interval, and
+        a key-up while paused or in the lead counts at the pause moment.
+        """
+        seconds = at - self.visual_transport.run_at
+        floor = self._pause_floor
+        if floor is None:
+            return seconds
+        if self.visual_transport.paused:
+            return min(seconds, floor)
+        if at < self._resume_grading_after:
+            return max(seconds, floor)
+        return seconds
+
     def _pause_current_session(self):
         """Pause learning, playback or preparation using one sampled clock."""
         now = self.now()
         context = self._phase(now) if not self.visual_transport.paused else ""
         require_pausable(paused=self.visual_transport.paused, phase=context)
         self.pause_context = context
+        if self.running:
+            # A second Pause inside the resume lead keeps the first pause
+            # moment: the graded timeline has not moved since.
+            self._pause_floor = self._musical_seconds(now)
         self.visual_transport.pause(at=now)
         self.measurement.phase_changed("pause", now)
         if self.mode == "learn" and self.teaching is not None:
@@ -2945,6 +2981,7 @@ class PracticeEngine:
         """
         self.transport_id += 1
         self.live_input.reset_attempt()
+        self._pause_floor = None
         if phrase is not None:
             self.live_input.prepare(phrase)
         self.recorder = Recorder() if recording else None

@@ -25,8 +25,9 @@ class LiveInputView:
         self.recent: deque[dict] = deque(maxlen=32)
         self.used: set[int] = set()
         # Per pitch, FIFO of (source_id, attack_at, expected_seconds,
-        # seconds_per_beat) for presses that are still down. Unmatched
-        # presses hold a None source so release pairing stays FIFO.
+        # seconds_per_beat) for presses that are still down. ``attack_at`` is
+        # on the engine's musical clock (see ``receive``). Unmatched presses
+        # hold a None source so release pairing stays FIFO.
         self._down: dict[int, deque[tuple[str | None, float, float, float]]] = {}
         self._indexed_phrase: Phrase | None = None
         self._onset_beats: list[float] = []
@@ -61,16 +62,25 @@ class LiveInputView:
         hand: str, bpm: float, from_beat: float, run_at: float,
         running: bool, paused: bool, preview: bool, mode: str,
         transport_id: int, tempo_map: TempoMap | None = None,
+        at: float | None = None,
     ) -> dict | None:
+        """``now`` is the corrected wall time of the key event; ``at`` is the
+        same instant on the engine's graded musical clock in seconds since
+        ``run_at``, the value the Recorder receives. It stands still from
+        Pause until grading resumes, so held time across a pause matches the
+        settled grade. Without it, ``now - run_at`` is used (no pause).
+        """
         if not 0 <= pitch <= 127:
             return None
+        if at is None:
+            at = now - run_at
         if not is_on:
             remaining = self.held.get(pitch, 0) - 1
             if remaining > 0:
                 self.held[pitch] = remaining
             else:
                 self.held.pop(pitch, None)
-            return self._release(pitch, now, running=running, paused=paused,
+            return self._release(pitch, now, at, running=running, paused=paused,
                                  transport_id=transport_id)
 
         self.held[pitch] = self.held.get(pitch, 0) + 1
@@ -82,14 +92,13 @@ class LiveInputView:
         reference_source = ""
         matched_hold: tuple[float, float] | None = None
         if running and not paused and mode in ("practice", "perform"):
-            if now < run_at:
+            if at < 0:
                 status = "count_in"
             elif preview:
                 status = "heard"
             elif phrase is not None and bpm > 0:
                 # Match only plausible attacks. This onset preview cannot claim
                 # correctness of duration or override final assessment.
-                at = now - run_at
                 origin = tempo_map.seconds_at(from_beat) if tempo_map else 0.0
 
                 def expected(note):
@@ -151,7 +160,7 @@ class LiveInputView:
                         reference_source = source_note_id(reference, index)
 
         self._down.setdefault(pitch, deque()).append(
-            (source or None, now, *(matched_hold or (0.0, 0.0))))
+            (source or None, at, *(matched_hold or (0.0, 0.0))))
         event = {
             "kind": "attack", "pitch": pitch, "status": status,
             "source_id": source, "reference_source_id": reference_source,
@@ -160,7 +169,7 @@ class LiveInputView:
         self.recent.append(event)
         return dict(event)
 
-    def _release(self, pitch: int, now: float, *, running: bool, paused: bool,
+    def _release(self, pitch: int, now: float, at: float, *, running: bool, paused: bool,
                  transport_id: int) -> dict | None:
         """Bind a key-up to its source note and classify the observed hold.
 
@@ -176,7 +185,7 @@ class LiveInputView:
             self._down.pop(pitch, None)
         if source is None or not running or paused:
             return None
-        held = max(0.0, now - attack_at)
+        held = max(0.0, at - attack_at)
         slack = duration_tolerance(expected, spb)
         release = ("short" if held < expected - slack else
                    "long" if held > expected + slack else "on_time")
