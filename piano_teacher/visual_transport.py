@@ -32,14 +32,16 @@ class VisualTransport:
     _preparation_at: float = 0.0
     visual_gap_beats: float = 4.0
     # The one announced automatic continuation: (source_from_beat, graded
-    # run_at). Set when the engine schedules the next take of the same
-    # stage, published unchanged as score_queue_next while the rest runs,
-    # and started with exactly this run_at. Nothing adds a lead later.
-    announced_continuation: tuple[float, float] | None = None
+    # run_at, start BPM). Set when the engine schedules the next take of the
+    # same stage, published unchanged as score_queue_next while the rest
+    # runs, and started with exactly this run_at and BPM. Nothing adds a
+    # lead or recomputes the tempo later.
+    announced_continuation: tuple[float, float, float] | None = None
 
     def announce_continuation(self, source_from_beat: float,
-                              deadline: float) -> None:
-        self.announced_continuation = (float(source_from_beat), float(deadline))
+                              deadline: float, bpm: float) -> None:
+        self.announced_continuation = (
+            float(source_from_beat), float(deadline), float(bpm))
         self.next_at = float(deadline)
 
     def announced_deadline(self, source_from_beat: float) -> float | None:
@@ -49,6 +51,13 @@ class VisualTransport:
                 or not self.next_at or abs(announced[1] - self.next_at) > 1e-9):
             return None
         return announced[1]
+
+    def announced_bpm(self) -> float | None:
+        """The announced next take's start BPM while the announcement holds."""
+        announced = self.announced_continuation
+        if announced is None or self.announced_deadline(announced[0]) is None:
+            return None
+        return announced[2]
 
     def reset_for_stop(self, *, rewind_seconds: float) -> None:
         """Forget the visible attempt but retain the loaded score's gap duration."""
@@ -180,8 +189,8 @@ class VisualTransport:
         if self.next_at:
             self.next_at += duration
         if self.announced_continuation is not None:
-            floor, deadline = self.announced_continuation
-            self.announced_continuation = (floor, deadline + duration)
+            floor, deadline, bpm = self.announced_continuation
+            self.announced_continuation = (floor, deadline + duration, bpm)
         if self._visual_rewind_from is not None:
             self._visual_rewind_at += duration
         if self._preparation_pending:

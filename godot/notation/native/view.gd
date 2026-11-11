@@ -946,6 +946,29 @@ func reserve_transport_action(action: String, world: float,
     return _transport_admission_receipt(planned,admitted,world,opening)
 
 
+func earliest_continuation_world(world: float, opening: float) -> float:
+    # Pure: the earliest world position where an automatic continuation's
+    # source can still be admitted offscreen once every unseen strip is
+    # withdrawn (exposed ink stays). Resume in a rest between takes sends
+    # this as its lead so the engine re-announces a deadline that fits.
+    if not native_ready or not retained_ready():
+        return NAN
+    world = maxf(world,stream_world_beat)
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var preview: Dictionary = _stream_queue.preview_tail_withdrawal(
+        world,density,staff_gap(),timeline.duration_beats,size.x,
+        size.x*PLAYHEAD_FRACTION)
+    var header: float = _stream_header_beats(opening)
+    var start: float = StreamAdmission.position(preview["remaining"],world,
+        _stream_right_beats(),header,NAN,0.0,density,staff_gap(),
+        timeline.duration_beats)
+    var peer: float = _stream_queue.minimum_peer_opening(
+        density,size.x,size.x*PLAYHEAD_FRACTION)
+    if is_finite(peer):
+        start = maxf(start,peer+header)
+    return start
+
+
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false,

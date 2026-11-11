@@ -1073,7 +1073,9 @@ func _switch_flow_rate_at_take_start(parsed: Dictionary) -> void:
     if take == _flow_rate_transport:
         return
     _flow_rate_transport = take
-    var start_bpm: float = TempoTimeline.bpm_at_beat(0.0,
+    # The tempo map is phrase-local: a take opens at its play_from_beat.
+    var start_bpm: float = TempoTimeline.bpm_at_beat(
+        float(parsed.get("play_from_beat",0.0)),
         float(parsed.get("bpm",40.0)),parsed.get("tempo_segments",[]))
     score_flow.switch_rate_at(float(parsed["visual_run_at_ms"]) +
         visual_transport_clock.backend_offset_ms,start_bpm)
@@ -1122,6 +1124,30 @@ func _send_action(command: Dictionary) -> void:
         practice_view.begin_action(requested, previous_action)
         return
     practice_view.begin_action(requested)
+    var rest_phase: bool = not bool(last_state.get("running",false)) and \
+        str(last_state.get("pause_context",last_state.get("phase",""))) in [
+            "feedback","recovering","preview_gap"]
+    if requested == "resume" and rest_phase and \
+            str(last_state.get("mode","practice")) == "practice" and \
+            practice_view.stage.renderer != null:
+        # Resume in the rest between takes: there is no paused take to
+        # reserve. Report where the announced next take's source can still
+        # be admitted offscreen; the engine re-announces its deadline no
+        # earlier than that (the axis kept moving during the pause).
+        var rest_now: float = score_flow.project(Time.get_ticks_msec())
+        var earliest: float = practice_view.stage.renderer.earliest_continuation_world(
+            rest_now,0.0)
+        command = command.duplicate(true)
+        if is_finite(earliest):
+            command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
+                earliest,rest_now,score_flow.bpm)
+        command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(
+            float(practice_view.stage.renderer.practice_timeline.get(
+                "gap",{}).get("duration_beats",0.0)),
+            practice_view.stage.renderer._stream_right_beats(),
+            practice_view.stage.renderer._stream_header_beats(0.0))
+        _send_command("practice.command", command)
+        return
     if requested in ["start","restart","resume"] and \
             str(last_state.get("mode","practice")) in ["practice","perform"] and \
             practice_view.stage.renderer != null:

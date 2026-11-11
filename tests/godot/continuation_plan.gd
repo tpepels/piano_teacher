@@ -199,7 +199,40 @@ func _test_flow_rate_switch() -> void:
     check(is_equal_approx(flow.beat,at_switch+384.0*40.0/60000.0-100.0*4.0/60000.0),
         "and the slower rate is repaid exactly")
 
+func _test_count_in_at_announced_tempo() -> void:
+    # A tempo-step repeat (rest at 60 BPM, next take announced at 72 BPM)
+    # counts in at 72 BPM: cues 60/72 s apart, the last one beat before.
+    var practice := Practice.new()
+    var clock := Clock.new()
+    var owner := Coordinator.new(Settings.new(),practice,clock,
+        func(_now: int) -> float: return NAN,
+        func(_accent: bool, _beat: float) -> void: pass,
+        func(_accent: bool) -> void: pass)
+    var deadline_ms := 200000.0
+    var rest := _state("feedback",4,false)
+    rest["bpm"] = 60.0
+    rest["score_queue_next"] = {"plan_id":"q","source_from_beat":0.0,
+        "deadline_at_ms":deadline_ms,"transport_id":5,"count_in_beats":4.0,
+        "bpm":72.0}
+    var local_deadline: int = int(deadline_ms+clock.backend_offset_ms)
+    var cue_ms: Array = []
+    for at in range(local_deadline-8000,local_deadline,1):
+        var before: int = practice.stage.count_in.spoken.size()
+        owner.update(rest,at,NAN,at)
+        if practice.stage.count_in.spoken.size() > before:
+            cue_ms.append(at)
+    var beat_ms: float = 60000.0/72.0
+    check(practice.stage.count_in.spoken == [1,2,3,4] and cue_ms.size() == 4,
+        "one bar at the announced tempo, got %s" % str(practice.stage.count_in.spoken))
+    if cue_ms.size() == 4:
+        for i in range(3):
+            check(absf(float(cue_ms[i+1]-cue_ms[i])-beat_ms) <= 2.0,
+                "cue spacing is the announced take's beat")
+        check(absf(float(local_deadline-int(cue_ms[3]))-beat_ms) <= 2.0,
+            "last cue one announced beat before the deadline")
+
 func _initialize() -> void:
+    _test_count_in_at_announced_tempo()
     _test_flow_rate_switch()
     _test_binding()
     _test_count_in()

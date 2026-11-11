@@ -52,7 +52,9 @@ func _announced_count_in(state: Dictionary, now_ms: int) -> bool:
         return false
     var deadline_ms: float = float(plan.get("deadline_at_ms",NAN)) + \
         float(clock.backend_offset_ms)
-    var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
+    # The announced take's own start tempo (a tempo-step repeat counts in
+    # at its new BPM, not at the rest's).
+    var bpm: float = maxf(1.0,float(plan.get("bpm",state.get("bpm",60.0))))
     var beat: float = (float(now_ms)-deadline_ms)/60000.0*bpm
     if not is_finite(beat) or not CueTimeline.counting(beat,1,bar_beats):
         return false
@@ -112,8 +114,11 @@ func update(state: Dictionary, state_tick_ms: int,
     if (settings_view.calibration_beat_pulse != null
             and settings_view.calibration_beat_pulse.visible):
         settings_view.animate_calibration_beat(-1.0,false)
+    # A rest's count-in belongs to the take the engine ANNOUNCED for it
+    # (score_queue_next). An unannounced repeat counts in once it starts.
     var preparing_retry: bool = (
         str(state.get("phase","")) in ["feedback","recovering"] and
+        state.get("score_queue_next") is Dictionary and
         bool(clock.retry_active) and clock.retry_preparing(now_ms) and
         not bool(state.get("paused",false)))
     if preparing_retry:

@@ -228,6 +228,7 @@ class PracticeEngine:
         # Explicit backend-selected next take. Renderer may only enqueue this
         # source identity at this exact monotonic graded deadline.
         self._queue_scheduled_start = None
+        self._decided_remediation = None
         self._prepared_stage_published = False
         # Global musical origin of a delayed, pre-engraved next stage.
         self._stage_handoff_visual_beat: float | None = None
@@ -1464,6 +1465,18 @@ class PracticeEngine:
                                 "start_beat": start, "end_beat": grid[-1]}
             self.next_action = f"Get ready to play from bar {bar} at {self.plan.bpm} BPM."
 
+    def _settled_remediation(self):
+        """The remediation decided when the take ended (one source)."""
+        if resolve_mistake_policy(self.library.settings[
+                "mistake_response_strategy"]).whole_handler is not None:
+            return lambda *args, **kwargs: None
+        decided = self._decided_remediation
+        if (decided is not None and self.plan is not None
+                and decided[0] == self.plan.identity
+                and decided[1] is not self._UNDECIDED):
+            return lambda *args, **kwargs: decided[1]
+        return self.remediation_planner.plan
+
     def _commit_pending(self) -> str:
         """Settle graded evidence, source feedback and mastery atomically.
 
@@ -1510,11 +1523,11 @@ class PracticeEngine:
                 outcome = commit_assessed_result(
                     plan=p, result=result, fingerprint=self.fingerprint,
                     assessed_bpm=self._pending_assessed_bpm,
+                    # One tempo source: the announced next take's BPM.
+                    next_bpm=self.visual_transport.announced_bpm(),
                     automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
                     observe=self.practice_policy.observe,
-                    plan_remediation=(self.remediation_planner.plan if resolve_mistake_policy(
-                        self.library.settings["mistake_response_strategy"]).whole_handler is None
-                        else lambda *args, **kwargs: None))
+                    plan_remediation=self._settled_remediation())
                 if use_feedback:
                     # Reuse graded original source IDs through the selected generator's
                     # feedback contract. No name-based algorithm dispatch in the engine.
@@ -1731,6 +1744,28 @@ class PracticeEngine:
                 lead_beats >= self.count_in_bar_beats - 1e-6:
             self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
 
+    def _reannounce_after_rest_pause(self, now: float, lead_seconds: float) -> None:
+        """Resume in the rest between takes: announce the next take anew.
+
+        resume() shifted the announced deadline by the pause, but the
+        presentation axis kept moving, so the old repeat's ink may have
+        scrolled into view and can no longer be its source. Announce once
+        more, no earlier than where Godot can still admit fresh ink offscreen
+        (its reported lead) or a full reading horizon from now. The new
+        deadline is a new plan identity; the old copy never gets a count-in.
+        """
+        announced = self.visual_transport.announced_continuation
+        if (self.running or self.plan is None or self.mode != "practice"
+                or announced is None
+                or self.visual_transport.announced_deadline(announced[0]) is None):
+            return
+        lead = max(0.0, float(lead_seconds),
+                   self._continuous_horizon_beats * 60.0 / self.plan.bpm)
+        deadline = max(announced[1], now + lead)
+        if deadline > announced[1] + 1e-9:
+            self.visual_transport.announce_continuation(
+                announced[0], deadline, announced[2])
+
     def _continuation_deadline(self, deadline: float, from_beat: float) -> float:
         """The ONE graded run_at of an automatic same-stage continuation.
 
@@ -1752,9 +1787,72 @@ class PracticeEngine:
         return max(self._automatic_stream_deadline(deadline),
                    self.now() + self._continuous_horizon_beats * 60.0 / self.plan.bpm)
 
+    _UNDECIDED = object()
+
+    def _decide_remediation(self, result) -> None:
+        """Decide at take end whether settlement plans a remediation.
+
+        The ledger history plus this take's own evidence is exactly what the
+        recommendation sees once the take is persisted. Settlement then uses
+        this stored decision instead of recomputing it (one source), so an
+        announced repeat cannot turn into a remedial section later.
+        """
+        p = self.plan
+        remediation = None
+        try:
+            if (not result.passed and self.auto and self.mode == "practice"
+                    and not self.is_builtin_warmup and p.exercise.kind == "learn"
+                    and self.fingerprint and getattr(result, "notes", None)
+                    and resolve_mistake_policy(self.library.settings[
+                        "mistake_response_strategy"]).whole_handler is None):
+                from .diagnosis_policies import AssessmentEvidence, LearnerSnapshot
+                evidence = AssessmentEvidence.from_result(
+                    p.identity, result, self._pending_assessed_bpm or p.bpm)
+                history = self.practice_policy.store.recent(self.fingerprint, p.identity)
+                snapshot = LearnerSnapshot(p.identity, (history.recent + (evidence,))[-8:])
+                recommendation = self.practice_policy.learner.recommend(
+                    snapshot, self.practice_policy.diagnosis)
+                if recommendation is not None:
+                    remediation = self.remediation_planner.plan(
+                        recommendation, result, p.active_variant,
+                        stage_key=p.identity, boundaries=p.piece.bar_boundaries)
+        except Exception:
+            remediation = self._UNDECIDED
+        self._decided_remediation = (p.identity, remediation)
+
+    def _settlement_may_reroute(self, result, response=None) -> bool:
+        """Whether settling this finished take can change what runs next.
+
+        Route, source opening and tempo are known when a take ends, except
+        when settlement may master the stage, re-engrave it from performance
+        feedback, or plan a remediation, or when the selected response
+        leaves timed practice. Such a take is not announced: an announced
+        continuation is always exactly the take that runs.
+        """
+        p = self.plan
+        if p is None or not self.auto or self.mode != "practice" or self.preview_only:
+            return True
+        if (getattr(result, "passed", False) and p.bpm >= p.target_bpm
+                and p.streak + 1 >= SETTINGS.clean_runs_to_master):
+            # Settlement masters the stage (next stage, next passage, or
+            # "Piece mastered"), never a same-stage repeat.
+            return True
+        if (p.accepts_performance_feedback and p.active_variant.level == "original"
+                and not self.is_builtin_warmup and bool(getattr(result, "notes", ()))):
+            return True
+        decided = self._decided_remediation
+        if decided is None or decided[0] != p.identity or decided[1] is not None:
+            return True
+        if response is not None and (
+                getattr(response, "guided", False)
+                or getattr(response, "action", "") == "pause"):
+            return True
+        return False
+
     def _schedule_preparation(self, target: float, *, now: float,
                               from_visual: float, reverse_seconds: float,
-                              reading_lead_included: bool = False):
+                              reading_lead_included: bool = False,
+                              announce: bool = True):
         """Reverse on this pass, then traverse one semantic rest into target.
 
         The resulting next_at is the graded run_at of the next take and is
@@ -1767,7 +1865,10 @@ class PracticeEngine:
             self._source_model(), source_from_beat=target,
             from_visual=from_visual, now=now,
             reverse_seconds=reverse_seconds, bpm=self.plan.bpm)
-        if not reading_lead_included:
+        if not reading_lead_included and announce:
+            # An unannounced take gets its whole reading horizon when it is
+            # settled (_continuation_deadline); adding it here as well would
+            # double the rest.
             # An automatic recovery target may differ from the speculative
             # next passage. Its newly queued source must have the SAME
             # offscreen reading lead as a normal automatic repeat, after the
@@ -1780,8 +1881,13 @@ class PracticeEngine:
                 self._continuous_horizon_beats - upcoming_rest,
             )
             self.visual_transport.next_at += missing * 60.0 / self.plan.bpm
-        self.visual_transport.announce_continuation(
-            target, self.visual_transport.next_at)
+        if announce:
+            # Only a take whose settlement cannot change its route, opening
+            # or tempo is announced (see _settlement_may_reroute).
+            self.visual_transport.announce_continuation(
+                target, self.visual_transport.next_at, self.plan.bpm)
+        else:
+            self.visual_transport.announced_continuation = None
         self.running = False
         self.recorder = None
         self.count_in_beats = 0.0
@@ -2147,6 +2253,7 @@ class PracticeEngine:
         self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
         if had_reading_lead:
             self._resume_grading_after += max(0.0, now-paused_at)
+        self._reannounce_after_rest_pause(now, presentation_lead_seconds)
         # A paused passage returns with a short genuine count-in. Its
         # authoritative run_at moves, so MIDI grading and source ink agree
         # and no note is required during the visual reading lead-in.
@@ -2395,6 +2502,7 @@ class PracticeEngine:
                 self.auto = False
                 self.feedback = "Preparing next passage"
                 self.visual_transport.next_at = 0
+                self.visual_transport.announced_continuation = None
             elif route == "continue":
                 # Failed attempts reuse the existing source; clean attempts
                 # append another passage with the exact authored rest gap.
@@ -2408,6 +2516,7 @@ class PracticeEngine:
                                   from_beat=target)
             else:
                 self.visual_transport.next_at = 0
+                self.visual_transport.announced_continuation = None
                 self.auto = False
                 self.feedback = message or self.feedback
         return
@@ -2537,6 +2646,9 @@ class PracticeEngine:
         self._trouble_key = transition.trouble_key
         self._trouble_count = transition.trouble_count
         self._guided_recovery_pending = transition.guided
+        if transition.guided:
+            # The next step is note-by-note learning, not a timed take.
+            self.visual_transport.announced_continuation = None
         self.recovery_notice = transition.display.notice
         self.retry_range = transition.display.retry_range
         self.feedback = transition.display.feedback
@@ -2570,7 +2682,7 @@ class PracticeEngine:
                 repeat_deadline(
                     run_at=self.visual_transport.run_at, duration=duration,
                     gap_beats=self.visual_transport.visual_gap_beats,
-                    bpm=self.plan.bpm)))
+                    bpm=self.plan.bpm)), self.plan.bpm)
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn progress."
             if now >= self.visual_transport.next_at:
@@ -2708,6 +2820,7 @@ class PracticeEngine:
         # The response policy may slow the next retry before this take is
         # committed. Durable evidence must retain the tempo actually assessed.
         self._pending_assessed_bpm = self.plan.bpm
+        self._decide_remediation(result)
         whole_recovery = None
         assessed_bpm = self.plan.bpm
         if decision.rewind and not self.is_builtin_warmup:
@@ -2747,7 +2860,8 @@ class PracticeEngine:
                 (whole_recovery.restart_beat if whole_recovery is not None
                  else self.visual_transport.play_from_beat), now=now,
                 from_visual=visual_from,
-                reverse_seconds=decision.rewind_seconds)
+                reverse_seconds=decision.rewind_seconds,
+                announce=not self._settlement_may_reroute(result, whole_recovery))
         if decision.failed:
             # An abandoned failed take cannot leave a previously clean
             # streak durable in SQLite. Settle this monotone invalidation
@@ -2793,18 +2907,22 @@ class PracticeEngine:
         if decision.deadline_action == "clear":
             self.visual_transport.next_at = 0
         elif decision.deadline_action == "schedule":
-            if planned is None:
+            if not self._settlement_may_reroute(result):
                 # The clean take repeats this stage: decide its graded
                 # deadline ONCE, now, including the renderer's offscreen
-                # reading horizon, and announce it for the whole rest so the
-                # repeat's ink is admitted offscreen at exactly this world
-                # position. Settlement at that deadline starts the take with
-                # this same run_at (R1 P2: publishing it only at the start
-                # left no time to admit the ink offscreen).
+                # reading horizon, and announce it with the tempo settlement
+                # will apply, for the whole rest, so the repeat's ink is
+                # admitted offscreen at exactly this world position and its
+                # count-in is at the take's own tempo. Settlement at that
+                # deadline starts the take with this same run_at and BPM
+                # (R1 P2: publishing it only at the start was too late).
                 self.visual_transport.announce_continuation(
-                    0.0, self._automatic_stream_deadline(decision.deadline_at))
+                    0.0, self._automatic_stream_deadline(decision.deadline_at),
+                    self.plan.bpm_after(result.passed))
             else:
-                # A possible stage handoff keeps its own prepared lead.
+                # A possible stage handoff or re-engraving keeps the plain
+                # rest; nothing is announced that settlement could change.
+                self.visual_transport.announced_continuation = None
                 self.visual_transport.next_at = decision.deadline_at
             if now >= self.visual_transport.next_at:
                 self._update()
@@ -3106,6 +3224,7 @@ class PracticeEngine:
             next_floor = None
             next_deadline = None
             next_transport = self.transport_id + 1
+            next_bpm = float(self.plan.bpm) if self.plan is not None else 0.0
             announced = self.visual_transport.announced_continuation
             if (self.mode == "practice" and not self.visual_transport.paused
                     and not self.running and announced is not None
@@ -3116,6 +3235,7 @@ class PracticeEngine:
                 # preview) is announced with the run_at it WILL start with.
                 next_floor = float(announced[0])
                 next_deadline = float(announced[1]) * 1000.0
+                next_bpm = float(announced[2])
             elif (self.mode == "practice" and self.running and
                     self._queue_scheduled_start is not None):
                 transport, floor, run_at, stage_key, revision = (
@@ -3176,9 +3296,11 @@ class PracticeEngine:
                     # The take this source is graded as, and the one
                     # count-in bar spoken immediately before its deadline.
                     "transport_id": next_transport,
-                    "count_in_beats": (lead_in_beats(bar_beats, self.plan.bpm)
-                                       if bar_beats > 0 and self.plan.bpm > 0
+                    "count_in_beats": (lead_in_beats(bar_beats, next_bpm)
+                                       if bar_beats > 0 and next_bpm > 0
                                        else 0.0),
+                    # That take's start tempo: its count-in is at this BPM.
+                    "bpm": next_bpm,
                 }
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self._stage_handoff_visual_beat is not None:

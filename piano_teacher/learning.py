@@ -537,8 +537,20 @@ class LearningPlan:
             self.transferable_tempos.add(self.identity)
         return self.bpm
 
+    def bpm_after(self, accepted: bool) -> float:
+        """The tempo apply_result gives this stage's next take (same stage).
+
+        An accepted take below the target steps up one automatic rung; any
+        other same-stage outcome keeps the tempo. The engine announces the
+        next take with this BPM and settlement applies exactly that value.
+        """
+        if accepted and self.bpm < self.target_bpm:
+            return self._next_automatic_bpm()
+        return self.bpm
+
     def apply_result(self, *, correct: int, total: int, extras: int = 0,
-                     accepted: bool | None = None) -> str:
+                     accepted: bool | None = None,
+                     next_bpm: float | None = None) -> str:
         """Accepted takes restore tempo; three full target-speed passes earn mastery.
 
         Recovery slowdowns happen on five pitch errors in a two-bar window.
@@ -554,7 +566,8 @@ class LearningPlan:
         self.failures = 0
         if self.bpm < self.target_bpm:
             self.streak = 0
-            self.bpm = self._next_automatic_bpm()
+            # The announced next take's tempo, when one was announced.
+            self.bpm = self._next_automatic_bpm() if next_bpm is None else next_bpm
             self.stage_tempos[self.identity] = self.bpm
             self.transferable_tempos.add(self.identity)
             return f"Tempo increased to {self.bpm} BPM"

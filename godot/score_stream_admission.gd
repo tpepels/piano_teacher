@@ -15,11 +15,12 @@ const READY_TRAVEL_BEATS := 0.30
 const REST_GAP_BEATS := 1.0
 # "Strictly ahead of the playhead" for reusing a paused take.
 const PAUSED_REUSE_EPSILON_BEATS := .001
-# Listen/Perform may open on an empty strip only when the one count-in-bar
-# slot computed here is the engine's own first-note deadline (one display
-# frame of jitter, never a fraction of a note; 2.4 px at 96 px/beat).
-# Automatic practice continuations do NOT use a tolerance: their source is
-# bound by the backend plan identity (NativeView._planned_owner).
+# Listen/Perform may open on an empty strip only when the one-count-in-bar
+# slot computed here (empty_strip_start) matches the engine's first-note
+# deadline to within this many beats: one display frame of clock jitter,
+# never a fraction of a note (0.025 beat is 2.4 px at 96 px/beat). It is not
+# used for automatic practice continuations, which are bound by their
+# backend plan identity (NativeView._planned_owner), not by comparing onsets.
 const EMPTY_STRIP_DEADLINE_EPSILON_BEATS := .025
 
 static func clip_bounds(item: Dictionary, density: float,

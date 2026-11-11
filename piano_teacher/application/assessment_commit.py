@@ -28,6 +28,7 @@ def commit_assessed_result(
     observe: Callable[..., Any],
     plan_remediation: Callable[..., Any],
     assessed_bpm: float | None = None,
+    next_bpm: float | None = None,
 ) -> AssessmentCommit:
     """Use the original stage identity for evidence before applying mastery."""
     stage = plan.identity
@@ -37,9 +38,10 @@ def commit_assessed_result(
         fingerprint=fingerprint, stage_key=stage,
         bpm=bpm if assessed_bpm is None else assessed_bpm,
         result=result, observe=observe)
+    tempo = {} if next_bpm is None else {"next_bpm": next_bpm}
     message = plan.apply_result(
         correct=result.correct, total=len(result.notes),
-        extras=result.extra_notes, accepted=accepted)
+        extras=result.extra_notes, accepted=accepted, **tempo)
     remediation = None
     if (recommendation is not None and not accepted and automatic
             and mode == "practice" and not warmup

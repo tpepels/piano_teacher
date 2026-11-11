@@ -7,6 +7,7 @@ const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
+const StreamQueue := preload("res://score_stream_queue.gd")
 const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
@@ -365,26 +366,30 @@ func present_frame(_state: Dictionary, global_beat: float) -> void:
 func _outgoing_clearance_beats() -> float:
     # The handoff starts when the current take ends. Its own ink and printed
     # rest are still on the staff then (now that every repeat is drawn), and
-    # ScoreStreamQueue.minimum_peer_opening admits ink of a different
-    # density only after that old ink has left past the left edge. Reserve
-    # that much lead from the take's end, plus the usual 1.5-beat jitter, or
-    # the prepared stage is refused and the next stage plays with no ink.
+    # the queue admits the next stage only after that ink by the SAME peer
+    # rule it enforces (ScoreStreamQueue.peer_opening_after). Reserve that
+    # lead from the take's end, plus the usual 1.5-beat jitter, or the
+    # prepared stage is refused and the next stage plays with no ink.
     var old = stage.renderer if stage != null else null
     if old == null or not is_instance_valid(old) or old == _future or \
             old.get("timeline") == null or not old.has_method("staff_gap") or \
             not old.get("practice_timeline") is Dictionary:
         return 0.0
     var old_density: float = maxf(1.0,float(old.timeline.pixels_per_beat))
-    var new_density: float = maxf(1.0,float(_future.timeline.pixels_per_beat))
-    var rest: float = float(old.practice_timeline.get("gap",{}).get(
-        "duration_beats",0.0))
-    var trailing: float = 2.2*float(old.staff_gap())/old_density
-    var tail: float = rest+trailing
-    if absf(old_density-new_density) < .0001:
-        return tail+StreamAdmission.REST_GAP_BEATS+ \
-            _future._stream_header_beats(0.0)+1.5
-    return tail+(old.size.x*.33+60.0)/old_density+ \
-        _future._stream_right_beats()+_future._stream_header_beats(0.0)+1.5
+    var duration: float = float(old.timeline.duration_beats)
+    # The take's printed end (final barline margin) and its written rest.
+    var printed_end: float = StreamAdmission.engraved_clip_bounds(
+        0.0,duration,old_density,float(old.staff_gap()),duration).y/old_density
+    var peer_end: float = maxf(printed_end,duration)-duration+ \
+        float(old.practice_timeline.get("gap",{}).get("duration_beats",0.0))
+    var density: float = maxf(1.0,float(_future.timeline.pixels_per_beat))
+    var playhead_x: float = _future.size.x*NativeView.PLAYHEAD_FRACTION
+    var opening_left: float = StreamQueue.peer_opening_after(peer_end,
+        old_density,old.size.x*NativeView.PLAYHEAD_FRACTION,density,
+        _future.size.x,playhead_x)
+    if absf(density-old_density) < .0001:
+        opening_left += StreamAdmission.REST_GAP_BEATS
+    return opening_left+_future._stream_header_beats(0.0)+1.5
 
 
 func promote_if_ready(state: Dictionary) -> bool:

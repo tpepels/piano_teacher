@@ -74,9 +74,9 @@ func _initialize() -> void:
     raw_events.clear()
     clock.retry_active = true
     clock.preparing = true
-    owner.update({"phase":"feedback","paused":false,
+    owner.update({"phase":"feedback","paused":false,"score_queue_next":{},
         "count_in_bar_beats":4},1000,NAN,1000)
-    owner.update({"phase":"feedback","paused":false,
+    owner.update({"phase":"feedback","paused":false,"score_queue_next":{},
         "count_in_bar_beats":4},1000,NAN,1000)
     if raw_events != [false] or practice.stage.count_in.events[-1][0] != -1.0:
         failures += 1
@@ -169,7 +169,7 @@ func _initialize() -> void:
     clock.retry_active = true
     clock.preparing = true
     clock.retry_beat = -4.0
-    owner.update({"phase":"feedback","paused":false,
+    owner.update({"phase":"feedback","paused":false,"score_queue_next":{},
         "count_in_bar_beats":4},2000,NAN,2000)
     if practice.stage.count_in.spoken != [1]:
         failures += 1

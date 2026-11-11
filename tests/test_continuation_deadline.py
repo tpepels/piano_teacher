@@ -165,22 +165,31 @@ def test_preview_repeat_is_announced_and_starts_unchanged(engine):
     assert started["score_queue_next"]["plan_id"] == plan["plan_id"]
 
 
-def test_pause_in_rest_moves_the_announced_deadline_with_the_take(engine):
+@pytest.mark.parametrize("renderer_lead", [0.0, 11.0])
+def test_resume_in_rest_reannounces_a_deadline_its_ink_can_still_meet(engine, renderer_lead):
     app, now = engine()
     start_with_horizon(app)
     play_clean(app)
     _, rest = finish_take(app, now)
-    deadline = rest["score_queue_next"]["deadline_at_ms"] / 1000
+    before = rest["score_queue_next"]
+    deadline = before["deadline_at_ms"] / 1000
     app.control("pause")
     assert "score_queue_next" not in app.state()
     now[0] += 12.0
-    app.control("resume", continuous_horizon_beats=HORIZON)
-    resumed = app.state()["score_queue_next"]
-    assert resumed["deadline_at_ms"] / 1000 == pytest.approx(deadline + 12.0)
-    now[0] = deadline + 12.0 + .01
+    resumed_at = now[0]
+    # Godot reports where fresh ink can still be admitted offscreen (the old
+    # copy may have scrolled into view while paused).
+    app.control("resume", continuous_horizon_beats=HORIZON,
+                presentation_lead_seconds=renderer_lead)
+    plan = app.state()["score_queue_next"]
+    expected = max(deadline + 12.0, resumed_at + renderer_lead,
+                   resumed_at + HORIZON * 60 / BPM)
+    assert plan["deadline_at_ms"] / 1000 == pytest.approx(expected)
+    assert plan["plan_id"] != before["plan_id"], "fresh ink, not the old copy"
+    now[0] = expected + .01
     app.state()
     assert app.running
-    assert app.visual_transport.run_at == pytest.approx(deadline + 12.0)
+    assert app.visual_transport.run_at == pytest.approx(expected)
 
 
 def test_unannounced_continuation_still_gets_a_full_offscreen_lead(engine):
@@ -217,3 +226,65 @@ def test_renderer_binds_by_plan_identity_and_counts_in_before_announced_deadline
     assert "SCRIPT ERROR" not in output and "Parse Error" not in output, output
     assert "CONTINUATION_PLAN_FAILURES:0" in output, output
     assert result.returncode == 0, output
+
+
+def _rest_plans_then_start(app, now, *, step=0.25, limit=60.0):
+    """Poll the rest like Godot does; return (announced plans, first running state)."""
+    plans = []
+    end = now[0] + limit
+    while now[0] < end:
+        state = app.state()
+        if state.get("running") and state.get("transport_id") != _rest_plans_then_start.tid:
+            return plans, state
+        plan = state.get("score_queue_next")
+        if plan is not None and not state.get("running"):
+            plans.append(plan)
+        now[0] += step
+    raise AssertionError("no next take started")
+
+
+@pytest.mark.parametrize("scenario", ["clean", "tempo_step", "failed", "retry"])
+def test_an_announced_continuation_is_exactly_the_take_that_runs(engine, scenario):
+    app, now = engine(piece_bpm=2 * BPM if scenario == "tempo_step" else BPM)
+    start_with_horizon(app)
+    _rest_plans_then_start.tid = app.transport_id
+    if scenario == "retry":
+        now[0] = app.visual_transport.run_at + 1.0
+        app.control("restart", presentation_lead_seconds=7.0,
+                    continuous_horizon_beats=HORIZON)
+    else:
+        if scenario != "failed":
+            play_clean(app)
+        finish_take(app, now)
+    plans, started = _rest_plans_then_start(app, now)
+    assert plans, "this continuation is predictable and must be announced"
+    assert len({p["plan_id"] for p in plans}) == 1, "one announcement per rest"
+    plan = plans[-1]
+    assert started["transport_id"] == plan["transport_id"]
+    assert started["play_from_beat"] == pytest.approx(plan["source_from_beat"])
+    assert app.visual_transport.run_at * 1000 == pytest.approx(plan["deadline_at_ms"])
+    assert started["bpm"] == pytest.approx(plan["bpm"])
+    if scenario == "tempo_step":
+        assert plan["bpm"] > BPM, "the count-in is announced at the stepped tempo"
+
+
+@pytest.mark.parametrize("reason", ["mastery", "feedback_reengraving", "remediation"])
+def test_a_take_whose_settlement_can_reroute_is_not_announced(engine, monkeypatch, reason):
+    app, now = engine()
+    if reason == "mastery":
+        app.plan.bpm = app.plan.target_bpm
+        from piano_teacher.lesson_settings import SETTINGS
+        app.plan.streak = SETTINGS.clean_runs_to_master - 1
+    elif reason == "feedback_reengraving":
+        monkeypatch.setattr(type(app.plan), "accepts_performance_feedback",
+                            property(lambda _plan: True))
+    else:
+        monkeypatch.setattr(app, "_decide_remediation", lambda result: setattr(
+            app, "_decided_remediation", (app.plan.identity, "remedial section")))
+    start_with_horizon(app)
+    if reason != "remediation":
+        play_clean(app)
+    _, rest = finish_take(app, now)
+    assert rest["phase"] in ("feedback", "recovering")
+    assert "score_queue_next" not in rest
+    assert app.visual_transport.announced_continuation is None

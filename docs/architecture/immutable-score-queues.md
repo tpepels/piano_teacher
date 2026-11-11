@@ -119,9 +119,17 @@ whole rest, with the graded `transport_id` and the one `count_in_beats` bar,
 and starts the take with that same `run_at`; nothing adds a lead at start.
 Godot admits the source offscreen at the projected world position and binds
 it to the take named by the plan identity (`NativeView._planned_owner`), not
-by comparing two onset estimates against a tolerance. A continuation whose
-opening changed at settlement (unannounced) gets a fresh full horizon from
-that moment, so its ink is still admitted offscreen before grading.
+by comparing two onset estimates against a tolerance. The announcement also carries
+the take's start BPM (`LearningPlan.bpm_after`); settlement applies exactly
+that tempo, so a tempo-step repeat counts in at its own tempo. Only a take
+whose settlement cannot change the route, opening or tempo is announced:
+not one that may master the stage, re-engrave from performance feedback, or
+plan a remediation (decided at take end and reused at settlement), nor a
+response that leaves timed practice. An unannounced continuation gets a
+fresh full horizon when it is settled and counts its last bar itself.
+Resume in a rest re-announces the next take (new plan identity) no earlier
+than the position Godot reports it can still admit offscreen, because the
+presentation axis kept moving while paused; the old copy gets no count-in.
 Resume cannot repurpose a different source interval. A successful
 source/transport bind changes only transport status; never immutable source
 geometry. Failed controls restore every strip's provisional status or remove

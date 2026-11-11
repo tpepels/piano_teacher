@@ -101,9 +101,11 @@ there is no legacy camera fallback.
 9. **Automatic continuations count in too** (R1 F1). An announced repeat
    starts at its graded deadline, so `MetronomeFrameCoordinator` speaks its
    one count-in bar during the rest, in the bar right before
-   `score_queue_next.deadline_at_ms` (`count_in_beats`), under the same
-   deadline token as the retry-preparation clock, so the two never both
-   speak a bar. Nothing is spoken earlier in the rest.
+   `score_queue_next.deadline_at_ms` (`count_in_beats`, at the announced
+   take's `bpm`), under the same deadline token as the retry-preparation
+   clock, so the two never both speak a bar. A rest with no announced take
+   speaks nothing; that take counts its own last bar once it starts.
+   Nothing is spoken earlier in the rest.
 
 ## Required regression gates
 

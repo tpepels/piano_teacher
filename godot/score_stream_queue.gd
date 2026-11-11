@@ -52,17 +52,22 @@ func minimum_peer_opening(density: float,
                 item,peer_density,peer_gap,peer_duration)
             var peer_end: float = float(item["world_origin"]) + \
                 peer_bounds.y/peer_density
-            if absf(density-peer_density) < .0001:
-                earliest = maxf(earliest,peer_end)
-            else:
-                # Different printed scales have different visual velocities.
-                # Wait until the old rightmost pixel has left the viewport
-                # before the new leftmost pixel may enter from the right.
-                var peer_exit: float = peer_end + \
-                    (peer_playhead+60.0)/peer_density
-                earliest = maxf(earliest,peer_exit + \
-                    (viewport_width-playhead_x)/density)
+            earliest = maxf(earliest,peer_opening_after(peer_end,
+                peer_density,peer_playhead,density,viewport_width,playhead_x))
     return earliest
+
+
+static func peer_opening_after(peer_end: float, peer_density: float,
+        peer_playhead: float, density: float, viewport_width: float,
+        playhead_x: float) -> float:
+    # The earliest left edge of new ink after a peer layer's last printed
+    # pixel at world beat peer_end. Equal densities may adjoin. Different
+    # printed scales have different visual velocities: wait until the old
+    # rightmost pixel has left the viewport before new ink enters.
+    if absf(density-peer_density) < .0001:
+        return peer_end
+    return peer_end + (peer_playhead+60.0)/peer_density + \
+        (viewport_width-playhead_x)/density
 
 
 func _clears_prior_layers(opening_left: float, density: float,
