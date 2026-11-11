@@ -124,12 +124,9 @@ func paint_engraved_chord(canvas, frame: RenderPass, event: Dictionary, x: float
     if heads.size() != group.size():
         return []
     x += score_layout.voice_column_offset(event,gap,score_layout.cached_head_offsets)
-    var sorted_heads: Array = score_layout.sorted_chord_members.get(
-        str(event.get("id","")),[])
-    if sorted_heads.is_empty():
-        sorted_heads = group.duplicate()
-        sorted_heads.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
+    # Head i of the template is the event its i-th Verovio note stands for.
+    var sorted_heads: Array = score_layout.ordered_chord_members(
+        str(event.get("id","")))
     var anchor: float = score_layout.event_y(event,gap)
     var head_centres: Array = []
     for i in range(sorted_heads.size()):

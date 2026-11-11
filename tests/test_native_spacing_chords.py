@@ -134,9 +134,9 @@ def test_augmented_unison_chord_has_a_pattern_and_authentic_two_head_sprite():
     notes = [_head("E",0,4), _head("G",0,4), _head("G",1,4)]
     measure = {"clefs":{"right":{"sign":"G","line":2}}}
     assert chord_pattern(notes[0],notes,measure) == "quarter|up|0,2,2"
-    # A triple stack on one position has no authentic single sprite.
+    # G1: three heads on one position are a chord too; Verovio engraves it.
     triple = notes + [_head("G",-1,4)]
-    assert chord_pattern(triple[0],triple,measure) is None
+    assert chord_pattern(triple[0],triple,measure) == "quarter|up|0,2,2,2"
     import verovio
     from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
     toolkit = _create_verovio_toolkit(verovio)
@@ -167,33 +167,72 @@ def test_rachmaninoff_prelude_builds_complete_native_assets(tmp_path):
         if event["kind"] == "note":
             notes.setdefault((event["staff"],event["voice"],event["measure"],
                               round(event["beat"],6)),[]).append(event)
-    measures = {m["number"]:m for m in model["measures"]}
-    needed = set()
+    # Every chord has its own Verovio instance template, naming its heads.
+    mapped = {leader: heads for item in templates.values()
+              for leader, heads in item.get("leaders", {}).items()}
+    chords = 0
     for key, members in notes.items():
         leaders = [n for n in members if not n["chord"]]
         if len(members) > 1:
-            pattern = chord_pattern(leaders[0],members,measures[key[2]])
-            assert pattern, f"bar {key[2]} chord has no engraving pattern"
-            needed.add(pattern)
-    assert needed and needed <= set(templates)
+            chords += 1
+            assert leaders[0]["id"] in mapped, f"bar {key[2]} chord has no engraving"
+            assert sorted(mapped[leaders[0]["id"]]) == sorted(m["id"] for m in members)
+    assert chords
 
 
-def test_identical_spelling_and_pitch_on_one_position_is_refused():
-    # F3: two heads that are the same note written twice are not a unison
-    # chord (that needs different accidentals), and the refusal names where.
+def test_identical_spelling_and_pitch_on_one_position_is_a_chord():
+    # G1: a chord draws whatever its shape. Import splits identical pitches
+    # into separate voices, but a hand-built chord with a doubled head still
+    # engraves: Verovio places the two heads side by side.
     from piano_teacher.notation.assets import chords
     notes = [_head("E",0,4), _head("G",0,4), _head("G",0,4)]
     for index, note in enumerate(notes):
         note.update(measure=9, id=f"n{index}", chord=index > 0, kind="note",
                     voice="1", beat=0.0)
     measure = {"number": 9, "clefs": {"right": {"sign": "G", "line": 2}}}
-    assert chord_pattern(notes[0], notes, measure) is None
-    reason = chords.chord_refusal(notes[0], notes, measure)
-    assert reason.startswith("measure 9, right staff:") and "identical spelling" in reason
+    assert chord_pattern(notes[0], notes, measure) == "quarter|up|0,2,2"
+    assert chords.chord_refusal(notes[0], notes, measure) is None
     model = {"measures": [measure], "notation_events": notes}
-    assert chords.refused_chords(model) == [reason]
-    assert chords.patterns_from_model(model) == []
-    sharp = [dict(n) for n in notes]
-    sharp[2]["spelling"] = {"step": "G", "alter": 1, "octave": 4}
-    assert chord_pattern(sharp[0], sharp, measure) == "quarter|up|0,2,2"
-    assert chords.refused_chords({"measures": [measure], "notation_events": sharp}) == []
+    assert chords.refused_chords(model) == []
+    assert chords.patterns_from_model(model) == ["quarter|up|0,2,2"]
+
+
+def test_only_input_that_is_not_one_chord_is_refused_with_its_cause():
+    from piano_teacher.notation.assets import chords
+    measure = {"number": 3, "clefs": {"right": {"sign": "G", "line": 2}}}
+    mixed = [_head("C",0,4), {**_head("E",0,4), "note_type": "half"}]
+    for index, note in enumerate(mixed):
+        note.update(measure=3, id=f"m{index}", chord=index > 0)
+    reason = chords.chord_refusal(mixed[0], mixed, measure)
+    assert reason == ("measure 3, right staff: heads of different note values "
+                      "are separate voices, not one chord")
+    # Eleven heads, a five-octave span and stacked unisons all have a pattern.
+    for names in (["C4","D4","E4","F4","G4","A4","B4","C5","D5","E5","F5"],
+                  ["A0","C8"], ["G4","G4","G4","G4"]):
+        heads = [_head(n[0], 0, int(n[1])) for n in names]
+        assert chord_pattern(heads[0], heads, measure)
+
+
+def test_every_corpus_chord_is_a_chord():
+    """All 17 corpus MIDIs: no chord is refused at any lesson phrase."""
+    from piano_teacher.music import load_midi
+    from piano_teacher.notation.assets.chords import refused_chords
+    from piano_teacher.notation.lesson import build_lesson_score
+    from piano_teacher.notation.model import build_score_model
+
+    pieces = sorted((ROOT / "midi").glob("*.midi"))
+    assert len(pieces) == 17
+    refused, chords = [], 0
+    for path in pieces:
+        piece = load_midi(path)
+        for phrase in piece.phrases:
+            score = build_lesson_score(
+                phrase, boundaries=piece.bar_boundaries,
+                time_signatures=piece.time_signatures,
+                key_signatures=piece.key_signatures,
+                clef_changes=piece.clef_changes)
+            model = build_score_model(score, boundaries=piece.bar_boundaries)
+            chords += len(patterns_from_model(model))
+            refused += [f"{path.name}: {r}" for r in refused_chords(model)]
+    assert chords > 0
+    assert refused == []

@@ -104,9 +104,13 @@ func rebuild_index() -> void:
     chord_members = index["chord_members"]
     sorted_chord_members.clear()
     for leader_id in chord_members:
-        var ordered: Array = chord_members[leader_id].duplicate()
-        ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
+        # Template note order: an instance template names its heads by
+        # event id; otherwise the generic bottom-to-top order.
+        var ordered: Array = _instance_order(str(leader_id))
+        if ordered.is_empty():
+            ordered = chord_members[leader_id].duplicate()
+            ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+                return Geometry.head_order_less(a,b))
         sorted_chord_members[leader_id] = ordered
     voice_stem_up_by_note = polyphonic_stem_directions()
     previous_attack_before_measure = index["previous_attack_before_measure"]
@@ -271,6 +275,44 @@ func polyphonic_stem_directions() -> Dictionary:
             y_by_id[str(member.get("id",""))] = event_y(member,1.0)
     return VoiceLayout.stem_directions(ordered_events,chord_members,y_by_id)
 
+func chord_instance(event: Dictionary) -> Dictionary:
+    # The Verovio instance template of exactly this source chord, when its
+    # published heads are this chord's members.
+    var id: String = str(event.get("id",""))
+    if not chord_members.has(id) or not glyphs.chord_instances.has(id):
+        return {}
+    var instance: Dictionary = glyphs.chord_instances[id]
+    var members: Array = chord_members[id]
+    if instance["heads"].size() != members.size():
+        return {}
+    for member in members:
+        if not instance["heads"].has(str(member.get("id",""))):
+            return {}
+    return instance
+
+# Chord members in the order of their template's notes (head_positions).
+func ordered_chord_members(leader_id: String) -> Array:
+    if sorted_chord_members.has(leader_id):
+        return sorted_chord_members[leader_id]
+    var ordered: Array = _instance_order(leader_id)
+    if ordered.is_empty():
+        ordered = chord_members.get(leader_id,[]).duplicate()
+        ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            return Geometry.head_order_less(a,b))
+    return ordered
+
+func _instance_order(leader_id: String) -> Array:
+    var instance: Dictionary = chord_instance({"id":leader_id})
+    if instance.is_empty():
+        return []
+    var by_id: Dictionary = {}
+    for member in chord_members[leader_id]:
+        by_id[str(member.get("id",""))] = member
+    var ordered: Array = []
+    for id in instance["heads"]:
+        ordered.append(by_id[id])
+    return ordered
+
 func chord_extents(event: Dictionary, gap: float,
         head_offsets: Dictionary = {}) -> Dictionary:
     var members: Array = chord_members.get(str(event.get("id", "")), [event])
@@ -281,7 +323,8 @@ func chord_extents(event: Dictionary, gap: float,
     var sum_step := 0.0
     var explicit_stem := ""
     for member in members:
-        if str(member.get("stem","")) in ["up","down"]:
+        # One chord, one stem: the first direction declared in source order.
+        if str(member.get("stem","")) in ["up","down"] and explicit_stem.is_empty():
             explicit_stem = str(member["stem"])
         var head_y: float = event_y(member, gap)
         var offset: float = float(head_offsets.get(str(member.get("id", "")), 0.0))
@@ -295,6 +338,10 @@ func chord_extents(event: Dictionary, gap: float,
             str(member.get("staff", "right")), measure_for(member))
         sum_step += float(Geometry.staff_step(
             member.get("spelling", {}),clef))
+    # The stem Verovio engraved this chord with (its template's direction).
+    var engraved: String = str(chord_instance(event).get("stem",""))
+    if engraved in ["up","down"]:
+        explicit_stem = engraved
     return {"top_y":top_y,"bottom_y":bottom_y,
         "top_offset":top_offset,"bottom_offset":bottom_offset,
         "up":explicit_stem == "up" if not explicit_stem.is_empty() else
@@ -302,40 +349,30 @@ func chord_extents(event: Dictionary, gap: float,
                 sum_step/float(maxi(1,members.size())) < 4.0))}
 
 
-# Chord sprites are keyed by their diatonic interval signature, which is
-# invariant under octave transposition. Godot places only Verovio ink.
+# A prepared score names the Verovio instance template of every chord.
+# Without one, generic sprites are keyed by their diatonic interval
+# signature, invariant under octave transposition. Any number of heads, any
+# span and any number of heads on one staff position is a chord. Godot
+# places only Verovio ink.
 
 func chord_template_key(event: Dictionary) -> String:
+    var instance: Dictionary = chord_instance(event)
+    if not instance.is_empty():
+        return str(instance["key"])
     var notes: Array = chord_members.get(str(event.get("id","")),[])
-    if notes.size() < 2 or notes.size() > 10:
+    if notes.size() < 2:
         return ""
     var leader: int = Geometry.diatonic_index(event.get("spelling",{}))
     if leader < 0:
         return ""
     var differences: Array[int] = []
     for head in notes:
+        # Heads of different note values are separate voices, not a chord.
         if str(head.get("note_type","")) != str(event.get("note_type","")):
             return ""
         differences.append(Geometry.diatonic_index(
             head.get("spelling",{}))-leader)
     differences.sort()
-    if differences.size() < 2 or differences[-1]-differences[0] > 28:
-        return ""
-    var spellings: Dictionary = {}
-    for head in notes:
-        # Two heads of identical spelling and pitch are one note written twice.
-        var spelling: Dictionary = head.get("spelling",{})
-        var identity := "%s|%d|%d" % [str(spelling.get("step","")),
-            int(spelling.get("alter",0) if spelling.get("alter") != null else 0),
-            int(spelling.get("octave",0))]
-        if spellings.has(identity):
-            return ""
-        spellings[identity] = true
-    for i in range(2,differences.size()):
-        # Two heads may share a staff position (G and G-sharp, engraved side
-        # by side); three have no authentic single-sprite engraving.
-        if differences[i] == differences[i-2]:
-            return ""
     var names: PackedStringArray = []
     for value in differences:
         names.append(str(value))
@@ -364,8 +401,7 @@ func engraved_head_offsets(gap: float) -> Dictionary:
         var positions: Array = glyphs.chord_heads(chord_template_key(leader))
         if positions.size() != members.size():
             continue
-        members.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
+        members = ordered_chord_members(str(leader_id))
         for i in range(members.size()):
             offsets[str(members[i].get("id",""))] = \
                 float(positions[i][0])*gap/250.0
@@ -397,11 +433,9 @@ func polyphonic_column_offsets(gap: float, heads: Dictionary) -> Dictionary:
 func voice_column_offset(event: Dictionary, gap: float, heads: Dictionary) -> float:
     var id: String = str(event.get("id",""))
     var intrinsic := 0.0
-    var members: Array = chord_members.get(id,[]).duplicate()
+    var members: Array = ordered_chord_members(id)
     var positions: Array = glyphs.chord_heads(chord_template_key(event))
     if positions.size() == members.size():
-        members.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
         for i in range(members.size()):
             if str(members[i].get("id","")) == id:
                 intrinsic = float(positions[i][0])*gap/250.0

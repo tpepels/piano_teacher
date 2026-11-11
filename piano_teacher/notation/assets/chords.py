@@ -1,74 +1,106 @@
-"""Actual Verovio-rendered chord sprites indexed by diatonic interval pattern.
+"""Actual Verovio-rendered chord sprites.
 
-Only isolated chord attacks (not a beat shared with a beam group) can use a
-fixed sprite. The atlas stores exact notehead positions for independent dots,
-ledger lines and accidentals. Rhythmic timing never comes from SVG positions.
+Every chord is engraved by Verovio itself. A score prepared from its own
+Verovio pages gets one *instance* template per chord shape at the chord's
+real staff position, clef, spelling and Verovio's own stem direction, and
+each head is bound to its notation event by the template's note element id
+(``leaders``: leader id -> member ids in template note order). Verovio's
+head arrangement depends on all of those: seconds flip sides with the stem,
+whole notes take a virtual stem from their position, and a far ledger head
+can join the displaced column. Without pages (hand-built models), a
+position-free *generic* template keyed by diatonic intervals is used and the
+native view derives the same key itself.
+
+The atlas stores exact notehead positions for independent dots, ledger lines
+and accidentals. Rhythmic timing never comes from SVG positions.
 """
 from __future__ import annotations
 
 import base64
 from collections import defaultdict
+from copy import deepcopy
 from io import BytesIO
 import math
+import re
 import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 7
+VERSION = 8
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
 _BEATS = {"whole":4.0,"half":2.0,"quarter":1.0,"eighth":.5,
           "16th":.25,"32nd":.125,"64th":.0625,"128th":.03125}
+_CLEF_ANCHORS = {"G":32,"F":24,"C":28}
+# MusicXML octaves 0..9: diatonic indices 0..69 can be written in a template.
+_LOWEST, _HIGHEST = 0, 69
 
 
 def diatonic(spelling: dict) -> int:
     return int(spelling["octave"])*7+_STEPS[spelling["step"]]
 
 
-def _spelling_key(note: dict):
-    spelling = note["spelling"]
-    return (spelling["step"], int(spelling.get("alter") or 0), int(spelling["octave"]))
+def _alter(note: dict) -> int:
+    return int(note["spelling"].get("alter") or 0)
+
+
+def head_order(notes: list[dict]) -> list[dict]:
+    """Template note order, identical to the native view's head_order_less:
+    bottom to top by staff position, then sounding pitch, then event id."""
+    return sorted(notes, key=lambda n: (diatonic(n["spelling"]),
+                                        int(n.get("midi_pitch") or 0), str(n.get("id", ""))))
+
+
+def _clef(leader: dict, measure: dict) -> tuple[str, int, int]:
+    staff = leader.get("staff","right")
+    clef = measure.get("clefs",{}).get(staff,{})
+    sign = str(clef.get("sign","G" if staff=="right" else "F"))
+    line = int(clef.get("line",2 if staff=="right" else 4))
+    return sign, line, int(clef.get("octave_change",0))
+
+
+def _shape_or_reason(leader: dict, notes: list[dict], measure: dict):
+    """(shape, None) for a chord, else (None, why the input is not a chord).
+
+    Any number of heads, any span, any number of heads on one staff
+    position and identical heads are chords: Verovio engraves them all.
+    """
+    if len(notes) < 2:
+        return None, f"{len(notes)} head: a chord has two or more"
+    kind = str(leader.get("note_type",""))
+    if kind not in _BEATS:
+        return None, f"note value {kind!r} has no engraving"
+    if any(n.get("note_type") != kind for n in notes):
+        # MusicXML chord tones share one duration; heads of different values
+        # at one onset belong to different voices. Import never merges them.
+        return None, "heads of different note values are separate voices, not one chord"
+    try:
+        absolute = [diatonic(n["spelling"]) for n in notes]
+        alters = [_alter(n) for n in notes]
+    except (KeyError,TypeError,ValueError):
+        return None, "a head has no readable pitch spelling"
+    sign, line, octave_change = _clef(leader, measure)
+    if sign not in _CLEF_ANCHORS:
+        return None, f"clef {sign} is not a pitched staff"
+    bottom = _CLEF_ANCHORS[sign]-(line-1)*2+octave_change*7
+    # One chord has one stem: the first declared direction in source order
+    # (the leader's, when it declares one) is the chord's.
+    declared = next((n["stem"] for n in notes if n.get("stem") in {"up","down"}), None)
+    return {"kind": kind, "absolute": absolute, "alters": alters,
+            "clef": (sign, line, octave_change), "bottom": bottom,
+            "declared": declared}, None
 
 
 def _pattern_or_reason(leader: dict, notes: list[dict], measure: dict):
-    """(pattern, None) for an engravable chord, else (None, refusal reason)."""
-    if not 2 <= len(notes) <= 10:
-        return None, f"{len(notes)} heads (2 to 10 supported)"
-    kind = str(leader.get("note_type",""))
-    if kind not in _BEATS or any(n.get("note_type") != kind for n in notes):
-        return None, "heads of different note values"
-    try:
-        absolute = [diatonic(n["spelling"]) for n in notes]
-        spellings = [_spelling_key(n) for n in notes]
-    except (KeyError,TypeError,ValueError):
-        return None, "a head has no readable spelling"
-    # Two heads may share one staff position when their accidentals differ
-    # (G and G-sharp): Verovio engraves them side by side. More than two on
-    # one position has no authentic single-sprite engraving, and two heads of
-    # identical spelling and pitch are one note written twice.
-    if len(set(spellings)) != len(spellings):
-        return None, "two heads with identical spelling and pitch on one position"
-    if max(absolute)-min(absolute)>28:
-        return None, "span wider than 29 diatonic steps"
-    if any(absolute.count(p)>2 for p in set(absolute)):
-        return None, "more than two heads on one staff position"
-    staff = leader.get("staff","right")
-    clef = measure.get("clefs",{}).get(staff,{})
-    sign = clef.get("sign","G" if staff=="right" else "F")
-    line = int(clef.get("line",2 if staff=="right" else 4))
-    octave_change = int(clef.get("octave_change",0))
-    anchor = {"G":32,"F":24,"C":28}.get(sign)
-    if anchor is None:
-        return None, f"unsupported clef {sign}"
-    bottom = anchor-(line-1)*2+octave_change*7
+    """(generic pattern, None) for a chord, else (None, refusal reason)."""
+    shape, reason = _shape_or_reason(leader, notes, measure)
+    if shape is None:
+        return None, reason
+    absolute, bottom = shape["absolute"], shape["bottom"]
     up = sum(p-bottom for p in absolute)/len(absolute)<4
-    declared = {n.get("stem") for n in notes if n.get("stem") in {"up", "down"}}
-    if len(declared) > 1:
-        # One compound sprite cannot represent conflicting stems.
-        return None, "conflicting stem directions"
-    direction = next(iter(declared)) if declared else ("up" if up else "down")
+    direction = shape["declared"] or ("up" if up else "down")
     differences = sorted(p-diatonic(leader["spelling"]) for p in absolute)
-    return f"{kind}|{direction}|{','.join(map(str,differences))}", None
+    return f"{shape['kind']}|{direction}|{','.join(map(str,differences))}", None
 
 
 def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
@@ -76,7 +108,7 @@ def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
 
 
 def chord_refusal(leader: dict, notes: list[dict], measure: dict) -> str | None:
-    """Why a chord cannot be engraved, naming its measure and staff."""
+    """Why simultaneous heads are not one chord, naming measure and staff."""
     reason = _pattern_or_reason(leader, notes, measure)[1]
     if reason is None:
         return None
@@ -140,30 +172,52 @@ def patterns_from_model(model: dict, *, stem_directions: dict[str, bool] | None 
     return sorted(patterns)
 
 
-def _xml(pattern: str) -> str:
-    kind,direction,relative = pattern.split("|")
-    offsets = [int(n) for n in relative.split(",")]
-    # B4 is a neutral reference with no key signature or accidentals.
-    base = 34
+def _score_xml(kind: str, direction: str, heads: list[tuple[int, int]],
+               clef: tuple[str, int, int] = ("G", 2, 0)) -> str:
+    """One chord measure; heads are (diatonic index, alter) in note order.
+
+    Notes are ids c0, c1, ... in the given order. An alter is written without
+    an <accidental>, so Verovio knows the pitch but prints no accidental:
+    native accidentals are placed separately. ``direction`` "auto" writes no
+    stem, so Verovio chooses it from the staff position as in a real score.
+    A whole note's stem is invisible yet still decides its head arrangement.
+    """
     duration = round(_BEATS[kind]*10080)
     notes = []
-    for i,offset in enumerate(offsets):
-        index = base+offset
+    for i,(index,alter) in enumerate(heads):
         octave,step = divmod(index,7)
         extra = "<chord/>" if i else ""
-        stem = f"<stem>{direction}</stem>" if i==0 and kind!="whole" else ""
+        stem = f"<stem>{direction}</stem>" if i==0 and direction in {"up","down"} else ""
+        written = f"<alter>{alter}</alter>" if alter else ""
         notes.append(f'<note id="c{i}">{extra}<pitch><step>{_LETTERS[step]}</step>'
-                     f'<octave>{octave}</octave></pitch>'
+                     f'{written}<octave>{octave}</octave></pitch>'
                      f'<duration>{duration}</duration><type>{kind}</type>{stem}</note>')
     notes_xml="".join(notes)
+    sign, line, octave_change = clef
+    shift = (f"<clef-octave-change>{octave_change}</clef-octave-change>"
+             if octave_change else "")
     return (f'<score-partwise version="4.0"><work><work-title> </work-title></work>'
             f'<movement-title> </movement-title><part-list><score-part id="P1">'
             f'<part-name>Piano</part-name></score-part></part-list>'
             f'<part id="P1"><measure number="1"><attributes>'
             f'<divisions>10080</divisions><time><beats>4</beats>'
-            f'<beat-type>4</beat-type></time><clef><sign>G</sign>'
-            f'<line>2</line></clef></attributes>{notes_xml}</measure></part>'
+            f'<beat-type>4</beat-type></time><clef><sign>{sign}</sign>'
+            f'<line>{line}</line>{shift}</clef></attributes>{notes_xml}</measure></part>'
             f'</score-partwise>')
+
+
+def _xml(pattern: str) -> str:
+    """Generic template: the leader at B4, a neutral treble reference with no
+    key signature or accidentals, moved by whole octaves only when a very
+    wide chord would leave the writable MusicXML range."""
+    kind,direction,relative = pattern.split("|")
+    offsets = [int(n) for n in relative.split(",")]
+    base = 34
+    while base+min(offsets) < _LOWEST:
+        base += 7
+    while base+max(offsets) > _HIGHEST and base+min(offsets)-7 >= _LOWEST:
+        base -= 7
+    return _score_xml(kind, direction, [(base+offset, 0) for offset in offsets])
 
 
 def _extract_chord(svg: str, ids: set[str]) -> str:
@@ -239,19 +293,25 @@ def _only_original_chord_stems(svg: str) -> str:
 
 
 def _render(toolkit,pattern: str) -> dict:
+    """Generic template: the leader is the first zero-offset head."""
+    offsets=[int(n) for n in pattern.split("|")[2].split(",")]
+    return _render_xml(toolkit, _xml(pattern), len(offsets), offsets.index(0),
+                       pattern.split("|", 1)[0])
+
+
+def _render_xml(toolkit, xml: str, count: int, anchor_index: int, kind: str) -> dict:
     import cairosvg
     from ...source_svg import parse_svg_geometry
-    if not toolkit.loadData(_xml(pattern)):
+    if not toolkit.loadData(xml):
         raise ValueError("Verovio refused chord sample")
     svg = toolkit.renderToSVG(1)
     g = parse_svg_geometry(svg)
-    names={f"c{index}" for index in range(len(pattern.split("|")[2].split(",")))}
+    names={f"c{index}" for index in range(count)}
     if not names.issubset(g.elements):
         raise ValueError("Verovio chord notehead anchor IDs missing")
     # Normalization is relative to the actual MusicXML chord leader.
-    # It need not be the lowest note: preserve the zero-offset head.
-    offsets=[int(n) for n in pattern.split("|")[2].split(",")]
-    anchor=g.elements[f"c{offsets.index(0)}"]
+    # It need not be the lowest note: preserve the leader's head.
+    anchor=g.elements[f"c{anchor_index}"]
     rails=g.staff_systems[anchor[2]]["staff_lines"]
     filtered=_extract_chord(svg,names)
     with Image.open(BytesIO(cairosvg.svg2png(
@@ -275,7 +335,6 @@ def _render(toolkit,pattern: str) -> dict:
     if staff<=2:
         raise ValueError("Invalid chord staff spacing")
     from .glyphs import native_glyphs
-    kind = pattern.split("|", 1)[0]
     head=native_glyphs()["head_" + (
         kind if kind in {"whole", "half"} else "black")]["bounds"]
     dx=(head[0]+head[2]*.5)*staff/250
@@ -370,12 +429,126 @@ def _valid_asset(value: object, pattern: str) -> bool:
             (box(stem) and stem.get("source") == "verovio-engraved-chord-stem"))
 
 
-def chord_templates(model: dict,cache=None, *,
-                    stem_directions: dict[str, bool] | None = None) -> dict:
-    patterns=patterns_from_model(model, stem_directions=stem_directions)
-    for refusal in refused_chords(model):
-        print("VEROVIO_CHORD_REFUSED:",refusal)
-    if not patterns:
+_NUMBER = r"-?\d+(?:\.\d+)?"
+
+
+def _classes(node) -> set[str]:
+    return set(node.get("class", "").split())
+
+
+def verovio_chord_stems(pages) -> dict[str, bool]:
+    """Note id -> stem up, for every stemmed chord of Verovio's own pages.
+
+    Verovio's stem rule (the head farthest from the middle line, voices,
+    beams) differs from a mean-position rule, and the side of every second
+    follows the stem: the score's real direction is read, not re-derived.
+    """
+    result: dict[str, bool] = {}
+    for page in pages or ():
+        root = ET.fromstring(page)
+        for chord in root.iter():
+            classes = _classes(chord)
+            if "chord" not in classes or classes & {"bounding-box", "content-bounding-box"}:
+                continue
+            stem_ys, head_ys, ids = [], [], []
+            for node in chord.iter():
+                kinds = _classes(node)
+                if kinds & {"bounding-box", "content-bounding-box"}:
+                    continue
+                if "note" in kinds and node.get("id"):
+                    ids.append(node.get("id"))
+                if "stem" in kinds and not stem_ys:
+                    for path in node.iter():
+                        match = re.fullmatch(r"\s*M\s*(%s)[,\s]+(%s)\s*L\s*(%s)[,\s]+(%s)\s*"
+                                             % ((_NUMBER,) * 4), path.get("d", "") or "")
+                        if match:
+                            stem_ys = [float(match.group(2)), float(match.group(4))]
+                            break
+                if "notehead" in kinds:
+                    for use in node.iter():
+                        if use.tag.rsplit("}", 1)[-1] != "use":
+                            continue
+                        move = re.search(r"translate\(\s*(%s)[,\s]+(%s)" % (_NUMBER, _NUMBER),
+                                         use.get("transform", ""))
+                        head_ys.append(float(move.group(2)) if move else float(use.get("y", "0")))
+                        break
+            if not stem_ys or not head_ys:
+                continue
+            up = min(head_ys)-min(stem_ys) > max(stem_ys)-max(head_ys)
+            for ident in ids:
+                result[ident] = up
+    return result
+
+
+def _chord_lanes(model: dict):
+    """Leader, members and measure of every chord, like the native index."""
+    measures = {int(m["number"]):m for m in model.get("measures",[])}
+    lanes = defaultdict(list)
+    for e in model.get("notation_events",[]):
+        if e.get("kind")=="note":
+            lanes[(e.get("staff"),str(e.get("voice","1")),int(e.get("measure",0)),
+                   round(float(e.get("beat",0)),6))].append(e)
+    for (_,_,measure_id,_), notes in lanes.items():
+        leaders = [n for n in notes if not n.get("chord")]
+        if len(leaders)==1 and len(notes)>=2 and measure_id in measures:
+            yield leaders[0], notes, measures[measure_id]
+
+
+def chord_instances(model: dict, pages, *,
+                    stem_directions: dict[str, bool] | None = None) -> dict[str, dict]:
+    """Leader id -> the instance template that engraves exactly that chord.
+
+    Direction: a source beam's, else Verovio's own stem on the page, else a
+    declared stem, else the mean-position rule. Whole notes have no visible
+    stem: their template writes none, so Verovio's virtual stem comes from
+    the same staff position it had in the score.
+    """
+    stems = verovio_chord_stems(pages)
+    beams = stem_directions or {}
+    result: dict[str, dict] = {}
+    for leader, notes, measure in _chord_lanes(model):
+        shape, _ = _shape_or_reason(leader, notes, measure)
+        if shape is None:
+            continue
+        ordered = head_order(notes)
+        anchor = next(i for i, n in enumerate(ordered) if n is leader)
+        leader_id = str(leader.get("id", ""))
+        page = next((stems[str(n.get("id"))] for n in notes if str(n.get("id")) in stems), None)
+        if shape["kind"] == "whole":
+            direction = "auto"
+        elif leader_id in beams:
+            direction = "up" if beams[leader_id] else "down"
+        elif page is not None:
+            direction = "up" if page else "down"
+        elif shape["declared"]:
+            direction = shape["declared"]
+        else:
+            bottom = shape["bottom"]
+            mean = sum(p-bottom for p in shape["absolute"])/len(notes)
+            direction = "up" if mean < 4 else "down"
+        heads = [(diatonic(n["spelling"]), _alter(n)) for n in ordered]
+        sign, line, octave_change = shape["clef"]
+        shift = 0
+        while min(i for i, _ in heads)+shift < _LOWEST:
+            shift += 7
+        while max(i for i, _ in heads)+shift > _HIGHEST:
+            shift -= 7
+        heads = [(index+shift, alter) for index, alter in heads]
+        origin = heads[anchor][0]
+        relative = ",".join(str(index-origin) for index, _ in heads)
+        spelled = ",".join(f"{index}{'s'*alter if alter > 0 else 'f'*-alter}"
+                           for index, alter in heads)
+        key = (f"{shape['kind']}|{direction}|{relative}|{sign}{line}{octave_change:+d}"
+               f"|{spelled}|a{anchor}")
+        result[leader_id] = {"key": key, "kind": shape["kind"], "anchor": anchor,
+                             "xml": _score_xml(shape["kind"], direction, heads, shape["clef"]),
+                             "heads": [str(n.get("id", "")) for n in ordered]}
+    return result
+
+
+def _render_templates(cache, specs: dict[str, tuple]) -> dict:
+    """key -> asset for key -> (xml, head count, anchor index, note value)."""
+    if not specs:
         return {}
     import verovio
     from .glyphs import native_glyphs
@@ -384,7 +557,7 @@ def chord_templates(model: dict,cache=None, *,
     from .runtime import _create_verovio_toolkit
     toolkit=None
     result={}
-    for pattern in patterns:
+    for pattern, (xml, count, anchor, kind) in sorted(specs.items()):
         key=cache.key("verovio-chords",VERSION,font,ver,pattern) if cache else None
         value=cache.read_json("verovio-chord",key) if key else None
         if not _valid_asset(value, pattern):
@@ -396,7 +569,7 @@ def chord_templates(model: dict,cache=None, *,
                         "svgContentBoundingBoxes":True}):
                     raise RuntimeError("Verovio rejected chord engraving options")
             try:
-                value=_render(toolkit,pattern)
+                value=_render_xml(toolkit, xml, count, anchor, kind)
                 if not _valid_asset(value, pattern):
                     raise ValueError("Incomplete genuine chord components")
             except (ValueError,RuntimeError) as exc:
@@ -410,3 +583,33 @@ def chord_templates(model: dict,cache=None, *,
                 cache.write_json("verovio-chord",key,value)
         result[pattern]=value
     return result
+
+
+def chord_templates(model: dict,cache=None, *,
+                    stem_directions: dict[str, bool] | None = None,
+                    pages=None) -> dict:
+    """Verovio chord atlas for a model.
+
+    With the score's own Verovio ``pages``, every chord gets an instance
+    template and the asset lists it under ``leaders`` (leader id -> member
+    ids in template note order), which the native view uses instead of
+    deriving a key. Without pages, generic interval templates are made.
+    """
+    for refusal in refused_chords(model):
+        print("VEROVIO_CHORD_REFUSED:",refusal)
+    if pages is not None:
+        instances = chord_instances(model, pages, stem_directions=stem_directions)
+        rendered = _render_templates(cache, {
+            item["key"]: (item["xml"], len(item["heads"]), item["anchor"], item["kind"])
+            for item in instances.values()})
+        result = {key: deepcopy(value) for key, value in rendered.items()}
+        for leader_id, item in sorted(instances.items()):
+            if item["key"] in result:
+                result[item["key"]].setdefault("leaders", {})[leader_id] = item["heads"]
+        return result
+    patterns=patterns_from_model(model, stem_directions=stem_directions)
+    return _render_templates(cache, {
+        pattern: (_xml(pattern), len(pattern.split("|")[2].split(",")),
+                  [int(n) for n in pattern.split("|")[2].split(",")].index(0),
+                  pattern.split("|", 1)[0])
+        for pattern in patterns})

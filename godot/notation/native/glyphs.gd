@@ -57,6 +57,10 @@ var chord_heads_textures: Dictionary = {}
 var chord_heads_bounds: Dictionary = {}
 var chord_stem_textures: Dictionary = {}
 var chord_stem_bounds: Dictionary = {}
+# Leader id -> {"key", "heads" (member ids in template note order), "stem"}.
+# An instance template engraves exactly one source chord shape; its heads
+# bind to events by Verovio note element order, never by re-sorting.
+var chord_instances: Dictionary = {}
 var beam_textures: Dictionary = {}
 var beam_metadata: Dictionary = {}
 var tuplet_textures: Dictionary = {}
@@ -310,6 +314,7 @@ func load_chord_templates(items: Dictionary) -> bool:
     var heads_dimensions: Dictionary = {}
     var loaded_stems: Dictionary = {}
     var stem_dimensions: Dictionary = {}
+    var instances: Dictionary = {}
     for key in items:
         var item: Dictionary = items[key]
         var bounds: Array = item.get("bounds",[])
@@ -319,6 +324,21 @@ func load_chord_templates(items: Dictionary) -> bool:
                 bounds.size() != 4 or positions.size() < 2:
             error = "Invalid Verovio chord sprite: " + str(key)
             return false
+        var leaders: Variant = item.get("leaders",{})
+        if not leaders is Dictionary:
+            error = "Invalid Verovio chord leaders: " + str(key)
+            return false
+        var fields: PackedStringArray = str(key).split("|")
+        for leader in leaders:
+            var heads: Variant = leaders[leader]
+            if not heads is Array or heads.size() != positions.size():
+                error = "Verovio chord heads do not match its template: " + str(key)
+                return false
+            var ids: Array = []
+            for id in heads:
+                ids.append(str(id))
+            instances[str(leader)] = {"key":str(key), "heads":ids,
+                "stem":fields[1] if fields.size() > 1 else ""}
         var img := Image.new()
         if img.load_png_from_buffer(Marshalls.base64_to_raw(
                 str(item.get("png_base64","")))) != OK or img.is_empty():
@@ -357,6 +377,7 @@ func load_chord_templates(items: Dictionary) -> bool:
     chord_heads_bounds = heads_dimensions
     chord_stem_textures = loaded_stems
     chord_stem_bounds = stem_dimensions
+    chord_instances = instances
     return true
 
 

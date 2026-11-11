@@ -31,8 +31,8 @@ def assemble_layout(source_score, *,
     from ..notation.assets.notes import note_templates
     from ..notation.assets.ties import tie_templates
     from ..notation.assets.chords import chord_templates
-    # Variable chord patterns are pre-engraved individually and
-    # reused via a disk cache; unsupported patterns remain native.
+    # Variable chord shapes are pre-engraved individually and
+    # reused via a disk cache.
     layout["native_note_templates"] = note_templates(cache)
     # Missing required Verovio assets cannot be published as a partially
     # usable native score. The caller retries the same selected source.
@@ -61,8 +61,11 @@ def assemble_layout(source_score, *,
         directions = {str(identifier): bool(fragment["stem_up"])
             for fragment in layout["native_beam_fragments"].values()
             for identifier in fragment["note_ids"]}
+        # Every chord is engraved at its own position with the stem Verovio
+        # gave it on these pages; heads bind to events by template note id.
         layout["native_chord_templates"] = chord_templates(
-            native_model, cache, stem_directions=directions)
+            native_model, cache, stem_directions=directions,
+            pages=source_score.pages)
     except Exception as exc:
         raise _failed("chord templates", exc) from exc
     try:
