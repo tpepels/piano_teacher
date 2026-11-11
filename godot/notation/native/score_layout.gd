@@ -106,8 +106,7 @@ func rebuild_index() -> void:
     for leader_id in chord_members:
         var ordered: Array = chord_members[leader_id].duplicate()
         ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < \
-                Geometry.diatonic_index(b.get("spelling",{})))
+            return Geometry.head_order_less(a,b))
         sorted_chord_members[leader_id] = ordered
     voice_stem_up_by_note = polyphonic_stem_directions()
     previous_attack_before_measure = index["previous_attack_before_measure"]
@@ -322,8 +321,10 @@ func chord_template_key(event: Dictionary) -> String:
     differences.sort()
     if differences.size() < 2 or differences[-1]-differences[0] > 28:
         return ""
-    for i in range(1,differences.size()):
-        if differences[i] == differences[i-1]:
+    for i in range(2,differences.size()):
+        # Two heads may share a staff position (G and G-sharp, engraved side
+        # by side); three have no authentic single-sprite engraving.
+        if differences[i] == differences[i-2]:
             return ""
     var names: PackedStringArray = []
     for value in differences:
@@ -354,8 +355,7 @@ func engraved_head_offsets(gap: float) -> Dictionary:
         if positions.size() != members.size():
             continue
         members.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < \
-                Geometry.diatonic_index(b.get("spelling",{})))
+            return Geometry.head_order_less(a,b))
         for i in range(members.size()):
             offsets[str(members[i].get("id",""))] = \
                 float(positions[i][0])*gap/250.0
@@ -391,7 +391,7 @@ func voice_column_offset(event: Dictionary, gap: float, heads: Dictionary) -> fl
     var positions: Array = glyphs.chord_heads(chord_template_key(event))
     if positions.size() == members.size():
         members.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < Geometry.diatonic_index(b.get("spelling",{})))
+            return Geometry.head_order_less(a,b))
         for i in range(members.size()):
             if str(members[i].get("id","")) == id:
                 intrinsic = float(positions[i][0])*gap/250.0
@@ -476,7 +476,7 @@ func event_ink_rect(event: Dictionary, gap: float,
     if chord_members.has(id):
         var group: Array = chord_members[id].duplicate()
         group.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < Geometry.diatonic_index(b.get("spelling",{})))
+            return Geometry.head_order_less(a,b))
         var centers: Array = []
         for member in group:
             centers.append(Vector2(float(heads.get(str(member.get("id","")),0.0)),event_y(member,gap)))

@@ -35,7 +35,11 @@ def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
         absolute = [diatonic(n["spelling"]) for n in notes]
     except (KeyError,TypeError,ValueError):
         return None
-    if len(set(absolute)) != len(absolute) or max(absolute)-min(absolute)>28:
+    # Two heads may share one staff position when their accidentals differ
+    # (G and G-sharp): Verovio engraves them side by side. More than two on
+    # one position has no authentic single-sprite engraving.
+    if (max(absolute)-min(absolute)>28 or
+            any(absolute.count(p)>2 for p in set(absolute))):
         return None
     staff = leader.get("staff","right")
     clef = measure.get("clefs",{}).get(staff,{})

@@ -248,7 +248,7 @@ func event_obstacles(event: Dictionary, gap: float, bins: Dictionary, cell: floa
     var dot_anchors: Dictionary = {}
     if score_layout.chord_members.has(id):
         dot_events.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < Geometry.diatonic_index(b.get("spelling",{})))
+            return Geometry.head_order_less(a,b))
         var centers: Array = []
         for member in dot_events:
             centers.append(Vector2(anchor+float(score_layout.cached_head_offsets.get(str(member["id"]),0.0)),

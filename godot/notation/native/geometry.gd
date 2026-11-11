@@ -64,6 +64,19 @@ static func diatonic_index(spelling: Dictionary) -> int:
         return -9999
     return int(spelling.get("octave", 4)) * 7 + int(STEPS[name])
 
+# Chord heads order bottom to top. Two heads on one staff position (G and
+# G-sharp) order by sounding pitch, as Verovio displaces the higher one.
+static func head_order_less(a: Dictionary,b: Dictionary) -> bool:
+    var da: int = diatonic_index(a.get("spelling",{}))
+    var db: int = diatonic_index(b.get("spelling",{}))
+    if da != db:
+        return da < db
+    var pa: int = int(a.get("midi_pitch",0))
+    var pb: int = int(b.get("midi_pitch",0))
+    if pa != pb:
+        return pa < pb
+    return str(a.get("id","")) < str(b.get("id",""))
+
 static func bottom_line(clef: Dictionary) -> int:
     var sign: String = str(clef.get("sign", "G"))
     var line: int = int(clef.get("line", 2))
@@ -302,8 +315,7 @@ static func chord_offsets(events: Array, gap: float) -> Dictionary:
         if chord.size() < 2:
             continue
         chord.sort_custom(func(a,b):
-            return diatonic_index(a.get("spelling",{})) < \
-                diatonic_index(b.get("spelling",{})))
+            return head_order_less(a,b))
         for i in range(1,chord.size()):
             var previous: int = diatonic_index(chord[i-1].get("spelling",{}))
             var current: int = diatonic_index(chord[i].get("spelling",{}))

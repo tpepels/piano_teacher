@@ -111,7 +111,7 @@ func outgoing_glyph_bands(event: Dictionary, gap: float,
     if score.chord_members.has(id):
         var group: Array = score.chord_members[id].duplicate()
         group.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < Geometry.diatonic_index(b.get("spelling",{})))
+            return Geometry.head_order_less(a,b))
         var centers: Array = []
         for member in group:
             centers.append(Vector2(float(heads.get(str(member.get("id","")),0.0)),score.event_y(member,gap)))

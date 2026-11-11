@@ -123,8 +123,7 @@ func paint_engraved_chord(canvas, frame: RenderPass, event: Dictionary, x: float
     if sorted_heads.is_empty():
         sorted_heads = group.duplicate()
         sorted_heads.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < \
-                Geometry.diatonic_index(b.get("spelling",{})))
+            return Geometry.head_order_less(a,b))
     var anchor: float = score_layout.event_y(event,gap)
     var head_centres: Array = []
     for i in range(sorted_heads.size()):
