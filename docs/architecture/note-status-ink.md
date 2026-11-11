@@ -65,13 +65,13 @@ A notehead shows one color, chosen by explicit precedence (highest first):
 
 1. wrong or missed pitch → `missed` (coral)
 2. late onset → `late` (amber)
-3. early onset → `early_onset` (pale gold)
+3. early onset → `early_onset` (orchid pink)
 4. observed early key-up → `early_release` (lavender)
 5. late key-up or still held → `late` (amber)
 6. otherwise → `hit` (mint)
 
 The ledger keeps every dimension, so a combined early-onset/early-release
-note stays recorded as both while showing pale gold.
+note stays recorded as both while showing orchid pink.
 
 ### Provisional and settled evidence
 
@@ -98,7 +98,7 @@ pause, and the live release verdict always agrees with the settled one.
 | `missed` | Coral `#F17978` | Tiny mask-only coral |
 | `late` | Amber `#F0B661` | Tiny mask-only amber |
 | `early_release` | Lavender `#BCA4F1` | Tiny mask-only lavender |
-| `early_onset` | Pale gold `#EBCF81` | Tiny mask-only pale gold |
+| `early_onset` | Orchid pink `#F08FCB` (`Ink.EARLY_ONSET`, one constant; was pale gold, too close to amber) | Tiny mask-only orchid pink |
 
 Records belong to physical note instances: **(immutable take, engraved note
 ID)**. A repeated passage is another take, so the same source note can be
@@ -127,13 +127,22 @@ recolored in place with three passes of that same artwork:
   touching chord members are partitioned so no texel belongs to two heads),
   drawn with the template's rectangle and the original ink;
 - **core** (additive blend): the same texels in the status tint;
+- **fill** (mix, hollow half and whole heads only): the enclosed interior of
+  the head's own glyph (`glyphs.head_interior`, the glyph's pixels inside its
+  outline, antialiased) in the status tint at alpha 0.55, so a hollow head
+  reads as its status. It stays inside the head's own mask region: no ring;
 - **glow** (mix): the head mask at 1.024× (alpha 0.105) and 1.052× (alpha
   0.045).
+
+A tied continuation head takes the colour of its attack (owner decision C4):
+`NativeScoreFeedback.statuses_for_take` expands each attack's status to the
+continuation heads that share its `source_id`; the ledger itself stays keyed
+by the physical attack.
 
 For coverage *a* over background *b* the strip held *b(1−a)+ink·a*; erase
 and core leave exactly *b(1−a)+tint·a*. The white head is replaced, not
 overpainted, so no white contour remains. Hollow half and whole heads stay
-hollow. There is no ring, badge, circle, detached halo, bloom rectangle,
+hollow (outline and interior are both tinted). There is no ring, badge, circle, detached halo, bloom rectangle,
 particle or second score renderer, and unplayed notes are not touched.
 Projected `drawn_note_instances` carry their `take_key` and strip `clip_x`;
 the rendering path never copies the online queue.
@@ -145,10 +154,13 @@ the rendering path never copies the online queue.
   through the view's queue, then measures the PNGs: unplayed notation
   pixel-identical; no changed pixel outside colored heads; exact opaque tint;
   in-place recolor without a doubled contour (edge-model error); glow ≤ 40/255
-  within 3 px of the head; hollow heads hollow; independent colors per copy;
+  within 3 px of the head; hollow heads tinted softly inside their own mask; independent colors per copy;
   exact translation with the strip and no repaint while scrolling; ink only
   inside its own strip clip, including a head split across two strips;
   preview shows the original notation.
+- `tests/test_status_palette_framebuffer.py`: all six statuses on real filled
+  and hollow heads (`tests/fixtures/status_palette.musicxml`); set
+  `STATUS_PALETTE_SAMPLE=<png>` to keep the sheet.
 - `tests/godot/native_score_feedback.gd` (CI): precedence, provisional versus
   settled, release events, transport-transition events, revision buffering,
   tail retention and pruning, inbox acknowledgement, gaps and overflow.

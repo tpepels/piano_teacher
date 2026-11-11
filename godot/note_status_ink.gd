@@ -15,14 +15,22 @@ extends RefCounted
 ## so no white contour survives under or around the colored one.
 const Status := preload("res://note_status_registry.gd")
 const Design := preload("res://practice_theme.gd")
+const EARLY_ONSET := Color("#F08FCB")
 const COLORS := {
     "hit": Color("#53E7B7"),
     "missed": Color("#F17978"),
     "late": Color("#F0B661"),
     "early_release": Color("#BCA4F1"),
-    "early_onset": Color("#EBCF81"),
+    # C6: a soft orchid pink, clearly apart from mint (hue 160), coral (0),
+    # amber (36) and lavender (258) at practice distance, and still 7:1 on the
+    # stage. One constant: change it here (and nowhere else).
+    "early_onset": EARLY_ONSET,
 }
-const PASSES := ["erase", "core", "glow"]
+const PASSES := ["erase", "core", "fill", "glow"]
+## C5: hollow (half, whole) heads also get their enclosed interior softly
+## tinted, inside the head's own glyph region, so the status reads without a
+## ring. Solid heads have no interior and are unaffected.
+const INTERIOR_ALPHA := 0.55
 const CORE_ALPHA := 1.0
 const INNER_GLOW_ALPHA := 0.105
 const OUTER_GLOW_ALPHA := 0.045
@@ -39,7 +47,7 @@ static func material_for(pass_name: String) -> CanvasItemMaterial:
     var material := CanvasItemMaterial.new()
     material.blend_mode = (CanvasItemMaterial.BLEND_MODE_SUB if pass_name == "erase"
         else CanvasItemMaterial.BLEND_MODE_ADD if pass_name == "core"
-        else CanvasItemMaterial.BLEND_MODE_MIX)
+        else CanvasItemMaterial.BLEND_MODE_MIX)  # fill and glow are plain mixes
     return material
 
 ## Paint one pass for one physical head. ``instance`` is the immutable record
@@ -59,6 +67,9 @@ static func paint(canvas: CanvasItem, glyphs, instance: Dictionary,
             return bool(glyphs.paint_head(canvas,instance,instance["ink"]))
         "core":
             return bool(glyphs.paint_head(canvas,instance,Color(tint,CORE_ALPHA)))
+        "fill":
+            return bool(glyphs.paint_head_interior(canvas,instance,
+                Color(tint,INTERIOR_ALPHA)))
         "glow":
             # 2.4% and 5.2% expansion of the authentic head mask about its
             # centre: an extremely soft, contour-bound light about 1 px wide.

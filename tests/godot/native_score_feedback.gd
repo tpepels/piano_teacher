@@ -58,6 +58,8 @@ func run() -> void:
     _registry()
     _pending_release()
     _precedence()
+    await _tied_continuations()
+    _palette()
     await _ingestion()
     _inbox()
     print("NATIVE_FEEDBACK_FAILURES:",failures.size())
@@ -225,6 +227,49 @@ func _ingestion() -> void:
         "ignored", "a new engraving revision does not inherit the previous note map")
     feedback.free()
     next.free()
+
+## C4 (owner decision): a tied continuation head shows its attack's status.
+func _tied_continuations() -> void:
+    var renderer := Renderer.new(["a","b"])
+    # "t" continues the tie that began at attack "a" (same source, not an attack).
+    renderer.layout.ordered_events.append({"id":"t","kind":"note",
+        "source_id":"sa","is_attack":false})
+    root.add_child(renderer)
+    var feedback = load("res://native_score_feedback.gd").new()
+    root.add_child(feedback)
+    feedback.bind_score(renderer,7)
+    var take: String = Status.take_key(_take(1))
+    feedback.ingest(_assess(1,"a",{"pitch":"correct","onset":"late","release":"on_time"}))
+    check(feedback.status_for(take,"t") == Status.LATE and feedback.status_for(take,"a") == Status.LATE,
+        "C4: the tied continuation takes its attack's colour")
+    check(feedback.statuses_for_take(take).get("t","") == Status.LATE,
+        "C4: the strip ledger view colours the continuation head")
+    check(feedback.status_for(take,"b") == Status.UNPLAYED and
+        not feedback.statuses_for_take(take).has("b"), "C4: other notes stay unplayed")
+    feedback.ingest(_assess(1,"a",{"pitch":"missed"}))
+    check(feedback.statuses_for_take(take).get("t","") == Status.MISSED,
+        "C4: the continuation follows a later settled result")
+    check(feedback.status_for(Status.take_key(_take(2)),"t") == Status.UNPLAYED,
+        "C4: another take's continuation is not coloured")
+    feedback.free()
+    renderer.free()
+    await process_frame
+
+## C6: the early-onset hue is clearly apart from the other four colours, and
+## readable on the dark stage. The constant has one definition.
+func _palette() -> void:
+    var early: Color = Ink.COLORS["early_onset"]
+    check(early == Ink.EARLY_ONSET, "C6: early onset colour is one constant")
+    for other in ["hit","missed","late","early_release"]:
+        var c: Color = Ink.COLORS[other]
+        var hue_gap: float = absf(early.h-c.h)
+        hue_gap = minf(hue_gap,1.0-hue_gap)
+        var distance: float = Vector3(early.r-c.r,early.g-c.g,early.b-c.b).length()
+        check(hue_gap >= .08 or distance >= .30,
+            "C6: early onset is distinguishable from "+other)
+    var stage: Color = load("res://practice_theme.gd").STAGE
+    check(early.get_luminance() > stage.get_luminance()+.3,
+        "C6: early onset has strong luminance contrast on the stage")
 
 func _inbox() -> void:
     var inbox := Inbox.new()

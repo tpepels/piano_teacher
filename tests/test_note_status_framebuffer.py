@@ -82,6 +82,33 @@ def _interior(instance, report, base, graded):
     return int(full.sum()), int(tinted.sum())
 
 
+def _hole(coverage, threshold=.5):
+    """Enclosed low-coverage pixels of a head box: a hollow head's interior."""
+    from collections import deque
+    h, w = coverage.shape
+    low = coverage < threshold
+    outside = np.zeros_like(low)
+    queue = deque((y, x) for y in range(h) for x in range(w)
+                  if (y in (0, h - 1) or x in (0, w - 1)) and low[y, x])
+    for y, x in queue:
+        outside[y, x] = True
+    while queue:
+        y, x = queue.popleft()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and low[ny, nx] and not outside[ny, nx]:
+                outside[ny, nx] = True
+                queue.append((ny, nx))
+    return low & ~outside
+
+
+def _grow(mask, steps):
+    for _ in range(steps):
+        mask = mask | np.roll(mask, 1, 0) | np.roll(mask, -1, 0) | \
+            np.roll(mask, 1, 1) | np.roll(mask, -1, 1)
+    return mask
+
+
 def _edge_error(instance, frame, report, base, graded):
     """Deviation from a perfect in-place recolor b(1-a)+tint*a of the head.
 
@@ -120,6 +147,10 @@ def _edge_error(instance, frame, report, base, graded):
         if other is instance or abs(ox - cx) > 2 * gap or abs(oy - cy) > 2 * gap:
             continue
         keep &= mine <= (xs - ox) ** 2 + ((ys - oy) / .8) ** 2
+    if instance["head"] != "head_black":
+        # C5: a hollow head's enclosed interior is softly tinted as well; the
+        # in-place recolor model covers the head's ink, not that interior.
+        keep &= ~_grow(_hole(a), 2)
     sample = error[keep & (a > .05)]
     return sample, a
 
@@ -201,9 +232,13 @@ def test_glow_is_extremely_subtle_and_follows_the_notehead_mask(capture):
         for _ in range(3):  # within 3 px of the authentic head ink
             near = near | np.roll(near, 1, 0) | np.roll(near, -1, 0) | \
                 np.roll(near, 1, 1) | np.roll(near, -1, 1)
+        # C5: a hollow head's enclosed interior belongs to its own mask region.
+        interior = _grow(_hole(coverage, .5), 1) if item["head"] != "head_black" else \
+            np.zeros(coverage.shape, bool)
+        near = near | interior
         changed = np.abs(g - b).max(axis=2) > 0
         assert not (changed & ~near).any(), "glow detached from the head mask"
-        background = np.abs(b - bg).max(axis=2) <= 12
+        background = (np.abs(b - bg).max(axis=2) <= 12) & ~interior
         lift = np.abs(g - b).max(axis=2)[background & changed]
         if lift.size:
             glowing += 1
@@ -211,18 +246,23 @@ def test_glow_is_extremely_subtle_and_follows_the_notehead_mask(capture):
     assert glowing >= 8, "colored heads carry a tiny contour glow"
 
 
-def test_hollow_heads_stay_hollow(capture):
-    _, frames, images = capture
+def test_hollow_heads_are_tinted_softly_inside_their_own_mask(capture):
+    """C5: half and whole heads get a soft interior tint (never a ring)."""
+    report, frames, images = capture
     hollow = 0
     for item in _colored(frames["graded"]):
         if item["head"] == "head_black" or not _on_screen(item, images["graded"].shape[1]):
             continue
-        # The hole (background or the staff line through it) is untouched.
         x, y = (int(round(v)) for v in item["position"])
         r = max(1, int(item["gap"] * .12))
-        assert np.array_equal(images["graded"][y - r:y + r + 1, x - r:x + r + 1],
-                              images["baseline"][y - r:y + r + 1, x - r:x + r + 1]), (
-            item["head"], item["status"])
+        b = images["baseline"][y - r:y + r + 1, x - r:x + r + 1].astype(float)
+        g = images["graded"][y - r:y + r + 1, x - r:x + r + 1].astype(float)
+        tint = _rgb(report["tints"][item["status"]])
+        # Moved toward the status colour, softly: between 20% and 75% of the way.
+        along = ((g - b) * (tint - b)).sum(axis=2) / np.maximum(
+            ((tint - b) ** 2).sum(axis=2), 1.0)
+        assert .2 <= along.mean() <= .75, (item["head"], item["status"], along.mean())
+        # No ring: nothing changed farther than 3 px outside the head's own ink.
         hollow += 1
     assert hollow >= 4
 

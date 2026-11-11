@@ -22,6 +22,11 @@ var _suppress_graded_ink := false
 # engraving that a live renderer (current or scrolling tail) still shows.
 var _source_maps: Dictionary = {}
 var _note_ids: Dictionary = {}
+# revision -> {continuation note_id: attack note_id}: a tied continuation head
+# shows the colour of its attack (owner decision C4). Display only; the ledger
+# itself stays keyed by the physical attack.
+var _attack_of: Dictionary = {}
+var _continuations: Dictionary = {}
 var _renderers: Array = [] # [{renderer: WeakRef, revision: int}]
 var _buffered: Array = []
 var _overflow_logged := false
@@ -46,6 +51,7 @@ func bind_score(renderer: Control, revision: int) -> void:
     _renderers.append({"renderer":weakref(renderer),"revision":revision})
     var by_source: Dictionary = {}
     var ids: Dictionary = {}
+    var tied: Array = []
     var layout = renderer.get("layout")
     if layout != null:
         for event in layout.ordered_events:
@@ -53,10 +59,26 @@ func bind_score(renderer: Control, revision: int) -> void:
             if id.is_empty() or str(event.get("kind","note")) != "note":
                 continue
             ids[id] = true
-            if bool(event.get("is_attack",false)) and event.get("source_id") != null:
+            if event.get("source_id") == null:
+                continue
+            if bool(event.get("is_attack",false)):
                 by_source[str(event["source_id"])] = id
+            else:
+                tied.append([id,str(event["source_id"])])
+    var attack_of: Dictionary = {}
+    var continuations: Dictionary = {}
+    for pair in tied:
+        var attack: String = str(by_source.get(pair[1],""))
+        if attack.is_empty():
+            continue
+        attack_of[pair[0]] = attack
+        if not continuations.has(attack):
+            continuations[attack] = []
+        continuations[attack].append(pair[0])
     _source_maps[revision] = by_source
     _note_ids[revision] = ids
+    _attack_of[revision] = attack_of
+    _continuations[revision] = continuations
     _forget_unshown_revisions()
     # Replay, in sequence order, events that arrived before this engraving.
     var waiting: Array = _buffered
@@ -138,10 +160,27 @@ func present(state: Dictionary) -> void:
     statuses.prune(keys,_active_take)
 
 func status_for(take: String, note_id: String) -> String:
-    return statuses.status(take,note_id)
+    var own: String = statuses.status(take,note_id)
+    if own != Statuses.UNPLAYED:
+        return own
+    var attack: String = str((_attack_of.get(_take_revision(take),{}) as Dictionary).get(note_id,""))
+    return statuses.status(take,attack) if not attack.is_empty() else own
 
+## Status per engraved note of a take, with every tied continuation carrying
+## its attack's status unless it was graded on its own.
 func statuses_for_take(take: String) -> Dictionary:
-    return statuses.statuses_for_take(take)
+    var own: Dictionary = statuses.statuses_for_take(take)
+    var result: Dictionary = own.duplicate()
+    var continuations: Dictionary = _continuations.get(_take_revision(take),{})
+    for attack in own:
+        for id in continuations.get(attack,[]):
+            if not result.has(id):
+                result[id] = own[attack]
+    return result
+
+static func _take_revision(take: String) -> int:
+    var parts: PackedStringArray = take.split("|")
+    return int(parts[parts.size()-3]) if parts.size() >= 3 else -1
 
 func take_revision(take: String) -> int:
     return statuses.take_revision(take)
@@ -187,6 +226,8 @@ func _forget_unshown_revisions() -> void:
         if not shown.has(int(revision)):
             _source_maps.erase(revision)
             _note_ids.erase(revision)
+            _attack_of.erase(revision)
+            _continuations.erase(revision)
 
 func _repaint() -> void:
     for entry in _live_renderers():
