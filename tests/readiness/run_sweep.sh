@@ -4,6 +4,7 @@
 # Isolated HOME/XDG dirs (real learner progress is never touched), the
 # default exercise strategy, a virtual ALSA MIDI keyboard played by
 # tests/readiness/pyhook/sitecustomize.py, and a real (windowed) framebuffer.
+# R1_SWEEP_STEP=N starts on lesson step N (selected through the real UI action).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 MIDI="$(realpath "$1")"

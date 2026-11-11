@@ -132,3 +132,13 @@ def test_repeated_copies_show_feedback_colour(continuation_run):
     assert shown, checked["takes"]
     for take in shown:
         assert take["coloured_heads"] > 0, take
+
+
+def test_automatic_rests_are_at_most_about_two_bars(continuation_run):
+    """Owner decision P5: the result shows briefly, then the next take's one
+    count-in bar; rest plus count-in is at most about two bars."""
+    _, checked = continuation_run
+    automatic = [t for t in checked["takes"] if t.get("automatic")]
+    assert automatic, checked["takes"]
+    for take in automatic:
+        assert take["rest_bars"] is not None and take["rest_bars"] <= 2.25, take

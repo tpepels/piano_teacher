@@ -35,7 +35,9 @@ def _log(name: str, record: dict) -> None:
 
 
 class Performer(threading.Thread):
-    CLIENT = "R1Sweep"
+    # Unique per process: concurrent sweeps (CI, other agents) must never
+    # connect to each other's virtual keyboard.
+    CLIENT = f"R1Sweep{os.getpid()}"
     PORT = "R1 Sweep Keyboard"
 
     def __init__(self, engine):
@@ -215,7 +217,8 @@ class Performer(threading.Thread):
         deadline = time.monotonic() + 30
         name = ""
         while time.monotonic() < deadline and not name:
-            names = [n for n in mido.get_input_names() if self.CLIENT in n]
+            names = [n for n in mido.get_input_names()
+                     if n.split(":")[0] == self.CLIENT]
             name = names[0] if names else ""
             if not name:
                 time.sleep(0.1)

@@ -22,14 +22,30 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-PALETTE = {
-    "unplayed": (0xEE, 0xF5, 0xF1),
-    "hit": (0x53, 0xE7, 0xB7),
-    "missed": (0xF1, 0x79, 0x78),
-    "late": (0xF0, 0xB6, 0x61),
-    "early_release": (0xBC, 0xA4, 0xF1),
-    "early_onset": (0xEB, 0xCF, 0x81),
-}
+INK_SOURCE = Path(__file__).resolve().parents[2] / "godot" / "note_status_ink.gd"
+
+
+def ink_palette(source: Path = INK_SOURCE) -> dict[str, tuple[int, int, int]]:
+    """Status colours read from the painter's own constants (NoteStatusInk
+    COLORS, e.g. EARLY_ONSET), so a palette change cannot desynchronise the
+    pixel classifier."""
+    import re
+    text = source.read_text(encoding="utf-8")
+    named = {m.group(1): m.group(2) for m in re.finditer(
+        r'^const (\w+)\s*:?=\s*Color\("#?([0-9A-Fa-f]{6})"\)', text, re.M)}
+    block = text[text.index("const COLORS"):]
+    block = block[:block.index("}")]
+    palette = {}
+    for status, value in re.findall(r'"(\w+)":\s*([^,\n]+)', block):
+        literal = re.search(r'Color\("#?([0-9A-Fa-f]{6})"\)', value)
+        hexcode = literal.group(1) if literal else named.get(value.strip())
+        if hexcode is None:
+            raise ValueError(f"Cannot resolve ink colour {status}: {value}")
+        palette[status] = tuple(int(hexcode[i:i + 2], 16) for i in (0, 2, 4))
+    return palette
+
+
+PALETTE = {"unplayed": (0xEE, 0xF5, 0xF1), **ink_palette()}
 MUTED = (0x81, 0x91, 0x8B)
 PLAN_TO_STATUS = {"hit": "hit", "late": "late", "early_onset": "early_onset",
                   "early_release": "early_release", "missed": "missed", "wrong": "missed"}

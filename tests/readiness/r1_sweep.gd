@@ -343,6 +343,7 @@ func _process(_delta: float) -> bool:
         _event("take_started",{"tid":tid,"index":takes.size(),"len":_take_len(s),
             "preview":s.get("preview_only"),"bpm":s.get("bpm"),"step":step,
             "cib":s.get("count_in_bar_beats"),"ci":s.get("count_in_beats"),
+            "cim":s.get("count_in_meter"),
             "pf":s.get("play_from_beat")})
         last_tid = tid
         # The performer reads the plan when it sees the NEXT take start.
@@ -377,6 +378,24 @@ func _process(_delta: float) -> bool:
                     return true
                 return false
             if now-phase_ms < 1500:
+                return false
+            var wanted_step: int = int(OS.get_environment("R1_SWEEP_STEP")) \
+                if OS.has_environment("R1_SWEEP_STEP") else 0
+            if wanted_step > 0 and not flags.has("step_selected"):
+                # Start on a chosen lesson step (e.g. an original-level stage)
+                # through the real step selection, then wait for READY.
+                if int(s.get("lesson_step",0)) != wanted_step:
+                    if not flags.has("step_sent"):
+                        flags["step_sent"] = true
+                        _event("select_step",{"number":wanted_step})
+                        app._send_action({"action":"select_step","number":wanted_step})
+                    return false
+                if not _ready_score() or str(s.get("phase","")) != "ready" or \
+                        app.command_state.pending:
+                    return false
+                flags["step_selected"] = true
+                stage_seen_ms = -1
+                phase_ms = now
                 return false
             _capture("ready_midi_connected")
             _advance("play")

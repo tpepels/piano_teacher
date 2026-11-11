@@ -63,7 +63,11 @@ def check_run(run: Path) -> dict:
         bar = float(meta.get("cib") or default_bar)
         rows = [r for r in frames if r.get("tid") == tid and r.get("run")
                 and not r.get("pau")]
-        playing = [r for r in rows if r.get("ph") == "playing"]
+        # Judge a take's first graded beat before any Pause in it: a Resume
+        # continues from the pause point on a new strip.
+        paused_t = [r["t"] for r in frames if r.get("tid") == tid and r.get("pau")]
+        first_pause = min(paused_t) if paused_t else float("inf")
+        playing = [r for r in rows if r.get("ph") == "playing" and r["t"] < first_pause]
         # The first frame of a new transport projects the engine beat from a
         # snapshot before Godot's transport clock has phase-locked to it; it
         # measures that estimate, not ink position. Report it, judge after.
@@ -88,14 +92,25 @@ def check_run(run: Path) -> dict:
             for ident, dx, expected in r.get("near", []):
                 if ident not in best or abs(expected) < abs(best[ident][1]):
                     best[ident] = (dx, expected, r["d"])
-        offsets = [dx - exp for dx, exp, d in best.values() if abs(exp) < 0.12 * d]
+        # One onset per beat column: a chord's displaced second-interval head
+        # is engraved ~a head width right of its stem by notation, not time.
+        columns: dict = {}
+        for dx, exp, d in best.values():
+            if abs(exp) < 0.12 * d:
+                key = round(exp, 1)
+                if key not in columns or abs(dx - exp) < abs(columns[key]):
+                    columns[key] = dx - exp
+        offsets = list(columns.values())
         take["onset_px_n"] = len(offsets)
         take["onset_px_max"] = max((abs(v) for v in offsets), default=None)
         take["onset_px_median"] = statistics.median(offsets) if offsets else None
         # Count-in: syllables in the rest before this take's first graded beat,
         # at this take's own tempo. The first beat's time is interpolated
         # from the transport beat of the first phase-locked frame.
-        first_beat_t = first["t"] - first["tb"] * beat_ms
+        # Robust to one stalled frame: the median of the first three
+        # phase-locked frames (close to beat 0, so a tempo map's rate
+        # differing from the nominal BPM hardly matters).
+        first_beat_t = statistics.median(r["t"] - r["tb"] * beat_ms for r in graded[:3])
         previous_end = 0
         if index > 0:
             before = [r for r in frames if r.get("tid") == tids[index - 1]
@@ -106,18 +121,58 @@ def check_run(run: Path) -> dict:
         in_bar = [v for v in rest if v["t"] >= window_start]
         cue_t = [v["t"] for v in in_bar]
         spacing = [b - a for a, b in zip(cue_t, cue_t[1:])]
-        allowed = max(CUE_SPACING_FRACTION * beat_ms, FRAME_MS)
+        # Owner M3: compound meters (6/8, 9/8, 12/8) count the dotted-quarter
+        # pulse; every other meter counts its beats.
+        meter = meta.get("cim") or [4, 4]
+        pulse = 1.5 if (len(meter) == 2 and int(meter[1]) == 8
+                        and int(meter[0]) in (6, 9, 12)) else 1.0
+        take["count_in_pulse_beats"] = pulse
+        allowed = max(CUE_SPACING_FRACTION * beat_ms * pulse, FRAME_MS)
         take["count_in_numbers"] = [v["number"] for v in in_bar]
         take["early_cues"] = [v["number"] for v in rest if v["t"] < window_start]
         take["cue_spacing_beats"] = [round(d / beat_ms, 3) for d in spacing]
         take["last_cue_to_first_beat_beats"] = (
             round((first_beat_t - cue_t[-1]) / beat_ms, 3) if cue_t else None)
-        expected_cues = list(range(1, int(round(bar)) + 1)) if bar > 0 else []
-        take["count_in_ok"] = (take["count_in_numbers"] == expected_cues
-                               and not take["early_cues"] and bool(cue_t)
-                               and all(abs(d - beat_ms) <= allowed for d in spacing)
-                               and abs(take["last_cue_to_first_beat_beats"] - 1.0)
-                               <= LAST_CUE_BEATS + FRAME_MS / beat_ms)
+        expected_cues = list(range(1, int(round(bar / pulse)) + 1)) if bar > 0 else []
+        rest_paused = any(e.get("kind") == "press" and "(rest)" in str(e.get("button", ""))
+                          and previous_end < e["t"] < first["t"] for e in ev)
+        take["rest_paused"] = rest_paused
+        last_ok = bool(cue_t) and abs(take["last_cue_to_first_beat_beats"] - pulse) \
+            <= LAST_CUE_BEATS + FRAME_MS / beat_ms
+        if rest_paused:
+            # Pause inside the count-in bar (owner rule 8): Resume continues
+            # with the rest of that bar, each syllable at most once, a cue
+            # due while paused or observed late is not spoken. What is spoken
+            # rises, ends on the bar's last syllable one pulse before beat 0.
+            heard = take["count_in_numbers"]
+            take["count_in_ok"] = heard == sorted(set(heard))
+        else:
+            # The first Play's first syllable can be heard up to one command
+            # latency late (reported in cue_spacing_beats, a known concern);
+            # every later interval and the last cue are judged.
+            judged = spacing[1:] if index == 0 else spacing
+            take["count_in_ok"] = (take["count_in_numbers"] == expected_cues
+                                   and not take["early_cues"] and bool(cue_t)
+                                   and all(abs(d - pulse * beat_ms) <= allowed for d in judged)
+                                   and last_ok)
+        # Owner P5: rest + count-in from the previous take's end to this
+        # take's first graded beat, for automatic continuations.
+        take["rest_seconds"] = take["rest_bars"] = None
+        take["automatic"] = False
+        if index > 0 and "first_beat_t" in takes[index - 1]:
+            prev = takes[index - 1]
+            prev_meta = starts[tids[index - 1]]
+            prev_end = prev["first_beat_t_exact"] + float(prev_meta.get("len") or 0.0) * \
+                60000.0 / float(prev_meta.get("bpm") or bpm)
+            presses = [e for e in ev if e.get("kind") == "press"
+                       and prev["first_beat_t_exact"] - 500 < e["t"] < first_beat_t]
+            take["automatic"] = not presses
+            retries = [e for e in presses if str(e.get("button", "")).startswith("Retry")]
+            take["since_retry_seconds"] = (round((first_beat_t - retries[-1]["t"]) / 1000.0, 2)
+                                           if retries else None)
+            take["rest_seconds"] = round((first_beat_t - prev_end) / 1000.0, 2)
+            take["rest_bars"] = round((first_beat_t - prev_end) / (bar * beat_ms), 2) if bar else None
+        take["first_beat_t_exact"] = first_beat_t
         # A take with notes in its first beat must have measured onsets.
         take["notes_in_first_beat"] = first_beat_notes.get(tid, 0)
         take["onsets_measured"] = take["onset_px_n"] > 0 or not take["notes_in_first_beat"]
