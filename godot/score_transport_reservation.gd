@@ -101,6 +101,13 @@ static func plan(renderer, action: String, world: float,
         density,staff_gap,duration)
     if is_finite(peer_floor):
         onset = maxf(onset,peer_floor+header+Admission.REST_GAP_BEATS)
+    if action in ["start","resume"] and is_finite(count_in_beats) and \
+            count_in_beats > 0.0:
+        # The engine counts one whole bar before grading starts. The slot
+        # must be at least that far ahead, or grading (count-in bar) and
+        # ink (shorter offscreen slot) would be two deadlines. With no
+        # written rest between takes the offscreen slot can be shorter.
+        onset = maxf(onset,preview_world+count_in_beats)
     if not is_finite(onset):
         return _refuse("no_finite_future_slot")
     var first_pixel_x: float = width*renderer.PLAYHEAD_FRACTION +         (onset-header-preview_world)*density

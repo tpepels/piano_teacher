@@ -17,6 +17,11 @@ import math
 
 from .learning import LearningPlan
 from .lesson_timing import lead_in_beats
+
+# Poll/frame latency allowed between announcing a short-rest continuation
+# (sampled when it is announced, after the take-end work) and Godot
+# admitting it; the ink still opens a full count-in bar ahead.
+SHORT_REST_LATENCY_SECONDS = 0.25
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.future_score import FutureScore
@@ -229,6 +234,15 @@ class PracticeEngine:
         # source identity at this exact monotonic graded deadline.
         self._queue_scheduled_start = None
         self._decided_remediation = None
+        self._decided_reengraving = None
+        # Godot's empty-strip geometry (clear, header beats); None = no
+        # renderer has reported it, keep the offscreen reading horizon.
+        self._short_rest: tuple[float, float] | None = None
+        self._prepared_handoff_pending = False
+        self._future_stage_clear_beats: float | None = None
+        self._future_stage_short_rest: tuple[float, float] | None = None
+        self._tempo_key = None
+        self._tempo_epoch: float | None = None
         self._prepared_stage_published = False
         # Global musical origin of a delayed, pre-engraved next stage.
         self._stage_handoff_visual_beat: float | None = None
@@ -1728,12 +1742,15 @@ class PracticeEngine:
 
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Retain polling overshoot instead of moving the musical deadline."""
+        announced = self.visual_transport.announced_deadline(from_beat)
+        serial = (self.visual_transport.announce_serial
+                  if announced is not None and abs(announced - deadline) <= 1e-9 else None)
         self.start(from_beat=from_beat, mode=self.mode, loop_continuation=True,
                    scheduled_deadline=deadline)
         self._queue_scheduled_start = (
             self.transport_id, self.visual_transport.play_from_beat,
             self.visual_transport.run_at, self.plan.identity,
-            self.score_revision)
+            self.score_revision, serial)
         # An announced continuation starts AT its first graded beat; Godot
         # spoke its one count-in bar from the announced deadline during the
         # rest. A continuation that still has a whole bar of lead counts
@@ -1744,24 +1761,31 @@ class PracticeEngine:
                 lead_beats >= self.count_in_bar_beats - 1e-6:
             self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
 
-    def _reannounce_after_rest_pause(self, now: float, lead_seconds: float) -> None:
-        """Resume in the rest between takes: announce the next take anew.
+    def _reannounce_after_rest_pause(self, now: float, lead_seconds: float,
+                                     *, reuse: bool = False) -> None:
+        """Resume in the rest between takes: re-time or re-announce the take.
 
         resume() shifted the announced deadline by the pause, but the
-        presentation axis kept moving, so the old repeat's ink may have
-        scrolled into view and can no longer be its source. Announce once
-        more, no earlier than where Godot can still admit fresh ink offscreen
-        (its reported lead) or a full reading horizon from now. The new
-        deadline is a new plan identity; the old copy never gets a count-in.
+        presentation axis kept moving. Godot reports either that the
+        announced copy is still ahead of the playhead (reuse: the take keeps
+        that ink and its plan identity, re-timed to reach the playhead in
+        lead_seconds, like Resume of a paused take) or the earliest lead at
+        which fresh ink can still be admitted; then a new announcement (new
+        plan identity) is made no earlier than that, and the old copy, if
+        visible, never gets a count-in.
         """
         announced = self.visual_transport.announced_continuation
         if (self.running or self.plan is None or self.mode != "practice"
                 or announced is None
                 or self.visual_transport.announced_deadline(announced[0]) is None):
             return
-        lead = max(0.0, float(lead_seconds),
-                   self._continuous_horizon_beats * 60.0 / self.plan.bpm)
-        deadline = max(announced[1], now + lead)
+        if reuse and lead_seconds > 0.0:
+            self.visual_transport.retime_announcement(now + float(lead_seconds))
+            return
+        floor = (self._short_rest_deadline(0.0, from_beat=announced[0], now=now)
+                 if self._short_rest is not None else
+                 now + self._continuous_horizon_beats * 60.0 / self.plan.bpm)
+        deadline = max(announced[1], now + max(0.0, float(lead_seconds)), floor)
         if deadline > announced[1] + 1e-9:
             self.visual_transport.announce_continuation(
                 announced[0], deadline, announced[2])
@@ -1782,7 +1806,13 @@ class PracticeEngine:
         announced = self.visual_transport.announced_deadline(from_beat)
         if announced is not None and abs(announced - deadline) <= 1e-9:
             return deadline
-        if self._continuous_horizon_beats <= 0 or self.plan is None or not self.auto:
+        if self.plan is None or not self.auto:
+            return deadline
+        short = self._short_rest_deadline(deadline, from_beat=from_beat)
+        if short is not None:
+            # The previous take's ink has passed: open on the empty strip.
+            return max(deadline, short)
+        if self._continuous_horizon_beats <= 0:
             return deadline
         return max(self._automatic_stream_deadline(deadline),
                    self.now() + self._continuous_horizon_beats * 60.0 / self.plan.bpm)
@@ -1816,9 +1846,78 @@ class PracticeEngine:
                     remediation = self.remediation_planner.plan(
                         recommendation, result, p.active_variant,
                         stage_key=p.identity, boundaries=p.piece.bar_boundaries)
-        except Exception:
+        except ValueError:
+            # Invalid ledger identifiers or evidence: settlement recomputes
+            # (and reports) it; this take is simply not announced.
             remediation = self._UNDECIDED
         self._decided_remediation = (p.identity, remediation)
+
+    def _start_rate_bpm(self, from_beat: float, bpm: float) -> float:
+        """Authored tempo-map rate at a take's first beat, at this BPM."""
+        if self.plan is None or bpm <= 0 or self.mode not in ("practice", "listen"):
+            return float(bpm)
+        tempo = self.tempo_map_cache.get(self.plan.active_stage, bpm)
+        return float(tempo.bpm_at(from_beat)) if tempo is not None else float(bpm)
+
+    def _note_tempo(self, now: float) -> None:
+        """Remember WHEN the presentation tempo changed (tempo_epoch_ms).
+
+        Godot sees a new BPM one snapshot later; it switches its forward-only
+        presentation axis at this exact instant instead, so deadlines the
+        engine computes from this moment at the new tempo stay equal to the
+        ink (a stage handoff from 108 to 40 BPM drifted ~0.15 beat).
+        """
+        if self.plan is None:
+            return
+        key = (self.plan.identity, float(self.plan.bpm))
+        if key != self._tempo_key:
+            self._tempo_key = key
+            self._tempo_epoch = now
+
+    def _decide_reengraving(self, result) -> None:
+        """Decide at take end whether settling it re-engraves the stage.
+
+        Settlement records the take's original-attack mistakes and asks the
+        generator for a feedback refresh, which may select another stage.
+        Run that same refresh now on the evidence the store will hold after
+        this take, then restore the plan exactly as settlement's own rollback
+        does. Only a take that will really move to another stage stays
+        unannounced. (True: re-engraves; False: stays; None: undecidable.)
+        """
+        p = self.plan
+        decision: bool | None = False
+        if (p.accepts_performance_feedback and p.active_variant.level == "original"
+                and not self.is_builtin_warmup and getattr(result, "notes", None)
+                and self.fingerprint):
+            ids = [n.note.source_id for n in result.notes]
+            if any(not sid for sid in ids) or len(ids) != len(set(ids)):
+                decision = None  # settlement's store rejects such a take
+            else:
+                evidence = dict(self.fukuda_mistakes.evidence(self.fingerprint))
+                for entry in result.notes:
+                    if entry.status == "correct":
+                        evidence.pop(entry.note.source_id, None)
+                    else:
+                        evidence[entry.note.source_id] = entry.status
+                evidence = dict(sorted(evidence.items()))
+                failed_ids = frozenset(n.note.source_id for n in result.notes
+                                       if n.status != "correct")
+                before = {key: (value.copy() if isinstance(value, (dict, list, set))
+                                else value) for key, value in vars(p).items()}
+                identity = p.identity
+                try:
+                    changed = p.refresh_from_feedback(
+                        evidence, prefer_repair=not result.passed and bool(failed_ids),
+                        focus_ids=failed_ids)
+                    if not changed and not result.passed and failed_ids:
+                        changed = p.revisit_source_errors(failed_ids)
+                    decision = bool(changed) and p.identity != identity
+                except (ValueError, TypeError):
+                    decision = None
+                finally:
+                    vars(p).clear()
+                    vars(p).update(before)
+        self._decided_reengraving = (p.identity, decision)
 
     def _settlement_may_reroute(self, result, response=None) -> bool:
         """Whether settling this finished take can change what runs next.
@@ -1837,8 +1936,8 @@ class PracticeEngine:
             # Settlement masters the stage (next stage, next passage, or
             # "Piece mastered"), never a same-stage repeat.
             return True
-        if (p.accepts_performance_feedback and p.active_variant.level == "original"
-                and not self.is_builtin_warmup and bool(getattr(result, "notes", ()))):
+        reengraves = self._decided_reengraving
+        if reengraves is None or reengraves[0] != p.identity or reengraves[1] is not False:
             return True
         decided = self._decided_remediation
         if decided is None or decided[0] != p.identity or decided[1] is not None:
@@ -1852,7 +1951,8 @@ class PracticeEngine:
     def _schedule_preparation(self, target: float, *, now: float,
                               from_visual: float, reverse_seconds: float,
                               reading_lead_included: bool = False,
-                              announce: bool = True):
+                              announce: bool = True,
+                              short_deadline: float | None = None):
         """Reverse on this pass, then traverse one semantic rest into target.
 
         The resulting next_at is the graded run_at of the next take and is
@@ -1865,7 +1965,16 @@ class PracticeEngine:
             self._source_model(), source_from_beat=target,
             from_visual=from_visual, now=now,
             reverse_seconds=reverse_seconds, bpm=self.plan.bpm)
-        if not reading_lead_included and announce:
+        if announce and short_deadline is not None:
+            # Short rest (P5): the repeat opens on the empty strip one
+            # count-in bar ahead; the engine's own rewind animation ends by
+            # then. This IS the announced deadline.
+            vt = self.visual_transport
+            vt.next_at = short_deadline
+            vt._preparation_at = min(vt._preparation_at, short_deadline)
+            vt._visual_rewind_seconds = max(
+                .05, min(vt._visual_rewind_seconds, vt._preparation_at - vt._visual_rewind_at))
+        elif not reading_lead_included and announce:
             # An unannounced take gets its whole reading horizon when it is
             # settled (_continuation_deadline); adding it here as well would
             # double the rest.
@@ -1970,10 +2079,21 @@ class PracticeEngine:
                 self.awaiting_score_revision = None
                 self.teaching.start(now=self.now())
             elif decision == "practice":
+                # A take starting on a freshly (re-)engraved score: open it on
+                # the empty strip one count-in bar ahead, with the snapshot
+                # latency allowed, and publish that run_at as its plan.
+                lead = (self._next_count_in_beats() * 60.0 / self.plan.bpm
+                        + SHORT_REST_LATENCY_SECONDS) if self._short_rest is not None else 0.0
                 self.start(
                     from_beat=(self.visual_transport.pending_rewind if self.visual_transport.pending_rewind is not None
                                else self.open_from_beat),
-                    mode="perform" if self.mode == "perform" else "practice")
+                    mode="perform" if self.mode == "perform" else "practice",
+                    presentation_lead_seconds=lead)
+                if self._short_rest is not None:
+                    self._queue_scheduled_start = (
+                        self.transport_id, self.visual_transport.play_from_beat,
+                        self.visual_transport.run_at, self.plan.identity,
+                        self.score_revision, None)
         elif self.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
             # Demo tokens are invalidated by Stop, tempo and navigation.
             self._start_listen_if_ready()
@@ -2030,6 +2150,44 @@ class PracticeEngine:
             if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
                 self.measurement.assistance_used = True
 
+    def _update_short_rest(self, kwargs: dict) -> None:
+        """Godot's empty-strip geometry for short rests (owner decision P5).
+
+        continuation_clear_beats: from a take's end until its last printed
+        pixel (final barline) has passed the playhead, plus a frame margin.
+        continuation_header_beats: rest gap plus the opening header that an
+        opening needs after older ink. The next take then opens one count-in
+        bar ahead on the empty staff (the empty-strip rule).
+        """
+        clear = kwargs.get("continuation_clear_beats")
+        header = kwargs.get("continuation_header_beats")
+        if clear is None or header is None:
+            return
+        clear, header = float(clear), float(header)
+        if not all(math.isfinite(v) and 0.0 <= v <= 16.0 for v in (clear, header)):
+            raise ValueError("Invalid short-rest geometry")
+        self._short_rest = (clear, header)
+
+    def _short_rest_deadline(self, take_end: float, *, from_beat: float = 0.0,
+                             now: float | None = None) -> float | None:
+        """The graded run_at of a continuation that opens on the empty strip.
+
+        Rest plus count-in is the time for the last printed pixel to pass the
+        playhead (or for this announcement to reach Godot) plus one count-in
+        bar, never shorter than the rest gap and header the queue keeps
+        between passages. The deadline is exactly where Godot admits the ink.
+        """
+        if self._short_rest is None or self.plan is None or self.plan.bpm <= 0:
+            return None
+        clear, header = self._short_rest
+        spb = 60.0 / self.plan.bpm
+        now = self.now() if now is None else now
+        _, bar, _ = self.attempt_progression.count_in_bar(
+            phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
+            time_signatures=self.plan.piece.time_signatures, position=from_beat)
+        empty_at = max(take_end + clear * spb, now + SHORT_REST_LATENCY_SECONDS)
+        return empty_at + max(bar, header) * spb
+
     def _update_continuous_horizon(self, value) -> None:
         if value is None:
             return
@@ -2046,6 +2204,19 @@ class PracticeEngine:
         missing = max(0.0, self._continuous_horizon_beats-gap)
         return scheduled_offscreen_start(deadline, missing, self.plan.bpm)
 
+    def _presentation_lead(self, kwargs: dict) -> float:
+        """Lead to the world position Godot reserved for this command.
+
+        Godot reports the reserved deadline itself (presentation_deadline_ms,
+        backend clock). Measuring the lead from it here absorbs the time the
+        command spent queued behind engine work, which a relative lead added
+        to the engine's own "now" turned into an offset (Clair, 12 px).
+        """
+        deadline = kwargs.get("presentation_deadline_ms")
+        if deadline is not None and math.isfinite(float(deadline)):
+            return max(0.0, float(deadline) / 1000.0 - self.now())
+        return float(kwargs.get("presentation_lead_seconds", 0.0))
+
     def _control_transport(self, action: str, kwargs: dict) -> None:
         if action == "practice":
             self._prepare_practice()
@@ -2060,15 +2231,16 @@ class PracticeEngine:
             self.next_action = "Start when you are ready."
         elif action in ("start", "restart"):
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self._start_or_restart(action, presentation_lead_seconds=float(
-                kwargs.get("presentation_lead_seconds",0.0)))
+            self._update_short_rest(kwargs)
+            self._start_or_restart(action, presentation_lead_seconds=self._presentation_lead(kwargs))
         elif action == "pause":
             self._pause_current_session()
         elif action == "resume":
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self._resume_current_session(presentation_lead_seconds=float(
-                kwargs.get("presentation_lead_seconds",0.0)),
-                reuse_pending_score=kwargs.get("reuse_pending_score",False) is True)
+            self._update_short_rest(kwargs)
+            self._resume_current_session(presentation_lead_seconds=self._presentation_lead(kwargs),
+                reuse_pending_score=kwargs.get("reuse_pending_score",False) is True,
+                reuse_announced_score=kwargs.get("reuse_announced_score",False) is True)
 
     def _open_selected_measure(self, kwargs: dict):
         """Open a source measure using the existing lesson navigation policy."""
@@ -2227,7 +2399,8 @@ class PracticeEngine:
         return
 
     def _resume_current_session(self, *, presentation_lead_seconds: float = 0.0,
-                                reuse_pending_score: bool = False):
+                                reuse_pending_score: bool = False,
+                                reuse_announced_score: bool = False):
         """Resume grading after future-only visual notes have reading space."""
         learning = self.mode == "learn" and self.teaching is not None
         shift_run_at = resume_timeline(
@@ -2253,7 +2426,8 @@ class PracticeEngine:
         self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
         if had_reading_lead:
             self._resume_grading_after += max(0.0, now-paused_at)
-        self._reannounce_after_rest_pause(now, presentation_lead_seconds)
+        self._reannounce_after_rest_pause(now, presentation_lead_seconds,
+                                          reuse=reuse_announced_score)
         # A paused passage returns with a short genuine count-in. Its
         # authoritative run_at moves, so MIDI grading and source ink agree
         # and no note is required during the visual reading lead-in.
@@ -2375,6 +2549,9 @@ class PracticeEngine:
 
     def _advance_pending_feedback(self, now: float, *, prepared_on_time: bool = False):
         """Commit finished feedback and schedule exactly one next transition."""
+        if self._prepared_handoff_pending:
+            prepared_on_time = True
+            self._prepared_handoff_pending = False
         if self.auto and self.visual_transport.next_at and now >= self.visual_transport.next_at:
             # Keep the current music axis moving until authentic next-step ink
             # is compiled, acknowledged, and adoptable. A cache miss is never
@@ -2423,6 +2600,8 @@ class PracticeEngine:
             previous_identity = self.plan.identity
             try:
                 message = self._commit_pending()
+                # Settlement may step the tempo or change the stage now.
+                self._note_tempo(now)
             except UnpreparedNextStage as exc:
                 # The transaction rolled back to the score still on screen.
                 # Never reset the camera or ask Godot to load the wrong step.
@@ -2467,6 +2646,16 @@ class PracticeEngine:
                 self._prepared_stage_published = False
                 lead_beats = self._future_stage_lead_beats
                 self._future_stage_lead_beats = 0.0
+                if self._future_stage_clear_beats is not None:
+                    # Opens on the empty strip: one whole count-in bar of the
+                    # new stage ahead, never less than the reported gap and
+                    # header, plus the snapshot latency to reach Godot.
+                    lead_beats = (max(lead_beats, self._next_count_in_beats())
+                                  + SHORT_REST_LATENCY_SECONDS * self.plan.bpm / 60.0)
+                self._future_stage_clear_beats = None
+                if self._future_stage_short_rest is not None:
+                    self._short_rest = self._future_stage_short_rest
+                    self._future_stage_short_rest = None
                 # A visual stage must be completely outside the right edge
                 # when the next graded clock starts counting down. Extend
                 # that SAME Python deadline; no second frontend clock.
@@ -2640,6 +2829,7 @@ class PracticeEngine:
             raise
         self._pending_rolling = None
         self.measurement.finish()
+        self._note_tempo(now)
         self._schedule_preparation(transition.restart_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds)
@@ -2678,8 +2868,9 @@ class PracticeEngine:
             self.measurement.finish()
             self.running = False
             self.visual_transport._preview_loop_pending = True
-            self.visual_transport.announce_continuation(0.0, self._automatic_stream_deadline(
-                repeat_deadline(
+            short = self._short_rest_deadline(self.visual_transport.run_at + duration)
+            self.visual_transport.announce_continuation(0.0, short if short is not None else
+                self._automatic_stream_deadline(repeat_deadline(
                     run_at=self.visual_transport.run_at, duration=duration,
                     gap_beats=self.visual_transport.visual_gap_beats,
                     bpm=self.plan.bpm)), self.plan.bpm)
@@ -2734,6 +2925,7 @@ class PracticeEngine:
                 self.plan.bpm = previous_bpm
                 raise
             self.measurement.finish()
+            self._note_tempo(now)
         self.feedback_marks = assessed.marks
         self.feedback_unmapped = assessed.unmapped
         # The completed take's settled grades, before any transition below can
@@ -2821,6 +3013,7 @@ class PracticeEngine:
         # committed. Durable evidence must retain the tempo actually assessed.
         self._pending_assessed_bpm = self.plan.bpm
         self._decide_remediation(result)
+        self._decide_reengraving(result)
         whole_recovery = None
         assessed_bpm = self.plan.bpm
         if decision.rewind and not self.is_builtin_warmup:
@@ -2855,13 +3048,17 @@ class PracticeEngine:
                     "origin": "automatic", "state": "applied"})
             if whole_recovery is not None:
                 self.plan.bpm = whole_recovery.bpm
+            self._note_tempo(now)
             self.visual_transport._retry_previous_pass = True
+            target = (whole_recovery.restart_beat if whole_recovery is not None
+                      else self.visual_transport.play_from_beat)
             self._schedule_preparation(
-                (whole_recovery.restart_beat if whole_recovery is not None
-                 else self.visual_transport.play_from_beat), now=now,
+                target, now=now,
                 from_visual=visual_from,
                 reverse_seconds=decision.rewind_seconds,
-                announce=not self._settlement_may_reroute(result, whole_recovery))
+                announce=not self._settlement_may_reroute(result, whole_recovery),
+                short_deadline=self._short_rest_deadline(
+                    self.visual_transport.run_at + duration, from_beat=target))
         if decision.failed:
             # An abandoned failed take cannot leave a previously clean
             # streak durable in SQLite. Settle this monotone invalidation
@@ -2901,6 +3098,16 @@ class PracticeEngine:
             if (self._future_stage_ready ==
                     (selection.stage_key, selection.revision) and
                     self.future_score.ready(selection)):
+                clear = self._future_stage_clear_beats
+                commit_at = (self.visual_transport.run_at + duration
+                             + clear * 60.0 / self.plan.bpm) if clear else now
+                if commit_at > now:
+                    # Short handoff (P5): settle when the outgoing ink has
+                    # passed, so the next stage opens on the empty strip.
+                    self.visual_transport.announced_continuation = None
+                    self.visual_transport.next_at = commit_at
+                    self._prepared_handoff_pending = True
+                    return
                 self.visual_transport.next_at = now
                 self._advance_pending_feedback(now, prepared_on_time=True)
                 return
@@ -2916,8 +3123,11 @@ class PracticeEngine:
                 # count-in is at the take's own tempo. Settlement at that
                 # deadline starts the take with this same run_at and BPM
                 # (R1 P2: publishing it only at the start was too late).
+                short = self._short_rest_deadline(
+                    self.visual_transport.run_at + duration)
                 self.visual_transport.announce_continuation(
-                    0.0, self._automatic_stream_deadline(decision.deadline_at),
+                    0.0, short if short is not None else
+                    self._automatic_stream_deadline(decision.deadline_at),
                     self.plan.bpm_after(result.passed))
             else:
                 # A possible stage handoff or re-engraving keeps the plain
@@ -3098,6 +3308,7 @@ class PracticeEngine:
         MIDI matches, settlement or feedback marks.
         """
         self.transport_id += 1
+        self._prepared_handoff_pending = False
         self.live_input.reset_attempt()
         self._pause_floor = None
         if phrase is not None:
@@ -3225,6 +3436,7 @@ class PracticeEngine:
             next_deadline = None
             next_transport = self.transport_id + 1
             next_bpm = float(self.plan.bpm) if self.plan is not None else 0.0
+            plan_serial = None
             announced = self.visual_transport.announced_continuation
             if (self.mode == "practice" and not self.visual_transport.paused
                     and not self.running and announced is not None
@@ -3236,9 +3448,10 @@ class PracticeEngine:
                 next_floor = float(announced[0])
                 next_deadline = float(announced[1]) * 1000.0
                 next_bpm = float(announced[2])
+                plan_serial = self.visual_transport.announce_serial
             elif (self.mode == "practice" and self.running and
                     self._queue_scheduled_start is not None):
-                transport, floor, run_at, stage_key, revision = (
+                transport, floor, run_at, stage_key, revision, serial = (
                     self._queue_scheduled_start)
                 if (transport == self.transport_id and
                         stage_key == self.plan.identity and
@@ -3246,6 +3459,7 @@ class PracticeEngine:
                     next_floor = float(floor)
                     next_deadline = float(run_at) * 1000.0
                     next_transport = self.transport_id
+                    plan_serial = serial
             elif (self.mode in ("listen", "perform") and self.running
                     and not self.visual_transport.paused and self.plan is not None):
                 # Listen and graded whole-piece performance must publish
@@ -3282,15 +3496,19 @@ class PracticeEngine:
                 next_transport = self.transport_id
             if (self.plan is not None and next_floor is not None
                     and next_deadline is not None):
-                _, bar_beats, _ = self.attempt_progression.count_in_bar(
+                _, bar_beats, plan_meter = self.attempt_progression.count_in_bar(
                     phrase=self.plan.active_phrase,
                     boundaries=self.plan.piece.bar_boundaries,
                     time_signatures=self.plan.piece.time_signatures,
                     position=next_floor)
                 state["score_queue_next"] = {
+                    # An announced continuation keeps one identity while its
+                    # deadline is re-timed to its admitted ink (rest Resume).
                     "plan_id": f"{self.fingerprint}:{self.plan.identity}:"
                                f"{self.score_revision}:{next_transport}:"
-                               f"{next_floor:.6f}:{next_deadline:.3f}",
+                               f"{next_floor:.6f}:" + (
+                                   f"a{plan_serial}" if plan_serial is not None
+                                   else f"{next_deadline:.3f}"),
                     "source_from_beat": next_floor,
                     "deadline_at_ms": next_deadline,
                     # The take this source is graded as, and the one
@@ -3301,8 +3519,17 @@ class PracticeEngine:
                                        else 0.0),
                     # That take's start tempo: its count-in is at this BPM.
                     "bpm": next_bpm,
+                    # The rate the take's own (possibly mapped) tempo starts
+                    # at: Godot's presentation axis switches to it exactly at
+                    # the deadline instead of a late snapshot later.
+                    "start_rate_bpm": self._start_rate_bpm(next_floor, next_bpm),
+                    # The meter its count-in pulses in (compound: M3).
+                    "count_in_meter": list(plan_meter),
                 }
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
+            if self._tempo_epoch is not None and self.plan is not None and \
+                    self._tempo_key == (self.plan.identity, float(self.plan.bpm)):
+                state["tempo_epoch_ms"] = self._tempo_epoch * 1000.0
             if self._stage_handoff_visual_beat is not None:
                 state["next_stage_start_beat"] = self._stage_handoff_visual_beat
             if self.plan is not None:
@@ -3468,7 +3695,10 @@ class PracticeEngine:
 
     def acknowledge_preloaded_stage(self, *, stage_key: str,
                                     revision: int,
-                                    presentation_lead_beats: float = 0.0) -> dict:
+                                    presentation_lead_beats: float = 0.0,
+                                    presentation_clear_beats: float | None = None,
+                                    continuation_clear_beats: float | None = None,
+                                    continuation_header_beats: float | None = None) -> dict:
         """Only a fully compiled and exact source-bound future ink may advance."""
         with self.lock:
             planned = self._next_stage_selection()
@@ -3482,8 +3712,24 @@ class PracticeEngine:
             if not 0.0 <= presentation_lead_beats <= 64.0 or not math.isfinite(
                     presentation_lead_beats):
                 raise ValueError("Invalid future notation reading lead")
+            if presentation_clear_beats is not None and not (
+                    math.isfinite(presentation_clear_beats)
+                    and 0.0 <= presentation_clear_beats <= 64.0):
+                raise ValueError("Invalid outgoing notation clearance")
             self._future_stage_ready = (stage_key, revision)
             self._future_stage_lead_beats = presentation_lead_beats
+            # Short handoff (P5): beats after the outgoing take's end until
+            # the next stage may open on the empty strip; None = offscreen.
+            self._future_stage_clear_beats = presentation_clear_beats
+            # The incoming stage's own short-rest geometry (its density and
+            # header), adopted when the handoff commits; the outgoing stage's
+            # would time the new stage's repeats wrongly.
+            self._future_stage_short_rest = None
+            if continuation_clear_beats is not None and continuation_header_beats is not None:
+                pending = (float(continuation_clear_beats), float(continuation_header_beats))
+                if not all(math.isfinite(v) and 0.0 <= v <= 16.0 for v in pending):
+                    raise ValueError("Invalid short-rest geometry")
+                self._future_stage_short_rest = pending
             # If the future ink became ready during the existing rest gap,
             # schedule its exact delayed start immediately. Waiting for the
             # old full-bar deadline would show native ink on a false origin.

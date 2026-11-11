@@ -285,6 +285,9 @@ static func attach_compiled(passes: Array) -> void:
             segment.reparent(clip,false)
             clip.visible = false
 
+# Fixed left gutter of the staff (brace and system line at x = 29).
+const LEFT_GUTTER_PX := 29.0
+
 static func project(item: Dictionary, world: float, playhead_x: float,
         density: float, staff_gap: float, viewport: Vector2,
         score_duration: float) -> bool:
@@ -311,16 +314,24 @@ static func project(item: Dictionary, world: float, playhead_x: float,
     if segment.get_parent() != clip:
         clip.visible = false
         return false
-    clip.position = Vector2(position+bounds.x,0.0)
-    clip.size = Vector2(maxf(1.0,bounds.y-bounds.x),viewport.y)
-    segment.position = Vector2(-bounds.x,0.0)
-    segment.visible = true
-    clip.visible = true
+    # The window stops at the fixed left gutter (brace and system line):
+    # departing ink is cut there by its own clip, never hidden behind a
+    # painted panel. Only the window narrows; the source never moves.
+    var left: float = position+bounds.x
+    var right: float = position+bounds.y
+    var visible_left: float = maxf(left,LEFT_GUTTER_PX)
     # This flag is monotonic. Once any authentic glyph of a queue entry
     # reaches the viewport, its owner can never be removed from the tail.
-    if clip.position.x < viewport.x and \
-            clip.position.x+clip.size.x > 0.0:
+    if left < viewport.x and right > 0.0:
         item["ever_visible"] = true
+    if right <= visible_left:
+        clip.visible = false
+        return true
+    clip.position = Vector2(visible_left,0.0)
+    clip.size = Vector2(maxf(1.0,right-visible_left),viewport.y)
+    segment.position = Vector2(-bounds.x-(visible_left-left),0.0)
+    segment.visible = true
+    clip.visible = true
     return true
 
 static func retire(owner: Control, item: Dictionary) -> void:

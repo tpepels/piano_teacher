@@ -30,13 +30,20 @@ class InstrumentedView:
 class CountIn:
     extends RefCounted
     var spoken: Array[int] = []
+    var spoken_at: Array[float] = []
     var shown := 0
-    func present(_beat: float, _bar: int, visible: bool, _paused: bool,
+    var circles := 0
+    var last_beat := NAN
+    func present(beat: float, bar: int, visible: bool, _paused: bool,
             _count_in_beats: float = -1.0) -> void:
+        last_beat = beat
         if visible:
             shown += 1
+            if beat < 0.0:  # GameCountIn hides itself from beat 0 on
+                circles = bar
     func speak_beat(number: int) -> bool:
         spoken.append(number)
+        spoken_at.append(last_beat)
         return true
 
 class Stage:
@@ -198,6 +205,19 @@ func _test_flow_rate_switch() -> void:
     check(monotonic,"a slower take start never moves the axis back or stops it")
     check(is_equal_approx(flow.beat,at_switch+384.0*40.0/60000.0-100.0*4.0/60000.0),
         "and the slower rate is repaid exactly")
+    # A deadline projected while debt is still owed lands where the axis
+    # really is then (the debt is repaid on the way).
+    var second = Flow.new()
+    second.sample(0,108.0)
+    second.sample(1000,108.0)
+    second.switch_rate_at(800.0,40.0)
+    var projected: float = second.project_authored_future(3000,1000,0.0,40.0,[])
+    for at in range(1016,3001,16):
+        second.sample(at,40.0)
+    second.sample(3000,40.0)
+    check(absf(second.beat-projected) < .0005,
+        "a projected deadline includes the slow-down still owed: %f vs %f" % [
+            second.beat,projected])
 
 func _test_count_in_at_announced_tempo() -> void:
     # A tempo-step repeat (rest at 60 BPM, next take announced at 72 BPM)
@@ -231,7 +251,94 @@ func _test_count_in_at_announced_tempo() -> void:
         check(absf(float(local_deadline-int(cue_ms[3]))-beat_ms) <= 2.0,
             "last cue one announced beat before the deadline")
 
+class PreparingClock:
+    extends Clock
+    func retry_preparing(_now: int) -> bool:
+        return true
+    func retry_count_in_beat(at: int) -> float:
+        return (float(at)-110000.0)/1000.0
+
+func _test_unannounced_rest_is_silent() -> void:
+    # A rest whose next take was NOT announced (settlement may reroute it)
+    # speaks nothing, even while the engine's preparation clock runs; the
+    # take counts its own last bar once it has started.
+    var practice := Practice.new()
+    var clock := PreparingClock.new()
+    clock.retry_active = true
+    var owner := Coordinator.new(Settings.new(),practice,clock,
+        func(_now: int) -> float: return NAN,
+        func(_accent: bool, _beat: float) -> void: pass,
+        func(_accent: bool) -> void: pass)
+    for phase in ["feedback","recovering","preview_gap"]:
+        var rest := _state(phase,3,false)
+        rest["bpm"] = 60.0
+        rest["count_in_bar_beats"] = 4
+        for at in range(100000,110000,16):
+            owner.update(rest,at,NAN,at)
+    check(practice.stage.count_in.spoken.is_empty() and
+        practice.stage.count_in.shown == 0,
+        "an unannounced rest speaks and shows no count-in, got %s" %
+            str(practice.stage.count_in.spoken))
+
+func _coordinator(practice: Practice):
+    return Coordinator.new(Settings.new(),practice,Clock.new(),
+        func(_now: int) -> float: return NAN,
+        func(_accent: bool, _beat: float) -> void: pass,
+        func(_accent: bool) -> void: pass)
+
+func _test_compound_meter_count_in() -> void:
+    # Owner decision M3: one syllable per dotted-quarter pulse, evenly across
+    # the single bar, ending right before the first note; circles match.
+    for case in [[[6,8],3.0,[1,2]],[[9,8],4.5,[1,2,3]],[[12,8],6.0,[1,2,3,4]],
+            [[4,4],4.0,[1,2,3,4]],[[3,4],3.0,[1,2,3]]]:
+        var practice := Practice.new()
+        var owner = _coordinator(practice)
+        var bar: float = float(case[1])
+        var state := _state("count_in",7,true)
+        state["bpm"] = 60.0
+        state["count_in_meter"] = case[0]
+        state["count_in_bar_beats"] = bar
+        state["count_in_beats"] = bar
+        var beat := -bar
+        while beat < 0.5:
+            owner.update(state,1000,beat,1000)
+            beat += .01
+        var pulse: float = 1.5 if int(case[0][1]) == 8 else 1.0
+        check(practice.stage.count_in.spoken == Array(case[2],TYPE_INT,"",null),
+            "%s speaks %s, got %s" % [str(case[0]),str(case[2]),
+                str(practice.stage.count_in.spoken)])
+        check(practice.stage.count_in.circles == (case[2] as Array).size(),
+            "%s shows one circle per pulse" % str(case[0]))
+        var on_pulses := true
+        for i in range(practice.stage.count_in.spoken_at.size()):
+            var at: float = practice.stage.count_in.spoken_at[i]
+            on_pulses = on_pulses and absf(at*pulse-(-bar+pulse*i)) < .02
+        check(on_pulses,"%s cues fall evenly on the pulses: %s" % [
+            str(case[0]),str(practice.stage.count_in.spoken_at)])
+
+func _test_resumed_count_in_cues_fall_on_beats() -> void:
+    # R1 M4: Resume landing at -1.34 used to speak "San" at once and "Shi"
+    # 0.34 beat later. A cue observed late is consumed; "Shi" is on -1.0.
+    var practice := Practice.new()
+    var owner = _coordinator(practice)
+    var resumed := _state("count_in",8,true)
+    resumed["bpm"] = 60.0
+    resumed["count_in_bar_beats"] = 4
+    resumed["count_in_beats"] = 4.0
+    resumed["count_in_meter"] = [4,4]
+    resumed["resume_count_in_beat"] = -1.34
+    for at in range(1000,2400,16):
+        owner.update(resumed,1000,NAN,at)
+    var spoken: Array = practice.stage.count_in.spoken
+    var at_beats: Array = practice.stage.count_in.spoken_at
+    check(spoken == [4],"only the beats still ahead are spoken, got %s" % str(spoken))
+    check(at_beats.size() == 1 and absf(float(at_beats[0])+1.0) < .02,
+        "the resumed cue falls on its beat, at %s" % str(at_beats))
+
 func _initialize() -> void:
+    _test_compound_meter_count_in()
+    _test_resumed_count_in_cues_fall_on_beats()
+    _test_unannounced_rest_is_silent()
     _test_count_in_at_announced_tempo()
     _test_flow_rate_switch()
     _test_binding()

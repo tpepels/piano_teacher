@@ -29,8 +29,12 @@ func register_peer(view: Control) -> void:
             return
     _peer_views.append(weakref(view))
 
+# Clearance between outgoing and incoming ink, in pixels.
+const PEER_MARGIN_PX := 60.0
+
 func minimum_peer_opening(density: float,
-        viewport_width: float, playhead_x: float) -> float:
+        viewport_width: float, playhead_x: float,
+        popping_in: bool = false) -> float:
     # Earliest permitted world time for the first pixel of new ink.
     # READY can schedule beyond this barrier; an engine-authored exact
     # deadline must be rejected if it arrives earlier.
@@ -46,15 +50,32 @@ func minimum_peer_opening(density: float,
             float(view.timeline.pixels_per_beat))
         var peer_gap: float = float(view.staff_gap())
         var peer_duration: float = float(view.timeline.duration_beats)
-        var peer_playhead: float = view.size.x*.33
+        # The peer view's own fixed playhead (NativeView.PLAYHEAD_FRACTION).
+        var peer_playhead: float = view.size.x*(float(view.PLAYHEAD_FRACTION)
+            if "PLAYHEAD_FRACTION" in view else .33)
         for item in peer_queue.online:
             var peer_bounds: Vector2 = Admission.clip_bounds(
                 item,peer_density,peer_gap,peer_duration)
             var peer_end: float = float(item["world_origin"]) + \
                 peer_bounds.y/peer_density
-            earliest = maxf(earliest,peer_opening_after(peer_end,
+            earliest = maxf(earliest,
+                peer_popin_after(peer_end,peer_density,playhead_x,density)
+                if popping_in else peer_opening_after(peer_end,
                 peer_density,peer_playhead,density,viewport_width,playhead_x))
     return earliest
+
+
+static func peer_popin_after(peer_end: float, peer_density: float,
+        playhead_x: float, density: float) -> float:
+    # Ink that opens on the EMPTY strip (owner P5): the outgoing layer's last
+    # pixel has passed the playhead. Ink of another density then never
+    # overlaps it: a slower incoming layer only falls further behind, and a
+    # faster one is still right of the old ink's last pixel when that pixel
+    # leaves past the left edge (a pure linear bound on screen positions).
+    var floor_beat: float = peer_end + PEER_MARGIN_PX/maxf(1.0,density)
+    if density > peer_density:
+        floor_beat += playhead_x*(density-peer_density)/(peer_density*density)
+    return floor_beat
 
 
 static func peer_opening_after(peer_end: float, peer_density: float,
@@ -66,14 +87,15 @@ static func peer_opening_after(peer_end: float, peer_density: float,
     # rightmost pixel has left the viewport before new ink enters.
     if absf(density-peer_density) < .0001:
         return peer_end
-    return peer_end + (peer_playhead+60.0)/peer_density + \
+    return peer_end + (peer_playhead+PEER_MARGIN_PX)/peer_density + \
         (viewport_width-playhead_x)/density
 
 
 func _clears_prior_layers(opening_left: float, density: float,
-        viewport_width: float, playhead_x: float) -> bool:
+        viewport_width: float, playhead_x: float,
+        popping_in: bool = false) -> bool:
     return opening_left >= minimum_peer_opening(
-        density,viewport_width,playhead_x)-.00001
+        density,viewport_width,playhead_x,popping_in)-.00001
 
 
 func _init() -> void:
@@ -164,12 +186,12 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     var onto_empty_strip: bool = empty_strip and \
         not Admission.ink_ahead_of(online,world,density,gap,
             source_duration,take) and \
-        minimum_peer_opening(density,viewport_width,playhead_x) <= world+.00001
+        minimum_peer_opening(density,viewport_width,playhead_x,true) <= world+.00001
     var inside: bool = is_finite(opening_left) and \
         playhead_x + (opening_left-world)*density <= viewport_width
     if not is_finite(opening_left) or (inside and not onto_empty_strip) or \
             not _clears_prior_layers(opening_left,density,
-                viewport_width,playhead_x):
+                viewport_width,playhead_x,inside and onto_empty_strip):
         return false
     if not online.is_empty():
         var end_beat := -INF

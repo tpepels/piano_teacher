@@ -685,8 +685,8 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
         canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
             Color(NOTE_INK,.48),1.0,true)
         return
-    canvas.draw_rect(Rect2(0,staff_top-gap,29,
-        staff_bottom-staff_top+gap*2),Design.STAGE)
+    # No backing panel: strips clip themselves at the gutter
+    # (StreamLifecycle.LEFT_GUTTER_PX), so the brace sits on the backdrop.
     if glyphs.textures.has("brace"):
         canvas.draw_texture_rect(glyphs.textures["brace"],
             Rect2(6,staff_top-2,18,staff_bottom-staff_top+4),false,NOTE_INK)
@@ -698,6 +698,11 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 var _ambient_anchor_world := 0.0
 
 var _stream_last_admitted := -1
+# Owner decision P5 (2026-11-11): rests stay short. No written rest measure
+# is printed after a take; once its last pixel has passed the playhead the
+# staff is empty and the next take opens one count-in bar ahead (the
+# empty-strip rule). Tests of the former written rest may enable it.
+var written_rest_between_takes := false
 # Each backend decision has a stable identity. Repeated state polls cannot
 # enqueue another copy after the first source has already been activated
 # or has passed off the left edge.
@@ -762,7 +767,7 @@ func _stream_add_take(source_beat: float, start_world: float,
             "piece_duration":timeline.duration_beats,"take_key":take_key,
             "pending":take_key in ["prepared","autopending"],
             "hidden_until_armed":hidden}]
-        if is_last and gap > .0001:
+        if is_last and gap > .0001 and written_rest_between_takes:
             specs.append({
                 "kind":"rest","owner_serial":serial,
                 "take_owner":first_serial,
@@ -946,11 +951,13 @@ func reserve_transport_action(action: String, world: float,
     return _transport_admission_receipt(planned,admitted,world,opening)
 
 
-func earliest_continuation_world(world: float, opening: float) -> float:
+func earliest_continuation_world(world: float, opening: float,
+        count_in_beats: float = 0.0) -> float:
     # Pure: the earliest world position where an automatic continuation's
-    # source can still be admitted offscreen once every unseen strip is
-    # withdrawn (exposed ink stays). Resume in a rest between takes sends
-    # this as its lead so the engine re-announces a deadline that fits.
+    # source can still be admitted once every unseen strip is withdrawn
+    # (exposed ink stays): offscreen, or on an empty strip one count-in bar
+    # ahead (P5). Resume in a rest sends this as its lead so the engine
+    # re-announces a deadline that fits.
     if not native_ready or not retained_ready():
         return NAN
     world = maxf(world,stream_world_beat)
@@ -966,7 +973,46 @@ func earliest_continuation_world(world: float, opening: float) -> float:
         density,size.x,size.x*PLAYHEAD_FRACTION)
     if is_finite(peer):
         start = maxf(start,peer+header)
+    if count_in_beats > 0.0:
+        var empty: float = StreamAdmission.empty_strip_start(
+            preview["remaining"],world,count_in_beats,header,
+            _stream_queue.minimum_peer_opening(density,size.x,
+                size.x*PLAYHEAD_FRACTION,true),
+            density,staff_gap(),timeline.duration_beats)
+        if is_finite(empty) and (not is_finite(start) or empty < start):
+            start = empty
     return start
+
+
+func short_rest_geometry() -> Dictionary:
+    # P5: what the engine needs to time a continuation that opens on the
+    # empty strip. clear: from a take's end until its final barline margin
+    # has passed the playhead (plus a frame margin); header: the rest gap
+    # and opening header the queue keeps after older ink.
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    return {"continuation_clear_beats":
+            2.2*staff_gap()/density+StreamAdmission.OFFSCREEN_MARGIN_BEATS,
+        "continuation_header_beats":
+            StreamAdmission.REST_GAP_BEATS+_stream_header_beats(0.0)+
+            StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+
+
+func announced_copy_onset(world: float) -> float:
+    # The world onset of the most recently announced continuation's
+    # admitted, still unbound copy if it is still ahead of the playhead (a
+    # Resume in the rest reuses it, like a paused take); otherwise NAN.
+    var newest := -1
+    for owner_serial in _scheduled_score_plan_ids.values():
+        newest = maxi(newest,int(owner_serial))
+    for item in _stream_queue.online:
+        if str(item.get("kind","")) == "source" and \
+                int(item.get("take_owner",-1)) == newest and \
+                str(item.get("take_key","")) == "autopending":
+            var onset: float = float(item["world_origin"])+ \
+                float(item.get("source_floor",0.0))
+            return onset if onset > maxf(world,stream_world_beat)+ \
+                StreamAdmission.PAUSED_REUSE_EPSILON_BEATS else NAN
+    return NAN
 
 
 func arm_stream_take(world: float, opening: float,
@@ -1026,7 +1072,7 @@ func arm_stream_take(world: float, opening: float,
                 _stream_queue.online,stream_world_beat,empty_strip_count_in,
                 _stream_header_beats(opening),
                 _stream_queue.minimum_peer_opening(timeline.pixels_per_beat,
-                    size.x,size.x*PLAYHEAD_FRACTION),
+                    size.x,size.x*PLAYHEAD_FRACTION,true),
                 timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
             onto_empty_strip = is_finite(earliest) and \
                 planned_start_world >= earliest-.0001
@@ -1197,7 +1243,8 @@ func _restore_future_suffix(saved: Array, world: float) -> bool:
 
 func enqueue_recovery_queue(world: float, source_opening: float,
         graded_deadline_world: float, plan_id: String = "",
-        allow_count_in: bool = false, count_in_beats: float = 0.0) -> bool:
+        allow_count_in: bool = false, count_in_beats: float = 0.0,
+        deadline_at_or_after: bool = false) -> bool:
     # Recovery decisions arrive from the engine with an absolute graded
     # deadline. Reuse a compatible offline-planned future if possible;
     # otherwise withdraw the maximal safe suffix, then APPEND new source
@@ -1241,23 +1288,41 @@ func enqueue_recovery_queue(world: float, source_opening: float,
         # The source can appear during ONE count-in on an entirely empty
         # staff; the existing source/rest/peer exposure rules still apply.
         var peer_floor: float = _stream_queue.minimum_peer_opening(
-            timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION)
+            timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION,true)
         var onset: float = StreamAdmission.empty_strip_start(
             remaining,stream_world_beat,count_in_beats,
             _stream_header_beats(source_opening),peer_floor,
             timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
-        if is_finite(onset) and \
+        # Practice continuations (P5 short rests): the engine's deadline is
+        # the one source; it opens on the empty strip when no earlier than
+        # the empty-strip slot (one count-in bar ahead, after the gap).
+        if is_finite(onset) and ((deadline_at_or_after and
+                graded_deadline_world >= onset-.0001) or
                 absf(onset-graded_deadline_world) <= \
-                    StreamAdmission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS:
+                    StreamAdmission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS):
             checked = graded_deadline_world
             on_empty = true
+        elif deadline_at_or_after and count_in_beats > 0.0:
+            # Late safety net: the plan reached an empty strip after its
+            # one-bar slot (a slow engine tick). Still on the empty staff and
+            # still exactly at the engine deadline, with at least half the
+            # count-in bar ahead: better than grading a take with no ink.
+            var late: float = StreamAdmission.empty_strip_start(
+                remaining,stream_world_beat,count_in_beats*.5,
+                _stream_header_beats(source_opening),peer_floor,
+                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+            if is_finite(late) and graded_deadline_world >= late-.0001:
+                checked = graded_deadline_world
+                on_empty = true
+                _diagnose_plan(identity,"admitted_late_on_empty_strip",
+                    graded_deadline_world)
     if not is_finite(checked):
         _diagnose_plan(identity,"refused_inside_or_overlap",
             graded_deadline_world)
         return false
     var incoming_left: float = checked - _stream_header_beats(source_opening)
     if not _stream_queue._clears_prior_layers(incoming_left,
-            timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION):
+            timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION,on_empty):
         _diagnose_plan(identity,"refused_prior_layer",graded_deadline_world)
         return false
     # COMMIT: the exact same exposure snapshot and world coordinate must
@@ -1541,11 +1606,14 @@ func _project_stream(playhead_x: float) -> void:
         # Register every head the strip actually shows, including heads a
         # voice column displaced left of its source floor into the clip's
         # leading margin: they are painted, so they must stay interactive.
+        # The same window the strip clips to: nothing behind the gutter.
+        var window_left: float = maxf(position+clip_bounds.x,
+            StreamLifecycle.LEFT_GUTTER_PX)
         var count: int = RetainedNoteProjection.append_visible(
             segment.note_instances,position,size.x,playhead_x,
             int(item["serial"]),drawn_note_instances,drawn_noteheads,
-            clip_bounds.x,clip_bounds.y,take_key,
-            Vector2(position+clip_bounds.x,position+clip_bounds.y))
+            window_left-position,clip_bounds.y,take_key,
+            Vector2(window_left,position+clip_bounds.y))
         visible_symbols += count
         frame_scanned_events += count
         fingering_pass_clocks.append({

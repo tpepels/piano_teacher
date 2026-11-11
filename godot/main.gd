@@ -911,11 +911,7 @@ func _process(_delta: float) -> void:
     frame_ms = Time.get_ticks_msec()
     var ticks: int = frame_ms
     var beat: float = _transport_beat_at(ticks)
-    var source_bpm: float = float(last_state.get("bpm",40.0))
-    if bool(last_state.get("running",false)) or bool(last_state.get("paused",false)):
-        source_bpm = TempoTimeline.bpm_at_beat(beat,source_bpm,
-            last_state.get("tempo_segments",[]))
-    score_flow.sample(ticks,source_bpm)
+    score_flow.sample(ticks,_flow_bpm(last_state,beat,ticks))
     _read_feedback_events()
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
@@ -928,6 +924,24 @@ func _process(_delta: float) -> void:
         # Old score clips continue exiting even during a revision load or
         # a source-picker transition with no currently loaded piece.
         score_runway.present_frame(last_state,_unrolled_score_beat_at(beat,ticks))
+
+func _flow_bpm(state: Dictionary, beat: float, at_ms: int = -1) -> float:
+    # The presentation axis moves at the take's authored tempo while it
+    # runs, otherwise at the selected BPM (rests, count-ins, READY). From an
+    # announced take's deadline on, it moves at that take's start rate even
+    # before the engine's first snapshot of the take arrives.
+    var source_bpm: float = float(state.get("bpm",40.0))
+    if bool(state.get("running",false)) or bool(state.get("paused",false)):
+        source_bpm = TempoTimeline.bpm_at_beat(beat,source_bpm,
+            state.get("tempo_segments",[]))
+    elif at_ms >= 0 and state.get("score_queue_next") is Dictionary and \
+            visual_transport_clock.has_backend_offset:
+        var plan: Dictionary = state["score_queue_next"]
+        var start_ms: float = float(plan.get("deadline_at_ms",INF)) + \
+            visual_transport_clock.backend_offset_ms
+        if float(at_ms) >= start_ms and plan.has("start_rate_bpm"):
+            source_bpm = float(plan["start_rate_bpm"])
+    return source_bpm
 
 func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
@@ -985,9 +999,29 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     last_state_tick = int((started_ms+received_ms)/2.0)
     visual_transport_clock.accept(parsed,last_state_tick,received_ms)
     _switch_flow_rate_at_take_start(parsed)
+    # Adopt this snapshot's rate BEFORE anything is placed on the axis. When
+    # the engine reports the instant its tempo changed (settlement, slower
+    # retry, stage handoff), switch the forward-only axis retroactively at
+    # that instant; otherwise from here. Deadlines computed at the new tempo
+    # then stay on the ink.
+    var flow_beat: float = _transport_beat_at(received_ms)
+    var epoch: float = float(parsed.get("tempo_epoch_ms",NAN))
+    if is_finite(epoch) and visual_transport_clock.has_backend_offset and \
+            epoch != _applied_tempo_epoch:
+        _applied_tempo_epoch = epoch
+        score_flow.switch_rate_at(epoch+visual_transport_clock.backend_offset_ms,
+            _flow_bpm(parsed,flow_beat))
+    score_flow.sample(received_ms,_flow_bpm(parsed,flow_beat,received_ms))
     var promoted_this_snapshot := false
     if score_runway != null:
-        promoted_this_snapshot = score_runway.promote_if_ready(parsed)
+        # A prepared stage opens at the engine's run_at, projected on this
+        # same axis exactly like any announced plan (one deadline).
+        var stage_world := NAN
+        if visual_transport_clock.has_backend_offset and parsed.has("visual_run_at_ms"):
+            stage_world = score_flow.project_authored_future(roundi(
+                float(parsed["visual_run_at_ms"])+visual_transport_clock.backend_offset_ms),
+                received_ms,flow_beat,float(parsed.get("bpm",40.0)),[])
+        promoted_this_snapshot = score_runway.promote_if_ready(parsed,stage_world)
         if not promoted_this_snapshot:
             # A manual, unprepared lesson change must replace the active
             # renderer BEFORE asset reset, preserving its moving notes.
@@ -999,6 +1033,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         score_runway.update_state(parsed,received_ms)
     if bool(parsed.get("loaded",false)) and practice_view.stage.renderer != null:
         var beat: float = _transport_beat_at(received_ms)
+
         var world: float = _unrolled_score_beat_at(beat,received_ms)
         var renderer = practice_view.stage.renderer
         renderer.present(
@@ -1039,11 +1074,15 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
                 deadline_ms,received_ms,beat,float(parsed.get("bpm",40.0)),
                 future_segments)
             var playback_mode: String = str(parsed.get("mode","practice"))
+            # Practice continuations open on the empty strip at their engine
+            # deadline (P5); Listen/Perform/Learn keep the exact slot.
             renderer.enqueue_recovery_queue(world,
                 float(next_plan["source_from_beat"]),
                 authored_world,str(next_plan["plan_id"]),
-                playback_mode in ["listen","perform","learn"],
-                float(parsed.get("next_count_in_beats",0.0)))
+                playback_mode in ["listen","perform","learn","practice"],
+                float(next_plan.get("count_in_beats",
+                    parsed.get("next_count_in_beats",0.0))),
+                playback_mode == "practice")
         # Atomically bind an acknowledged transport ID to the already armed
         # source BEFORE publishing the new backend state. Otherwise the UI
         # may observe a running Retry while its note copy still has the
@@ -1058,6 +1097,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
 
 
 var _flow_rate_transport := ""
+var _applied_tempo_epoch := NAN
 
 func _switch_flow_rate_at_take_start(parsed: Dictionary) -> void:
     # A repeat's tempo step is settled at its graded run_at, but this client
@@ -1134,13 +1174,31 @@ func _send_action(command: Dictionary) -> void:
         # reserve. Report where the announced next take's source can still
         # be admitted offscreen; the engine re-announces its deadline no
         # earlier than that (the axis kept moving during the pause).
-        var rest_now: float = score_flow.project(Time.get_ticks_msec())
-        var earliest: float = practice_view.stage.renderer.earliest_continuation_world(
-            rest_now,0.0)
+        var rest_at_ms: int = Time.get_ticks_msec()
+        var rest_now: float = score_flow.project(rest_at_ms)
+        var rest_renderer = practice_view.stage.renderer
         command = command.duplicate(true)
-        if is_finite(earliest):
+        # The announced copy may already be on the staff (it opens one bar
+        # ahead on the empty strip): while still ahead of the playhead the
+        # take keeps it, like Resume of a paused take, re-timed to reach the
+        # playhead where it now is. Otherwise report where fresh ink fits.
+        var copy_onset: float = rest_renderer.announced_copy_onset(rest_now)
+        if is_finite(copy_onset):
             command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
-                earliest,rest_now,score_flow.bpm)
+                copy_onset,rest_now,float(last_state.get("bpm",score_flow.bpm)))
+            command["reuse_announced_score"] = true
+        else:
+            var earliest: float = rest_renderer.earliest_continuation_world(
+                rest_now,0.0,float(last_state.get("next_count_in_beats",0.0)))
+            if is_finite(earliest):
+                command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
+                    earliest,rest_now,float(last_state.get("bpm",score_flow.bpm)))
+        command.merge(rest_renderer.short_rest_geometry(),true)
+        if command.has("presentation_lead_seconds") and \
+                visual_transport_clock.has_backend_offset:
+            command["presentation_deadline_ms"] = float(rest_at_ms) + \
+                float(command["presentation_lead_seconds"])*1000.0 - \
+                visual_transport_clock.backend_offset_ms
         command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(
             float(practice_view.stage.renderer.practice_timeline.get(
                 "gap",{}).get("duration_beats",0.0)),
@@ -1154,7 +1212,8 @@ func _send_action(command: Dictionary) -> void:
         # The user's action reserves the next musical deadline beyond all
         # notes still moving on the visual bar. The engine, not the GUI,
         # applies this lead to MIDI grading and count-in.
-        var visual_now: float = score_flow.project(Time.get_ticks_msec())
+        var reserved_at_ms: int = Time.get_ticks_msec()
+        var visual_now: float = score_flow.project(reserved_at_ms)
         var renderer = practice_view.stage.renderer
         var opening: float = maxf(0.0,float(last_state.get("play_from_beat",0.0)))
         if requested == "resume":
@@ -1175,8 +1234,20 @@ func _send_action(command: Dictionary) -> void:
             return
         _pending_stream_renderer = renderer
         command = command.duplicate(true)
+        # World beats to seconds at the rate the axis moves at AFTER this
+        # command: Play's count-in and Retry's rest run at the selected BPM
+        # (a tempo-mapped take, e.g. a slowdown stage, ran at its own rate
+        # until now); a mid-take Resume continues inside the take's map.
+        var lead_bpm: float = score_flow.bpm if requested == "resume" else \
+            float(last_state.get("bpm",score_flow.bpm))
         command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
-            float(reserved["start_world"]),visual_now,score_flow.bpm)
+            float(reserved["start_world"]),visual_now,lead_bpm)
+        if visual_transport_clock.has_backend_offset:
+            # The reserved deadline itself (backend clock): the engine
+            # measures the lead when it processes the command.
+            command["presentation_deadline_ms"] = float(reserved_at_ms) + \
+                float(command["presentation_lead_seconds"])*1000.0 - \
+                visual_transport_clock.backend_offset_ms
         if requested == "resume":
             command["reuse_pending_score"] = bool(
                 reserved.get("reused_unplayed_count_in",false))
@@ -1185,6 +1256,7 @@ func _send_action(command: Dictionary) -> void:
         command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(
             written_rest,renderer._stream_right_beats(),
             renderer._stream_header_beats(0.0))
+        command.merge(renderer.short_rest_geometry(),true)
     _send_command("practice.command", command)
 
 

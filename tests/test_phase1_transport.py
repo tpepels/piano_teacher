@@ -218,9 +218,12 @@ def test_godot_uses_single_transport_sample_for_music_and_metronome():
     assert 'func _restart_practice() -> void:' in main
     cue_timeline = (root / 'countin_cue_timeline.gd').read_text()
     assert 'if paused:' in click_owner
-    assert '_cues.hold(token,beat)' in click_owner
-    # The engine's one count-in bar windows every cue (owner, 2026-11-08).
-    assert '_dispatch_cue(token,beat,bar,false,count_in_beats)' in click_owner
+    # One helper turns every count-in reading into circles and cues, in
+    # the meter's main pulse (owner M3, 2026-11-11): it holds while paused
+    # and the engine's one count-in bar windows every cue (2026-11-08).
+    assert '_cues.hold(token,float(units[0]))' in click_owner
+    assert '_dispatch_cue(token,float(units[0]),int(units[1]),use_raw_click,float(units[2]))' in click_owner
+    assert 'state.get("count_in_meter"),false,count_in_beats,paused)' in click_owner
     assert 'var tick := floori(beat + .00001)' in cue_timeline
     assert '"accent":posmod(tick,meter) == 0' in cue_timeline
 
@@ -246,7 +249,7 @@ def test_three_four_count_in_retains_meter_for_click_accents(harness):
     assert 'CueTimeline.new()' in clicks
     assert '"accent":posmod(tick,meter) == 0' in (
         root / 'countin_cue_timeline.gd').read_text()
-    assert 'practice_view.stage.count_in.present(beat,bar,true,paused,count_in_beats)' in clicks
+    assert 'practice_view.stage.count_in.present(float(units[0]),int(units[1]),true,' in clicks
     assert 'metronome_frame.update(last_state,last_state_tick,sampled_beat,now_ms)' in main
 
 

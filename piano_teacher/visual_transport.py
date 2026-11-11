@@ -37,11 +37,22 @@ class VisualTransport:
     # runs, and started with exactly this run_at and BPM. Nothing adds a
     # lead or recomputes the tempo later.
     announced_continuation: tuple[float, float, float] | None = None
+    # Identity of the announcement (part of score_queue_next.plan_id). A new
+    # announcement is new ink; a re-timed one keeps its admitted ink.
+    announce_serial: int = 0
 
     def announce_continuation(self, source_from_beat: float,
                               deadline: float, bpm: float) -> None:
+        self.announce_serial += 1
         self.announced_continuation = (
             float(source_from_beat), float(deadline), float(bpm))
+        self.next_at = float(deadline)
+
+    def retime_announcement(self, deadline: float) -> None:
+        """Keep the announced (already admitted) ink; move only its deadline
+        to where that ink now reaches the playhead (Resume in a rest)."""
+        floor, _, bpm = self.announced_continuation
+        self.announced_continuation = (floor, float(deadline), bpm)
         self.next_at = float(deadline)
 
     def announced_deadline(self, source_from_beat: float) -> float | None:

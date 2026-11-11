@@ -62,16 +62,23 @@ func project_authored_future(at_ms: int, sampled_ms: int,
     # Feedback/paused preparation continues at the selected rest BPM.
     var local_world: float = project(sampled_ms)
     var delta_seconds: float = maxf(0.0,float(at_ms-sampled_ms)/1000.0)
+    # Slow-down debt still owed after sampled_ms is repaid on the way to the
+    # deadline (at most half of each step): the axis reaches the deadline
+    # that much later, so the projection must subtract it too.
+    var owed: float = maxf(0.0,_slow_debt-minf(_slow_debt,
+        float(maxi(0,sampled_ms-last_ms))*bpm/60000.0*0.5))
     if delta_seconds <= 0.0 or authored_segments.is_empty() or \
             not is_finite(source_beat) or not is_finite(nominal_bpm) or \
             nominal_bpm <= 0.0:
-        return local_world + delta_seconds*bpm/60.0
+        var advance: float = delta_seconds*bpm/60.0
+        return local_world + advance - minf(owed,advance*0.5)
     var timing = preload("res://tempo_timeline.gd")
     var before: float = timing.seconds_at_beat(
         source_beat,nominal_bpm,authored_segments)
     var after: float = timing.beat_at_seconds(
         before+delta_seconds,nominal_bpm,authored_segments)
-    return local_world+maxf(0.0,after-source_beat)
+    var mapped: float = maxf(0.0,after-source_beat)
+    return local_world+mapped-minf(owed,mapped*0.5)
 
 
 func reset() -> void:

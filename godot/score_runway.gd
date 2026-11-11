@@ -353,46 +353,49 @@ func present_frame(_state: Dictionary, global_beat: float) -> void:
         # Reserve an additional 1.5 source beats for polling/IPC jitter,
         # beyond the entire offscreen staff and Verovio header. Neither
         # the frontend nor the backend may recenter a late source.
-        var lead: float = maxf(5.0,
-            _future._stream_right_beats()+
-            _future._stream_header_beats(0.0)+1.5)
-        lead = maxf(lead,_outgoing_clearance_beats())
-        _ack_waiting = _ack.request("score.stage_ready",{
-            "stage_key":_bundle["stage_key"],
+        # P5 short handoff: the engine settles the step once the outgoing
+        # take's last pixel has passed (clear, beats after that take's end)
+        # and opens the new stage on the empty strip one count-in bar ahead,
+        # never closer than the rest gap and header (lead).
+        var short: Dictionary = _short_handoff()
+        var request: Dictionary = {"stage_key":_bundle["stage_key"],
             "revision":_bundle["revision"],
-            "presentation_lead_beats":lead}) == OK
+            "presentation_lead_beats":float(short.get("lead",maxf(5.0,
+                _future._stream_right_beats()+
+                _future._stream_header_beats(0.0)+1.5)))}
+        if short.has("clear"):
+            request["presentation_clear_beats"] = float(short["clear"])
+        # The incoming stage's own short-rest geometry (its density/header)
+        # times that stage's repeats once the handoff commits.
+        if _future.has_method("short_rest_geometry"):
+            request.merge(_future.short_rest_geometry(),true)
+        _ack_waiting = _ack.request("score.stage_ready",request) == OK
 
 
-func _outgoing_clearance_beats() -> float:
-    # The handoff starts when the current take ends. Its own ink and printed
-    # rest are still on the staff then (now that every repeat is drawn), and
-    # the queue admits the next stage only after that ink by the SAME peer
-    # rule it enforces (ScoreStreamQueue.peer_opening_after). Reserve that
-    # lead from the take's end, plus the usual 1.5-beat jitter, or the
-    # prepared stage is refused and the next stage plays with no ink.
+func _short_handoff() -> Dictionary:
+    # Geometry for opening the next stage on the empty strip (owner P5),
+    # from the SAME pop-in peer rule the queue enforces
+    # (ScoreStreamQueue.peer_popin_after): clear = beats after the outgoing
+    # take's end until its final barline margin has passed the playhead and
+    # the new density may open without ever overlapping it; lead = the rest
+    # gap plus the new opening header (the engine adds one count-in bar).
     var old = stage.renderer if stage != null else null
     if old == null or not is_instance_valid(old) or old == _future or \
-            old.get("timeline") == null or not old.has_method("staff_gap") or \
-            not old.get("practice_timeline") is Dictionary:
-        return 0.0
+            old.get("timeline") == null or not old.has_method("staff_gap"):
+        return {}
     var old_density: float = maxf(1.0,float(old.timeline.pixels_per_beat))
     var duration: float = float(old.timeline.duration_beats)
-    # The take's printed end (final barline margin) and its written rest.
-    var printed_end: float = StreamAdmission.engraved_clip_bounds(
-        0.0,duration,old_density,float(old.staff_gap()),duration).y/old_density
-    var peer_end: float = maxf(printed_end,duration)-duration+ \
-        float(old.practice_timeline.get("gap",{}).get("duration_beats",0.0))
+    var trailing: float = StreamAdmission.engraved_clip_bounds(
+        0.0,duration,old_density,float(old.staff_gap()),duration).y/old_density-duration
     var density: float = maxf(1.0,float(_future.timeline.pixels_per_beat))
-    var playhead_x: float = _future.size.x*NativeView.PLAYHEAD_FRACTION
-    var opening_left: float = StreamQueue.peer_opening_after(peer_end,
-        old_density,old.size.x*NativeView.PLAYHEAD_FRACTION,density,
-        _future.size.x,playhead_x)
-    if absf(density-old_density) < .0001:
-        opening_left += StreamAdmission.REST_GAP_BEATS
-    return opening_left+_future._stream_header_beats(0.0)+1.5
+    var clear: float = StreamQueue.peer_popin_after(maxf(0.0,trailing),
+        old_density,_future.size.x*NativeView.PLAYHEAD_FRACTION,density)+ \
+        StreamAdmission.OFFSCREEN_MARGIN_BEATS
+    return {"clear":clear,"lead":StreamAdmission.REST_GAP_BEATS+
+        _future._stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 
 
-func promote_if_ready(state: Dictionary) -> bool:
+func promote_if_ready(state: Dictionary, run_at_world: float = NAN) -> bool:
     if _future == null or not is_instance_valid(_future) or \
             not _acknowledged or not _future.retained_ready():
         return false
@@ -409,9 +412,15 @@ func promote_if_ready(state: Dictionary) -> bool:
     var graded: float = float(state.get("clock_beat",-INF))
     if not is_finite(graded) or graded >= 0.0:
         return false
-    var intended_world: float = _visual_beat - graded
+    # The engine's run_at projected on the presentation axis (main.gd, with
+    # this snapshot's tempo already applied); the frame's cached world minus
+    # the sampled clock beat is only a fallback.
+    var intended_world: float = run_at_world if is_finite(run_at_world) \
+        else _visual_beat - graded
+    # The step opens on the empty strip one count-in bar ahead (P5).
     var armed: Dictionary = new_renderer.arm_stream_take(
-        _visual_beat,0.0,intended_world)
+        _visual_beat,0.0,intended_world,false,false,
+        float(state.get("count_in_beats",0.0)))
     if armed.is_empty():
         return false
     # The future stage has already been explicitly acknowledged by the

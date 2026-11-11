@@ -138,6 +138,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "visual_offset_beats": ('number',),
     "visual_preparation_schedule": ('dict', 'null'),
     "visual_run_at_ms": ('number',),
+    "tempo_epoch_ms": ('number',),
     "visual_scroll_beat": ('number',),
     "visual_scroll_speed": ('number',),
     "visual_target_beat": ('number',),

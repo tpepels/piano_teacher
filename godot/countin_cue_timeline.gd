@@ -33,6 +33,26 @@ func continues(token: String, beat: float) -> bool:
 # Explicit "count one whole bar of the meter" (Retry preparation, whose
 # engine count_in_beats is not published). 0 is a real count-in of zero.
 const WHOLE_BAR := -1.0
+# A count-in cue is spoken only within this fraction of its beat.
+const LATE_CUE_BEATS := 0.2
+
+# Owner decision M3 (2026-11-11): compound meters count their main pulse,
+# the dotted quarter, evenly across the one count-in bar: 6/8 "Ichi Ni",
+# 9/8 "Ichi Ni San", 12/8 "Ichi Ni San Shi". Beats are quarter notes.
+static func pulse_beats(meter: Variant) -> float:
+    if meter is Array and meter.size() >= 2 and int(meter[1]) == 8 and \
+            int(meter[0]) in [6,9,12]:
+        return 1.5
+    return 1.0
+
+# A count-in reading (beat, bar, count_in) in pulse units: only the
+# count-in before beat 0 is re-expressed; the take's own beats stay beats.
+static func in_pulses(beat: float, bar_beats: float, count_in_beats: float,
+        pulse: float) -> Array:
+    if pulse == 1.0 or not is_finite(beat) or beat >= 0.0:
+        return [beat,maxi(1,roundi(bar_beats)),count_in_beats]
+    return [beat/pulse,maxi(1,roundi(bar_beats/pulse)),
+        count_in_beats if count_in_beats == WHOLE_BAR else count_in_beats/pulse]
 
 static func counting(beat: float, beats_per_bar: int,
         count_in_beats: float = WHOLE_BAR) -> bool:
@@ -61,6 +81,11 @@ func observe(token: String, beat: float, beats_per_bar: int,
         # render frame must never speak the same beat twice.
         return {}
     _last_tick = tick
+    if tick < 0 and beat - float(tick) > LATE_CUE_BEATS:
+        # A count-in beat first observed well after it began (Resume landing
+        # mid-beat, R1 M4: "San" at -1.34 then "Shi" 0.53 s later) is
+        # consumed silently: every spoken cue falls on its beat.
+        return {}
     var meter: int = maxi(1,beats_per_bar)
     return {"tick":tick,"beat":beat,"count_in":tick < 0,
         "syllable":posmod(tick,meter)+1,

@@ -106,6 +106,14 @@ there is no legacy camera fallback.
    clock, so the two never both speak a bar. A rest with no announced take
    speaks nothing; that take counts its own last bar once it starts.
    Nothing is spoken earlier in the rest.
+10. **Compound meters count their pulse** (owner decision M3, 2026-11-11):
+    6/8, 9/8 and 12/8 speak one syllable per dotted-quarter pulse, evenly
+    across the one bar ("Ichi Ni", "Ichi Ni San", "Ichi Ni San Shi"), and
+    the circles match (`CountInCueTimeline.pulse_beats`/`in_pulses`). Simple
+    meters are unchanged.
+11. **Every cue on its beat** (R1 M4): a count-in cue first observed more
+    than `CountInCueTimeline.LATE_CUE_BEATS` after its beat (Resume landing
+    mid-beat) is consumed silently instead of spoken late.
 
 ## Required regression gates
 

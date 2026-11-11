@@ -127,9 +127,28 @@ not one that may master the stage, re-engrave from performance feedback, or
 plan a remediation (decided at take end and reused at settlement), nor a
 response that leaves timed practice. An unannounced continuation gets a
 fresh full horizon when it is settled and counts its last bar itself.
-Resume in a rest re-announces the next take (new plan identity) no earlier
-than the position Godot reports it can still admit offscreen, because the
-presentation axis kept moving while paused; the old copy gets no count-in.
+Resume in a rest reuses the announced copy while it is still ahead of the
+playhead (same plan identity, deadline re-timed to where that ink now is,
+like Resume of a paused take); otherwise it re-announces (new identity) no
+earlier than where Godot can still admit fresh ink, and the old copy gets no
+count-in.
+
+**Short rests (owner decision P5, 2026-11-11).** No written rest measure is
+printed after a take. Once its final barline margin has passed the playhead
+the staff is empty, and the next take opens one count-in bar ahead under the
+empty-strip rule, never closer than the rest gap and header after older ink.
+Godot reports that geometry (`continuation_clear_beats`,
+`continuation_header_beats`) with each transport command and, for a stage,
+with `score.stage_ready`; the engine's deadline is take end + clearance +
+max(bar, gap and header), so rest plus count-in is about one bar (1.1-1.6
+bars measured). A stage handoff is settled once the outgoing ink has passed
+(`presentation_clear_beats`) and opens on the empty strip; ink of another
+density then follows `ScoreStreamQueue.peer_popin_after` (no horizontal
+overlap with the outgoing ink) instead of waiting for the whole screen to
+clear. Offscreen admissions keep the whole-screen rule. The engine publishes
+`tempo_epoch_ms` and each plan's `start_rate_bpm`, so Godot switches its
+forward-only presentation rate at the instant the tempo changes. Strips clip
+themselves at the fixed left gutter (`StreamLifecycle.LEFT_GUTTER_PX`).
 Resume cannot repurpose a different source interval. A successful
 source/transport bind changes only transport status; never immutable source
 geometry. Failed controls restore every strip's provisional status or remove

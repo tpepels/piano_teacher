@@ -46,7 +46,8 @@ class MockView:
     func _stream_header_beats(_opening: float) -> float:
         return 3.5
     func arm_stream_take(world: float, _opening: float,
-            planned: float = NAN) -> Dictionary:
+            planned: float = NAN, _resuming: bool = false,
+            _retrying: bool = false, _count_in: float = 0.0) -> Dictionary:
         arm_calls += 1
         if not is_finite(planned) or planned <= world+9.5:
             return {}

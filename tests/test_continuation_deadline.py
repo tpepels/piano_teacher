@@ -268,16 +268,15 @@ def test_an_announced_continuation_is_exactly_the_take_that_runs(engine, scenari
         assert plan["bpm"] > BPM, "the count-in is announced at the stepped tempo"
 
 
-@pytest.mark.parametrize("reason", ["mastery", "feedback_reengraving", "remediation"])
+@pytest.mark.parametrize("reason", ["mastery", "feedback_moves_stage", "remediation"])
 def test_a_take_whose_settlement_can_reroute_is_not_announced(engine, monkeypatch, reason):
     app, now = engine()
     if reason == "mastery":
         app.plan.bpm = app.plan.target_bpm
         from piano_teacher.lesson_settings import SETTINGS
         app.plan.streak = SETTINGS.clean_runs_to_master - 1
-    elif reason == "feedback_reengraving":
-        monkeypatch.setattr(type(app.plan), "accepts_performance_feedback",
-                            property(lambda _plan: True))
+    elif reason == "feedback_moves_stage":
+        _feedback_refresh(monkeypatch, app, moves=True)
     else:
         monkeypatch.setattr(app, "_decide_remediation", lambda result: setattr(
             app, "_decided_remediation", (app.plan.identity, "remedial section")))
@@ -288,3 +287,159 @@ def test_a_take_whose_settlement_can_reroute_is_not_announced(engine, monkeypatc
     assert rest["phase"] in ("feedback", "recovering")
     assert "score_queue_next" not in rest
     assert app.visual_transport.announced_continuation is None
+
+
+def _feedback_refresh(monkeypatch, app, *, moves: bool):
+    """An original-level stage whose feedback refresh moves (or keeps) the stage."""
+    plan_type = type(app.plan)
+    monkeypatch.setattr(plan_type, "accepts_performance_feedback", property(lambda _p: True))
+    calls = []
+
+    def refresh(plan, evidence, *, prefer_repair=True, focus_ids=None):
+        calls.append(dict(evidence))
+        if moves:
+            plan.stage_tempos = dict(plan.stage_tempos, _moved=True)
+            monkeypatch.setattr(plan_type, "identity", property(
+                lambda p: "moved-stage" if p.stage_tempos.get("_moved") else "kept"))
+        return moves
+    monkeypatch.setattr(plan_type, "refresh_from_feedback", refresh)
+    return calls
+
+
+def test_an_original_level_take_that_keeps_its_stage_is_announced(engine, monkeypatch):
+    """Item 1 (round 3): feedback refresh is decided at take end; only a take
+    that really re-engraves another stage goes unannounced."""
+    app, now = engine()
+    calls = _feedback_refresh(monkeypatch, app, moves=False)
+    start_with_horizon(app)
+    play_clean(app)
+    _, rest = finish_take(app, now)
+    assert calls, "the refresh was decided at take end"
+    assert "score_queue_next" in rest
+    plan = rest["score_queue_next"]
+    now[0] = plan["deadline_at_ms"] / 1000 + .01
+    started = app.state()
+    assert started["running"] and started["transport_id"] == plan["transport_id"]
+    assert app.visual_transport.run_at * 1000 == pytest.approx(plan["deadline_at_ms"])
+    # The dry run restored the plan exactly: settlement refreshed it again.
+    assert len(calls) == 2
+
+
+def _play_pattern(app, pattern: str):
+    phrase = app.plan.active_phrase
+    spb = 60.0 / app.plan.bpm
+    presses = []
+    for n in phrase.notes:
+        on = (n.start - phrase.start) * spb
+        off = (n.end - phrase.start) * spb - .02
+        pitch = n.pitch
+        if pattern == "late":
+            on, off = on + .35 * spb, off + .35 * spb
+        elif pattern == "short":
+            off = on + .1
+        elif pattern == "wrong":
+            pitch += 1
+        elif pattern == "missed":
+            continue
+        presses.append(PlayedNote(pitch, on, off))
+    app.recorder.presses = presses
+
+
+def test_take_end_remediation_decision_equals_the_settlement_computation(engine):
+    """The remediation decided when a take ends is exactly what the former
+    settlement-time computation (ledger including this take -> observe ->
+    planner) returns, across several failure histories."""
+    from piano_teacher.diagnosis_policies import AssessmentEvidence
+    app, now = engine()
+    history = ["late", "late", "late", "short", "short", "short",
+               "wrong", "wrong", "missed", "late", "short", "wrong"]
+    decisions = []
+    for pattern in history:
+        if not (app.running and app.visual_transport.play_from_beat == 0
+                and app.review_end_beat is None):
+            app.control("stop")
+            start_with_horizon(app)
+        _play_pattern(app, pattern)
+        finish_take(app, now)
+        result = app.pending_result
+        assert result is not None and not result.passed
+        stage, decided = app._decided_remediation
+        bpm = app._pending_assessed_bpm
+        # Settle the take (the next take starts) so the ledger holds it.
+        now[0] = max(now[0], app.visual_transport.next_at) + .01
+        app.state()
+        recommendation = app.practice_policy.observe(
+            app.fingerprint, AssessmentEvidence.from_result(stage, result, bpm))
+        old = (app.remediation_planner.plan(
+            recommendation, result, app.plan.active_variant, stage_key=stage,
+            boundaries=app.plan.piece.bar_boundaries)
+            if recommendation is not None else None)
+        assert decided == old, (pattern, decided, old)
+        decisions.append(decided)
+    assert any(d is None for d in decisions)
+    assert any(d is not None for d in decisions), "no history produced a remediation"
+
+
+CLEAR, HEADER = 0.3, 2.4  # beats, as Godot reports them (short_rest_geometry)
+
+
+def start_short(app):
+    app.control("start", continuous_horizon_beats=HORIZON,
+                continuation_clear_beats=CLEAR, continuation_header_beats=HEADER)
+    assert app.running
+
+
+@pytest.mark.parametrize("outcome", ["clean", "failed"])
+def test_short_rest_opens_the_repeat_one_count_in_bar_after_the_ink_has_passed(engine, outcome):
+    """Owner P5: rest plus count-in is at most about two bars. The repeat is
+    announced at take end + clearance + one count-in bar (never less than
+    the gap and header), and starts at exactly that run_at."""
+    app, now = engine()
+    start_short(app)
+    if outcome == "clean":
+        play_clean(app)
+    end_at, rest = finish_take(app, now)
+    plan = rest["score_queue_next"]
+    spb = 60 / BPM
+    bar = 4.0
+    from piano_teacher.server import SHORT_REST_LATENCY_SECONDS
+    expected = (max(end_at + CLEAR * spb, now[0] + SHORT_REST_LATENCY_SECONDS)
+                + max(bar, HEADER) * spb)
+    assert plan["deadline_at_ms"] / 1000 == pytest.approx(expected)
+    assert (expected - end_at) / spb <= 2 * bar, "rest + count-in within two bars"
+    now[0] = expected + .01
+    started = app.state()
+    assert started["running"] and started["transport_id"] == plan["transport_id"]
+    assert app.visual_transport.run_at == pytest.approx(expected)
+
+
+def test_short_rest_resume_reuses_the_visible_announced_copy(engine):
+    app, now = engine()
+    start_short(app)
+    play_clean(app)
+    _, rest = finish_take(app, now)
+    plan = rest["score_queue_next"]
+    app.control("pause")
+    now[0] += 3.0
+    # Godot: the announced copy is still 1.7 s from the playhead.
+    app.control("resume", reuse_announced_score=True, presentation_lead_seconds=1.7,
+                continuation_clear_beats=CLEAR, continuation_header_beats=HEADER)
+    reused = app.state()["score_queue_next"]
+    assert reused["plan_id"] == plan["plan_id"], "the take keeps its admitted ink"
+    assert reused["deadline_at_ms"] / 1000 == pytest.approx(now[0] + 1.7)
+    now[0] += 1.71
+    assert app.state()["running"]
+    assert app.visual_transport.run_at == pytest.approx(now[0] - .01)
+
+
+def test_play_runs_at_the_reserved_deadline_even_when_the_command_was_delayed(engine):
+    """Godot reports the reserved world position as an absolute deadline; a
+    command queued behind engine work must not move grading after the ink."""
+    app, now = engine()
+    reserved_at = now[0]
+    deadline = reserved_at + 6.0  # reserved slot, longer than the 3 s count-in bar
+    now[0] += 0.4  # the command waited 400 ms behind engine work
+    app.control("start", presentation_lead_seconds=6.0,
+                presentation_deadline_ms=deadline * 1000.0,
+                continuous_horizon_beats=HORIZON)
+    assert app.visual_transport.run_at == pytest.approx(deadline)

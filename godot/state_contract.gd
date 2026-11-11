@@ -112,6 +112,7 @@ const SCHEMA := {
     "take_result": ["dict", "null"],
     "target_bpm": ["number"],
     "teaching": ["dict", "null"],
+    "tempo_epoch_ms": ["number"],
     "tempo_rungs": ["list"],
     "tempo_segments": ["list"],
     "tempo_strategy": ["string"],
