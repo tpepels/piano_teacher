@@ -1,0 +1,666 @@
+{
+ "g1_chords.mid": [
+  {
+   "measure": 1,
+   "case": "unison-pair-up",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    64,
+    67,
+    68
+   ]
+  },
+  {
+   "measure": 1,
+   "case": "unison-pair-down",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    79,
+    80,
+    83
+   ]
+  },
+  {
+   "measure": 1,
+   "case": "unison-pair-half",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    65,
+    66
+   ]
+  },
+  {
+   "measure": 2,
+   "case": "chromatic-cluster-up",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    61,
+    62,
+    63,
+    64
+   ]
+  },
+  {
+   "measure": 2,
+   "case": "chromatic-cluster-down",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    81,
+    82,
+    83,
+    84,
+    85
+   ]
+  },
+  {
+   "measure": 2,
+   "case": "unison-pair-whole-lh",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    41,
+    42,
+    45
+   ]
+  },
+  {
+   "measure": 3,
+   "case": "cluster-4-up",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    62,
+    64,
+    65
+   ]
+  },
+  {
+   "measure": 3,
+   "case": "cluster-5-down",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    72,
+    74,
+    76,
+    77,
+    79
+   ]
+  },
+  {
+   "measure": 3,
+   "case": "cluster-6-up",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    62,
+    64,
+    65,
+    67,
+    69,
+    71
+   ]
+  },
+  {
+   "measure": 3,
+   "case": "cluster-6-down",
+   "beats": [
+    3.0
+   ],
+   "pitches": [
+    69,
+    71,
+    72,
+    74,
+    76,
+    77
+   ]
+  },
+  {
+   "measure": 4,
+   "case": "cluster-lh-up",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    36,
+    38,
+    40,
+    41
+   ]
+  },
+  {
+   "measure": 4,
+   "case": "cluster-lh-down",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    47,
+    48,
+    50,
+    52,
+    53
+   ]
+  },
+  {
+   "measure": 4,
+   "case": "eleven-heads",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    60,
+    62,
+    64,
+    65,
+    67,
+    69,
+    71,
+    72,
+    74,
+    76,
+    77
+   ]
+  },
+  {
+   "measure": 5,
+   "case": "wide-ledger-rh",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    69,
+    96
+   ]
+  },
+  {
+   "measure": 5,
+   "case": "wide-ledger-lh",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    21,
+    28,
+    55
+   ]
+  },
+  {
+   "measure": 5,
+   "case": "wide-span-over-four-octaves",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    60,
+    76,
+    108
+   ]
+  },
+  {
+   "measure": 6,
+   "case": "twelve-chromatic",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71
+   ]
+  },
+  {
+   "measure": 6,
+   "case": "ledger-cluster-high",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    93,
+    95,
+    96
+   ]
+  },
+  {
+   "measure": 6,
+   "case": "ledger-cluster-low",
+   "beats": [
+    3.0
+   ],
+   "pitches": [
+    24,
+    26,
+    28
+   ]
+  },
+  {
+   "measure": 7,
+   "case": "mixed-durations-one-onset",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    64,
+    67,
+    69
+   ]
+  },
+  {
+   "measure": 7,
+   "case": "dotted-cluster",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    72,
+    74,
+    77
+   ]
+  },
+  {
+   "measure": 7,
+   "case": "dotted-eighth-pair",
+   "beats": [
+    3.5
+   ],
+   "pitches": [
+    67,
+    69
+   ]
+  },
+  {
+   "measure": 8,
+   "case": "beamed-seconds",
+   "beats": [
+    0.0,
+    0.5,
+    1.0,
+    1.5
+   ],
+   "pitches": [
+    67,
+    69,
+    71,
+    72,
+    74,
+    76,
+    77
+   ]
+  },
+  {
+   "measure": 8,
+   "case": "beamed-unisons",
+   "beats": [
+    2.0,
+    2.5
+   ],
+   "pitches": [
+    65,
+    66,
+    67,
+    68
+   ]
+  },
+  {
+   "measure": 8,
+   "case": "dotted-half-lh-cluster",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    52,
+    53,
+    55
+   ]
+  },
+  {
+   "measure": 9,
+   "case": "duplicates-two-tracks",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    64,
+    67
+   ]
+  },
+  {
+   "measure": 9,
+   "case": "duplicates-two-channels",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    72,
+    76
+   ]
+  },
+  {
+   "measure": 10,
+   "case": "cross-hand-split",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    36,
+    40,
+    72,
+    76
+   ]
+  },
+  {
+   "measure": 10,
+   "case": "lh-reaches-treble",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    48,
+    52,
+    84,
+    88
+   ]
+  },
+  {
+   "measure": 11,
+   "case": "chord-under-held-note",
+   "beats": [
+    0.0,
+    1.0,
+    2.0,
+    3.0
+   ],
+   "pitches": [
+    62,
+    64,
+    65,
+    67,
+    68,
+    84
+   ]
+  },
+  {
+   "measure": 11,
+   "case": "whole-second-lh",
+   "beats": [
+    0.0,
+    1.0
+   ],
+   "pitches": [
+    43,
+    48,
+    50
+   ]
+  },
+  {
+   "measure": 12,
+   "case": "two-voice-same-onset",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    62,
+    76,
+    77,
+    79
+   ]
+  },
+  {
+   "measure": 13,
+   "case": "sharp-key-unison",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    64,
+    65,
+    66
+   ]
+  },
+  {
+   "measure": 13,
+   "case": "sharp-key-b-sharp",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    71,
+    72,
+    73
+   ]
+  },
+  {
+   "measure": 15,
+   "case": "flat-key-unison",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    71,
+    72,
+    75
+   ]
+  },
+  {
+   "measure": 15,
+   "case": "flat-key-g-flat",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    66,
+    67,
+    70
+   ]
+  },
+  {
+   "measure": 17,
+   "case": "asymmetric-low-anchor",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    57,
+    77,
+    79,
+    81
+   ]
+  },
+  {
+   "measure": 17,
+   "case": "asymmetric-high-anchor",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    60,
+    62,
+    64,
+    84
+   ]
+  },
+  {
+   "measure": 17,
+   "case": "far-ledger-joins-column",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    62,
+    64,
+    83
+   ]
+  },
+  {
+   "measure": 17,
+   "case": "asymmetric-pair",
+   "beats": [
+    3.0
+   ],
+   "pitches": [
+    59,
+    60,
+    79,
+    81
+   ]
+  },
+  {
+   "measure": 18,
+   "case": "whole-asymmetric",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    57,
+    77,
+    79,
+    81
+   ]
+  },
+  {
+   "measure": 18,
+   "case": "whole-far-ledger",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    43,
+    45,
+    64
+   ]
+  }
+ ],
+ "g1_chords.musicxml": [
+  {
+   "measure": 1,
+   "case": "triple-g-flat-natural-sharp",
+   "beat": 0,
+   "heads": "Gb4 G4 G#4"
+  },
+  {
+   "measure": 1,
+   "case": "triple-f-plus-seconds",
+   "beat": 1,
+   "heads": "Fb4 F4 F#4 G4 G#4"
+  },
+  {
+   "measure": 1,
+   "case": "triple-b-double-flat",
+   "beat": 2,
+   "heads": "Bbb4 Bb4 B4"
+  },
+  {
+   "measure": 1,
+   "case": "double-accidentals",
+   "beat": 3,
+   "heads": "Fx4 A4 Cbb5"
+  },
+  {
+   "measure": 2,
+   "case": "alto-clef-chord",
+   "beat": 0,
+   "heads": "C4 D4 F4 F#4"
+  },
+  {
+   "measure": 2,
+   "case": "alto-clef-triple",
+   "beat": 2,
+   "heads": "Ab3 A3 A#3 C4"
+  },
+  {
+   "measure": 3,
+   "case": "tenor-clef-chord",
+   "beat": 0,
+   "heads": "A3 B3 B#3 D4"
+  },
+  {
+   "measure": 4,
+   "case": "treble-8vb-chord",
+   "beat": 0,
+   "heads": "E3 F#3 G3 G#3"
+  },
+  {
+   "measure": 5,
+   "case": "bass-clef-rh-chord",
+   "beat": 0,
+   "heads": "C3 Db3 D3 E3"
+  },
+  {
+   "measure": 6,
+   "case": "seven-sharps-double-sharp",
+   "beat": 0,
+   "heads": "Ex4 F#4 Fx4 A#4"
+  },
+  {
+   "measure": 7,
+   "case": "seven-flats-double-flat",
+   "beat": 0,
+   "heads": "Bbb3 Cb4 Dbb4 Fb4"
+  },
+  {
+   "measure": 8,
+   "case": "flat-key-unison-pair",
+   "beat": 0,
+   "heads": "Cb5 C5 Eb5"
+  },
+  {
+   "measure": 9,
+   "case": "identical-duplicate-spelling",
+   "beat": 0,
+   "heads": "E4 G4 G4"
+  },
+  {
+   "measure": 9,
+   "case": "enharmonic-same-pitch",
+   "beat": 2,
+   "heads": "E#4 F4 F#4"
+  },
+  {
+   "measure": 10,
+   "case": "dotted-half-cluster-down",
+   "beat": 0,
+   "heads": "C5 D5 E5 E#5"
+  },
+  {
+   "measure": 11,
+   "case": "grace-chord",
+   "beat": 0,
+   "heads": "C5 E5"
+  },
+  {
+   "measure": 11,
+   "case": "arpeggiated-chord",
+   "beat": 2,
+   "heads": "C4 E4 G4 C5"
+  }
+ ]
+}
