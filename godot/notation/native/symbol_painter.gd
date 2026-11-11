@@ -11,6 +11,9 @@ const DIM_INK := Design.STAFF_MUTED
 var score_layout
 var connector_geometry
 
+const STAFF_LINE_WIDTH := 1.15
+const STAFF_LINE_ALPHA := .48
+
 func _init(layout, connectors) -> void:
     score_layout = layout
     connector_geometry = connectors
@@ -21,20 +24,23 @@ func paint_ledger(canvas, frame: RenderPass, x: float, y: float, step: int,
     # At this staff score_layout.size a fixed ±14 px rule almost disappears under
     # real Verovio notehead ink. Let each ledger line extend clearly.
     var half_width: float = maxf(18.0,gap*.95)
-    var weight: float = maxf(1.6,gap*.075)
+    # Ledger rules continue the staff: the same ink, opacity and weight as
+    # the five staff lines (view.gd draws those at alpha .48, width 1.15).
+    var weight: float = STAFF_LINE_WIDTH
+    var rule: Color = Color(ink,STAFF_LINE_ALPHA)
     if step < 0:
         var line_step: int = -2
         while line_step >= step:
             var line_y: float = Geometry.note_y(line_step, bottom, gap)
             canvas.draw_line(Vector2(x-half_width,line_y),
-                Vector2(x+half_width,line_y), Color(ink,.94), weight,true)
+                Vector2(x+half_width,line_y), rule, weight,true)
             line_step -= 2
     elif step > 8:
         var line_step: int = 10
         while line_step <= step:
             var line_y: float = Geometry.note_y(line_step, bottom, gap)
             canvas.draw_line(Vector2(x-half_width,line_y),
-                Vector2(x+half_width,line_y), Color(ink,.94), weight,true)
+                Vector2(x+half_width,line_y), rule, weight,true)
             line_step += 2
 
 

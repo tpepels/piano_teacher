@@ -77,22 +77,50 @@ func meter_is_crowded(measure: Dictionary, previous: Dictionary,
         (at-last_attack)*advance < gap*6.0
 
 
-func paint_meter_above_staff(canvas, frame: RenderPass, measure: Dictionary, x: float,
-        gap: float) -> void:
+## A time signature that follows a very short bar (a pickup) has no room left
+## of its barline at full size. It stays where Verovio prints it, on the staff
+## of BOTH hands, at a reduced size tucked against the barline (R1 N2); it is
+## never moved off the staff.
+const CROWDED_METER_SCALE := .78
+
+func crowded_meter_x(measure: Dictionary, x: float, gap: float) -> float:
+    var scale: float = gap*CROWDED_METER_SCALE
+    var half_width := 0.0
+    for value in measure.get("meter",[4,4]):
+        var text: String = str(int(value))
+        var widest := 0.0
+        for digit in text:
+            widest = maxf(widest,float(score_layout.glyphs.bounds["time_"+digit][2])*scale/500.0)
+        half_width = maxf(half_width,float(text.length()-1)*scale*1.10*.5+widest)
+    # Tuck against the barline, but never over the last engraved symbol (note
+    # or rest) of the short bar before it: step left of that symbol's ink.
+    var right_edge: float = x-gap*.42
+    var start: float = float(measure.get("start_beat",0.0))
+    var latest := -INF
+    for event in score_layout.ordered_events:
+        var beat: float = float(event.get("beat",0.0))
+        if beat < start-.0001 and beat > latest and \
+                str(event.get("kind","")) in ["note","rest"]:
+            latest = beat
+    if is_finite(latest):
+        var symbol_x: float = x-(start-latest)*score_layout.timeline.pixels_per_beat
+        right_edge = minf(right_edge,symbol_x-gap*.95)
+    return right_edge-half_width
+
+
+func paint_crowded_meter(canvas, frame: RenderPass, measure: Dictionary, x: float,
+        staff: String, gap: float) -> void:
     var meter: Array = measure.get("meter", [4,4])
     if meter.size() < 2:
         return
-    # Actual Verovio time-signature digit textures, scaled together and
-    # arranged ABOVE the upper five lines, not GUI text or invented score_layout.glyphs.
-    var center: float = score_layout.staff_center("right")
-    var origin: float = x-gap*1.75
-    var space: float = gap*.72
-    # Meter applies to BOTH staves and must remain readable while one
-    # of the hands is dimmed for separate-handed practice.
-    paint_meter_number(canvas,frame,int(meter[0]),origin,center-gap*4.50,
-        NOTE_INK,space)
-    paint_meter_number(canvas,frame,int(meter[1]),origin,center-gap*3.05,
-        NOTE_INK,space)
+    var scale: float = gap*CROWDED_METER_SCALE
+    var center: float = score_layout.staff_center(staff)
+    var meter_x: float = crowded_meter_x(measure,x,gap)
+    # The same vertical stacking as the full-size signature, at the reduced size.
+    paint_meter_number(canvas,frame,int(meter[0]),meter_x,center-scale*.95,
+        frame.ink(staff),scale)
+    paint_meter_number(canvas,frame,int(meter[1]),meter_x,center+scale*.8,
+        frame.ink(staff),scale)
 
 
 func paint_clef(canvas, frame: RenderPass, x: float, center: float, clef: Dictionary,
@@ -327,7 +355,10 @@ func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_meas
                 symbol_painter.paint_accidental(canvas,frame,glyph_x,glyph_y,
                     str(mark["accidental"]),frame.ink(staff),gap)
         if (opening or previous_measure.get("meter",[]) !=
-                measure.get("meter",[])) and not crowded_meter:
+                measure.get("meter",[])) and crowded_meter:
+            paint_crowded_meter(canvas,frame,measure,x,staff,gap)
+        elif (opening or previous_measure.get("meter",[]) !=
+                measure.get("meter",[])):
             var meter: Array = measure.get("meter",[4,4])
             if meter.size() >= 2:
                 var meter_x: float = context_meter_x(measure,x,gap,opening,meter_right_limit)
@@ -335,8 +366,6 @@ func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_meas
                     center-gap*.95, frame.ink(staff), gap)
                 paint_meter_number(canvas,frame,int(meter[1]), meter_x,
                     center+gap*.8, frame.ink(staff), gap)
-    if crowded_meter:
-        paint_meter_above_staff(canvas,frame,measure,x,gap)
     return crowded_meter
 
 

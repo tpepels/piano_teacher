@@ -69,6 +69,7 @@ var error := ""
 var head_images: Dictionary = {}
 var template_images: Dictionary = {}
 var _head_cutouts: Dictionary = {}
+var _head_interiors: Dictionary = {}
 # A cutout keeps the template's own texels within this distance (font units,
 # 250 per staff space) of the notehead outline: the full antialiased head,
 # never more than ~0.05 space of an attached stem.
@@ -82,6 +83,7 @@ func load_font(items: Dictionary) -> bool:
         return true
     # head_images is replaced below; cutouts derived from the old ones are stale.
     _head_cutouts.clear()
+    _head_interiors.clear()
     var loaded_textures: Dictionary = {}
     var loaded_bounds: Dictionary = {}
     var common_font := ""
@@ -113,6 +115,11 @@ func load_font(items: Dictionary) -> bool:
         if image.is_empty():
             error = "Empty Verovio symbol " + name
             return false
+        if name == "brace":
+            # The font's E000 outline is a hairline once stretched over a
+            # grand staff. Verovio itself engraves the system brace as one
+            # bold FILLED curve, so build that shape (see brace_image).
+            image = brace_image()
         loaded_textures[name] = ImageTexture.create_from_image(image)
         loaded_bounds[name] = geometry.duplicate()
         if name.begins_with("head_"):
@@ -122,6 +129,46 @@ func load_font(items: Dictionary) -> bool:
     font_name = common_font
     error = ""
     return true
+
+## Bold filled grand-staff brace, like Verovio's own: a tip at each end on the
+## right, the widest strokes in the outer quarters and the cusp on the left in
+## the middle. Drawn into a tall image (the view stretches it over the system);
+## rows are antialiased by supersampling, the shape is symmetric about the
+## middle row.
+const BRACE_SIZE := Vector2i(96,1024)
+const BRACE_OVERSAMPLE := 4
+
+static func brace_profile(t: float, width: float) -> Vector2:
+    var u: float = 2.0*minf(t,1.0-t)  # 0 at the tips, 1 at the cusp
+    var centre: float
+    if u < 0.38:
+        centre = 0.90-0.26*(1.0-pow(1.0-u/0.38,2.0))
+    elif u < 0.78:
+        centre = 0.64-0.06*(u-0.38)/0.40
+    else:
+        centre = 0.58*(1.0-pow((u-0.78)/0.22,1.7))
+    var thick: float = 0.05+0.40*pow(sin(PI*clampf(u/0.95,0.0,1.0)),1.0)
+    return Vector2((centre-thick*.5)*width,(centre+thick*.5)*width)
+
+static func brace_image() -> Image:
+    var w: int = BRACE_SIZE.x
+    var h: int = BRACE_SIZE.y
+    var coverage := PackedFloat32Array()
+    coverage.resize(w)
+    var image := Image.create_empty(w,h,false,Image.FORMAT_RGBA8)
+    for y in range(h):
+        coverage.fill(0.0)
+        for sub in range(BRACE_OVERSAMPLE):
+            var span: Vector2 = brace_profile(
+                (float(y)+(float(sub)+.5)/float(BRACE_OVERSAMPLE))/float(h),float(w))
+            for x in range(maxi(0,floori(span.x)),mini(w,ceili(span.y))):
+                var covered: float = minf(float(x+1),span.y)-maxf(float(x),span.x)
+                coverage[x] += maxf(0.0,covered)/float(BRACE_OVERSAMPLE)
+        for x in range(w):
+            if coverage[x] > 0.0:
+                image.set_pixel(x,y,Color(1,1,1,minf(1.0,coverage[x])))
+    return image
+
 
 func note_ready() -> bool:
     return note_textures.size() == NOTE_TEMPLATES.size() and \
@@ -786,6 +833,71 @@ func head_cutout(source: String, key: String, index: int, head: String) -> Textu
         cutout = ImageTexture.create_from_image(head_only)
     _head_cutouts[cache_key] = cutout
     return cutout
+
+
+## Soft "interior" artwork of a hollow head (half, whole): the pixels of the
+## head's own glyph that are enclosed by its outline, with the glyph's own
+## antialiasing (alpha 1-a). It lives in the head glyph's own rectangle, so it
+## is positioned exactly like the head and can never leave its mask region.
+## null for solid heads (no enclosed region).
+func head_interior(head: String) -> Texture2D:
+    if _head_interiors.has(head):
+        return _head_interiors[head]
+    var result: Texture2D = null
+    var glyph: Image = head_images.get(head)
+    if glyph != null and not glyph.is_empty():
+        var image: Image = glyph.duplicate()
+        image.convert(Image.FORMAT_RGBA8)
+        var w: int = image.get_width()
+        var h: int = image.get_height()
+        var outside := PackedByteArray()
+        outside.resize(w*h)
+        var stack: Array[Vector2i] = []
+        for x in range(w):
+            stack.append(Vector2i(x,0))
+            stack.append(Vector2i(x,h-1))
+        for y in range(h):
+            stack.append(Vector2i(0,y))
+            stack.append(Vector2i(w-1,y))
+        while not stack.is_empty():
+            var at: Vector2i = stack.pop_back()
+            if at.x < 0 or at.y < 0 or at.x >= w or at.y >= h or \
+                    outside[at.y*w+at.x] != 0 or image.get_pixel(at.x,at.y).a >= .5:
+                continue
+            outside[at.y*w+at.x] = 1
+            stack.append(Vector2i(at.x+1,at.y))
+            stack.append(Vector2i(at.x-1,at.y))
+            stack.append(Vector2i(at.x,at.y+1))
+            stack.append(Vector2i(at.x,at.y-1))
+        var interior := Image.create_empty(w,h,false,Image.FORMAT_RGBA8)
+        var enclosed := 0
+        for y in range(h):
+            for x in range(w):
+                var a: float = image.get_pixel(x,y).a
+                if outside[y*w+x] == 0 and a < .5:
+                    interior.set_pixel(x,y,Color(1,1,1,1.0-a))
+                    enclosed += 1
+        if enclosed > 0:
+            result = ImageTexture.create_from_image(interior)
+    _head_interiors[head] = result
+    return result
+
+
+## Tint the enclosed interior of a hollow head (C5). Returns false for solid
+## heads. Same anchor and scale as the head itself; never a ring or halo.
+func paint_head_interior(canvas: CanvasItem, instance: Dictionary,
+        color: Color) -> bool:
+    var head: String = str(instance["head"])
+    var texture: Texture2D = head_interior(head)
+    if texture == null or not bounds.has(head):
+        return false
+    var box: Array = bounds[head]
+    var point: Vector2 = instance["position"]
+    var unit: float = float(instance["gap"])/250.0
+    canvas.draw_texture_rect(texture,Rect2(
+        point.x+(float(box[0])-(float(box[0])+float(box[2])*.5))*unit,
+        point.y+float(box[1])*unit,float(box[2])*unit,float(box[3])*unit),false,color)
+    return true
 
 
 ## Repaint one engraved head with ``color``: the exact template head pixels

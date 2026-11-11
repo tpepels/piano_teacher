@@ -25,22 +25,33 @@ def diatonic(spelling: dict) -> int:
     return int(spelling["octave"])*7+_STEPS[spelling["step"]]
 
 
-def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
+def _spelling_key(note: dict):
+    spelling = note["spelling"]
+    return (spelling["step"], int(spelling.get("alter") or 0), int(spelling["octave"]))
+
+
+def _pattern_or_reason(leader: dict, notes: list[dict], measure: dict):
+    """(pattern, None) for an engravable chord, else (None, refusal reason)."""
     if not 2 <= len(notes) <= 10:
-        return None
+        return None, f"{len(notes)} heads (2 to 10 supported)"
     kind = str(leader.get("note_type",""))
     if kind not in _BEATS or any(n.get("note_type") != kind for n in notes):
-        return None
+        return None, "heads of different note values"
     try:
         absolute = [diatonic(n["spelling"]) for n in notes]
+        spellings = [_spelling_key(n) for n in notes]
     except (KeyError,TypeError,ValueError):
-        return None
+        return None, "a head has no readable spelling"
     # Two heads may share one staff position when their accidentals differ
     # (G and G-sharp): Verovio engraves them side by side. More than two on
-    # one position has no authentic single-sprite engraving.
-    if (max(absolute)-min(absolute)>28 or
-            any(absolute.count(p)>2 for p in set(absolute))):
-        return None
+    # one position has no authentic single-sprite engraving, and two heads of
+    # identical spelling and pitch are one note written twice.
+    if len(set(spellings)) != len(spellings):
+        return None, "two heads with identical spelling and pitch on one position"
+    if max(absolute)-min(absolute)>28:
+        return None, "span wider than 29 diatonic steps"
+    if any(absolute.count(p)>2 for p in set(absolute)):
+        return None, "more than two heads on one staff position"
     staff = leader.get("staff","right")
     clef = measure.get("clefs",{}).get(staff,{})
     sign = clef.get("sign","G" if staff=="right" else "F")
@@ -48,15 +59,49 @@ def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
     octave_change = int(clef.get("octave_change",0))
     anchor = {"G":32,"F":24,"C":28}.get(sign)
     if anchor is None:
-        return None
+        return None, f"unsupported clef {sign}"
     bottom = anchor-(line-1)*2+octave_change*7
     up = sum(p-bottom for p in absolute)/len(absolute)<4
     declared = {n.get("stem") for n in notes if n.get("stem") in {"up", "down"}}
     if len(declared) > 1:
-        return None  # One compound sprite cannot represent conflicting stems.
+        # One compound sprite cannot represent conflicting stems.
+        return None, "conflicting stem directions"
     direction = next(iter(declared)) if declared else ("up" if up else "down")
     differences = sorted(p-diatonic(leader["spelling"]) for p in absolute)
-    return f"{kind}|{direction}|{','.join(map(str,differences))}"
+    return f"{kind}|{direction}|{','.join(map(str,differences))}", None
+
+
+def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
+    return _pattern_or_reason(leader, notes, measure)[0]
+
+
+def chord_refusal(leader: dict, notes: list[dict], measure: dict) -> str | None:
+    """Why a chord cannot be engraved, naming its measure and staff."""
+    reason = _pattern_or_reason(leader, notes, measure)[1]
+    if reason is None:
+        return None
+    return (f"measure {int(leader.get('measure', measure.get('number', 0)))}, "
+            f"{leader.get('staff', 'right')} staff: {reason}")
+
+
+def refused_chords(model: dict) -> list[str]:
+    """Readable refusal for every chord of the model that has no sprite."""
+    measures = {int(m["number"]):m for m in model.get("measures",[])}
+    lanes = defaultdict(list)
+    for e in model.get("notation_events",[]):
+        if e.get("kind")=="note":
+            lanes[(e.get("staff"),str(e.get("voice","1")),int(e.get("measure",0)),
+                   round(float(e.get("beat",0)),6))].append(e)
+    refused = []
+    for (staff,_,measure_id,beat), notes in sorted(lanes.items(),
+            key=lambda item: (item[0][2], item[0][3], str(item[0][0]))):
+        leaders = [n for n in notes if not n.get("chord")]
+        if len(leaders)!=1 or len(notes)<2 or measure_id not in measures:
+            continue
+        reason = chord_refusal(leaders[0],notes,measures[measure_id])
+        if reason:
+            refused.append(reason)
+    return refused
 
 
 def patterns_from_model(model: dict, *, stem_directions: dict[str, bool] | None = None) -> list[str]:
@@ -328,6 +373,8 @@ def _valid_asset(value: object, pattern: str) -> bool:
 def chord_templates(model: dict,cache=None, *,
                     stem_directions: dict[str, bool] | None = None) -> dict:
     patterns=patterns_from_model(model, stem_directions=stem_directions)
+    for refusal in refused_chords(model):
+        print("VEROVIO_CHORD_REFUSED:",refusal)
     if not patterns:
         return {}
     import verovio

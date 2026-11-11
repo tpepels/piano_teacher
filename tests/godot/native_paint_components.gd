@@ -37,6 +37,7 @@ class Atlas:
         "repeat_dot":[-10,-10,20,20]}
     var textures := {"clef_g_8va":true}
     var chord_metadata: Dictionary = {}
+    var chord_textures: Dictionary = {}
     var chord_stem_bounds: Dictionary = {}
     var note_stem_bounds := {"quarter_up":[40,-500,10,500]}
     var beam_metadata: Dictionary = {}
@@ -130,6 +131,38 @@ func note(id: String, beat: float = 0.0) -> Dictionary:
         "is_attack":true,"source_id":"source-"+id,"stem":"up",
         "spelling":{"step":"E","octave":4,"alter":0}}
 
+## F3: the Godot chord key is exactly the Python chord_pattern (the sprite the
+## backend engraves), duplicates are refused, and a refusal names where it is.
+func check_chord_parity() -> void:
+    var Geometry = load("res://notation/native/geometry.gd")
+    var Readiness = load("res://notation/native/engraving_readiness.gd")
+    var chord: Array = []
+    for spec in [["a","E",0,4],["b","G",0,4],["c","G",1,4]]:
+        var event := note(spec[0])
+        event["chord"] = spec[0] != "a"
+        event["spelling"] = {"step":spec[1],"alter":spec[2],"octave":spec[3]}
+        chord.append(event)
+    chord[1]["spelling"]["alter"] = 0
+    chord[1]["spelling"]["octave"] = 4
+    chord[2]["spelling"]["alter"] = 1
+    var score = fixture(chord)
+    score.chord_members = Geometry.chord_members(chord)
+    check(score.chord_template_key(chord[0]) == "quarter|up|0,2,2",
+        "chord_template_key equals the Python chord_pattern for G + G-sharp: "+score.chord_template_key(chord[0]))
+    var twice: Array = chord.duplicate(true)
+    twice[2]["spelling"] = twice[1]["spelling"].duplicate()
+    score.chord_members = Geometry.chord_members(twice)
+    check(score.chord_template_key(twice[0]).is_empty(),
+        "two heads of identical spelling and pitch are refused")
+    for head in twice:
+        head["measure"] = 7
+        head["staff"] = "left"
+    score.chord_members = Geometry.chord_members(twice)
+    score.notation_tuplets = []
+    var message: String = Readiness.missing(score,score.glyphs,null,[],true,[],true)
+    check(message.contains("measure 7") and message.contains("left staff"),
+        "the refusal names measure and staff: "+message)
+
 func fixture(events: Array):
     var axis := Axis.new()
     axis.pixels_per_beat = 100.0
@@ -155,6 +188,8 @@ func run_contract() -> void:
         check_symbols()
     elif contract == "context":
         check_context()
+    elif contract == "chords":
+        check_chord_parity()
     elif contract == "atlas":
         await check_real_atlas()
     finish()
@@ -209,7 +244,8 @@ func check_symbols() -> void:
     check(frame.drawn_note_instances[0]["instance_id"] == "2:a","painted heads carry source-copy identity")
     painter.paint_ledger(canvas,frame,100.0,100.0,12,220.0,20.0,Design.SCORE_INK)
     check(canvas.lines.size() == 2 and canvas.lines[0][0] == Vector2(81,120) and canvas.lines[1][1] == Vector2(119,100),"ledger rules retain staff-space extents")
-    check(is_equal_approx(canvas.lines[0][3],1.6),"ledger rules retain stroke weight")
+    check(is_equal_approx(canvas.lines[0][3],1.15) and is_equal_approx(canvas.lines[0][2].a,.48) and
+        canvas.lines[0][2].is_equal_approx(Color(Design.SCORE_INK,.48)),"ledger rules match the staff-line ink and weight (N5)")
     painter.paint_rest(canvas,frame,300.0,345.0,"quarter",2,Design.SCORE_INK,20.0)
     check(score.glyphs.calls[-1][1].is_equal_approx(Vector2(333.6,340.2)),"rest dots retain distinct rest anchor")
     painter.paint_note(canvas,frame,b,300.0,20.0,Design.SCORE_INK,{"up":true,"tip_y":140.0},9.0)
@@ -294,10 +330,38 @@ func check_beams(painter, canvas, frame, score, a, b) -> void:
     painter.beam_layout(frame,score.cached_head_offsets,[])
     check(frame.visible_beam_groups == 0,"empty explicit group list cannot resurrect source beams")
 
+## N3: the grand-staff brace is a bold FILLED shape (Verovio engraves it so),
+## symmetric about the system's middle, pointed at the middle and at both tips.
+func check_brace() -> void:
+    var image: Image = load("res://notation/native/glyphs.gd").brace_image()
+    var w: int = image.get_width()
+    var h: int = image.get_height()
+    var widest := 0.0
+    var solid := 0
+    for y in range(0,h,8):
+        var row := 0.0
+        for x in range(w):
+            var a: float = image.get_pixel(x,y).a
+            row += a
+            if a >= .999:
+                solid += 1
+        widest = maxf(widest,row)
+    check(widest >= w*.3,"N3: the brace's thick strokes are at least 30% of its width ("+str(widest/w)+")")
+    check(solid > 200,"N3: the brace is filled, not an outline ("+str(solid)+" opaque samples)")
+    var asymmetry := 0.0
+    for y in range(0,h/2,16):
+        for x in range(0,w,4):
+            asymmetry = maxf(asymmetry,absf(image.get_pixel(x,y).a-image.get_pixel(x,h-1-y).a))
+    check(asymmetry < .35,"N3: the brace is symmetric about the middle of the system")
+    check(image.get_pixel(w/2,h/2).a < .2 and image.get_pixel(w-4,h/2).a < .2,
+        "N3: the middle of the brace is its left-pointing cusp")
+
 func check_context() -> void:
+    check_brace()
     var a := note("a",1.0)
     a["staff"] = "left"
-    var score = fixture([a])
+    var pickup_rest := {"id":"pickup_rest","kind":"rest","staff":"right","beat":0.0}
+    var score = fixture([pickup_rest,a])
     var symbols = Symbols.new(score,Connectors.new(score))
     var painter = Context.new(score,symbols)
     var frame = Pass.new({"active_hand":"right","clock":.5,"playhead_x":200.0,"gap":20.0,"play_from_beat":1.0,"visual_scroll_beat":5.0})
@@ -313,14 +377,30 @@ func check_context() -> void:
     check(is_equal_approx(painter.context_meter_x({"meter":[12,8]},100.0,20.0,false,60.0),42.0),"meter clears exact rightmost boundary ink")
     var previous := {"number":1,"start_beat":0.0,"end_beat":.5,"meter":[1,8],"keys":{"right":2,"left":2}}
     var incoming := {"number":2,"start_beat":.5,"end_beat":4.5,"meter":[4,4],"keys":{"right":0,"left":0}}
-    check(painter.meter_is_crowded(incoming,previous,20.0),"short pickup puts meter above staff")
+    check(painter.meter_is_crowded(incoming,previous,20.0),"short pickup crowds the meter off its normal lane")
     var start: int = score.glyphs.calls.size()
-    check(painter.paint_context(canvas,frame,incoming,previous,300.0,20.0,false),"crowded context reports raised meter")
+    check(painter.paint_context(canvas,frame,incoming,previous,300.0,20.0,false),"crowded context reports the compact meter")
     var names: Array = []
     for call in score.glyphs.calls.slice(start):
         names.append(call[0])
     check(names.count("acc_natural") == 4,"key cancellation survives zero destination signature")
-    check(score.glyphs.calls[-1][3] == Design.SCORE_INK and is_equal_approx(score.glyphs.calls[-1][2],14.4),"shared upper meter remains readable with one hand muted")
+    var meter_calls: Array = []
+    for call in score.glyphs.calls.slice(start):
+        if str(call[0]).begins_with("time_"):
+            meter_calls.append(call)
+    var meter_rows: Dictionary = {}
+    for call in meter_calls:
+        meter_rows[snappedf(call[1].y,.01)] = true
+    var staff_ys: Array = [score.staff_center("right"),score.staff_center("left")]
+    var on_both_staves := meter_calls.size() == 4
+    for call in meter_calls:
+        on_both_staves = on_both_staves and (absf(call[1].y-staff_ys[0]) < 20.0 or
+            absf(call[1].y-staff_ys[1]) < 20.0) and is_equal_approx(call[2],20.0*.78)
+    check(on_both_staves and meter_rows.size() == 4,"N2: crowded mid-score meter is drawn on the staff of both hands, never above it")
+    check(meter_calls[0][3] == Design.SCORE_INK and meter_calls[-1][3] != Design.SCORE_INK,
+        "N2: the muted hand's meter is dimmed with its staff")
+    check(meter_calls[0][1].x < 300.0-.5*100.0-20.0*.95 and meter_calls[0][1].x > 100.0,
+        "N2: the meter sits left of the barline and clear of the short bar's last symbol")
     score.source_expressions = [{"kind":"dynamic","value":"p","staff":"left","hand":"left","beat":1.0},
         {"kind":"articulation","value":"staccato","note_id":"a","beat":1.0}]
     frame.record_notehead(a,Vector2(155,280),1000.0)

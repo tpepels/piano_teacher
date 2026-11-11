@@ -176,3 +176,24 @@ def test_rachmaninoff_prelude_builds_complete_native_assets(tmp_path):
             assert pattern, f"bar {key[2]} chord has no engraving pattern"
             needed.add(pattern)
     assert needed and needed <= set(templates)
+
+
+def test_identical_spelling_and_pitch_on_one_position_is_refused():
+    # F3: two heads that are the same note written twice are not a unison
+    # chord (that needs different accidentals), and the refusal names where.
+    from piano_teacher.notation.assets import chords
+    notes = [_head("E",0,4), _head("G",0,4), _head("G",0,4)]
+    for index, note in enumerate(notes):
+        note.update(measure=9, id=f"n{index}", chord=index > 0, kind="note",
+                    voice="1", beat=0.0)
+    measure = {"number": 9, "clefs": {"right": {"sign": "G", "line": 2}}}
+    assert chord_pattern(notes[0], notes, measure) is None
+    reason = chords.chord_refusal(notes[0], notes, measure)
+    assert reason.startswith("measure 9, right staff:") and "identical spelling" in reason
+    model = {"measures": [measure], "notation_events": notes}
+    assert chords.refused_chords(model) == [reason]
+    assert chords.patterns_from_model(model) == []
+    sharp = [dict(n) for n in notes]
+    sharp[2]["spelling"] = {"step": "G", "alter": 1, "octave": 4}
+    assert chord_pattern(sharp[0], sharp, measure) == "quarter|up|0,2,2"
+    assert chords.refused_chords({"measures": [measure], "notation_events": sharp}) == []

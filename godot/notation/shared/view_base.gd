@@ -121,6 +121,15 @@ func present_clock(transport_beat: float, visual_beat: float = NAN) -> void:
         visual_scroll_beat = next_visual
         queue_redraw()
 
+## The fingering-editor hint belongs to an idle or paused stage only. While a
+## take runs (count-in included) the pointer resting on the score must never
+## put a tooltip over the notation (R1 N6).
+func tooltip_allowed() -> bool:
+    return not running or paused
+
+func _get_tooltip(_at_position: Vector2) -> String:
+    return tooltip_text if tooltip_allowed() else ""
+
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     var next_clock: float = transport_beat
     var next_visual: float = visual_beat if is_finite(visual_beat) else transport_beat + float(state.get("play_from_beat", 0.0))
@@ -162,5 +171,8 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
         transport_id = next_transport
         running = next_running
         paused = next_paused
+        if not tooltip_allowed() and is_inside_tree() and \
+                get_viewport().has_method("gui_cancel_tooltip"):
+            get_viewport().call("gui_cancel_tooltip")
         queue_redraw()
 

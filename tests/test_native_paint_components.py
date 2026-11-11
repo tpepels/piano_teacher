@@ -6,7 +6,7 @@ import subprocess
 import pytest
 
 
-@pytest.mark.parametrize("contract", ["frame", "symbols", "context", "atlas"])
+@pytest.mark.parametrize("contract", ["frame", "symbols", "context", "chords", "atlas"])
 def test_native_paint_components_without_a_view(contract):
     binary = shutil.which("godot") or shutil.which("godot4")
     if binary is None:

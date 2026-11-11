@@ -321,6 +321,16 @@ func chord_template_key(event: Dictionary) -> String:
     differences.sort()
     if differences.size() < 2 or differences[-1]-differences[0] > 28:
         return ""
+    var spellings: Dictionary = {}
+    for head in notes:
+        # Two heads of identical spelling and pitch are one note written twice.
+        var spelling: Dictionary = head.get("spelling",{})
+        var identity := "%s|%d|%d" % [str(spelling.get("step","")),
+            int(spelling.get("alter",0) if spelling.get("alter") != null else 0),
+            int(spelling.get("octave",0))]
+        if spellings.has(identity):
+            return ""
+        spellings[identity] = true
     for i in range(2,differences.size()):
         # Two heads may share a staff position (G and G-sharp, engraved side
         # by side); three have no authentic single-sprite engraving.

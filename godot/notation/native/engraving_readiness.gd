@@ -35,7 +35,10 @@ static func missing(layout, glyphs, connector_geometry,
             return "Missing original chord leader: "+str(leader_id)
         var key: String = layout.chord_template_key(event)
         if key.is_empty() or not glyphs.has_chord(key):
-            return "Missing engraved Verovio chord: "+str(leader_id)+ \
+            # Name where the chord is: the learner and the log can find it.
+            return "Missing engraved Verovio chord at measure "+ \
+                str(int(event.get("measure",0)))+", "+ \
+                str(event.get("staff","right"))+" staff: "+str(leader_id)+ \
                 " (pattern="+key+", atlas="+ \
                 str(glyphs.chord_textures.size())+" templates)"
         if layout.beamed_note_ids.has(str(leader_id)) and ( \
