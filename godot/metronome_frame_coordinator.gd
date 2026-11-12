@@ -15,54 +15,110 @@ var _cues := CueTimeline.new()
 # The count-in of a Play/Retry/Resume Godot itself reserved (round 4, M4):
 # its first-beat deadline is known locally when the user acts, so every
 # syllable is spoken on its beat even before the engine's state, one
-# snapshot latency later, reports the transport running.
+# snapshot latency later, reports the take. While it runs it owns every
+# count-in syllable; no other source (running transport, Resume countdown,
+# Retry preparation) speaks a count-in beat until one beat after its
+# deadline, so a hand-off can never re-speak a syllable (C1/I1).
 var _reserved: Dictionary = {}
-# Tolerance (beats) for the engine's transport to confirm that deadline.
-const RESERVED_AGREEMENT_BEATS := 0.1
+var _count_in_owned_until_ms := -INF
+var _count_in_owned_transport := -1
+var _frame_now_ms := 0
+# The engine's deadline for the reserved take may differ from Godot's by
+# at most this much before the countdown is re-based onto it (logged).
+const RESERVED_AGREEMENT_MS := 40.0
 
 func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
-        meter: Variant, count_in_beats: float) -> void:
+        meter: Variant, count_in_beats: float, action: String = "start") -> void:
     if not is_finite(deadline_ms) or not is_finite(bpm) or bpm <= 0.0 or \
             not is_finite(count_in_beats) or count_in_beats <= 0.0:
         _reserved = {}
         return
     _reserved = {"deadline_ms":deadline_ms,"bpm":bpm,"bar":bar_beats,
-        "meter":meter,"count_in":count_in_beats}
+        "meter":meter,"count_in":count_in_beats,"action":action,
+        "token":"countin:%d" % roundi(deadline_ms),"acked_ms":NAN}
 
 func cancel_reserved_count_in() -> void:
     _reserved = {}
+    _count_in_owned_until_ms = -INF
 
-func _reserved_count_in(state: Dictionary, sampled_beat: float,
+func acknowledge_reserved_count_in(now_ms: int) -> void:
+    # The engine accepted the command: the first snapshot from now on must
+    # show the take (or Retry) for this deadline, or nothing is spoken.
+    if not _reserved.is_empty():
+        _reserved["acked_ms"] = float(now_ms)
+
+static func engine_count_in_deadline_ms(state: Dictionary, action: String,
+        offset_ms: float) -> float:
+    # The engine's first graded beat of the take this action started, on
+    # the local clock (NAN: the snapshot shows no such take).
+    var plan: Variant = state.get("score_queue_next")
+    if action == "restart":
+        if plan is Dictionary and not bool(state.get("running",false)):
+            return float(plan.get("deadline_at_ms",NAN))+offset_ms
+        return NAN
+    if not bool(state.get("running",false)) or bool(state.get("paused",false)):
+        return NAN
+    var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
+    var countdown: Variant = state.get("resume_count_in_beat")
+    if action == "resume" and countdown != null and float(countdown) < 0.0 and \
+            state.has("clock_sampled_at_ms"):
+        return float(state["clock_sampled_at_ms"])+offset_ms- \
+            float(countdown)*60000.0/bpm
+    if state.has("visual_run_at_ms"):
+        return float(state["visual_run_at_ms"])+offset_ms
+    return NAN
+
+func _reserved_count_in(state: Dictionary, state_tick_ms: int,
         now_ms: int) -> bool:
     if _reserved.is_empty():
         return false
-    var deadline: float = float(_reserved["deadline_ms"])
-    var beat: float = (float(now_ms)-deadline)*float(_reserved["bpm"])/60000.0
-    var running: bool = bool(state.get("running",false)) and \
-        not bool(state.get("paused",false))
-    if running and is_finite(sampled_beat):
-        # The engine confirmed the take: its own transport takes over, on
-        # the same countdown when it agrees with the reserved deadline
-        # (beats already spoken stay spoken), otherwise afresh.
-        if absf(sampled_beat-beat) <= RESERVED_AGREEMENT_BEATS:
-            _cues.adopt("running:%d:%d" % [int(state.get("revision",-1)),
-                int(state.get("transport_id",0))])
-        _reserved = {}
-        return false
-    if beat >= 0.0:
-        # The downbeat belongs to the running transport, once ITS beat
-        # reaches 0 (above); until then the spoken count-in is not repeated.
-        if beat >= 1.0:
+    var acked: float = float(_reserved["acked_ms"])
+    # Only a snapshot the engine SAMPLED after it accepted the command can
+    # confirm it (a poll already in flight may show the state before it).
+    var sampled_ms: float = float(state.get("clock_sampled_at_ms",-INF))+ \
+        float(clock.backend_offset_ms) if bool(clock.has_backend_offset) else -INF
+    if is_finite(acked) and sampled_ms >= acked:
+        # One check, on the first snapshot after the engine accepted it.
+        _reserved["acked_ms"] = NAN
+        var engine: float = engine_count_in_deadline_ms(state,
+            str(_reserved["action"]),float(clock.backend_offset_ms))
+        if not is_finite(engine):
+            # No take started for this deadline (an error, reload_score,
+            # a refused start): it must not be counted in.
             _reserved = {}
             return false
-        return true
-    _count_in("reserved:%d" % roundi(deadline),beat,float(_reserved["bar"]),
+        var reserved: float = float(_reserved["deadline_ms"])
+        if absf(engine-reserved) > RESERVED_AGREEMENT_MS:
+            print("COUNT_IN_DEADLINE_DISAGREEMENT:",JSON.stringify({
+                "action":_reserved["action"],"reserved_ms":reserved,
+                "engine_ms":engine}))
+            # The same countdown (same token, beats already spoken stay
+            # spoken) continues on the engine's deadline.
+            _reserved["deadline_ms"] = engine
+    var deadline: float = float(_reserved["deadline_ms"])
+    var bpm: float = float(_reserved["bpm"])
+    var beat: float = (float(now_ms)-deadline)*bpm/60000.0
+    if beat >= 0.0:
+        # For one beat the same take's own transport (running or resumed
+        # countdown of this transport) may still report a count-in beat:
+        # it was already spoken. A later take (an announced continuation)
+        # has its own countdown and is never suppressed.
+        _count_in_owned_until_ms = deadline+60000.0/bpm
+        _count_in_owned_transport = int(state.get("transport_id",-1))
+        _reserved = {}
+        return false
+    _count_in(str(_reserved["token"]),beat,float(_reserved["bar"]),
         _reserved["meter"],true,float(_reserved["count_in"]))
     return true
 
 func _dispatch_cue(token: String, beat: float, bar: int,
         use_raw_click: bool, count_in_beats: float = CueTimeline.WHOLE_BAR,
         drop_late: bool = false) -> void:
+    if beat < 0.0 and (token.begins_with("running:") or token.begins_with("resume:")) and \
+            token.ends_with(":%d" % _count_in_owned_transport) and \
+            float(_frame_now_ms) < _count_in_owned_until_ms:
+        # The reserved countdown already spoke this count-in.
+        return
     var cue: Dictionary = _cues.observe(token,beat,bar,count_in_beats,drop_late)
     if cue.is_empty():
         return
@@ -141,6 +197,7 @@ func _init(settings, practice, visual_clock, at_beat: Callable,
 
 func update(state: Dictionary, state_tick_ms: int,
         sampled_beat: float, now_ms: int) -> void:
+    _frame_now_ms = now_ms
     var calibration: Dictionary = state.get("midi_calibration", {})
     if bool(calibration.get("active",false)):
         _cues.reset()
@@ -180,6 +237,8 @@ func update(state: Dictionary, state_tick_ms: int,
     if (settings_view.calibration_beat_pulse != null
             and settings_view.calibration_beat_pulse.visible):
         settings_view.animate_calibration_beat(-1.0,false)
+    if _reserved_count_in(state,state_tick_ms,now_ms):
+        return
     # A rest's count-in belongs to the take the engine ANNOUNCED for it
     # (score_queue_next). An unannounced repeat counts in once it starts.
     var preparing_retry: bool = (
@@ -196,8 +255,6 @@ func update(state: Dictionary, state_tick_ms: int,
             "count_in_meter",state.get("count_in_meter"))
         _count_in("retry:%d:%s" % [int(state.get("revision",-1)),retry_key],
             retry_beat,float(state.get("count_in_bar_beats",4)),plan_meter,true)
-        return
-    if _reserved_count_in(state,sampled_beat,now_ms):
         return
     if _announced_count_in(state,now_ms):
         return

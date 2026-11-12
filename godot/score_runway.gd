@@ -391,18 +391,14 @@ func _short_handoff() -> Dictionary:
     var playhead: float = _future.size.x*NativeView.PLAYHEAD_FRACTION
     var rest: float = float(old.practice_timeline.get("gap",{}).get(
         "duration_beats",0.0)) if "practice_timeline" in old else 0.0
-    if bool(old.get("written_rest_between_takes")) and rest > .0001:
-        # Round 4: the outgoing take keeps its written rest bar. The step
-        # settles at once (clear 0) and the new stage opens straight after
-        # that rest bar by the pop-in rule (lead counted from the take end).
-        return {"clear":0.0,"lead":StreamQueue.peer_popin_after(
-            maxf(rest,trailing),old_density,playhead,density)+
-            _future._stream_header_beats(0.0)+
-            StreamAdmission.OFFSCREEN_MARGIN_BEATS}
-    var clear: float = StreamQueue.peer_popin_after(maxf(0.0,trailing),
-        old_density,playhead,density)+StreamAdmission.OFFSCREEN_MARGIN_BEATS
-    return {"clear":clear,"lead":StreamAdmission.REST_GAP_BEATS+
-        _future._stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+    # Round 4: the outgoing take keeps its written rest bar (one full
+    # measure). The step settles at once (clear 0) and the new stage opens
+    # straight after that rest bar by the pop-in rule (lead counted from
+    # the take end).
+    return {"clear":0.0,"lead":StreamQueue.peer_popin_after(
+        maxf(rest,trailing),old_density,playhead,density)+
+        _future._stream_header_beats(0.0)+
+        StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 
 
 func promote_if_ready(state: Dictionary, run_at_world: float = NAN) -> bool:

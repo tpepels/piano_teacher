@@ -31,12 +31,11 @@ UNRENDERED = "Source expression requires original Verovio engraving"
 # A quarter and an eighth, or a held and a pedalled note, at one onset are
 # two voices, not a chord: no chord row. The import tests below check them.
 NOT_A_CHORD = {"genuinely-different-values", "pedal-different-values"}
-# Pre-existing stream defect (r1-defects.md, "Strip after an off-bar seam is
-# never presented"), already at 179ccb25 and not chord-specific: a note
-# displayed .87 beat long at a bar start moves the next strip's seam to
-# 4.0766, and that strip's ink is never presented. Asserted as the defect so
-# this test changes when it is fixed.
-STREAM_SEAM_DEFECT = {"dead-zone-chord-87", "wide-humanised-chord"}
+# r1-defects N8 (fixed): the framebuffer harness presented its "paused"
+# audit frames as admitting frames, so a take whose second strip started
+# offscreen at the first clock had that strip retracted as an unseen
+# suffix on Pause. The cases that exposed it now draw like any other.
+SEAM_REGRESSION_CASES = {"dead-zone-chord-87", "wide-humanised-chord"}
 
 
 def _godot() -> str | None:
@@ -64,10 +63,6 @@ def test_chord_case_draws_where_verovio_puts_its_heads(rows, case):
         assert not mine, mine
         return
     assert mine
-    if case in STREAM_SEAM_DEFECT:
-        assert all(row["outcome"] == "refused" and "not painted" in row["detail"]
-                   for row in mine), mine
-        return
     if case in SCORE_LEVEL_REFUSALS:
         assert all(row["outcome"] == "refused" and row["detail"] == UNRENDERED
                    for row in mine), mine
@@ -263,3 +258,11 @@ def test_pedalled_and_held_values_stay_separate_voices():
     bar = _attacks(model, 23)
     assert bar[(0.0, "1")] == [("C4", "quarter", None)]
     assert bar[(0.0, "2")][0][:2] == ("G4", "half")
+
+
+def test_strip_after_an_offscreen_seam_is_painted(rows):
+    """r1-defects N8 regression: a take whose next strip starts beyond the
+    viewport at the audit's first clock keeps that strip and paints it."""
+    for case in SEAM_REGRESSION_CASES:
+        mine = [row for row in rows if row["case"] == case]
+        assert mine and all(row["outcome"] == "drawn" for row in mine), mine

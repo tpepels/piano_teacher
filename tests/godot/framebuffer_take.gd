@@ -18,7 +18,12 @@ static func show(tree: SceneTree, renderer: Control, state: Dictionary,
         renderer._stream_add_take(0.0, origin, 0.0, "framebuffer-audit")
     for settle in range(40):
         renderer.present(state, clock, visual_clock)
-        renderer.present_flow(world, state, clock)
+        # Presentation only (allow_admission false): the audit holds one
+        # take still under a "paused" snapshot, and an admitting frame would
+        # treat that as a real Pause and retract the take's not-yet-exposed
+        # strips for good (r1-defects N8: everything after an offscreen
+        # seam vanished when the first frame's clock left it unexposed).
+        renderer.present_flow(world, state, clock, false)
         await tree.process_frame
         if settle >= 1 and renderer.retained_ready():
             break

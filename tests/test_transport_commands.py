@@ -61,33 +61,31 @@ def test_resume_shifts_only_running_non_guided_deadlines(inputs, expected):
 
 
 
-@pytest.mark.parametrize(("lead","rest","minimum","expected"), [
-    (14.0,6.0,1.0,8.0),
-    (7.0,6.0,1.0,1.0),
-    (3.5,3.0,0.1,0.5),
-    # Round 4: the reserved deadline wins over the reverse animation's
-    # nominal minimum (a Retry is never pushed later than its ink).
-    (7.0,6.0,2.0,1.0),
+@pytest.mark.parametrize(("lead","rest","expected"), [
+    (14.0,6.0,8.0),
+    (7.0,6.0,1.0),
+    (3.5,3.0,0.5),
+    # Round 4: the reserved deadline is honoured exactly; there is no
+    # minimum reverse window that could push a Retry later than its ink.
+    (6.2,6.0,0.2),
 ])
-def test_retry_reading_lead_accounts_for_written_rest_once(lead, rest, minimum, expected):
+def test_retry_reading_lead_accounts_for_written_rest_once(lead, rest, expected):
     from piano_teacher.application.transport_commands import planned_retry_reverse_seconds
     assert planned_retry_reverse_seconds(
         reading_lead_seconds=lead,
-        semantic_rest_seconds=rest,
-        minimum_rewind_seconds=minimum) == pytest.approx(expected)
+        semantic_rest_seconds=rest) == pytest.approx(expected)
 
 
-@pytest.mark.parametrize(("lead","rest","minimum"), [
-    (4.0,6.0,1.0),
-    (6.02,6.0,2.0),
-    (float("nan"),4.0,1.0),
-    (8.0,0.0,1.0),
+@pytest.mark.parametrize(("lead","rest"), [
+    (4.0,6.0),
+    (6.02,6.0),
+    (float("nan"),4.0),
+    (8.0,0.0),
 ])
 def test_retry_reservation_fails_closed_if_rest_or_reading_lead_cannot_fit(
-        lead, rest, minimum):
+        lead, rest):
     from piano_teacher.application.transport_commands import planned_retry_reverse_seconds
     with pytest.raises(ValueError, match="retry"):
         planned_retry_reverse_seconds(
             reading_lead_seconds=lead,
-            semantic_rest_seconds=rest,
-            minimum_rewind_seconds=minimum)
+            semantic_rest_seconds=rest)

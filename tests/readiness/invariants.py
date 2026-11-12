@@ -93,25 +93,29 @@ def check_run(run: Path) -> dict:
             if "okey" in r:
                 continue
             staff_space = r.get("sg", staff_space)
-            for ident, dx, expected in r.get("near", []):
+            for entry in r.get("near", []):
+                ident, dx, expected = entry[0], entry[1], entry[2]
+                y = entry[3] if len(entry) > 3 else None
                 if ident not in best or abs(expected) < abs(best[ident][1]):
-                    best[ident] = (dx, expected, r["d"])
+                    best[ident] = (dx, expected, r["d"], y)
         # Every head is judged. The only exemption is notation, not time: in
         # a chord with a second, one head is engraved on the other side of
         # the stem, displaced by exactly one notehead width (Bravura
-        # noteheadBlack, 1.18 staff spaces). Such a head passes only when its
-        # column also has an on-time head and its offset is that width
-        # within the same ONSET_PX.
+        # noteheadBlack, 1.18 staff spaces) and half a staff space above or
+        # below an on-time head of its column. Such a head passes only with
+        # both offsets within ONSET_PX.
         head_width = HEAD_WIDTH_SPACES * staff_space if staff_space else None
         columns: dict = {}
-        for dx, exp, d in best.values():
+        for dx, exp, d, y in best.values():
             if abs(exp) < 0.12 * d:
-                columns.setdefault(round(exp, 1), []).append(dx - exp)
+                columns.setdefault(round(exp, 1), []).append((dx - exp, y))
         offsets, displaced = [], 0
         for heads in columns.values():
-            on_time = min(abs(v) for v in heads) <= ONSET_PX
-            for v in heads:
-                if (abs(v) > ONSET_PX and on_time and head_width is not None
+            on_time_y = [y for v, y in heads if abs(v) <= ONSET_PX and y is not None]
+            for v, y in heads:
+                second = (head_width is not None and y is not None and any(
+                    abs(abs(y - y0) - 0.5 * staff_space) <= ONSET_PX for y0 in on_time_y))
+                if (abs(v) > ONSET_PX and second
                         and abs(abs(v) - head_width) <= ONSET_PX):
                     displaced += 1
                     continue
@@ -161,9 +165,20 @@ def check_run(run: Path) -> dict:
             # due while paused or observed late is not spoken. What is spoken
             # is non-empty, rises, has nothing before the bar and ends on the
             # bar's last syllable one pulse before beat 0.
-            heard = take["count_in_numbers"]
-            take["count_in_ok"] = (bool(heard) and heard == sorted(set(heard))
-                                   and not take["early_cues"] and last_ok)
+            # A syllable heard before the rest's Pause belongs to the same,
+            # continued countdown: the whole cycle (before the Pause plus
+            # after the Resume) rises strictly; nothing is early after it.
+            pause_t = max((e["t"] for e in ev if e.get("kind") == "press"
+                           and str(e.get("button", "")).startswith("Pause(rest)")
+                           and previous_end < e["t"] < first["t"]), default=None)
+            before = [v["number"] for v in rest
+                      if v["t"] < window_start and pause_t is not None and v["t"] < pause_t]
+            early_after = [v["number"] for v in rest if v["t"] < window_start
+                           and (pause_t is None or v["t"] > pause_t)]
+            heard = before + take["count_in_numbers"]
+            take["count_in_ok"] = (bool(take["count_in_numbers"])
+                                   and all(b > a for a, b in zip(heard, heard[1:]))
+                                   and not early_after and last_ok)
         else:
             # Every interval, the first Play's first one included: Godot
             # speaks a count-in it reserved from its own deadline (M4).
@@ -184,7 +199,8 @@ def check_run(run: Path) -> dict:
             # A Pause inside the previous take moves its end: its last
             # playing frame is the real end (round 4: rests of re-engraved
             # takes after a paused take were overstated by the pause).
-            prev_end = max(prev_end, previous_end)
+            if any(r.get("tid") == tids[index - 1] and r.get("pau") for r in frames):
+                prev_end = max(prev_end, previous_end)
             presses = [e for e in ev if e.get("kind") == "press"
                        and prev["first_beat_t_exact"] - 500 < e["t"] < first_beat_t]
             take["automatic"] = not presses
@@ -223,9 +239,29 @@ def check_run(run: Path) -> dict:
             take["captures_after_first_beat"] = sum(
                 1 for c in captures
                 if take["first_beat_t"] < c["t"] < end and float(c.get("tb", -1)) >= 1.0)
+    # Round 4 fix wave (C1): takes are judged up to their first Pause, so a
+    # Resume's count-in is checked here: the syllables heard from every
+    # Resume press until the resumed transport reaches its graded beat (or
+    # the next press) rise strictly -- no syllable is spoken twice.
+    resumes = []
+    presses_t = sorted(e["t"] for e in ev if e.get("kind") == "press")
+    for press in (e for e in ev if e.get("kind") == "press"
+                  and str(e.get("button", "")).startswith("Resume")):
+        later = [t for t in presses_t if t > press["t"]]
+        until = min([later[0]] if later else [float("inf")])
+        graded = next((r["t"] for r in frames if r["t"] > press["t"] + 50
+                       and r.get("run") and not r.get("pau")
+                       and r.get("ph") == "playing" and r.get("tb", -1) >= 0), None)
+        if graded is not None:
+            until = min(until, graded)
+        heard = [v["number"] for v in voices if press["t"] <= v["t"] < until]
+        resumes.append({"t": press["t"], "button": press.get("button"), "heard": heard,
+                        "ok": all(b > a for a, b in zip(heard, heard[1:]))})
     return {"run": str(run), "takes": takes, "frame_median_ms": frame_median_ms,
             "graded_takes": sum(t["reached_first_beat"] for t in takes),
-            "all_ok": all(t.get("ok", True) for t in takes if t["reached_first_beat"])}
+            "resume_count_ins": resumes,
+            "all_ok": all(t.get("ok", True) for t in takes if t["reached_first_beat"])
+            and all(r["ok"] for r in resumes)}
 
 
 def _repeat_colour(run: Path) -> dict[int, int]:
@@ -275,6 +311,8 @@ def main() -> None:
         (Path(arg) / "invariants.json").write_text(json.dumps(result, indent=1))
         for take in result["takes"]:
             print(json.dumps(take))
+        for resume in result["resume_count_ins"]:
+            print("RESUME_COUNT_IN", json.dumps(resume))
         print("ALL_OK" if result["all_ok"] else "VIOLATIONS", result["graded_takes"])
 
 

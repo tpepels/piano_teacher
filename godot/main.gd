@@ -37,6 +37,8 @@ const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
 const CommandSuccessEffects := preload("res://command_success_effects.gd")
 const PracticeControlPolicy := preload("res://practice_control_policy.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
+const NoteStatusInk := preload("res://note_status_ink.gd")
+const CountInCueTimeline := preload("res://countin_cue_timeline.gd")
 const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
 const CountInVoicePlayer := preload("res://countin_voice_player.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
@@ -351,7 +353,10 @@ func _unrolled_score_beat_at(transport_clock: float, at_ms: int) -> float:
 
 func _raw_click(accent: bool) -> void:
     # Calibration and retry preparation are audible even if practice
-    # metronome is disabled. No MIDI clock is changed.
+    # metronome is disabled. No MIDI clock is changed. Fixture apps built
+    # without the audio nodes still run every count-in path silently.
+    if click_player == null:
+        return
     click_player.stream = click_high if accent else click_low
     click_player.play()
 
@@ -733,6 +738,66 @@ func _on_score_published(published_revision: int) -> void:
     print("NATIVE_MODEL_READY: ", published_revision,
         " NOTES: ", practice_view.stage.renderer.timeline.notes.size(),
         " DENSITY: ", practice_view.stage.renderer.timeline.pixels_per_beat)
+    _warm_status_heads(practice_view.stage.renderer)
+
+var _status_head_interiors: Dictionary = {}
+
+func _free_after_frames(node: Node, frames: int) -> void:
+    for _i in range(frames):
+        await get_tree().process_frame
+    if is_instance_valid(node):
+        node.queue_free()
+
+func _warm_status_heads(renderer) -> void:
+    # Round 4 (I5): the first coloured head of a score built its head
+    # interior masks (the status "fill" pass) inside the first take, a
+    # 110+ ms CPU stall at the first graded attack. Build them now, while
+    # the score loads, before any Play.
+    if renderer == null or not is_instance_valid(renderer) or \
+            renderer.get("glyphs") == null:
+        return
+    var glyphs = renderer.glyphs
+    if not glyphs.has_method("head_interior"):
+        return
+    var started: int = Time.get_ticks_usec()
+    # Every stage engraves the same head glyphs: an interior built for one
+    # renderer is reused (same image bytes) by the next, so a stage handoff
+    # promoted inside a count-in does not rebuild them there.
+    var reused := 0
+    for head in glyphs.head_images.keys():
+        var image: Image = glyphs.head_images[head]
+        var key: String = "%s|%s|%d" % [str(head),str(image.get_size()),
+            hash(image.get_data())]
+        if _status_head_interiors.has(key) and "_head_interiors" in glyphs:
+            glyphs._head_interiors[str(head)] = _status_head_interiors[key]
+            reused += 1
+        else:
+            _status_head_interiors[key] = glyphs.head_interior(str(head))
+    if reused == glyphs.head_images.size():
+        return
+    # Then draw every status pass once, near-transparent, so its blend
+    # pipeline, the interior textures' upload and the glow sizes' glyph
+    # rasterization also happen now (GL Compatibility does them lazily).
+    var gap: float = float(renderer.staff_gap()) if renderer.has_method("staff_gap") else 10.0
+    var warm := Node2D.new()
+    warm.name = "StatusInkWarmup"
+    renderer.add_child(warm)
+    for pass_name in NoteStatusInk.PASSES:
+        var layer := Node2D.new()
+        layer.material = NoteStatusInk.material_for(pass_name)
+        layer.draw.connect(func() -> void:
+            var faint := Color(1,1,1,0.004)
+            for head in glyphs.head_images.keys():
+                var interior: Texture2D = glyphs.head_interior(str(head))
+                if interior != null:
+                    layer.draw_texture_rect(interior,Rect2(2,2,4,4),false,faint)
+                for scale in [1.0,NoteStatusInk.INNER_SCALE,NoteStatusInk.OUTER_SCALE]:
+                    glyphs.paint(layer,str(head),4.0,4.0,gap*scale,faint,true))
+        warm.add_child(layer)
+    _free_after_frames(warm,3)
+    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+        print("STATUS_HEADS_WARMED: ",glyphs.head_images.size()," ms=",
+            (Time.get_ticks_usec()-started)/1000)
 
 func _retry_score() -> void:
     if score_session != null:
@@ -1185,12 +1250,20 @@ func _send_action(command: Dictionary) -> void:
         # take keeps it, like Resume of a paused take, re-timed to reach the
         # playhead where it now is. Otherwise report where fresh ink fits.
         var copy_onset: float = rest_renderer.announced_copy_onset(rest_now)
-        # The copy keeps its count-in only with at least one count-in beat
-        # plus the snapshot latency still ahead (engine
-        # SHORT_REST_LATENCY_SECONDS); otherwise a fresh copy is placed.
+        # Godot alone decides the reuse (I3): the copy keeps its count-in
+        # only with at least one count-in PULSE (a dotted quarter in
+        # compound meters) at the announced tempo, plus the engine's
+        # published snapshot latency, still ahead; otherwise a fresh copy.
+        var plan: Dictionary = last_state.get("score_queue_next",{}) \
+            if last_state.get("score_queue_next") is Dictionary else {}
+        var plan_bpm: float = maxf(1.0,float(plan.get("bpm",
+            last_state.get("bpm",score_flow.bpm))))
+        var pulse: float = CountInCueTimeline.pulse_beats(plan.get(
+            "count_in_meter",last_state.get("count_in_meter")))
         var rest_bpm: float = float(last_state.get("bpm",score_flow.bpm))
         if is_finite(copy_onset) and StreamAdmission.lead_seconds(copy_onset,
-                rest_now,rest_bpm) < 60.0/maxf(1.0,rest_bpm)+0.4:
+                rest_now,rest_bpm) < pulse*60.0/plan_bpm+float(
+                    last_state.get("short_rest_latency_seconds",0.0)):
             copy_onset = NAN
         if is_finite(copy_onset):
             command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
@@ -1232,9 +1305,16 @@ func _send_action(command: Dictionary) -> void:
         # Failure cannot mutate the online queue before a valid plan exists.
         # The engine publishes the one count-in bar this action gets; on an
         # empty strip the opening is placed exactly that far ahead.
+        # Play/Resume open one count-in bar plus the engine's published
+        # snapshot latency ahead (I5): the first syllable then falls after
+        # this frame's reservation work, and the count-in bar itself still
+        # ends exactly at the take's first beat.
+        var count_in_slot: float = float(last_state.get("next_count_in_beats",0.0))
+        if requested in ["start","resume"] and count_in_slot > 0.0:
+            count_in_slot += float(last_state.get("short_rest_latency_seconds",0.0))* \
+                float(last_state.get("bpm",score_flow.bpm))/60.0
         var reserved: Dictionary = renderer.reserve_transport_action(
-            requested,visual_now,opening,
-            float(last_state.get("next_count_in_beats",0.0)))
+            requested,visual_now,opening,count_in_slot)
         if reserved.is_empty():
             command_state.abort_action()
             practice_view.finish_action()
@@ -1271,7 +1351,7 @@ func _send_action(command: Dictionary) -> void:
                 float(last_state.get("next_count_in_beats",0.0)),
                 last_state.get("next_count_in_meter",
                     last_state.get("count_in_meter")),
-                float(last_state.get("next_count_in_beats",0.0)))
+                float(last_state.get("next_count_in_beats",0.0)),requested)
         var written_rest: float = float(renderer.practice_timeline.get(
             "gap",{}).get("duration_beats",0.0))
         command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(
@@ -1317,6 +1397,8 @@ func _send_command(operation: String, payload: Dictionary) -> void:
     if not command_state.begin(operation,Time.get_ticks_msec()):
         if operation == "practice.command":
             _cancel_pending_stream_arm()
+            # No take starts: a reserved count-in must not be spoken (I2).
+            metronome_frame.cancel_reserved_count_in()
         return
     practice_view.present_busy(true)
     settings_view.present_busy(true)
@@ -1324,6 +1406,8 @@ func _send_command(operation: String, payload: Dictionary) -> void:
     if err != OK:
         if operation == "practice.command":
             _cancel_pending_stream_arm()
+            # No take starts: a reserved count-in must not be spoken (I2).
+            metronome_frame.cancel_reserved_count_in()
         practice_view.present_busy(false)
         settings_view.present_busy(false)
         if operation == "practice.command":
@@ -1352,6 +1436,8 @@ func _on_action(code: int, body: PackedByteArray) -> void:
     if code != 0:
         if operation == "practice.command":
             _cancel_pending_stream_arm()
+            # No take starts: a reserved count-in must not be spoken (I2).
+            metronome_frame.cancel_reserved_count_in()
         var message := _command_failure(code, body)
         if operation == "fingering.correct":
             fingering_save_error = message
@@ -1379,6 +1465,8 @@ func _on_action(code: int, body: PackedByteArray) -> void:
         # Commit the provisional source owner only after successful backend
         # acknowledgement, before the response publishes its transport ID.
         _pending_stream_renderer.acknowledge_stream_arm()
+    if operation == "practice.command":
+        metronome_frame.acknowledge_reserved_count_in(Time.get_ticks_msec())
     command_success_effects.apply(decision,opened,
         code,body,int(completed["started_ms"]))
     if operation == "practice.command":

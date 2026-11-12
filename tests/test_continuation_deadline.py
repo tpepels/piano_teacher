@@ -490,3 +490,13 @@ def test_an_unannounced_take_settles_during_its_written_rest(engine, monkeypatch
     now[0] = end_at + 0.5
     app.state()
     assert app.pending_result is None, "settled within half a second of the take end"
+
+
+def test_stop_forgets_the_last_take_end(engine):
+    """Round 4 fix wave M6: no later rest can follow a stopped session."""
+    app, now = engine()
+    start_short(app)
+    finish_take(app, now)
+    assert app._rest_take_end is not None
+    app.control("stop")
+    assert app._rest_take_end is None

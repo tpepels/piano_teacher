@@ -698,11 +698,11 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 var _ambient_anchor_world := 0.0
 
 var _stream_last_admitted := -1
-# Owner decision (round 4, 2026-11-11): a written rest bar follows every
-# take, and it IS the count-in bar of the next take: the next source is
-# admitted straight after it (empty_strip_start) and its one count-in is
-# spoken over the rest, so rest plus count-in stays short (P5).
-var written_rest_between_takes := true
+# Owner decision (round 4, 2026-11-11): a written rest bar (the practice
+# timeline's gap, always one full measure) follows every take, and it IS
+# the count-in bar of the next take: the next source is admitted straight
+# after it (empty_strip_start) and its one count-in is spoken over the
+# rest, so rest plus count-in stays short (P5).
 # Each backend decision has a stable identity. Repeated state polls cannot
 # enqueue another copy after the first source has already been activated
 # or has passed off the left edge.
@@ -767,7 +767,7 @@ func _stream_add_take(source_beat: float, start_world: float,
             "piece_duration":timeline.duration_beats,"take_key":take_key,
             "pending":take_key in ["prepared","autopending"],
             "hidden_until_armed":hidden}]
-        if is_last and gap > .0001 and written_rest_between_takes:
+        if is_last and gap > .0001:
             specs.append({
                 "kind":"rest","owner_serial":serial,
                 "take_owner":first_serial,
@@ -938,9 +938,11 @@ func reserve_transport_action(action: String, world: float,
     if _stream_queue.online.size() != int(planned["remaining_count"]):
         push_error("SCORE_TRANSPORT_COMMIT: online queue changed during preflight")
         return {}
+    _retry_placement = action == "restart"
     var admitted: Dictionary = arm_stream_take(
         world,opening,intended,false,false,
         count_in_beats if bool(planned.get("empty_strip",false)) else 0.0)
+    _retry_placement = false
     if admitted.is_empty():
         push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")
         return {}
@@ -1001,24 +1003,20 @@ func short_rest_geometry() -> Dictionary:
     # header = the next opening's header plus a frame margin. The next
     # source opens straight after the rest (empty_strip_start).
     var density: float = maxf(1.0,timeline.pixels_per_beat)
+    # The timeline's gap is always one full measure (practice_timeline
+    # raises otherwise). Its source strip's final barline margin can reach
+    # past it when the last window ends in a short measure: then that margin
+    # plus the usual rest gap is what the next opening must clear.
     var rest: float = float(practice_timeline.get("gap",{}).get(
         "duration_beats",0.0))
-    if written_rest_between_takes and rest > .0001:
-        # A gap shorter than the final barline margin (a passage ending
-        # mid-measure) is followed by that margin plus the usual rest gap.
-        var trailing: float = 2.2*staff_gap()/density
-        var after: float = rest if rest >= trailing else \
-            trailing+StreamAdmission.REST_GAP_BEATS
-        return {"continuation_clear_beats":
-                after+StreamQueue.PEER_MARGIN_PX/density+
-                StreamAdmission.OFFSCREEN_MARGIN_BEATS,
-            "continuation_header_beats":
-                _stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+    var trailing: float = 2.2*staff_gap()/density
+    var after: float = rest if rest >= trailing else \
+        trailing+StreamAdmission.REST_GAP_BEATS
     return {"continuation_clear_beats":
-            2.2*staff_gap()/density+StreamAdmission.OFFSCREEN_MARGIN_BEATS,
+            after+StreamQueue.PEER_MARGIN_PX/density+
+            StreamAdmission.OFFSCREEN_MARGIN_BEATS,
         "continuation_header_beats":
-            StreamAdmission.REST_GAP_BEATS+_stream_header_beats(0.0)+
-            StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+            _stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 
 
 func announced_copy_onset(world: float) -> float:
@@ -1038,6 +1036,9 @@ func announced_copy_onset(world: float) -> float:
                 StreamAdmission.PAUSED_REUSE_EPSILON_BEATS else NAN
     return NAN
 
+
+# Set only around reserve_transport_action's commit of a Retry slot.
+var _retry_placement := false
 
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
@@ -1089,6 +1090,17 @@ func arm_stream_take(world: float, opening: float,
             _stream_header_beats(opening),planned_start_world,0.0,
             timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
         var onto_empty_strip := false
+        if not is_finite(checked) and _retry_placement:
+            # A Retry is placed by StreamAdmission.retry_start (right edge at
+            # once, after exposed ink, no REST_GAP/READY travel): the commit
+            # accepts exactly that slot (the preflight's own rule).
+            var retry_floor: float = StreamAdmission.retry_start(
+                _stream_queue.online,stream_world_beat,_stream_right_beats(),
+                _stream_header_beats(opening),float(practice_timeline.get(
+                    "gap",{}).get("duration_beats",0.0)),
+                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+            if planned_start_world >= retry_floor-.0001:
+                checked = planned_start_world
         if not is_finite(checked) and empty_strip_count_in > 0.0:
             # The preflight chose the empty-strip count-in bar slot; the
             # live queue must still permit exactly that deadline.

@@ -201,7 +201,7 @@ func _post_draw() -> void:
             if not info.is_empty():
                 var expected: float = (float(info[0])-play_from-tb)*density
                 near.append([str(inst["event_id"]),snappedf(p.x-playhead_x,.01),
-                    snappedf(expected,.01)])
+                    snappedf(expected,.01),snappedf(p.y,.01)])
     if visible > 0 and t_play_ms >= 0 and t_first_ink_ms < 0:
         t_first_ink_ms = _now_ms()
         _event("first_ink",{"after_play_ms":t_first_ink_ms-t_play_ms})

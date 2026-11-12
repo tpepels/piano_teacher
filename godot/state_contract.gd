@@ -103,6 +103,7 @@ const SCHEMA := {
     "seek_available": ["bool"],
     "seek_range": ["dict", "null"],
     "selected_start_bar": ["number"],
+    "short_rest_latency_seconds": ["number"],
     "skip_available": ["bool"],
     "stage_change": ["string"],
     "stage_family": ["string"],

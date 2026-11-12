@@ -241,7 +241,6 @@ class PracticeEngine:
         # (seconds, bpm) of the last finished take's end: the written rest
         # bar that follows it is printed from there at that tempo.
         self._rest_take_end: tuple[float, float] | None = None
-        self._prepared_handoff_pending = False
         self._future_stage_clear_beats: float | None = None
         self._future_stage_short_rest: tuple[float, float] | None = None
         self._tempo_key = None
@@ -892,6 +891,8 @@ class PracticeEngine:
                     self.recorder.add(message.note, False, musical_at)
 
     def load(self, path: str, *, warmup: bool = False):
+        # A new plan: no previous take's written rest applies (M6).
+        self._rest_take_end = None
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = checkpoint = time.perf_counter()
         with self._fingering_lock:
@@ -1792,11 +1793,9 @@ class PracticeEngine:
                 or announced is None
                 or self.visual_transport.announced_deadline(announced[0]) is None):
             return
-        # The reused copy keeps its count-in only if at least one whole
-        # count-in beat of it is still ahead once Godot hears the new
-        # deadline (round 4: a rest-paused take is never left with an empty
-        # or late count-in); otherwise a fresh copy is announced.
-        if reuse and lead_seconds >= 60.0 / announced[2] + SHORT_REST_LATENCY_SECONDS:
+        # Godot owns the reuse decision (one count-in pulse plus the published
+        # latency still ahead, at the announced tempo); it is not re-decided.
+        if reuse and lead_seconds > 0.0:
             self.visual_transport.retime_announcement(now + float(lead_seconds))
             return
         floor = (self._short_rest_deadline(0.0, from_beat=announced[0], now=now)
@@ -2283,6 +2282,8 @@ class PracticeEngine:
                 self.next_action = "Play one piano key to begin, or press Play."
         elif action == "stop":
             self._stop(reason="stop")
+            # A stopped session has no take a later rest could follow (M6).
+            self._rest_take_end = None
             self.feedback = "Stopped"
             self.next_action = "Start when you are ready."
         elif action in ("start", "restart"):
@@ -2394,8 +2395,7 @@ class PracticeEngine:
                         following_measure=following)["duration_beats"])
                 reverse_seconds = planned_retry_reverse_seconds(
                     reading_lead_seconds=presentation_lead_seconds,
-                    semantic_rest_seconds=rest_beats * 60.0 / self.plan.bpm,
-                    minimum_rewind_seconds=self.feedback_seconds)
+                    semantic_rest_seconds=rest_beats * 60.0 / self.plan.bpm)
             self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
             self.visual_transport.paused = False
             self.visual_transport.paused_at = 0.0
@@ -2605,9 +2605,6 @@ class PracticeEngine:
 
     def _advance_pending_feedback(self, now: float, *, prepared_on_time: bool = False):
         """Commit finished feedback and schedule exactly one next transition."""
-        if self._prepared_handoff_pending:
-            prepared_on_time = True
-            self._prepared_handoff_pending = False
         if self.auto and self.visual_transport.next_at and now >= self.visual_transport.next_at:
             # Keep the current music axis moving until authentic next-step ink
             # is compiled, acknowledged, and adoptable. A cache miss is never
@@ -3131,8 +3128,9 @@ class PracticeEngine:
                 from_visual=visual_from,
                 reverse_seconds=decision.rewind_seconds,
                 announce=not self._settlement_may_reroute(result, whole_recovery),
-                short_deadline=self._short_rest_deadline(
-                    self.visual_transport.run_at + duration, from_beat=target))
+                # The recorded take end at its own tempo; a slower retry's
+                # tempo epoch (noted above) applies after it.
+                short_deadline=self._short_rest_deadline(None, from_beat=target))
         if decision.failed:
             # An abandoned failed take cannot leave a previously clean
             # streak durable in SQLite. Settle this monotone invalidation
@@ -3172,16 +3170,8 @@ class PracticeEngine:
             if (self._future_stage_ready ==
                     (selection.stage_key, selection.revision) and
                     self.future_score.ready(selection)):
-                clear = self._future_stage_clear_beats
-                commit_at = (self.visual_transport.run_at + duration
-                             + clear * 60.0 / self.plan.bpm) if clear else now
-                if commit_at > now:
-                    # Short handoff (P5): settle when the outgoing ink has
-                    # passed, so the next stage opens on the empty strip.
-                    self.visual_transport.announced_continuation = None
-                    self.visual_transport.next_at = commit_at
-                    self._prepared_handoff_pending = True
-                    return
+                # The handoff settles at once; the new stage opens straight
+                # after the outgoing take's written rest bar (round 4).
                 self.visual_transport.next_at = now
                 self._advance_pending_feedback(now, prepared_on_time=True)
                 return
@@ -3342,6 +3332,28 @@ class PracticeEngine:
         elif step.action == "complete":
             self._complete_attempt(phrase, step.ending,
                                    phrase.end-phrase.start, step.duration, now)
+            self._refloor_fresh_announcement()
+
+    def _refloor_fresh_announcement(self) -> None:
+        """Keep a just-made announcement one count-in bar ahead of the reply.
+
+        A take's completion (grading, evidence, persistence) can take most
+        of a second under the lock on large pieces (Chopin), and Godot only
+        sees the announcement in the reply after it. A deadline floored at
+        the START of that work then began its count-in before Godot knew of
+        it (first syllable 0.3 s late). Godot has not seen it yet, so it is
+        re-timed (same identity) to at least now + latency + one bar.
+        """
+        announced = self.visual_transport.announced_continuation
+        if (announced is None or self.running or self.plan is None
+                or self._short_rest is None or self.plan.bpm <= 0):
+            return
+        _, bar, _ = self.attempt_progression.count_in_bar(
+            phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
+            time_signatures=self.plan.piece.time_signatures, position=announced[0])
+        floor = self.now() + SHORT_REST_LATENCY_SECONDS + bar * 60.0 / self.plan.bpm
+        if announced[1] < floor:
+            self.visual_transport.retime_announcement(floor)
 
     def _phase(self, now: float) -> str:
         teaching_phase = None
@@ -3385,7 +3397,6 @@ class PracticeEngine:
         MIDI matches, settlement or feedback marks.
         """
         self.transport_id += 1
-        self._prepared_handoff_pending = False
         self.live_input.reset_attempt()
         self._pause_floor = None
         if phrase is not None:
@@ -3625,6 +3636,7 @@ class PracticeEngine:
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
             state["next_count_in_beats"] = self._next_count_in_beats()
             state["next_count_in_meter"] = self._next_count_in_meter()
+            state["short_rest_latency_seconds"] = SHORT_REST_LATENCY_SECONDS
             state["resume_count_in_beat"] = (
                 (calibration_sample_at - self._resume_grading_after)
                 * self.plan.bpm / 60.0

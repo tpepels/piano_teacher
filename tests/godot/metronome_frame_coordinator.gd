@@ -206,6 +206,35 @@ func _initialize() -> void:
             failures += 1
             print("reserved count-in cue off its beat ",spoken_at)
             break
+    # Round 4 fix wave (C1): a mid-take Pause then Resume. Godot reserves
+    # the Resume's count-in at the press; the engine's state, 30-150 ms
+    # later, reports the transport running with its own resume countdown
+    # (and the take position as the sampled beat). Exactly one cycle.
+    for latency in [30,90,150]:
+        practice.stage.count_in.spoken.clear()
+        var resume_press: int = 100000+latency*1000
+        var resume_deadline: float = float(resume_press+2000)
+        owner.reserve_count_in(resume_deadline,120.0,4.0,[4,4],4.0,"resume")
+        var at: int = resume_press
+        while at <= resume_press+2600:
+            var resumed_state: Dictionary = {"running":false,"paused":true,
+                "phase":"paused","transport_id":12,"revision":3,
+                "count_in_bar_beats":4,"count_in_beats":4.0}
+            var take_beat := NAN
+            if at >= resume_press+latency:
+                var countdown: float = (float(at)-resume_deadline)*120.0/60000.0
+                resumed_state = {"running":true,"paused":false,
+                    "phase":"count_in" if countdown < 0.0 else "playing",
+                    "transport_id":12,"revision":3,"bpm":120,
+                    "count_in_bar_beats":4,"count_in_beats":4.0,
+                    "resume_count_in_beat":countdown}
+                take_beat = 7.25+maxf(0.0,countdown)
+            owner.update(resumed_state,at,take_beat,at)
+            at += 16
+        if practice.stage.count_in.spoken != [1,2,3,4]:
+            failures += 1
+            print("mid-take Resume at %d ms latency spoke %s" % [latency,
+                str(practice.stage.count_in.spoken)])
     # A late first observation outside a continued Resume is still spoken.
     var late := CueTimeline.new()
     if late.observe("running:9",-3.7,4).is_empty() or \

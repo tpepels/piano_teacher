@@ -73,6 +73,8 @@ func first_play_lands_one_count_in_bar_ahead() -> void:
     var visual_now: float = app.score_flow.project(Time.get_ticks_msec())
     var visible_before: int = app._visible_score_noteheads()
     check(visible_before == 0, "READY shows no ink right of the playhead")
+    # Everything heard from the Play press on belongs to this one take.
+    voice.spoken.clear()
     app._send_action({"action":"start"})
     check(app.wire_commands.size() == 1, "Play reaches the engine exactly once")
     if app.wire_commands.is_empty():
@@ -93,11 +95,17 @@ func first_play_lands_one_count_in_bar_ahead() -> void:
         "bpm":bpm, "count_in_beats":count_in,
         "lead_beats":lead_beats, "lead_seconds":lead_seconds,
         "start_world_minus_now":start_world-visual_now}))
-    # One count-in bar, plus at most the frame or two between sampling
-    # visual_now here and inside _send_action.
-    check(lead_beats >= count_in - .001 and lead_beats <= count_in + .15,
-        "Play -> first note is one count-in bar (%.2f beats), got %.2f beats" % [
-            count_in, lead_beats])
+    # One count-in bar plus the engine's published snapshot latency (round 4
+    # I5: the first syllable falls after the Play frame's work), plus at
+    # most the frame or two between sampling visual_now here and inside
+    # _send_action.
+    var allowance: float = float(app.last_state.get(
+        "short_rest_latency_seconds",0.0))*bpm/60.0
+    check(allowance > 0.0, "The engine publishes its snapshot latency")
+    check(lead_beats >= count_in + allowance - .001 and
+            lead_beats <= count_in + allowance + .15,
+        "Play -> first note is one count-in bar (%.2f beats) + latency (%.2f), got %.2f beats" % [
+            count_in, allowance, lead_beats])
     check(absf((start_world - visual_now) - lead_beats) < .15,
         "The score deadline equals the lead sent to the grading engine")
     # The opening is on screen immediately, already approaching the playhead;
@@ -198,9 +206,7 @@ func pause_one_beat_into_count_in_then_resume() -> void:
         app.metronome_frame.update(resumed, tick,
             -lead_beats + float(elapsed)*bpm/60000.0, tick + elapsed)
         elapsed += 20
-    var cycle: Array = (heard_at_press + voice.spoken) if voice.spoken.size() < 4 \
-        else voice.spoken
-    check(cycle == [1, 2, 3, 4],
+    check(heard_at_press + voice.spoken == [1, 2, 3, 4],
         "Pause and Resume inside the count-in hear exactly one cycle: %s (at Play: %s)" % [
             str(voice.spoken),str(heard_at_press)])
     print("PAUSE_RESUME_SPOKEN:", JSON.stringify({"spoken":voice.spoken}))
@@ -208,6 +214,9 @@ func pause_one_beat_into_count_in_then_resume() -> void:
 
 func one_countdown_for_a_long_lead() -> void:
     var count_in = app.practice_view.stage.count_in
+    # The previous scenario's take is abandoned here (no engine): its
+    # reserved Resume count-in must not speak over these synthetic states.
+    app.metronome_frame.cancel_reserved_count_in()
     voice.spoken.clear()
     var bar := 4
     var shown_early := false

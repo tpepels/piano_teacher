@@ -90,6 +90,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "next_action": ('string',),
     "next_count_in_beats": ('number',),
     "next_count_in_meter": ('list',),
+    "short_rest_latency_seconds": ('number',),
     "original_bpm": ('number',),
     "pause_context": ('null', 'string'),
     "paused": ('bool',),
