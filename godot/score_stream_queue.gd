@@ -34,7 +34,7 @@ const PEER_MARGIN_PX := 60.0
 
 func minimum_peer_opening(density: float,
         viewport_width: float, playhead_x: float,
-        popping_in: bool = false) -> float:
+        popping_in: bool = false, kinds: String = "all") -> float:
     # Earliest permitted world time for the first pixel of new ink.
     # READY can schedule beyond this barrier; an engine-authored exact
     # deadline must be rejected if it arrives earlier.
@@ -51,9 +51,13 @@ func minimum_peer_opening(density: float,
         var peer_gap: float = float(view.staff_gap())
         var peer_duration: float = float(view.timeline.duration_beats)
         # The peer view's own fixed playhead (NativeView.PLAYHEAD_FRACTION).
-        var peer_playhead: float = view.size.x*(float(view.PLAYHEAD_FRACTION)
-            if "PLAYHEAD_FRACTION" in view else .33)
+        var peer_playhead: float = view.size.x*float(view.PLAYHEAD_FRACTION)
         for item in peer_queue.online:
+            # kinds: "all", "source" (ink that blocks an empty-strip
+            # opening) or "rest" (a written rest an opening may follow).
+            var is_rest: bool = str(item.get("kind","source")) == "rest"
+            if (kinds == "source" and is_rest) or (kinds == "rest" and not is_rest):
+                continue
             var peer_bounds: Vector2 = Admission.clip_bounds(
                 item,peer_density,peer_gap,peer_duration)
             var peer_end: float = float(item["world_origin"]) + \
@@ -186,7 +190,8 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     var onto_empty_strip: bool = empty_strip and \
         not Admission.ink_ahead_of(online,world,density,gap,
             source_duration,take) and \
-        minimum_peer_opening(density,viewport_width,playhead_x,true) <= world+.00001
+        minimum_peer_opening(density,viewport_width,playhead_x,true,
+            "source") <= world+.00001
     var inside: bool = is_finite(opening_left) and \
         playhead_x + (opening_left-world)*density <= viewport_width
     if not is_finite(opening_left) or (inside and not onto_empty_strip) or \

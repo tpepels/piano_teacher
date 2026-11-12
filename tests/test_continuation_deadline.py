@@ -303,6 +303,11 @@ def _feedback_refresh(monkeypatch, app, *, moves: bool):
                 lambda p: "moved-stage" if p.stage_tempos.get("_moved") else "kept"))
         return moves
     monkeypatch.setattr(plan_type, "refresh_from_feedback", refresh)
+
+    def changes(plan, evidence):
+        calls.append(dict(evidence))
+        return moves
+    monkeypatch.setattr(plan_type, "feedback_changes_generator", changes)
     return calls
 
 
@@ -391,9 +396,9 @@ def start_short(app):
 
 @pytest.mark.parametrize("outcome", ["clean", "failed"])
 def test_short_rest_opens_the_repeat_one_count_in_bar_after_the_ink_has_passed(engine, outcome):
-    """Owner P5: rest plus count-in is at most about two bars. The repeat is
-    announced at take end + clearance + one count-in bar (never less than
-    the gap and header), and starts at exactly that run_at."""
+    """Owner P5 + round 4: rest plus count-in is at most about two bars. The
+    repeat is announced right after the written rest bar and header (never
+    inside one count-in bar) and starts at exactly that run_at."""
     app, now = engine()
     start_short(app)
     if outcome == "clean":
@@ -403,8 +408,10 @@ def test_short_rest_opens_the_repeat_one_count_in_bar_after_the_ink_has_passed(e
     spb = 60 / BPM
     bar = 4.0
     from piano_teacher.server import SHORT_REST_LATENCY_SECONDS
-    expected = (max(end_at + CLEAR * spb, now[0] + SHORT_REST_LATENCY_SECONDS)
-                + max(bar, HEADER) * spb)
+    # Round 4: the repeat opens right after the written rest bar (CLEAR)
+    # plus its header, never inside one count-in bar from the announcement.
+    expected = max(end_at + (CLEAR + HEADER) * spb,
+                   now[0] + SHORT_REST_LATENCY_SECONDS + bar * spb)
     assert plan["deadline_at_ms"] / 1000 == pytest.approx(expected)
     assert (expected - end_at) / spb <= 2 * bar, "rest + count-in within two bars"
     now[0] = expected + .01
@@ -443,3 +450,43 @@ def test_play_runs_at_the_reserved_deadline_even_when_the_command_was_delayed(en
                 presentation_deadline_ms=deadline * 1000.0,
                 continuous_horizon_beats=HORIZON)
     assert app.visual_transport.run_at == pytest.approx(deadline)
+
+
+def test_an_unexpected_generator_error_at_take_end_leaves_the_take_unannounced(
+        engine, monkeypatch, caplog):
+    """Round 4 item 4: any generator error in the take-end decision means
+    "unannounced" and is logged with its traceback; settlement decides."""
+    app, now = engine()
+    plan_type = type(app.plan)
+    monkeypatch.setattr(plan_type, "accepts_performance_feedback", property(lambda _p: True))
+
+    def broken(plan, evidence):
+        raise KeyError("generator bug")
+    monkeypatch.setattr(plan_type, "feedback_changes_generator", broken)
+    monkeypatch.setattr(plan_type, "refresh_from_feedback",
+                        lambda plan, evidence, **_kw: False)
+    start_with_horizon(app)
+    play_clean(app)
+    with caplog.at_level("ERROR"):
+        _, rest = finish_take(app, now)
+    assert "score_queue_next" not in rest
+    assert app.visual_transport.announced_continuation is None
+    assert any("re-engraving decision failed" in r.getMessage() and r.exc_info
+               for r in caplog.records)
+
+
+@pytest.mark.parametrize("outcome", ["clean", "failed"])
+def test_an_unannounced_take_settles_during_its_written_rest(engine, monkeypatch, outcome):
+    """Round 4: a take whose settlement may re-engrave is unannounced, but
+    it settles at once (during the written rest bar), not at the end of the
+    rest, so the next source can still open straight after that bar."""
+    app, now = engine()
+    _feedback_refresh(monkeypatch, app, moves=True)
+    start_short(app)
+    if outcome == "clean":
+        play_clean(app)
+    end_at, rest = finish_take(app, now)
+    assert "score_queue_next" not in rest
+    now[0] = end_at + 0.5
+    app.state()
+    assert app.pending_result is None, "settled within half a second of the take end"

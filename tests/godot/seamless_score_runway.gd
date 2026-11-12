@@ -152,7 +152,9 @@ func run() -> void:
         "a late handoff cannot silently seek or replace the old bar")
     var ready: Dictionary = early.duplicate(true)
     ready["clock_beat"] = -14.0
-    check(runway.promote_if_ready(ready),
+    # The engine's run_at projected on the presentation axis (34.5) is the
+    # one world coordinate used, not the frame's world minus clock beat (34).
+    check(runway.promote_if_ready(ready,34.5),
         "precompiled next lesson must promote with offscreen lead")
     check(stage.renderer == future and session._renderer == future and \
             session.revision == 2 and session.is_ready(),
@@ -162,8 +164,8 @@ func run() -> void:
         future.mouse_filter == Control.MOUSE_FILTER_PASS,
         "departing and incoming score layers remain under the HUD; fingering remains interactive")
     check(future.arm_calls == 2 and future.ack_calls == 1 and \
-            is_equal_approx(future.armed_world,34.0),
-        "promoted future source keeps its acknowledged world coordinate")
+            is_equal_approx(future.armed_world,34.5),
+        "promoted future source opens exactly at the engine's run_at world")
     check(runway._tails == [old] and old.cleared == 0,
         "outgoing score survives until its own clips exit left")
     runway._advance_tails(29.0)

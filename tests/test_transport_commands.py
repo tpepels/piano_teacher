@@ -65,6 +65,9 @@ def test_resume_shifts_only_running_non_guided_deadlines(inputs, expected):
     (14.0,6.0,1.0,8.0),
     (7.0,6.0,1.0,1.0),
     (3.5,3.0,0.1,0.5),
+    # Round 4: the reserved deadline wins over the reverse animation's
+    # nominal minimum (a Retry is never pushed later than its ink).
+    (7.0,6.0,2.0,1.0),
 ])
 def test_retry_reading_lead_accounts_for_written_rest_once(lead, rest, minimum, expected):
     from piano_teacher.application.transport_commands import planned_retry_reverse_seconds
@@ -76,7 +79,7 @@ def test_retry_reading_lead_accounts_for_written_rest_once(lead, rest, minimum, 
 
 @pytest.mark.parametrize(("lead","rest","minimum"), [
     (4.0,6.0,1.0),
-    (7.0,6.0,2.0),
+    (6.02,6.0,2.0),
     (float("nan"),4.0,1.0),
     (8.0,0.0,1.0),
 ])

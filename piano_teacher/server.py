@@ -21,7 +21,7 @@ from .lesson_timing import lead_in_beats
 # Poll/frame latency allowed between announcing a short-rest continuation
 # (sampled when it is announced, after the take-end work) and Godot
 # admitting it; the ink still opens a full count-in bar ahead.
-SHORT_REST_LATENCY_SECONDS = 0.25
+SHORT_REST_LATENCY_SECONDS = 0.4
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.future_score import FutureScore
@@ -238,6 +238,9 @@ class PracticeEngine:
         # Godot's empty-strip geometry (clear, header beats); None = no
         # renderer has reported it, keep the offscreen reading horizon.
         self._short_rest: tuple[float, float] | None = None
+        # (seconds, bpm) of the last finished take's end: the written rest
+        # bar that follows it is printed from there at that tempo.
+        self._rest_take_end: tuple[float, float] | None = None
         self._prepared_handoff_pending = False
         self._future_stage_clear_beats: float | None = None
         self._future_stage_short_rest: tuple[float, float] | None = None
@@ -1740,6 +1743,16 @@ class PracticeEngine:
                 position=self.open_from_beat)
         return lead_in_beats(bar_beats, self.plan.bpm) if bar_beats > 0 else 0.0
 
+    def _next_count_in_meter(self) -> list[int]:
+        """The meter of that count-in bar (its syllables and pulses)."""
+        if self.plan is None or self.running or self.visual_transport.paused:
+            return list(self.count_in_meter)
+        _, _, meter = self.attempt_progression.count_in_bar(
+            phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
+            time_signatures=self.plan.piece.time_signatures,
+            position=self.open_from_beat)
+        return [int(meter[0]), int(meter[1])]
+
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Retain polling overshoot instead of moving the musical deadline."""
         announced = self.visual_transport.announced_deadline(from_beat)
@@ -1779,16 +1792,24 @@ class PracticeEngine:
                 or announced is None
                 or self.visual_transport.announced_deadline(announced[0]) is None):
             return
-        if reuse and lead_seconds > 0.0:
+        # The reused copy keeps its count-in only if at least one whole
+        # count-in beat of it is still ahead once Godot hears the new
+        # deadline (round 4: a rest-paused take is never left with an empty
+        # or late count-in); otherwise a fresh copy is announced.
+        if reuse and lead_seconds >= 60.0 / announced[2] + SHORT_REST_LATENCY_SECONDS:
             self.visual_transport.retime_announcement(now + float(lead_seconds))
             return
         floor = (self._short_rest_deadline(0.0, from_beat=announced[0], now=now)
                  if self._short_rest is not None else
                  now + self._continuous_horizon_beats * 60.0 / self.plan.bpm)
-        deadline = max(announced[1], now + max(0.0, float(lead_seconds)), floor)
-        if deadline > announced[1] + 1e-9:
-            self.visual_transport.announce_continuation(
-                announced[0], deadline, announced[2])
+        # The copy announced before the pause is not reused, so it never
+        # gets this take: always a NEW announcement (new plan identity) at
+        # the earliest place Godot reported for fresh ink. Keeping the old
+        # identity with resume()'s shifted deadline bound the take to the
+        # old copy 1.7-1.9 beats off the playhead (round 4, Hanon).
+        deadline = max(now + max(0.0, float(lead_seconds)), floor)
+        self.visual_transport.announce_continuation(
+            announced[0], deadline, announced[2])
 
     def _continuation_deadline(self, deadline: float, from_beat: float) -> float:
         """The ONE graded run_at of an automatic same-stage continuation.
@@ -1808,9 +1829,11 @@ class PracticeEngine:
             return deadline
         if self.plan is None or not self.auto:
             return deadline
-        short = self._short_rest_deadline(deadline, from_beat=from_beat)
+        short = self._short_rest_deadline(
+            None if self._rest_take_end is not None else deadline,
+            from_beat=from_beat)
         if short is not None:
-            # The previous take's ink has passed: open on the empty strip.
+            # Settled early, during the written rest: open right after it.
             return max(deadline, short)
         if self._continuous_horizon_beats <= 0:
             return deadline
@@ -1875,14 +1898,18 @@ class PracticeEngine:
             self._tempo_epoch = now
 
     def _decide_reengraving(self, result) -> None:
-        """Decide at take end whether settling it re-engraves the stage.
+        """Decide at take end whether settling it may re-engrave the stage.
 
         Settlement records the take's original-attack mistakes and asks the
-        generator for a feedback refresh, which may select another stage.
-        Run that same refresh now on the evidence the store will hold after
-        this take, then restore the plan exactly as settlement's own rollback
-        does. Only a take that will really move to another stage stays
-        unannounced. (True: re-engraves; False: stays; None: undecidable.)
+        generator's feedback hook for an updated generator; only a changed
+        generator is regenerated (a whole-curriculum rebuild, ~0.5-1.4 s on
+        Hanon). Running that rebuild here, under the engine lock, stalled
+        every take end, so the decision is made from the cheap hook alone:
+        a changed generator MAY re-engrave and stays unannounced (settlement
+        rebuilds once); an unchanged one can only revisit an existing
+        scaffold, which is simulated exactly and restored. (True: may
+        re-engrave; False: stays; None: undecidable.) Any generator error
+        means unannounced; settlement then reports it as before.
         """
         p = self.plan
         decision: bool | None = False
@@ -1906,13 +1933,15 @@ class PracticeEngine:
                                 else value) for key, value in vars(p).items()}
                 identity = p.identity
                 try:
-                    changed = p.refresh_from_feedback(
-                        evidence, prefer_repair=not result.passed and bool(failed_ids),
-                        focus_ids=failed_ids)
-                    if not changed and not result.passed and failed_ids:
-                        changed = p.revisit_source_errors(failed_ids)
-                    decision = bool(changed) and p.identity != identity
-                except (ValueError, TypeError):
+                    if p.feedback_changes_generator(evidence):
+                        decision = True
+                    elif not result.passed and failed_ids:
+                        decision = (p.revisit_source_errors(failed_ids)
+                                    and p.identity != identity)
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "Take-end re-engraving decision failed; "
+                        "the continuation stays unannounced")
                     decision = None
                 finally:
                     vars(p).clear()
@@ -1974,6 +2003,12 @@ class PracticeEngine:
             vt._preparation_at = min(vt._preparation_at, short_deadline)
             vt._visual_rewind_seconds = max(
                 .05, min(vt._visual_rewind_seconds, vt._preparation_at - vt._visual_rewind_at))
+        elif not announce and short_deadline is not None:
+            # Round 4: a failed take whose settlement may re-engrave or
+            # reroute settles now, during its written rest bar, so whatever
+            # runs next opens straight after that bar (_continuation_deadline
+            # and the score acknowledgement use the recorded take end).
+            self.visual_transport.next_at = now
         elif not reading_lead_included and announce:
             # An unannounced take gets its whole reading horizon when it is
             # settled (_continuation_deadline); adding it here as well would
@@ -2084,6 +2119,12 @@ class PracticeEngine:
                 # latency allowed, and publish that run_at as its plan.
                 lead = (self._next_count_in_beats() * 60.0 / self.plan.bpm
                         + SHORT_REST_LATENCY_SECONDS) if self._short_rest is not None else 0.0
+                # A re-engraved continuation still opens after the written
+                # rest bar of the take it follows.
+                after_rest = self._short_rest_deadline(
+                    from_beat=self.open_from_beat) if lead > 0.0 else None
+                if after_rest is not None:
+                    lead = max(lead, after_rest - self.now())
                 self.start(
                     from_beat=(self.visual_transport.pending_rewind if self.visual_transport.pending_rewind is not None
                                else self.open_from_beat),
@@ -2151,13 +2192,13 @@ class PracticeEngine:
                 self.measurement.assistance_used = True
 
     def _update_short_rest(self, kwargs: dict) -> None:
-        """Godot's empty-strip geometry for short rests (owner decision P5).
+        """Godot's written-rest geometry between takes (owner, round 4).
 
-        continuation_clear_beats: from a take's end until its last printed
-        pixel (final barline) has passed the playhead, plus a frame margin.
-        continuation_header_beats: rest gap plus the opening header that an
-        opening needs after older ink. The next take then opens one count-in
-        bar ahead on the empty staff (the empty-strip rule).
+        continuation_clear_beats: the written rest bar printed directly after
+        a take's last source beat, plus the margin that new ink keeps from it.
+        continuation_header_beats: the next opening's header plus a frame
+        margin. The next source is admitted straight after the rest on the
+        empty staff; its one count-in bar is spoken over the rest bar.
         """
         clear = kwargs.get("continuation_clear_beats")
         header = kwargs.get("continuation_header_beats")
@@ -2168,25 +2209,40 @@ class PracticeEngine:
             raise ValueError("Invalid short-rest geometry")
         self._short_rest = (clear, header)
 
-    def _short_rest_deadline(self, take_end: float, *, from_beat: float = 0.0,
+    def _short_rest_deadline(self, take_end: float | None = None, *,
+                             from_beat: float = 0.0,
                              now: float | None = None) -> float | None:
-        """The graded run_at of a continuation that opens on the empty strip.
+        """The graded run_at of the take that follows a written rest bar.
 
-        Rest plus count-in is the time for the last printed pixel to pass the
-        playhead (or for this announcement to reach Godot) plus one count-in
-        bar, never shorter than the rest gap and header the queue keeps
-        between passages. The deadline is exactly where Godot admits the ink.
+        The next source opens right after the rest bar printed behind the
+        last take (take_end, default: the last finished take), but never
+        closer than one count-in bar plus the snapshot latency from now,
+        so its count-in is always whole. The rest is printed at the tempo
+        of the take it follows. The deadline is where Godot admits the ink.
         """
         if self._short_rest is None or self.plan is None or self.plan.bpm <= 0:
             return None
         clear, header = self._short_rest
-        spb = 60.0 / self.plan.bpm
+        rest_bpm = self.plan.bpm
+        if take_end is None:
+            if self._rest_take_end is None:
+                return None
+            take_end, rest_bpm = self._rest_take_end
         now = self.now() if now is None else now
         _, bar, _ = self.attempt_progression.count_in_bar(
             phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
             time_signatures=self.plan.piece.time_signatures, position=from_beat)
-        empty_at = max(take_end + clear * spb, now + SHORT_REST_LATENCY_SECONDS)
-        return empty_at + max(bar, header) * spb
+        span = clear + header
+        after_rest = take_end + span * 60.0 / rest_bpm
+        epoch = self._tempo_epoch
+        if (epoch is not None and take_end < epoch < after_rest
+                and abs(self.plan.bpm - rest_bpm) > 1e-9):
+            # Settled during the rest at another tempo: the presentation
+            # axis switched rate at that tempo epoch.
+            covered = (epoch - take_end) * rest_bpm / 60.0
+            after_rest = epoch + (span - covered) * 60.0 / self.plan.bpm
+        return max(after_rest,
+                   now + SHORT_REST_LATENCY_SECONDS + bar * 60.0 / self.plan.bpm)
 
     def _update_continuous_horizon(self, value) -> None:
         if value is None:
@@ -2645,8 +2701,11 @@ class PracticeEngine:
                 self._future_stage_ready = None
                 self._prepared_stage_published = False
                 lead_beats = self._future_stage_lead_beats
+                rest_lead = (
+                    (self._future_stage_clear_beats or 0.0) + lead_beats)
                 self._future_stage_lead_beats = 0.0
-                if self._future_stage_clear_beats is not None:
+                short_handoff = self._future_stage_clear_beats is not None
+                if short_handoff:
                     # Opens on the empty strip: one whole count-in bar of the
                     # new stage ahead, never less than the reported gap and
                     # header, plus the snapshot latency to reach Godot.
@@ -2667,6 +2726,20 @@ class PracticeEngine:
                 # authored offscreen lead at the moment of commitment.
                 next_deadline = scheduled_offscreen_start(
                     max(deadline, now), lead_beats, self.plan.bpm)
+                if short_handoff and self._rest_take_end is not None:
+                    # Round 4: the new stage opens straight after the
+                    # outgoing take's written rest bar (lead counted from
+                    # that take's end at its tempo), never inside one
+                    # whole count-in bar plus the snapshot latency.
+                    # The presentation axis ran at the outgoing tempo until
+                    # this commit (its tempo epoch, _note_tempo above) and
+                    # at the new stage's tempo from now on.
+                    take_end, rest_bpm = self._rest_take_end
+                    remaining = rest_lead - max(0.0, now - take_end) * rest_bpm / 60.0
+                    next_deadline = now + max(
+                        max(0.0, remaining) * 60.0 / self.plan.bpm,
+                        SHORT_REST_LATENCY_SECONDS
+                        + self._next_count_in_beats() * 60.0 / self.plan.bpm)
                 self._continue_at(next_deadline)
                 # One count-in bar before the handed-off stage starts; the
                 # rest of its offscreen lead is silent (owner, 2026-11-08).
@@ -2859,6 +2932,7 @@ class PracticeEngine:
         This method is called from the locked _update loop. Assessment and
         grading are calculated only after a completed non-preview take.
         """
+        self._rest_take_end = (self.visual_transport.run_at + duration, self.plan.bpm)
         if self.preview_only:
             # Disconnected MIDI: repeat as an ungraded preview, never create
             # fake notes, misses, accepted passes or mastery.
@@ -3130,10 +3204,13 @@ class PracticeEngine:
                     self._automatic_stream_deadline(decision.deadline_at),
                     self.plan.bpm_after(result.passed))
             else:
-                # A possible stage handoff or re-engraving keeps the plain
+                # A possible stage handoff or re-engraving keeps the written
                 # rest; nothing is announced that settlement could change.
+                # It settles now, during the rest bar, so the next source can
+                # still be admitted straight after that bar (round 4).
                 self.visual_transport.announced_continuation = None
-                self.visual_transport.next_at = decision.deadline_at
+                self.visual_transport.next_at = (
+                    now if self._short_rest is not None else decision.deadline_at)
             if now >= self.visual_transport.next_at:
                 self._update()
 
@@ -3547,6 +3624,7 @@ class PracticeEngine:
             state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
             state["next_count_in_beats"] = self._next_count_in_beats()
+            state["next_count_in_meter"] = self._next_count_in_meter()
             state["resume_count_in_beat"] = (
                 (calibration_sample_at - self._resume_grading_after)
                 * self.plan.bpm / 60.0

@@ -127,5 +127,26 @@ func _initialize() -> void:
         "a live peer layer still on screen blocks empty-strip placement")
     check(not is_finite(Admission.empty_strip_start([],5.0,0.0,3.75,NAN,d,g,4.0)),
         "no published count-in means no on-screen placement")
+    # Owner decision (round 4): a written rest bar follows every take and
+    # IS the next take's count-in bar. A rest still ahead of the playhead
+    # does not block the empty strip; the opening follows it directly
+    # (header right after the rest, no extra gap) and never inside one bar.
+    var take: Array = [{"kind":"source","world_origin":0.0,"source_floor":0.0,
+        "source_ceiling":4.0,"clip_floor":0.0,"clip_ceiling":4.0,
+        "clip_leading_spaces":0.0,"clip_trailing_spaces":0.0},
+        {"kind":"rest","world_origin":4.0,"source_floor":0.0,"source_ceiling":4.0}]
+    check(not Admission.ink_ahead_of(take,4.0,d,g,4.0),
+        "a written rest is printed silence, not ink an opening must wait for")
+    check(is_equal_approx(Admission.empty_strip_start(take,4.0,4.0,1.5,NAN,d,g,4.0),
+            9.5), "the next opening follows the rest bar plus its header")
+    check(is_equal_approx(Admission.empty_strip_start(take,6.0,4.0,1.5,NAN,d,g,4.0),
+            10.0), "and is never inside its one count-in bar")
+    check(not is_finite(Admission.empty_strip_start(take,3.0,4.0,1.5,NAN,d,g,4.0)),
+        "source ink still ahead keeps blocking")
+    check(is_equal_approx(Admission.empty_strip_start([],4.0,4.0,1.5,NAN,d,g,4.0,
+            8.5),10.0), "a peer layer's written rest only moves the opening past it")
+    check(is_equal_approx(Admission.retry_start(take,2.0,5.0,1.5,4.0,d,g,4.0),
+            maxf(2.0+5.0+1.5+Admission.OFFSCREEN_MARGIN_BEATS,8.0+1.5)),
+        "a Retry opens just beyond the right edge, after exposed ink, no travel")
     print("SCORE_STREAM_ADMISSION_FAILURES:",failures)
     quit(0 if failures==0 else 1)

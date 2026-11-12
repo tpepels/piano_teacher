@@ -74,6 +74,7 @@ const SCHEMA := {
     "mode": ["string"],
     "next_action": ["string"],
     "next_count_in_beats": ["number"],
+    "next_count_in_meter": ["list"],
     "original_bpm": ["number"],
     "pause_context": ["null", "string"],
     "paused": ["bool"],

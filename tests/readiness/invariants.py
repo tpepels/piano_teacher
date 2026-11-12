@@ -24,6 +24,8 @@ from pathlib import Path
 SYNC_PX = 2.0
 ONSET_PX = 2.0
 CUE_SPACING_FRACTION = 0.05   # cue spacing = the take's beat within 5 %
+REST_MAX_BARS = 2.25          # written rest bar + count-in, automatic takes
+HEAD_WIDTH_SPACES = 1.18      # Bravura noteheadBlack advance (staff spaces)
 LAST_CUE_BEATS = 0.1          # last cue one take beat before the first beat
 FRAME_MS = 17.0               # cues and frames are observed per display frame
 
@@ -86,21 +88,35 @@ def check_run(run: Path) -> dict:
         take["warmup_frame_sync_px"] = warmup.get("sync_px") if warmup else None
         take["sync_px_max"] = max(syncs) if syncs else None
         best: dict = {}
+        staff_space = None
         for r in playing[1:]:
             if "okey" in r:
                 continue
+            staff_space = r.get("sg", staff_space)
             for ident, dx, expected in r.get("near", []):
                 if ident not in best or abs(expected) < abs(best[ident][1]):
                     best[ident] = (dx, expected, r["d"])
-        # One onset per beat column: a chord's displaced second-interval head
-        # is engraved ~a head width right of its stem by notation, not time.
+        # Every head is judged. The only exemption is notation, not time: in
+        # a chord with a second, one head is engraved on the other side of
+        # the stem, displaced by exactly one notehead width (Bravura
+        # noteheadBlack, 1.18 staff spaces). Such a head passes only when its
+        # column also has an on-time head and its offset is that width
+        # within the same ONSET_PX.
+        head_width = HEAD_WIDTH_SPACES * staff_space if staff_space else None
         columns: dict = {}
         for dx, exp, d in best.values():
             if abs(exp) < 0.12 * d:
-                key = round(exp, 1)
-                if key not in columns or abs(dx - exp) < abs(columns[key]):
-                    columns[key] = dx - exp
-        offsets = list(columns.values())
+                columns.setdefault(round(exp, 1), []).append(dx - exp)
+        offsets, displaced = [], 0
+        for heads in columns.values():
+            on_time = min(abs(v) for v in heads) <= ONSET_PX
+            for v in heads:
+                if (abs(v) > ONSET_PX and on_time and head_width is not None
+                        and abs(abs(v) - head_width) <= ONSET_PX):
+                    displaced += 1
+                    continue
+                offsets.append(v)
+        take["displaced_second_heads"] = displaced
         take["onset_px_n"] = len(offsets)
         take["onset_px_max"] = max((abs(v) for v in offsets), default=None)
         take["onset_px_median"] = statistics.median(offsets) if offsets else None
@@ -141,19 +157,20 @@ def check_run(run: Path) -> dict:
             <= LAST_CUE_BEATS + FRAME_MS / beat_ms
         if rest_paused:
             # Pause inside the count-in bar (owner rule 8): Resume continues
-            # with the rest of that bar, each syllable at most once, a cue
+            # with the rest of that bar, each syllable at most once; a cue
             # due while paused or observed late is not spoken. What is spoken
-            # rises, ends on the bar's last syllable one pulse before beat 0.
+            # is non-empty, rises, has nothing before the bar and ends on the
+            # bar's last syllable one pulse before beat 0.
             heard = take["count_in_numbers"]
-            take["count_in_ok"] = heard == sorted(set(heard))
+            take["count_in_ok"] = (bool(heard) and heard == sorted(set(heard))
+                                   and not take["early_cues"] and last_ok)
         else:
-            # The first Play's first syllable can be heard up to one command
-            # latency late (reported in cue_spacing_beats, a known concern);
-            # every later interval and the last cue are judged.
-            judged = spacing[1:] if index == 0 else spacing
+            # Every interval, the first Play's first one included: Godot
+            # speaks a count-in it reserved from its own deadline (M4).
             take["count_in_ok"] = (take["count_in_numbers"] == expected_cues
                                    and not take["early_cues"] and bool(cue_t)
-                                   and all(abs(d - pulse * beat_ms) <= allowed for d in judged)
+                                   and all(abs(d - pulse * beat_ms) <= allowed
+                                           for d in spacing)
                                    and last_ok)
         # Owner P5: rest + count-in from the previous take's end to this
         # take's first graded beat, for automatic continuations.
@@ -164,6 +181,10 @@ def check_run(run: Path) -> dict:
             prev_meta = starts[tids[index - 1]]
             prev_end = prev["first_beat_t_exact"] + float(prev_meta.get("len") or 0.0) * \
                 60000.0 / float(prev_meta.get("bpm") or bpm)
+            # A Pause inside the previous take moves its end: its last
+            # playing frame is the real end (round 4: rests of re-engraved
+            # takes after a paused take were overstated by the pause).
+            prev_end = max(prev_end, previous_end)
             presses = [e for e in ev if e.get("kind") == "press"
                        and prev["first_beat_t_exact"] - 500 < e["t"] < first_beat_t]
             take["automatic"] = not presses
@@ -182,6 +203,14 @@ def check_run(run: Path) -> dict:
                           and take["onsets_measured"]
                           and (take["onset_px_max"] is None or take["onset_px_max"] <= ONSET_PX)
                           and take["count_in_ok"])
+        # Owner P5 / round 4: EVERY automatic continuation (announced
+        # repeats, re-engraved stages, remediations, handoffs) has its
+        # written rest bar plus count-in within REST_MAX_BARS. A Pause in
+        # the rest lengthens it by the user's own pause.
+        take["rest_ok"] = (not take["automatic"] or take["rest_paused"]
+                           or take["rest_bars"] is None
+                           or take["rest_bars"] <= REST_MAX_BARS)
+        take["ok"] = take["ok"] and take["rest_ok"]
         takes.append(take)
     colour = _repeat_colour(run)
     starts_t = sorted((starts[t]["t"], t) for t in tids)

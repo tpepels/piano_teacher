@@ -219,6 +219,35 @@ func _test_flow_rate_switch() -> void:
         "a projected deadline includes the slow-down still owed: %f vs %f" % [
             second.beat,projected])
 
+func _test_retry_lead_after_slowdown_meets_reserved_onset() -> void:
+    # Round 4 item 8: a Retry pressed during a slowed (tempo-mapped) take.
+    # main.gd converts the reserved world lead at the selected BPM; the
+    # engine notes its tempo epoch at the command, which this client learns
+    # one snapshot later and applies retroactively. The world then reaches
+    # the reserved onset exactly at the deadline it sent.
+    var Flow := preload("res://continuous_score_flow.gd")
+    var Admission := preload("res://score_stream_admission.gd")
+    var flow = Flow.new()
+    flow.sample(0,30.0)
+    flow.sample(1000,30.0)
+    var start_world: float = flow.project(1000)+6.0
+    var lead_bpm: float = Admission.command_lead_bpm("restart",flow.bpm,40.0)
+    check(lead_bpm == 40.0,"Retry converts its lead at the selected BPM")
+    var deadline_ms: float = 1000.0+Admission.lead_seconds(
+        start_world,flow.project(1000),lead_bpm)*1000.0
+    flow.sample(1100,30.0)
+    flow.switch_rate_at(1000.0,40.0)
+    var at := 1116
+    while at < int(deadline_ms):
+        flow.sample(at,40.0)
+        at += 16
+    flow.sample(int(deadline_ms),40.0)
+    check(absf(flow.beat-start_world) < .002,
+        "the reserved Retry onset is at the playhead at its deadline: %f vs %f" % [
+            flow.beat,start_world])
+    check(Admission.command_lead_bpm("resume",30.0,40.0) == 30.0,
+        "a mid-take Resume continues in the take's own tempo map")
+
 func _test_count_in_at_announced_tempo() -> void:
     # A tempo-step repeat (rest at 60 BPM, next take announced at 72 BPM)
     # counts in at 72 BPM: cues 60/72 s apart, the last one beat before.
@@ -339,6 +368,7 @@ func _initialize() -> void:
     _test_compound_meter_count_in()
     _test_resumed_count_in_cues_fall_on_beats()
     _test_unannounced_rest_is_silent()
+    _test_retry_lead_after_slowdown_meets_reserved_onset()
     _test_count_in_at_announced_tempo()
     _test_flow_rate_switch()
     _test_binding()

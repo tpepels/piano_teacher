@@ -88,6 +88,11 @@ def planned_retry_reverse_seconds(
         or minimum_rewind_seconds < 0):
         raise ValueError("Invalid scheduled retry time")
     available = reading_lead_seconds - semantic_rest_seconds
-    if available + 0.01 < max(0.05, minimum_rewind_seconds):
+    # The reserved deadline is honoured exactly (round 4): the reverse
+    # animation shrinks to what the reservation leaves, down to a frame.
+    # minimum_rewind_seconds is no longer a floor that pushed the take
+    # later than the ink Godot had already admitted.
+    del minimum_rewind_seconds
+    if available + 0.01 < 0.05:
         raise ValueError("Future retry reservation lacks space for one full rest")
     return max(0.05, available)

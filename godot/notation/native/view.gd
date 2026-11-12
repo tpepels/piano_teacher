@@ -698,11 +698,11 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 var _ambient_anchor_world := 0.0
 
 var _stream_last_admitted := -1
-# Owner decision P5 (2026-11-11): rests stay short. No written rest measure
-# is printed after a take; once its last pixel has passed the playhead the
-# staff is empty and the next take opens one count-in bar ahead (the
-# empty-strip rule). Tests of the former written rest may enable it.
-var written_rest_between_takes := false
+# Owner decision (round 4, 2026-11-11): a written rest bar follows every
+# take, and it IS the count-in bar of the next take: the next source is
+# admitted straight after it (empty_strip_start) and its one count-in is
+# spoken over the rest, so rest plus count-in stays short (P5).
+var written_rest_between_takes := true
 # Each backend decision has a stable identity. Repeated state polls cannot
 # enqueue another copy after the first source has already been activated
 # or has passed off the left edge.
@@ -974,22 +974,46 @@ func earliest_continuation_world(world: float, opening: float,
     if is_finite(peer):
         start = maxf(start,peer+header)
     if count_in_beats > 0.0:
-        var empty: float = StreamAdmission.empty_strip_start(
-            preview["remaining"],world,count_in_beats,header,
-            _stream_queue.minimum_peer_opening(density,size.x,
-                size.x*PLAYHEAD_FRACTION,true),
-            density,staff_gap(),timeline.duration_beats)
+        var empty: float = _empty_strip_onset(
+            preview["remaining"],world,count_in_beats,header)
         if is_finite(empty) and (not is_finite(start) or empty < start):
             start = empty
     return start
 
 
-func short_rest_geometry() -> Dictionary:
-    # P5: what the engine needs to time a continuation that opens on the
-    # empty strip. clear: from a take's end until its final barline margin
-    # has passed the playhead (plus a frame margin); header: the rest gap
-    # and opening header the queue keeps after older ink.
+func _empty_strip_onset(passes: Array, world: float, count_in_beats: float,
+        header: float) -> float:
+    # The one empty-strip slot (StreamAdmission.empty_strip_start): live
+    # peer SOURCE ink blocks it; a peer's written rest bar only moves the
+    # opening past that rest, by the same pop-in rule (owner, round 4).
     var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var playhead: float = size.x*PLAYHEAD_FRACTION
+    return StreamAdmission.empty_strip_start(passes,world,count_in_beats,
+        header,_stream_queue.minimum_peer_opening(density,size.x,playhead,
+            true,"source"),density,staff_gap(),timeline.duration_beats,
+        _stream_queue.minimum_peer_opening(density,size.x,playhead,true,"rest"))
+
+
+func short_rest_geometry() -> Dictionary:
+    # What the engine needs to time the take after a written rest bar
+    # (owner, round 4): clear = that rest bar (it starts at the take's last
+    # source beat) plus the pop-in margin a peer layer keeps from it;
+    # header = the next opening's header plus a frame margin. The next
+    # source opens straight after the rest (empty_strip_start).
+    var density: float = maxf(1.0,timeline.pixels_per_beat)
+    var rest: float = float(practice_timeline.get("gap",{}).get(
+        "duration_beats",0.0))
+    if written_rest_between_takes and rest > .0001:
+        # A gap shorter than the final barline margin (a passage ending
+        # mid-measure) is followed by that margin plus the usual rest gap.
+        var trailing: float = 2.2*staff_gap()/density
+        var after: float = rest if rest >= trailing else \
+            trailing+StreamAdmission.REST_GAP_BEATS
+        return {"continuation_clear_beats":
+                after+StreamQueue.PEER_MARGIN_PX/density+
+                StreamAdmission.OFFSCREEN_MARGIN_BEATS,
+            "continuation_header_beats":
+                _stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
     return {"continuation_clear_beats":
             2.2*staff_gap()/density+StreamAdmission.OFFSCREEN_MARGIN_BEATS,
         "continuation_header_beats":
@@ -1068,12 +1092,9 @@ func arm_stream_take(world: float, opening: float,
         if not is_finite(checked) and empty_strip_count_in > 0.0:
             # The preflight chose the empty-strip count-in bar slot; the
             # live queue must still permit exactly that deadline.
-            var earliest: float = StreamAdmission.empty_strip_start(
+            var earliest: float = _empty_strip_onset(
                 _stream_queue.online,stream_world_beat,empty_strip_count_in,
-                _stream_header_beats(opening),
-                _stream_queue.minimum_peer_opening(timeline.pixels_per_beat,
-                    size.x,size.x*PLAYHEAD_FRACTION,true),
-                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+                _stream_header_beats(opening))
             onto_empty_strip = is_finite(earliest) and \
                 planned_start_world >= earliest-.0001
             checked = planned_start_world if onto_empty_strip else NAN
@@ -1287,12 +1308,9 @@ func enqueue_recovery_queue(world: float, source_opening: float,
         # Listen/Perform use the same engine-authored first note deadline.
         # The source can appear during ONE count-in on an entirely empty
         # staff; the existing source/rest/peer exposure rules still apply.
-        var peer_floor: float = _stream_queue.minimum_peer_opening(
-            timeline.pixels_per_beat,size.x,size.x*PLAYHEAD_FRACTION,true)
-        var onset: float = StreamAdmission.empty_strip_start(
+        var onset: float = _empty_strip_onset(
             remaining,stream_world_beat,count_in_beats,
-            _stream_header_beats(source_opening),peer_floor,
-            timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+            _stream_header_beats(source_opening))
         # Practice continuations (P5 short rests): the engine's deadline is
         # the one source; it opens on the empty strip when no earlier than
         # the empty-strip slot (one count-in bar ahead, after the gap).
@@ -1302,23 +1320,20 @@ func enqueue_recovery_queue(world: float, source_opening: float,
                     StreamAdmission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS):
             checked = graded_deadline_world
             on_empty = true
-        elif deadline_at_or_after and count_in_beats > 0.0:
-            # Late safety net: the plan reached an empty strip after its
-            # one-bar slot (a slow engine tick). Still on the empty staff and
-            # still exactly at the engine deadline, with at least half the
-            # count-in bar ahead: better than grading a take with no ink.
-            var late: float = StreamAdmission.empty_strip_start(
-                remaining,stream_world_beat,count_in_beats*.5,
-                _stream_header_beats(source_opening),peer_floor,
-                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
-            if is_finite(late) and graded_deadline_world >= late-.0001:
-                checked = graded_deadline_world
-                on_empty = true
-                _diagnose_plan(identity,"admitted_late_on_empty_strip",
-                    graded_deadline_world)
     if not is_finite(checked):
+        var blocking: Array = []
+        for item in remaining:
+            var bounds: Vector2 = StreamAdmission.clip_bounds(item,
+                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+            var finish: float = float(item["world_origin"])+bounds.y/ \
+                maxf(1.0,timeline.pixels_per_beat)
+            if finish > stream_world_beat-1.0:
+                blocking.append([str(item.get("kind","source")),
+                    snappedf(finish,.001)])
         _diagnose_plan(identity,"refused_inside_or_overlap",
-            graded_deadline_world)
+            graded_deadline_world,{"count_in":count_in_beats,
+            "header":_stream_header_beats(source_opening),
+            "ink_ends":blocking})
         return false
     var incoming_left: float = checked - _stream_header_beats(source_opening)
     if not _stream_queue._clears_prior_layers(incoming_left,

@@ -99,6 +99,10 @@ static func plan(renderer, action: String, world: float,
     var onset: float = Admission.position(survivors,preview_world,
         right,header,NAN,Admission.READY_TRAVEL_BEATS,
         density,staff_gap,duration)
+    if action == "restart":
+        onset = Admission.retry_start(survivors,preview_world,right,header,
+            float(renderer.practice_timeline.get("gap",{}).get(
+                "duration_beats",0.0)),density,staff_gap,duration)
     if is_finite(peer_floor):
         onset = maxf(onset,peer_floor+header+Admission.REST_GAP_BEATS)
     if action in ["start","resume"] and is_finite(count_in_beats) and \

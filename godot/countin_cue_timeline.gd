@@ -24,6 +24,13 @@ func hold(token: String, beat: float) -> void:
     _token = token
     _last_tick = tick
 
+func adopt(token: String) -> void:
+    # The same countdown continues under another epoch token (a reserved
+    # Play count-in handed to the engine's running transport): beats already
+    # spoken stay spoken.
+    if not token.is_empty():
+        _token = token
+
 func continues(token: String, beat: float) -> bool:
     # True when beat moves forward within the held epoch: a reused Resume
     # picks up the same countdown instead of starting a second one.
@@ -33,7 +40,9 @@ func continues(token: String, beat: float) -> bool:
 # Explicit "count one whole bar of the meter" (Retry preparation, whose
 # engine count_in_beats is not published). 0 is a real count-in of zero.
 const WHOLE_BAR := -1.0
-# A count-in cue is spoken only within this fraction of its beat.
+# A Resume that CONTINUES a paused countdown speaks a cue only within this
+# fraction of its beat (R1 M4). Every other count-in is driven from a
+# deadline Godot knows in advance, so its cues are on their beats anyway.
 const LATE_CUE_BEATS := 0.2
 
 # Owner decision M3 (2026-11-11): compound meters count their main pulse,
@@ -65,7 +74,7 @@ static func counting(beat: float, beats_per_bar: int,
     return beat < 0.0 and beat >= -window-.00001
 
 func observe(token: String, beat: float, beats_per_bar: int,
-        count_in_beats: float = WHOLE_BAR) -> Dictionary:
+        count_in_beats: float = WHOLE_BAR, drop_late: bool = false) -> Dictionary:
     if token.is_empty() or not is_finite(beat) or beats_per_bar <= 0:
         return {}
     var tick := floori(beat + .00001)
@@ -81,10 +90,10 @@ func observe(token: String, beat: float, beats_per_bar: int,
         # render frame must never speak the same beat twice.
         return {}
     _last_tick = tick
-    if tick < 0 and beat - float(tick) > LATE_CUE_BEATS:
-        # A count-in beat first observed well after it began (Resume landing
-        # mid-beat, R1 M4: "San" at -1.34 then "Shi" 0.53 s later) is
-        # consumed silently: every spoken cue falls on its beat.
+    if drop_late and tick < 0 and beat - float(tick) > LATE_CUE_BEATS:
+        # A continued Resume countdown first observing a beat well after it
+        # began (R1 M4: "San" at -1.34 then "Shi" 0.53 s later) consumes it
+        # silently: every spoken cue falls on its beat.
         return {}
     var meter: int = maxi(1,beats_per_bar)
     return {"tick":tick,"beat":beat,"count_in":tick < 0,

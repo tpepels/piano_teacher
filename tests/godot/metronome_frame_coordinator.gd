@@ -1,5 +1,6 @@
 extends SceneTree
 const Coordinator := preload("res://metronome_frame_coordinator.gd")
+const CueTimeline := preload("res://countin_cue_timeline.gd")
 
 class Settings:
     extends RefCounted
@@ -172,6 +173,43 @@ func _initialize() -> void:
     owner.update({"phase":"feedback","paused":false,"score_queue_next":{},
         "count_in_bar_beats":4},2000,NAN,2000)
     if practice.stage.count_in.spoken != [1]:
+        failures += 1
+    # Round 4 (M4): a first Play at 120 BPM whose running state reaches
+    # Godot 150 ms after the press still speaks every count-in syllable on
+    # its beat: Godot reserved the deadline itself and counts from it.
+    clock.retry_active = false
+    clock.preparing = false
+    practice.stage.count_in.spoken.clear()
+    var press := 50000
+    owner.reserve_count_in(float(press+2000),120.0,4.0,[4,4],4.0)
+    var spoken_at: Array = []
+    var frame := press
+    while frame <= press+2100:
+        var state: Dictionary = {"running":false,"phase":"ready",
+            "transport_id":8,"count_in_bar_beats":4,"count_in_beats":4.0}
+        var sampled := NAN
+        if frame >= press+150:
+            state = {"running":true,"paused":false,"phase":"count_in",
+                "transport_id":8,"bpm":120,"count_in_bar_beats":4,
+                "count_in_beats":4.0}
+            sampled = float(frame-press-2000)*120.0/60000.0
+        var before: int = practice.stage.count_in.spoken.size()
+        owner.update(state,frame,sampled,frame)
+        if practice.stage.count_in.spoken.size() > before:
+            spoken_at.append(frame)
+        frame += 16
+    if practice.stage.count_in.spoken != [1,2,3,4]:
+        failures += 1
+        print("reserved count-in spoke ",practice.stage.count_in.spoken)
+    for index in range(spoken_at.size()):
+        if absi(int(spoken_at[index])-(press+500*index)) > 16:
+            failures += 1
+            print("reserved count-in cue off its beat ",spoken_at)
+            break
+    # A late first observation outside a continued Resume is still spoken.
+    var late := CueTimeline.new()
+    if late.observe("running:9",-3.7,4).is_empty() or \
+            not late.observe("resume:9",-1.7,4,4.0,true).is_empty():
         failures += 1
     print("METRONOME_FRAME_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

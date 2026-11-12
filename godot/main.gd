@@ -1164,6 +1164,8 @@ func _send_action(command: Dictionary) -> void:
         practice_view.begin_action(requested, previous_action)
         return
     practice_view.begin_action(requested)
+    if not requested in ["start","restart","resume"]:
+        metronome_frame.cancel_reserved_count_in()
     var rest_phase: bool = not bool(last_state.get("running",false)) and \
         str(last_state.get("pause_context",last_state.get("phase",""))) in [
             "feedback","recovering","preview_gap"]
@@ -1183,6 +1185,13 @@ func _send_action(command: Dictionary) -> void:
         # take keeps it, like Resume of a paused take, re-timed to reach the
         # playhead where it now is. Otherwise report where fresh ink fits.
         var copy_onset: float = rest_renderer.announced_copy_onset(rest_now)
+        # The copy keeps its count-in only with at least one count-in beat
+        # plus the snapshot latency still ahead (engine
+        # SHORT_REST_LATENCY_SECONDS); otherwise a fresh copy is placed.
+        var rest_bpm: float = float(last_state.get("bpm",score_flow.bpm))
+        if is_finite(copy_onset) and StreamAdmission.lead_seconds(copy_onset,
+                rest_now,rest_bpm) < 60.0/maxf(1.0,rest_bpm)+0.4:
+            copy_onset = NAN
         if is_finite(copy_onset):
             command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
                 copy_onset,rest_now,float(last_state.get("bpm",score_flow.bpm)))
@@ -1238,8 +1247,8 @@ func _send_action(command: Dictionary) -> void:
         # command: Play's count-in and Retry's rest run at the selected BPM
         # (a tempo-mapped take, e.g. a slowdown stage, ran at its own rate
         # until now); a mid-take Resume continues inside the take's map.
-        var lead_bpm: float = score_flow.bpm if requested == "resume" else \
-            float(last_state.get("bpm",score_flow.bpm))
+        var lead_bpm: float = StreamAdmission.command_lead_bpm(requested,
+            score_flow.bpm,float(last_state.get("bpm",score_flow.bpm)))
         command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
             float(reserved["start_world"]),visual_now,lead_bpm)
         if visual_transport_clock.has_backend_offset:
@@ -1251,6 +1260,18 @@ func _send_action(command: Dictionary) -> void:
         if requested == "resume":
             command["reuse_pending_score"] = bool(
                 reserved.get("reused_unplayed_count_in",false))
+        # Godot knows this deadline now: speak its count-in from it, on
+        # every beat, before the engine's state confirms the take (M4).
+        if not bool(reserved.get("reused_unplayed_count_in",false)):
+            metronome_frame.reserve_count_in(float(reserved_at_ms)+
+                float(command["presentation_lead_seconds"])*1000.0,
+                float(last_state.get("bpm",score_flow.bpm)),
+                # One count-in bar: next_count_in_beats IS that bar (an idle
+                # snapshot's count_in_bar_beats can still be a default).
+                float(last_state.get("next_count_in_beats",0.0)),
+                last_state.get("next_count_in_meter",
+                    last_state.get("count_in_meter")),
+                float(last_state.get("next_count_in_beats",0.0)))
         var written_rest: float = float(renderer.practice_timeline.get(
             "gap",{}).get("duration_beats",0.0))
         command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(

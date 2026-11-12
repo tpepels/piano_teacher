@@ -196,6 +196,7 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     if is_instance_valid(stage.renderer):
         _future.external_backdrop = stage.renderer.external_backdrop
         _future.compact_inactive_staff = stage.renderer.compact_inactive_staff
+        _future.layout.bottom_clearance = stage.renderer.layout.bottom_clearance
         # Use the NEXT stage's published hand, not the current stage's hand.
         # Pre-engraving must already occupy the eventual single-staff lane.
         _future.active_hand = str(value.get("hand","both"))
@@ -306,6 +307,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     var incoming = NativeView.new()
     incoming.external_backdrop = outgoing.external_backdrop
     incoming.compact_inactive_staff = outgoing.compact_inactive_staff
+    incoming.layout.bottom_clearance = outgoing.layout.bottom_clearance
     incoming.active_hand = str(state.get("hand","both"))
     incoming.set_density(float(outgoing.configured_density))
     incoming.set_transport_overlay_enabled(true)
@@ -388,9 +390,19 @@ func _short_handoff() -> Dictionary:
     var trailing: float = StreamAdmission.engraved_clip_bounds(
         0.0,duration,old_density,float(old.staff_gap()),duration).y/old_density-duration
     var density: float = maxf(1.0,float(_future.timeline.pixels_per_beat))
+    var playhead: float = _future.size.x*NativeView.PLAYHEAD_FRACTION
+    var rest: float = float(old.practice_timeline.get("gap",{}).get(
+        "duration_beats",0.0)) if "practice_timeline" in old else 0.0
+    if bool(old.get("written_rest_between_takes")) and rest > .0001:
+        # Round 4: the outgoing take keeps its written rest bar. The step
+        # settles at once (clear 0) and the new stage opens straight after
+        # that rest bar by the pop-in rule (lead counted from the take end).
+        return {"clear":0.0,"lead":StreamQueue.peer_popin_after(
+            maxf(rest,trailing),old_density,playhead,density)+
+            _future._stream_header_beats(0.0)+
+            StreamAdmission.OFFSCREEN_MARGIN_BEATS}
     var clear: float = StreamQueue.peer_popin_after(maxf(0.0,trailing),
-        old_density,_future.size.x*NativeView.PLAYHEAD_FRACTION,density)+ \
-        StreamAdmission.OFFSCREEN_MARGIN_BEATS
+        old_density,playhead,density)+StreamAdmission.OFFSCREEN_MARGIN_BEATS
     return {"clear":clear,"lead":StreamAdmission.REST_GAP_BEATS+
         _future._stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 

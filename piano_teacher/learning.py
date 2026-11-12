@@ -153,6 +153,16 @@ class LearningPlan:
         """Generators opt in through a common immutable feedback hook."""
         return callable(getattr(self.lesson_generator, "with_feedback", None))
 
+    def feedback_changes_generator(self, evidence: Mapping[str, str]) -> bool:
+        """Whether refresh_from_feedback(evidence) would rebuild the course.
+
+        Only the immutable feedback hook runs (microseconds); the rebuild
+        itself is left to refresh_from_feedback.
+        """
+        hook = getattr(self.lesson_generator, "with_feedback", None)
+        return callable(hook) and hook(
+            evidence, self.lesson_definition) is not self.lesson_generator
+
     def refresh_from_feedback(
         self, evidence: Mapping[str, str], *, prefer_repair: bool = True,
         focus_ids: frozenset[str] | None = None,

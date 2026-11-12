@@ -12,10 +12,58 @@ var raw_click: Callable
 var calibration_tick_index := -999
 var retry_first_click_sent := false
 var _cues := CueTimeline.new()
+# The count-in of a Play/Retry/Resume Godot itself reserved (round 4, M4):
+# its first-beat deadline is known locally when the user acts, so every
+# syllable is spoken on its beat even before the engine's state, one
+# snapshot latency later, reports the transport running.
+var _reserved: Dictionary = {}
+# Tolerance (beats) for the engine's transport to confirm that deadline.
+const RESERVED_AGREEMENT_BEATS := 0.1
+
+func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
+        meter: Variant, count_in_beats: float) -> void:
+    if not is_finite(deadline_ms) or not is_finite(bpm) or bpm <= 0.0 or \
+            not is_finite(count_in_beats) or count_in_beats <= 0.0:
+        _reserved = {}
+        return
+    _reserved = {"deadline_ms":deadline_ms,"bpm":bpm,"bar":bar_beats,
+        "meter":meter,"count_in":count_in_beats}
+
+func cancel_reserved_count_in() -> void:
+    _reserved = {}
+
+func _reserved_count_in(state: Dictionary, sampled_beat: float,
+        now_ms: int) -> bool:
+    if _reserved.is_empty():
+        return false
+    var deadline: float = float(_reserved["deadline_ms"])
+    var beat: float = (float(now_ms)-deadline)*float(_reserved["bpm"])/60000.0
+    var running: bool = bool(state.get("running",false)) and \
+        not bool(state.get("paused",false))
+    if running and is_finite(sampled_beat):
+        # The engine confirmed the take: its own transport takes over, on
+        # the same countdown when it agrees with the reserved deadline
+        # (beats already spoken stay spoken), otherwise afresh.
+        if absf(sampled_beat-beat) <= RESERVED_AGREEMENT_BEATS:
+            _cues.adopt("running:%d:%d" % [int(state.get("revision",-1)),
+                int(state.get("transport_id",0))])
+        _reserved = {}
+        return false
+    if beat >= 0.0:
+        # The downbeat belongs to the running transport, once ITS beat
+        # reaches 0 (above); until then the spoken count-in is not repeated.
+        if beat >= 1.0:
+            _reserved = {}
+            return false
+        return true
+    _count_in("reserved:%d" % roundi(deadline),beat,float(_reserved["bar"]),
+        _reserved["meter"],true,float(_reserved["count_in"]))
+    return true
 
 func _dispatch_cue(token: String, beat: float, bar: int,
-        use_raw_click: bool, count_in_beats: float = CueTimeline.WHOLE_BAR) -> void:
-    var cue: Dictionary = _cues.observe(token,beat,bar,count_in_beats)
+        use_raw_click: bool, count_in_beats: float = CueTimeline.WHOLE_BAR,
+        drop_late: bool = false) -> void:
+    var cue: Dictionary = _cues.observe(token,beat,bar,count_in_beats,drop_late)
     if cue.is_empty():
         return
     var tick: int = int(cue["tick"])
@@ -37,7 +85,7 @@ func _dispatch_cue(token: String, beat: float, bar: int,
 
 func _count_in(token: String, beat: float, bar_beats: float, meter: Variant,
         use_raw_click: bool, count_in_beats: float = CueTimeline.WHOLE_BAR,
-        paused: bool = false) -> void:
+        paused: bool = false, drop_late: bool = false) -> void:
     # One place turns a count-in reading into circles and cues, in the
     # meter's main pulse (M3); simple meters are unchanged.
     var units: Array = CueTimeline.in_pulses(beat,bar_beats,count_in_beats,
@@ -47,9 +95,13 @@ func _count_in(token: String, beat: float, bar_beats: float, meter: Variant,
     if paused:
         _cues.hold(token,float(units[0]))
         return
-    _dispatch_cue(token,float(units[0]),int(units[1]),use_raw_click,float(units[2]))
+    _dispatch_cue(token,float(units[0]),int(units[1]),use_raw_click,
+        float(units[2]),drop_late)
 
 func _announced_count_in(state: Dictionary, now_ms: int) -> bool:
+    # An announcement normally arrives a whole rest early; one first heard
+    # mid-beat is a Resume in the rest continuing that countdown, so a beat
+    # observed late is consumed (R1 M4) rather than spoken off its beat.
     # An automatic continuation starts AT its announced graded deadline,
     # so its one count-in bar is spoken during the rest, in the bar right
     # before that deadline (score_queue_next: deadline and bar length). The
@@ -74,7 +126,8 @@ func _announced_count_in(state: Dictionary, now_ms: int) -> bool:
         return false
     _count_in("retry:%d:%s" % [int(state.get("revision",-1)),
         str(roundi(deadline_ms))],beat,bar_beats,
-        plan.get("count_in_meter",state.get("count_in_meter")),true,bar_beats)
+        plan.get("count_in_meter",state.get("count_in_meter")),true,bar_beats,
+        false,true)
     return true
 
 func _init(settings, practice, visual_clock, at_beat: Callable,
@@ -144,6 +197,8 @@ func update(state: Dictionary, state_tick_ms: int,
         _count_in("retry:%d:%s" % [int(state.get("revision",-1)),retry_key],
             retry_beat,float(state.get("count_in_bar_beats",4)),plan_meter,true)
         return
+    if _reserved_count_in(state,sampled_beat,now_ms):
+        return
     if _announced_count_in(state,now_ms):
         return
     # The engine's one count-in bar; a longer lead before it stays silent.
@@ -161,7 +216,10 @@ func update(state: Dictionary, state_tick_ms: int,
             # A Resume that reuses the paused count-in keeps its original
             # first-beat deadline, so its countdown is the same musical axis
             # as the transport beat. Continue that epoch: a syllable already
-            # heard before Pause is not spoken again (one cycle only).
+            # heard before Pause is not spoken again (one cycle only). This
+            # continued countdown resumes mid-beat by construction, so a
+            # beat first observed late is consumed (R1 M4); every other
+            # count-in is spoken from a deadline Godot reserved (round 4).
             var transport_beat: float = sampled_beat if is_finite(sampled_beat) \
                 else float(transport_beat_at.call(now_ms))
             var running_token: String = "running:%d:%d" % [
@@ -175,7 +233,7 @@ func update(state: Dictionary, state_tick_ms: int,
                 int(state.get("transport_id",0))]
             _count_in(resume_token,resume_beat,
                 float(state.get("count_in_bar_beats",4)),
-                state.get("count_in_meter"),true,count_in_beats)
+                state.get("count_in_meter"),true,count_in_beats,false,true)
             return
     if state.is_empty() or not bool(state.get("running",false)):
         practice_view.stage.count_in.present(0.0,4,false,false)

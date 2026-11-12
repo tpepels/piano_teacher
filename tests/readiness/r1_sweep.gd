@@ -213,6 +213,7 @@ func _post_draw() -> void:
         "pf":play_from,"d":density,"vis":visible,
         "rr":renderer.retained_ready(),"ci":ci.visible if ci != null else false,
         "step":int(s.get("lesson_step",0)),"near":near,
+        "sg":snappedf(float(renderer.staff_gap()),.01),
         "foc":DisplayServer.window_is_focused(),
         "minz":DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MINIMIZED}
     if origin_key != key:

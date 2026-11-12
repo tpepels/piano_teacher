@@ -148,6 +148,9 @@ func pause_one_beat_into_count_in_then_resume() -> void:
     var renderer = app.practice_view.stage.renderer
     var count_in: float = float(app.last_state.get("next_count_in_beats", 4.0))
     var bpm: float = float(app.last_state.get("bpm", 60.0))
+    # Round 4 (M4): Godot speaks the count-in from the deadline it reserved
+    # at the Play press, so "1" may already have been heard on that press.
+    var heard_at_press: Array = voice.spoken.duplicate()
     voice.spoken.clear()
     var ready_state: Dictionary = app.last_state.duplicate()
     # Play's acknowledgement binds the armed take to its transport.
@@ -195,8 +198,11 @@ func pause_one_beat_into_count_in_then_resume() -> void:
         app.metronome_frame.update(resumed, tick,
             -lead_beats + float(elapsed)*bpm/60000.0, tick + elapsed)
         elapsed += 20
-    check(voice.spoken == [1, 2, 3, 4],
-        "Pause and Resume inside the count-in hear exactly one cycle: " + str(voice.spoken))
+    var cycle: Array = (heard_at_press + voice.spoken) if voice.spoken.size() < 4 \
+        else voice.spoken
+    check(cycle == [1, 2, 3, 4],
+        "Pause and Resume inside the count-in hear exactly one cycle: %s (at Play: %s)" % [
+            str(voice.spoken),str(heard_at_press)])
     print("PAUSE_RESUME_SPOKEN:", JSON.stringify({"spoken":voice.spoken}))
     app.last_state = ready_state
 

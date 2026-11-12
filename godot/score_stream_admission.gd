@@ -122,13 +122,26 @@ static func select(passes: Array, purpose: String, opening: float,
 
 static func ink_ahead_of(passes: Array, world: float, density: float,
         gap: float, score_duration: float, except_take: int = -1) -> bool:
-    # True when any printed source/rest pixel lies right of the playhead.
+    # True when any printed SOURCE pixel lies right of the playhead. A
+    # written rest bar between takes is printed silence: the next opening
+    # may follow it on the staff (owner decision, round 4).
     for item in passes:
+        if str(item.get("kind","source")) == "rest":
+            continue
         if except_take >= 0 and int(item.get("take_owner",
                 item.get("owner_serial",-1))) == except_take:
             continue
-        var bounds: Vector2 = clip_bounds(item,density,gap,score_duration)
-        if float(item["world_origin"]) + bounds.y/density > world+.00001:
+        # A source strip blocks while its MUSIC is ahead; its final barline
+        # margin is only whitespace, which placement (empty_strip_start)
+        # still clears. A take whose rest gap is shorter than that margin
+        # (a passage ending mid-measure) otherwise kept "ink ahead" until
+        # its one-bar slot had passed (Chopin 12/8, round 4).
+        var music_end: float = float(item.get("clip_ceiling",
+            item.get("source_ceiling",INF)))
+        if not item.has("clip_ceiling") and not item.has("source_ceiling"):
+            var bounds: Vector2 = clip_bounds(item,density,gap,score_duration)
+            music_end = bounds.y/density
+        if float(item["world_origin"]) + music_end > world+.00001:
             return true
     return false
 
@@ -136,7 +149,7 @@ static func ink_ahead_of(passes: Array, world: float, density: float,
 static func empty_strip_start(passes: Array, world: float,
         count_in_beats: float, header_beats: float, peer_floor: float,
         density: float = 96.0, gap: float = 24.0,
-        score_duration: float = INF) -> float:
+        score_duration: float = INF, peer_rest_floor: float = NAN) -> float:
     # Owner decision 2026-11-08: "the notes should appear closer to the
     # playhead, so the wait is about one bar". With nothing printed right of
     # the playhead (this queue and every live peer layer), Play places the
@@ -144,7 +157,12 @@ static func empty_strip_start(passes: Array, world: float,
     # opening appears on the empty strip instead of travelling in from the
     # right edge. Otherwise NAN: the append-only offscreen rule applies.
     # Older ink that already passed the playhead keeps the same rest gap as
-    # any appended passage; committed origins are never moved.
+    # any appended passage; committed origins are never moved. A written
+    # rest bar (owner decision, round 4) may still be ahead: the opening
+    # then follows it directly, its header right after the rest's barline,
+    # and its count-in is spoken over the rest bar. peer_floor (source ink
+    # of a live peer layer) blocks; peer_rest_floor (a peer's written rest)
+    # only positions the opening after it.
     if not is_finite(count_in_beats) or count_in_beats <= 0.0:
         return NAN
     density = maxf(1.0,density)
@@ -154,13 +172,20 @@ static func empty_strip_start(passes: Array, world: float,
         return NAN
     var start: float = world + count_in_beats
     var last := -INF
+    var last_is_rest := false
     for item in passes:
         var bounds: Vector2 = clip_bounds(item,density,gap,score_duration)
-        last = maxf(last,float(item["world_origin"]) + bounds.y/density)
+        var finish: float = float(item["world_origin"]) + bounds.y/density
+        if finish > last:
+            last = finish
+            last_is_rest = str(item.get("kind","source")) == "rest"
     if is_finite(last):
-        start = maxf(start,last + REST_GAP_BEATS + header_beats)
+        start = maxf(start,last + header_beats +
+            (0.0 if last_is_rest else REST_GAP_BEATS))
     if is_finite(peer_floor):
         start = maxf(start,peer_floor + REST_GAP_BEATS + header_beats)
+    if is_finite(peer_rest_floor):
+        start = maxf(start,peer_rest_floor + header_beats)
     return start
 
 
@@ -178,6 +203,22 @@ static func position(passes: Array, world: float, right_beats: float,
     return minimum
 
 
+static func retry_start(passes: Array, world: float, right_beats: float,
+        header_beats: float, rest_beats: float, density: float = 96.0,
+        gap: float = 24.0, score_duration: float = INF) -> float:
+    # Owner, round 4 (item 7): a Retry opens at the right edge at once. Its
+    # first printed pixel is just beyond the viewport and directly after
+    # the ink already exposed (no REST_GAP, no READY travel), and never
+    # closer than the one written rest measure the engine traverses first.
+    var start: float = world + maxf(maxf(MIN_READING_BEATS,rest_beats),
+        right_beats + header_beats + OFFSCREEN_MARGIN_BEATS)
+    var occupied: float = _occupied_end(passes,world,maxf(1.0,density),gap,
+        score_duration)
+    if is_finite(occupied):
+        start = maxf(start,occupied + header_beats)
+    return start
+
+
 static func automatic_horizon(rest_beats: float,
         right_beats: float, header_beats: float) -> float:
     # This precise value is passed to the backend at Start AND used to place
@@ -191,6 +232,15 @@ static func automatic_horizon(rest_beats: float,
     return maxf(4.0,maxf(
         right_beats+header_beats+1.5,
         rest_beats+REST_GAP_BEATS+header_beats+OFFSCREEN_MARGIN_BEATS))
+
+
+static func command_lead_bpm(action: String, flow_bpm: float,
+        selected_bpm: float) -> float:
+    # World beats to seconds at the rate the axis moves at AFTER a command:
+    # Play's count-in and Retry's rest run at the selected BPM (a tempo-
+    # mapped take, e.g. a slowdown stage, ran at its own rate until now); a
+    # mid-take Resume continues inside the take's map.
+    return flow_bpm if action == "resume" else selected_bpm
 
 
 static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
