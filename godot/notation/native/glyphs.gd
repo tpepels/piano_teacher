@@ -305,8 +305,10 @@ func paint_tie(canvas: CanvasItem, x0: float, x1: float, y: float,
 
 
 func load_chord_templates(items: Dictionary) -> bool:
-    # These are optional: unusually wide or ambiguous chord patterns use
-    # the existing per-glyph renderer. Never substitute fake sprite ink.
+    # One Verovio instance template per chord shape of the score. Positions
+    # and bounds are relative to the lowest head (template note 0); each
+    # chord is re-anchored here on its leader, the event the painter places.
+    # Never substitute fake sprite ink.
     _forget_template_images("chord")
     var loaded := {}
     var metrics := {}
@@ -324,21 +326,9 @@ func load_chord_templates(items: Dictionary) -> bool:
                 bounds.size() != 4 or positions.size() < 2:
             error = "Invalid Verovio chord sprite: " + str(key)
             return false
-        var leaders: Variant = item.get("leaders",{})
-        if not leaders is Dictionary:
+        if not item.get("leaders",{}) is Dictionary:
             error = "Invalid Verovio chord leaders: " + str(key)
             return false
-        var fields: PackedStringArray = str(key).split("|")
-        for leader in leaders:
-            var heads: Variant = leaders[leader]
-            if not heads is Array or heads.size() != positions.size():
-                error = "Verovio chord heads do not match its template: " + str(key)
-                return false
-            var ids: Array = []
-            for id in heads:
-                ids.append(str(id))
-            instances[str(leader)] = {"key":str(key), "heads":ids,
-                "stem":fields[1] if fields.size() > 1 else ""}
         var img := Image.new()
         if img.load_png_from_buffer(Marshalls.base64_to_raw(
                 str(item.get("png_base64","")))) != OK or img.is_empty():
@@ -371,6 +361,42 @@ func load_chord_templates(items: Dictionary) -> bool:
                 return false
             loaded_stems[str(key)] = ImageTexture.create_from_image(stem_image)
             stem_dimensions[str(key)] = stem["bounds"]
+    for key in items:
+        var positions: Array = metrics[str(key)]["head_positions"]
+        var leaders: Dictionary = items[key].get("leaders",{})
+        for leader in leaders:
+            var heads: Variant = leaders[leader]
+            if not heads is Array or heads.size() != positions.size():
+                error = "Verovio chord heads do not match its template: " + str(key)
+                return false
+            var ids: Array = []
+            for id in heads:
+                ids.append(str(id))
+            var anchor: int = ids.find(str(leader))
+            if anchor < 0:
+                error = "Verovio chord leader is not one of its heads: " + str(leader)
+                return false
+            var used: String = str(key)
+            if anchor > 0:
+                used = "%s|a%d" % [key, anchor]
+                if not metrics.has(used):
+                    var origin := Vector2(float(positions[anchor][0]),float(positions[anchor][1]))
+                    var shifted: Array = []
+                    for position in positions:
+                        shifted.append([float(position[0])-origin.x,float(position[1])-origin.y])
+                    metrics[used] = {"bounds":_shifted(metrics[str(key)]["bounds"],origin),
+                        "head_positions":shifted}
+                    loaded[used] = loaded[str(key)]
+                    template_images["chord:"+used] = template_images["chord:"+str(key)]
+                    if loaded_heads.has(str(key)):
+                        loaded_heads[used] = loaded_heads[str(key)]
+                        heads_dimensions[used] = _shifted(heads_dimensions[str(key)],origin)
+                        template_images["chord_heads:"+used] = template_images["chord_heads:"+str(key)]
+                    if loaded_stems.has(str(key)):
+                        loaded_stems[used] = loaded_stems[str(key)]
+                        stem_dimensions[used] = _shifted(stem_dimensions[str(key)],origin)
+            instances[str(leader)] = {"key":used, "heads":ids,
+                "stem":str(key).get_slice("|",1)}
     chord_textures = loaded
     chord_metadata = metrics
     chord_heads_textures = loaded_heads
@@ -379,6 +405,11 @@ func load_chord_templates(items: Dictionary) -> bool:
     chord_stem_bounds = stem_dimensions
     chord_instances = instances
     return true
+
+
+static func _shifted(bounds: Array, origin: Vector2) -> Array:
+    return [float(bounds[0])-origin.x,float(bounds[1])-origin.y,
+        float(bounds[2]),float(bounds[3])]
 
 
 func has_chord(key: String) -> bool:

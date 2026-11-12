@@ -27,9 +27,11 @@ func run() -> void:
     var by_id: Dictionary = {}
     for event in data["model"]["notation_events"]:
         by_id[str(event["id"])] = event
-    check(renderer.layout.chord_template_key(by_id["a"]) == "eighth|down|0,2",
+    var low_key: String = renderer.layout.chord_template_key(by_id["a"])
+    var high_key: String = renderer.layout.chord_template_key(by_id["c"])
+    check(low_key.get_slice("|",1) == "down",
         "Low chord forced DOWN uses the original left-side stem and head displacement")
-    check(renderer.layout.chord_template_key(by_id["c"]) == "eighth|up|0,2",
+    check(high_key.get_slice("|",1) == "up",
         "High chord forced UP uses the original right-side stem and head displacement")
     var painted: Dictionary = {}
     var density: float = renderer.timeline.pixels_per_beat
@@ -46,7 +48,7 @@ func run() -> void:
         var up: bool = beat != 0.0
         check(beams["stems"].has(id) and bool(beams["stems"][id]["up"]) == up,
             "Stem direction and chord key agree with the original authored beam")
-        var key: String = "eighth|up|0,2" if up else "eighth|down|0,2"
+        var key: String = high_key if up else low_key
         var stem_box: Array = renderer.glyphs.chord_stem_bounds[key]
         var stem_x: float = renderer.timeline.screen_x(beat,beat,1200.0*.42)+ \
             (float(stem_box[0])+float(stem_box[2])*.5)*gap/250.0
@@ -57,22 +59,22 @@ func run() -> void:
             renderer.timeline.pixels_per_beat == density,
             "Forced stem direction never changes the one global timing scale")
     check(painted.size() == 6,"Every original chord tone and single note is drawn")
-    # Missing requested direction must fail validation, rather than paint a
-    # source-opposite stem from an available isolated-chord template.
-    var saved: Texture2D = renderer.glyphs.chord_textures["eighth|down|0,2"]
-    renderer.glyphs.chord_textures.erase("eighth|down|0,2")
+    # A missing template must fail validation, naming the chord, rather than
+    # paint another chord's ink.
+    var saved: Texture2D = renderer.glyphs.chord_textures[low_key]
+    renderer.glyphs.chord_textures.erase(low_key)
     check(not renderer.load_score(data["model"]) and not renderer.native_ready and
-        renderer.failure_reason.contains("eighth|down|0,2"),
-        "Validation requires the authoritative beam direction before drawing")
-    renderer.glyphs.chord_textures["eighth|down|0,2"] = saved
-    var isolated: Dictionary = data["model"].duplicate(true)
-    check(renderer.glyphs.load_beam_fragments({}),"Clear old source beam atlas")
+        renderer.failure_reason.contains(low_key),
+        "Validation requires the chord's own Verovio template before drawing")
+    renderer.glyphs.chord_textures[low_key] = saved
+    # A following lesson brings its own atlas: nothing of this one leaks.
+    check(renderer.glyphs.load_chord_templates({}) and renderer.glyphs.load_beam_fragments({}),
+        "Clear the old lesson's chord and beam atlases")
     renderer.expected_beam_groups.clear()
-    check(renderer.load_score(isolated) and renderer.native_ready,
-        "A following isolated-chord score loads after source beam cache replacement")
-    check(renderer.layout.chord_template_key(by_id["a"]) == "eighth|up|0,2" and
-        renderer.layout.chord_template_key(by_id["c"]) == "eighth|down|0,2",
-        "Old beam directions never leak into the next lesson")
+    check(renderer.layout.chord_template_key(by_id["a"]).is_empty() and
+        not renderer.load_score(data["model"].duplicate(true)) and
+        renderer.failure_reason.contains("Missing engraved Verovio chord"),
+        "Old chord templates never leak into the next lesson")
     print("NATIVE_BEAMED_CHORD_FAILURES:",failures.size())
     renderer.free()
     quit(0 if failures.is_empty() else 1)

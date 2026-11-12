@@ -92,7 +92,7 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").catalogue(),
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue(model["notation_events"]),
         load("res://tests/native_glyph_fixture.gd").beam_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tuplet_catalogue()),
         "Unit test has Verovio-shaped placeholder textures")

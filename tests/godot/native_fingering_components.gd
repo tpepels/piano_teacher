@@ -259,6 +259,10 @@ func check_obstacle_geometry(Obstacles) -> void:
     upper["dots"] = 1
     upper["spelling"]["step"] = "F"
     var chord_score = fixture([lower,upper])
+    # The prepared atlas names the chord's heads in template note order.
+    chord_score.glyphs.chord_instances = {"lower":{"key":"quarter|up|fixture",
+        "heads":["lower","upper"],"stem":"up"}}
+    chord_score.rebuild_index()
     chord_score.cached_head_offsets = {"lower":-4.0,"upper":4.0}
     var chord_obstacles = Obstacles.new(chord_score,Connectors.new(chord_score))
     bins.clear()

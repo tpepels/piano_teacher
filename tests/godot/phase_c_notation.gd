@@ -129,7 +129,7 @@ func run() -> void:
     check(renderer.set_verovio_glyphs(sample_glyphs,
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue(model["notation_events"]),
         {},{},load("res://tests/native_glyph_fixture.gd").slur_catalogue()),
         "Load SVG glyphs into cached Godot ImageTextures")
     check(renderer.glyphs.ready(), "Native glyph assets are resident")
@@ -223,14 +223,15 @@ func run() -> void:
         model["notation_events"][5],staff_gap)
     check(float(chord["top_y"]) < float(chord["bottom_y"]) and
         bool(chord["up"]), "Chord stem covers top and bottom real glyph heads")
-    check(renderer.layout.chord_template_key(model["notation_events"][5]) ==
-        "quarter|up|0,2", "Exact chord interval/clef signature matches backend")
-    check(renderer.glyphs.has_chord("quarter|up|0,2"),
+    var chord_key: String = renderer.layout.chord_template_key(model["notation_events"][5])
+    check(chord_key == "quarter|up|fixture|n6",
+        "The chord's leader names its own prepared Verovio template")
+    check(renderer.glyphs.has_chord(chord_key),
         "Completed original Verovio chord ink is resident and can be reused")
     check(renderer.glyphs.note_ready() and \
         renderer.glyphs.note_stem_textures.size() == 14,
         "Native beam stems are original Verovio sprites, never Godot lines")
-    check(renderer.glyphs.chord_heads("quarter|up|0,2").size() == 2,
+    check(renderer.glyphs.chord_heads(chord_key).size() == 2,
         "Each head keeps its exact original relative Verovio anchor")
     var unordered: Dictionary = model.duplicate(true)
     unordered["notation_events"].reverse()

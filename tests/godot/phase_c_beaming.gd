@@ -69,16 +69,6 @@ func run() -> void:
         "B-flat and E-flat have real diatonic staff positions")
     check(Geometry.signature_steps(clefs["left"],-2) != [4,7],
         "Bass clef key signature is not copied from the treble staff")
-    var close_chord: Array = [
-        note("c4", 0.0, 1.0, "right", "1", 1, "quarter"),
-        note("d4", 0.0, 1.0, "right", "1", 1, "quarter",true)]
-    close_chord[0]["spelling"] = {"step":"C","octave":4}
-    close_chord[1]["spelling"] = {"step":"D","octave":4}
-    var shifts: Dictionary = Geometry.chord_offsets(close_chord,12.0)
-    check(shifts.has("c4") and shifts.has("d4"),
-        "Adjacent chord seconds gain local collision-free glyph positions")
-    check(absf(float(shifts["c4"])-float(shifts["d4"])) >= 17.0,
-        "Adjacent noteheads must not visually overlap at ordinary scale")
     var renderer = Native.new()
     get_root().add_child(renderer)
     renderer.size = Vector2(1360, 460)
@@ -86,7 +76,7 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").catalogue(),
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue(score["notation_events"]),
         load("res://tests/native_glyph_fixture.gd").beam_catalogue()),
         "Unit test has all source-matched Verovio beam textures")
     check(renderer.load_score(score), "Native loads grouped rhythms")
@@ -142,7 +132,7 @@ func run() -> void:
         "Native accepts a shared-beam Verovio chord interval signature")
     var original_key: String = renderer.layout.chord_template_key(
         source_chord["notation_events"][2])
-    check(original_key=="eighth|up|0,2" and
+    check(original_key.get_slice("|",1)=="up" and
         renderer.glyphs.has_chord_heads(original_key) and
         renderer.glyphs.has_chord_stem(original_key),
         "A beamed chord has separate authentic Verovio head and stem ink")

@@ -665,6 +665,24 @@ def _midi_ornament_onsets(phrase, hand):
     return result
 
 
+_RELEASE_GRID = DIVISIONS // 4
+
+
+def _release_tolerance(rounded: int, end: int) -> float:
+    """Beats a performed release may move to its 16th-grid value: shortening
+    by at most .08 beat, lengthening by at most .15 beat."""
+    return .08 if rounded < end else .15
+
+
+def _grid_release(start: int, end: int) -> int:
+    """A performed release on the display grid, when display quantization
+    would put it there; otherwise the exact release."""
+    rounded = round(end/_RELEASE_GRID)*_RELEASE_GRID
+    if rounded > start and abs(rounded-end) <= _ticks(_release_tolerance(rounded, end)):
+        return rounded
+    return end
+
+
 def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     groups = defaultdict(list)
     attacks = {}
@@ -699,12 +717,23 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
         display_key = (
             note.track,note.voice,round(note.start-phrase.start,9))
         timing = "triplet" if display_key in triplet_onsets else "exact"
-        groups[note.track,note.voice,start,end].append({
+        # Performed MIDI releases one chord's keys a few ticks apart. Tones
+        # that share an attack and release on the same 16th-grid value within
+        # the display release tolerance are one written chord; genuinely
+        # different values stay separate voices.
+        # A tuplet-length tone keeps its exact release and groups only with
+        # tones released on the same tick.
+        exact = from_source_musicxml or _tuplet_type(end-start) is not None
+        grid_end = end if exact else _grid_release(start, end)
+        groups[note.track,note.voice,start,grid_end,exact].append({
             'source_id':source,'source_beat':note.start-phrase.start,
             'pitch':note.pitch,'hand':hand,'note':note,
-            'notation_timing':timing})
+            'notation_timing':timing,'end':end})
     events = []
-    for (track, voice, start, end), tones in groups.items():
+    for (track, voice, start, grid_end, _), tones in groups.items():
+        # Identical releases keep their exact tick; humanised ones the grid's.
+        releases = {tone['end'] for tone in tones}
+        end = releases.pop() if len(releases) == 1 else grid_end
         remaining = sorted(tones,key=lambda tone:(tone['pitch'],tone['source_id']))
         while remaining:
             layer, pitches = [], set()
@@ -752,7 +781,7 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
                     and lane[i-1][0] == beat_start+third)
                 if in_triplet and (next_start == target or preceding_pair):
                     end = target
-            rounded = round(end/(DIVISIONS//4))*(DIVISIONS//4)
+            rounded = round(end/_RELEASE_GRID)*_RELEASE_GRID
             # Performance MIDI stores physical key release, not the intended
             # written duration. At Autumn Leaves measure 8, for example,
             # a 3.798-beat held note was printed as a triple-dotted 3.75
@@ -768,8 +797,7 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
             # Never shorten an unusual expressive MIDI duration by more
             # than .08 beat. Small release noise around ordinary subdivisions
             # is still normalized; genuine .625-beat values are preserved.
-            tolerance = .12 if from_source_musicxml else (
-                .08 if rounded < end else .15)
+            tolerance = .12 if from_source_musicxml else _release_tolerance(rounded, end)
             if not from_source_musicxml and rounded > end and end-start >= DIVISIONS:
                 tolerance = max(tolerance,.25) if rounded in {
                     _ticks(boundary) for boundary in grid} else tolerance

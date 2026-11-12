@@ -39,6 +39,7 @@ class Atlas:
     var chord_metadata: Dictionary = {}
     var chord_textures: Dictionary = {}
     var chord_stem_bounds: Dictionary = {}
+    var chord_instances: Dictionary = {}
     var note_stem_bounds := {"quarter_up":[40,-500,10,500]}
     var beam_metadata: Dictionary = {}
     var beam_textures: Dictionary = {}
@@ -131,33 +132,41 @@ func note(id: String, beat: float = 0.0) -> Dictionary:
         "is_attack":true,"source_id":"source-"+id,"stem":"up",
         "spelling":{"step":"E","octave":4,"alter":0}}
 
-## F3: the Godot chord key is exactly the Python chord_pattern (the sprite the
-## backend engraves), duplicates are refused, and a refusal names where it is.
+## G1: a chord's key, head order and stem come only from the Verovio
+## instance template its prepared atlas names for the leader. A chord with
+## no template has no key, and the refusal names its measure and staff.
 func check_chord_parity() -> void:
     var Geometry = load("res://notation/native/geometry.gd")
     var Readiness = load("res://notation/native/engraving_readiness.gd")
     var chord: Array = []
-    for spec in [["a","E",0,4],["b","G",0,4],["c","G",1,4]]:
+    for spec in [["a","E",0],["b","G",0],["c","G",1]]:
         var event := note(spec[0])
         event["chord"] = spec[0] != "a"
-        event["spelling"] = {"step":spec[1],"alter":spec[2],"octave":spec[3]}
+        event["spelling"] = {"step":spec[1],"alter":spec[2],"octave":4}
         chord.append(event)
-    chord[1]["spelling"]["alter"] = 0
-    chord[1]["spelling"]["octave"] = 4
-    chord[2]["spelling"]["alter"] = 1
     var score = fixture(chord)
     score.chord_members = Geometry.chord_members(chord)
-    check(score.chord_template_key(chord[0]) == "quarter|up|0,2,2",
-        "chord_template_key equals the Python chord_pattern for G + G-sharp: "+score.chord_template_key(chord[0]))
-    var twice: Array = chord.duplicate(true)
-    twice[2]["spelling"] = twice[1]["spelling"].duplicate()
-    score.chord_members = Geometry.chord_members(twice)
-    check(score.chord_template_key(twice[0]).is_empty(),
-        "two heads of identical spelling and pitch are refused")
-    for head in twice:
+    score.glyphs.chord_instances = {"a":{"key":"quarter|down|G2+0|30,32s,32",
+        "heads":["a","c","b"],"stem":"down"}}
+    check(score.chord_template_key(chord[0]) == "quarter|down|G2+0|30,32s,32",
+        "the key is the leader's prepared template: "+score.chord_template_key(chord[0]))
+    check(score.ordered_chord_members("a").map(func(e): return e["id"]) == ["a","c","b"],
+        "heads bind to events in template note order, by id, never re-sorted")
+    check(not bool(score.chord_extents(chord[0],10.0)["up"]),
+        "the stem Verovio engraved overrides a declared one")
+    var unknown: Array = chord.duplicate(true)
+    unknown[2]["id"] = "d"
+    score.chord_members = Geometry.chord_members(unknown)
+    check(score.chord_template_key(unknown[0]).is_empty(),
+        "a template naming other heads is not this chord's")
+    var two_leaders: Array = chord.duplicate(true)
+    two_leaders[1]["chord"] = false
+    check(Geometry.chord_members(two_leaders).is_empty(),
+        "a lane with two unmarked notes is not one chord")
+    for head in unknown:
         head["measure"] = 7
         head["staff"] = "left"
-    score.chord_members = Geometry.chord_members(twice)
+    score.chord_members = Geometry.chord_members(unknown)
     score.notation_tuplets = []
     var message: String = Readiness.missing(score,score.glyphs,null,[],true,[],true)
     check(message.contains("measure 7") and message.contains("left staff"),
@@ -293,6 +302,8 @@ func check_chord(painter, canvas, frame, score) -> void:
     score.chord_members = {"lower":[lower,upper]}
     score.cached_head_offsets.merge({"lower":-4.0,"upper":4.0})
     score.glyphs.chord_metadata["quarter|up|0,1"] = {"head_positions":[[-50,0],[50,-125]]}
+    score.glyphs.chord_instances = {"lower":{"key":"quarter|up|0,1",
+        "heads":["lower","upper"],"stem":"up"}}
     var ids: Array = painter.paint_engraved_chord(canvas,frame,lower,500.0,20.0,Design.SCORE_INK)
     check(ids == ["lower","upper"],"compound sprite reports every physical source identity")
     check(frame.pass_noteheads["lower"] == Vector2(496,220) and frame.pass_noteheads["upper"] == Vector2(504,210),"compound heads use measured original sprite offsets")
@@ -302,6 +313,7 @@ func check_chord(painter, canvas, frame, score) -> void:
     painter.paint_engraved_chord(canvas,frame,lower,500.0,20.0,Design.SCORE_INK,{"up":true,"tip_y":140.0})
     check(score.glyphs.calls[before][0] == "chord_stem:quarter|up|0,1" and score.glyphs.calls[before+1][0] == "heads:quarter|up|0,1","beamed compound uses separated authentic masks")
     score.chord_members = {}
+    score.glyphs.chord_instances = {}
     score.beamed_note_ids = {}
 
 func check_beams(painter, canvas, frame, score, a, b) -> void:

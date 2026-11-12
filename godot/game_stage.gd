@@ -253,7 +253,7 @@ func _draw() -> void:
     # Wide, thin rail floats above the transport instead of hugging the
     # bottom edge of a dark rectangular score panel.
     var inset: float = clampf(w * .025, 14.0, 38.0)
-    var track_y: float = h - 48.0
+    var track_y: float = h - ScoreView.PROGRESS_RAIL_INSET
     var rail_width: float = maxf(1.0, w - inset * 2.0)
     var fill_tone: Color = Design.SCORE_PROGRESS
     if result_wave > .001:

@@ -6,6 +6,7 @@ const INK := Design.STONE
 const MUTED := Design.SECONDARY_INK
 const ACCENT := Design.TEAL
 const GameStage := preload("res://game_stage.gd")
+const ScoreViewBase := preload("res://notation/shared/view_base.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const GlowField := preload("res://mint_glow_field.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
@@ -49,6 +50,11 @@ var _marker_renderer
 var _marker_revision := -999999
 var _marker_hand := ""
 var _first_attack_offset := INF
+
+func _clear_progress_rail(child: Node) -> void:
+    var layout: Variant = child.get("layout")
+    if layout is Object and "bottom_clearance" in layout:
+        layout.bottom_clearance = ScoreViewBase.PROGRESS_RAIL_CLEARANCE
 
 func _ready() -> void:
     name = "PracticeScoreStage"
@@ -101,6 +107,11 @@ func _ready() -> void:
     score_area.custom_minimum_size = Vector2(0, 210)
     score_region.add_child(score_area)
     score_frame = score_area
+    # The stage's progress rail runs along the bottom of the score frame.
+    # Every notation view placed here (this stage's, a pre-engraved next
+    # stage, a promoted replacement) keeps its lowest ledger notes and their
+    # fingerings above the rail's band, before it lays out a score.
+    score_frame.child_entered_tree.connect(_clear_progress_rail)
     score_frame.clip_contents = true
     # Background is owned by the full Practice page. Keeping another
     # opaque backdrop inside the score creates the visible hard-edged box.

@@ -6,6 +6,27 @@ extends SceneTree
 ## the view renders into a real viewport and saves one PNG per chord.
 const FramebufferTake := preload("framebuffer_take.gd")
 
+## The stem as painted, relative to the leader's head centre in staff spaces:
+## side (up), centre-line offset (dx) and the far end (tip). A beamed chord's
+## stem comes from the beam plan; any other chord's from its template sprite.
+func _stem(renderer, leader: Dictionary, key: String, beat: float, gap: float) -> Dictionary:
+    var box: Array = renderer.glyphs.chord_stem_bounds.get(key, [])
+    if box.size() != 4:
+        return {}
+    var id: String = str(leader.get("id", ""))
+    var dx: float = (float(box[0])+float(box[2])*.5)/250.0
+    if renderer.layout.beamed_note_ids.has(id):
+        var plan: Dictionary = renderer.beam_plan(gap, beat, renderer.size.x*.33,
+            renderer.layout.cached_head_offsets)
+        if not plan["stems"].has(id):
+            return {"beamed": true, "missing": true}
+        var stem: Dictionary = plan["stems"][id]
+        return {"beamed": true, "up": bool(stem["up"]), "dx": dx,
+            "tip": (float(stem["tip_y"])-renderer.layout.event_y(leader, gap))/gap}
+    var up: bool = str(renderer.glyphs.chord_instances[id]["stem"]) == "up"
+    return {"beamed": false, "up": up, "dx": dx,
+        "tip": (float(box[1]) if up else float(box[1])+float(box[3]))/250.0}
+
 func _initialize() -> void:
     call_deferred("run")
 
@@ -28,6 +49,8 @@ func run() -> void:
         else:
             root.add_child(renderer)
         renderer.set_transport_overlay_enabled(false)
+        # As in the practice stage, whose progress rail runs along the bottom.
+        renderer.layout.bottom_clearance = renderer.PROGRESS_RAIL_CLEARANCE
         var a: Dictionary = item["layout"]
         var result := {"name": item["name"], "ready": false, "failure": "", "chords": {}}
         var glyphs_ok: bool = renderer.set_verovio_glyphs(a["native_glyphs"],
@@ -61,8 +84,10 @@ func run() -> void:
                     if id in chord["members"]:
                         sources[id] = [str(instance.get("source", "")),
                             str(instance.get("template", "")), int(instance.get("head_index", -1))]
+                var gap: float = renderer.staff_gap()
                 var entry := {"key": key, "has_template": renderer.glyphs.has_chord(key),
-                    "gap": renderer.staff_gap(), "heads": heads, "sources": sources}
+                    "gap": gap, "heads": heads, "sources": sources,
+                    "stem": _stem(renderer, by_id[leader], key, float(chord["beat"]), gap)}
                 if viewport != null and bool(chord.get("capture", false)):
                     await RenderingServer.frame_post_draw
                     var image := viewport.get_texture().get_image()

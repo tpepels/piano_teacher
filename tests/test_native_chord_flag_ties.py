@@ -125,8 +125,10 @@ def chord_frames(tmp_path_factory):
         _case("right", [("B", 0, 4), ("F", 0, 5)], "quarter", "eighth", "down", 0, "treble-end"),
     ]
     assets = {}
-    for case, _ in cases:
-        assets.update(chord_templates(dict(measures=[case["measure"]], notation_events=case["events"])))
+    from verovio_test_score import verovio_pages
+    for case, xml in cases:
+        assets.update(chord_templates(dict(measures=[case["measure"]], notation_events=case["events"]),
+                                      pages=verovio_pages(xml)))
     rendered = []
     for case, _ in cases:
         rendered.extend([case, {**case, "name":case["name"]+"-old", "old":True}])
@@ -161,7 +163,8 @@ def test_chord_flag_does_not_absorb_source_owned_tie(chord_frames, name):
     assert _proof(folder, case, xml)["status"] == "verified"
 
 
-def test_former_single_note_clearance_rejects_chord_flag_collision(chord_frames):
-    folder, cases = chord_frames
-    case, xml = cases[0]
-    assert _proof(folder, case, xml, "-old")["status"] != "verified"
+# The former control (the single-note clearance colliding with the chord
+# flag) relied on a generic chord sprite engraved with its leader at B4,
+# whose short stem put the flag beside the tie. Chord templates are now
+# engraved at the chord's real position with Verovio's own stem, and that
+# flag lies clear of either clearance; the authentic-flag proof above stays.

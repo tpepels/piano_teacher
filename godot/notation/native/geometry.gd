@@ -64,19 +64,6 @@ static func diatonic_index(spelling: Dictionary) -> int:
         return -9999
     return int(spelling.get("octave", 4)) * 7 + int(STEPS[name])
 
-# Chord heads order bottom to top. Two heads on one staff position (G and
-# G-sharp) order by sounding pitch, as Verovio displaces the higher one.
-static func head_order_less(a: Dictionary,b: Dictionary) -> bool:
-    var da: int = diatonic_index(a.get("spelling",{}))
-    var db: int = diatonic_index(b.get("spelling",{}))
-    if da != db:
-        return da < db
-    var pa: int = int(a.get("midi_pitch",0))
-    var pb: int = int(b.get("midi_pitch",0))
-    if pa != pb:
-        return pa < pb
-    return str(a.get("id","")) < str(b.get("id",""))
-
 static func bottom_line(clef: Dictionary) -> int:
     var sign: String = str(clef.get("sign", "G"))
     var line: int = int(clef.get("line", 2))
@@ -285,52 +272,14 @@ static func chord_members(events: Array) -> Dictionary:
         var notes: Array = lanes[key]
         if notes.size() < 2:
             continue
-        var leader: Dictionary = {}
+        # Exactly one leader, as Python's chords.chord_lanes: a lane with
+        # two unmarked notes is not one MusicXML chord.
+        var leaders: Array = []
         for note in notes:
             if not bool(note.get("chord", false)):
-                leader = note
-                break
-        if not leader.is_empty():
-            result[str(leader.get("id", ""))] = notes
-    return result
-
-
-static func chord_offsets(events: Array, gap: float) -> Dictionary:
-    # Engraved unisons/seconds must never be placed on top of each other.
-    # This is a glyph-only horizontal offset: the musical beat and scroll
-    # camera remain untouched. Alternating sides centres the whole chord.
-    var lanes: Dictionary = {}
-    for event in events:
-        if not event is Dictionary or str(event.get("kind", "")) != "note":
-            continue
-        var name: String = str(event.get("staff",""))+"|"+ \
-            str(event.get("voice","1"))+"|"+str(event.get("measure",0))+"|"+ \
-            str(snappedf(float(event.get("beat", 0.0)), .000001))
-        if not lanes.has(name):
-            lanes[name] = []
-        lanes[name].append(event)
-    var result: Dictionary = {}
-    for key in lanes:
-        var chord: Array = lanes[key]
-        if chord.size() < 2:
-            continue
-        chord.sort_custom(func(a,b):
-            return head_order_less(a,b))
-        for i in range(1,chord.size()):
-            var previous: int = diatonic_index(chord[i-1].get("spelling",{}))
-            var current: int = diatonic_index(chord[i].get("spelling",{}))
-            if current-previous == 1:
-                # Alternate each close neighbour, avoid sustained drift
-                # when three or more adjacent pitches form a cluster.
-                var old_id: String = str(chord[i-1].get("id",""))
-                var new_id: String = str(chord[i].get("id",""))
-                var old_offset: float = float(result.get(old_id,0.0))
-                var width: float = gap*.75
-                if absf(old_offset) < .001:
-                    result[old_id] = -width
-                    result[new_id] = width
-                else:
-                    result[new_id] = -old_offset
+                leaders.append(note)
+        if leaders.size() == 1:
+            result[str(leaders[0].get("id", ""))] = notes
     return result
 
 

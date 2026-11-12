@@ -244,11 +244,11 @@ func event_obstacles(event: Dictionary, gap: float, bins: Dictionary, cell: floa
     # independent head/ledger/accidental reservations above.
     if bool(event.get("chord",false)):
         return
-    var dot_events: Array = score_layout.chord_members.get(id,[event]).duplicate()
+    var dot_events: Array = [event]
     var dot_anchors: Dictionary = {}
     if score_layout.chord_members.has(id):
-        dot_events.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
+        # Bottom to top in template note order, bound by event id.
+        dot_events = score_layout.ordered_chord_members(id)
         var centers: Array = []
         for member in dot_events:
             centers.append(Vector2(anchor+float(score_layout.cached_head_offsets.get(str(member["id"]),0.0)),

@@ -10,6 +10,11 @@ const HIGHLIGHT := Color("#84EDD3")
 const MUTED := Color("#819F9A")
 const LEFT_TONE := Color("#9FB4DC")
 const PLAYHEAD_FRACTION := .33
+# The practice stage draws its progress rail this far above the bottom edge
+# of the score frame, which the score view fills. Notation ink, including
+# the lowest ledger notes and their fingerings, stays above the clearance.
+const PROGRESS_RAIL_INSET := 48.0
+const PROGRESS_RAIL_CLEARANCE := 60.0
 
 var timeline = Timeline.new()
 var clock_beat := 0.0

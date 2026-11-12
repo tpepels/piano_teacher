@@ -69,17 +69,18 @@ def _authored_beamed_chords():
         "pageWidth": 900, "pageHeight": 650, "svgViewBox": True,
         "svgBoundingBoxes": True, "svgContentBoundingBoxes": True})
     assert toolkit.loadData(xml)
-    beams = extract_beam_fragments(
-        [toolkit.renderToSVG(p) for p in range(1, toolkit.getPageCount() + 1)], model)
+    pages = [toolkit.renderToSVG(p) for p in range(1, toolkit.getPageCount() + 1)]
+    beams = extract_beam_fragments(pages, model)
     assert set(beams) == {"a|b", "c|d"}
     assert beams["a|b"]["stem_up"] is False
     assert beams["c|d"]["stem_up"] is True
     directions = {identifier: fragment["stem_up"]
                   for fragment in beams.values() for identifier in fragment["note_ids"]}
-    chords = chord_templates(model, stem_directions=directions)
-    # Both local directions occur naturally in this model. Each of those
-    # two genuine templates is required in the opposite source beam too.
-    assert {"eighth|up|0,2", "eighth|down|0,2"} <= chords.keys()
+    chords = chord_templates(model, stem_directions=directions, pages=pages)
+    # Each chord's template follows its authored source beam: the low third
+    # forced down, the high third forced up.
+    by_leader = {leader: key for key, item in chords.items() for leader in item["leaders"]}
+    assert by_leader["a"].split("|")[1] == "down" and by_leader["c"].split("|")[1] == "up"
     return {"model": model, "glyphs": native_glyphs(), "beams": beams,
             "notes": note_templates(), "ties": tie_templates(), "chords": chords}
 
@@ -164,7 +165,27 @@ def test_packed_accidental_ink_clears_previous_onset_at_one_global_scale(
     model["notes"] = [{"id": e["id"], "onset_beats": e["beat"],
                        "duration_beats": 1.0, "midi_pitch": 60, "hand": "right"}
                       for e in events]
-    data["chords"] = chord_templates(model)
+    from verovio_test_score import verovio_pages
+    def note(event):
+        spelling = event["spelling"]
+        alter = spelling.get("alter", 0)
+        return (f'<note id="{event["id"]}">{"<chord/>" if event["chord"] else ""}'
+                f'<pitch><step>{spelling["step"]}</step>'
+                + (f"<alter>{alter}</alter>" if alter else "")
+                + f'<octave>{spelling["octave"]}</octave></pitch><duration>4</duration>'
+                f'<voice>{event["voice"]}</voice><type>quarter</type>'
+                + ("<accidental>sharp</accidental>" if alter else "") + "</note>")
+    voices = {}
+    for event in events:
+        voices.setdefault(event["voice"], []).append(event)
+    body = '<backup><duration>4</duration></backup>'.join(
+        "".join(note(e) for e in voice) for voice in voices.values())
+    xml = ('<score-partwise version="4.0"><part-list><score-part id="P"><part-name>P'
+           '</part-name></score-part></part-list><part id="P"><measure number="1">'
+           '<attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4'
+           '</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>'
+           + body + '</measure></part></score-partwise>')
+    data["chords"] = chord_templates(model, pages=verovio_pages(xml))
     data["beams"] = {}
     fixture = tmp_path / "accidentals.json"
     fixture.write_text(json.dumps(data))

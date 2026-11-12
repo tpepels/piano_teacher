@@ -59,6 +59,28 @@ inputs to compare, never proof assertions.
 | `native_notation` | Exact multiset of generated visible events versus native notation, including source-derived note/segment bindings, attack flags, hand, lane, measure, pitch/spelling, rhythm, chord and tie flags, accidental and ratio. Duplicates, missing events and fabricated events fail. Hidden rests are cursor scaffolding, absent from the visible native inventory. |
 | `hand_mode` | Requested active hand and active attack IDs equal the selection independently derived from source hands; both written staves remain present. |
 
+## Chords
+
+- A chord is the notes of one staff, voice, measure and beat with exactly one
+  MusicXML leader (a note without `<chord/>`). The engine
+  (`notation/assets/chords.py: chord_lanes`) and the native view
+  (`Geometry.chord_members`) use this one rule.
+- Performed MIDI releases a chord's keys a few ticks apart. Tones of one
+  track/channel owner that share an attack and whose releases round to the
+  same 16th-grid value within the display release tolerance (at most .08 beat
+  shorter or .15 beat longer, `lesson._release_tolerance`) are one chord with
+  that grid duration. Identical releases keep their exact tick; genuinely
+  different values (a quarter and an eighth) stay separate voices.
+- Every chord is engraved from its own Verovio instance template: its real
+  clef, staff position and spelling, with the stem Verovio gave it on the
+  lesson's pages. Heads bind to events by the template's note ids. Any number
+  of heads, any span and any number of heads on one staff position draws.
+- Grace chords and arpeggio marks exist only in MusicXML: MIDI cannot carry
+  them, so the product's MIDI input never reaches them. A MusicXML exercise
+  that contains one is refused as a whole ("Source expression requires
+  original Verovio engraving"): the native view has no grace-chord or
+  arpeggio painter.
+
 ## Display timing bounds
 
 Production behavior was read in `music.py`, `notation/lesson.py` and

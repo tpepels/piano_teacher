@@ -1,152 +1,94 @@
-"""Native chord availability and fixed-beat readability regressions."""
+"""Native chord availability: every chord of a score gets its Verovio template."""
 from pathlib import Path
 
-from piano_teacher.notation.assets.chords import (
-    chord_pattern, patterns_from_model,
-)
+import pytest
+
+from verovio_test_score import (chord_xml, chords_by_names, prepare_musicxml,
+                                rest_xml, score_xml)
 
 
 ROOT = Path(__file__).resolve().parents[1]
+_TICKS = {"whole": 64, "half": 32, "quarter": 16, "eighth": 8, "16th": 4, "32nd": 2, "64th": 1}
 
 
-def test_chord_catalogue_is_not_silently_truncated_at_thirty_two():
-    clefs = {"right": {"sign":"G","line":2}}
-    events = []
-    beat = 0
-    for kind in ("quarter","eighth"):
-        for interval in range(1,21):
-            events.extend([
-                {"id":f"a{beat}","kind":"note","staff":"right",
-                 "voice":"1","measure":1,"beat":float(beat),
-                 "chord":False,"note_type":kind,
-                 "spelling":{"step":"B","octave":4}},
-                {"id":f"b{beat}","kind":"note","staff":"right",
-                 "voice":"1","measure":1,"beat":float(beat),
-                 "chord":True,"note_type":kind,
-                 "spelling":{"step":"CDEFGAB"[((6+interval)%7)],
-                              "octave":4+(6+interval)//7}},
-            ])
-            beat += 1
-    model = {"measures":[{"number":1,"clefs":clefs}],
-             "notation_events":events}
-    patterns=patterns_from_model(model)
-    assert len(patterns) == 40, patterns
-    assert any(x.startswith("quarter|") for x in patterns)
-    assert any(x.startswith("eighth|") for x in patterns)
+def _rests(ticks: int) -> str:
+    out = []
+    for kind, length in _TICKS.items():
+        while ticks >= length:
+            out.append(rest_xml(length, kind))
+            ticks -= length
+    return "".join(out)
 
 
-def test_long_score_keeps_every_distinct_chord_pattern():
-    events = []
-    beat = 0
+def _mapped(prepared) -> dict:
+    return {leader: key for key, item in prepared["layout"]["native_chord_templates"].items()
+            for leader in item.get("leaders", {})}
+
+
+def _assert_every_chord_mapped(prepared):
+    from piano_teacher.notation.assets.chords import chord_lanes
+    mapped = _mapped(prepared)
+    chords = list(chord_lanes(prepared["model"]))
+    assert chords
+    for leader, notes, _ in chords:
+        assert leader["id"] in mapped, (leader["measure"], leader["id"])
+        heads = prepared["layout"]["native_chord_templates"][mapped[leader["id"]]]["leaders"][leader["id"]]
+        assert sorted(heads) == sorted(n["id"] for n in notes)
+    return mapped, chords
+
+
+def test_chord_catalogue_is_not_silently_truncated(tmp_path):
+    # Forty distinct shapes (twenty intervals, two note values), four per bar.
+    letters = "CDEFGAB"
+    chords = []
+    for kind, ticks in (("quarter", 16), ("eighth", 8)):
+        for interval in range(1, 21):
+            upper = 6 + interval
+            chords.append(chord_xml(f"B4 {letters[upper % 7]}{4 + upper // 7}", kind, ticks // 4)
+                          + ("" if kind == "quarter" else rest_xml(2, "eighth")))
+    measures = ["".join(chords[i:i + 4]) for i in range(0, len(chords), 4)]
+    prepared = prepare_musicxml(score_xml(measures), tmp_path)
+    mapped, found = _assert_every_chord_mapped(prepared)
+    assert len(found) == 40 and len(set(mapped.values())) == 40
+
+
+def test_every_note_value_keeps_its_own_templates(tmp_path):
+    measures = []
     for kind in ("whole", "half", "quarter", "eighth", "16th", "32nd", "64th"):
-        for first, second in ((a, b) for a in range(1, 11) for b in range(a + 1, 12)):
-            for index, offset in enumerate((0, first, second)):
-                pitch = 34 + offset
-                events.append({
-                    "id": f"{beat}-{index}", "kind": "note", "staff": "right",
-                    "voice": "1", "measure": 1, "beat": beat, "chord": index > 0,
-                    "note_type": kind,
-                    "spelling": {"step": "CDEFGAB"[pitch % 7], "octave": pitch // 7}})
-            beat += 1
-    model = {"measures": [{"number": 1, "clefs": {"right": {"sign": "G", "line": 2}}}],
-             "notation_events": events}
-    assert len(patterns_from_model(model)) == 385
+        for upper in ("D5", "E5", "G5"):
+            measures.append(chord_xml(f"B4 {upper}", kind, _TICKS[kind]) + _rests(64 - _TICKS[kind]))
+    prepared = prepare_musicxml(score_xml(measures, divisions=16), tmp_path)
+    mapped, found = _assert_every_chord_mapped(prepared)
+    assert len(found) == 21 and len(set(mapped.values())) == 21
 
 
-def test_ala_original_source_chords_have_native_template_signatures():
-    """A real user MIDI should never be rejected by a 32-item atlas cap."""
+def test_ala_measure_nine_chords_have_instance_templates(tmp_path):
+    """A real user MIDI: every chord of Ala's measure-9 exercise is engraved."""
+    from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
     from piano_teacher.music import load_midi
-    from piano_teacher.notation.lesson import build_lesson_score
-    from piano_teacher.notation.model import build_score_model
+    from piano_teacher.preprocessing_cache import PreprocessingCache
 
-    piece = load_midi(ROOT/"midi/Ala_–_Joep_Beving.midi")
-    from piano_teacher.notation.assets.chords import chord_templates
-    found = False
-    total = 0
-    target_pattern = None
-    target_model = None
-    for phrase in piece.phrases:
-        score = build_lesson_score(
-            phrase, boundaries=piece.bar_boundaries,
-            time_signatures=piece.time_signatures,
-            key_signatures=piece.key_signatures,
-            clef_changes=piece.clef_changes)
-        model = build_score_model(score,boundaries=piece.bar_boundaries)
-        known = set(patterns_from_model(model))
-        measures = {int(m["number"]):m for m in model["measures"]}
-        by_attack = {}
-        for event in model["notation_events"]:
-            if event.get("kind") == "note":
-                key=(event["staff"],event.get("voice","1"),
-                     event["measure"],round(float(event["beat"]),6))
-                by_attack.setdefault(key,[]).append(event)
-        for (_,_,measure_id,_), notes in by_attack.items():
-            leaders=[n for n in notes if not n.get("chord")]
-            if len(leaders)!=1 or len(notes)<2:
-                continue
-            pattern=chord_pattern(leaders[0],notes,measures[measure_id])
-            if pattern:
-                assert pattern in known, (pattern,leaders[0]["id"])
-                total += 1
-            if any(n.get("id") ==
-                    "pt2fa3797d60751961741d28759c09256as0" for n in notes):
-                found = True
-                assert pattern is not None, (notes,measure_id)
-                assert pattern in known, pattern
-                target_pattern = pattern
-                target_model = model
-    assert total > 0, "Ala has chords and must exercise the compound atlas"
-    if found:
-        atlas = chord_templates(target_model)
-        assert target_pattern in atlas, (
-            "Exact Ala chord ID could not be engraved by Verovio",
-            target_pattern, list(atlas))
-    else:
-        # The source ID may be a lesson transformation. Nonetheless prove
-        # that the original Ala passage containing measure 9 has a complete
-        # authentic chord atlas, not just semantic pattern strings.
-        section = next((p for p in piece.phrases
-                        if p.first_bar <= 9 <= p.last_bar),None)
-        assert section is not None, "Ala measure 9 must exist"
-        notation = build_lesson_score(
-            section, boundaries=piece.bar_boundaries,
-            time_signatures=piece.time_signatures,
-            key_signatures=piece.key_signatures,
-            clef_changes=piece.clef_changes)
-        model = build_score_model(notation,boundaries=piece.bar_boundaries)
-        requested = set(patterns_from_model(model))
-        generated = chord_templates(model)
-        assert requested <= set(generated), (
-            "Verovio failed real Ala measure-9 chord patterns",
-            requested-set(generated))
+    path = ROOT/"midi/Ala_–_Joep_Beving.midi"
+    piece = load_midi(path)
+    phrase = next(p for p in piece.phrases if p.first_bar <= 9 <= p.last_bar)
+    artifacts = ScoreArtifacts(PreprocessingCache(tmp_path))
+    selected = ScoreSelection(piece, phrase, "both", "ala", 1, path.name)
+    _assert_every_chord_mapped({"layout": artifacts.geometry(selected),
+                                "model": artifacts.semantic_score(selected)})
 
 
-
-def _head(step, alter, octave):
-    return {"staff":"right","note_type":"quarter","stem":None,
-            "spelling":{"step":step,"alter":alter,"octave":octave}}
-
-
-def test_augmented_unison_chord_has_a_pattern_and_authentic_two_head_sprite():
+def test_augmented_unison_and_triple_unison_are_engraved_side_by_side(tmp_path):
     # N1: Rachmaninoff Op. 3 No. 2 bar 3 holds E4, G4 and G#4 in one voice.
     # G and G-sharp share a staff position; Verovio engraves them side by side.
-    from piano_teacher.notation.assets import chords
-    notes = [_head("E",0,4), _head("G",0,4), _head("G",1,4)]
-    measure = {"clefs":{"right":{"sign":"G","line":2}}}
-    assert chord_pattern(notes[0],notes,measure) == "quarter|up|0,2,2"
-    # G1: three heads on one position are a chord too; Verovio engraves it.
-    triple = notes + [_head("G",-1,4)]
-    assert chord_pattern(triple[0],triple,measure) == "quarter|up|0,2,2,2"
-    import verovio
-    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
-    toolkit = _create_verovio_toolkit(verovio)
-    assert toolkit.setOptions({"inputFrom":"xml","scale":48,"pageWidth":900,
-        "pageHeight":650,"svgViewBox":True,"adjustPageHeight":True,
-        "svgBoundingBoxes":True,"svgContentBoundingBoxes":True})
-    asset = chords._render(toolkit,"quarter|up|0,2,2")
-    assert chords._valid_asset(asset,"quarter|up|0,2,2")
-    (x0,y0),(x1,y1),(x2,y2) = asset["head_positions"]
+    # G1: three heads on one position are a chord too.
+    prepared = prepare_musicxml(score_xml([
+        chord_xml("E4 G4 G#4") + chord_xml("E4 Gb4 G4 G#4") + rest_xml(8, "half")]), tmp_path)
+    mapped, _ = _assert_every_chord_mapped(prepared)
+    atlas = prepared["layout"]["native_chord_templates"]
+    chords = chords_by_names(prepared["model"])
+    (x0, y0), (x1, y1), (x2, y2) = atlas[mapped[chords[(1, "E4 G4 G#4")]["id"]]]["head_positions"]
     assert y1 == y2 and x1 != x2 and y0 > y1
+    assert len(atlas[mapped[chords[(1, "E4 Gb4 G4 G#4")]["id"]]]["head_positions"]) == 4
 
 
 def test_rachmaninoff_prelude_builds_complete_native_assets(tmp_path):
@@ -180,6 +122,11 @@ def test_rachmaninoff_prelude_builds_complete_native_assets(tmp_path):
     assert chords
 
 
+def _head(step, alter, octave):
+    return {"staff":"right","note_type":"quarter","stem":None,
+            "spelling":{"step":step,"alter":alter,"octave":octave}}
+
+
 def test_identical_spelling_and_pitch_on_one_position_is_a_chord():
     # G1: a chord draws whatever its shape. Import splits identical pitches
     # into separate voices, but a hand-built chord with a doubled head still
@@ -190,11 +137,10 @@ def test_identical_spelling_and_pitch_on_one_position_is_a_chord():
         note.update(measure=9, id=f"n{index}", chord=index > 0, kind="note",
                     voice="1", beat=0.0)
     measure = {"number": 9, "clefs": {"right": {"sign": "G", "line": 2}}}
-    assert chord_pattern(notes[0], notes, measure) == "quarter|up|0,2,2"
     assert chords.chord_refusal(notes[0], notes, measure) is None
     model = {"measures": [measure], "notation_events": notes}
     assert chords.refused_chords(model) == []
-    assert chords.patterns_from_model(model) == ["quarter|up|0,2,2"]
+    assert [leader["id"] for leader, _, _ in chords.chord_lanes(model)] == ["n0"]
 
 
 def test_only_input_that_is_not_one_chord_is_refused_with_its_cause():
@@ -206,33 +152,52 @@ def test_only_input_that_is_not_one_chord_is_refused_with_its_cause():
     reason = chords.chord_refusal(mixed[0], mixed, measure)
     assert reason == ("measure 3, right staff: heads of different note values "
                       "are separate voices, not one chord")
-    # Eleven heads, a five-octave span and stacked unisons all have a pattern.
+    # Eleven heads, a five-octave span and stacked unisons are chords.
     for names in (["C4","D4","E4","F4","G4","A4","B4","C5","D5","E5","F5"],
                   ["A0","C8"], ["G4","G4","G4","G4"]):
         heads = [_head(n[0], 0, int(n[1])) for n in names]
-        assert chord_pattern(heads[0], heads, measure)
+        assert chords.chord_refusal(heads[0], heads, measure) is None
 
 
-def test_every_corpus_chord_is_a_chord():
-    """All 17 corpus MIDIs: no chord is refused at any lesson phrase."""
-    from piano_teacher.music import load_midi
+CORPUS = sorted((ROOT / "midi").glob("*.midi"))
+# Exercises whose page engraving fails before any chord is prepared, already
+# at 179ccb25 (before G1): render_layout rejects a long note that starts on
+# a triplet offset and is tied across the barline ("Engraved source identity
+# has an incorrect display onset"). Not a chord shape. Listed exactly, so a
+# new failure, or a fix, changes this test.
+KNOWN_ENGRAVING_FAILURES = {"Peace_Piece_-_Bill_Evans_(Piano_Solo)": {31, 37, 53, 67}}
+
+
+def test_corpus_has_seventeen_pieces():
+    assert len(CORPUS) == 17
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("path", CORPUS, ids=[p.stem[:24] for p in CORPUS])
+def test_every_corpus_chord_is_engraved(path, tmp_path):
+    """Every lesson phrase of a corpus MIDI through the production path:
+    ScoreArtifacts engraving and native preparation. Each chord has its
+    Verovio instance template naming exactly its heads, and none is refused.
+    """
+    from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
+    from piano_teacher.importing.pieces import import_piece
     from piano_teacher.notation.assets.chords import refused_chords
-    from piano_teacher.notation.lesson import build_lesson_score
-    from piano_teacher.notation.model import build_score_model
+    from piano_teacher.preprocessing_cache import PreprocessingCache
 
-    pieces = sorted((ROOT / "midi").glob("*.midi"))
-    assert len(pieces) == 17
-    refused, chords = [], 0
-    for path in pieces:
-        piece = load_midi(path)
-        for phrase in piece.phrases:
-            score = build_lesson_score(
-                phrase, boundaries=piece.bar_boundaries,
-                time_signatures=piece.time_signatures,
-                key_signatures=piece.key_signatures,
-                clef_changes=piece.clef_changes)
-            model = build_score_model(score, boundaries=piece.bar_boundaries)
-            chords += len(patterns_from_model(model))
-            refused += [f"{path.name}: {r}" for r in refused_chords(model)]
-    assert chords > 0
-    assert refused == []
+    piece, _ = import_piece(path)
+    artifacts = ScoreArtifacts(PreprocessingCache(tmp_path))
+    failed = set()
+    for phrase in piece.phrases:
+        selected = ScoreSelection(piece, phrase, "both", "corpus", 1, path.name)
+        try:
+            layout = artifacts.geometry(selected)
+        except ValueError as exc:
+            assert "incorrect display onset" in str(exc), (phrase.first_bar, exc)
+            failed.add(phrase.first_bar)
+            continue
+        prepared = {"layout": layout, "model": artifacts.semantic_score(selected)}
+        assert refused_chords(prepared["model"]) == [], phrase.first_bar
+        from piano_teacher.notation.assets.chords import chord_lanes
+        if any(True for _ in chord_lanes(prepared["model"])):
+            _assert_every_chord_mapped(prepared)
+    assert failed == KNOWN_ENGRAVING_FAILURES.get(path.stem, set())

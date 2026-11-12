@@ -49,17 +49,37 @@ static func tie_catalogue() -> Dictionary:
     return output
 
 
-static func chord_catalogue() -> Dictionary:
+# Test-only chord sprites, bound like production instance templates: one
+# entry per chord of ``events``, its heads named bottom to top by event id.
+# Positions are relative to the lowest head, as a prepared atlas's are.
+static func chord_catalogue(events: Array = [], stem: String = "up") -> Dictionary:
     var image := Image.create(4,8,false,Image.FORMAT_RGBA8)
     image.fill(Color.WHITE)
     var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())
+    var geometry = load("res://notation/native/geometry.gd")
     var atlas: Dictionary = {}
-    for pattern in ["quarter|up|0,2","eighth|up|0,2","eighth|up|0,3"]:
-        atlas[pattern] = {
+    var chords: Dictionary = geometry.chord_members(events)
+    for leader in chords:
+        var members: Array = chords[leader].duplicate()
+        members.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+            var da: int = geometry.diatonic_index(a.get("spelling",{}))
+            var db: int = geometry.diatonic_index(b.get("spelling",{}))
+            return da < db if da != db else str(a.get("id","")) < str(b.get("id","")))
+        var lowest: int = geometry.diatonic_index(members[0].get("spelling",{}))
+        var positions: Array = []
+        var ids: Array = []
+        for member in members:
+            positions.append([0.0,-125.0*float(geometry.diatonic_index(
+                member.get("spelling",{}))-lowest)])
+            ids.append(str(member.get("id","")))
+        var key: String = "%s|%s|fixture|%s" % [str(members[0].get("note_type","quarter")),
+            stem, leader]
+        atlas[key] = {
             "source":"verovio-engraved-chord","units_per_space":250,
             "bounds":[-20.0,-200.0,120.0,250.0],
-            "head_positions":[[0.0,0.0],[0.0,-250.0]],
+            "head_positions":positions,
             "png_base64":encoded,
+            "leaders":{str(leader):ids},
             "heads_only":{"source":"verovio-engraved-chord-heads",
                 "bounds":[-20.0,-190.0,120.0,160.0],
                 "png_base64":encoded},

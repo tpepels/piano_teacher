@@ -7,9 +7,9 @@ chord is classified:
 
 - drawn:   the native view painted every head, each where Verovio put it;
 - refused: the score did not load, or a head was not painted;
-- wrong:   painted, but a head's displacement differs from Verovio's own SVG
-           render of the same measure (head positions relative to the chord's
-           leader, in staff spaces).
+- wrong:   painted, but a head's displacement, or the stem's side, centre
+           line or tip, differs from Verovio's own SVG render of the same
+           measure (relative to the chord's leader head, in staff spaces).
 
 Not a test module: tests/test_chord_engraving_probe.py drives it.
 """
@@ -31,6 +31,8 @@ LAYOUT_KEYS = ("native_glyphs", "native_note_templates", "native_tie_templates",
                "native_required_slur_pairs", "native_slurs_complete",
                "native_required_beam_groups", "native_beams_complete")
 TOLERANCE = .2  # staff spaces
+STEM_SIDE = .15  # staff spaces, stem centre line from the leader's head centre
+STEM_TIP = .3    # staff spaces, the stem's far end
 
 
 def _verovio_heads(pages) -> dict:
@@ -45,6 +47,64 @@ def _verovio_heads(pages) -> dict:
             if gaps:
                 found[ident] = (x * geometry.width, y * geometry.height,
                                 min(gaps) * geometry.height)
+    return found
+
+
+_NUMBER = r"-?\d+(?:\.\d+)?"
+
+
+def _verovio_stems(pages) -> dict:
+    """Note id -> its chord's Verovio stem relative to that note's head, in
+    staff spaces: up, centre-line dx from the head centre, far end (tip)."""
+    import re
+    import xml.etree.ElementTree as ET
+    from piano_teacher.notation.assets.glyphs import native_glyphs
+
+    def classes(node):
+        return set(node.get("class", "").split())
+
+    glyphs = native_glyphs()
+    found = {}
+    for page in pages:
+        root = ET.fromstring(page)
+        parents = {child: parent for parent in root.iter() for child in parent}
+        for chord in root.iter():
+            if "chord" not in classes(chord) or classes(chord) & {"bounding-box", "content-bounding-box"}:
+                continue
+            staff = parents.get(chord)
+            while staff is not None and "staff" not in classes(staff):
+                staff = parents.get(staff)
+            lines = sorted(float(m.group(2)) for item in (staff if staff is not None else [])
+                           if (m := re.fullmatch(r"\s*M\s*(%s)[,\s]+(%s)\s*L.*" % (_NUMBER, _NUMBER),
+                                                 item.get("d", "") or "")))
+            gaps = [b - a for a, b in zip(lines, lines[1:]) if b - a > 1e-6]
+            stem = None
+            heads = {}
+            for node in chord.iter():
+                if classes(node) & {"bounding-box", "content-bounding-box"}:
+                    continue
+                if "stem" in classes(node) and stem is None:
+                    for path in node.iter():
+                        m = re.fullmatch(r"\s*M\s*(%s)[,\s]+(%s)\s*L\s*(%s)[,\s]+(%s)\s*"
+                                         % ((_NUMBER,) * 4), path.get("d", "") or "")
+                        if m:
+                            stem = (float(m.group(1)), float(m.group(2)), float(m.group(4)))
+                            break
+                if "note" in classes(node) and node.get("id"):
+                    use = next((u for u in node.iter() if u.tag.endswith("use")), None)
+                    move = re.search(r"translate\(\s*(%s)[,\s]+(%s)" % (_NUMBER, _NUMBER),
+                                     use.get("transform", "")) if use is not None else None
+                    if move:
+                        heads[node.get("id")] = (float(move.group(1)), float(move.group(2)))
+            if stem is None or not gaps or not heads:
+                continue
+            space = min(gaps)
+            ys = [y for _, y in heads.values()]
+            up = min(ys) - min(stem[1:]) > max(stem[1:]) - max(ys)
+            tip = min(stem[1:]) if up else max(stem[1:])
+            for ident, (x, y) in heads.items():
+                found[ident] = {"up": up, "x": stem[0], "tip": tip, "head": (x, y),
+                                "space": space}
     return found
 
 
@@ -91,13 +151,26 @@ def prepare(path: Path, cache: Path) -> list[dict]:
         model = artifacts.semantic_score(selected)
         pages = artifacts.engraving(selected).pages
         heads = _verovio_heads(pages)
+        stems = _verovio_stems(pages)
         chords = model_chords(model)
         for chord in chords:
             lx, ly, space = heads.get(chord["leader"], (0.0, 0.0, 0.0))
             chord["verovio"] = {
                 ident: [(heads[ident][0] - lx) / space, (heads[ident][1] - ly) / space]
                 for ident in chord["members"] if ident in heads and space > 0}
-            # Each measure starts a new source bar; the bar number is global.
+            stem = stems.get(chord["leader"])
+            if stem is not None:
+                from piano_teacher.notation.assets.glyphs import native_glyphs
+                kind = chord["kind"]
+                box = native_glyphs()["head_" + (kind if kind in {"whole", "half"} else "black")]["bounds"]
+                # Verovio places a head by its glyph origin (left edge); the
+                # native view by its centre. The Leipzig box has 12 units of
+                # padding on each side at 250 units per space.
+                half = (box[2] * .5 - 12) / 250
+                hx, hy = stem["head"]
+                chord["verovio_stem"] = {"up": stem["up"],
+                                         "dx": (stem["x"] - hx) / stem["space"] - half,
+                                         "tip": (stem["tip"] - hy) / stem["space"]}
         items.append({"name": f"{path.name}-bars{phrase.first_bar}-{phrase.last_bar}",
                       "source": path.name, "first_bar": phrase.first_bar,
                       "layout": {key: layout[key] for key in LAYOUT_KEYS},
@@ -167,6 +240,20 @@ def classify(items: list[dict], results: list[dict]) -> list[dict]:
                 if max(abs(native[0] - expected[0]), abs(native[1] - expected[1])) > TOLERANCE:
                     errors.append("%s native (%.2f,%.2f) Verovio (%.2f,%.2f)" % (
                         row["names"][chord["members"].index(ident)], *native, *expected))
+            expected_stem, native_stem = chord.get("verovio_stem"), drawn.get("stem") or {}
+            row.update(verovio_stem=expected_stem, native_stem=native_stem)
+            if expected_stem is not None:
+                if not native_stem or native_stem.get("missing"):
+                    errors.append("stem not painted")
+                elif native_stem["up"] != expected_stem["up"]:
+                    errors.append("stem %s, Verovio %s" % (
+                        "up" if native_stem["up"] else "down", "up" if expected_stem["up"] else "down"))
+                elif (abs(native_stem["dx"] - expected_stem["dx"]) > STEM_SIDE
+                      or abs(native_stem["tip"] - expected_stem["tip"]) > STEM_TIP):
+                    errors.append("stem native dx %.2f tip %.2f, Verovio dx %.2f tip %.2f" % (
+                        native_stem["dx"], native_stem["tip"], expected_stem["dx"], expected_stem["tip"]))
+            elif native_stem and row.get("kind") != "whole":
+                errors.append("stem painted where Verovio has none")
             row.update(outcome="wrong" if errors else "drawn", detail="; ".join(errors))
             rows.append(row)
     return rows
@@ -184,12 +271,23 @@ def case_of(row: dict, manifest: dict) -> str:
     return "?"
 
 
+def _finger(item: dict, chord: dict) -> None:
+    """Give each head of a chord an automatic fingering of its own hand."""
+    events = {e["id"]: e for e in item["model"]["notation_events"]}
+    for finger, ident in enumerate(chord["members"], 1):
+        event = events[ident]
+        event["fingering"] = {"finger": min(finger, 5), "hand": event.get("hand", event["staff"]),
+                              "source_id": event.get("source_id") or ident, "origin": "automatic"}
+
+
 def probe(capture: Path | None = None, work: Path | None = None,
-          capture_cases: set[str] | None = None) -> tuple[list[dict], list[dict]]:
+          capture_cases: set[str] | None = None,
+          fingering_cases: set[str] = frozenset()) -> tuple[list[dict], list[dict]]:
     """Prepare every fixture exercise, draw it natively, classify each chord.
 
     With ``capture``, a real viewport saves one PNG per chord of
     ``capture_cases`` (all chords when None) and only those exercises run.
+    Chords of ``fingering_cases`` get a fingering on every head.
     """
     work = work or Path(tempfile.mkdtemp(prefix="g1-chord-probe-"))
     manifest = json.loads((FIXTURES / "cases.json").read_text())
@@ -199,6 +297,8 @@ def probe(capture: Path | None = None, work: Path | None = None,
     for item in items:
         for chord in item["chords"]:
             chord["case"] = case_of({**chord, "source": item["source"]}, manifest)
+            if chord["case"] in fingering_cases:
+                _finger(item, chord)
             chord["capture"] = capture is not None and (
                 capture_cases is None or chord["case"] in capture_cases)
     if capture is not None:

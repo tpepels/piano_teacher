@@ -95,8 +95,23 @@ MIDI_CASES += [
     (18, "whole-asymmetric", _chord(0, 0, 4, "A3 F5 G5 A5")),
     (18, "whole-far-ledger", _chord(1, 0, 4, "G2 A2 E4")),
 ]
+# bar 19-20: performed MIDI. One chord's keys release a few ticks apart; a
+# held bass sounds under moving (also humanised) chords of the same track.
+def _humanised(track, beat, names, releases, channel=0):
+    return [(track, channel, beat, beats, _p(name))
+            for name, beats in zip(names.split(), releases)]
+
+
+MIDI_CASES += [
+    (19, "humanised-triad", _humanised(0, 0, "C4 E4 G4", (1.0, 1.02, .97))),
+    (19, "humanised-seventh-half", _humanised(0, 1, "D4 F4 A4 C5", (2.03, 1.96, 2.0, 1.98))),
+    (19, "genuinely-different-values", _humanised(0, 3, "E4 G4", (1.0, .5))),
+    (20, "held-bass-under-moving-chords", [(1, 0, 0, 4, _p("C2"))]
+        + _humanised(1, 0, "E3 G3", (.98, 1.01)) + _humanised(1, 1, "F3 A3", (1.02, .97))
+        + _humanised(1, 2, "E3 G3", (1.0, 1.03)) + _humanised(1, 3, "D3 F3", (.96, 1.0))),
+]
 MIDI_KEYS = {13: "C#", 15: "Gb", 17: "C"}
-MIDI_BARS = 18
+MIDI_BARS = 20
 
 
 # A short in-app file: the hardest MIDI shapes, two bars per lesson.

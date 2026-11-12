@@ -23,15 +23,22 @@ func run() -> void:
     var renderer = load("res://notation/native/view.gd").new()
     get_root().add_child(renderer)
     renderer.size = Vector2(1200,440)
-    var chord_atlas: Dictionary = Fixture.chord_catalogue()
-    # The first attack's MusicXML leader is the HIGHER pitch. Beam bounds
-    # remain relative to that leader, while stem tips use the outer pitch.
-    chord_atlas["eighth|up|-2,0"] = chord_atlas["eighth|up|0,2"].duplicate(true)
-    chord_atlas["eighth|up|-2,0"]["head_positions"] = [[0.0,250.0],[0.0,0.0]]
-    var beam_atlas: Dictionary = Fixture.beam_catalogue()
-    beam_atlas = {"a|b|c":beam_atlas["a|b|c"]}
     var events: Array = [note("a",0.0,"E"),note("low",0.0,"C",true),
         note("b",.5,"G"),note("c",1.0,"A")]
+    var second_events: Array = [note("lead",0.0,"C"),note("second",0.0,"D",true)]
+    var accidental_events: Array = [note("sharp_c",0.0,"C"),note("sharp_e",0.0,"E",true)]
+    # The first attack's MusicXML leader is the HIGHER pitch. Template
+    # positions are relative to the lowest head; the atlas re-anchors them
+    # on the leader. Beam bounds remain relative to that leader, while stem
+    # tips use the outer pitch.
+    var chord_atlas: Dictionary = Fixture.chord_catalogue(events)
+    chord_atlas.merge(Fixture.chord_catalogue(second_events))
+    chord_atlas.merge(Fixture.chord_catalogue(accidental_events))
+    # A second has asymmetric original Verovio head displacement.
+    chord_atlas["eighth|up|fixture|lead"]["bounds"] = [-20.0,-200.0,400.0,300.0]
+    chord_atlas["eighth|up|fixture|lead"]["head_positions"] = [[0.0,0.0],[300.0,-125.0]]
+    var beam_atlas: Dictionary = Fixture.beam_catalogue()
+    beam_atlas = {"a|b|c":beam_atlas["a|b|c"]}
     var model := {"schema":"piano-teacher-score-model-v1","revision":9,
         "beat_unit":"quarter","duration_beats":4.0,"notes":[],
         "measures":[{"number":9,"start_beat":0.0,"end_beat":4.0,
@@ -57,11 +64,7 @@ func run() -> void:
     # A second has asymmetric original Verovio head displacement. Estimated
     # +/- .75-space placement cannot be reused for ties, slurs or beams.
     var seconds: Dictionary = model.duplicate(true)
-    seconds["notation_events"] = [note("lead",0.0,"C"),note("second",0.0,"D",true)]
-    renderer.glyphs.chord_textures["eighth|up|0,1"] = renderer.glyphs.chord_textures["eighth|up|0,2"]
-    renderer.glyphs.chord_metadata["eighth|up|0,1"] = {
-        "bounds":[-20.0,-200.0,400.0,300.0],
-        "head_positions":[[0.0,0.0],[300.0,-125.0]]}
+    seconds["notation_events"] = second_events
     check(renderer.load_score(seconds) and renderer.native_ready,
         "Displaced second stays native")
     # Force the normal draw path, including its cached head offsets.
@@ -76,8 +79,7 @@ func run() -> void:
     check(not tied.is_empty() and absf(float(tied["x0"])-(100.0+gap*1.2)) < .001,
         "Tie attaches to displaced source head without changing beat spacing")
     var accidentals: Dictionary = seconds.duplicate(true)
-    accidentals["notation_events"] = [note("sharp_c",0.0,"C"),
-        note("sharp_e",0.0,"E",true)]
+    accidentals["notation_events"] = accidental_events
     for event in accidentals["notation_events"]:
         event["accidental"] = "sharp"
     check(renderer.load_score(accidentals) and renderer.native_ready,

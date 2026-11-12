@@ -9,6 +9,10 @@ const SourceSpans := preload("res://notation/native/source_spans.gd")
 const SourceSpanIndex := preload("res://notation/native/source_span_index.gd")
 var timeline
 var glyphs
+# Pixels at the bottom of the view kept free of notation ink: the practice
+# stage sets its progress rail's band (view_base PROGRESS_RAIL_CLEARANCE).
+# Heads keep at least 32 px and other ink 3 px, as without a rail.
+var bottom_clearance := 0.0
 var size := Vector2.ZERO
 var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
@@ -104,13 +108,9 @@ func rebuild_index() -> void:
     chord_members = index["chord_members"]
     sorted_chord_members.clear()
     for leader_id in chord_members:
-        # Template note order: an instance template names its heads by
-        # event id; otherwise the generic bottom-to-top order.
+        # Template note order: the instance template names its heads by
+        # event id. A chord without one has no order and is not drawn.
         var ordered: Array = _instance_order(str(leader_id))
-        if ordered.is_empty():
-            ordered = chord_members[leader_id].duplicate()
-            ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-                return Geometry.head_order_less(a,b))
         sorted_chord_members[leader_id] = ordered
     voice_stem_up_by_note = polyphonic_stem_directions()
     previous_attack_before_measure = index["previous_attack_before_measure"]
@@ -294,12 +294,7 @@ func chord_instance(event: Dictionary) -> Dictionary:
 func ordered_chord_members(leader_id: String) -> Array:
     if sorted_chord_members.has(leader_id):
         return sorted_chord_members[leader_id]
-    var ordered: Array = _instance_order(leader_id)
-    if ordered.is_empty():
-        ordered = chord_members.get(leader_id,[]).duplicate()
-        ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
-    return ordered
+    return _instance_order(leader_id)
 
 func _instance_order(leader_id: String) -> Array:
     var instance: Dictionary = chord_instance({"id":leader_id})
@@ -349,42 +344,12 @@ func chord_extents(event: Dictionary, gap: float,
                 sum_step/float(maxi(1,members.size())) < 4.0))}
 
 
-# A prepared score names the Verovio instance template of every chord.
-# Without one, generic sprites are keyed by their diatonic interval
-# signature, invariant under octave transposition. Any number of heads, any
-# span and any number of heads on one staff position is a chord. Godot
+# Every chord is drawn from the Verovio instance template its prepared score
+# names for its leader; there is no derived or rule-based chord key. Godot
 # places only Verovio ink.
 
 func chord_template_key(event: Dictionary) -> String:
-    var instance: Dictionary = chord_instance(event)
-    if not instance.is_empty():
-        return str(instance["key"])
-    var notes: Array = chord_members.get(str(event.get("id","")),[])
-    if notes.size() < 2:
-        return ""
-    var leader: int = Geometry.diatonic_index(event.get("spelling",{}))
-    if leader < 0:
-        return ""
-    var differences: Array[int] = []
-    for head in notes:
-        # Heads of different note values are separate voices, not a chord.
-        if str(head.get("note_type","")) != str(event.get("note_type","")):
-            return ""
-        differences.append(Geometry.diatonic_index(
-            head.get("spelling",{}))-leader)
-    differences.sort()
-    var names: PackedStringArray = []
-    for value in differences:
-        names.append(str(value))
-    var extents: Dictionary = chord_extents(event,1.0)
-    # A source beam can force a chord opposite to its isolated pitch rule.
-    # Its direction selects BOTH displaced heads and the stem-side mask,
-    # including during load validation, before a frame has been painted.
-    var up: bool = bool(beam_stem_up_by_note.get(
-        str(event.get("id","")),extents["up"]))
-    var direction: String = "up" if up else "down"
-    return "%s|%s|%s" % [
-        str(event.get("note_type","quarter")),direction,",".join(names)]
+    return str(chord_instance(event).get("key",""))
 
 func engraved_head_offsets(gap: float) -> Dictionary:
     # All attachments use the SAME original head centres as the compound
@@ -518,9 +483,8 @@ func event_ink_rect(event: Dictionary, gap: float,
             float(glyphs.bounds["augmentation_dot"][2])*unit*.5)
     var rect := Rect2(left,top,right-left,bottom-top)
     if chord_members.has(id):
-        var group: Array = chord_members[id].duplicate()
-        group.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
+        # Bottom to top in template note order, bound by event id.
+        var group: Array = ordered_chord_members(id)
         var centers: Array = []
         for member in group:
             centers.append(Vector2(float(heads.get(str(member.get("id","")),0.0)),event_y(member,gap)))
@@ -684,7 +648,10 @@ func staff_gap(staff_gap_limit: float) -> float:
         var factor: float = 2.0 - float(step)*.5
         var assignment: Dictionary = FingeringPlacement.assignment(event)
         var above: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "right" else 32.0
-        var below: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "left" else 32.0
+        # Below the lowest head: the progress rail's band when there is
+        # one, and room for a left-hand fingering under the head.
+        var below: float = maxf(32.0, bottom_clearance) + (
+            13.0 if not assignment.is_empty() and assignment["hand"] == "left" else 0.0)
         if factor < -.001:
             gap = minf(gap, (center-above) / -factor)
         elif factor > .001:
@@ -738,5 +705,5 @@ func fit_vertical_ink_gap(limit: float, staff: String, unit_ink: Rect2) -> float
     if top<-.001:
         limit = minf(limit,(center-3.0)/-top)
     if bottom>.001:
-        limit = minf(limit,(size.y-3.0-center)/bottom)
+        limit = minf(limit,(size.y-maxf(3.0,bottom_clearance)-center)/bottom)
     return limit

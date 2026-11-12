@@ -109,9 +109,8 @@ func outgoing_glyph_bands(event: Dictionary, gap: float,
     # Dots follow the same chord-wide anchors and staff spaces as the painter.
     var anchors: Dictionary = {}
     if score.chord_members.has(id):
-        var group: Array = score.chord_members[id].duplicate()
-        group.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.head_order_less(a,b))
+        # Bottom to top in template note order, bound by event id.
+        var group: Array = score.ordered_chord_members(id)
         var centers: Array = []
         for member in group:
             centers.append(Vector2(float(heads.get(str(member.get("id","")),0.0)),score.event_y(member,gap)))
