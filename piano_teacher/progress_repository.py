@@ -142,11 +142,6 @@ class ProgressRepository:
             p.bpm = p._tempo_for_current_stage()
             p.streak = 0
 
-    def has_strategy_session(self, fingerprint: str, strategy: str) -> bool:
-        return self.db.execute(
-            "SELECT 1 FROM strategy_sessions WHERE fingerprint=? AND strategy=?",
-            (fingerprint, strategy)).fetchone() is not None
-
     def save(self, plan: LearningPlan | None, fingerprint: str) -> None:
         p=plan
         if p is None:

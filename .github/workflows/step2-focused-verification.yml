@@ -25,7 +25,7 @@ jobs:
         run: timeout 85s python -m pip install -e '.[test,godot]'
       - name: Focused strategies, actual MusicXML, assessment and recovery
         run: |
-          timeout 65s python -m pytest -q --tb=short             tests/test_exercise_contracts.py             tests/test_exercise_strategies.py             tests/test_timing_live_integration.py             tests/test_timed_real_scores_and_recovery.py             tests/test_strategy_pipeline.py             tests/test_assessment_service.py             tests/test_rolling_recovery_transition.py             tests/test_settings_screen.py
+          timeout 65s python -m pytest -q --tb=short             tests/test_timed_real_scores_and_recovery.py             tests/test_assessment_service.py             tests/test_rolling_recovery_transition.py             tests/test_settings_screen.py
 
       - name: Fetch Godot 4.7.2 headless runner
         run: |

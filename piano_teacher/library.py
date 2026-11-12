@@ -11,15 +11,18 @@ from pathlib import Path
 import tempfile
 
 from .warmups import catalog as built_in_warmups, is_warmup, materialize
-from .exercise_strategies import available_strategies
+from .exercise_strategies import DEFAULT_STRATEGY, available_strategies
 from .application.mistake_responses import (
     available_mistake_policies, resolve_mistake_policy,
 )
-from .exercise_contracts import (resolve_timing_strategy, resolve_tempo_strategy,
-                                 resolve_diagnosis_strategy, resolve_learner_strategy)
+from .diagnosis_policies import resolve_diagnosis_strategy, resolve_learner_strategy
 
 FORMATS = frozenset({'.mid', '.midi'})  # Only user-supplied MIDI enters the desktop library.
 MAX_FILES = 5000
+# Preferences removed by the owner decision of 2026-11-11 (only the default
+# exercise strategy is offered; it owns its rhythm and tempo stages). A saved
+# file that still holds them loads, and the next save drops them.
+RETIRED_PREFERENCES = frozenset({'timing_strategy', 'tempo_strategy'})
 EVIDENCE_PREFERENCES = {
     'evidence_retention_days': (365, 7, 3650),
     'evidence_budget_mib': (256, 16, 4096),
@@ -40,11 +43,11 @@ class ScoreLibrary:
     def __init__(self, config_dir: Path | None = None):
         self.config_dir = Path(config_dir) if config_dir is not None else default_config_dir()
         self.settings_path = self.config_dir / 'settings.json'
+        migrated = False
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
                          'last_piece': '', 'midi_device': '', 'midi_key_ranges': {}, 'metronome': True,
                          'midi_offset_ms': 0,
-                         'exercise_strategy': 'coda-fukuda-midi', 'timing_strategy': 'original-timing',
-                         'tempo_strategy': 'constant-tempo',
+                         'exercise_strategy': DEFAULT_STRATEGY,
                          'diagnosis_strategy': 'error-family',
                          'learner_strategy': 'repeated-error',
                          'mistake_response_strategy': 'adaptive',
@@ -53,6 +56,7 @@ class ScoreLibrary:
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
                 if isinstance(stored, dict):
+                    migrated = bool(RETIRED_PREFERENCES & stored.keys())
                     for key in self.settings:
                         if key in stored and isinstance(stored[key], type(self.settings[key])):
                             self.settings[key] = stored[key]
@@ -63,15 +67,11 @@ class ScoreLibrary:
             # First run: create a predictable folder that the user can fill.
             default_music_dir().mkdir(parents=True, exist_ok=True)
         if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
-            self.settings['exercise_strategy'] = 'coda-fukuda-midi'
-        from .lesson_generators import lesson_generator_registration
-        selected = lesson_generator_registration(self.settings['exercise_strategy'])
-        if selected is not None and selected.owns_timing:
-            self.settings['timing_strategy']='original-timing'
-            self.settings['tempo_strategy']='constant-tempo'
+            # Saved choices of removed strategies (coda-midi, fukuda-midi,
+            # source-progression, fukuda, ...) migrate to the default.
+            migrated = migrated or self.settings_path.exists()
+            self.settings['exercise_strategy'] = DEFAULT_STRATEGY
         for key, valid, fallback in (
-                ("timing_strategy", {"original-timing", "dotted-long-short", "dotted-short-long", "coda-chord-blocks"}, "original-timing"),
-                ("tempo_strategy", {"constant-tempo", "two-phase-tempo"}, "constant-tempo"),
                 ("diagnosis_strategy", {"error-family", "accuracy-only"}, "error-family"),
                 ("learner_strategy", {"repeated-error", "repeat-only"}, "repeated-error")):
             if self.settings[key] not in valid:
@@ -107,6 +107,13 @@ class ScoreLibrary:
                 self.settings[key] = self._validate_evidence_preference(key, self.settings[key])
             except ValueError:
                 self.settings[key] = default
+        if migrated:
+            # Persist the data migration once; an unwritable folder must not
+            # prevent the app starting (the migrated values still apply).
+            try:
+                self.save()
+            except OSError:
+                pass
 
     @staticmethod
     def _normalize_folder(folder: str, *, require_exists: bool = True) -> Path:
@@ -155,7 +162,7 @@ class ScoreLibrary:
         Lesson preparation can now fail before a strategy switch commits
         settings or changes the active transport.
         """
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'midi_key_ranges', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'midi_key_ranges', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
         allowed.update(EVIDENCE_PREFERENCES)
         unknown = set(changes) - allowed
         if unknown:
@@ -191,9 +198,7 @@ class ScoreLibrary:
             if type(selected) is not str or selected not in {x['id'] for x in available_strategies()}:
                 raise ValueError('Unknown exercise strategy')
             new['exercise_strategy'] = selected
-        for key, resolver in (("timing_strategy", resolve_timing_strategy),
-                              ("tempo_strategy", resolve_tempo_strategy),
-                              ("diagnosis_strategy", resolve_diagnosis_strategy),
+        for key, resolver in (("diagnosis_strategy", resolve_diagnosis_strategy),
                               ("learner_strategy", resolve_learner_strategy)):
             if key in changes:
                 value = changes[key]
@@ -205,19 +210,6 @@ class ScoreLibrary:
             selected_response = changes['mistake_response_strategy']
             resolve_mistake_policy(selected_response)
             new['mistake_response_strategy'] = selected_response
-        from .lesson_generators import lesson_generator_registration
-        selected = lesson_generator_registration(new['exercise_strategy'])
-        if selected is not None and selected.owns_timing:
-            if 'exercise_strategy' in changes:
-                # A piece-selected Coda lesson generates its own rhythmic
-                # and tempo stages. Avoid accidentally stacking old policies.
-                new['timing_strategy']='original-timing'
-                new['tempo_strategy']='constant-tempo'
-            elif (('timing_strategy' in changes and
-                   new['timing_strategy']!='original-timing') or
-                  ('tempo_strategy' in changes and
-                   new['tempo_strategy']!='constant-tempo')):
-                raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
         return new
 
     def update(self, **changes) -> dict:
@@ -232,14 +224,6 @@ class ScoreLibrary:
     def public_settings(self) -> dict:
         return {**self.settings,
                 'available_exercise_strategies': list(available_strategies()),
-                'available_timing_strategies': [
-                    {'id': 'original-timing', 'label': 'Original rhythm'},
-                    {'id': 'dotted-long-short', 'label': 'Dotted · long then short'},
-                    {'id': 'dotted-short-long', 'label': 'Dotted · short then long'},
-                    {'id': 'coda-chord-blocks', 'label': 'Coda · source chord blocks'}],
-                'available_tempo_strategies': [
-                    {'id': 'constant-tempo', 'label': 'Constant tempo'},
-                    {'id': 'two-phase-tempo', 'label': 'Two-phase · slower then target'}],
                 'available_diagnosis_strategies': [
                     {'id': 'error-family', 'label': 'Pitch, rhythm and duration errors'},
                     {'id': 'accuracy-only', 'label': 'Overall accuracy baseline'}],

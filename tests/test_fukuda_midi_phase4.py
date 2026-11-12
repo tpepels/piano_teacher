@@ -18,6 +18,7 @@ from piano_teacher.learning import LearningPlan
 from piano_teacher.lesson_generators import FukudaMidiLessonGenerator
 from piano_teacher.music import Note,Phrase,load_midi
 from piano_teacher.practice import PlayedNote
+from stage_fixtures import fukuda_course
 
 
 def phrase(pitches, times, duration=.2, hands=None):
@@ -159,11 +160,11 @@ def test_fukuda_whole_piece_generator_uses_all_rule_families(tmp_path):
     path=tmp_path/"fukuda.mid"
     make_midi(path)
     piece=load_midi(path)
-    plan=LearningPlan(piece,exercise_strategy="fukuda-midi")
+    plan=fukuda_course(piece)
     assert isinstance(plan.lesson_generator,FukudaMidiLessonGenerator)
     assert plan.lesson_definition.generator_name=="fukuda-midi"
     assert plan.lesson_steps
-    assert all(step.key.startswith("course:4:fukuda-midi:")
+    assert all(step.key.startswith("course:3:fukuda-midi:")
                for step in plan.lesson_steps)
     assert any("fukuda-midi-chord" in s.level for s in plan.lesson_steps)
     assert any("fukuda-midi-fast" in s.level for s in plan.lesson_steps)
@@ -182,17 +183,18 @@ def test_fukuda_whole_piece_generator_uses_all_rule_families(tmp_path):
 
 
 def test_incompatible_audio_musicxml_input_and_extra_rules_are_rejected(tmp_path):
-    from piano_teacher.exercise_strategies import available_strategies,resolve_strategy
+    from piano_teacher.exercise_strategies import resolve_strategy
     path=tmp_path/"midi.mid";make_midi(path)
     p=load_midi(path)
-    assert "fukuda-midi" in {x["id"] for x in available_strategies()}
-    assert resolve_strategy("fukuda-midi",piece=p).name=="fukuda-midi"
+    assert resolve_strategy("coda-fukuda-midi",piece=p).name=="coda-fukuda-midi"
     with pytest.raises(ValueError,match="MIDI piece"):
-        resolve_strategy("fukuda-midi")
+        resolve_strategy("coda-fukuda-midi")
     from dataclasses import replace
     with pytest.raises(ValueError,match="MIDI piece"):
         LearningPlan(replace(p,source_format="musicxml"),
-                     exercise_strategy="fukuda-midi")
+                     exercise_strategy="coda-fukuda-midi")
+    with pytest.raises(ValueError,match="Fukuda MIDI requires"):
+        FukudaMidiLessonGenerator().generate(replace(p,source_format="musicxml"))
 
 
 def test_mistake_store_isolated_persisted_and_correct_notes_resolved(tmp_path):
@@ -227,8 +229,7 @@ def test_live_learning_plan_rebuilds_graded_midi_stages_without_mastery_transfer
     path=tmp_path/"fukuda.mid"
     make_midi(path)
     piece=load_midi(path)
-    plan=LearningPlan(piece,exercise_strategy="fukuda-midi",
-        fukuda_mistakes=frozenset())
+    plan=fukuda_course(piece,mistakes=frozenset())
     original_key=plan.identity
     original_index=plan.variant_index
     assert not any(s.level.startswith("fukuda-midi-")
@@ -252,42 +253,6 @@ def test_live_learning_plan_rebuilds_graded_midi_stages_without_mastery_transfer
     assert original_key in {s.key for s in plan.lesson_steps}
 
 
-def test_real_engine_records_assessed_original_midi_errors_and_restores(tmp_path):
-    from piano_teacher.practice import Assessment,NoteAssessment
-    from piano_teacher.server import PracticeEngine
-    path=tmp_path/"phase4-engine.mid"
-    make_midi(path)
-    engine=PracticeEngine(tmp_path/"state",enable_midi=False)
-    try:
-        engine.set_preferences(exercise_strategy="fukuda-midi")
-        engine.load(str(path))
-        assert engine.plan.lesson_generator.name=="fukuda-midi"
-        assert len(engine.plan.stages)==1
-        source=engine.plan.active_variant.notes
-        assert source
-        # The normal grading pipeline owns these statuses. A MIDI
-        # wrong/missing note is remembered by source ID, not fuzzy pitch.
-        assess=Assessment(tuple(NoteAssessment(note,"missed")
-                                for note in source),0)
-        engine.pending_result=assess
-        engine._commit_pending()
-        assert engine.fukuda_mistakes.problematic(engine.fingerprint)==frozenset(
-            n.source_id for n in source)
-        assert len(engine.plan.stages)>1
-        original_stage=next(x.variant for x in engine.plan.stages
-                            if x.variant.level=="original")
-        assert original_stage.notes==source
-        engine.load(str(path))
-        assert engine.plan.lesson_generator.mistakes
-        assert len(engine.plan.stages)>1
-        engine._reset_current_path(confirm=True,fingerprint=engine.fingerprint)
-        assert not engine.fukuda_mistakes.problematic(engine.fingerprint)
-        assert len(engine.plan.stages)==1
-    finally:
-        engine.listen.cancel()
-        engine.db.close()
-
-
 @pytest.mark.parametrize("family",[
     "fukuda-midi-chord-outer",
     "fukuda-midi-fast-thin",
@@ -306,8 +271,7 @@ def test_fukuda_midi_family_uses_actual_notation_listen_and_grading(
     path=tmp_path/"fukuda-play.mid"
     make_midi(path)
     piece=load_midi(path)
-    plan=LearningPlan(piece,exercise_strategy="fukuda-midi",
-        fukuda_mistakes=frozenset(n.source_id for n in piece.notes))
+    plan=fukuda_course(piece,mistakes=frozenset(n.source_id for n in piece.notes))
     stage=next(x for x in plan.stages if x.variant.level==family)
     index=next(i for i,x in enumerate(plan.stages) if x is stage)
     plan.variant_index=index
@@ -448,8 +412,7 @@ def test_fukuda_long_score_only_teaches_error_bars_not_unrelated_sections(tmp_pa
     original=load_midi(path)
     troubled=frozenset(n.source_id for n in original.notes
                        if (4<=n.start<5 or 68<=n.start<69))
-    plan=LearningPlan(original,exercise_strategy="fukuda-midi",
-                      fukuda_mistakes=troubled)
+    plan=fukuda_course(original,mistakes=troubled)
     focus=[x for x in plan.exercises if x.kind=="learn"]
     assert len(focus)==2
     assert focus[0].phrase.first_bar==2

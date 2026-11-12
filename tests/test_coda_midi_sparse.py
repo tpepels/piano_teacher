@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from stage_fixtures import coda_course
+
 from piano_teacher.application.coda_midi_curriculum import midi_coda_catalog
 from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.music import Phrase, load_midi
@@ -115,12 +117,11 @@ def test_full_real_repertoire_catalog_does_not_have_dense_capacity_exclusion(fil
 
 @pytest.mark.parametrize("file", sorted(REPERTOIRE.glob("*.midi")), ids=lambda p: p.name)
 def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
-    from piano_teacher.learning import LearningPlan
 
     piece = load_midi(file)
-    plan = LearningPlan(piece, exercise_strategy="coda-midi", consolidate=False)
+    plan = coda_course(piece)
     assert plan.piece is piece
-    assert plan.exercise_strategy.name == "coda-midi"
+    assert plan.lesson_generator.name == "coda-midi"
     assert plan.exercises[0].phrase.first_bar == 1
     # Desktop Coda practises bounded MIDI passages and ends at the complete
     # unchanged source performance. Direct research Coda remains whole-score.

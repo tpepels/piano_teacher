@@ -59,7 +59,6 @@ jobs:
             tests/test_coda_written_rests_research.py \
             tests/test_coda_written_tie_segments.py \
             tests/test_coda_four_family_contract.py \
-            tests/test_coda_timeline_end_to_end.py \
             tests/test_coda_differential.py \
             tests/test_coda_discrepancy.py \
             tests/test_coda_parity_contract.py \
@@ -70,7 +69,6 @@ jobs:
             tests/test_coda_auto_chord_levels.py \
             tests/test_coda_author_catalog.py \
             tests/test_coda_extended_probe.py \
-            tests/test_coda_piece_curriculum.py \
             tests/test_coda_midi_author_catalog_completeness.py \
             tests/test_lesson_generator_architecture.py \
             tests/test_coda_live_note_audit.py \

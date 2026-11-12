@@ -1,19 +1,16 @@
-"""Step 4 contracts: explanatory difficulty, source-safe drills and remediation."""
-from dataclasses import dataclass, replace
+"""Evidence-driven remediation routing on the source course.
 
+Moved from the retired step-4 strategy tests: the remediation planner and
+the repeat-only learner policy are strategy-independent and still current.
+"""
 import pytest
 
-from piano_teacher.difficulty import DifficultyEstimate, HeuristicDifficulty
-from piano_teacher.exercise_contracts import (
-    ChordBlockTiming, OriginalTiming, resolve_timing_strategy)
+from piano_teacher.diagnosis_policies import PracticeRecommendation
 from piano_teacher.exercise_generator import ExerciseVariant
-from piano_teacher.exercise_strategies import (
-    CodaPartStrategy, ExerciseContext, FeatureGatedStrategy, resolve_strategy)
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import Assessment, NoteAssessment
 from piano_teacher.remediation import RemediationPlanner
-from piano_teacher.diagnosis_policies import PracticeRecommendation
 from piano_teacher.server import PracticeEngine
 
 
@@ -37,55 +34,6 @@ def settle_exposure(engine, result, *, automatic=True):
     engine.pending_result = result
     engine._pending_assessed_bpm = engine.plan.bpm
     engine._commit_pending()
-
-
-def test_features_are_explainable_and_estimator_injectable():
-    p = source()
-    report = HeuristicDifficulty().estimate(p.notes, 8)
-    assert report.features.attack_count == 8
-    assert report.features.max_melodic_leap == 1
-    assert report.features.peak_chord_size == 1
-    assert report.features.as_dict()["attacks_per_beat"] == 1.0
-    assert report.level == "baseline"
-
-    class CustomEstimator:
-        name = "custom"
-        def estimate(self, notes, beats):
-            return DifficultyEstimate("challenging", "rhythm",
-                                      ("injected",), report.features)
-
-    generated = FeatureGatedStrategy(CustomEstimator()).generate(
-        ExerciseContext(p.phrases[0], "right"),
-        lambda: (ExerciseVariant("original", p.phrases[0], tuple(range(8))),))
-    assert generated[0].level.startswith("coda")
-
-
-def test_coda_multiple_stages_are_nested_and_preserve_original():
-    p = source().phrases[0]
-    stages = resolve_strategy("coda-part").generate(
-        ExerciseContext(p, "right", max_attacks=8),
-        lambda: ())
-    assert [v.level for v in stages] == ["coda-part-a", "coda-part-b", "original"]
-    assert len(stages[0].notes) == 4 and len(stages[1].notes) == 6
-    assert stages[-1].notes == p.notes
-    assert set(stages[0].source_indices) < set(stages[1].source_indices)
-
-
-def test_chordification_retains_source_id_and_rejects_repeated_unisons():
-    p = source().phrases[0]
-    p = replace(p, notes=tuple(replace(note, end=note.start+1.0)
-                               for note in p.notes))
-    source_variant = ExerciseVariant("original", p, tuple(range(len(p.notes))))
-    timing = resolve_timing_strategy("coda-chord-blocks").transform(source_variant)
-    assert isinstance(resolve_timing_strategy("coda-chord-blocks"), ChordBlockTiming)
-    assert timing.events[1].exercise_start == timing.events[0].exercise_start
-    assert timing.events[1].exercise_end == timing.events[0].exercise_end
-    assert timing.events[3].exercise_start == timing.events[2].exercise_start
-    assert timing.exercise_phrase.notes[1].source_id == p.notes[1].source_id
-    repeated = tuple(Note(float(i), float(i)+1, 60, 0, 0,
-                          "right", f"repeat-{i}", "v1") for i in range(2))
-    variant = ExerciseVariant("original", Phrase(1, 1, 1, 0, 4, repeated), (0, 1))
-    assert ChordBlockTiming().transform(variant).events == OriginalTiming().transform(variant).events
 
 
 def test_remediation_selects_wrong_chord_and_does_not_change_source_stage():
@@ -147,49 +95,6 @@ def test_remediation_never_creates_unscored_mastery_and_repeat_only_stays_manual
         assert baseline._remediation_pending is None
     finally:
         baseline.db.close()
-
-
-def test_fukuda_keeps_annotated_inner_chord_pitch():
-    notes = (
-        Note(0, 1, 60, 0, 0, "right", "root", "v1"),
-        Note(0, 1, 64, 0, 0, "right", "middle", "v1"),
-        Note(0, 1, 67, 0, 0, "right", "top", "v1"),
-        Note(1, 2, 72, 0, 0, "right", "last", "v1"),
-    )
-    phrase = Phrase(1, 1, 1, 0, 4, notes)
-    groups = (("slur", (frozenset({1}), frozenset({3}))),)
-    variants = resolve_strategy("fukuda").generate(
-        ExerciseContext(phrase, "right", groups), lambda: ())
-    assert all(1 in variant.source_indices for variant in variants)
-    assert variants[-1].notes == notes
-
-
-def test_coda_chord_blocks_are_accessible_through_pipeline_and_score_model(tmp_path):
-    from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
-    from piano_teacher.preprocessing_cache import PreprocessingCache
-    notes = tuple(Note(float(i), float(i)+1, pitch, 0, 0, "right",
-                       f"chord-src-{i}", "v1")
-                  for i, pitch in enumerate((60, 64, 67, 71)))
-    phrase = Phrase(1, 1, 1, 0, 4, notes)
-    piece = Piece("Chord blocks", 80, notes, (phrase,),
-                  bar_boundaries=(0, 4))
-    plan = LearningPlan(piece, timing_strategy="coda-chord-blocks")
-    index = next(i for i, stage in enumerate(plan.stages)
-                 if stage.transformed_rhythm)
-    plan.variant_index = index
-    assert plan.active_variant.level == "coda-chord-blocks"
-    assert plan.variants[-1].level == "original"
-    assert plan.active_variant.notes[1].start == 0
-    assert plan.active_variant.notes[3].start == 2
-    artifacts = ScoreArtifacts(PreprocessingCache(tmp_path/"preprocessed"))
-    selection = ScoreSelection(piece, plan.active_phrase, "right", plan.identity,
-                               1, "test-source", transformed_rhythm=True)
-    model = artifacts.source_model(selection)
-    actual = {n["id"]: n for n in model["notes"]}
-    assert set(actual) == {n.source_id for n in notes}
-    assert actual["chord-src-1"]["onset_beats"] == 0
-    assert actual["chord-src-3"]["onset_beats"] == 2
-    assert tuple(n.start for n in piece.notes) == (0, 1, 2, 3)
 
 
 @pytest.mark.parametrize("status,action", [

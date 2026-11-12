@@ -5,7 +5,7 @@ course progress. The key includes the selected strategy and exact note content.
 """
 from __future__ import annotations
 
-from .exercise_contracts import (
+from .diagnosis_policies import (
 
     AssessmentEvidence, LearnerSnapshot, PracticeRecommendation,
     resolve_diagnosis_strategy, resolve_learner_strategy,

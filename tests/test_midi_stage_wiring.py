@@ -4,10 +4,14 @@ No physical MIDI device or long corpus test is required. The short synthetic
 source contains chord simplification, dense attacks, and distinct hand voices.
 """
 from dataclasses import replace
+from pathlib import Path
 
 import mido
 import pytest
 
+from piano_teacher.assessment_clock import expected_note_seconds
+from piano_teacher.application.listen_session import ListenSelection, ListenSession
+from piano_teacher.practice import PlayedNote, evaluate
 from piano_teacher.application.lesson_snapshot import build_lesson_snapshot
 from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
 from piano_teacher.exercise_pipeline import ExerciseStage
@@ -17,8 +21,12 @@ from piano_teacher.lesson_stage_semantics import (
     describe, difference, distinct_stages, fingerprint)
 from piano_teacher.music import load_midi
 from piano_teacher.preprocessing_cache import PreprocessingCache
+from stage_fixtures import coda_course, fukuda_course
 from piano_teacher.state_projection import (
     ActivitySnapshot, SessionSnapshot, TimingSnapshot, project_session_state)
+
+
+THREE_FOUR = Path(__file__).parent/"fixtures/musical_fidelity/midi_three_four.mid"
 
 
 @pytest.fixture
@@ -86,7 +94,7 @@ def test_hybrid_first_stage_is_a_real_source_bound_reduction(piece):
 
 def test_pure_coda_research_catalog_and_teaching_path_stay_separate(piece):
     author = CodaLessonGenerator().generate(piece)
-    application = LearningPlan(piece, exercise_strategy="coda-midi")
+    application = coda_course(piece)
     assert author.exercises[0].phrase.notes == piece.notes
     assert application.exercises[0].phrase.notes != piece.notes
     assert application.exercises[-1].phrase.notes == piece.notes
@@ -101,7 +109,7 @@ def test_pure_coda_research_catalog_and_teaching_path_stay_separate(piece):
 
 
 def test_selected_coda_stage_reaches_notation_and_real_tempo_projection(piece, tmp_path):
-    plan = LearningPlan(piece, exercise_strategy="coda-midi")
+    plan = coda_course(piece)
     index = next(i for i, stage in enumerate(plan.stages)
                  if stage.variant.level.startswith("coda-slowdown-x2"))
     plan.variant_index = index
@@ -161,13 +169,12 @@ def test_live_engine_state_and_step_overview_show_actual_selected_strategy(piece
         assert overview["steps"][0]["stage_label"] == state["stage_label"]
         assert overview["steps"][0]["stage_change"] == state["stage_change"]
         assert overview["steps"][-1]["stage_family"] == "Original"
-        # An explicit switch must use the registered Coda generator without
-        # silently retaining the adaptive Fukuda course or its stage labels.
-        engine.set_preferences(exercise_strategy="coda-midi")
-        state = engine.state()
-        assert state["exercise_strategy"] == "coda-midi"
-        assert state["stage_family"] in ("Coda", "Original")
-        assert engine.lesson_overview()["exercise_strategy"] == "coda-midi"
+        # Removed strategies cannot be selected; the course stays intact.
+        identity = engine.plan.identity
+        with pytest.raises(ValueError, match="Unknown exercise strategy"):
+            engine.set_preferences(exercise_strategy="coda-midi")
+        assert engine.plan.identity == identity
+        assert engine.state()["exercise_strategy"] == "coda-fukuda-midi"
     finally:
         engine.listen.cancel()
         engine.db.close()
@@ -200,8 +207,8 @@ def test_third_party_midi_stage_uses_explicit_metadata_not_level_prefix(piece):
 
 
 def test_selected_coda_and_fukuda_stages_publish_generator_owned_metadata(piece):
-    for name in ("coda-midi", "fukuda-midi", "coda-fukuda-midi"):
-        plan = LearningPlan(piece, exercise_strategy=name)
+    for plan in (coda_course(piece), fukuda_course(piece),
+                 LearningPlan(piece, exercise_strategy="coda-fukuda-midi")):
         for ex in plan.exercises:
             from piano_teacher.lesson_generators import lesson_hands
             for hand in lesson_hands(ex):
@@ -248,3 +255,47 @@ def test_third_party_pitch_and_dynamic_exercises_are_not_dropped_as_noops(piece)
         pitched, dynamics, baseline)
     assert describe(pitched, baseline)["label"] == "Interval drill"
     assert describe(dynamics, baseline)["change"] == "1 changed dynamics"
+
+
+def test_default_slowdown_stage_uses_native_score_listen_and_grader_on_original_piece(tmp_path):
+    piece=load_midi(THREE_FOUR)
+    plan=LearningPlan(piece,exercise_strategy="coda-fukuda-midi")
+    chosen=next(i for i,s in enumerate(plan.variants)
+                if s.level=="coda-slowdown-x2")
+    plan.variant_index=chosen
+    stage=plan.active_stage
+    assert stage.shaped_tempo
+    assert not stage.transformed_rhythm
+    tempo=stage.tempo_map(100)
+    assert tempo.bpm_at(0)==pytest.approx(50)
+    assert tempo.duration_seconds==pytest.approx(
+        (stage.variant.phrase.end-stage.variant.phrase.start)*60/50)
+    selection=ScoreSelection(
+        piece=piece,phrase=stage.variant.phrase,hand=plan.hand,
+        stage_key=plan.identity,revision=3,fingerprint="whole-source",
+        transformed_rhythm=stage.transformed_rhythm)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"preprocessed"))
+    model=artifacts.source_model(selection)
+    assert {x["id"] for x in model["notes"]}=={
+        n.source_id for n in stage.variant.notes}
+    listen=ListenSession(tmp_path/"audio")
+    try:
+        selected=ListenSelection(
+            variant=stage.variant,bpm=100,stage_key=plan.identity,
+            revision=3,bar_boundaries=piece.bar_boundaries,
+            time_signatures=piece.time_signatures,tempo_map=tempo)
+        listen.prepare(selected)
+        listen.thread.join(timeout=10)
+        assert not listen.thread.is_alive()
+        assert listen.take_failure() is None
+        assert listen.snapshot()["audio_available"]
+        assert listen.snapshot()["duration_seconds"]==pytest.approx(
+            tempo.duration_seconds)
+    finally:
+        listen.cancel()
+    played=[PlayedNote(note.pitch,tempo.seconds_at(note.start-stage.variant.phrase.start),
+                       tempo.seconds_at(note.end-stage.variant.phrase.start))
+            for note in stage.variant.notes]
+    assert evaluate(stage.variant.phrase,plan.hand,plan.bpm,played,
+        expected_seconds=expected_note_seconds(
+            stage.variant.phrase,tempo)).clean

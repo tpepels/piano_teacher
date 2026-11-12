@@ -130,8 +130,6 @@ class LessonSnapshot(_Snapshot):
     stage_change: str = "unchanged source"
     stage_meaningful: bool = False
     exercise_strategy: str = "legacy"
-    timing_strategy: str = "original-timing"
-    tempo_strategy: str = "constant-tempo"
     level_number: int = 1
     level_count: int = 1
     required_notes: int = 0
@@ -281,7 +279,6 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "effective_bpm": (
             float(timing.tempo_segments[0]["bpm"])
             if timing.tempo_segments else tempo.bpm),
-        "timing_strategy": lesson.timing_strategy, "tempo_strategy": lesson.tempo_strategy,
         "lesson_level_number": lesson.level_number,
         "lesson_level_count": lesson.level_count, "required_notes": lesson.required_notes,
         "warmup": lesson.warmup, "piece_last_bar": lesson.piece_last_bar,

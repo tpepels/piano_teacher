@@ -4,6 +4,12 @@ import sqlite3
 
 import pytest
 
+from piano_teacher.diagnosis_policies import (
+    AssessmentEvidence, ErrorFamilyDiagnosis, LearnerSnapshot,
+    RepeatedErrorPolicy, resolve_diagnosis_strategy, resolve_learner_strategy,
+)
+from piano_teacher.learning_ledger import LearningLedger
+from piano_teacher.practice_history import PracticePolicyService
 from piano_teacher.progress_repository import ProgressRepository
 from piano_teacher.sqlite_transaction import sqlite_atomic
 
@@ -533,3 +539,50 @@ def test_migration_drop_failure_rolls_back_every_import_and_retries(tmp_path, mo
         assert len(repository.ledger.recent("legacy-source", "legacy-stage").recent) == 2
     finally:
         repository.close()
+
+
+def test_diagnosis_and_learner_policies_are_injectable_by_name():
+    assert resolve_diagnosis_strategy("accuracy-only").name == "accuracy-only"
+    assert resolve_learner_strategy("repeat-only").name == "repeat-only"
+    with pytest.raises(ValueError):
+        resolve_diagnosis_strategy("unknown")
+
+
+def test_history_is_persistent_scoped_and_read_without_duplicate_writes(tmp_path):
+    db_path = tmp_path / "history.db"
+    db = sqlite3.connect(db_path)
+    store = LearningLedger(db)
+    store.start_session("session", "run", "2026-11-04T10:00:00Z", "UTC")
+    policy = PracticePolicyService(store)
+    bad = AssessmentEvidence("stage-fukuda", ("late", "late", "correct"), 0, 60.)
+    def record(index):
+        identity = f"attempt-{index}"
+        store.start_attempt(identity, "session", {"fingerprint": "score", "stage_key": bad.stage_key, "scope": "full"})
+        store.settle_attempt(identity, {"state": "completed", "reason": "deadline",
+            "assessment": {"statuses": list(bad.statuses), "extra_notes": 0, "bpm": 60,
+                           "clean": False, "passed": False, "mastery_eligible": True}})
+    record(0)
+    assert policy.observe("score", bad).action == "repeat"
+    assert policy.observe("score", bad).action == "repeat"
+    assert db.execute("SELECT count(*) FROM learning_assessments").fetchone()[0] == 1
+    record(1)
+    assert policy.observe("score", bad).action == "timing-practice"
+    assert policy.inspect("score", "stage-fukuda")["latest_diagnosis"] == "rhythm"
+    assert not store.recent("score", "stage-legacy").recent
+    for index in range(2, 72):
+        record(index)
+    assert len(store.recent("score", "stage-fukuda", 64).recent) == 64
+    db.close()
+    reopened = sqlite3.connect(db_path)
+    assert len(LearningLedger(reopened).recent("score", "stage-fukuda").recent) == 8
+    reopened.close()
+
+
+def test_diagnosis_not_credited_without_actual_assessment():
+    evidence = AssessmentEvidence("a", ("correct",), 0, 60, assessed=False)
+    assert not evidence.clean
+    with pytest.raises(ValueError):
+        LearnerSnapshot("a", (evidence,))
+    assert ErrorFamilyDiagnosis().diagnose(evidence) == "unassessed"
+    assert RepeatedErrorPolicy().recommend(LearnerSnapshot("a", ()),
+                                          ErrorFamilyDiagnosis()).action == "repeat"

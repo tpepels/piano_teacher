@@ -11,10 +11,9 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Callable, Mapping, Protocol
 
-from .exercise_pipeline import ExercisePipeline,ExerciseStage
+from .exercise_pipeline import ExerciseStage
 from .exercise_generator import ExerciseVariant
-from .exercise_strategies import ExerciseContext,ExerciseStrategy
-from .lesson_settings import SETTINGS
+from .exercise_strategies import WARMUP_STRATEGY
 from .music import Piece,Phrase
 from .musical_groups import MusicalGrouping
 from .lesson_source_planner import (
@@ -103,21 +102,15 @@ def lesson_hands(exercise: Exercise) -> tuple[str,...]:
 
 @dataclass(frozen=True)
 class SourceLessonGenerator:
-    """Explicitly registered source-preserving passage generator.
+    """Source-preserving passage course: the fixed built-in warm-up route.
 
-    Builds source-based practice courses under the same immutable whole-piece
-    definition as other algorithms; never selected as an implicit fallback.
+    Never offered in the strategy picker. It is also the baseline course
+    for pieces that no MIDI-only generator accepts (fixtures, tools).
     """
-    strategy: ExerciseStrategy
-    timing_strategy: object
-    tempo_strategy: object
     consolidate: bool = False
     warmup: bool = False
     grouping: MusicalGrouping | None = None
-
-    @property
-    def name(self) -> str:
-        return self.strategy.name
+    name: str = WARMUP_STRATEGY
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if self.warmup:
@@ -130,20 +123,12 @@ class SourceLessonGenerator:
         else:
             exercises=build_exercises(piece,consolidate=self.consolidate,
                                       grouping=self.grouping)
-        pipeline=ExercisePipeline(self.strategy,self.timing_strategy,self.tempo_strategy)
         result={}
         for ex in exercises:
             for hand in lesson_hands(ex):
-                groups=(self.grouping.for_phrase(ex.phrase,hand)
-                        if self.grouping is not None else ())
-                context=ExerciseContext(
-                    ex.phrase,hand,groups,SETTINGS.focus_max_attacks,
-                    SETTINGS.focus_min_onsets,ex.kind,self.warmup)
-                result[(ex.key,hand)]=pipeline.build(
-                    context,
-                    lambda ex=ex,hand=hand: source_variants(
-                        ex,hand,grouping=self.grouping),
-                    source_musicxml=piece.source_musicxml)
+                result[(ex.key,hand)]=tuple(
+                    ExerciseStage(variant) for variant in source_variants(
+                        ex,hand,grouping=self.grouping))
         return LessonPlanDefinition(exercises,result,self.name)
 
 
@@ -607,7 +592,6 @@ class LessonGeneratorRegistration:
     name: str
     factory: Callable[..., LessonGenerator]
     course_version: int
-    owns_timing: bool = False
     midi_only: bool = False
     requires_grouping: bool = False
 
@@ -615,22 +599,16 @@ class LessonGeneratorRegistration:
 _REGISTRY: dict[str, LessonGeneratorRegistration] = {}
 
 
-def register_lesson_generator(
-    registration: LessonGeneratorRegistration, *, label: str | None = None,
-) -> None:
+def register_lesson_generator(registration: LessonGeneratorRegistration) -> None:
     """Register an independent generator without changing LearningPlan or PracticeEngine.
 
-    For external generators, a matching selectable strategy is installed
-    automatically. The registration is an explicit, startup-time operation.
+    A registered generator can be built by name; it is not added to the
+    settings picker, which offers only the default strategy.
     """
     if not registration.name or registration.course_version < 1:
         raise ValueError("Invalid lesson generator registration")
     if registration.name in _REGISTRY:
         raise ValueError(f"Duplicate lesson generator: {registration.name}")
-    if label is not None:
-        from .exercise_strategies import register_exercise_strategy
-        register_exercise_strategy(
-            registration.name, label, midi_only=registration.midi_only)
     _REGISTRY[registration.name] = registration
 
 
@@ -639,8 +617,7 @@ def lesson_generator_registration(name: str) -> LessonGeneratorRegistration | No
 
 
 def build_lesson_generator(
-    name: str, *, strategy: ExerciseStrategy, timing: object,
-    tempo: object, consolidate: bool, warmup: bool,
+    name: str, *, consolidate: bool, warmup: bool,
     grouping: MusicalGrouping | None, mistakes: frozenset[str] | None,
     feedback: Mapping[str, str] | None = None,
 ) -> LessonGenerator:
@@ -648,72 +625,21 @@ def build_lesson_generator(
     if registered is None:
         raise ValueError(f"No registered lesson generator for {name!r}")
     return registered.factory(
-        strategy=strategy, timing=timing, tempo=tempo,
         consolidate=consolidate, warmup=warmup, grouping=grouping,
         mistakes=mistakes, feedback=feedback)
 
 
-def register_composed_lesson_generator(
-    name: str, component_names: tuple[str, ...], *,
-    label: str | None = None, version: int = 1, adaptive: bool = False,
-) -> None:
-    """Compose any registered generators without changing application roots.
-
-    Components must all expose immutable whole-piece lesson definitions.
-    The declared order determines exercise order; the central engine and
-    LearningPlan remain unaware of the individual algorithms.
-    """
-    if (not component_names or len(set(component_names)) != len(component_names)
-            or name in component_names):
-        raise ValueError("Invalid lesson composition")
-    definitions = tuple(lesson_generator_registration(part)
-                        for part in component_names)
-    if any(definition is None for definition in definitions):
-        raise ValueError("Compositions require registered whole-piece generators")
-    if adaptive and not all(reg.midi_only for reg in definitions):
-        raise ValueError("Adaptive passage composition requires MIDI generators")
-
-    def factory(**options):
-        participants = tuple(reg.factory(
-            **{**options, "mistakes": None}) for reg in definitions)
-        kind = AdaptiveComposedLessonGenerator if adaptive else ComposedLessonGenerator
-        return kind(
-            participants, name, mistakes=options["mistakes"],
-            error_status=tuple(sorted((options.get("feedback") or {}).items())))
-
-    register_lesson_generator(LessonGeneratorRegistration(
-        name, factory, version,
-        owns_timing=any(reg.owns_timing for reg in definitions),
-        midi_only=adaptive or any(reg.midi_only for reg in definitions),
-        requires_grouping=any(reg.requires_grouping for reg in definitions)),
-        label=label)
-
-
-# Source-based algorithms register complete curricula; unknown names fail closed.
-for _source_name in (
-    "source-progression", "fukuda", "coda-part", "feature-gated",
-    "fukuda+coda-part", "rubricnet-trained",
-):
-    register_lesson_generator(LessonGeneratorRegistration(
-        _source_name,
-        lambda **options: SourceLessonGenerator(
-            options["strategy"], options["timing"], options["tempo"],
-            consolidate=options["consolidate"],
-            warmup=options["warmup"], grouping=options["grouping"]),
-        course_version=4, requires_grouping=True))
-
+# The built-in warm-up route and the source baseline; not selectable.
 register_lesson_generator(LessonGeneratorRegistration(
-    "coda-midi",
-    lambda **options: CodaLessonGenerator(teaching_passages=True),
-    course_version=8, owns_timing=True, midi_only=True))
-register_lesson_generator(LessonGeneratorRegistration(
-    "fukuda-midi",
-    lambda **options: FukudaMidiLessonGenerator(
-        mistakes=options["mistakes"], consolidate=options["consolidate"]),
-    course_version=4, midi_only=True))
+    WARMUP_STRATEGY,
+    lambda **options: SourceLessonGenerator(
+        consolidate=options["consolidate"],
+        warmup=options["warmup"], grouping=options["grouping"]),
+    course_version=4, requires_grouping=True))
+# The one selectable strategy (owner decision 2026-11-11).
 register_lesson_generator(LessonGeneratorRegistration(
     "coda-fukuda-midi",
     lambda **options: CodaFukudaMidiLessonGenerator(
         mistakes=options["mistakes"],
         error_status=tuple(sorted((options.get("feedback") or {}).items()))),
-    course_version=3, owns_timing=True, midi_only=True))
+    course_version=3, midi_only=True))

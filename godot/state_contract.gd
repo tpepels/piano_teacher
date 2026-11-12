@@ -3,7 +3,7 @@ extends RefCounted
 ## piano_teacher/state_contract.py. Do not edit by hand.
 ## The versioned contract of the per-frame state snapshot.
 
-const VERSION := 1
+const VERSION := 2
 const STATIC_KEYS := ["import_warnings"]
 const SCHEMA := {
     "auto": ["bool"],
@@ -117,8 +117,6 @@ const SCHEMA := {
     "tempo_epoch_ms": ["number"],
     "tempo_rungs": ["list"],
     "tempo_segments": ["list"],
-    "tempo_strategy": ["string"],
-    "timing_strategy": ["string"],
     "title": ["string"],
     "transition_in_seconds": ["null", "number"],
     "transport_id": ["number"],

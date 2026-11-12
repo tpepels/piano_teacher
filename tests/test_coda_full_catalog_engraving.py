@@ -7,6 +7,8 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 import pytest
 
+from stage_fixtures import coda_course
+
 from piano_teacher.application.listen_session import ListenSelection,ListenSession
 from piano_teacher.application.score_artifacts import ScoreArtifacts,ScoreSelection
 from piano_teacher.learning import LearningPlan
@@ -23,7 +25,7 @@ ROOT=Path(__file__).parent/"fixtures/musical_fidelity"
 @pytest.mark.parametrize("factor",[2,4])
 def test_full_excerpt_source_identity_engraving_and_slowdown(name,factor,tmp_path):
     piece=load_midi(ROOT/name)
-    plan=LearningPlan(piece,exercise_strategy="coda-midi")
+    plan=coda_course(piece)
     assert plan.exercises[0].phrase.notes==piece.notes
     index=next(i for i,stage in enumerate(plan.stages)
                if stage.variant.level==f"coda-slowdown-x{factor}")
@@ -87,7 +89,7 @@ def test_actual_sparse_coda_rhythm_stage_native_engraving_listen_and_grading(
     midi.save(source)
 
     piece = load_midi(source)
-    plan = LearningPlan(piece, exercise_strategy="coda-midi")
+    plan = coda_course(piece)
     index = next(i for i, stage in enumerate(plan.stages)
                  if stage.variant.level.startswith(family))
     plan.variant_index = index

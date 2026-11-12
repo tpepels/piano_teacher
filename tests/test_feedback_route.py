@@ -10,13 +10,12 @@ from piano_teacher.application.feedback_route import (
 
 BASE = FeedbackFacts(
     automatic=True, has_remediation=False, same_stage=True,
-    coda=False, course_guided=False, score_changed=False, message="Continue")
+    course_guided=False, score_changed=False, message="Continue")
 
 
 @pytest.mark.parametrize(("updates", "expected"), [
     ({}, "continue"),
     ({"has_remediation": True}, "remediation"),
-    ({"has_remediation": True, "coda": True}, "continue"),
     ({"has_remediation": True, "same_stage": False}, "continue"),
     ({"course_guided": True, "same_stage": False}, "guided_stage"),
     ({"score_changed": True}, "await_score"),

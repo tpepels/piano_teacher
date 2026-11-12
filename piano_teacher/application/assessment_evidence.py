@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..exercise_contracts import AssessmentEvidence
+from ..diagnosis_policies import AssessmentEvidence
 
 
 def observe_assessed_take(

@@ -24,32 +24,26 @@ func preferences(view: Control) -> void:
     view.strategy_requested.connect(func(id: String): echoes.append(id))
     view.present_preferences({
         "music_dir":"/scores", "fullscreen":false, "metronome":false,
-        "exercise_strategy":"fukuda",
+        "exercise_strategy":"coda-fukuda-midi",
         "available_exercise_strategies":[
-            {"id":"legacy", "label":"Original progression"},
-            {"id":"fukuda", "label":"Fukuda"}
+            {"id":"test-generator", "label":"Test generator"},
+            {"id":"coda-fukuda-midi", "label":"Coda + Fukuda"}
         ]})
     check(view.strategy_picker.item_count == 2
         and view.strategy_picker.selected == 1,
         "Backend strategy options and current selection are presented")
     view.strategy_picker.item_selected.emit(0)
-    check(echoes == ["legacy"], "Changing the picker emits the selected strategy identifier")
+    check(echoes == ["test-generator"], "Changing the picker emits the selected strategy identifier")
     view.present_preferences({
         "music_dir":"/scores", "fullscreen":false, "metronome":false,
         "exercise_strategy":"coda-fukuda-midi",
         "available_exercise_strategies":[
-            {"id":"coda-fukuda-midi", "label":"Coda + Fukuda", "owns_timing":true}
+            {"id":"coda-fukuda-midi", "label":"Coda + Fukuda", "midi_only":true}
         ]})
-    check(view.timing_strategy_picker.disabled and view.tempo_strategy_picker.disabled,
-        "Composed generators own their timing and tempo UI independently of their names")
-    view.present_preferences({
-        "music_dir":"/scores", "fullscreen":false, "metronome":false,
-        "exercise_strategy":"fukuda-midi",
-        "available_exercise_strategies":[
-            {"id":"fukuda-midi", "label":"Fukuda", "owns_timing":false}
-        ]})
-    check(not view.timing_strategy_picker.disabled and not view.tempo_strategy_picker.disabled,
-        "Generators without an owned clock expose independent timing and tempo policies")
+    check(view.strategy_picker.item_count == 1 and view.strategy_picker.selected == 0,
+        "The picker offers exactly the strategies the backend lists (only the default)")
+    check(not ("timing_strategy_picker" in view) and not ("tempo_strategy_picker" in view),
+        "The default generator owns rhythm and tempo stages: no separate pickers exist")
     echoes.clear()
     view.present_volume(-3.0)
     check(view.folder_edit.text == "/scores" and not view.fullscreen_toggle.button_pressed

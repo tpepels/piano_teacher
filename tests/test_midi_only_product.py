@@ -27,10 +27,9 @@ def test_midi_is_sufficient_for_import_lesson_and_semantic_notation(filename, tm
     assert piece.notes and piece.phrases
     assert all(note.source_id.startswith("midi-t") for note in piece.notes)
 
-    plan = LearningPlan(piece, exercise_strategy="coda-part",
-                        timing_strategy="dotted-long-short",
-                        tempo_strategy="two-phase-tempo")
+    plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
     assert plan.lesson_steps
+    assert plan.lesson_steps[-1].level == "original"
     phrase = piece.phrases[0]
     selected = ScoreSelection(piece, phrase, "both", "midi-only-acceptance",
                               1, filename)

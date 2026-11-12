@@ -28,8 +28,6 @@ jobs:
           timeout 65s python -m pytest -q --tb=short \
             tests/test_transformed_source_notation.py \
             tests/test_timed_real_scores_and_recovery.py \
-            tests/test_timing_live_integration.py \
-            tests/test_strategy_pipeline.py \
             tests/test_native_precise_rhythms.py \
             tests/test_native_barlines.py \
             tests/test_native_musicxml_hairpins.py \

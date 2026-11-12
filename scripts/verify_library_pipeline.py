@@ -45,10 +45,11 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
     # Isolated data/config protects the user's progress, preferences and
     # most-recent piece; even a failed check is read-only for their library.
     with tempfile.TemporaryDirectory(prefix="piano-phase6-") as temp:
-        engine = PracticeEngine(Path(temp) / "state", enable_midi=False)
         if path.suffix.lower() not in (".mid", ".midi"):
-            # The default Coda/Fukuda course is MIDI-only.
-            engine.library.update(exercise_strategy="source-progression")
+            # The only course (adaptive Coda + Fukuda) is MIDI-only, as is
+            # the desktop library.
+            raise ValueError(f"Not a MIDI file: {path.name}")
+        engine = PracticeEngine(Path(temp) / "state", enable_midi=False)
         samples = []
         try:
             engine.load(str(path))

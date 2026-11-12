@@ -46,7 +46,6 @@ from .state_projection import (
 )
 from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
-from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
 from .application.score_ack import ScoreAckState, choose_score_ack_action
 from .application.transport_commands import (
@@ -378,8 +377,6 @@ class PracticeEngine:
                 "hold_formula": "max(grading_duration_floor_seconds,duration*max(grading_duration_tolerance_fraction,min(0.75,grading_duration_tolerance_fraction+0.28*max(0,local_spb-0.5))))",
                 "importer": "midi-source-v1", "generator": p.lesson_generator.name,
                 "generator_version": p.route_version,
-                "timing_strategy": self.library.settings["timing_strategy"],
-                "tempo_strategy": self.library.settings["tempo_strategy"],
                 "retry_version": resolve_mistake_policy(self.library.settings["mistake_response_strategy"]).version,
                 "guided_config": {**asdict(self.teaching.config if self.teaching else TeachingConfig()),
                                   "persistent_hints": self.persistent_hints},
@@ -573,9 +570,7 @@ class PracticeEngine:
             if confirm is not True or not self.plan or fingerprint != self.fingerprint:
                 raise ValueError("Confirm deletion for the currently loaded piece")
             replacement = LearningPlan(self.plan.piece, warmup=self.is_builtin_warmup,
-                exercise_strategy=self.library.settings["exercise_strategy"],
-                timing_strategy=self.library.settings["timing_strategy"],
-                tempo_strategy=self.library.settings["tempo_strategy"],
+                exercise_strategy=self.plan.exercise_strategy.name,
                 fukuda_mistakes=frozenset(), feedback={})
             with self.measurement.atomic():
                 self.progress.ledger.delete_piece(fingerprint)
@@ -599,9 +594,7 @@ class PracticeEngine:
             if confirm is not True:
                 raise ValueError("Confirm deletion of all learning history and progress")
             replacement = (LearningPlan(self.plan.piece, warmup=self.is_builtin_warmup,
-                exercise_strategy=self.library.settings["exercise_strategy"],
-                timing_strategy=self.library.settings["timing_strategy"],
-                tempo_strategy=self.library.settings["tempo_strategy"],
+                exercise_strategy=self.plan.exercise_strategy.name,
                 fukuda_mistakes=frozenset(), feedback={}) if self.plan else None)
             with self.measurement.atomic():
                 self.progress.ledger.delete_learner()
@@ -633,25 +626,10 @@ class PracticeEngine:
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
-            # Validate the complete configuration and prepare any new course
-            # while the current session, revision and settings remain intact.
-            # A generator failure must never leave a persisted strategy
-            # pointing at an unrelated active learning plan.
+            # Validate the complete configuration before anything changes.
+            # The one selectable exercise strategy never swaps the course.
             proposed = self.library.propose_update(**changes)
             before = self.library.settings["music_dir"]
-            strategy_keys = ("exercise_strategy", "timing_strategy", "tempo_strategy")
-            previous_strategy = tuple(self.library.settings[key] for key in strategy_keys)
-            strategy_changed = previous_strategy != tuple(
-                proposed[key] for key in strategy_keys)
-            replacement = None
-            if strategy_changed and self.plan is not None:
-                self._save()
-                replacement = restored_strategy_plan(
-                    self.plan, settings=proposed,
-                    progress=self.progress, fingerprint=self.fingerprint,
-                    warmup=self.is_builtin_warmup,
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(self.fingerprint),
-                    feedback=self.fukuda_mistakes.evidence(self.fingerprint))
             intent = identifier()
             self.measurement.event("settings_intent", {
                 "intent_id": intent, "before": {key: self.library.settings[key] for key in changes},
@@ -680,21 +658,6 @@ class PracticeEngine:
                     learner=self.library.settings["learner_strategy"])
             if before != self.library.settings["music_dir"]:
                 self.library_health.reset()
-            if replacement is not None:
-                self._stop(reason="strategy_changed")
-                self._reset_trouble()
-                self.plan = replacement
-                self.open_from_beat = 0.0
-                self.mode = "practice"
-                self.course_guided = False
-                self.guided_range = None
-                self.teaching = None
-                self.score_artifacts.invalidate()
-                self.score_revision += 1
-                self.awaiting_score_revision = None
-                self.feedback = "Exercise strategy changed"
-                self.next_action = "Review the new exercise before starting."
-                self._save()
             return updated
 
     def _active_tempo_map(self):
@@ -725,12 +688,8 @@ class PracticeEngine:
         with self.lock:
             if self.plan is None:
                 return {"loaded": False,
-                        "exercise_strategy": self.library.settings['exercise_strategy'],
-                        "timing_strategy": self.library.settings['timing_strategy'],
-                        "tempo_strategy": self.library.settings['tempo_strategy']}
+                        "exercise_strategy": self.library.settings['exercise_strategy']}
             return {"loaded": True, "exercise_strategy": self.plan.exercise_strategy.name,
-                    "timing_strategy": self.plan.timing_strategy.name,
-                    "tempo_strategy": self.plan.tempo_strategy.name,
                     "tempo_segments": (self._active_tempo_map().as_segments()
                                        if self._active_tempo_map() is not None else ()),
                     "stage_key": self.plan.identity,
@@ -917,8 +876,6 @@ class PracticeEngine:
                 # selected score, active MIDI take and source revision intact.
                 candidate = LearningPlan(piece, warmup=warmup,
                     exercise_strategy=self.library.settings['exercise_strategy'],
-                    timing_strategy=self.library.settings['timing_strategy'],
-                    tempo_strategy=self.library.settings['tempo_strategy'],
                     fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
                     feedback=self.fukuda_mistakes.evidence(fingerprint))
                 self.progress.restore(candidate, fingerprint)
@@ -1017,11 +974,10 @@ class PracticeEngine:
         piece = self.plan.piece
         warmup = self.is_builtin_warmup
         # Validate the reset course against cleared source feedback while the
-        # current take and durable records are still intact.
+        # current take and durable records are still intact. A reset rebuilds
+        # the same course (the active plan's generator), never another one.
         replacement = LearningPlan(piece, warmup=warmup,
-                    exercise_strategy=self.library.settings['exercise_strategy'],
-                    timing_strategy=self.library.settings['timing_strategy'],
-                    tempo_strategy=self.library.settings['tempo_strategy'],
+                    exercise_strategy=self.plan.exercise_strategy.name,
                     fukuda_mistakes=frozenset(), feedback={})
         # Publish all replacement records before stopping the current take.
         with self.measurement.atomic():
@@ -2683,7 +2639,6 @@ class PracticeEngine:
             route = select_feedback_route(FeedbackFacts(
                 automatic=self.auto, has_remediation=assignment is not None,
                 same_stage=self.plan.identity == previous_identity,
-                coda=self.plan.exercise_strategy.name == "coda-part",
                 course_guided=self.course_guided,
                 score_changed=self.score_revision != previous_revision,
                 message=message))
@@ -3322,7 +3277,6 @@ class PracticeEngine:
             run_at=self.visual_transport.run_at, next_boundary=self.next_boundary_beat,
             review_end=self.review_end_beat, preview=self.preview_only,
             auto=self.auto, mode=self.mode,
-            coda=self.plan.exercise_strategy.name == "coda-part",
             bpm=self.plan.bpm, gap_beats=self.visual_transport.visual_gap_beats),
             self._assess_rolling_boundary, self._elapsed_seconds)
         self.next_boundary_beat = step.next_boundary

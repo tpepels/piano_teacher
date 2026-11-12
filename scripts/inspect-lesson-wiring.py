@@ -70,7 +70,7 @@ def _report(plan: LearningPlan) -> dict:
 def audit(filename: Path) -> dict:
     piece = load_midi(filename)
     reports = [_report(LearningPlan(piece, exercise_strategy=strategy))
-               for strategy in ("legacy", "coda-midi", "coda-fukuda-midi")]
+               for strategy in ("source-progression", "coda-fukuda-midi")]
     legacy_notes = reports[0]["_actual_notes"]
     for report in reports:
         report["same_first_stage_as_legacy"] = (

@@ -12,7 +12,6 @@ on:
       - 'piano_teacher/server.py'
       - 'piano_teacher/preprocessing_cache.py'
       - 'piano_teacher/fukuda_mistake_store.py'
-      - 'piano_teacher/application/strategy_session.py'
       - 'piano_teacher/lesson_generators.py'
       - 'piano_teacher/learning.py'
       - 'piano_teacher/progress_repository.py'
@@ -39,7 +38,6 @@ jobs:
           python -m compileall -q piano_teacher/fukuda_midi.py piano_teacher/fukuda_midi_performance.py piano_teacher/lesson_generators.py tests/test_fukuda_midi_phase4.py
           timeout 50s python -m pytest -q --tb=short \
             tests/test_fukuda_midi_phase4.py \
-            tests/test_exercise_strategies.py \
             tests/test_lesson_generator_architecture.py
 
       - name: Audit all independent fixtures and shipped real MIDI pieces

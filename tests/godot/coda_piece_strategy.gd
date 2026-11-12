@@ -1,5 +1,5 @@
 extends SceneTree
-# Coda is a piece-wide lesson strategy in Settings, not a per-passage trial.
+# The one exercise strategy (adaptive Coda + Fukuda) is piece-wide, not a per-passage trial.
 var failures: Array[String] = []
 
 func check(ok: bool, message: String) -> void:
@@ -16,42 +16,22 @@ func run() -> void:
     await process_frame
     settings.present_preferences({
         "music_dir":"/tmp/music",
-        "exercise_strategy":"coda-midi",
+        "exercise_strategy":"coda-fukuda-midi",
         "available_exercise_strategies":[
-            {"id":"legacy","label":"Original progression"},
-            {"id":"coda-midi","label":"Coda · MIDI whole-piece lessons",
-             "owns_timing":true, "midi_only":true}
-        ],
-        "timing_strategy":"original-timing",
-        "available_timing_strategies":[
-            {"id":"original-timing","label":"Original rhythm"}
-        ],
-        "tempo_strategy":"constant-tempo",
-        "available_tempo_strategies":[
-            {"id":"constant-tempo","label":"Constant tempo"}
+            {"id":"coda-fukuda-midi","label":"Coda + Fukuda · MIDI combined lessons",
+             "midi_only":true}
         ]
     })
     var selected: String=""
     if settings.strategy_picker.selected>=0:
         selected=str(settings.strategy_picker.get_item_metadata(
             settings.strategy_picker.selected))
-    check(selected=="coda-midi","Coda piece strategy is not selected")
-    check(settings.timing_strategy_picker.disabled,
-          "Piece-selected Coda must own generated rhythms")
-    check(settings.tempo_strategy_picker.disabled,
-          "Piece-selected Coda must own generated tempo stages")
-    settings.present_preferences({
-        "music_dir":"/tmp/music",
-        "exercise_strategy":"coda-fukuda-midi",
-        "available_exercise_strategies":[
-            {"id":"coda-fukuda-midi","label":"Combined lessons",
-             "owns_timing":true, "midi_only":true}
-        ]
-    })
-    check(settings.timing_strategy_picker.disabled,
-          "Combined MIDI generators must own their rhythmic stages")
-    check(settings.tempo_strategy_picker.disabled,
-          "Combined MIDI generators must own their tempo stages")
+    check(selected=="coda-fukuda-midi","The default Coda + Fukuda strategy is not selected")
+    check(settings.strategy_picker.item_count==1,
+          "The strategy picker must offer only the default")
+    check(not ("timing_strategy_picker" in settings) and
+          not ("tempo_strategy_picker" in settings),
+          "The default generator owns rhythm and tempo stages; no separate pickers")
     var lesson=load("res://lesson_screen.gd").new()
     get_root().add_child(lesson)
     await process_frame

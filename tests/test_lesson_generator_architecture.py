@@ -17,7 +17,11 @@ from piano_teacher.lesson_generators import (
     CodaLessonGenerator, Exercise, SourceLessonGenerator,
     LessonPlanDefinition,
 )
-from piano_teacher.music import Phrase, load_midi
+from piano_teacher.exercise_strategies import (
+    APP_STRATEGIES, available_strategies, resolve_strategy,
+)
+from piano_teacher.music import Note, Phrase, Piece, load_midi
+from stage_fixtures import coda_course
 
 
 SOURCE=Path(__file__).parent/"fixtures/musical_fidelity/midi_three_four.mid"
@@ -29,7 +33,7 @@ def test_desktop_coda_uses_own_bounded_passages_without_legacy_lesson_planner(mo
     def forbidden(*args,**kwargs):
         raise AssertionError("Coda consulted the legacy lesson planner")
     monkeypatch.setattr(mod,"build_exercises",forbidden)
-    plan=LearningPlan(piece,exercise_strategy="coda-midi")
+    plan=coda_course(piece)
     assert isinstance(plan.lesson_generator,CodaLessonGenerator)
     assert plan.lesson_generator.teaching_passages is True
     assert plan.lesson_definition.exercises is plan.exercises
@@ -38,7 +42,7 @@ def test_desktop_coda_uses_own_bounded_passages_without_legacy_lesson_planner(mo
     assert plan.exercises[-1].phrase.notes==piece.notes
     assert plan.exercises[-1].phrase.first_bar==1
     assert plan.exercises[-1].phrase.last_bar==len(piece.bar_boundaries)-1
-    assert all(step.key.startswith("course:8:coda-midi:") for step in plan.lesson_steps)
+    assert all(step.key.startswith("course:3:coda-midi:") for step in plan.lesson_steps)
     assert all(ex.phrase.last_bar-ex.phrase.first_bar+1 <= 8
                for ex in plan.exercises if ex.kind=="learn")
     # A directly constructed research generator retains the author's
@@ -172,7 +176,7 @@ def test_research_coda_whole_piece_and_desktop_coda_passages_are_distinct(tmp_pa
     # Desktop Coda is explicitly a different pedagogical route. Its
     # source-safe passages neither invent nor drop attacks; source coverage
     # is exact, while the final original score is still complete.
-    plan=LearningPlan(piece,exercise_strategy="coda-midi")
+    plan=coda_course(piece)
     catalog=[ex for ex in plan.exercises if ex.kind=="learn"]
     assert len(catalog)>1
     assert catalog[0].phrase.first_bar==1
@@ -193,7 +197,7 @@ def test_coda_explicit_measure_range_matches_original_endpoint_request():
     piece=load_midi(SOURCE)
     assert len(piece.bar_boundaries)>2
     chosen=CodaLessonGenerator(first_measure=2,last_measure=2)
-    plan=LearningPlan(piece,exercise_strategy="coda-midi",
+    plan=LearningPlan(piece,exercise_strategy="coda-fukuda-midi",
                       lesson_generator=chosen)
     assert len(plan.exercises)==2
     excerpt=plan.exercises[0]
@@ -208,7 +212,7 @@ def test_coda_explicit_measure_range_matches_original_endpoint_request():
     assert all(step.first_bar==2 and step.last_bar==2
                for step in plan.lesson_steps)
     with pytest.raises(ValueError,match="measure range"):
-        LearningPlan(piece,exercise_strategy="coda-midi",
+        LearningPlan(piece,exercise_strategy="coda-fukuda-midi",
             lesson_generator=CodaLessonGenerator(first_measure=0,last_measure=1))
 
 
@@ -225,7 +229,7 @@ def test_only_registered_group_owners_compile_full_piece_midi_beams(monkeypatch)
         return original(source)
 
     monkeypatch.setattr(learning, "grouping_for_piece", grouping)
-    for strategy in ("coda-midi", "fukuda-midi", "coda-fukuda-midi"):
+    for strategy in ("coda-fukuda-midi",):
         assert not lesson_generator_registration(strategy).requires_grouping
         plan = LearningPlan(piece, exercise_strategy=strategy)
         assert plan.grouping is None
@@ -237,18 +241,6 @@ def test_only_registered_group_owners_compile_full_piece_midi_beams(monkeypatch)
     assert original_route.grouping is not None
     assert original_route.exercises[0].phrase.notes
 
-
-def test_registered_composed_source_generator_propagates_group_ownership():
-    from piano_teacher.lesson_generators import (
-        lesson_generator_registration, register_composed_lesson_generator)
-    name = "group-ownership-test-source-composition"
-    if lesson_generator_registration(name) is None:
-        register_composed_lesson_generator(
-            name, ("source-progression", "fukuda"),
-            label="Group Ownership Test")
-    registered = lesson_generator_registration(name)
-    assert registered is not None and registered.requires_grouping
-    assert not lesson_generator_registration("coda-fukuda-midi").requires_grouping
 
 def test_large_course_stage_index_preserves_step_numbers_and_mastery_across_navigation():
     from piano_teacher.learning import LearningPlan
@@ -271,3 +263,40 @@ def test_large_course_stage_index_preserves_step_numbers_and_mastery_across_navi
     plan.mastered["obsolete-previous-course"] = 90
     assert plan.lesson_steps_mastered == 2
     assert plan.lesson_step_number == len(steps)
+
+
+def test_source_progression_is_the_unselectable_default_route():
+    notes = tuple(Note(t, t + .4, p, 0, 0, "right", f"n{i}", "voice-1")
+                  for i, (p, t) in enumerate(zip([60, 64, 67, 69, 71], [0, 0, 0, 1, 2])))
+    phrase = Phrase(1, 1, 2, 0, 8, notes)
+    piece = Piece("Test", 100, notes, (phrase,))
+    default = LearningPlan(piece)
+    explicit = LearningPlan(piece, exercise_strategy="source-progression")
+    assert resolve_strategy(None).name == "source-progression"
+    assert default.exercise_strategy.name == "source-progression"
+    assert default.identity == explicit.identity
+    assert [s.key for s in default.lesson_steps] == [s.key for s in explicit.lesson_steps]
+    assert [entry["id"] for entry in available_strategies()] == ["coda-fukuda-midi"]
+    assert APP_STRATEGIES == (("coda-fukuda-midi", APP_STRATEGIES[0][1]),)
+
+
+@pytest.mark.parametrize("removed", (
+    "fukuda", "coda-part", "feature-gated", "fukuda+coda-part",
+    "rubricnet-trained", "coda-midi", "fukuda-midi"))
+def test_removed_strategies_are_neither_registered_nor_resolvable(removed):
+    from piano_teacher.lesson_generators import lesson_generator_registration
+    assert lesson_generator_registration(removed) is None
+    with pytest.raises(ValueError, match="Unknown exercise strategy"):
+        resolve_strategy(removed, piece=load_midi(SOURCE))
+
+
+def test_warmups_ignore_the_selected_midi_strategy_and_keep_their_keys():
+    notes = (Note(0, 1, 60, 0, 0, "right", "r", "v"),
+             Note(0, 1, 48, 1, 0, "left", "l", "v"))
+    piece = Piece("Warmup", 60, notes, (Phrase(1, 1, 1, 0, 4, notes),),
+                  bar_boundaries=(0, 4), time_signatures=((0, 4, 4),))
+    source_plan = LearningPlan(piece, warmup=True, exercise_strategy="source-progression")
+    selected = LearningPlan(piece, warmup=True, exercise_strategy="coda-fukuda-midi")
+    assert selected.exercise_strategy.name == "source-progression"
+    assert selected.identity == source_plan.identity
+    assert selected.identity.startswith("course:4:warmup:")

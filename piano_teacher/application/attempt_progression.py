@@ -41,7 +41,6 @@ class AttemptTick:
     preview: bool
     auto: bool
     mode: str
-    coda: bool
     bpm: float
     gap_beats: float
 
@@ -164,8 +163,7 @@ class AttemptProgression:
         boundary = tick.next_boundary
         total_beats = tick.phrase.end-tick.phrase.start
         while (tick.mode == "practice" and tick.review_end is None
-               and not tick.preview and (not tick.coda
-                   or tick.score_beat >= total_beats - 1e-7)
+               and not tick.preview
                and boundary and tick.score_beat >= boundary):
             decision = recover(boundary,grid)
             if decision is not None:

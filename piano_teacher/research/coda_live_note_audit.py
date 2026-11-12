@@ -54,7 +54,11 @@ class CodaAudit:
 def audit_coda_midi(piece: Piece) -> CodaAudit:
     if piece.source_format!="midi":
         raise ValueError("Coda note audit requires original imported MIDI")
-    plan=LearningPlan(piece,exercise_strategy="coda-midi")
+    # The standalone Coda course is no longer a selectable strategy; audit
+    # its teaching-passage generator directly through the same plan.
+    from ..lesson_generators import CodaLessonGenerator
+    plan=LearningPlan(piece,exercise_strategy="coda-fukuda-midi",
+                      lesson_generator=CodaLessonGenerator(teaching_passages=True))
     original={n.source_id:n for n in piece.notes}
     if not original or len(original)!=len(piece.notes):
         raise ValueError("Cannot audit duplicate or absent source MIDI IDs")

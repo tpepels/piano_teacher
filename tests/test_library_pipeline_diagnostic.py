@@ -19,7 +19,7 @@ SPEC.loader.exec_module(diagnostic)
 
 @pytest.mark.parametrize("filename", [
     "midi_mixed_meter.mid",
-    "xml_pickup.musicxml",
+    "midi_three_four.mid",
 ])
 def test_true_start_middle_end_navigation_and_engraving(filename, tmp_path):
     # Runs the production engine, actual source-note mapping and Verovio
@@ -35,11 +35,16 @@ def test_true_start_middle_end_navigation_and_engraving(filename, tmp_path):
         assert item["pages"] >= 1 and manifest["pages"] == item["pages"]
 
 
+def test_non_midi_input_is_rejected_before_the_engine_starts(tmp_path):
+    with pytest.raises(ValueError, match="Not a MIDI file"):
+        diagnostic.check_one(FIXTURES / "xml_pickup.musicxml", tmp_path, godot=None)
+
+
 def test_broken_library_entry_does_not_prevent_next_file(tmp_path):
     music = tmp_path / "music"
     music.mkdir()
     (music / "a-broken.mid").write_bytes(b"not a MIDI file")
-    (music / "b-valid.mid").write_bytes((FIXTURES / "midi_four_four.mid").read_bytes())
+    (music / "b-valid.mid").write_bytes((FIXTURES / "midi_three_four.mid").read_bytes())
     report = diagnostic.run_library(music, tmp_path / "results", timeout=120)
     assert report["completed"] == 2
     assert report["passed"] == 1
@@ -65,7 +70,7 @@ def test_sample_bars_selects_real_attacks_instead_of_timeline_fractions():
     assert diagnostic.sample_bars(Sparse()) == [1, 51, 98]
 
 
-@pytest.mark.parametrize("filename", ["midi_mixed_meter.mid", "xml_pickup.musicxml"])
+@pytest.mark.parametrize("filename", ["midi_mixed_meter.mid", "midi_three_four.mid"])
 def test_godot_diagnostic_prepares_and_displays_each_native_sample(filename, tmp_path):
     binary = shutil.which("godot") or shutil.which("godot4")
     if not binary:

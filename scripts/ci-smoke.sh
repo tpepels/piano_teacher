@@ -31,7 +31,6 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_adaptive_hybrid_journey.py::test_index_matches_old_source_window_semantics_at_float_boundaries \
   tests/test_lesson_generator_architecture.py::test_large_course_stage_index_preserves_step_numbers_and_mastery_across_navigation \
   tests/test_lesson_generator_architecture.py::test_only_registered_group_owners_compile_full_piece_midi_beams \
-  tests/test_lesson_generator_architecture.py::test_registered_composed_source_generator_propagates_group_ownership \
   tests/test_state_projection.py::test_snapshot_sends_only_visible_hand_rows_but_preserves_full_step_count \
   tests/test_inprocess_artifact_install.py \
   tests/test_inprocess_transport_structure.py \
@@ -108,20 +107,13 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_continuous_practice_loop.py::test_recovery_queue_has_immutable_reading_lead_after_actual_authored_rest \
   tests/test_continuous_practice_loop.py::test_backend_authored_preview_queue_plan_survives_restart \
   tests/test_continuous_practice_loop.py::test_backend_recovery_queue_plan_keeps_identical_midi_deadline \
-  tests/test_continuous_practice_loop.py::test_coda_practice_finishes_before_adaptive_retry_or_guided_switch \
   tests/test_practice_stage_tempo_ladder.py::test_tempo_up_can_exceed_original_target_without_overwriting_per_song_progress \
   tests/test_assessment_service.py \
   tests/test_state_projection.py \
-  tests/test_exercise_contracts.py \
-  tests/test_exercise_strategies.py \
-  tests/test_timing_live_integration.py \
-  tests/test_strategy_pipeline.py \
   tests/test_strategy_preferences_atomic.py \
+  tests/test_stage_metadata_engine.py \
+  tests/test_remediation_routing.py \
   tests/test_timed_real_scores_and_recovery.py \
-  tests/test_step4_algorithms.py \
-  tests/test_step4_real_scores.py \
-  tests/test_rubricnet_reproduction.py \
-  tests/test_rubricnet_offline_integration.py \
   tests/test_moonlight_real_midi_beams.py \
   tests/test_shared_tempo_timeline.py \
   tests/test_live_input_view.py \

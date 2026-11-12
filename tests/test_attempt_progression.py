@@ -11,13 +11,13 @@ BOUNDARIES = (0.0,4.0,8.0)
 
 
 def tick(now: float, *, next_boundary: float = 4.0,
-         preview: bool = False, coda: bool = False,
+         preview: bool = False,
          gap: float = 4.0) -> AttemptTick:
     return AttemptTick(
         phrase=PHRASE,boundaries=BOUNDARIES,now=now,
         score_beat=now-100.0,from_beat=0.0,run_at=100.0,
         next_boundary=next_boundary,review_end=None,preview=preview,
-        auto=True,mode="practice",coda=coda,bpm=60.0,gap_beats=gap)
+        auto=True,mode="practice",bpm=60.0,gap_beats=gap)
 
 
 def test_authoritative_tick_caches_source_grid_until_phrase_changes(monkeypatch):
@@ -52,21 +52,6 @@ def test_authoritative_tick_caches_source_grid_until_phrase_changes(monkeypatch)
     replacement = Phrase(2,1,2,0.0,8.0,())
     assert progression.grid_for(replacement,BOUNDARIES)==BOUNDARIES
     assert len(calls)==2
-
-
-def test_coda_defers_recovery_assessment_until_end_of_phrase():
-    progression = AttemptProgression()
-    assessed = []
-    def recover(boundary,grid):
-        assessed.append(boundary)
-        return None
-    before = progression.inspect(tick(104.01,coda=True),recover,float)
-    assert before.action=="waiting"
-    assert before.next_boundary==4.0
-    assert assessed==[]
-    at_end = progression.inspect(tick(108.19,coda=True),recover,float)
-    assert at_end.action=="waiting"
-    assert assessed==[4.0,8.0]
 
 
 def test_recovery_preempts_attempt_completion():

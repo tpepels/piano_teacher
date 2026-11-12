@@ -1,12 +1,9 @@
-"""Experimental contracts for timing transformations and adaptive practice.
+"""Timing plans and tempo maps shared by notation, transport and grading.
 
-These interfaces deliberately separate exercise timing, graded evidence and
-learner history. The current live score still uses original source beats:
-timing transformations must not be enabled as live variants until engraving,
-transport and live scoring support the same timing plan.
-
-Research inspirations: Tang (2025, Coda), Dannenberg et al. (1990,
-Piano Tutor), Fukuda et al. (2015). They are not exact reproductions.
+A TimingPlan maps each source note to its exercise beats; a TempoMap turns
+exercise beats into seconds. Generators (Coda's dotted, chordified and
+slowed stages) produce them; transport, Listen and the grader consume the
+same objects, so the drawn, heard and graded timelines cannot diverge.
 """
 from __future__ import annotations
 
@@ -69,11 +66,6 @@ class TimingPlan:
                             for note, event in zip(self.original.notes, self.events)))
 
 
-class TimingStrategy(Protocol):
-    name: str
-    def transform(self, variant: ExerciseVariant) -> TimingPlan: ...
-
-
 def _events(variant: ExerciseVariant) -> tuple[TimingEvent, ...]:
     origin = variant.phrase.start
     return tuple(TimingEvent(index, note.start, note.end,
@@ -90,92 +82,6 @@ class OriginalTiming:
         p = variant.phrase
         duration = max(p.end - p.start, max((n.end-p.start for n in variant.notes), default=0))
         return TimingPlan(self.name, variant, _events(variant), duration)
-
-
-@dataclass(frozen=True)
-class DottedPairTiming:
-    """Coda-inspired long-short or short-long attack-pair rhythm.
-
-    Transform only monophonic, strictly sequential single-note passages.
-    Preserve each pair's total duration and the first onset. Keep the final
-    original note duration and do not mutate shared chords or overlap/ties.
-    """
-    long_first: bool = True
-
-    @property
-    def name(self) -> str:
-        return "dotted-long-short" if self.long_first else "dotted-short-long"
-
-    def transform(self, variant: ExerciseVariant) -> TimingPlan:
-        original = OriginalTiming().transform(variant)
-        if len(variant.notes) < 2:
-            return original
-        notes = variant.notes
-        order = sorted(range(len(notes)), key=lambda i: (notes[i].start, i))
-        if any(a.hand != b.hand for a, b in zip(notes, notes[1:])):
-            return original
-        if any(notes[b].start < notes[a].end - 1e-7
-               for a, b in zip(order, order[1:])):
-            return original
-        events = list(original.events)
-        for i in range(0, len(order)-1, 2):
-            left, right = order[i:i+2]
-            a, b = events[left], events[right]
-            # Rhythm pattern applies only to equal-duration adjacent attacks.
-            gap = b.source_start - a.source_start
-            if gap <= 1e-7 or abs(gap - (notes[right].end-notes[right].start)) > 1e-5:
-                continue
-            if abs(gap - (notes[left].end-notes[left].start)) > 1e-5:
-                continue
-            # Long-short pair spans two gaps; does not change following pair.
-            pair_end = (events[order[i+2]].exercise_start
-                        if i + 2 < len(order)
-                        else b.exercise_start + gap)
-            if abs(pair_end - (a.exercise_start + 2*gap)) > 1e-5:
-                continue
-            first = gap * (1.5 if self.long_first else .5)
-            second = 2 * gap - first
-            events[left] = replace(a, exercise_end=a.exercise_start+first)
-            events[right] = replace(b, exercise_start=a.exercise_start+first,
-                                    exercise_end=a.exercise_start+first+second)
-        return TimingPlan(self.name, variant, tuple(events), original.duration_beats)
-
-
-@dataclass(frozen=True)
-class ChordBlockTiming:
-    """Coda-inspired two-note chord blocks for eligible sequential attacks.
-
-    Each pair of original consecutive notes is practised together at its
-    first source onset. The sounding pitches are unchanged; later space
-    becomes an intentional rest. Polyphony, repeated unisons, unequal
-    durations and existing chord voices are not collapsed.
-    """
-    name: str = "coda-chord-blocks"
-    protect_slurs: bool = True
-
-    def transform(self, variant: ExerciseVariant) -> TimingPlan:
-        original = OriginalTiming().transform(variant)
-        notes = variant.notes
-        if len(notes) < 2 or len({n.hand for n in notes}) != 1:
-            return original
-        order = sorted(range(len(notes)), key=lambda i: (notes[i].start, i))
-        # A source containing independent voices/overlaps is outside this
-        # strict chordification strategy's applicability.
-        if any(notes[b].start < notes[a].end - 1e-7
-               for a, b in zip(order, order[1:])):
-            return original
-        events = list(original.events)
-        for left, right in zip(order[::2], order[1::2]):
-            a, b = notes[left], notes[right]
-            duration = a.end - a.start
-            if (a.pitch == b.pitch or a.voice != b.voice or a.track != b.track
-                    or abs((b.end-b.start) - duration) > 1e-6
-                    or abs((b.start-a.start) - duration) > 1e-6):
-                continue
-            events[right] = replace(events[right],
-                                    exercise_start=events[left].exercise_start,
-                                    exercise_end=events[left].exercise_end)
-        return TimingPlan(self.name, variant, tuple(events), original.duration_beats)
 
 
 @dataclass(frozen=True)
@@ -278,22 +184,6 @@ class ConstantTempo:
 
 
 @dataclass(frozen=True)
-class TwoPhaseTempo:
-    """Deterministic Coda-inspired tempo shaping: slow half, target half."""
-    speed_fraction: float = .8
-    name: str = "two-phase-tempo"
-
-    def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap:
-        if (not isfinite(target_bpm) or target_bpm <= 0
-                or not isfinite(self.speed_fraction) or not 0 < self.speed_fraction <= 1):
-            raise ValueError("Invalid tempo-shaping parameters")
-        middle = plan.duration_beats / 2
-        return TempoMap(self.name, (
-            TempoSegment(0, middle, target_bpm*self.speed_fraction),
-            TempoSegment(middle, plan.duration_beats, target_bpm)))
-
-
-@dataclass(frozen=True)
 class TimingAssessment:
     """Assessment of the transformed target, with original note identity."""
     timing_name: str
@@ -328,41 +218,3 @@ def assess_timed(plan: TimingPlan, hand: str, bpm: float,
     return TimingAssessment(plan.name, Assessment(bound, timed.extra_notes,
                                                    timed.unmatched_played), timed.notes,
                             tempo_map.name if tempo_map is not None else "constant-tempo")
-
-
-_TIMING_STRATEGIES = {
-    "original-timing": OriginalTiming,
-    "dotted-long-short": lambda: DottedPairTiming(True),
-    "dotted-short-long": lambda: DottedPairTiming(False),
-    "coda-chord-blocks": ChordBlockTiming,
-}
-_TEMPO_STRATEGIES = {
-    "constant-tempo": ConstantTempo,
-    "two-phase-tempo": TwoPhaseTempo,
-}
-def _resolve_strategy(spec, options: dict, method: str):
-    if isinstance(spec, str):
-        try:
-            return options[spec]()
-        except KeyError as error:
-            raise ValueError(f"Unknown strategy {spec!r}; choose from {tuple(options)}") from error
-    if not isinstance(getattr(spec, "name", None), str) or not callable(getattr(spec, method, None)):
-        raise TypeError(f"Custom strategy needs a name and {method} method")
-    return spec
-
-
-def resolve_timing_strategy(spec: str | TimingStrategy = "original-timing") -> TimingStrategy:
-    return _resolve_strategy(spec, _TIMING_STRATEGIES, "transform")
-
-
-def resolve_tempo_strategy(spec: str | TempoStrategy = "constant-tempo") -> TempoStrategy:
-    return _resolve_strategy(spec, _TEMPO_STRATEGIES, "generate")
-
-# Compatibility exports: existing callers and saved-history contracts keep
-# importing these symbols from exercise_contracts during migration.
-from .diagnosis_policies import (
-    AssessmentEvidence, LearnerSnapshot, PracticeRecommendation,
-    AssessmentDiagnosisStrategy, ErrorFamilyDiagnosis, LearnerStateStrategy,
-    RepeatedErrorPolicy, AccuracyOnlyDiagnosis, RepeatOnlyPolicy,
-    resolve_diagnosis_strategy, resolve_learner_strategy,
-)

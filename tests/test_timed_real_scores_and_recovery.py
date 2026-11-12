@@ -9,15 +9,14 @@ from pathlib import Path
 import pytest
 
 from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
-from piano_teacher.exercise_contracts import (
-    DottedPairTiming, OriginalTiming, TwoPhaseTempo,
-)
+from piano_teacher.exercise_contracts import OriginalTiming
 from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.importing.pieces import import_piece
 from piano_teacher.measure_grid import phrase_grid
 from piano_teacher.music import Note, Phrase, Piece, source_note_id
 from piano_teacher.practice import PlayedNote
 from piano_teacher.preprocessing_cache import PreprocessingCache
+from stage_fixtures import DottedPairTiming, TwoPhaseTempo
 from piano_teacher.timed_assessment import (
     assess_timed_window, timed_live_marks, timed_rolling_recovery,
 )
@@ -63,23 +62,6 @@ def test_real_musicxml_retains_original_notes_and_sound_duration(filename, tmp_p
         assert event["onset_beats"] == pytest.approx(note.start-phrase.start)
         assert event["duration_beats"] == pytest.approx(note.end-note.start)
     assert len(model["notation_events"]) > 0
-
-
-def test_real_beamed_sixteenths_change_rhythm_but_chords_do_not():
-    _, line = source_fixture("beam16")
-    notes = [note for note in line.notes if note.hand == "right"]
-    original = ExerciseVariant("original", replace(line, notes=tuple(notes)),
-                               tuple(range(len(notes))))
-    timing = DottedPairTiming().transform(original)
-    assert any(abs(e.exercise_start-(n.start-line.start)) > 1e-7
-               for e, n in zip(timing.events, notes))
-    _, chorded = source_fixture("beam-chords")
-    notes = [note for note in chorded.notes if note.hand == "right"]
-    original = ExerciseVariant("original", replace(chorded, notes=tuple(notes)),
-                               tuple(range(len(notes))))
-    result = DottedPairTiming().transform(original)
-    assert all(abs(e.exercise_start-(n.start-chorded.start)) < 1e-7
-               for e, n in zip(result.events, notes))
 
 
 def long_phrase():

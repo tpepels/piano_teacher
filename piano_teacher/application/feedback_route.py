@@ -19,15 +19,13 @@ class FeedbackFacts:
     automatic: bool
     has_remediation: bool
     same_stage: bool
-    coda: bool
     course_guided: bool
     score_changed: bool
     message: str
 
 
 def select_feedback_route(facts: FeedbackFacts) -> FeedbackRoute:
-    if (facts.automatic and facts.has_remediation and
-            facts.same_stage and not facts.coda):
+    if facts.automatic and facts.has_remediation and facts.same_stage:
         return "remediation"
     if not facts.automatic or facts.message == "Piece mastered":
         return "stop"

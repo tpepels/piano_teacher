@@ -13,8 +13,6 @@ signal save_folder_requested(path: String)
 signal device_selected(name: String)
 signal tempo_requested(bpm: int)
 signal strategy_requested(strategy: String)
-signal timing_strategy_requested(strategy: String)
-signal tempo_strategy_requested(strategy: String)
 signal diagnosis_strategy_requested(strategy: String)
 signal learner_strategy_requested(strategy: String)
 signal mistake_response_requested(strategy: String)
@@ -55,8 +53,6 @@ var tempo_setting: SpinBox
 var apply_tempo_button: Button
 var metronome_toggle: CheckButton
 var strategy_picker: OptionButton
-var timing_strategy_picker: OptionButton
-var tempo_strategy_picker: OptionButton
 var diagnosis_strategy_picker: OptionButton
 var learner_strategy_picker: OptionButton
 var mistake_response_picker: OptionButton
@@ -293,24 +289,10 @@ func _ready() -> void:
     strategy_picker = OptionButton.new()
     strategy_picker.custom_minimum_size = Vector2(260, 40)
     strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    strategy_picker.tooltip_text = "Select which rule-based exercise planner to compare."
+    strategy_picker.tooltip_text = "Adaptive Coda + Fukuda lessons: reductions, rhythm and slow stages from your MIDI."
     strategy_picker.item_selected.connect(func(index: int):
         strategy_requested.emit(str(strategy_picker.get_item_metadata(index))))
     practice_strategy_body.add_child(strategy_picker)
-    practice_strategy_body.add_child(_label("Rhythm exercise", 14, MUTED))
-    timing_strategy_picker = OptionButton.new()
-    timing_strategy_picker.custom_minimum_size = Vector2(260, 40)
-    timing_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    timing_strategy_picker.item_selected.connect(func(index: int):
-        timing_strategy_requested.emit(str(timing_strategy_picker.get_item_metadata(index))))
-    practice_strategy_body.add_child(timing_strategy_picker)
-    practice_strategy_body.add_child(_label("Tempo pattern", 14, MUTED))
-    tempo_strategy_picker = OptionButton.new()
-    tempo_strategy_picker.custom_minimum_size = Vector2(260, 40)
-    tempo_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    tempo_strategy_picker.item_selected.connect(func(index: int):
-        tempo_strategy_requested.emit(str(tempo_strategy_picker.get_item_metadata(index))))
-    practice_strategy_body.add_child(tempo_strategy_picker)
     practice_strategy_body.add_child(_label("Error assessment", 14, MUTED))
     diagnosis_strategy_picker = OptionButton.new()
     diagnosis_strategy_picker.custom_minimum_size = Vector2(260, 40)
@@ -614,13 +596,7 @@ func present_preferences(values: Dictionary) -> void:
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
     _present_strategy_picker(strategy_picker,
         values.get("available_exercise_strategies", []),
-        str(values.get("exercise_strategy", "coda-midi")))
-    _present_strategy_picker(timing_strategy_picker,
-        values.get("available_timing_strategies", []),
-        str(values.get("timing_strategy", "original-timing")))
-    _present_strategy_picker(tempo_strategy_picker,
-        values.get("available_tempo_strategies", []),
-        str(values.get("tempo_strategy", "constant-tempo")))
+        str(values.get("exercise_strategy", "coda-fukuda-midi")))
     _present_strategy_picker(diagnosis_strategy_picker,
         values.get("available_diagnosis_strategies", []),
         str(values.get("diagnosis_strategy", "error-family")))
@@ -635,20 +611,6 @@ func present_preferences(values: Dictionary) -> void:
                 str(values.get("mistake_response_strategy","adaptive")):
             mistake_response_picker.tooltip_text = str(option.get("description",""))
             break
-    var selected_strategy: String = str(values.get("exercise_strategy", ""))
-    var owns_timing := false
-    for entry in values.get("available_exercise_strategies", []):
-        if entry is Dictionary and str(entry.get("id", "")) == selected_strategy:
-            owns_timing = bool(entry.get("owns_timing", false))
-            break
-    timing_strategy_picker.disabled = owns_timing
-    tempo_strategy_picker.disabled = owns_timing
-    timing_strategy_picker.tooltip_text = (
-        "This lesson generator owns its rhythmic exercises."
-        if owns_timing else "Choose an independent timing transformation.")
-    tempo_strategy_picker.tooltip_text = (
-        "This lesson generator owns its tempo stages."
-        if owns_timing else "Choose an independent tempo policy.")
 
 func _present_strategy_picker(picker: OptionButton, choices: Array, selected: String) -> void:
     picker.clear()
@@ -686,8 +648,6 @@ func present_busy(pending: bool) -> void:
     _history_busy = pending
     apply_tempo_button.disabled = pending
     strategy_picker.disabled = pending
-    timing_strategy_picker.disabled = pending
-    tempo_strategy_picker.disabled = pending
     diagnosis_strategy_picker.disabled = pending
     learner_strategy_picker.disabled = pending
     mistake_response_picker.disabled = pending

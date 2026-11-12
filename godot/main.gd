@@ -659,10 +659,6 @@ func _build_settings_screen() -> void:
         _send_action({"action": "tempo", "bpm": bpm}))
     settings_view.strategy_requested.connect(func(strategy: String):
         _send_command("settings.update", {"exercise_strategy": strategy}))
-    settings_view.timing_strategy_requested.connect(func(strategy: String):
-        _send_command("settings.update", {"timing_strategy": strategy}))
-    settings_view.tempo_strategy_requested.connect(func(strategy: String):
-        _send_command("settings.update", {"tempo_strategy": strategy}))
     settings_view.diagnosis_strategy_requested.connect(func(strategy: String):
         _send_command("settings.update", {"diagnosis_strategy": strategy}))
     settings_view.learner_strategy_requested.connect(func(strategy: String):

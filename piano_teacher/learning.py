@@ -7,11 +7,10 @@ from typing import Mapping
 import hashlib
 import json
 import math
-from .exercise_strategies import ExerciseStrategy, resolve_strategy
+from .exercise_strategies import WARMUP_STRATEGY, resolve_strategy
 from .exercise_pipeline import ExerciseStage
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant
-from .exercise_contracts import resolve_timing_strategy, resolve_tempo_strategy
 from .musical_groups import grouping_for_piece, MusicalGrouping
 from .lesson_settings import SETTINGS
 from .tempo_difficulty import suggested_start_bpm
@@ -39,30 +38,19 @@ class LearningPlan:
     """Adaptive, manually navigable practice sequence independent of the GUI."""
     def __init__(self, piece: Piece, *, warmup: bool = False,
                  consolidate: bool = False,
-                 exercise_strategy: str | ExerciseStrategy | None = None,
-                 timing_strategy: str = "original-timing",
-                 tempo_strategy: str = "constant-tempo",
+                 exercise_strategy: str | None = None,
                  lesson_generator: LessonGenerator | None = None,
                  fukuda_mistakes: frozenset[str] | None = None,
                  feedback: Mapping[str, str] | None = None) -> None:
         self.piece = piece
-        self.timing_strategy = resolve_timing_strategy(timing_strategy)
-        self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
-        # Warmups have their own fixed route; a selected MIDI-Coda policy
+        # Warmups have their own fixed route; the selected MIDI strategy
         # applies to imported pieces, not the built-in warmup catalog.
-        requested = exercise_strategy if exercise_strategy is not None else "source-progression"
-        if warmup and (registration := lesson_generator_registration(
-                requested if isinstance(requested, str) else requested.name)
-                ) is not None and registration.midi_only:
-            requested = "source-progression"
+        requested = exercise_strategy if exercise_strategy is not None else WARMUP_STRATEGY
+        if warmup:
+            requested = WARMUP_STRATEGY
         self.exercise_strategy = resolve_strategy(requested,piece=piece)
         self.generator_registration = lesson_generator_registration(
             self.exercise_strategy.name)
-        if (self.generator_registration is not None
-                and self.generator_registration.owns_timing and
-                (self.timing_strategy.name!="original-timing" or
-                 self.tempo_strategy.name!="constant-tempo")):
-            raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
         self.warmup = warmup
         # Full-piece MIDI beam inference constructs and reparses MusicXML
         # for *every source attack*. It is only required by generators
@@ -77,9 +65,7 @@ class LearningPlan:
         # Produce a complete, immutable course from the entire MIDI Piece
         # before this stateful player owns navigation and mastery.
         self.lesson_generator = lesson_generator or build_lesson_generator(
-            self.exercise_strategy.name,
-            strategy=self.exercise_strategy, timing=self.timing_strategy,
-            tempo=self.tempo_strategy, consolidate=consolidate, warmup=warmup,
+            self.exercise_strategy.name, consolidate=consolidate, warmup=warmup,
             grouping=self.grouping, mistakes=fukuda_mistakes,
             feedback=feedback)
         self.lesson_definition = self.lesson_generator.generate(piece)
@@ -108,12 +94,7 @@ class LearningPlan:
 
     @property
     def profile(self) -> str:
-        profile = self.lesson_generator.name
-        if not self.warmup and self.timing_strategy.name != "original-timing":
-            profile += "~" + self.timing_strategy.name
-        if not self.warmup and self.tempo_strategy.name != "constant-tempo":
-            profile += "~" + self.tempo_strategy.name
-        return profile
+        return self.lesson_generator.name
 
     @property
     def start_bpm(self) -> int:

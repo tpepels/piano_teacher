@@ -182,8 +182,7 @@ def test_lesson_overview_preserves_step_skip_and_mastery_values(service, store):
     assert {k: v for k, v in overview.items() if k != "steps"} == dict(
         trouble_spots=[], route_version=3, piece_fingerprint=FINGERPRINT,
         current_step=1, total_steps=3, completed_steps=1,
-        exercise_strategy="source-progression", timing_strategy="original-timing",
-        tempo_strategy="constant-tempo")
+        exercise_strategy="source-progression")
     assert overview["steps"] == [dict(number=i+1, exercise=1, hand=hand, level="original",
         stage_label="original", stage_family="Practice", stage_change="source notes",
         key=step.key, kind="learn", first_bar=1, last_bar=8, required_notes=count,

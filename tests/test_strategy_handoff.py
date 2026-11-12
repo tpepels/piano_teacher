@@ -1,12 +1,10 @@
-"""Switching installed lesson strategies must respect the new course's stages.
+"""Saved progress resumes a course safely across course-version changes.
 
-First selection transfers only the source location. An explicitly saved
-strategy session can resume its own stage, but a foreign course's exercise
-index, hand and variant are never reused as new stage selectors.
+(Switching between strategies was removed with the other strategies; only
+the default adaptive Coda + Fukuda course is selectable.)
 """
 import mido
 
-from piano_teacher.application.strategy_session import restored_strategy_plan
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import load_midi
 
@@ -40,83 +38,6 @@ def _piece(tmp_path):
         midi.tracks.append(track)
     midi.save(path)
     return load_midi(path)
-
-
-class _Progress:
-    def __init__(self, saved=False, target=None):
-        self.saved = saved
-        self.target = target
-        self.restored = False
-        self.restore_session = None
-
-    def has_strategy_session(self, fingerprint, profile):
-        return self.saved
-
-    def restore(self, plan, fingerprint, *, restore_session=True):
-        self.restored = True
-        self.restore_session = restore_session
-        if self.saved and restore_session and self.target is not None:
-            plan.restore_location(**self.target)
-
-
-def _settings(strategy):
-    return {"exercise_strategy":strategy,"timing_strategy":"original-timing",
-            "tempo_strategy":"constant-tempo"}
-
-
-def test_switching_from_whole_piece_left_hand_to_right_only_passage(tmp_path):
-    piece = _piece(tmp_path)
-    prior = LearningPlan(piece, exercise_strategy="fukuda-midi")
-    prior.set_hand("left")
-    assert prior.hand == "left"
-    assert prior.exercise.phrase.last_bar > 2
-    fresh = _Progress()
-    updated = restored_strategy_plan(
-        prior, settings=_settings("coda-fukuda-midi"),
-        progress=fresh, fingerprint="same-midi", warmup=False)
-    assert fresh.restored and fresh.restore_session is False
-    assert updated.lesson_generator.name == "coda-fukuda-midi"
-    assert updated.exercise.kind == "learn"
-    assert updated.exercise.phrase.first_bar == 1
-    assert updated.exercise.phrase.last_bar <= 2
-    assert updated.hand == "right"
-    assert updated.variant_index == 0
-    assert updated.active_stage is updated.stages[0]
-    assert updated.piece is piece
-
-
-def test_new_combined_selection_uses_its_own_first_transformation(tmp_path):
-    piece = _piece(tmp_path)
-    old = LearningPlan(piece, exercise_strategy="coda-midi")
-    old.set_hand("right")
-    old.variant_index = len(old.variants)-1
-    old.bpm = 24
-    result = restored_strategy_plan(
-        old, settings=_settings("coda-fukuda-midi"),
-        progress=_Progress(), fingerprint="same-midi", warmup=False)
-    assert result.exercise.kind == "learn"
-    assert result.hand == "right"
-    assert result.variant_index == 0
-    assert result.active_stage is result.stages[0]
-    assert result.active_variant.level.startswith("fukuda-midi-")
-    assert result.streak == 0
-    assert result.piece is old.piece
-
-
-def test_existing_saved_combined_selection_is_not_reset(tmp_path):
-    piece = _piece(tmp_path)
-    old = LearningPlan(piece, exercise_strategy="coda-midi")
-    saved = _Progress(saved=True, target={
-        "kind":"learn","first_bar":3,"last_bar":4,
-        "hand":"left","level":"original"})
-    result = restored_strategy_plan(
-        old, settings=_settings("coda-fukuda-midi"),
-        progress=saved, fingerprint="same-midi", warmup=False)
-    assert saved.restore_session is True
-    assert result.exercise.kind == "learn"
-    assert result.active_phrase.first_bar == 3
-    assert result.hand == "left"
-    assert result.active_variant.level == "original"
 
 
 def test_old_course_version_resumes_source_location_without_stale_bpm_or_credit(tmp_path):

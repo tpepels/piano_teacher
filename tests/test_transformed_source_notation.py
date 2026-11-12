@@ -9,15 +9,13 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from piano_teacher.exercise_contracts import ConstantTempo, DottedPairTiming
 from piano_teacher.exercise_generator import ExerciseVariant
-from piano_teacher.exercise_pipeline import ExercisePipeline
-from piano_teacher.exercise_strategies import ExerciseContext, SourceProgressionStrategy
 from piano_teacher.importing.musicxml import load_musicxml
 from piano_teacher.music import Phrase, source_note_id
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.notation.model import build_score_model
 from piano_teacher.notation.rhythm_safety import rhythm_protected_source_ids
+from stage_fixtures import DottedPairTiming, retimed_phrase
 
 
 def _authored_score(tmp_path):
@@ -104,12 +102,7 @@ def _exercise(piece):
                     piece.bar_boundaries[-1], piece.notes)
     original = ExerciseVariant("original", phrase,
                                tuple(range(len(phrase.notes))))
-    pipeline = ExercisePipeline(SourceProgressionStrategy(), DottedPairTiming(), ConstantTempo())
-    stages = pipeline.build(
-        ExerciseContext(phrase, "right"), lambda: (original,),
-        source_musicxml=piece.source_musicxml)
-    transformed = next(stage for stage in stages if stage.transformed_rhythm)
-    return phrase, transformed.variant.phrase
+    return phrase, retimed_phrase(phrase, DottedPairTiming().transform(original))
 
 
 def test_dotted_score_preserves_source_slurs_rests_ties_fingering_and_dynamics(tmp_path):
@@ -152,17 +145,11 @@ def test_dotted_score_preserves_source_slurs_rests_ties_fingering_and_dynamics(t
                 if n["id"] == original.notes[1].source_id)["onset_beats"] == pytest.approx(.75)
 
 
-def test_authored_tuplets_are_ineligible_for_dotted_transform_without_loss():
+def test_authored_tuplets_are_rhythm_protected_and_keep_time_modification():
     source = Path(__file__).parent / "fixtures/connector_pixels/tuplets/score.musicxml"
     piece = load_musicxml(source, bpm=80)
     phrase = Phrase(1, 1, len(piece.bar_boundaries) - 1,
                     piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
-    original = ExerciseVariant("original", phrase, tuple(range(len(phrase.notes))))
-    pipeline = ExercisePipeline(SourceProgressionStrategy(), DottedPairTiming(), ConstantTempo())
-    stages = pipeline.build(
-        ExerciseContext(phrase, "right"), lambda: (original,),
-        source_musicxml=piece.source_musicxml)
-    assert not any(stage.transformed_rhythm for stage in stages)
     assert rhythm_protected_source_ids(piece.source_musicxml)
     score = build_lesson_score(
         phrase, boundaries=piece.bar_boundaries,

@@ -79,7 +79,6 @@ def test_typed_reset_rolls_back_all_records_and_preserves_active_take_on_failure
     # progress delete would commit before the later Fukuda delete is rejected.
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.library.update(exercise_strategy="source-progression")
         engine.plan = LearningPlan(_piece())
         engine.fingerprint = "selected"
         _seed_piece(engine, "selected", engine.plan)

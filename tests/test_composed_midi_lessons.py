@@ -19,6 +19,7 @@ from piano_teacher.lesson_generators import (
 from piano_teacher.music import load_midi
 from piano_teacher.practice import Assessment, NoteAssessment, PlayedNote, evaluate
 from piano_teacher.preprocessing_cache import PreprocessingCache
+from stage_fixtures import coda_course
 
 
 def write_piece(path: Path) -> None:
@@ -66,7 +67,7 @@ def test_hybrid_is_a_selectable_midi_only_strategy(piece):
 
 
 def test_hybrid_preserves_both_research_families_and_source_final(piece):
-    coda = LearningPlan(piece, exercise_strategy="coda-midi")
+    coda = coda_course(piece)
     combined = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
     assert combined.lesson_definition.requires_unique_source_ids
     assert len([ex for ex in combined.exercises if ex.kind=="learn"]) >= 2
@@ -108,9 +109,8 @@ def test_hybrid_preserves_both_research_families_and_source_final(piece):
 def test_desktop_coda_teaches_bounded_excerpts_before_complete_performance(piece):
     from collections import Counter
     from piano_teacher.lesson_generators import lesson_hands
-    from piano_teacher.exercise_strategies import available_strategies
 
-    plan = LearningPlan(piece, exercise_strategy="coda-midi")
+    plan = coda_course(piece)
     learned = [ex for ex in plan.exercises if ex.kind == "learn"]
     assert len(learned) > 1
     assert plan.exercises[0].phrase.end < plan.exercises[-1].phrase.end
@@ -123,7 +123,7 @@ def test_desktop_coda_teaches_bounded_excerpts_before_complete_performance(piece
     assert plan.exercises[-1].phrase.notes == piece.notes
     assert all(step.level == "original" for step in plan.lesson_steps
                if step.kind == "perform")
-    assert all(step.key.startswith("course:8:coda-midi:") for step in plan.lesson_steps)
+    assert all(step.key.startswith("course:3:coda-midi:") for step in plan.lesson_steps)
     for ex in plan.exercises:
         for hand in lesson_hands(ex):
             stages = plan.lesson_definition.stages(ex, hand)
@@ -133,9 +133,6 @@ def test_desktop_coda_teaches_bounded_excerpts_before_complete_performance(piece
             assert all(set(n.source_id for n in stage.variant.notes) <=
                        set(n.source_id for n in stages[-1].variant.notes)
                        for stage in stages)
-    label = next(row["label"] for row in available_strategies()
-                 if row["id"] == "coda-midi")
-    assert "passage" in label.lower()
     # Old v6 desktop Coda saved the entire source as its *learn* range.
     # Restore it to the first relevant source passage, not to the
     # course's only remaining containing interval (the final performance).
@@ -203,7 +200,6 @@ def test_generic_course_composition_rejects_wrong_final_performance(piece):
 
 
 def test_external_generator_registers_without_central_branch(piece):
-    import piano_teacher.exercise_strategies as strategies
     import piano_teacher.lesson_generators as generators
     key = "test-complete-score-provider"
     class ExternalGenerator:
@@ -214,8 +210,10 @@ def test_external_generator_registers_without_central_branch(piece):
     try:
         register_lesson_generator(LessonGeneratorRegistration(
             name=key, factory=lambda **kwargs: ExternalGenerator(),
-            course_version=9, owns_timing=True, midi_only=True), label="Test provider")
-        assert key in {row["id"] for row in available_strategies()}
+            course_version=9, midi_only=True))
+        # Registration makes a generator buildable by name; the settings
+        # picker still offers only the default strategy.
+        assert [row["id"] for row in available_strategies()] == ["coda-fukuda-midi"]
         plan = LearningPlan(piece, exercise_strategy=key)
         assert plan.lesson_generator.name == key
         assert all(s.key.startswith("course:9:test-complete-score-provider:")
@@ -227,10 +225,6 @@ def test_external_generator_registers_without_central_branch(piece):
                 key, lambda **kwargs: ExternalGenerator(), 9))
     finally:
         generators._REGISTRY.pop(key, None)
-        strategies._FACTORIES.pop(key, None)
-        strategies._MIDI_ONLY_STRATEGIES.discard(key)
-        strategies.APP_STRATEGIES = tuple(
-            spec for spec in strategies.APP_STRATEGIES if spec[0] != key)
 
 
 def test_engine_persists_combined_feedback_and_can_reset(piece, tmp_path):
@@ -361,58 +355,6 @@ def test_registered_generators_cannot_omit_terminal_source_attack(piece):
                              requires_unique_source_ids=True)
 
 
-def test_arbitrary_registered_composition_with_grading_feedback(piece):
-    """Plug in a third-party combination with no central name switch."""
-    import piano_teacher.exercise_strategies as strategies
-    import piano_teacher.lesson_generators as generators
-    key = "test-independent-composed-midi"
-    try:
-        generators.register_composed_lesson_generator(
-            key, ("coda-midi", "fukuda-midi"),
-            label="Independent composite", version=7)
-        assert key in {row["id"] for row in available_strategies()}
-        metadata = next(row for row in available_strategies()
-                        if row["id"] == key)
-        assert metadata["midi_only"] and metadata["owns_timing"]
-        plan = LearningPlan(piece, exercise_strategy=key)
-        assert plan.lesson_generator.name == key
-        assert plan.lesson_steps
-        assert all(step.key.startswith("course:7:" + key + ":")
-                   for step in plan.lesson_steps)
-        assert any(s.level.startswith("coda-slowdown-x2")
-                   for s in plan.lesson_steps)
-        assert any(s.level.startswith("fukuda-midi-")
-                   for s in plan.lesson_steps)
-        with pytest.raises(ValueError, match="MIDI piece"):
-            resolve_strategy(key)
-        assert plan.refresh_from_feedback(
-            {next(n.source_id for n in piece.notes if n.hand == "right"): "wrong"})
-        assert any(ex.key.startswith("fukuda:errors:") for ex in plan.exercises)
-        assert plan.refresh_from_feedback({})
-        assert len(plan.exercises) >= 3
-        assert plan.exercises[-1].kind == "perform"
-        assert plan.exercises[-1].phrase.notes == piece.notes
-        with pytest.raises(ValueError, match="Duplicate"):
-            generators.register_composed_lesson_generator(
-                key, ("coda-midi", "fukuda-midi"))
-    finally:
-        generators._REGISTRY.pop(key, None)
-        strategies._FACTORIES.pop(key, None)
-        strategies._MIDI_ONLY_STRATEGIES.discard(key)
-        strategies.APP_STRATEGIES = tuple(
-            row for row in strategies.APP_STRATEGIES if row[0] != key)
-
-
-def test_compositions_reject_nonregistered_components_or_self_reference():
-    from piano_teacher.lesson_generators import register_composed_lesson_generator
-    with pytest.raises(ValueError, match="registered"):
-        register_composed_lesson_generator(
-            "unused-comp", ("coda-midi", "unknown-algorithm"))
-    with pytest.raises(ValueError, match="Invalid"):
-        register_composed_lesson_generator(
-            "self-comp", ("coda-midi", "self-comp"))
-
-
 def test_arbitrary_composed_generator_forwards_graded_error_families(piece):
     """A future source-aware algorithm receives late/wrong, not just IDs."""
     from dataclasses import dataclass
@@ -454,35 +396,6 @@ def test_arbitrary_composed_generator_forwards_graded_error_families(piece):
     baseline = fallback.generate(piece)
     repaired = fallback.with_feedback({attack: "wrong"}, baseline).generate(piece)
     assert any(ex.key.startswith("fukuda:errors:") for ex in repaired.exercises)
-
-
-def test_registered_adaptive_composition_uses_unmodified_app_contract(piece):
-    import piano_teacher.exercise_strategies as strategies
-    import piano_teacher.lesson_generators as generators
-    key = "test-new-adaptive-midi"
-    try:
-        generators.register_composed_lesson_generator(
-            key, ("coda-midi", "fukuda-midi"),
-            label="Independent adaptive curriculum", version=9, adaptive=True)
-        plan = LearningPlan(piece, exercise_strategy=key)
-        assert isinstance(plan.lesson_generator,
-                          generators.AdaptiveComposedLessonGenerator)
-        assert plan.lesson_definition.generator_name == key
-        assert all(step.key.startswith(f"course:9:{key}:")
-                   for step in plan.lesson_steps)
-        assert plan.exercises[-1].phrase.notes == piece.notes
-        assert any(s.origin == "fukuda-midi" for s in plan.stages[:-1])
-        assert any(s.origin == "coda-midi" for s in plan.stages[:-1])
-        attack = next(n.source_id for n in piece.notes if n.hand == "right")
-        assert plan.refresh_from_feedback({attack: "late"})
-        assert plan.lesson_generator.error_status == ((attack, "late"),)
-        assert plan.exercises[-1].phrase.notes == piece.notes
-    finally:
-        generators._REGISTRY.pop(key, None)
-        strategies._FACTORIES.pop(key, None)
-        strategies._MIDI_ONLY_STRATEGIES.discard(key)
-        strategies.APP_STRATEGIES = tuple(
-            row for row in strategies.APP_STRATEGIES if row[0] != key)
 
 
 def test_unrelated_adaptive_contributor_is_not_bound_to_coda_fukuda(piece):

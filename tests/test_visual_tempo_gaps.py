@@ -1,4 +1,8 @@
-"""The visual practice timeline is the same scheduled map as MIDI assessment."""
+"""The visual practice timeline is the same scheduled map as MIDI assessment.
+
+A two-segment tempo stage from tests/stage_fixtures.py exercises a tempo
+map whose segments differ from the selected BPM.
+"""
 from __future__ import annotations
 
 import pytest
@@ -7,6 +11,7 @@ from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
+from stage_fixtures import StagedTestGenerator
 
 
 def test_shaped_tempo_then_full_rest_has_no_new_time_origin(tmp_path, monkeypatch):
@@ -21,7 +26,7 @@ def test_shaped_tempo_then_full_rest_has_no_new_time_origin(tmp_path, monkeypatc
                   bar_boundaries=(0, 4, 8),
                   time_signatures=((0, 4, 4),))
     engine = PracticeEngine(tmp_path, enable_midi=False)
-    engine.plan = LearningPlan(piece, tempo_strategy="two-phase-tempo")
+    engine.plan = LearningPlan(piece, lesson_generator=StagedTestGenerator())
     engine.fingerprint = "shaped_tempo_then_full_rest_has_no_new_time_orig"
     engine.plan.variant_index = next(
         i for i, stage in enumerate(engine.plan.stages) if stage.shaped_tempo)
@@ -75,7 +80,7 @@ def test_failed_shaped_take_rewinds_from_the_true_visual_position(tmp_path, monk
                   bar_boundaries=(0, 4, 8),
                   time_signatures=((0, 4, 4),))
     engine = PracticeEngine(tmp_path, enable_midi=False)
-    engine.plan = LearningPlan(piece, tempo_strategy="two-phase-tempo")
+    engine.plan = LearningPlan(piece, lesson_generator=StagedTestGenerator())
     engine.fingerprint = "failed_shaped_take_rewinds_from_the_true_visual_"
     engine.plan.variant_index = next(
         i for i, stage in enumerate(engine.plan.stages) if stage.shaped_tempo)

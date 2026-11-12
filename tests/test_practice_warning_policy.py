@@ -50,7 +50,7 @@ def test_accepted_amber_advances_lesson_without_retry():
     phrase = Phrase(1, 1, 1, 0, 4, targets)
     piece = Piece("Warnings", 100, targets, (phrase,),
                   bar_boundaries=(0, 4))
-    plan = LearningPlan(piece, exercise_strategy="coda-part")
+    plan = LearningPlan(piece)
     result = _assessment(("correct", "late", "correct", "correct"), notes=targets)
     before = plan.bpm
     prompt = next_full_attempt(plan, result)
@@ -65,7 +65,7 @@ def test_half_warning_attacks_break_streak_without_losing_warning_marks():
     targets = tuple(_note(i) for i in range(4))
     phrase = Phrase(1,1,1,0,4,targets)
     plan = LearningPlan(Piece("Warnings",100,targets,(phrase,),
-                              bar_boundaries=(0,4)),exercise_strategy="coda-part")
+                              bar_boundaries=(0,4)))
     result = _assessment(("late","long","correct","correct"),notes=targets)
     assert not result.passed and not result.clean
     message = plan.apply_result(correct=result.correct,total=len(result.notes),
