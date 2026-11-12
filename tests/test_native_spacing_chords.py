@@ -161,10 +161,12 @@ def test_only_input_that_is_not_one_chord_is_refused_with_its_cause():
 
 CORPUS = sorted((ROOT / "midi").glob("*.midi"))
 # Exercises whose page engraving fails before any chord is prepared, already
-# at 179ccb25 (before G1): render_layout rejects a long note that starts on
-# a triplet offset and is tied across the barline ("Engraved source identity
-# has an incorrect display onset"). Not a chord shape. Listed exactly, so a
-# new failure, or a fix, changes this test.
+# at 179ccb25 (before G1). A voice opens with a lone 32nd triplet (840 ticks,
+# 3:2, tuplet start and stop on one note); Verovio's timemap counts it as
+# nothing, so the next notes are stamped 1/12 beat early (C5 at 4.25, bound at
+# 4.333) and render_layout rejects the binding ("Engraved source identity has
+# an incorrect display onset"). Not a chord shape. Listed exactly, so a new
+# failure, or a fix, changes this test.
 KNOWN_ENGRAVING_FAILURES = {"Peace_Piece_-_Bill_Evans_(Piano_Solo)": {31, 37, 53, 67}}
 
 
