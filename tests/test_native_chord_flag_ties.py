@@ -1,8 +1,9 @@
 """Short chord stems must not merge an authentic tie into their flag.
 
 Regression from Bill Evans bars 12–13, MIDI t1/e57 (B-flat 2).
-The original independent connected-curve test must accept the real PNG;
-the former single-note clearance is retained as a corrupted control.
+The independent connected-curve proof must accept the real PNG, and must
+reject two corrupted controls of the same chords: the tie removed, and the
+tie moved onto the flag beside the stem tip.
 """
 import json
 from pathlib import Path
@@ -11,34 +12,18 @@ from PIL import Image
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+CONTROLS = ("no_tie", "into_flag")
 
 HARNESS = r'''extends SceneTree
 class FixedStaffLayout extends "res://notation/native/score_layout.gd":
     func staff_center(hand: String) -> float:
         return 110.0 if hand=="right" else 280.0
-class LegacyTieGeometry extends "res://notation/native/connector_geometry.gd":
-    var old := false
-    func tie_contour_rect(first: Dictionary,last: Dictionary,place: Dictionary,gap: float) -> Rect2:
-        if not old:
-            return super.tie_contour_rect(first,last,place,gap)
-        # Former placement: the single-note template's endpoint margins.
-        var data: Dictionary = score.glyphs.tie_metadata[tie_template_key(first,last,place,gap)]
-        var box: Array = data["bounds"]
-        var centers: Array = data["head_centers"]
-        var unit: float = gap/250.0
-        var left: float = float(place["x0"])+(float(box[0])-float(centers[0]))*unit
-        var right: float = float(place["x1"])+(float(box[0])+float(box[2])-float(data["span"])-float(centers[1]))*unit
-        return Rect2(left,float(place["y"])+float(box[1])*unit,right-left,float(box[3])*unit)
-
 class Probe extends "res://notation/native/view.gd":
     var spec: Dictionary
     func _init() -> void:
         layout = FixedStaffLayout.new(timeline,glyphs)
-        connector_geometry = LegacyTieGeometry.new(layout)
-        symbols.connector_geometry = connector_geometry
     func _draw() -> void:
         layout.set_viewport(size)
-        connector_geometry.old = bool(spec.get("old",false))
         var gap := 21.875
         draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
         for center in [110.0,280.0]:
@@ -51,7 +36,8 @@ class Probe extends "res://notation/native/view.gd":
         timeline.measures = [measure]
         # Preserve the original 81px span on the canonical beat axis.
         assert(timeline.set_density(202.5))
-        layout.chord_members = {"a0":[events[0],events[1]],"b0":[events[2],events[3]]}
+        layout.chord_members = {str(events[0]["id"]):[events[0],events[1]],
+            str(events[2]["id"]):[events[2],events[3]]}
         var first: Dictionary = events[int(spec["tone"])]
         var last: Dictionary = events[2+int(spec["tone"])]
         layout.tie_pairs = [{"first":first,"last":last}]
@@ -59,7 +45,15 @@ class Probe extends "res://notation/native/view.gd":
         connector_geometry.prewarm_tie_clearances(gap)
         symbols.paint_engraved_chord(self,RenderPass.new(),events[0],100.0,gap,NOTE_INK)
         symbols.paint_engraved_chord(self,RenderPass.new(),events[2],181.0,gap,NOTE_INK)
+        var control: String = str(spec.get("control",""))
+        if control == "no_tie":
+            return
+        if control == "into_flag":
+            # Corrupted control: the same tie drawn on the flag at the stem tip.
+            var up: bool = str(events[0].get("stem","up")) == "up"
+            draw_set_transform(Vector2(0.0,(-3.0 if up else 3.0)*gap))
         symbols.paint_ties(self,RenderPass.new(),100.0,0.0,gap)
+        draw_set_transform(Vector2.ZERO)
 func _initialize() -> void:
     call_deferred("run")
 func run() -> void:
@@ -94,11 +88,12 @@ def _case(staff, pitches, first_kind, last_kind, stem, tone, name):
     notes = []
     for prefix, beat, kind, tie in (("a", 0, first_kind, "start"), ("b", .4, last_kind, "stop")):
         for i, (step, alter, octave) in enumerate(pitches):
-            events.append(dict(id=f"{prefix}{i}", kind="note", staff=staff, voice="1", hand=staff,
+            # Ids are unique per case: all cases share one chord atlas.
+            events.append(dict(id=f"{name}-{prefix}{i}", kind="note", staff=staff, voice="1", hand=staff,
                 measure=1, beat=beat, note_type=kind, chord=bool(i), stem=stem,
                 spelling=dict(step=step, alter=alter, octave=octave), dots=0))
             tie_xml = f'<tie type="{tie}"/>' if i == tone else ""
-            notes.append(f'<note id="{prefix}{i}">{"<chord/>" if i else ""}<pitch>'
+            notes.append(f'<note id="{name}-{prefix}{i}">{"<chord/>" if i else ""}<pitch>'
                          f'<step>{step}</step><alter>{alter}</alter><octave>{octave}</octave></pitch>'
                          f'<duration>4</duration><voice>1</voice><type>{kind}</type><stem>{stem}</stem>'
                          f'{tie_xml}</note>')
@@ -127,11 +122,15 @@ def chord_frames(tmp_path_factory):
     assets = {}
     from verovio_test_score import verovio_pages
     for case, xml in cases:
-        assets.update(chord_templates(dict(measures=[case["measure"]], notation_events=case["events"]),
-                                      pages=verovio_pages(xml)))
+        atlas = chord_templates(dict(measures=[case["measure"]], notation_events=case["events"]),
+                                pages=verovio_pages(xml))
+        for key, item in atlas.items():
+            # Two cases engrave the same shape: one template names both.
+            assets.setdefault(key, item)["leaders"].update(item["leaders"])
     rendered = []
     for case, _ in cases:
-        rendered.extend([case, {**case, "name":case["name"]+"-old", "old":True}])
+        rendered.extend([case] + [{**case, "name": f"{case['name']}-{control}", "control": control}
+                                  for control in CONTROLS])
     payload = dict(cases=rendered, glyphs=native_glyphs(), notes=note_templates(), ties=tie_templates(), chords=assets)
     (folder/"fixture.json").write_text(json.dumps(payload))
     (folder/"probe.gd").write_text(HARNESS)
@@ -163,8 +162,9 @@ def test_chord_flag_does_not_absorb_source_owned_tie(chord_frames, name):
     assert _proof(folder, case, xml)["status"] == "verified"
 
 
-# The former control (the single-note clearance colliding with the chord
-# flag) relied on a generic chord sprite engraved with its leader at B4,
-# whose short stem put the flag beside the tie. Chord templates are now
-# engraved at the chord's real position with Verovio's own stem, and that
-# flag lies clear of either clearance; the authentic-flag proof above stays.
+@pytest.mark.parametrize("control", CONTROLS)
+@pytest.mark.parametrize("name", ["bass-start", "bass-upper-leader", "treble-end"])
+def test_corrupted_tie_controls_are_rejected(chord_frames, name, control):
+    folder, cases = chord_frames
+    case, xml = next((case, xml) for case, xml in cases if case["name"] == name)
+    assert _proof(folder, case, xml, f"-{control}")["status"] != "verified"

@@ -46,6 +46,7 @@ def prepare_musicxml(xml: str, folder: Path) -> dict:
     return {"layout": artifacts.geometry(selected),
             "model": artifacts.semantic_score(selected),
             "pages": list(artifacts.engraving(selected).pages),
+            "notation_xml": artifacts.notation_musicxml(selected),
             "cache": artifacts.preprocessing}
 
 

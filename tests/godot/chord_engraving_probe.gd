@@ -23,7 +23,14 @@ func _stem(renderer, leader: Dictionary, key: String, beat: float, gap: float) -
         var stem: Dictionary = plan["stems"][id]
         return {"beamed": true, "up": bool(stem["up"]), "dx": dx,
             "tip": (float(stem["tip_y"])-renderer.layout.event_y(leader, gap))/gap}
-    var up: bool = str(renderer.glyphs.chord_instances[id]["stem"]) == "up"
+    # Side read from the painted geometry, not from the template's own
+    # direction: a stem whose centre lies above the heads' centre rises.
+    var top := INF
+    var bottom := -INF
+    for position in renderer.glyphs.chord_heads(key):
+        top = minf(top, float(position[1]))
+        bottom = maxf(bottom, float(position[1]))
+    var up: bool = float(box[1])+float(box[3])*.5 < (top+bottom)*.5
     return {"beamed": false, "up": up, "dx": dx,
         "tip": (float(box[1]) if up else float(box[1])+float(box[3]))/250.0}
 

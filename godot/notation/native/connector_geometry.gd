@@ -141,14 +141,23 @@ func tie_bow_down(first: Dictionary, last: Dictionary, gap: float) -> bool:
                     placement in ["above","below"]:
                 return placement == "below"
     var leader: Dictionary = tie_chord_leader(first)
-    var extents: Dictionary = score.chord_extents(leader,gap)
-    var y: float = score.event_y(first,gap)
-    var middle_y: float = (float(extents["top_y"])+float(extents["bottom_y"]))* .5
-    # Original chord ties face away from the chord interior, independently
-    # of the shared stem. The middle note of an odd chord keeps its stem rule.
-    if absf(y-middle_y) > .001:
-        return y > middle_y
-    return bool(score.beam_stem_up_by_note.get(str(leader.get("id","")),extents["up"]))
+    var up: bool = bool(score.beam_stem_up_by_note.get(
+        str(leader.get("id","")),score.chord_extents(leader,gap)["up"]))
+    # Verovio splits a chord's ties by note index, bottom to top in template
+    # note order: the lower half bows below, the upper half above, and the
+    # middle note of an odd chord opposite its stem (a whole chord's virtual
+    # stem). Checked against Verovio's own ties (test_chord_tie_sides.py).
+    var members: Array = score.ordered_chord_members(str(leader.get("id","")))
+    var index: int = -1
+    for i in range(members.size()):
+        if str(members[i].get("id","")) == str(first.get("id","")):
+            index = i
+    if members.size() > 1 and index >= 0:
+        var count: int = members.size()
+        if count % 2 == 1 and index == count/2:
+            return up
+        return index < count/2.0
+    return up
 
 func tie_template_key(first: Dictionary, last: Dictionary, place: Dictionary, gap: float) -> String:
     var down: bool = bool(place["down"])

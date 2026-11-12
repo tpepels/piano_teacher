@@ -61,10 +61,17 @@ static func chord_catalogue(events: Array = [], stem: String = "up") -> Dictiona
     var chords: Dictionary = geometry.chord_members(events)
     for leader in chords:
         var members: Array = chords[leader].duplicate()
+        # Python's chords.head_order: staff position, sounding pitch, event id.
         members.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
             var da: int = geometry.diatonic_index(a.get("spelling",{}))
             var db: int = geometry.diatonic_index(b.get("spelling",{}))
-            return da < db if da != db else str(a.get("id","")) < str(b.get("id","")))
+            if da != db:
+                return da < db
+            var pa: int = int(a.get("midi_pitch",0))
+            var pb: int = int(b.get("midi_pitch",0))
+            if pa != pb:
+                return pa < pb
+            return str(a.get("id","")) < str(b.get("id","")))
         var lowest: int = geometry.diatonic_index(members[0].get("spelling",{}))
         var positions: Array = []
         var ids: Array = []
@@ -79,7 +86,7 @@ static func chord_catalogue(events: Array = [], stem: String = "up") -> Dictiona
             "bounds":[-20.0,-200.0,120.0,250.0],
             "head_positions":positions,
             "png_base64":encoded,
-            "leaders":{str(leader):ids},
+            "leaders":{str(leader):ids}, "stem":stem,
             "heads_only":{"source":"verovio-engraved-chord-heads",
                 "bounds":[-20.0,-190.0,120.0,160.0],
                 "png_base64":encoded},

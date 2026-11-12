@@ -26,4 +26,5 @@ include = ["piano_teacher*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["slow: minutes-long corpus runs through the production engraving path"]
+markers = ["slow: minutes-long corpus runs through the production engraving path (scripts/ci-full.sh runs them)"]
+addopts = "-m 'not slow'"

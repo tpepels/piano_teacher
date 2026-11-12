@@ -29,12 +29,12 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 9
+VERSION = 10
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
 _BEATS = {"whole":4.0,"half":2.0,"quarter":1.0,"eighth":.5,
           "16th":.25,"32nd":.125,"64th":.0625,"128th":.03125}
-_CLEF_ANCHORS = {"G":32,"F":24,"C":28}
+_PITCHED_CLEFS = {"G", "F", "C"}
 # MusicXML octaves 0..9: diatonic indices 0..69 can be written in a template.
 _LOWEST, _HIGHEST = 0, 69
 # Raster scale of every sprite: 1600 px across Verovio's 900-wide page.
@@ -107,7 +107,7 @@ def _shape_or_reason(leader: dict, notes: list[dict], measure: dict):
     except (KeyError,TypeError,ValueError):
         return None, "a head has no readable pitch spelling"
     sign, line, octave_change = _clef(leader, measure)
-    if sign not in _CLEF_ANCHORS:
+    if sign not in _PITCHED_CLEFS:
         return None, f"clef {sign} is not a pitched staff"
     return {"kind": kind, "clef": (sign, line, octave_change)}, None
 
@@ -205,6 +205,8 @@ def _valid_asset(value: object, pattern: str) -> bool:
         return False
     heads = value.get("heads_only")
     if not box(heads) or heads.get("source") != "verovio-engraved-chord-heads":
+        return False
+    if value.get("stem") not in {"up", "down"}:
         return False
     stem = value.get("stem_only")
     return (pattern.startswith("whole|") or
@@ -415,9 +417,14 @@ def _cut(root, parents, chord, geometry, names, kind, box) -> dict:
     right = max(x for x, _ in heads)+6*space
     top = min(min(y for _, y in heads), rails[0]*height)-8*space
     bottom = max(max(y for _, y in heads), rails[-1]*height)+8*space
-    # Snap the crop to whole pixels of the full page's raster, so each sprite
-    # has exactly the pixels a whole-page rendering would give it.
-    left, top = math.floor(left*scale)/scale, math.floor(top*scale)/scale
+    # Snap the crop to whole pixels measured from the chord's own lowest
+    # head, so a key's raster is the same whatever shares its document. The
+    # head's glyph origin sits a quarter pixel into its pixel: on a pixel
+    # edge (or at its centre) status ink's recolored contour measured just
+    # over its limit (test_note_status_framebuffer); .25, .4 and .75 pass.
+    origin_x, origin_y = heads[0]
+    left = origin_x-(math.ceil((origin_x-left)*scale)+.25)/scale
+    top = origin_y-(math.ceil((origin_y-top)*scale)+.25)/scale
     pixels = max(1, math.ceil((right-left)*scale))
     right = left+pixels/scale
     bottom = top+math.ceil((bottom-top)*scale)/scale
@@ -458,16 +465,16 @@ def _cut(root, parents, chord, geometry, names, kind, box) -> dict:
     return result
 
 
-def _render_batch(toolkit, specs: dict[str, tuple]) -> dict:
-    """key -> asset, all engraved in one Verovio document and each chord cut
-    out of its page by its own note ids."""
+def _engrave_document(toolkit, specs: dict[str, tuple]) -> tuple[dict, dict]:
+    """(key -> asset, key -> why it failed) for chords engraved together in
+    one Verovio document, each cut out of its page by its own note ids."""
     from ...source_svg import parse_svg_geometry
     keys = sorted(specs)
     prefixes = {f"k{j}": key for j, key in enumerate(keys)}
     if not toolkit.loadData(_document_xml(
             [(prefix, *specs[key]) for prefix, key in prefixes.items()])):
         raise ValueError("Verovio refused the chord document")
-    result = {}
+    result, failed = {}, {}
     for page in range(1, toolkit.getPageCount()+1):
         svg = toolkit.renderToSVG(page)
         geometry = parse_svg_geometry(svg)
@@ -480,14 +487,65 @@ def _render_batch(toolkit, specs: dict[str, tuple]) -> dict:
                 continue
             ident = next((n.get("id") for n in chord.iter()
                           if "note" in _classes(n) and n.get("id")), "")
-            prefix = ident.split("c", 1)[0]
-            key = prefixes.get(prefix)
+            key = prefixes.get(ident.split("c", 1)[0])
             if key is None:
                 continue
-            names = [f"{prefix}c{i}" for i in range(len(specs[key][2]))]
-            if not set(names) <= set(geometry.elements):
-                raise ValueError("Verovio chord notehead IDs missing: " + key)
-            result[key] = _cut(root, parents, chord, geometry, names, specs[key][0], box)
+            names = [f"{ident.split('c', 1)[0]}c{i}" for i in range(len(specs[key][2]))]
+            try:
+                if not set(names) <= set(geometry.elements):
+                    raise ValueError("Verovio chord notehead IDs missing")
+                result[key] = _cut(root, parents, chord, geometry, names, specs[key][0], box)
+            except (ValueError, KeyError, IndexError, ZeroDivisionError) as exc:
+                failed[key] = f"{type(exc).__name__}: {exc}"
+    for key in keys:
+        if key not in result and key not in failed:
+            failed[key] = "Verovio engraved no chord for it"
+    return result, failed
+
+
+def _render_batch(toolkit, specs: dict[str, tuple]) -> dict:
+    """key -> asset for every chord that engraves; each failure is reported
+    by its own key and never blanks the rest of the stage's atlas.
+
+    A whole chord's stem is invisible, yet Verovio sets its heads by a
+    virtual stem: the one it gives the same chord as a stemless quarter
+    (checked against Verovio on 200 chords: 84 decisive, all agree). That
+    twin is engraved alongside and its stem becomes the template's.
+    """
+    twins = {f"{key}|twin": ("quarter", "auto", spec[2], spec[3])
+             for key, spec in specs.items() if spec[0] == "whole"}
+    wanted = {**specs, **twins}
+    try:
+        engraved, failed = _engrave_document(toolkit, wanted)
+    except (ValueError, RuntimeError) as exc:
+        # One unreadable chord must not take the stage's other chords with
+        # it: engrave each alone and name the one that fails.
+        print("VEROVIO_CHORD_DOCUMENT_UNAVAILABLE:", type(exc).__name__, str(exc))
+        engraved, failed = {}, {}
+        for key, spec in wanted.items():
+            try:
+                alone, why = _engrave_document(toolkit, {key: spec})
+                engraved.update(alone)
+                failed.update(why)
+            except (ValueError, RuntimeError) as single:
+                failed[key] = f"{type(single).__name__}: {single}"
+    result = {}
+    for key, spec in specs.items():
+        asset = engraved.get(key)
+        if asset is None:
+            print("VEROVIO_CHORD_PATTERN_UNAVAILABLE:", key, failed.get(key, ""))
+            continue
+        if spec[0] == "whole":
+            twin = engraved.get(f"{key}|twin", {}).get("stem_only")
+            if twin is None:
+                print("VEROVIO_CHORD_PATTERN_UNAVAILABLE:", key,
+                      "no virtual stem:", failed.get(f"{key}|twin", ""))
+                continue
+            # A rising stem ends at the lowest head (template note 0).
+            asset["stem"] = "up" if twin["bounds"][1]+twin["bounds"][3] < 125 else "down"
+        else:
+            asset["stem"] = spec[1]
+        result[key] = asset
     return result
 
 
@@ -522,18 +580,13 @@ def chord_templates(model: dict, cache=None, *, pages,
         toolkit = _create_verovio_toolkit(verovio)
         if not toolkit.setOptions(_OPTIONS):
             raise RuntimeError("Verovio rejected chord engraving options")
-        try:
-            rendered = _render_batch(toolkit, missing)
-        except (ValueError, RuntimeError) as exc:
-            # Report precisely which chords failed; the native view then
-            # names the chord it cannot draw instead of a blank score.
-            print("VEROVIO_CHORD_PATTERN_UNAVAILABLE:", len(missing),
-                  type(exc).__name__, str(exc))
-            rendered = {}
+        rendered = _render_batch(toolkit, missing)
         for key in missing:
             value = rendered.get(key)
+            if value is None:
+                continue  # _render_batch named it and why
             if not _valid_asset(value, key):
-                print("VEROVIO_CHORD_PATTERN_UNAVAILABLE:", key)
+                print("VEROVIO_CHORD_PATTERN_UNAVAILABLE:", key, "incomplete asset")
                 continue
             assets[key] = value
             if keys[key]:

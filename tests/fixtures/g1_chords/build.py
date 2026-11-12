@@ -110,8 +110,22 @@ MIDI_CASES += [
         + _humanised(1, 0, "E3 G3", (.98, 1.01)) + _humanised(1, 1, "F3 A3", (1.02, .97))
         + _humanised(1, 2, "E3 G3", (1.0, 1.03)) + _humanised(1, 3, "D3 F3", (.96, 1.0))),
 ]
+# bar 21-23: more performed releases. An eighth-triplet chord run released a
+# little early; a staccato chord; chords whose releases straddle the 16th
+# grid's tolerance; a pedalled note against a held one.
+_T = 1 / 3
+MIDI_CASES += [
+    (21, "humanised-triplet-chords", [
+        n for k in range(6)
+        for n in _humanised(0, k * _T, "E4 G4", (_T - .01, _T - .015))]),
+    (21, "staccato-chord", _humanised(0, 2, "C5 E5 G5", (.37, .38, .39))),
+    (22, "dead-zone-chord-85", _humanised(0, 0, "C4 E4", (.85, .86))),
+    (22, "dead-zone-chord-87", _humanised(0, 1, "D4 F4", (.87, .88))),
+    (22, "wide-humanised-chord", _humanised(0, 2, "E4 G4", (.91, 1.10))),
+    (23, "pedal-different-values", _humanised(0, 0, "C4 G4", (1.0, 2.4))),
+]
 MIDI_KEYS = {13: "C#", 15: "Gb", 17: "C"}
-MIDI_BARS = 20
+MIDI_BARS = 24
 
 
 # A short in-app file: the hardest MIDI shapes, two bars per lesson.
@@ -301,7 +315,7 @@ def build_musicxml(path: Path) -> None:
 def cases() -> dict:
     return {
         "g1_chords.mid": [{"measure": bar, "case": name,
-                           "beats": sorted({float(n[2]) for n in notes}),
+                           "beats": sorted({round(float(n[2]), 6) for n in notes}),
                            "pitches": sorted({p for *_, p in notes})}
                           for bar, name, notes in MIDI_CASES],
         "g1_chords.musicxml": [{"measure": measure, "case": name, "beat": beat,

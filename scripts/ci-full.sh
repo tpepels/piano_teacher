@@ -7,4 +7,5 @@ cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-.venv/bin/python}"
 # The in-app readiness scenario fails (not skips) when it cannot run.
 export CI_FULL=1
-exec "$PYTHON" -m pytest -q tests "$@"
+# Includes the slow corpus runs that pyproject's addopts deselect by default.
+exec "$PYTHON" -m pytest -q -m "slow or not slow" tests "$@"

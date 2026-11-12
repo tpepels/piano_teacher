@@ -674,13 +674,25 @@ def _release_tolerance(rounded: int, end: int) -> float:
     return .08 if rounded < end else .15
 
 
-def _grid_release(start: int, end: int) -> int:
-    """A performed release on the display grid, when display quantization
-    would put it there; otherwise the exact release."""
-    rounded = round(end/_RELEASE_GRID)*_RELEASE_GRID
-    if rounded > start and abs(rounded-end) <= _ticks(_release_tolerance(rounded, end)):
-        return rounded
-    return end
+# A performed chord's keys release a few ticks apart. Two raw releases are
+# one written release when display quantization could move them to one value
+# (at most .08 shorter plus .15 longer) and they differ by at most half the
+# shorter note, so a 16th and a 32nd stay separate values.
+_CHORD_RELEASE_SPREAD = .08 + .15
+
+
+def _release_clusters(tones: list[dict], start: int) -> list[list[dict]]:
+    """Tones of one attack grouped by raw release proximity, shortest first."""
+    clusters: list[list[dict]] = []
+    for tone in sorted(tones, key=lambda t: (t['end'], t['source_id'])):
+        if clusters:
+            first = clusters[-1][0]
+            limit = min(_ticks(_CHORD_RELEASE_SPREAD), (first['end']-start)/2)
+            if tone['end']-first['end'] <= limit:
+                clusters[-1].append(tone)
+                continue
+        clusters.append([tone])
+    return clusters
 
 
 def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
@@ -717,31 +729,29 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
         display_key = (
             note.track,note.voice,round(note.start-phrase.start,9))
         timing = "triplet" if display_key in triplet_onsets else "exact"
-        # Performed MIDI releases one chord's keys a few ticks apart. Tones
-        # that share an attack and release on the same 16th-grid value within
-        # the display release tolerance are one written chord; genuinely
-        # different values stay separate voices.
-        # A tuplet-length tone keeps its exact release and groups only with
-        # tones released on the same tick.
-        exact = from_source_musicxml or _tuplet_type(end-start) is not None
-        grid_end = end if exact else _grid_release(start, end)
-        groups[note.track,note.voice,start,grid_end,exact].append({
+        groups[note.track,note.voice,start].append({
             'source_id':source,'source_beat':note.start-phrase.start,
             'pitch':note.pitch,'hand':hand,'note':note,
             'notation_timing':timing,'end':end})
     events = []
-    for (track, voice, start, grid_end, _), tones in groups.items():
-        # Identical releases keep their exact tick; humanised ones the grid's.
-        releases = {tone['end'] for tone in tones}
-        end = releases.pop() if len(releases) == 1 else grid_end
-        remaining = sorted(tones,key=lambda tone:(tone['pitch'],tone['source_id']))
-        while remaining:
-            layer, pitches = [], set()
-            for tone in remaining:
-                if tone['pitch'] not in pitches:
-                    layer.append(tone); pitches.add(tone['pitch'])
-            remaining = [tone for tone in remaining if tone not in layer]
-            events.append((start,end,(track,voice),layer))
+    for (track, voice, start), attack in groups.items():
+        # Authored MusicXML durations are exact: only equal releases form one
+        # chord. A performed chord keeps a real release (its median tone's);
+        # lane quantization below then chooses grid or tuplet once, from that
+        # raw release, exactly as for a single note.
+        clusters = ([[t for t in attack if t['end'] == end]
+                     for end in sorted({t['end'] for t in attack})]
+                    if from_source_musicxml else _release_clusters(attack, start))
+        for tones in clusters:
+            end = sorted(t['end'] for t in tones)[(len(tones)-1)//2]
+            remaining = sorted(tones,key=lambda tone:(tone['pitch'],tone['source_id']))
+            while remaining:
+                layer, pitches = [], set()
+                for tone in remaining:
+                    if tone['pitch'] not in pitches:
+                        layer.append(tone); pitches.add(tone['pitch'])
+                remaining = [tone for tone in remaining if tone not in layer]
+                events.append((start,end,(track,voice),layer))
     events.sort(key=lambda event:(event[0],event[1],event[2],tuple(tone['source_id'] for tone in event[3])))
     lanes, endings, owners = [], [], []
     for start,end,owner,tones in events:

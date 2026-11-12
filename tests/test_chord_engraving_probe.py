@@ -28,9 +28,15 @@ CASE_NAMES = sorted({case["case"] for cases in CASES.values() for case in cases}
 # source expressions (docs/midi-transcription-rules.md, Chords).
 SCORE_LEVEL_REFUSALS = {"grace-chord", "arpeggiated-chord"}
 UNRENDERED = "Source expression requires original Verovio engraving"
-# A quarter and an eighth at one onset are two voices, not a chord: no chord
-# row. test_humanised_releases_import_as_one_chord checks the import.
-NOT_A_CHORD = {"genuinely-different-values"}
+# A quarter and an eighth, or a held and a pedalled note, at one onset are
+# two voices, not a chord: no chord row. The import tests below check them.
+NOT_A_CHORD = {"genuinely-different-values", "pedal-different-values"}
+# Pre-existing stream defect (r1-defects.md, "Strip after an off-bar seam is
+# never presented"), already at 179ccb25 and not chord-specific: a note
+# displayed .87 beat long at a bar start moves the next strip's seam to
+# 4.0766, and that strip's ink is never presented. Asserted as the defect so
+# this test changes when it is fixed.
+STREAM_SEAM_DEFECT = {"dead-zone-chord-87", "wide-humanised-chord"}
 
 
 def _godot() -> str | None:
@@ -58,6 +64,10 @@ def test_chord_case_draws_where_verovio_puts_its_heads(rows, case):
         assert not mine, mine
         return
     assert mine
+    if case in STREAM_SEAM_DEFECT:
+        assert all(row["outcome"] == "refused" and "not painted" in row["detail"]
+                   for row in mine), mine
+        return
     if case in SCORE_LEVEL_REFUSALS:
         assert all(row["outcome"] == "refused" and row["detail"] == UNRENDERED
                    for row in mine), mine
@@ -210,3 +220,46 @@ def test_every_view_in_the_practice_stage_clears_the_progress_rail():
          "--script", str(root / "tests/godot/practice_stage_rail_clearance.gd")],
         capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0 and "RAIL_CLEARANCE_FAILURES:0" in proc.stdout, proc.stdout[-3000:]
+
+
+def _attacks(model, measure):
+    """(bar beat, voice) -> [(name, note value, tuplet actual)] of one measure."""
+    start = next(m["start_beat"] for m in model["measures"] if m["number"] == measure)
+    found = {}
+    for e in model["notation_events"]:
+        if e["kind"] == "note" and e["measure"] == measure:
+            s = e["spelling"]
+            found.setdefault((round(e["beat"] - start, 3), e["voice"]), []).append(
+                (f"{s['step']}{s['octave']}", e["note_type"],
+                 (e.get("time_modification") or {}).get("actual")))
+    return found
+
+
+def test_humanised_triplet_chords_keep_their_triplet_rhythm():
+    # C1: an eighth-triplet chord run released .01/.015 beat early stays a run
+    # of 3:2 eighth chords in one voice; releases are not pre-snapped to 16ths.
+    model, _ = _bars(21)
+    attacks = _attacks(model, 21)
+    for beat in (0.0, .333, .667, 1.0, 1.333, 1.667):
+        assert attacks[(beat, "1")] == [("E4", "eighth", 3), ("G4", "eighth", 3)], beat
+    assert all(voice == "1" for (beat, voice) in attacks if beat < 2)
+
+
+def test_staccato_and_dead_zone_chords_stay_one_chord():
+    # I1: releases at .37/.38/.39, .85/.86, .87/.88 and .91/1.10 are one
+    # written chord each, whatever value display quantization then gives it.
+    model, _ = _bars(21)
+    assert [n for n, *_ in _attacks(model, 21)[(2.0, "1")]] == ["C5", "E5", "G5"]
+    bar = _attacks(model, 22)
+    assert sorted(bar) == [(0.0, "1"), (1.0, "1"), (2.0, "1")], bar
+    assert [n for n, *_ in bar[(0.0, "1")]] == ["C4", "E4"]
+    assert [n for n, *_ in bar[(1.0, "1")]] == ["D4", "F4"]
+    assert bar[(2.0, "1")] == [("E4", "quarter", None), ("G4", "quarter", None)]
+
+
+def test_pedalled_and_held_values_stay_separate_voices():
+    # A 1-beat note against a 2.4-beat pedalled one at the same attack.
+    model, _ = _bars(23)
+    bar = _attacks(model, 23)
+    assert bar[(0.0, "1")] == [("C4", "quarter", None)]
+    assert bar[(0.0, "2")][0][:2] == ("G4", "half")

@@ -329,6 +329,10 @@ func load_chord_templates(items: Dictionary) -> bool:
         if not item.get("leaders",{}) is Dictionary:
             error = "Invalid Verovio chord leaders: " + str(key)
             return false
+        # The stem Verovio engraved the chord with; a whole chord's virtual one.
+        if str(item.get("stem","")) not in ["up","down"]:
+            error = "Verovio chord template has no stem direction: " + str(key)
+            return false
         var img := Image.new()
         if img.load_png_from_buffer(Marshalls.base64_to_raw(
                 str(item.get("png_base64","")))) != OK or img.is_empty():
@@ -396,7 +400,7 @@ func load_chord_templates(items: Dictionary) -> bool:
                         loaded_stems[used] = loaded_stems[str(key)]
                         stem_dimensions[used] = _shifted(stem_dimensions[str(key)],origin)
             instances[str(leader)] = {"key":used, "heads":ids,
-                "stem":str(key).get_slice("|",1)}
+                "stem":str(items[key]["stem"])}
     chord_textures = loaded
     chord_metadata = metrics
     chord_heads_textures = loaded_heads

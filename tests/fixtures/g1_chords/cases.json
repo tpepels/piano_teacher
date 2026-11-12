@@ -611,6 +611,78 @@
     55,
     57
    ]
+  },
+  {
+   "measure": 21,
+   "case": "humanised-triplet-chords",
+   "beats": [
+    0.0,
+    0.333333,
+    0.666667,
+    1.0,
+    1.333333,
+    1.666667
+   ],
+   "pitches": [
+    64,
+    67
+   ]
+  },
+  {
+   "measure": 21,
+   "case": "staccato-chord",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    72,
+    76,
+    79
+   ]
+  },
+  {
+   "measure": 22,
+   "case": "dead-zone-chord-85",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    64
+   ]
+  },
+  {
+   "measure": 22,
+   "case": "dead-zone-chord-87",
+   "beats": [
+    1.0
+   ],
+   "pitches": [
+    62,
+    65
+   ]
+  },
+  {
+   "measure": 22,
+   "case": "wide-humanised-chord",
+   "beats": [
+    2.0
+   ],
+   "pitches": [
+    64,
+    67
+   ]
+  },
+  {
+   "measure": 23,
+   "case": "pedal-different-values",
+   "beats": [
+    0.0
+   ],
+   "pitches": [
+    60,
+    67
+   ]
   }
  ],
  "g1_chords.musicxml": [

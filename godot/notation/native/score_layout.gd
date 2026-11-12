@@ -315,12 +315,7 @@ func chord_extents(event: Dictionary, gap: float,
     var bottom_y := -INF
     var top_offset := 0.0
     var bottom_offset := 0.0
-    var sum_step := 0.0
-    var explicit_stem := ""
     for member in members:
-        # One chord, one stem: the first direction declared in source order.
-        if str(member.get("stem","")) in ["up","down"] and explicit_stem.is_empty():
-            explicit_stem = str(member["stem"])
         var head_y: float = event_y(member, gap)
         var offset: float = float(head_offsets.get(str(member.get("id", "")), 0.0))
         if head_y < top_y:
@@ -329,19 +324,27 @@ func chord_extents(event: Dictionary, gap: float,
         if head_y > bottom_y:
             bottom_y = head_y
             bottom_offset = offset
-        var clef: Dictionary = clef_for(
-            str(member.get("staff", "right")), measure_for(member))
-        sum_step += float(Geometry.staff_step(
-            member.get("spelling", {}),clef))
-    # The stem Verovio engraved this chord with (its template's direction).
-    var engraved: String = str(chord_instance(event).get("stem",""))
-    if engraved in ["up","down"]:
-        explicit_stem = engraved
     return {"top_y":top_y,"bottom_y":bottom_y,
         "top_offset":top_offset,"bottom_offset":bottom_offset,
-        "up":explicit_stem == "up" if not explicit_stem.is_empty() else
-            bool(voice_stem_up_by_note.get(str(event.get("id","")),
-                sum_step/float(maxi(1,members.size())) < 4.0))}
+        "up":engraved_stem_up(event,members)}
+
+
+# A chord's stem is the one Verovio engraved it with: its instance template's
+# (for a whole chord, the virtual stem Verovio sets its heads by). A single
+# note keeps a declared or voice direction, else Verovio's single-note rule:
+# below the middle line up, on it or above down.
+func engraved_stem_up(event: Dictionary, members: Array = []) -> bool:
+    if members.is_empty():
+        members = chord_members.get(str(event.get("id","")),[event])
+    if members.size() > 1:
+        return str(chord_instance(event).get("stem","")) == "up"
+    if str(event.get("stem","")) in ["up","down"]:
+        return str(event["stem"]) == "up"
+    var id: String = str(event.get("id",""))
+    if voice_stem_up_by_note.has(id):
+        return bool(voice_stem_up_by_note[id])
+    var clef: Dictionary = clef_for(str(event.get("staff", "right")), measure_for(event))
+    return Geometry.staff_step(event.get("spelling", {}),clef) < 4
 
 
 # Every chord is drawn from the Verovio instance template its prepared score
