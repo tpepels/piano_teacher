@@ -36,6 +36,11 @@ def native_camera_run(tmp_path_factory):
         env.pop(name, None)
     env.update(XDG_DATA_HOME=str(folder / "data"),
                XDG_CONFIG_HOME=str(folder / "config"))
+    # The app starts its embedded engine: CPython inside the GDExtension must
+    # see this checkout and the venv's packages, as the other embedded-app
+    # tests give it. Without this it is the bare system interpreter.
+    from scripts.review_art_direction import embedded_python_env
+    env.update(embedded_python_env())
     proc = subprocess.run(
         [binary, "--headless", "--path", str(ROOT / "godot"), "--script",
          str(ROOT / "tests/godot/native_camera.gd"), "--", str(fixture),
