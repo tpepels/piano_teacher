@@ -258,7 +258,10 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                             segments.append(bright_line)
                         elif dim_line['status'] == 'verified':
                             segments.append(dim_line)
-                        elif bright_line['status'] == 'unverified':
+                        elif bright_line['status'] in ('unverified', 'mismatch'):
+                            # A known missing physical pale wing dominates
+                            # an ambiguous dark channel. Only independently
+                            # PROVED dim wings can replace a pale mismatch.
                             segments.append(bright_line)
                         else:
                             segments.append(dim_line)
