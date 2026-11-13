@@ -54,3 +54,15 @@ def test_entire_erased_column_has_no_beam_witness():
     frame["pixels"][:, 4] = False
     frame["beam_edge"][:, 4] = False
     assert _photographed_beam_runs(frame, 0, 40, 4) == []
+
+
+def test_clipped_registered_beam_endpoints_cannot_be_called_missing_stems():
+    from piano_teacher.notation.connector_pixels import _full_beam_head_visible
+    # Original Chopin bar 14 at beat 7.65: a partially visible head is
+    # registered at x=28, while its stem lies outside production clipping.
+    assert not _full_beam_head_visible({"bbox": [21, 153, 36, 166]}, 1536)
+    assert _full_beam_head_visible({"bbox": [29, 153, 45, 166]}, 1536)
+    assert _full_beam_head_visible({"bbox": [35, 153, 49, 166]}, 1536)
+    assert not _full_beam_head_visible({"bbox": [1508, 153, 1520, 166]}, 1536)
+    # The absence of a complete endpoint must stay unavailable: the beam
+    # verifier is forbidden to award positive proof for any partial glyph.

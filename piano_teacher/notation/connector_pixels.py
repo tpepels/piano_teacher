@@ -367,12 +367,28 @@ def _stem(pixels, anchors, up):
                 bbox=[min(columns), top, max(columns)+1, bottom])
 
 
+def _full_beam_head_visible(anchor, viewport_width: int) -> bool:
+    """An edge-clipped registered head cannot prove its attached beam stem.
+
+    The native score clip removes the first 29px of note glyphs; the last
+    20px are likewise excluded from mandatory complete-glyph witnesses.
+    The source head may still register from partial ink, but a failed stem
+    in that same frame must be classified as unavailable, not missing ink.
+    A complete later photograph is still required for any verified beam.
+    """
+    left, _top, right, _bottom = anchor['bbox']
+    return left >= 29 and right <= viewport_width - 20
+
+
 def _beam(row, frames, target):
     events, art = row['events'], row.get('art')
     if art is None:
         raise ValueError('Reference beam has no isolated polygon ink')
     anchors = frames.anchors(events, target)
     frame = frames.frame(target)
+    if not all(_full_beam_head_visible(anchor, frame['pixels'].shape[1])
+               for anchor in anchors):
+        raise ValueError('Source beam endpoint is clipped by the actual score viewport')
     gap = anchors[0]['gap']
     up = (art['bbox'][1]+art['bbox'][3])/2 < art['anchors'][0][1]
     chords = []
