@@ -124,7 +124,11 @@ def test_real_subdued_antialias_stem_connects_actual_head_to_source_beam():
     with pytest.raises(ValueError, match="absent"):
         _stem(bright, anchors, False, edge=edge)
 
-    # A broad unrelated polygon is not accepted as a thin stem.
+    # A broad, physically bright endpoint and matching gray interior
+    # polygon is not accepted as a thin stem. Both source-end probes are
+    # genuinely present across its width, so only width can reject it.
     edge[20:47, 27:33] = True
+    bright[20:24, 27:33] = True
+    bright[39:47, 27:33] = True
     with pytest.raises(ValueError, match="too broad"):
         _stem(bright, anchors, False, edge=edge)
