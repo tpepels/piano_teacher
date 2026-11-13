@@ -301,6 +301,20 @@ def _runs(values):
     return [(int(p[0]), int(p[-1])+1) for p in np.split(a, np.flatnonzero(np.diff(a)>1)+1) if len(p)]
 
 
+def _beam_sample_band(tip: float, gap: float, levels: int, height: int) -> tuple[int, int]:
+    """Bound the photographed column for its source-required beam stack.
+
+    One thick beam fits the historical ±1.5-space interval. Each additional
+    source level occupies its own actual ink row plus a gap, possibly on the
+    opposite side of the stem tip. A fixed 1.5-space crop incorrectly makes
+    intact Chopin third-level ink appear two pixels thick. This only widens
+    the photographic search region: exact reference level-count, thickness,
+    spacing and every physical column remain mandatory in _beam().
+    """
+    radius = (1.5 + .70 * max(0, levels - 1)) * gap
+    return max(0, round(tip - radius)), min(height, round(tip + radius))
+
+
 def _photographed_beam_runs(frame, low: int, high: int, x: int):
     """Read continuous real beam ink, including quantized subthreshold pixels.
 
@@ -418,7 +432,7 @@ def _beam(row, frames, target):
             tip_a = stems[i]['top'] if up else stems[i]['bottom']-1
             tip_b = stems[i+1]['top'] if up else stems[i+1]['bottom']-1
             tip = tip_a+(tip_b-tip_a)*fraction
-            lo, hi = max(0, round(tip-1.5*gap)), min(frame['pixels'].shape[0], round(tip+1.5*gap))
+            lo, hi = _beam_sample_band(tip, gap, len(runs), frame['pixels'].shape[0])
             observed = _photographed_beam_runs(frame, lo, hi, x)
             expected_thickness = [(b-a)*gap/24 for a, b in runs]
             expected_separation = [(a-runs[0][0])*gap/24 for a, _ in runs]

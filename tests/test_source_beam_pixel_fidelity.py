@@ -39,3 +39,28 @@ def test_second_measure_beams_keep_original_boundaries():
     score = ET.fromstring(_lesson(2,2).musicxml)
     beams = [x.text for x in score.findall(".//part[@id='RH']//beam")]
     assert beams == ["begin","continue","continue","end"]*2
+
+
+def test_beam_photographic_window_contains_actual_three_level_ink_without_reconstructing_it():
+    """11-pixel staff spaces: third-level source rows must not be cropped."""
+    import numpy as np
+    from piano_teacher.notation.connector_pixels import _beam_sample_band, _photographed_beam_runs
+
+    gap = 11.0
+    tip = 218.0
+    photographed = np.zeros((260, 16), dtype=bool)
+    # Three *actual* uninterrupted bright rows, as found in Chopin 14/16.
+    for top, bottom in ((198, 204), (207, 212), (215, 220)):
+        photographed[top:bottom, 6] = True
+    frame = {"pixels": photographed}
+    old_low, old_high = round(tip - 1.5 * gap), round(tip + 1.5 * gap)
+    assert _photographed_beam_runs(frame, old_low, old_high, 6)[0] == (202, 204)
+    low, high = _beam_sample_band(tip, gap, 3, photographed.shape[0])
+    assert _photographed_beam_runs(frame, low, high, 6) == [
+        (198, 204), (207, 212), (215, 220)]
+    assert _beam_sample_band(tip, gap, 1, 260) == (old_low, old_high)
+    # A genuinely missing source beam is never painted by the new window.
+    photographed[198:204, 6] = False
+    assert len(_photographed_beam_runs(frame, low, high, 6)) == 2
+
+
