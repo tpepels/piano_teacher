@@ -136,3 +136,31 @@ def test_visual_ledger_does_not_bless_forged_quarter_space_status(tmp_path, kind
     report["measured"][0]["placement_evidence"].update(status="verified", grid_phase_error_spaces=0.)
     result = ledger(None, xml, rests=report["measured"])
     assert rows(result, "rest_placement")[0]["status"] != "verified"
+
+
+def test_mint_fixed_playhead_is_not_another_rest_collision_but_foreign_ink_is():
+    """Chopin's real rest controls have pale mint at x506-507, unlike note ink.
+
+    Exclude the transport overlay from *clearance only*. Do not reduce the
+    minimum clearance threshold or excuse independently observed neutral ink.
+    """
+    import numpy as np
+    from piano_teacher.notation.pixel_ink import bright, translating_ink
+    from piano_teacher.notation.rest_placement_pixels import rest_clearance
+
+    image = Image.new("RGB", (65, 65), (16, 41, 35))
+    pencil = ImageDraw.Draw(image)
+    pencil.line((29, 0, 29, 64), fill=(201, 248, 230), width=2)
+    rest = np.zeros((65, 65), dtype=bool)
+    rest[22:35, 16:28] = True
+    before = bright(image)
+    after = translating_ink(image)
+    assert before[28, 29] and not after[28, 29]
+    assert rest_clearance(rest, before, 11.)[0] < .12*11.
+    assert rest_clearance(rest, after, 11.)[0] >= .12*11.
+
+    # Neutral bright note/stem pixels at that same distance STILL veto a rest.
+    pencil.rectangle((29, 26, 29, 30), fill=(229, 242, 234))
+    foreign = translating_ink(image)
+    assert foreign[28, 29]
+    assert rest_clearance(rest, foreign, 11.)[0] < .12*11.

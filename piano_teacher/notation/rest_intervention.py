@@ -9,7 +9,7 @@ from PIL import Image
 from collections import defaultdict
 from pathlib import Path
 from .pixel_context import rectangular_rest_orientation
-from .pixel_ink import bright
+from .pixel_ink import bright, translating_ink
 from .pixel_proof import playhead_x
 from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
@@ -122,13 +122,20 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                 if len(xs) < 12:
                     raise ValueError("missing/occluded rest: insufficient visible changed pixels")
                 original_ink=bright(Image.fromarray(original.astype("uint8")))
-                suppressed_ink=bright(Image.fromarray(suppressed.astype("uint8")))
-                visible_removed=delta & original_ink & ~suppressed_ink
+                suppressed_image=Image.fromarray(suppressed.astype("uint8"))
+                suppressed_bright=bright(suppressed_image)
+                # Use the unchanged raw pale mask for intervention integrity,
+                # including detection of any ADDED ink. The pale mint fixed
+                # playhead qualifies as bright RGB but is not another glyph.
+                # Clearance alone must exclude that independently identified
+                # stationary coloured overlay, as camera-motion proof does.
+                suppressed_ink=translating_ink(suppressed_image)
+                visible_removed=delta & original_ink & ~suppressed_bright
                 row["visible_original_ink_removed"]=int(np.count_nonzero(visible_removed))
                 if row["visible_original_ink_removed"]<12:
                     raise ValueError("control did not remove visible original rest ink")
                 # Removing one pale rest cannot ADD independent pale ink.
-                added = suppressed_ink & ~original_ink
+                added = suppressed_bright & ~original_ink
                 if np.count_nonzero(added & delta):
                     raise ValueError("suppression added unrelated ink; contaminated control")
                 xpos = round(playhead_x(Image.fromarray(original.astype("uint8"))))
