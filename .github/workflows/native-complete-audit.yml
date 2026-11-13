@@ -79,7 +79,42 @@ jobs:
           path: |
             ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/revision.txt
             ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/summary.json
+            ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/case-manifest.txt
             ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/run.log
             ${{ runner.temp }}/native-audit/shard-${{ matrix.shard }}/coordinator-error.log
           if-no-files-found: warn
+          retention-days: 14
+
+  complete-source-acceptance:
+    name: Global 24-shard source/ink provenance and denominator acceptance
+    needs: independent-source-shard
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Download every exact-revision shard receipt
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: native-complete-shard-*-${{ github.sha }}
+          path: ${{ runner.temp }}/native-shards
+          merge-multiple: false
+      - name: Refuse missing, duplicated, stale or incomplete source obligations
+        if: always()
+        run: |
+          python scripts/audits/aggregate_shards.py \
+            --artifacts "${{ runner.temp }}/native-shards" \
+            --sha "${{ github.sha }}" \
+            --shard-count 24 \
+            --out "${{ runner.temp }}/native-source-acceptance.json"
+      - name: Preserve complete source acceptance, including failed evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-complete-global-${{ github.sha }}
+          path: ${{ runner.temp }}/native-source-acceptance.json
+          if-no-files-found: error
           retention-days: 14

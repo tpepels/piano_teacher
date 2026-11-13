@@ -1,6 +1,7 @@
 """Batch composition, fixed denominators and complete exact-input accounting."""
 from __future__ import annotations
 from collections import Counter
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ from .capture_store import ROOT, atomic_json
 from .case_types import AuditCase
 from .proof_execution import symbol_error
 from .batch_checkpoint import BatchCheckpoint
+from .aggregate_shards import case_identity, encode_manifest
 
 
 def execute_case_jobs(jobs, *, workers, case_timeout, memory_limit_mib, resume,
@@ -70,10 +72,13 @@ def run_batch(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
                "started_at":time.time(),"active_cases":[],
                "coordinator_pid":os.getpid(),
                "sources_checked": 0, "cases_expected": 0, "cases_checked": 0,
+               "source_semantics_expected": 0, "source_semantics_checked": 0,
+               "manifest_sha256": None, "manifest_entries": 0,
                "measures_expected": 0, "measures_checked": 0,
                "failures": [], "nonverified_symbols": {}}
     atomic_json(out/'summary.json',summary)
     plans=[]
+    manifest_ids=[]
     planning_failed=False
     for source_index, path in enumerate(sources):
         try:
@@ -83,6 +88,9 @@ def run_batch(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
             # instead of rebuilding an enormous complete score 24 times.
             semantic_case = AuditCase("source-semantics", str(path), 1, 1)
             if case_catalog.case_shard(path, semantic_case, shard_count) == shard_index:
+                summary["source_semantics_expected"] += 1
+                source_name = path.resolve().relative_to(ROOT.resolve()).as_posix()
+                manifest_ids.append(case_identity(source_name, "semantics", semantic_case))
                 semantics = planning.source_semantics(path, piece)
                 for row in semantics["elements"]:
                     if row["status"] in {"mismatch", "unverified"}:
@@ -91,6 +99,7 @@ def run_batch(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
                 directory.mkdir(parents=True,exist_ok=True)
                 (directory/"source-semantics.json").write_text(
                     json.dumps(semantics,indent=2)+"\n")
+                summary["source_semantics_checked"] += 1
             plan = planning.plan_source(path, piece, source_index=source_index, max_bars=max_bars,
                 shard_index=shard_index, shard_count=shard_count, focused_cases=case_catalog.CASES)
             if not plan.case_count:
@@ -105,6 +114,22 @@ def run_batch(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
             message = f"{path.name}: {type(exc).__name__}: {exc}"
             summary["failures"].append(message)
             print("FAIL " + message, flush=True)
+    # Publish a canonical case identity manifest BEFORE captures begin.
+    # A green per-shard summary by itself cannot establish that the whole
+    # 24-partition corpus contains every original case exactly once.
+    try:
+        for plan in plans:
+            source_name = plan.path.resolve().relative_to(ROOT.resolve()).as_posix()
+            for phase in ("originals", "focused", "stages"):
+                for case, _phrase, _variant in getattr(plan, phase):
+                    manifest_ids.append(case_identity(source_name, phase, case))
+        encoded_manifest = encode_manifest(manifest_ids)
+        (out/"case-manifest.txt").write_bytes(encoded_manifest)
+        summary["manifest_entries"] = len(manifest_ids)
+        summary["manifest_sha256"] = sha256(encoded_manifest).hexdigest()
+    except (ValueError, OSError) as exc:
+        planning_failed = True
+        summary["failures"].append("Case manifest could not be frozen: "+str(exc))
     # Freeze all denominators before capture. Cover every original measure,
     # then the named hard passages, then the generated learning curriculum.
     completed=Counter()
