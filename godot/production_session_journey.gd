@@ -97,7 +97,7 @@ func _ready_score() -> bool:
     return view.retained_ready()
 
 func _press(button: Button, action: String) -> bool:
-    if app.command_state.pending:
+    if app.command_coordinator.state.pending:
         return false
     if button.disabled:
         _fail(action+" button disabled despite ready score")
@@ -280,12 +280,12 @@ func _process(_delta: float) -> bool:
             if int(state.get("lesson_step",0)) != 1:
                 _fail("Listen changed the selected lesson")
                 return true
-            if app.command_state.pending:
+            if app.command_coordinator.state.pending:
                 return false
             app._send_action({"action":"select_step","number":2})
             _advance("stage_change")
         "stage_change":
-            if app.command_state.pending or int(state.get("lesson_step",0)) != 2 or                     not _ready_score():
+            if app.command_coordinator.state.pending or int(state.get("lesson_step",0)) != 2 or                     not _ready_score():
                 return false
             selected_revision = int(state["revision"])
             if int(state["revision"]) <= initial_revision:
@@ -296,7 +296,7 @@ func _process(_delta: float) -> bool:
             selected_bpm = float(state["bpm"])
             _advance("tempo_change")
         "tempo_change":
-            if app.command_state.pending or float(state.get("bpm",-1)) >= selected_bpm:
+            if app.command_coordinator.state.pending or float(state.get("bpm",-1)) >= selected_bpm:
                 return false
             if selected_bpm-float(state["bpm"]) != 5.0 or                     int(state.get("revision",-1)) != selected_revision or                     not _ready_score():
                 _fail("Manual tempo change re-engraved score or changed more than 5 BPM")
@@ -305,7 +305,7 @@ func _process(_delta: float) -> bool:
             app._open_library_piece(EXPECTED_PIECE,true)
             _advance("reopen")
         "reopen":
-            if app.command_state.pending or not _ready_score():
+            if app.command_coordinator.state.pending or not _ready_score():
                 return false
             if int(state.get("lesson_step",-1)) != 2 or                     absf(float(state.get("bpm",-1))-resumed_bpm) > .001:
                 _fail("Reopening lost the selected step or manual tempo")
