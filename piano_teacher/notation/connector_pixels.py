@@ -334,6 +334,66 @@ def _photographed_beam_runs(frame, low: int, high: int, x: int):
     return [(a+low, b+low) for a, b in _runs(core)]
 
 
+def _connected_source_beam_runs(frame, observed, *, x, tip, stems, gap):
+    """Keep only ink physically connected to the measured primary beam.
+
+    A photographed tuplet bracket is independent notation ink. In Chopin
+    Nocturne bar 14 its detached vertical bracket end lies just four pixels
+    below three genuine beam levels. A whole-height column scan labels that
+    bracket as a *fourth beam* despite the exact source polygon declaring
+    three levels. Resolve only when an eight-connected foreground component
+    actually attaches to the physical first beam run. Counterfeit additional
+    beam ink connected to that run remains a mismatch. Never paint, infer or
+    fill a missing source level: ordinary beam/continuity tests still apply.
+
+    This expensive branch is used only for unexpected additional runs. Its
+    crop comes from the independently measured stem endpoints and gap, not
+    the renderer's beam mask or a claimed foreground ownership report.
+    """
+    from collections import deque
+
+    pixels = frame["pixels"]
+    height, width = pixels.shape
+    left = max(0, math.floor(min(s["x"] for s in stems)-gap))
+    right = min(width, math.ceil(max(s["x"] for s in stems)+gap)+1)
+    first_tip = min(s["top"] for s in stems)
+    last_tip = max(s["bottom"]-1 for s in stems)
+    top = max(0, math.floor(first_tip-5*gap))
+    bottom = min(height, math.ceil(last_tip+5*gap))
+    if not left <= x < right or top >= bottom or not observed:
+        return observed
+    # The primary run is the one physically attached to the measured stem
+    # tip, not merely the top/bottom contour of an unrelated nearby glyph.
+    closest = min(observed, key=lambda run: max(run[0]-tip, tip-run[1]+1, 0))
+    sy = min(max(round(tip), closest[0]), closest[1]-1)
+    if not pixels[sy, x]:
+        return observed
+    region = pixels[top:bottom, left:right].copy()
+    # Apply the same strictly photographed, single subthreshold bridge used
+    # by _photographed_beam_runs, not a synthetic geometry-based gap fill.
+    edge = frame.get("beam_edge")
+    if edge is not None and region.shape[0] >= 3:
+        weak = edge[top:bottom, left:right]
+        bridges = region[:-2] & region[2:] & ~region[1:-1] & weak[1:-1]
+        region[1:-1] |= bridges
+    seed = (sy-top, x-left)
+    seen = np.zeros(region.shape, dtype=bool)
+    seen[seed] = True
+    todo = deque((seed,))
+    while todo:
+        cy, cx = todo.popleft()
+        for dy, dx in ((-1, -1), (-1, 0), (-1, 1),
+                       (0, -1), (0, 1),
+                       (1, -1), (1, 0), (1, 1)):
+            yy, xx = cy+dy, cx+dx
+            if (0 <= yy < region.shape[0] and 0 <= xx < region.shape[1]
+                    and region[yy, xx] and not seen[yy, xx]):
+                seen[yy, xx] = True
+                todo.append((yy, xx))
+    return [(a, b) for a, b in observed
+            if seen[max(a, top)-top:min(b, bottom)-top, x-left].any()]
+
+
 def _reference_column(art, x):
     column = round(x)-art['bbox'][0]
     return _runs(art['mask'][:, column]) if 0 <= column < art['mask'].shape[1] else []
@@ -450,6 +510,9 @@ def _beam(row, frames, target):
             tip = tip_a+(tip_b-tip_a)*fraction
             lo, hi = _beam_sample_band(tip, gap, len(runs), frame['pixels'].shape[0])
             observed = _photographed_beam_runs(frame, lo, hi, x)
+            if len(observed) > len(runs):
+                observed = _connected_source_beam_runs(
+                    frame, observed, x=x, tip=tip, stems=stems, gap=gap)
             expected_thickness = [(b-a)*gap/24 for a, b in runs]
             expected_separation = [(a-runs[0][0])*gap/24 for a, _ in runs]
             fit = len(observed) == len(runs)

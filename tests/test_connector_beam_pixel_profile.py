@@ -66,3 +66,36 @@ def test_clipped_registered_beam_endpoints_cannot_be_called_missing_stems():
     assert not _full_beam_head_visible({"bbox": [1508, 153, 1520, 166]}, 1536)
     # The absence of a complete endpoint must stay unavailable: the beam
     # verifier is forbidden to award positive proof for any partial glyph.
+
+
+
+def test_detached_real_tuplet_bracket_is_not_invented_fourth_beam():
+    """Actual separate bracket ink must not defeat a correct source beam."""
+    from piano_teacher.notation.connector_pixels import (
+        _connected_source_beam_runs, _photographed_beam_runs)
+    pixels = np.zeros((260, 600), dtype=bool)
+    for start, end in ((198, 204), (207, 212), (215, 220)):
+        pixels[start:end, 430:501] = True
+    # Real physical shaft joins source levels.
+    pixels[198:220, 430] = True
+    pixels[198:220, 500] = True
+    # Real tuplet bracket endpoint is bright but physically detached.
+    pixels[224:232, 438:461] = True
+    frame = {"pixels": pixels}
+    observed = _photographed_beam_runs(frame, 190, 240, 438)
+    assert observed == [(198, 204), (207, 212), (215, 220), (224, 232)]
+    stems = [{"x": 430., "top": 198, "bottom": 250},
+             {"x": 500., "top": 198, "bottom": 250}]
+    owned = _connected_source_beam_runs(frame, observed, x=438,
+                                         tip=198., stems=stems, gap=11.)
+    assert owned == observed[:3]
+    # A counterfeit fourth-level stroke genuinely connected to the
+    # source's printed stem/beam must still trigger a mismatch.
+    pixels[219:225, 460] = True
+    owned = _connected_source_beam_runs(frame, observed, x=438,
+                                         tip=198., stems=stems, gap=11.)
+    assert owned == observed
+    # A truly deleted second beam remains missing, never reconstituted.
+    pixels[207:212, 430:501] = False
+    remaining = _photographed_beam_runs(frame, 190, 240, 438)
+    assert (207, 212) not in remaining
