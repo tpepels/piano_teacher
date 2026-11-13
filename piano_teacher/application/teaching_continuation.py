@@ -135,14 +135,15 @@ class TeachingContinuation:
     def after_settlement(decision, *, score_changed, prepared):
         if decision.continuation in ("stop","pause"):
             return ContinuationEffect("stop")
+        if decision.next_exposure is not None and decision.next_exposure.mode == "learn":
+            # A preloaded score cannot skip a selected untimed guided lesson.
+            return ContinuationEffect("guided")
         if prepared:
             return ContinuationEffect("handoff")
         if decision.response is not None:
             return ContinuationEffect("response")
         if decision.remediation is not None:
             return ContinuationEffect("remediation")
-        if decision.next_exposure is not None and decision.next_exposure.mode == "learn":
-            return ContinuationEffect("guided")
         return ContinuationEffect("await_score" if score_changed else "continue")
 
     def capture_state(self):

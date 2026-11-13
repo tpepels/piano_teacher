@@ -16,6 +16,7 @@ class Owner:
         return part
 class PeerOwner:
     extends Owner
+    const PLAYHEAD_FRACTION := 0.33
     var _stream_queue
     var timeline := {"pixels_per_beat":100.0,"duration_beats":4.0}
     func staff_gap() -> float:

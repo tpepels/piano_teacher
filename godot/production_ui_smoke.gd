@@ -70,7 +70,7 @@ func _process(_delta: float) -> bool:
     if Time.get_ticks_msec() - begun_ms > MAX_MS:
         _fail("Production UI timed out phase=%s error=%s pending=%s" % [
             str(app.last_state.get("phase","missing")),
-            str(app.score_error),str(app.command_state.pending)])
+            str(app.score_error),str(app.command_coordinator.state.pending)])
         return true
     if not app.native_started:
         return false
@@ -203,7 +203,7 @@ func _process(_delta: float) -> bool:
         var renderer = app.practice_view.stage.renderer
         if not bool(app.last_state.get("running",false)):
             var awaiting: Variant = app.last_state.get("awaiting_score_revision",null)
-            if not start_requested and not app.command_state.pending and \
+            if not start_requested and not app.command_coordinator.state.pending and \
                     awaiting == null and bool(app.last_state.get("loaded",false)):
                 start_requested = true
                 app._send_action({"action":"start"})
@@ -294,7 +294,7 @@ func _process(_delta: float) -> bool:
         print("PHASE6_PRODUCTION_TRANSPORT_STARTED transport=",initial_transport)
         return false
     if not pause_requested:
-        if app.command_state.pending:
+        if app.command_coordinator.state.pending:
             return false
         pause_requested = true
         app._send_action({"action":"pause"})
@@ -330,7 +330,7 @@ func _process(_delta: float) -> bool:
                 renderer.stream_world_beat < ready_first_expiry_world:
             _fail("Pause withdrew the current unexpired source before Resume")
             return true
-        if app.command_state.pending:
+        if app.command_coordinator.state.pending:
             return false
         resume_requested = true
         app._send_action({"action":"resume"})
