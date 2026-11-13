@@ -87,6 +87,71 @@ def _ledger_segment(pixels, rail, head, step, context, occluded_columns):
                 **evidence, **bands[0])
 
 
+def _dim_ledger_wings(dim_pixels, rail, head, step, occluded_columns):
+    """Prove real subdued staff-colored ledger wings independently.
+
+    The head masks cover the centre of a thin ledger; joining a dim mask
+    with the pale notehead mask can certify an erased line. Require a
+    continuous, measured horizontal wing on BOTH sides of the independently
+    registered head, at exactly the written ledger step. An unrelated full
+    staff rail (or a wide horizontal connector) cannot count as a short
+    ledger: each physical run must end near its owning notehead.
+    """
+    gap = rail.gap
+    expected = rail.bottom-step*gap/2
+    left, _top, right, _bottom = head['bbox']
+    extension = math.ceil(.12*gap)
+    facts = dict(step=step, expected_y=expected,
+        required_extension_spaces=.12, head_bbox=list(head['bbox']),
+        registration_bbox=list(head.get('registration_bbox', head['bbox'])))
+    if any(left-extension <= x < right+extension for x in occluded_columns):
+        return dict(status='unverified', reason='Observed playhead covers required ledger ink', **facts)
+    height, width = dim_pixels.shape
+    reach = max(extension+2, math.ceil(1.5*gap))
+    if left-extension < 0 or right+extension >= width:
+        return dict(status='unverified', reason='Required ledger wings are offscreen', **facts)
+    bands = []
+    for y in range(max(0, round(expected-.13*gap)),
+                   min(height, round(expected+.13*gap)+1)):
+        lx0 = max(0,left-reach)
+        rx1 = min(width,right+reach)
+        left_runs = [(lx0+a,lx0+b) for a,b in pixel_runs(dim_pixels[y,lx0:left+1])]
+        right_runs = [(right+a,right+b) for a,b in pixel_runs(dim_pixels[y,right:rx1])]
+        # Allow one anti-aliased boundary pixel to be absent, but never an
+        # interrupted outer wing. No interpolation or synthetic head bridge.
+        good_left = [(a,b) for a,b in left_runs
+                     if a <= left-extension and b >= left and b-a <= reach]
+        good_right = [(a,b) for a,b in right_runs
+                      if a <= right+1 and b >= right+extension and b-a <= reach]
+        if len(good_left) == 1 and len(good_right) == 1:
+            bands.append((y,good_left[0][0],good_right[0][1]))
+    if not bands:
+        return dict(status='mismatch',
+            reason='No physically continuous subdued ledger wings on both sides of the head', **facts)
+    groups=[]
+    for y,a,b in bands:
+        if not groups or y>groups[-1][-1][0]+1:
+            groups.append([])
+        groups[-1].append((y,a,b))
+    candidates=[]
+    for rows in groups:
+        top,bottom=rows[0][0],rows[-1][0]+1
+        centre=(top+bottom-1)/2
+        if (bottom-top <= max(2,math.ceil(.14*gap)) and
+                abs(centre-expected)<=.13*gap):
+            a=min(row[1] for row in rows)
+            b=max(row[2] for row in rows)
+            candidates.append(dict(bbox=[a,top,b,bottom], y=centre,
+                thickness_spaces=(bottom-top)/gap, continuous=True,
+                left_extension_spaces=(left-a)/gap,
+                right_extension_spaces=(b-right)/gap))
+    if len(candidates)!=1:
+        return dict(status='ambiguous' if candidates else 'mismatch',
+            reason='Subdued ledger wings have no unique thin written row', **facts)
+    return dict(status='verified',
+        reason='Independent dim pixels form both source-required ledger wings',
+        **facts, **candidates[0])
+
 def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
     """Prove each source-required ledger step in actual PNGs, separately.
 
@@ -161,17 +226,9 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                 else:
                     aligned = pixels
                     aligned_ledger = ledger_pixels
-                # A filled head legitimately obscures the rule behind it.
-                # Require measured left AND right wings extending beyond
-                # the independently registered bright notehead silhouette;
-                # counting the dim ink alone would make that gap look broken.
-                ledger_support = aligned | aligned_ledger
                 notes = frames.notes_by_beat[beat]
                 heads, errors = register_noteheads(aligned, frame['staves'], written, notes, glyphs,
                                                    playhead_x=frame['playhead_x'])
-                contexts = {staff: ledger_context_rows(ledger_support, rail, written,
-                    [n for n in notes if n['staff'] == staff], playhead_x=frame['playhead_x'])
-                    for staff, rail in frame['staves'].items()}
                 bright_contexts = {staff: ledger_context_rows(aligned, rail, written,
                     [n for n in notes if n['staff'] == staff], playhead_x=frame['playhead_x'])
                     for staff, rail in frame['staves'].items()}
@@ -193,8 +250,8 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                         # wings or an excuse to relabel playhead occlusion.
                         bright_line = _ledger_segment(aligned, rail, head, step,
                             bright_contexts[note['staff']], frame['occluded_columns']-shift)
-                        dim_line = _ledger_segment(ledger_support, rail, head, step,
-                            contexts[note['staff']], frame['occluded_columns']-shift)
+                        dim_line = _dim_ledger_wings(aligned_ledger, rail, head, step,
+                            frame['occluded_columns']-shift)
                         if bright_line['status'] == 'verified':
                             segments.append(bright_line)
                         elif dim_line['status'] == 'verified':

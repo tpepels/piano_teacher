@@ -15,7 +15,6 @@ on:
       - 'tests/test_phase3_ledger_pixels.py'
       - 'piano_teacher/notation/pixel_proof.py'
       - 'piano_teacher/notation/photographed_staff_rails.py'
-      - 'piano_teacher/notation/captured_frames.py'
       - 'piano_teacher/notation/feature_pixels.py'
       - 'piano_teacher/notation/structure_pixels.py'
       - 'piano_teacher/notation/rest_intervention.py'
