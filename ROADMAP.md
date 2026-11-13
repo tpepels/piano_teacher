@@ -1159,3 +1159,40 @@ parity, complete package/realtime recovery and the original physical
 instrument/learner study gates remain open. Hardware, external learner outcomes
 and clean-machine release acceptance cannot be inferred from CI. **Phase 2,
 Phase 4, Phase 6 and Phase 7 exit gates have not been closed.**
+
+
+### 2026-11-13 — complete-source audit coverage and Chopin rest-ink correction
+
+- **Commit `b07d292`:** every original/learning/focused graphical case and
+  one whole-source semantic case per source receives a stable repository-relative
+  identity before capture. Every partition publishes an immutable case manifest,
+  SHA-256 and exact original source/runtime identifiers. New global
+  `complete-source-acceptance` refuses absent or duplicate cases, missing
+  shards, foreign revisions, inconsistent inputs/runtime, partial runs and
+  corrupted totals. The **24 source-shard workflow was triggered** as
+  [run 43491850070](https://github.com/tpepels/piano_teacher/actions/runs/43491850070).
+  Its complete source/pixel certification is not implied by the fast gate.
+- **Commit `13f492f`:** the independent rest-placement measurement previously
+  treated pale mint fixed playhead columns as bright neighboring notation.
+  It now removes only the photographed mint transport overlay from the
+  **clearance** mask. The unmodified raw bright-mask still governs suppression
+  integrity, including foreign added ink. A negative test ensures neutral
+  detached note ink still causes a collision. The matching
+  [fast gate](https://github.com/tpepels/piano_teacher/actions/runs/43492443134)
+  and [Phase 6 real-score framebuffer](https://github.com/tpepels/piano_teacher/actions/runs/43492443302)
+  passed. The independent full Chopin pixel audit remains a separate
+  acceptance gate; do not mark its four rest obligations fixed until that
+  audit publishes fresh source-specific evidence.
+- **Commit `60f3244`:** original-paper MusicXML/MIDI semantics now require
+  *each* ledger row to be `verified`, not merely the absence of a mismatch.
+  `unsupported`, `ambiguous`, `unverified`, malformed and empty ledgers
+  cannot certify the complete source audit. The matching
+  [fast contract gate](https://github.com/tpepels/piano_teacher/actions/runs/43492886601)
+  passed.
+
+**Open:** all 24 source-shard outcomes and their final joint receipt;
+unresolved independent Chopin beams, rhythm symbols and connectors (existing
+`xfail` remains unwaived); Coda/Fukuda decision-ownership and original-paper
+numerical/figure parity; unbundled real-source reproductions, MIDI hardware/
+audio-latency and long-session checks; clean-machine release and comparative
+learner evidence. **Do not close the product or research acceptance phases.**
