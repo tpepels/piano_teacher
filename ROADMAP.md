@@ -1207,3 +1207,71 @@ learner evidence. **Do not close the product or research acceptance phases.**
 **Full 24-shard audit remains blocked, rather than certified:** [run 43491850070](https://github.com/tpepels/piano_teacher/actions/runs/43491850070) enumerated roughly 600 original/focused/learning cases **per shard**. The first four shards exhausted their real 1,680-second process limit after only a fraction of those cases (exit code 124). Their retained case logs contain actual failures across Chopin, Debussy, Satie, Bach, Danny Boy and Hanon. The global exact-shard aggregator already refuses absent, incomplete, mismatched and unverified source evidence, but the current corpus job architecture cannot finish full acceptance within its configured per-shard deadline. This needs a resource-bounded complete-corpus execution redesign, not relaxed assertions or reduced source coverage. Its failing cases are not overridden by the narrow green Hanon or fast tests.
 
 **Exit conditions still open:** full original-score graphical and semantic source audit, remaining genuine/unverified notation mismatches, original Coda/Fukuda research parity and single-authority pedagogical integration, physical MIDI/Bluetooth/count-in/latency/reconnection testing, clean-machine release validation, and measured learner outcomes. The corresponding phases are **not complete**.
+
+
+### 2026-11-13 — latest independent-source, combined-teacher, and clean-machine status
+
+**Complete native Chopin source audit, not CI gate color:** The complete
+independent original-symbol and framebuffer run
+[43500813359](https://github.com/tpepels/piano_teacher/actions/runs/43500813359)
+at `5624d49` reduced the Nocturne Op. 9 No. 2 measures 13–16 right-hand
+**167 errors to 134** by correcting shared-chord flag obligations in the
+source inventory and photographed feature verifier. The full run
+[43502966732](https://github.com/tpepels/piano_teacher/actions/runs/43502966732)
+at `c2ece10` retained 134 errors: seven of ten source beams independently
+verified, two mismatches, one no-usable-common-photo beam. Exporting exact
+Verovio stem abscissae (`c2ece10`) removed a layout approximation but did
+**not** earn any extra independent source proof. The next full run
+[43504145272](https://github.com/tpepels/piano_teacher/actions/runs/43504145272)
+at `588c2f2` also retained **134** errors despite separating the
+photographed independent tuplet bracket from physical beam ink: the next
+remaining evidence failure is actual head-to-beam stem continuity. In the
+real `native-10.95000.png` screenshot, the second stem's photographed
+RGB 144/159/155 continuous anti-aliased column was below the old bright
+pixel cutoff. Commits `c5168a2` and `05c416f` now admit exactly that
+physical mid-tone ink when separately bound pale head/beam endpoints exist;
+missing multi-pixel stems and broad polygons remain negative controls.
+**Their full source audit was not yet completed when this entry was written.**
+Chopin remains XFAIL, never accepted on the strength of a green CI job.
+A different first group still lacks its authentic third-level backward hook;
+a third long group lacks a uniquely registered complete screenshot. The
+remaining meter, ledger-independent note features, note stems, flags,
+tuplets and source-clock ownership claims also remain open.
+
+**Selected Coda/Fukuda decision authority:** Commit `e400f4e` removes the
+older error-family `RepeatedErrorPolicy`/`RemediationPlanner` fallback
+from the only selectable hybrid course. Its original MIDI feedback now
+selects transformed candidate lessons through the original combined
+algorithm catalogue; the shared immutable teaching/transport coordinator
+still owns persistence, note timing and mastery. The adversarial regression
+monkeypatches the old planner to raise and passes in
+[fast CI 43501077851](https://github.com/tpepels/piano_teacher/actions/runs/43501077851)
+and [real-score recovery 43501078067](https://github.com/tpepels/piano_teacher/actions/runs/43501078067).
+This is stronger algorithm ownership, **not** proof of numerical reproduction
+of every original paper figure or external learner effectiveness.
+
+**Release candidate and fresh-install software validation:** Commits
+`137c5c5`/`4f4a45f` introduced a real stand-alone Linux x86_64 tarball
+from the embedded CPython 3.14 and native Godot bridge; a separate fresh
+Ubuntu container checks archive SHA-256, dynamic library resolution,
+relocated imports and actual executable startup without development tools.
+[Run 43502802706](https://github.com/tpepels/piano_teacher/actions/runs/43502802706)
+proved the native/full-score build and tarball, but exposed missing host
+`libcairo.so.2` in the clean container. Commit `4ea4bdc` supplies the
+required Cairo/Pango OS runtime dependencies and strict `ldd` evidence.
+[Run 43504715461](https://github.com/tpepels/piano_teacher/actions/runs/43504715461)
+then proved bundled imports and all native links in that clean container,
+but **the packaged Godot executable still exited 1**. Its redirected log
+was not printed due to shell fail-fast; commit `51f8bb1` records the real
+Godot error log even when startup fails. The subsequent clean-machine run
+was pending; **packaged clean-machine acceptance is not certified**.
+All of this is headless software evidence only, not keyboard/acoustic
+acceptance.
+
+**Outstanding blocking gates:** the full 24-shard audit is incomplete and
+already has retained genuine symbol failures and hard resource timeouts;
+Chopin source/ink is not complete; real physical USB/Bluetooth keyboard
+timing and sustained-play/count-in/reconnect recordings are not supplied;
+external-controlled learner outcomes, full original-paper figure parity,
+and clean-machine publish acceptance are unproven. Do not close Phase 2,
+Phase 4, Phase 6 or Phase 7 on the basis of these commits.
