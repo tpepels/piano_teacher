@@ -760,7 +760,8 @@ def _verify(xml, folder, hand, reference_svgs, kind):
             # Likewise a singleton numeral needs a non-occluded photo.
             targets = list(dict.fromkeys(
                 source_targets + frames.nearby_clocks(source_targets) +
-                frames.post_group_clocks(source_targets)))
+                frames.post_group_clocks(source_targets) +
+                frames.pre_group_clocks(source_targets)))
             for target in targets:
                 try:
                     status, reason, evidence = (_beam if kind == 'beam' else _tuplet)(row, frames, target)

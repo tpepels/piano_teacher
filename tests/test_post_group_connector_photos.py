@@ -66,3 +66,18 @@ def test_post_group_selection_preserves_exact_half_beat_and_epsilon_edges():
     frames = frames_with([.00001, .0000100001, .25, .50001, .5000101])
     assert frames.post_group_clocks([0.], limit=10) == [
         .0000100001, .25, .50001]
+
+
+def test_real_pre_group_photo_search_uses_only_existing_before_first_source_clock(tmp_path):
+    """No synthesized future-ink picture, no before/after-clock conflation."""
+    from types import SimpleNamespace
+    from piano_teacher.notation.captured_frames import CapturedFrames
+    frame_index = CapturedFrames.__new__(CapturedFrames)
+    frame_index.clocks = (3.5, 3.75, 4.0, 4.5, 4.85, 5.0, 5.25, 5.5, 6.0, 6.2)
+    # A group starting at 5 has a real just-before-start witness even when
+    # every later source-onset photo is obstructed by the timing line.
+    assert frame_index.pre_group_clocks((5.0, 5.5, 6.0)) == [4.85, 4.5, 4.0, 3.75]
+    assert frame_index.pre_group_clocks((5.0, 5.5, 6.0), limit=2) == [4.85, 4.5]
+    assert not frame_index.pre_group_clocks((3.5, 4.0))
+    assert not frame_index.pre_group_clocks((), limit=6)
+    assert all(x < 5.0 for x in frame_index.pre_group_clocks((5.0, 5.5, 6.0)))

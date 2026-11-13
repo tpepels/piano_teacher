@@ -60,6 +60,31 @@ class CapturedFrames:
                 selected.append(clock)
         return selected
 
+    def pre_group_clocks(self, targets, limit=6):
+        """Photographed future-ink witnesses before the first source attack.
+
+        Large beamed groups can cross the immovable playhead at EVERY
+        constituent onset and leave the left edge immediately afterward.
+        Earlier, genuinely captured frames may contain the whole group to
+        the right, before its first stem reaches that line. Only actual
+        native-*.png clocks within 1.25 quarter beats are eligible; strict
+        source-head registration, viewport checks and beam topology remain
+        separate requirements. This never synthesizes a missing image.
+        """
+        if not targets or limit < 1:
+            return []
+        start = min(float(beat) for beat in targets)
+        index = bisect_left(self.clocks, start - 1e-5) - 1
+        earliest = start - 1.25 - 1e-5
+        selected = []
+        while index >= 0 and len(selected) < limit:
+            clock = self.clocks[index]
+            if clock < earliest:
+                break
+            selected.append(clock)
+            index -= 1
+        return selected
+
     def post_group_clocks(self, targets, limit=4):
         """Additional REAL source-window photos after the final attack.
 
