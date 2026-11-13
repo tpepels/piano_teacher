@@ -12,6 +12,7 @@ def _app(tmp_path):
     phrase = Phrase(1, 1, 2, 0, 8, (note,))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(Piece("Update", 100, (note,), (phrase,)))
+    engine.fingerprint = "update-fixture-source"
     return engine
 
 

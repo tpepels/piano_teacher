@@ -164,8 +164,8 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "repeat_deadline(" in backend
     assert owner.count("_cancel_pending_stream_arm()") >= 3
     assert "last_published_control_started_ms" in app
-    assert "state_request_started_ms <= last_published_control_started_ms" in app
-    assert "_pending_stream_renderer.acknowledge_stream_arm()" in app
+    assert "state_request_started_ms <= command_coordinator.last_published_control_started_ms" in app
+    assert "_pending_stream_renderer.acknowledge_stream_arm()" in owner
     assert "StreamLifecycle.activate(" in view
     assert "StreamLifecycle.reposition(" not in view
     assert "StreamLifecycle.widen_source(" not in view
