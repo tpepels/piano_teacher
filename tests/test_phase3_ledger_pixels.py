@@ -148,6 +148,18 @@ def test_real_whole_head_cannot_supply_missing_short_or_false_ledger_ink(tmp_pat
     result = next(row['features']['ledger'] for row in after['measured']
                   if row['source_id'] == LISZT_WHOLE_ID)
     # A genuinely bad witness still overrides other unchanged green frames.
+    if result['status'] != 'mismatch':
+        witness = next((w for w in result['evidence']['witnesses']
+                        if w.get('frame') == frame), {})
+        print('LEDGER_MUTATION_DIAGNOSTIC', mutation, 'altered=', frame,
+              'selected=', result['evidence'].get('frame'),
+              'altered_status=', witness.get('status'),
+              'altered_bright=', witness.get('bright_status'),
+              'altered_segments=', [(v.get('status'), v.get('bbox'), v.get('reason'))
+                                    for v in witness.get('segments', [])],
+              'other_witnesses=', [(w.get('frame'), w.get('status'),
+                                   w.get('bright_status'))
+                                  for w in result['evidence']['witnesses']])
     assert result['status'] == 'mismatch', result
     assert result['evidence']['frame'] == frame
     assert not after['complete']
