@@ -193,7 +193,8 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
             ca-certificates libasound2t64 libgl1 libx11-6 libxcursor1 \
             libxinerama1 libxi6 libxrandr2 libfontconfig1 libfreetype6 \
-            libstdc++6 libgcc-s1
+            libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
+            libffi8 libstdc++6 libgcc-s1
       - uses: actions/download-artifact@v4
         with:
           name: standalone-native-linux-py314-${{ github.event.workflow_run.head_sha || github.sha }}
@@ -212,7 +213,14 @@ jobs:
           test -x ./bin/godot
           test -x ./bin/node
           test -s ./godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
-          ! ldd ./godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so | grep 'not found'
+          LD_LIBRARY_PATH="$PWD/runtime/python/lib" \
+            ldd ./godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so \
+            > /tmp/standalone-native-ldd.txt
+          cat /tmp/standalone-native-ldd.txt
+          if grep -F 'not found' /tmp/standalone-native-ldd.txt; then
+            echo 'Native bridge has a missing deployed shared-library dependency' >&2
+            exit 1
+          fi
           # PATH deliberately excludes hosted Python/Godot/Node; the actual
           # installed package must supply all three to its own launcher.
           env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV \
