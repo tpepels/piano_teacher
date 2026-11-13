@@ -46,7 +46,8 @@ def test_original_two_anchors_and_measured_stem_tips(monkeypatch,tmp_path):
     def model_geometry(svg):
         return SimpleNamespace(
             elements={"n1":(.125,.5,"s1"),"n2":(.5,.5,"s1")},
-            staff_systems={"s1":{"staff_lines":[.35,.45,.55,.65,.75]}})
+            staff_systems={"s1":{"staff_lines":[.35,.45,.55,.65,.75]}},
+            stem_x={"n1":.14,"n2":.51})
     monkeypatch.setattr(geometry,"parse_svg_geometry",model_geometry)
     fragments=extract_beam_fragments([SVG],MODEL)
     assert list(fragments)==["n1|n2"]
@@ -57,6 +58,12 @@ def test_original_two_anchors_and_measured_stem_tips(monkeypatch,tmp_path):
     assert item["span"]>0 and len(item["bounds"])==4
     assert len(item["tip_offsets"])==2
     assert all(offset < -600 for offset in item["tip_offsets"])
+    assert len(item["stem_offsets"]) == len(item["head_offsets"]) == 2
+    # The exact independent Verovio stem X is not the approximate
+    # font-head offset, even though both use the same source-space units.
+    assert item["stem_offsets"][0] == pytest.approx(150.)
+    assert item["stem_offsets"][1] == pytest.approx(3850.)
+    assert item["stem_offsets"][0] != item["head_offsets"][0]
 
     from piano_teacher.notation.assets import beams as native
     cache=PreprocessingCache(tmp_path)
@@ -334,3 +341,12 @@ def test_bounded_vector_beam_works_even_when_full_page_raster_is_limited(monkeyp
     _, layout = make_phrase_fixture(tmp_path, reading_phrase(bars=8))
     assert set(layout["native_required_beam_groups"]) <= set(
         layout["native_beam_fragments"])
+
+
+def test_native_beam_slice_prefers_exact_verovio_stem_abscissae():
+    from pathlib import Path
+    native = (Path(__file__).resolve().parents[1] /
+              "godot/notation/native/connector_geometry.gd").read_text()
+    assert 'var source_exact_stems: Array = score.glyphs.beam_metadata[source_key].get("stem_offsets",[])' in native
+    assert 'source_stems.append(float(source_exact_stems[index]))' in native
+    assert 'source_stems.append(float(source_heads[index])+origin_to_center+attachment)' in native

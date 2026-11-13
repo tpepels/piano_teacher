@@ -337,6 +337,7 @@ func beam_layout(gap: float, clock: float, playhead_x: float,
         var members: Array = []
         var source_stems: Array = []
         var source_heads: Array = score.glyphs.beam_metadata[source_key]["head_offsets"]
+        var source_exact_stems: Array = score.glyphs.beam_metadata[source_key].get("stem_offsets",[])
         var head_box: Array = score.glyphs.bounds["head_black"]
         var origin_to_center: float = float(head_box[0])+float(head_box[2])*.5
         for index in range(group.size()):
@@ -351,7 +352,14 @@ func beam_layout(gap: float, clock: float, playhead_x: float,
             # centred heads. Map each measured stem centre in BOTH spaces;
             # mapping head centres stretches the first beam cap away from
             # its stem when the source spacing differs from the beat grid.
-            source_stems.append(float(source_heads[index])+origin_to_center+attachment)
+            # Exact source-engraved stem X and native source-head position
+            # are two different physical anchors. Use the measured former
+            # for slicing the preserved beam mask; the legacy synthesized
+            # formula is only for old/hand-made test atlases.
+            if source_exact_stems.size() == group.size():
+                source_stems.append(float(source_exact_stems[index]))
+            else:
+                source_stems.append(float(source_heads[index])+origin_to_center+attachment)
             members.append({
                 "id":str(event.get("id", "")), "x":stem_x,
                 "head_x":x+float(head_offsets.get(str(event.get("id","")),0.0)),

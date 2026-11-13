@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 6
+VERSION = 7
 
 
 def _classes(node: ET.Element) -> set[str]:
@@ -239,6 +239,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             y_scale = rgba.height/bounds[3]
             up = bounds[1]+bounds[3]*.5 < 0
             edges = []
+            stem_offsets = []
             for index,(note_x,note_y,_) in enumerate(anchors):
                 source_heads = [geom.elements[ident] for ident in chord_ids[index]]
                 reference_y = (max(head[1] for head in source_heads) if up
@@ -247,6 +248,12 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 stem_units = (((source_stem-x0)*aspect*250/space)
                     if source_stem is not None else
                     (note_x-x0)*aspect*250/space+(.54 if up else -.54)*250)
+                # Both source-space anchor and actual measured Verovio stem
+                # position are immutable parts of the detached polygon.
+                # Do not reconstruct this second coordinate from the font's
+                # nominal stem/head offsets at playback: source chord
+                # displacement and secondary hooks need the original X.
+                stem_offsets.append(stem_units)
                 position = round((stem_units-bounds[0])*x_scale)
                 sample = []
                 for distance in range(round(1.1*250*x_scale)+1):
@@ -277,6 +284,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 "note_ids":list(ids), "chord_note_ids":[list(g) for g in chord_ids],
                 "stem_up":up, "tip_offsets":edges,
                 "head_offsets":[(x-x0)*aspect*250/space for x,_,_ in anchors],
+                "stem_offsets":stem_offsets,
                 "png_base64":art["png_base64"],
             }
         except (KeyError,ValueError,TypeError,ET.ParseError,RuntimeError,
@@ -308,7 +316,8 @@ def beam_fragments(svgs, model, cache=None, cache_identity="") -> dict:
                 isinstance(v,dict) and
                 v.get("source")=="verovio-engraved-beam" and
                 len(v.get("note_ids",[])) >= 2 and
-                len(v.get("head_offsets",[]))==len(v.get("note_ids",[]))
+                len(v.get("head_offsets",[]))==len(v.get("note_ids",[])) and
+                len(v.get("stem_offsets",[]))==len(v.get("note_ids",[]))
                 for v in stored.values()):
             return stored
     result=extract_beam_fragments(svgs,model)
