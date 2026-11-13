@@ -169,7 +169,7 @@ jobs:
           unset PIANO_PACKAGE_AUDIT_ONLY
           timeout 180s bash scripts/package-inprocess.sh
           test -s dist/piano-teacher-linux-x86_64.tar.gz
-          sha256sum dist/piano-teacher-linux-x86_64.tar.gz > dist/standalone-sha256.txt
+          (cd dist && sha256sum piano-teacher-linux-x86_64.tar.gz > standalone-sha256.txt)
       - name: Upload the exact built runtime for a genuinely fresh OS test
         uses: actions/upload-artifact@v4
         with:
