@@ -713,6 +713,61 @@ def _isolated_rectangle(photo, obj):
     return False
 
 
+def _partial_bass_clef_dot_tracks(photo, objects, written):
+    """Resolve measured F-clef ornaments even if its bowl is gutter-clipped.
+
+    This does not certify any missing ink. It only prevents two physically
+    paired source-clef dots from being counted as extra augmentation dots.
+    """
+    accepted=set()
+    bass_staves={staff for _at,staff,sign,_line,_octave in written.clefs if sign=='F'}
+    for staff_name in bass_staves:
+        rail=photo['staves'].get(staff_name)
+        if rail is None:
+            continue
+        gap=float(rail.gap)
+        reference_y=float(rail.lines[1])
+        dots=[]
+        for obj in objects:
+            if obj.get('name')!='augmentation_dot':
+                continue
+            box=obj['bbox']
+            x=(box[0]+box[2])/2
+            y=(box[1]+box[3])/2
+            if (abs(y-(reference_y-gap/2)) <= .21*gap or
+                    abs(y-(reference_y+gap/2)) <= .21*gap):
+                dots.append((obj,x,y))
+        for upper,x,y in dots:
+            if abs(y-(reference_y-gap/2)) > .21*gap:
+                continue
+            for lower,lx,ly in dots:
+                if (upper is lower or abs(ly-(reference_y+gap/2))>.21*gap or
+                        abs(x-lx)>.15*gap):
+                    continue
+                # The true engraved F clef has a tall curved contour to
+                # the left. A foreign pair with no curved physical bowl
+                # remains an unexpected symbol candidate.
+                left=max(0,round(x-2.0*gap))
+                right=min(photo['head_pixels'].shape[1],round(x-.40*gap))
+                top=max(0,round(reference_y-gap))
+                bottom=min(photo['head_pixels'].shape[0],round(reference_y+2*gap))
+                if right<=left or bottom<=top:
+                    continue
+                shape=photo['head_pixels'][top:bottom,left:right]
+                if int(shape.sum()) < round(8.0*gap):
+                    continue
+                centres=[]
+                for row in shape:
+                    xs=np.flatnonzero(row)
+                    if len(xs)>=3:
+                        centres.append(float(np.median(xs)))
+                if (len(centres)<round(2.3*gap) or
+                        max(centres)-min(centres)<.35*gap):
+                    continue
+                accepted.add(upper['track'])
+                accepted.add(lower['track'])
+    return accepted
+
 def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
     """Return ordinary frame/region observations and honest absence coverage.
 
@@ -857,6 +912,7 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
         unexpected, unresolved = [], []
         procedural_pair = verified_procedural_pair(snapshot,procedural)
         procedural_tracks = {obj['track'] for obj in procedural_pair}
+        source_bass_clef_dots = _partial_bass_clef_dot_tracks(photo, snapshot['objects'], written)
         if len(procedural_tracks) == 2:
             procedural_frames += 1
         for obj in snapshot['objects']:
@@ -875,6 +931,9 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
                           or (obj['family'] == 'flag' and not expected_flags and source_supported))
             clipped_context = min(x0, y0, photo['shape'][1]-x1, photo['shape'][0]-y1) < 1
             if clipped_context:
+                definitive = False
+            if obj['track'] in source_bass_clef_dots:
+                # A genuine clef mark remains unresolved, not a proved extra.
                 definitive = False
             # An actual chord head in Ala beat 0.90000 is crossed by the
             # turquoise playhead; incomplete ink cannot prove an extra note.
@@ -901,6 +960,8 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
                           context_status='clipped' if clipped_context else 'visible')
             if head_context:
                 record['head_boundary'] = head_context
+            if obj['track'] in source_bass_clef_dots:
+                record['source_clef_context'] = 'photographed_partial_F_clef'
             # Competing larger authentic glyphs (e.g. a clef bowl) make a
             # small internal family candidate ambiguous, not an invented note.
             (unexpected if definitive and not other else unresolved).append(record)

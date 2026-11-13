@@ -81,3 +81,29 @@ def test_damaged_distinct_glyph_remains_in_the_inventory():
     accepted = _distinct_candidates(rows, limit=100)
     assert extra in accepted
     assert accepted == exhaustive(rows)
+
+
+def test_partial_bass_clef_pair_requires_curved_ink_not_just_two_dots():
+    import math
+    import numpy as np
+    from types import SimpleNamespace
+    from piano_teacher.notation.extra_symbol_pixels import _partial_bass_clef_dot_tracks
+
+    rail=SimpleNamespace(gap=22.,lines=(314.5,336.5,358.5,380.5,402.5))
+    ink=np.zeros((520,1536),dtype=bool)
+    for y in range(315,381):
+        x=round(36+12*math.sin(math.pi*(y-315)/66))
+        ink[y,x:x+5]=True
+    photo=dict(head_pixels=ink,staves={'left':rail})
+    upper=dict(name='augmentation_dot',family='dot',bbox=[63,319,76,333],track=4)
+    lower=dict(name='augmentation_dot',family='dot',bbox=[63,340,76,354],track=5)
+    source=SimpleNamespace(clefs=[(0,'left','F',4,0)])
+    assert _partial_bass_clef_dot_tracks(photo,[upper,lower],source)=={4,5}
+    assert not _partial_bass_clef_dot_tracks(photo,[upper],source)
+    assert not _partial_bass_clef_dot_tracks(photo,[upper,lower],SimpleNamespace(clefs=[]))
+    assert not _partial_bass_clef_dot_tracks(dict(photo,head_pixels=np.zeros_like(ink)),[upper,lower],source)
+    straight=np.zeros_like(ink)
+    straight[315:381,40:45]=True
+    assert not _partial_bass_clef_dot_tracks(dict(photo,head_pixels=straight),[upper,lower],source)
+    detached=dict(lower,bbox=[98,340,111,354],track=6)
+    assert not _partial_bass_clef_dot_tracks(photo,[upper,detached],source)
