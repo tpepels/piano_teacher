@@ -172,6 +172,9 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                 contexts = {staff: ledger_context_rows(ledger_support, rail, written,
                     [n for n in notes if n['staff'] == staff], playhead_x=frame['playhead_x'])
                     for staff, rail in frame['staves'].items()}
+                bright_contexts = {staff: ledger_context_rows(aligned, rail, written,
+                    [n for n in notes if n['staff'] == staff], playhead_x=frame['playhead_x'])
+                    for staff, rail in frame['staves'].items()}
                 for note, row in required:
                     sid = note['source']['id']
                     if sid in source_errors or sid not in heads:
@@ -182,9 +185,24 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                             'head_half' if note['note_type'] == 'half' else 'head_black')
                     head = _ledger_visible_head(heads[sid], glyphs[name])
                     rail = frame['staves'][note['staff']]
-                    segments = [_ledger_segment(ledger_support, rail, head, step, contexts[note['staff']],
-                                frame['occluded_columns']-shift)
-                                for step in row['features']['ledger']['expected_steps']]
+                    segments = []
+                    for step in row['features']['ledger']['expected_steps']:
+                        # Preserve every previously certified pale-ledger
+                        # witness. New dim-rail evidence is an alternative
+                        # physical ink channel, never a veto over real bright
+                        # wings or an excuse to relabel playhead occlusion.
+                        bright_line = _ledger_segment(aligned, rail, head, step,
+                            bright_contexts[note['staff']], frame['occluded_columns']-shift)
+                        dim_line = _ledger_segment(ledger_support, rail, head, step,
+                            contexts[note['staff']], frame['occluded_columns']-shift)
+                        if bright_line['status'] == 'verified':
+                            segments.append(bright_line)
+                        elif dim_line['status'] == 'verified':
+                            segments.append(dim_line)
+                        elif bright_line['status'] == 'unverified':
+                            segments.append(bright_line)
+                        else:
+                            segments.append(dim_line)
                     for segment in segments:
                         if 'bbox' in segment:
                             segment['bbox'][0] += shift
