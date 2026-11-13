@@ -255,7 +255,7 @@ def decide_standard_teaching(event, state, *, generator=None):
             if route.guided_return is not None:
                 start = route.guided_return[1]
                 end = route.guided_range[1] if state.policy.whole_handler is not None and route.guided_range else None
-        elif chosen.key != c.key and route.course_guided:
+        elif chosen.key != c.key and route.course_guided and route.mode == "learn":
             selected = next_guided_range(chosen,state.manual_facts.credits)
             if chosen.exercise.kind == "perform":
                 mode = "perform"

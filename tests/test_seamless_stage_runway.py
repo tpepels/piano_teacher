@@ -223,7 +223,7 @@ def test_two_consecutive_prepared_stage_transitions_keep_global_beat(tmp_path):
         engine.db.close()
 
 
-def test_preloaded_stage_enters_guided_mode_without_automatic_graded_handoff(tmp_path):
+def test_preloaded_stage_continues_in_explicit_timed_practice_after_guidance(tmp_path):
     engine = _engine(tmp_path)
     try:
         engine.course_guided = True
@@ -234,9 +234,8 @@ def test_preloaded_stage_enters_guided_mode_without_automatic_graded_handoff(tmp
             stage_key=selection.stage_key, revision=selection.revision)
         _finish(engine)
         assert engine.plan.lesson_step_number == next_number
-        assert engine.mode == "learn" and not engine.running
-        assert engine.guided_session.controller is not None
-        assert engine.awaiting_score_revision == engine.score_revision
+        assert engine.running and engine.mode == "practice"
+        assert engine.awaiting_score_revision is None
     finally:
         engine.db.close()
 

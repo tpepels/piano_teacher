@@ -133,10 +133,12 @@ jobs:
         run: |
           bash scripts/godot-test.sh 15s --headless --path godot \
             --script "$PWD/tests/godot/settings_ownership.gd" -- preferences
-      - name: Verify Phase 4 native Fukuda strategy and lesson navigation
+      - name: Verify sole adaptive Coda-Fukuda coordinators and lesson picker
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
         run: |
           bash scripts/godot-test.sh 15s --headless --path godot \
-            --script "$PWD/tests/godot/fukuda_midi_strategy.gd"
+            --script "$PWD/tests/godot/teaching_coordinators.gd"
+          bash scripts/godot-test.sh 15s --headless --path godot \
+            --script "$PWD/tests/godot/lesson_stage_picker.gd"
 

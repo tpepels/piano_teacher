@@ -266,3 +266,13 @@ def test_invariant_rejections_precede_installation(mutation):
     with pytest.raises(ValueError):
         validate_teaching_decision(decision,event=event,state=state)
     assert p.capture_teaching_state()==before
+
+
+def test_prepared_renderer_cannot_autoplay_an_untimed_guided_exposure():
+    from types import SimpleNamespace
+    from piano_teacher.application.teaching_continuation import TeachingContinuation
+    selected = SimpleNamespace(continuation="advance",
+        next_exposure=SimpleNamespace(mode="learn"), response=None, remediation=None)
+    effect = TeachingContinuation.after_settlement(
+        selected, score_changed=True, prepared=True)
+    assert effect.action == "guided"
