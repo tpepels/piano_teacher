@@ -4,6 +4,7 @@ The application captures facts and installs effects. Retry/source/tempo and
 mastery choices live here, before any announcement or durable mutation.
 """
 from __future__ import annotations
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, replace
 from math import isfinite
 from .teaching_course import (PlanProgress, CourseState, assessed_progress, manual_progress,
@@ -149,10 +150,19 @@ def source_safe_response(response, *, phrase, hand, grid):
     start, end = response.restart_beat, response.end_beat
     notes = tuple(n for n in phrase.notes if hand == "both" or n.hand == hand)
     while start > grid[0] and any(n.start < phrase.start+start-1e-7 < n.end-1e-7 for n in notes):
-        start = grid[grid.index(start)-1]
+        # Whole-take policy permits restarting at the current playback beat,
+        # which need not coincide with an authored measure boundary. The old
+        # grid.index(start) raised ValueError if a held note crossed that beat.
+        previous = bisect_left(grid, start-1e-7) - 1
+        if previous < 0:
+            break
+        start = grid[previous]
     while end < grid[-1] and any(phrase.start+start-1e-7 <= n.start < phrase.start+end-1e-7
             and n.end > phrase.start+end+1e-7 for n in notes):
-        end = grid[grid.index(end)+1]
+        following = bisect_right(grid, end+1e-7)
+        if following >= len(grid):
+            break
+        end = grid[following]
     return replace(response, restart_beat=start, end_beat=end)
 
 

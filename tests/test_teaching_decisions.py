@@ -276,3 +276,32 @@ def test_prepared_renderer_cannot_autoplay_an_untimed_guided_exposure():
     effect = TeachingContinuation.after_settlement(
         selected, score_changed=True, prepared=True)
     assert effect.action == "guided"
+
+
+@pytest.mark.parametrize("restart", [.5, 2., 2.+.00000001])
+def test_teaching_source_safe_response_expands_held_notes_without_grid_index_crash(restart):
+    """Partial start beats are legal; recovery must use source measure bounds."""
+    from types import SimpleNamespace
+    from piano_teacher.teaching_decisions import source_safe_response
+    # First note is held across the selected start. The next source attack
+    # begins before the requested end and continues beyond it.
+    passage = Phrase(1, 1, 3, 0., 6., (
+        Note(0., 3., 60, 0, 0, "right"),
+        Note(3.5, 5.5, 64, 0, 0, "right"),
+        Note(0., 6., 48, 0, 0, "left"),
+    ))
+    selected = SimpleNamespace(restart_beat=restart, end_beat=4., action="repair")
+    repaired = source_safe_response(selected, phrase=passage, hand="right",
+                                    grid=(0., 2., 4., 6.))
+    assert repaired.restart_beat == 0.
+    assert repaired.end_beat == 6.
+    assert selected.restart_beat == restart and selected.end_beat == 4.
+
+
+def test_teaching_source_safe_response_keeps_uninterrupted_fractional_source_range():
+    from types import SimpleNamespace
+    from piano_teacher.teaching_decisions import source_safe_response
+    passage = Phrase(1, 1, 2, 0., 8., (Note(2., 3., 60, 0, 0, "right"),))
+    response = SimpleNamespace(restart_beat=.5, end_beat=4., action="repair")
+    observed = source_safe_response(response, phrase=passage, hand="right", grid=(0., 4., 8.))
+    assert observed is not response and observed.restart_beat == .5 and observed.end_beat == 4.
