@@ -86,6 +86,7 @@ class LessonGenerator(Protocol):
     @property
     def name(self) -> str: ...
     def generate(self, piece: Piece) -> LessonPlanDefinition: ...
+    def decide_teaching(self, event, state): ...
 
 
 def lesson_hands(exercise: Exercise) -> tuple[str,...]:
@@ -111,6 +112,10 @@ class SourceLessonGenerator:
     warmup: bool = False
     grouping: MusicalGrouping | None = None
     name: str = WARMUP_STRATEGY
+
+    def decide_teaching(self, event, state):
+        from .teaching_decisions import decide_standard_teaching
+        return decide_standard_teaching(event, state, generator=self)
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if self.warmup:
@@ -191,6 +196,10 @@ class CodaLessonGenerator:
     # The research generator still defaults to the complete author-selected
     # excerpt. Only the desktop registration enables bounded teaching units.
     teaching_passages: bool = False
+
+    def decide_teaching(self, event, state):
+        from .teaching_decisions import decide_standard_teaching
+        return decide_standard_teaching(event, state, generator=self)
 
     def passage_stages(self, piece: Piece, original: ExerciseVariant, *,
                        kind: str) -> tuple[ExerciseStage, ...]:
@@ -337,6 +346,10 @@ class FukudaMidiLessonGenerator:
     name: str = "fukuda-midi"
     consolidate: bool = False
 
+    def decide_teaching(self, event, state):
+        from .teaching_decisions import decide_standard_teaching
+        return decide_standard_teaching(event, state, generator=self)
+
     def passage_stages(self, piece: Piece, original: ExerciseVariant, *,
                        kind: str) -> tuple[ExerciseStage, ...]:
         """Contribute MIDI-native reductions without owning passage choice."""
@@ -463,6 +476,10 @@ class ComposedLessonGenerator:
     # Contributors decide which statuses their musical rules require.
     error_status: tuple[tuple[str, str], ...] = ()
 
+    def decide_teaching(self, event, state):
+        from .teaching_decisions import decide_standard_teaching
+        return decide_standard_teaching(event, state, generator=self)
+
     def with_feedback(
         self, evidence: Mapping[str, str], definition: LessonPlanDefinition,
     ) -> "ComposedLessonGenerator":
@@ -581,6 +598,10 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
 @dataclass(frozen=True)
 class CodaFukudaMidiLessonGenerator(AdaptiveComposedLessonGenerator):
     """Default adaptive MIDI preset using two interchangeable contributors."""
+    def decide_teaching(self, event, state):
+        from .teaching_decisions import decide_coda_fukuda_teaching
+        return decide_coda_fukuda_teaching(event, state, generator=self)
+
     components: tuple[LessonGenerator, ...] = (
         FukudaMidiLessonGenerator(), CodaLessonGenerator())
     name: str = "coda-fukuda-midi"

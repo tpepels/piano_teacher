@@ -42,6 +42,21 @@ def select_fragment(variant: ExerciseVariant, boundaries: tuple[float, ...],
     return GuidedFragment(variant, start, end, display)
 
 
+def materialize_fragment(variant, boundaries, *, start, end):
+    """Build display data for an exact, already selected source interval."""
+    from ..measure_grid import phrase_grid
+    phrase = variant.phrase
+    grid = phrase_grid(phrase,boundaries)
+    first,last = grid.index(start),grid.index(end)
+    if first >= last:
+        raise ValueError("Invalid guided exposure interval")
+    absolute_start,absolute_end = phrase.start+start,phrase.start+end
+    display = Phrase(phrase.number,phrase.first_bar+first,phrase.first_bar+last-1,
+        absolute_start,absolute_end,tuple(note for note in phrase.notes
+            if absolute_start-1e-7 <= note.start < absolute_end-1e-7))
+    return GuidedFragment(variant,start,end,display)
+
+
 class GuidedSession:
     def __init__(self, *, clock: Clock = monotonic):
         self._clock = clock
@@ -83,28 +98,6 @@ class GuidedSession:
             return
         self.controller.set_connected(connected, now=now)
         self.controller.tick(now=now)
-
-    def commit_completed_preparation(
-        self, *, learning: bool, remediation_active: bool,
-        fingerprint: str, stage_key: str,
-        current_unit, record_preparation,
-    ) -> bool:
-        """Record one completed idea; do not award timed practice mastery.
-
-        Callbacks resolve the current source unit and save a completion only
-        after the controller confirms it. Never accesses the engine or store.
-        """
-        if (self.prepared or remediation_active or not learning
-                or self.controller is None):
-            return False
-        snapshot = self.controller.snapshot(now=self._clock())
-        if not snapshot["completed"]:
-            return False
-        record_preparation(
-            fingerprint=fingerprint, stage_key=stage_key,
-            unit=current_unit(), assisted_count=snapshot["assisted_count"])
-        self.prepared = True
-        return True
 
     def set_hints(self, enabled: bool, *, now: float) -> None:
         self.persistent_hints = bool(enabled)

@@ -55,46 +55,11 @@ class AttemptStep:
     duration: float = 0.0
 
 
-@dataclass(frozen=True)
-class FullPassageDecision:
-    """Pure post-assessment clock routing, applied under the engine lock."""
-    failed: bool
-    rewind: bool
-    rewind_seconds: float | None
-    stop_auto: bool
-    deadline_action: str
-    deadline_at: float | None
-
-
 def repeat_deadline(*, run_at: float, duration: float,
                     gap_beats: float, bpm: float) -> float:
     """Use the musical origin, not the time the clock was polled."""
     return run_at + duration + gap_beats * 60.0 / bpm
 
-
-def plan_full_passage(*, accepted: bool, automatic: bool, warmup: bool,
-                      retry_pending: bool, run_at: float, duration: float,
-                      total_beats: float, gap_beats: float, bpm: float,
-                      feedback_seconds: float) -> FullPassageDecision:
-    """Failed retries keep their rewind deadline; clean takes use the rest gap."""
-    failed = not accepted
-    rewind = failed and automatic
-    stop_auto = failed and warmup
-    if not automatic or stop_auto:
-        deadline_action = "clear"
-    elif retry_pending or rewind:
-        deadline_action = "keep"
-    else:
-        deadline_action = "schedule"
-    return FullPassageDecision(
-        failed=failed, rewind=rewind, stop_auto=stop_auto,
-        rewind_seconds=(max(feedback_seconds,
-                            min(4.0, total_beats * 60.0 / bpm / 3.0))
-                        if rewind else None),
-        deadline_action=deadline_action,
-        deadline_at=(repeat_deadline(run_at=run_at, duration=duration,
-                                   gap_beats=gap_beats, bpm=bpm)
-                     if deadline_action == "schedule" else None))
 
 
 class AttemptProgression:

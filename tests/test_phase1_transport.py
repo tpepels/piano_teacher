@@ -267,7 +267,7 @@ def test_explicit_renderer_reading_lead_keeps_midi_on_authoritative_resume_clock
     # The renderer's reserved lead is the deadline. It is longer than the
     # one full count-in bar (4 beats = 6 s at 40 BPM; owner decisions of
     # 2026-11-08: one count-in bar, always a whole bar), so it applies as is.
-    assert e._resume_grading_after == pytest.approx(t[0]+7.5)
+    assert e.midi_ingress.resume_grading_after == pytest.approx(t[0]+7.5)
     assert resumed["count_in_beats"] == pytest.approx(4.0)
     t[0] += 7.0
     assert e.state()["phase"] == "count_in"
@@ -305,7 +305,7 @@ def test_worker_resume_command_reserves_future_note_deadline(harness):
     published = json.loads(payload)
     assert published["phase"] == "count_in"
     assert published["transport_id"] == 1
-    assert engine._resume_grading_after == pytest.approx(now[0]+7.0)
+    assert engine.midi_ingress.resume_grading_after == pytest.approx(now[0]+7.0)
     now[0] += 7.0
     assert engine.state()["clock_beat"] == pytest.approx(clock_before)
     assert engine.state()["phase"] == "playing"

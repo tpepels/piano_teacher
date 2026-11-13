@@ -13,14 +13,14 @@ def ledger(tmp_path):
     repository.close()
 
 
-def begin(ledger, attempt, *, piece="piece", bpm=90, scope="full", start=1.0):
+def begin(ledger, attempt, *, piece="piece", bpm=90, scope="full", start=1.0, extra_context=None):
     ledger.start_session("session", "run", "2026-01-01T10:00:00Z", "Europe/Lisbon")
     rule = ledger.store_rules({"mastery": "accepted-full-target-v1"})
     ledger.start_attempt(attempt, "session", {
         "fingerprint": piece, "stage_key": "stage", "rule_id": rule,
         "hand": "both", "scope": scope, "assistance": False,
         "from_beat": 0, "end_beat": 4, "performed_bpm": bpm,
-        "monotonic_start": start, "started_utc": "2026-01-01T10:00:01Z"})
+        "monotonic_start": start, "started_utc": "2026-01-01T10:00:01Z", **(extra_context or {})})
 
 
 def finish(ledger, attempt, *, passed=True, clean=False, eligible=True, end=5.0):

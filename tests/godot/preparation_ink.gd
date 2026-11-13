@@ -1,4 +1,5 @@
 extends SceneTree
+const FramebufferTake := preload("framebuffer_take.gd")
 
 class FixtureApp extends "native_production_fixture.gd":
     func _transport_beat_now() -> float:
@@ -32,27 +33,27 @@ func run() -> void:
         return
     var view = app.practice_view.stage.renderer
     for onset in [0.0,4.0]:
-        app.last_state = {"loaded":true,"revision":app.revision,"running":false,
-            "paused":false,"phase":"ready","clock_beat":0.0,"hand":"right",
-            "mode":"practice","preview_only":true,"bpm":80,"transport_id":7,
-            "play_from_beat":onset,"duration_beats":8.0,"count_in_beats":0.0}
-        app._process(0.0)
+        # Admit the authentic source once, then compare the SAME moving-world
+        # sample with/without its overlay. READY intentionally has no source ink.
+        view._stream_release_all()
+        var state := {"loaded":true,"revision":app.revision,"running":true,
+            "paused":false,"phase":"count_in","hand":"right","mode":"practice",
+            "preview_only":true,"bpm":80,"transport_id":7,"play_from_beat":onset,
+            "duration_beats":8.0,"count_in_beats":4.0}
+        var world: float = onset-.25
+        view.stream_world_beat = -100.0
+        view._stream_add_take(onset,onset,onset,"preparation-ink")
+        await FramebufferTake.show(self,view,state,-.25,world)
+        app.practice_view.stage.count_in.present(-.25,4,false,false,4.0)
         var original: Image = await frame()
-        var repeated: Image = await frame()
-        check(original.get_data() == repeated.get_data(),
-            "Frozen native baseline is stable before preparation intervention")
         var heads: Dictionary = view.drawn_noteheads.duplicate()
-        app.last_state.count_in_beats = 4.0
-        app.last_state.running = true
-        app.last_state.paused = false
-        app.last_state.phase = "count_in"
-        # An exact logical-pixel translation makes the independent before/
-        # after pixel comparison insensitive to camera movement itself.
-        app.last_state.clock_beat = -10.0/view.timeline.pixels_per_beat
-        app._process(0.0)
+        var admissions: int = view._stream_serial
+        app.practice_view.stage.count_in.present(-.25,4,true,false,4.0)
+        await FramebufferTake.show(self,view,state,-.25,world)
         var prepared: Image = await frame()
-        check(app.practice_view.stage.count_in.visible, "Backend count-in actually enables preparation lights")
-        check(original.get_data() != prepared.get_data(), "Preparation intervention changes the actual stage")
+        check(app.practice_view.stage.count_in.visible, "Count-in enables the production preparation lights")
+        check(view._stream_serial == admissions, "Control and preparation use identical admitted windows")
+        check(original.get_data() != prepared.get_data(), "Preparation changes the actual stage")
         original.save_png(folder.path_join("original-%.0f.png" % onset))
         prepared.save_png(folder.path_join("prepared-%.0f.png" % onset))
         var pixel_scale := Vector2(original.get_size()) / root.get_visible_rect().size
@@ -97,5 +98,14 @@ func run() -> void:
             "Fixture contains actual accidental/ledger ink at source onset %.0f (%d pixels)" % [onset,expected])
         check(retained >= expected*.98,
             "Native preparation retains source accidental/ledger pixels at %.0f: %d/%d" % [onset,retained,expected])
+        # Negative control: the next actual moving frame must not masquerade
+        # as a matched control. Real head positions advance at the source density.
+        await FramebufferTake.show(self,view,state,0.0,world+.25)
+        var moved: Image = await frame()
+        check(moved.get_data() != prepared.get_data(), "Different world beats produce different photographed source ink")
+        for id in heads:
+            if view.drawn_noteheads.has(id):
+                check(absf((heads[id].x-view.drawn_noteheads[id].x)-view.timeline.pixels_per_beat*.25) < .02,
+                    "Preparation does not stop the moving source world")
     print("PREPARATION_INK_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

@@ -116,3 +116,87 @@ def test_incomplete_or_conflicting_meter_never_makes_extra_rest_expected():
         bars=(0.,1.5,3.5),meter=((0,(2,4)),))) is None
     assert _source_gap_duration(SimpleNamespace(
         bars=(0.,2.,4.),meter=((0,(2,4)),(0,(3,4))))) is None
+
+
+def test_registered_contour_track_fragments_share_only_the_same_source_gap():
+    # Actual GL contours sometimes fall below the strict shape threshold
+    # during subpixel translation and regain a new track on rescan. Each
+    # fragment is stable in at least three independent photographs.
+    frames = [_frame(i) for i in range(12)]
+    for index, frame in enumerate(frames):
+        for obj in frame["objects"]:
+            obj["track"] += (index//4)*2
+    proof = confirmed_gap_tracks(_source(),frames)
+    assert proof["tracks"] == set(range(4856,4862))
+    assert all(len(verified_procedural_pair(frame,proof)) == 2 for frame in frames)
+
+
+def test_lone_fragment_at_other_time_never_inherits_a_confirmed_gap():
+    frames = [_frame(i) for i in range(12)]
+    for frame in frames[4:8]:
+        for obj in frame["objects"]:
+            obj["track"] += 2
+            obj["bbox"][0] -= 90
+            obj["bbox"][2] -= 90
+    proof = confirmed_gap_tracks(_source(),frames)
+    assert proof["tracks"] == {4856,4857}
+    assert all(not verified_procedural_pair(frame,proof) for frame in frames[4:8])
+
+
+def test_brief_fragment_must_follow_the_confirmed_photographic_trajectory():
+    frames = [_frame(i) for i in range(12)]
+    for frame in frames[4:6]:
+        for obj in frame["objects"]:
+            obj["track"] += 2
+            # Still inside the original broad source/meter search box.
+            obj["bbox"][0] += 10
+            obj["bbox"][2] += 10
+    proof = confirmed_gap_tracks(_source(),frames)
+    assert proof["tracks"] == {4856,4857}
+    assert all(not verified_procedural_pair(frame,proof) for frame in frames[4:6])
+
+
+@pytest.mark.parametrize("source_beat", [7.5, 8.25])
+def test_pair_inside_occupied_source_cannot_borrow_nearby_gap_midpoint(source_beat):
+    frames = [_frame(i) for i in range(6)]
+    for index, frame in enumerate(frames):
+        frame["travel"] = -index*1.25
+        frame["shift"] = -1.25 if index else None
+        # At low density the midpoint search radius reaches source music.
+        # Source end is 8; both placements overlap the occupied source.
+        cx = 507+(source_beat-frame["clock"])*20
+        for obj in frame["objects"]:
+            obj["bbox"][0], obj["bbox"][2] = cx-14,cx+14
+    assert _photographic_density(frames) == 20
+    assert not confirmed_gap_tracks(_source(),frames)
+
+
+def test_low_score_in_current_frame_revokes_a_previously_confirmed_fragment():
+    frames = [_frame(i) for i in range(6)]
+    proof = confirmed_gap_tracks(_source(),frames)
+    changed = copy.deepcopy(frames[3])
+    changed["objects"][0]["score"] = .89999
+    assert not verified_procedural_pair(changed,proof)
+
+
+def test_brief_two_track_fragment_requires_stable_photographs_on_both_sides():
+    frames = [_frame(i) for i in range(12)]
+    for frame in frames[4:6]:
+        for obj in frame["objects"]:
+            obj["track"] += 2
+    proof = confirmed_gap_tracks(_source(),frames)
+    assert proof["tracks"] == {4856,4857,4858,4859}
+    assert all(len(verified_procedural_pair(frame,proof)) == 2 for frame in frames)
+    # A short new fragment only at an end has no photographic bridge.
+    proof = confirmed_gap_tracks(_source(),frames[:6])
+    assert proof["tracks"] == {4856,4857}
+    assert not verified_procedural_pair(frames[4],proof)
+
+
+def test_a_brief_single_track_identity_change_cannot_be_bridged():
+    frames = [_frame(i) for i in range(12)]
+    for frame in frames[4:6]:
+        frame["objects"][0]["track"] += 2
+    proof = confirmed_gap_tracks(_source(),frames)
+    assert proof["tracks"] == {4856,4857}
+    assert not verified_procedural_pair(frames[4],proof)

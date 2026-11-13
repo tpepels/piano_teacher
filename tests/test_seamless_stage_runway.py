@@ -149,7 +149,7 @@ def test_unready_future_extends_scrolling_runway_until_stage_is_compiled(tmp_pat
         start_beat = before + 2.0
         start_at = engine.visual_transport.next_at
         assert start_at == pytest.approx(ready_at + 2 * 60.0 / engine.plan.bpm)
-        assert engine._stage_handoff_visual_beat == pytest.approx(start_beat)
+        assert engine.teaching_continuation.handoff_world == pytest.approx(start_beat)
         assert engine._state_snapshot()["next_stage_start_beat"] == pytest.approx(start_beat)
         assert engine._visual_motion(start_at)[0] == pytest.approx(start_beat)
 
@@ -362,10 +362,10 @@ def test_late_ack_schedules_handoff_without_waiting_for_full_rest(tmp_path, monk
             stage_key=selection.stage_key, revision=selection.revision)
         assert acknowledged["accepted"]
         assert engine.pending_result is not None
-        assert engine._stage_handoff_visual_beat is not None
+        assert engine.teaching_continuation.handoff_world is not None
         assert engine.visual_transport.next_at < full_rest_deadline
         assert engine._state_snapshot()["next_stage_start_beat"] == pytest.approx(
-            engine._stage_handoff_visual_beat)
+            engine.teaching_continuation.handoff_world)
         deadline = engine.visual_transport.next_at
         clock[0] = deadline
         engine._advance_pending_feedback(deadline)
@@ -385,21 +385,20 @@ def test_changed_next_stage_rolls_back_without_automatic_camera_reset(tmp_path, 
         selection, _number = engine._next_stage_selection()
         engine.acknowledge_preloaded_stage(
             stage_key=selection.stage_key, revision=selection.revision)
-        original = backend.commit_assessed_result
+        original = engine.plan.apply_teaching_progress
         old_revision = engine.score_revision
         old_identity = engine.plan.identity
         old_offset = engine.visual_transport.visual_offset_beats
         old_artifacts = engine.score_artifacts
 
-        def mutate_after_grading(**kwargs):
-            result = original(**kwargs)
-            if result.stage_changed:
+        def mutate_after_grading(*args, **kwargs):
+            result = original(*args, **kwargs)
+            if engine.plan.identity != old_identity:
                 engine._future_stage_ready = ("new-after-feedback",
                                              engine.score_revision + 1)
             return result
 
-        monkeypatch.setattr(backend, "commit_assessed_result",
-                            mutate_after_grading)
+        monkeypatch.setattr(engine.plan, "apply_teaching_progress", mutate_after_grading)
         finished_at = _finish(engine)
         assert engine.visual_transport.paused
         assert engine.visual_transport.next_at == 0.0

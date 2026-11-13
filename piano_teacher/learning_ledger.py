@@ -185,6 +185,10 @@ class LearningLedger:
                 payload_hash TEXT NOT NULL, summary_json TEXT NOT NULL, data_json TEXT)""",
             """CREATE INDEX IF NOT EXISTS learning_session_time ON learning_sessions(learner_id,started_utc)""",
             """CREATE INDEX IF NOT EXISTS learning_attempt_stage ON learning_attempts(fingerprint,stage_key,session_id)""",
+            """CREATE INDEX IF NOT EXISTS learning_attempt_statistics_context ON learning_attempts(
+                fingerprint,stage_key,json_extract(summary_json,'$.hand'),
+                json_extract(summary_json,'$.performed_bpm'),json_extract(summary_json,'$.scope'),
+                substr(json_extract(summary_json,'$.started_utc'),1,10))""",
             """CREATE INDEX IF NOT EXISTS learning_attempt_session ON learning_attempts(session_id,state)""",
             """CREATE INDEX IF NOT EXISTS learning_event_session ON learning_events(session_id,attempt_id)""",
             """CREATE INDEX IF NOT EXISTS learning_decision_attempt ON learning_decisions(attempt_id,session_id)""",

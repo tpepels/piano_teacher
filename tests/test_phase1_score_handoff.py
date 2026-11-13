@@ -16,15 +16,12 @@ def test_auto_advance_waits_for_correct_revision(tmp_path, monkeypatch):
     e.plan=LearningPlan(piece())
     e.fingerprint='handoff'
     try:
+        e.midi.port = object()
         e.start()
         previous=e.transport_id
-        class Result:
-            correct=1
-            clean=True
-            passed=True
-            extra_notes=0
-            notes=[1]
-        e.pending_result=Result()
+        from piano_teacher.practice import Assessment, NoteAssessment
+        e.pending_result = Assessment(tuple(NoteAssessment(n, "correct")
+            for n in e.plan.active_phrase.notes), 0)
         e.running=False
         e.visual_transport.next_at=now[0]-.1
         e.auto=True

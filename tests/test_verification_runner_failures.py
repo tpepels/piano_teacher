@@ -251,7 +251,7 @@ def _signal_owned_group(process, signum):
 
 
 def _interrupt_compression(process, directory, first_signal, *, process_group=False,
-                           last_signal=None):
+                           last_signal=None, shell_trace=None, expected_signal=None):
     deadline = time.monotonic() + 8
     while not list(directory.glob('.triage-*.zip')) and time.monotonic() < deadline:
         assert process.poll() is None, 'Process exited before atomic ZIP compression'
@@ -259,13 +259,25 @@ def _interrupt_compression(process, directory, first_signal, *, process_group=Fa
     assert list(directory.glob('.triage-*.zip')), 'Atomic ZIP compression did not begin'
     other = signal.SIGTERM if first_signal == signal.SIGINT else signal.SIGINT
     # End with a different signal so a last-signal-wins implementation fails.
-    for signum in (first_signal, other, other if last_signal is None else last_signal):
+    for index, signum in enumerate((first_signal, other, other if last_signal is None else last_signal)):
         assert process.poll() is None, 'Signal aborted packaging before the archive completed'
         if process_group:
             _signal_owned_group(process, signum)
         else:
             process.send_signal(signum)
-        time.sleep(.01)
+        if shell_trace is not None:
+            # Observe each completed trap rather than enqueue two different
+            # pending signals whose delivery order the OS does not guarantee.
+            expected_count = index + 1 + (1 if expected_signal != first_signal else 0)
+            marker = f"signal_count={expected_count}"
+            deadline = time.monotonic() + 8
+            while marker not in shell_trace.read_text() and time.monotonic() < deadline:
+                assert process.poll() is None, shell_trace.read_text()
+                time.sleep(.001)
+            assert marker in shell_trace.read_text(), shell_trace.read_text()
+        else:
+            time.sleep(.01)
+
 
 
 @pytest.mark.parametrize('invocation', ['direct', 'module'])
@@ -325,7 +337,7 @@ def test_outer_exit_packaging_defers_signals_and_keeps_the_first_status(
     shard = out / 'shard-0-of-24'
     names, digest = _compression_logs(shard)
     with (folder / 'driver.log').open('w') as log:
-        process = subprocess.Popen(['bash', 'scripts/verify-notation.sh'], cwd=folder, env=env,
+        process = subprocess.Popen(['bash', '-x', 'scripts/verify-notation.sh'], cwd=folder, env=env,
             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             if interrupt_audit:
@@ -335,11 +347,16 @@ def test_outer_exit_packaging_defers_signals_and_keeps_the_first_status(
                     time.sleep(.01)
                 assert (shard / 'started.json').exists()
                 process.send_signal(signum)
+                deadline = time.monotonic() + 8
+                while 'Interrupted: completed case checkpoints' not in (folder / 'driver.log').read_text() and time.monotonic() < deadline:
+                    assert process.poll() is None
+                    time.sleep(.001)
+                assert 'Interrupted: completed case checkpoints' in (folder / 'driver.log').read_text()
             during_packaging = (signal.SIGTERM if signum == signal.SIGINT else signal.SIGINT) \
                 if interrupt_audit else signum
             last_signal = signal.SIGTERM if signum == signal.SIGINT else signal.SIGINT
             _interrupt_compression(process, out, during_packaging, process_group=process_group,
-                                   last_signal=last_signal)
+                                   last_signal=last_signal, shell_trace=folder / 'driver.log', expected_signal=signum)
             assert process.wait(timeout=8) == 128 + signum, (folder / 'driver.log').read_text()
         finally:
             if process.poll() is None:

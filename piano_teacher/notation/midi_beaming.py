@@ -24,6 +24,8 @@ class _Event:
     level: int
     rest: bool
     hidden: bool
+    tuplet_start: bool
+    tuplet_stop: bool
 
 
 def _beat_boundaries(beats: int, beat_type: int, divisions: int,
@@ -91,7 +93,9 @@ def _voice_events(measure: ET.Element, divisions: int) -> dict[str, list[_Event]
             and (modification is None or conventional_triplet)) else 0
         lanes[child.findtext("voice", "1")].append(_Event(
             child, onset, duration, level, rest,
-            rest and child.get("print-object") == "no"))
+            rest and child.get("print-object") == "no",
+            child.find("notations/tuplet[@type='start']") is not None,
+            child.find("notations/tuplet[@type='stop']") is not None))
     return lanes
 
 
@@ -153,7 +157,15 @@ def beam_midi_measure(measure: ET.Element, beats: int, beat_type: int,
         # Hidden micro-rests represent MIDI key-release articulation, not
         # the composer's written rests. Keep exact cursor positions intact.
         for event in events:
-            if event.hidden and event.duration <= divisions // 8:
+            # Verovio nests a beam wholly inside a tuplet when their starts
+            # coincide. A beam crossing the local tuplet stop therefore
+            # applies that ratio to ordinary following notes too. Preserve
+            # the explicit tuplet scope, including hidden timing rests.
+            if event.tuplet_start and run:
+                _mark_group(run)
+                run = []
+            if (event.hidden and event.duration <= divisions // 8
+                    and not (event.tuplet_start or event.tuplet_stop)):
                 continue
             current = cell(event) if event.level else None
             separation = (event.onset - (run[-1].onset + run[-1].duration)
@@ -171,4 +183,8 @@ def beam_midi_measure(measure: ET.Element, beats: int, beat_type: int,
             if not run:
                 run_cell = current
             run.append(event)
+            if event.tuplet_stop:
+                _mark_group(run)
+                run = []
+                run_cell = None
         _mark_group(run)

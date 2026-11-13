@@ -4,30 +4,23 @@ from dataclasses import replace
 import pytest
 
 from piano_teacher.application.transport_commands import (
-    StartFacts, require_pausable, resume_timeline, select_start_route,
+    require_pausable, resume_timeline,
 )
 
 
-START = StartFacts(
-    action="start", mode="practice", loaded=True,
-    source_changed=False, exercise_kind="learn")
-
-
-@pytest.mark.parametrize(("changes", "expected"), [
-    ({}, "start"),
-    ({"mode":"listen"}, "listen"),
-    ({"mode":"learn"}, "prepare_practice"),
-    ({"source_changed":True}, "reload_score"),
-    ({"action":"restart"}, "rewind"),
-    ({"action":"restart","exercise_kind":"perform"}, "start"),
-    ({"action":"restart","mode":"perform"}, "start"),
-    ({"action":"restart","loaded":False}, "start"),
-    ({"mode":"listen","source_changed":True}, "listen"),
-    ({"mode":"learn","source_changed":True}, "prepare_practice"),
-    ({"action":"restart","source_changed":True}, "reload_score"),
-])
-def test_start_precedence(changes, expected):
-    assert select_start_route(replace(START, **changes)) == expected
+@pytest.mark.parametrize("mode,action,source_changed,expected",[
+    ("practice","start",False,"start"),("listen","start",False,"listen"),
+    ("learn","start",False,"prepare_practice"),("practice","start",True,"reload_score"),
+    ("practice","restart",False,"rewind"),("practice","restart",True,"reload_score"),
+    ("perform","restart",False,"start")])
+def test_start_consumes_selected_intent(mode,action,source_changed,expected):
+    from teaching_fixtures import teaching
+    from piano_teacher.application.session_commands import SessionCommands
+    p,event,state=teaching(mode=mode)
+    event=replace(event,kind="manual",action=action,assessment=None)
+    owner=SessionCommands()
+    effect=owner.prepare(event=event,state=state,generator=p.lesson_generator)
+    assert owner.start_route(effect,source_changed=source_changed)==expected
 
 
 @pytest.mark.parametrize("phase", (

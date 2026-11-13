@@ -117,8 +117,8 @@ def test_clean_auto_take_increases_bpm_without_reengraving(tmp_path):
         bpm, original_revision = app.plan.bpm, app.score_revision
         length = app.plan.active_phrase.end - app.plan.active_phrase.start
         app.running = False
-        app.pending_result = SimpleNamespace(
-            correct=2, notes=[object(), object()], extra_notes=0, clean=True, passed=True)
+        from piano_teacher.practice import Assessment, NoteAssessment
+        app.pending_result = Assessment(tuple(NoteAssessment(n, "correct") for n in app.plan.active_variant.notes), 0)
         app.visual_transport.next_at = time.monotonic() - .1
         app._update()
         assert app.plan.bpm > bpm
@@ -138,8 +138,8 @@ def test_failed_auto_take_moves_back_in_place_and_never_advances_repeat(tmp_path
         app.start()
         length = app.plan.active_phrase.end - app.plan.active_phrase.start
         app.running = False
-        app.pending_result = SimpleNamespace(
-            correct=1, notes=[object(), object()], extra_notes=0, clean=False, passed=False)
+        from piano_teacher.practice import Assessment, NoteAssessment
+        app.pending_result = Assessment(tuple(NoteAssessment(n, "missed") for n in app.plan.active_variant.notes), 0)
         app.visual_transport._retry_previous_pass = True
         app.visual_transport._visual_rewind_from = length
         app.visual_transport._visual_rewind_to = 0.0
@@ -770,7 +770,7 @@ def test_midi_deadline_handoff_retains_first_attack_release_and_feedback(
     app._receive(midi_note(note.pitch))
     # The callback only queues a due handoff key with its hardware timestamp;
     # the native worker's clock wakeup settles the handoff, then replays it.
-    assert calls == [] and app._deferred_midi
+    assert calls == [] and app.midi_ingress.deferred
     app.advance_clock()
     assert calls == [received_at]
     assert app.running and app.transport_id == transport + 1

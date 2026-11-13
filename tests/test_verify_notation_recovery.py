@@ -42,7 +42,6 @@ def local_driver(tmp_path):
         (case/'native-0.00000.png').write_bytes(b'retained framebuffer')
         (case/'verovio-0.svg').write_text('<svg/>')
         (case/'case-state.json').write_text('{"stage":"note-features"}')
-        (folder/'started.json').write_text(json.dumps(dict(pid=os.getpid(),args=args)))
         if os.environ.get('TEST_DRIVER_EDIT_RUNNER')=='1':
             runner=Path('scripts/verify-notation.sh')
             runner.write_text(runner.read_text().replace('  attempted=$((attempted+1))',
@@ -52,6 +51,8 @@ def local_driver(tmp_path):
             print('Audit interrupted; checkpoints retained',flush=True)
             raise SystemExit(143)
         signal.signal(signal.SIGTERM,stop)
+        # Publish readiness only after the owned worker can checkpoint TERM.
+        (folder/'started.json').write_text(json.dumps(dict(pid=os.getpid(),args=args)))
         if os.environ.get('TEST_DRIVER_BLOCK')=='1':time.sleep(30)
         if os.environ.get('TEST_DRIVER_FIRST_FAILURE_ONLY')=='1' and folder.name!='shard-0-of-24':
             (folder/'summary.json').write_text('{"state":"passed","passed":true}')

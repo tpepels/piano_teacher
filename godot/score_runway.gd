@@ -220,6 +220,7 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         _future = null
         _register_preload_failure(message)
         return
+    _warm_future_textures(_future)
     _bundle = value
     _layout = installed["layout"]
     _future_intro_offset = StepTimeline.first_playable_beat(
@@ -234,6 +235,46 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         "hand":str(value.get("hand","both")),
         "practice_preparation":null},-50.0,-50.0)
     _next_poll_ms = 0
+
+# Textures a prepared stage's ink draws, uploaded a few per frame while it
+# is still hidden: the first frame that showed a promoted stage otherwise
+# uploaded every template texture at once (67-148 ms inside the new stage's
+# count-in under the GL Compatibility renderer).
+const WARM_TEXTURES_PER_FRAME := 4
+const WARM_TEXTURE_SETS := ["note_textures","note_stem_textures",
+    "tie_textures","chord_textures","chord_heads_textures",
+    "chord_stem_textures","beam_textures","tuplet_textures","slur_textures"]
+
+func _warm_future_textures(view) -> void:
+    if view == null or not is_instance_valid(view) or view.get("glyphs") == null:
+        return
+    var pending: Array[Texture2D] = []
+    for set_name in WARM_TEXTURE_SETS:
+        var textures: Variant = view.glyphs.get(set_name)
+        if textures is Dictionary:
+            for texture in textures.values():
+                if texture is Texture2D:
+                    pending.append(texture)
+    if pending.is_empty():
+        return
+    var warm := Node2D.new()
+    warm.name = "TextureWarmup"
+    view.add_child(warm)
+    var batch: Array[Texture2D] = []
+    warm.draw.connect(func() -> void:
+        for texture in batch:
+            warm.draw_texture_rect(texture,Rect2(2,2,2,2),false,Color(1,1,1,0.004)))
+    while not pending.is_empty():
+        if not is_instance_valid(warm):
+            return
+        # Mutated in place: the draw callable captured this array.
+        batch.clear()
+        batch.append_array(pending.slice(0,WARM_TEXTURES_PER_FRAME))
+        pending = pending.slice(WARM_TEXTURES_PER_FRAME)
+        warm.queue_redraw()
+        await get_tree().process_frame
+    if is_instance_valid(warm):
+        warm.queue_free()
 
 func _on_ack_reply(code: int, body: PackedByteArray) -> void:
     _ack_waiting = false

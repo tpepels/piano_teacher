@@ -127,7 +127,8 @@ void PianoNative::initialize_python() {
 bool PianoNative::is_asset_operation(const std::string &operation) {
     // Read-only operations whose Python side runs outside the engine lock
     // (ScoreArtifacts serializes itself). Only these may leave worker_.
-    return operation == "score.native_layout" || operation == "score.semantic";
+    return operation == "score.native_layout" || operation == "score.semantic" ||
+           operation == "learning.statistics";
 }
 
 void PianoNative::asset_loop() {

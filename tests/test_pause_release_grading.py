@@ -123,14 +123,14 @@ def play_paused(build, t, lead=READING_LEAD):
     t[0] = run_at + PAUSE_AT + PAUSE_SECONDS
     e.control("resume", presentation_lead_seconds=lead)
     # A renderer's reading lead, or the direct-MIDI count-in bar.
-    assert e._resume_grading_after == pytest.approx(t[0] + (lead or 6.0))
+    assert e.midi_ingress.resume_grading_after == pytest.approx(t[0] + (lead or 6.0))
     for pitch, on in DURING_LEAD:
         t[0] += 2.0
         send(e, pitch, on)
     resumed = e.visual_transport.run_at
     for at, pitch, on in sorted(after, key=lambda item: (item[0], item[2])):
         t[0] = resumed + at
-        assert t[0] >= e._resume_grading_after
+        assert t[0] >= e.midi_ingress.resume_grading_after
         send(e, pitch, on)
     return e, published
 

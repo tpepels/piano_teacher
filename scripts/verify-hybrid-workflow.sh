@@ -29,16 +29,26 @@ if [[ "$MODE" != "--corpus" ]]; then
     tests/test_runtime_architecture_contract.py \
     tests/test_phase5_architecture_audit.py \
     tests/test_inprocess_dispatcher.py \
-    tests/test_phase6_inprocess.py
-  if command -v godot >/dev/null 2>&1; then
-    timeout 25s godot --headless --path godot --script \
-      res://../tests/godot/idle_note_preview.gd
-    timeout 25s godot --headless --path godot --script \
-      res://../tests/godot/lesson_stage_picker.gd
-    timeout 25s godot --headless --path godot --script \
-      res://../tests/godot/settings_ownership.gd -- preferences
+    tests/test_phase6_inprocess.py \
+    tests/test_mastered_stage_replanning.py
+  if [[ -n "${GODOT_BIN:-}" ]]; then
+    binary="$GODOT_BIN"
+  elif command -v godot >/dev/null 2>&1; then
+    binary="$(command -v godot)"
+  elif command -v godot4 >/dev/null 2>&1; then
+    binary="$(command -v godot4)"
   else
-    echo "GODOT_IDLE_PREVIEW_SKIPPED: Godot binary not installed" >&2
+    binary=""
+  fi
+  if [[ -n "$binary" ]]; then
+    for fixture in continuous_score_flow score_stream_admission lesson_stage_picker; do
+      GODOT_BIN="$binary" bash scripts/godot-test.sh 25s --headless --path godot \
+        --script "$PWD/tests/godot/$fixture.gd"
+    done
+    GODOT_BIN="$binary" bash scripts/godot-test.sh 25s --headless --path godot \
+      --script "$PWD/tests/godot/settings_ownership.gd" -- preferences
+  else
+    echo "GODOT_HYBRID_SKIPPED: Godot binary not installed" >&2
   fi
 fi
 

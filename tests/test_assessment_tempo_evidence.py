@@ -45,8 +45,15 @@ def test_completed_take_history_uses_performed_bpm_before_retry_slowdown(
 
         _seal_completed(engine, result)
         engine._finish_full_passage(result, 12.0, 7.2, end)
-        assert engine.plan.bpm == 90
+        assert engine.plan.bpm == 100
+        assert engine._presentation_bpm == 90
         assert engine.visual_transport.pending_rewind == restart
+        assert engine._tempo_epoch == end
+        schedule = engine.teaching_continuation.schedule
+        assert schedule.exposure.bpm == 90 and schedule.exposure.from_beat == restart
+        assert engine.visual_transport.announced_continuation == (restart,schedule.run_at,90)
+        assert schedule.run_at == engine.visual_transport.next_at
+        assert schedule.run_at > end
         if interrupt_commit:
             engine.db.execute("""CREATE TRIGGER reject_progress_write
                 BEFORE INSERT ON strategy_sessions

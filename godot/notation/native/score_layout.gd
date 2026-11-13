@@ -232,6 +232,11 @@ func rest_y(event: Dictionary, gap: float) -> float:
         float(rest_lane_offsets.get(str(event.get("id","")),0.0)))
 
 func layout_rest_lanes(gap: float, density: float) -> void:
+    # Each fitting trial solves absolute lanes from unshifted source ink.
+    # Previous offsets (including prepared Y positions) are outputs, not
+    # the baseline for the next trial's replacement offsets.
+    rest_lane_offsets.clear()
+    prepared_rest_y.clear()
     var heads: Dictionary = engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
         ordered_events,gap,heads,glyphs.bounds)

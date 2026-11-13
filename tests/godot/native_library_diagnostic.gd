@@ -72,6 +72,11 @@ func run() -> void:
         var deadline: int = Time.get_ticks_msec() + 5000
         while not view.retained_ready() and Time.get_ticks_msec() < deadline:
             await process_frame
+        # This offline pixel diagnostic runs at a declared accelerated rate.
+        # Apply it BEFORE reserving the slot, so reservation and acknowledged
+        # deadline share exactly the same world rate.
+        app.last_state["bpm"] = 240.0
+        app.score_flow.sample(Time.get_ticks_msec(),240.0)
         app._send_action({"action": "start"})
         check(app.command_state.pending, filename + ": Play must reserve a take")
         var origin := 0.0
@@ -87,11 +92,23 @@ func run() -> void:
         playing["count_in_beats"] = 4
         playing["count_in_bar_beats"] = 4
         playing["clock_beat"] = -8.0
+        playing["phase"] = "count_in"
+        # Captured READY has visual_run_at_ms=0. It is not a live transport
+        # epoch. Author a fresh acknowledged deadline for the reserved world
+        # origin using this fixture's calibrated backend clock conversion.
+        var now: int = Time.get_ticks_msec()
+        var backend_now: float = float(now)-app.visual_transport_clock.backend_offset_ms
+        playing["clock_sampled_at_ms"] = backend_now
+        playing["visual_run_at_ms"] = backend_now + (origin-app.score_flow.project(now))*60000.0/240.0
+        playing["visual_offset_beats"] = origin
+        playing["tempo_segments"] = []
+        playing["visual_tempo_segments"] = []
         app._on_action(0, JSON.stringify(playing).to_utf8_buffer())
         var arrival: int = Time.get_ticks_msec() + 15000
         while Time.get_ticks_msec() < arrival:
             playing["clock_beat"] = app.score_flow.project(Time.get_ticks_msec()) - origin - float(playing.get("play_from_beat", 0.0))
             playing["phase"] = "count_in" if float(playing["clock_beat"]) < 0.0 else "playing"
+            playing["clock_sampled_at_ms"] = float(Time.get_ticks_msec())-app.visual_transport_clock.backend_offset_ms
             app.last_state = playing.duplicate(true)
             app.last_state_tick = Time.get_ticks_msec()
             app.visual_transport_clock.accept(app.last_state, app.last_state_tick, app.last_state_tick)
@@ -102,6 +119,10 @@ func run() -> void:
         await process_frame
         await process_frame
         RenderingServer.force_draw()
+        var strips: Array = []
+        for item in view._stream_queue.online:
+            strips.append({"origin":item["world_origin"],"armed":item.get("armed"),"pending":item.get("pending"),"hidden":item.get("hidden_until_armed"),"floor":item["source_floor"],"ceiling":item["source_ceiling"]})
+        print("NATIVE_LIBRARY_SAMPLE:",JSON.stringify({"sample":filename,"world":view.stream_world_beat,"origin":origin,"first_beat":first_beat,"phase":playing["phase"],"strips":strips}))
         check(view.is_visible_in_tree() and not view.drawn_noteheads.is_empty(),
             filename + ": production must actually paint native heads")
         var displayed: Array[String] = []

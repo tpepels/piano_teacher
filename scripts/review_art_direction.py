@@ -4,9 +4,8 @@
 rtk proxy .venv/bin/python \
     scripts/review_art_direction.py --render --output /tmp/piano-art-direction
 
-Owns a temporary HTTP server on 127.0.0.1:8765; refuses an occupied port. Without
---render it still checks real MIDI/native rendering headlessly. --geometry-only
-uses production controls with supplied state, no server, and no screenshots.
+Uses the production embedded engine. Without --render it checks real MIDI/native
+rendering headlessly. --geometry-only uses supplied state and no screenshots.
 PNG files are raw viewport captures, never resized or composed mock scenes.
 """
 from __future__ import annotations
@@ -17,13 +16,10 @@ import math
 import os
 from pathlib import Path
 import shutil
-import socket
 import struct
 import subprocess
 import sys
 import time
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SIZES = ((1920, 1080), (800, 600))
@@ -174,8 +170,11 @@ def validate_report(report: dict, size: tuple[int, int], *, output: Path,
             require(native.get("score_ready") is True and native.get("native_ready") is True
                     and native.get("visible") is True,
                     f"{name}: native notation is not ready and visible")
-            require(native.get("drawn_noteheads", 0) > 0 and native.get("visible_noteheads", 0) > 0,
-                    f"{name}: no native noteheads drawn within the stage")
+            require(native.get("retained_source_heads", 0) > 0,
+                    f"{name}: no authentic retained source heads compiled")
+            if name == "practice_playing":
+                require(native.get("drawn_noteheads", 0) > 0 and native.get("visible_noteheads", 0) > 0,
+                        f"{name}: no native noteheads drawn within the stage")
             require(not native.get("failure_reason"), f"{name}: native fallback")
             revision = native.get("revision", -1)
             require(revision >= 0 and all(native.get(key) == revision for key in (
@@ -201,31 +200,6 @@ def remaining(deadline: float) -> float:
     if seconds <= 0:
         raise RuntimeError("Art direction review exceeded its total time budget")
     return seconds
-
-
-def api(route: str, deadline: float, data: dict | None = None, *, timeout: float = 90) -> dict:
-    request = Request("http://127.0.0.1:8765" + route,
-                      data=json.dumps(data).encode() if data is not None else None,
-                      headers={"Content-Type": "application/json"})
-    try:
-        with urlopen(request, timeout=min(timeout, remaining(deadline))) as response:
-            result = json.load(response)
-    except HTTPError as exc:
-        raise RuntimeError(f"{route}: HTTP {exc.code}: {exc.read().decode(errors='replace')}") from exc
-    if not isinstance(result, dict) or "error" in result:
-        raise RuntimeError(f"{route}: {result}")
-    return result
-
-
-def check_free_port() -> None:
-    with socket.socket() as sock:
-        # Match HTTPServer's reuse policy: recently closed test connections
-        # may be in TIME_WAIT even when no other application is listening.
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            sock.bind(("127.0.0.1", 8765))
-        except OSError as exc:
-            raise RuntimeError("Port 8765 is occupied; this review must own its isolated backend") from exc
 
 
 def run_capture(godot: str, size: tuple[int, int], config: dict, env: dict,
@@ -255,7 +229,7 @@ def run_capture(godot: str, size: tuple[int, int], config: dict, env: dict,
         raise RuntimeError("Godot did not run the requested Practice control journey")
     if report.get("native_input", False) is not bool(config.get("native_input", False)):
         raise RuntimeError("Godot did not run the requested native popup input")
-    validate_report(report, size, output=output, require_native=config["mode"] == "http",
+    validate_report(report, size, output=output, require_native=config["mode"] == "embedded",
                     render=config["render"])
     return report
 
@@ -264,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "--output-dir", type=Path, default=Path("/tmp/piano-art-direction"))
     parser.add_argument("--render", action="store_true", help="Visible Godot windows and raw full-resolution PNGs")
-    parser.add_argument("--geometry-only", action="store_true", help="Supplied state, no HTTP or native ink claim")
+    parser.add_argument("--geometry-only", action="store_true", help="Supplied state, no engine commands or native ink claim")
     parser.add_argument("--exercise-controls", action="store_true", help="Exercise real Practice controls after the six views")
     parser.add_argument("--native-input", action="store_true", help="Use real X11 mouse/keyboard for the native lesson popup (xdotool)")
     parser.add_argument("--file", type=Path, default=ROOT / "midi/Ala_–_Joep_Beving.midi")
@@ -276,9 +250,9 @@ def main(argv: list[str] | None = None) -> int:
     if not math.isfinite(args.timeout) or args.timeout < 10 or args.measure < 1:
         parser.error("--timeout must be finite and >=10; --measure must be positive")
     if args.render and args.geometry_only:
-        parser.error("--render requires the real HTTP application")
+        parser.error("--render requires the real embedded application")
     if args.exercise_controls and args.geometry_only:
-        parser.error("--exercise-controls requires the real HTTP application")
+        parser.error("--exercise-controls requires the real embedded application")
     if args.native_input and (not args.exercise_controls or not args.render or not shutil.which("xdotool")):
         parser.error("--native-input requires --render --exercise-controls and xdotool")
     if len(args.sizes) > 3 or len(set(args.sizes)) != len(args.sizes):
@@ -291,58 +265,34 @@ def main(argv: list[str] | None = None) -> int:
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     env = {**os.environ,
-           "XDG_DATA_HOME": str(output / "data"), "XDG_CONFIG_HOME": str(output / "config"),
+           "HOME": str(output / "home"), "XDG_DATA_HOME": str(output / "data"), "XDG_CONFIG_HOME": str(output / "config"),
            "XDG_CACHE_HOME": str(output / "cache"), **embedded_python_env()}
     deadline = time.monotonic() + args.timeout
-    summary = {"status": "running", "mode": "geometry" if args.geometry_only else "http",
+    summary = {"status": "running", "mode": "geometry" if args.geometry_only else "embedded",
                "file": str(args.file.resolve()), "measure": args.measure,
                "render": args.render, "runs": []}
-    backend = None
-    backend_log = None
     try:
-        if not args.geometry_only:
-            check_free_port()
-            music_dir = output / "music"
-            music_dir.mkdir(exist_ok=True)
-            fixture = music_dir / args.file.name
-            if fixture.resolve() != args.file.resolve():
-                shutil.copy2(args.file, fixture)
-            backend_log = (output / "backend.log").open("w", encoding="utf-8")
-            backend = subprocess.Popen([sys.executable, "-m", "piano_teacher.server", "--no-midi"],
-                                       cwd=ROOT, env=env, stdout=backend_log, stderr=subprocess.STDOUT)
-            startup_deadline = min(deadline, time.monotonic() + 15)
-            while True:
-                if backend.poll() is not None or time.monotonic() >= startup_deadline:
-                    raise RuntimeError("Backend did not become ready; see backend.log")
-                try:
-                    api("/state", startup_deadline, timeout=1)
-                    break
-                except (OSError, URLError):
-                    time.sleep(min(.1, remaining(startup_deadline)))
-            api("/settings", deadline, {"fullscreen": False, "music_dir": str(music_dir)})
-            api("/load", deadline, {"path": str(fixture)})
-            api("/control", deadline, {"action": "tempo", "bpm": 120})
+        music_dir = output / "music"
+        music_dir.mkdir(exist_ok=True)
+        fixture = music_dir / args.file.name
+        if not args.geometry_only and fixture.resolve() != args.file.resolve():
+            shutil.copy2(args.file, fixture)
         for size in args.sizes:
             config = {"mode": summary["mode"], "size": list(size), "render": args.render,
                       "exercise_controls": args.exercise_controls,
                       "native_input": args.native_input,
                       "output": str(output / f"{size[0]}x{size[1]}")}
-            if backend is not None:
-                if backend.poll() is not None:
-                    raise RuntimeError("Backend exited; see backend.log")
-                api("/control", deadline, {"action": "stop"})
-                state = api("/control", deadline, {"action": "open_at", "bar": args.measure, "mode": "practice"})
-                model = api("/score/model", deadline)
-                source = next((measure for measure in model.get("measures", [])
-                               if measure.get("number") == args.measure), None)
-                if source is None or state.get("selected_start_bar") != args.measure:
-                    raise RuntimeError("Server did not select the requested source measure")
-                if abs(float(state["play_from_beat"]) - float(source["start_beat"])) > 1e-7:
-                    raise RuntimeError("Server playback origin differs from the semantic source measure")
-                if state.get("revision") != model.get("revision"):
-                    raise RuntimeError("Server state/model revisions differ before launch")
-                config.update(measure=args.measure, play_from_beat=source["start_beat"], revision=state["revision"])
-            report = run_capture(godot, size, config, env, deadline)
+            if not args.geometry_only:
+                config.update(file=fixture.name, music_dir=str(music_dir), measure=args.measure)
+            # Each real application starts with its own preferences/progress.
+            # A second resolution must not inherit the prior journey's resume
+            # prompt and bypass the current source-measure picker.
+            run_root = Path(config["output"])
+            run_env = {**env, "HOME":str(run_root/"home"),
+                       "XDG_DATA_HOME":str(run_root/"data"),
+                       "XDG_CONFIG_HOME":str(run_root/"config"),
+                       "XDG_CACHE_HOME":str(run_root/"cache")}
+            report = run_capture(godot, size, config, run_env, deadline)
             summary["runs"].append(report)
         summary["status"] = "passed"
         print(f"ART_DIRECTION_PASS: {len(summary['runs']) * 6} views; {output / 'report.json'}")
@@ -352,15 +302,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ART_DIRECTION_FAIL: {exc}\nEvidence: {output}", file=sys.stderr)
         return 1
     finally:
-        if backend is not None:
-            backend.terminate()
-            try:
-                backend.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                backend.kill()
-                backend.wait(timeout=3)
-        if backend_log is not None:
-            backend_log.close()
         (output / "report.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 

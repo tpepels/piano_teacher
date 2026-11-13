@@ -79,6 +79,9 @@ var _head_interiors: Dictionary = {}
 # never more than ~0.05 space of an attached stem.
 const HEAD_CUTOUT_MARGIN := 12.0
 
+# name|svg hash|scale -> [Image, ImageTexture]: shared by every renderer.
+static var _font_raster_cache: Dictionary = {}
+
 func ready() -> bool:
     return textures.size() == REQUIRED.size()
 
@@ -112,19 +115,32 @@ func load_font(items: Dictionary) -> bool:
         if not svg.contains("<svg") or not svg.contains("<path"):
             error = "Missing original font outline for " + name
             return false
-        var image := Image.new()
-        if image.load_svg_from_buffer(svg.to_utf8_buffer(), RASTER_SCALE) != OK:
-            error = "Godot cannot rasterize Verovio symbol " + name
-            return false
-        if image.is_empty():
-            error = "Empty Verovio symbol " + name
-            return false
-        if name == "brace":
-            # The font's E000 outline is a hairline once stretched over a
-            # grand staff. Verovio itself engraves the system brace as one
-            # bold FILLED curve, so build that shape (see brace_image).
-            image = brace_image()
-        loaded_textures[name] = ImageTexture.create_from_image(image)
+        # Every stage engraves the same font: a symbol rasterized once is
+        # shared (immutable Image and texture) by every later renderer. A
+        # stage handoff built a new renderer inside the next take's count-in,
+        # and re-rasterizing all ~67 SVG symbols cost ~130 ms on the main
+        # thread there (F1 round 4, handoff stalls).
+        var cache_key: String = "%s|%d|%s" % [name,hash(svg),str(RASTER_SCALE)]
+        var cached: Array = _font_raster_cache.get(cache_key,[])
+        var image: Image
+        if cached.size() == 2:
+            image = cached[0]
+            loaded_textures[name] = cached[1]
+        else:
+            image = Image.new()
+            if image.load_svg_from_buffer(svg.to_utf8_buffer(), RASTER_SCALE) != OK:
+                error = "Godot cannot rasterize Verovio symbol " + name
+                return false
+            if image.is_empty():
+                error = "Empty Verovio symbol " + name
+                return false
+            if name == "brace":
+                # The font's E000 outline is a hairline once stretched over a
+                # grand staff. Verovio itself engraves the system brace as one
+                # bold FILLED curve, so build that shape (see brace_image).
+                image = brace_image()
+            loaded_textures[name] = ImageTexture.create_from_image(image)
+            _font_raster_cache[cache_key] = [image,loaded_textures[name]]
         loaded_bounds[name] = geometry.duplicate()
         if name.begins_with("head_"):
             head_images[name] = image

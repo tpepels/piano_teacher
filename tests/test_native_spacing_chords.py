@@ -160,14 +160,6 @@ def test_only_input_that_is_not_one_chord_is_refused_with_its_cause():
 
 
 CORPUS = sorted((ROOT / "midi").glob("*.midi"))
-# Exercises whose page engraving fails before any chord is prepared, already
-# at 179ccb25 (before G1). A voice opens with a lone 32nd triplet (840 ticks,
-# 3:2, tuplet start and stop on one note); Verovio's timemap counts it as
-# nothing, so the next notes are stamped 1/12 beat early (C5 at 4.25, bound at
-# 4.333) and render_layout rejects the binding ("Engraved source identity has
-# an incorrect display onset"). Not a chord shape. Listed exactly, so a new
-# failure, or a fix, changes this test.
-KNOWN_ENGRAVING_FAILURES = {"Peace_Piece_-_Bill_Evans_(Piano_Solo)": {31, 37, 53, 67}}
 
 
 def test_corpus_has_seventeen_pieces():
@@ -188,18 +180,11 @@ def test_every_corpus_chord_is_engraved(path, tmp_path):
 
     piece, _ = import_piece(path)
     artifacts = ScoreArtifacts(PreprocessingCache(tmp_path))
-    failed = set()
     for phrase in piece.phrases:
         selected = ScoreSelection(piece, phrase, "both", "corpus", 1, path.name)
-        try:
-            layout = artifacts.geometry(selected)
-        except ValueError as exc:
-            assert "incorrect display onset" in str(exc), (phrase.first_bar, exc)
-            failed.add(phrase.first_bar)
-            continue
+        layout = artifacts.geometry(selected)
         prepared = {"layout": layout, "model": artifacts.semantic_score(selected)}
         assert refused_chords(prepared["model"]) == [], phrase.first_bar
         from piano_teacher.notation.assets.chords import chord_lanes
         if any(True for _ in chord_lanes(prepared["model"])):
             _assert_every_chord_mapped(prepared)
-    assert failed == KNOWN_ENGRAVING_FAILURES.get(path.stem, set())

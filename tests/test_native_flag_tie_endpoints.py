@@ -147,6 +147,10 @@ class TieView extends "res://notation/native/view.gd":
         last.merge({"id":"stop","chord":false,"note_type":"half","beat":2.0},true)
         layout.ordered_events = [leader,child,last]
         layout.chord_members = {"leader":[leader,child]}
+        # Native chord direction belongs to the engraved instance. A declared
+        # leader stem alone is insufficient for a real multi-head chord.
+        glyphs.chord_instances = {"leader":{"heads":["leader","child"],"stem":"up"}}
+        layout.sorted_chord_members = {"leader":[leader,child]}
         layout.beamed_note_ids = {}
         layout.beam_stem_up_by_note = {}
         var checks := {"chord_child":connector_geometry.tie_template_key(child,last,{"down":false},21.875)}
@@ -162,6 +166,8 @@ class TieView extends "res://notation/native/view.gd":
         var top: Dictionary = child.duplicate(true)
         top.merge({"id":"top","spelling":{"step":"D","octave":5}},true)
         layout.chord_members = {"leader":[leader,child,top]}
+        glyphs.chord_instances = {"leader":{"heads":["leader","child","top"],"stem":"up"}}
+        layout.sorted_chord_members = {"leader":[leader,child,top]}
         layout.ordered_events = [leader,child,top,last]
         checks["middle_tone_bow_down"] = connector_geometry.tie_bow_down(child,last,21.875)
         return checks

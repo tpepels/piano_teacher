@@ -47,6 +47,18 @@ class LearnerProgress:
             unit = next(iter(guided_units(variant, boundaries)), None)
         return unit
 
+    def teaching_credits(self, fingerprint):
+        from ..teaching_manual import GuidedCredits, unit_key
+        if not fingerprint:
+            return ()
+        keys = self._store.db.execute("SELECT stage_key FROM learner_stages WHERE fingerprint=?", (fingerprint,)).fetchall()
+        result = []
+        for (key,) in keys:
+            saved = self._store.read(fingerprint,key)
+            result.append(GuidedCredits(key, unit_key(saved["resume_unit"]) if saved["resume_unit"] else None,
+                tuple(unit_key(unit) for unit in saved["completed_units"])))
+        return tuple(result)
+
     def save_resume(self, *, fingerprint: str, stage_key: str,
                     unit: dict | None) -> None:
         if fingerprint and unit is not None:

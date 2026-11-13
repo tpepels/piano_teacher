@@ -1,103 +1,19 @@
-"""LearningPlan commit and adaptive evidence have explicit boundaries."""
-from types import SimpleNamespace
-
-from piano_teacher.application import assessment_commit as module
+"""Settlement consumes chosen progress with original assessment evidence."""
+from test_assessment_atomicity import _engine,_pending
 
 
-class Plan:
-    def __init__(self, *, outcome="same"):
-        self.identity = "right-hand"
-        self.bpm = 50
-        self.exercise = SimpleNamespace(kind="learn")
-        self.active_variant = object()
-        self.piece = SimpleNamespace(bar_boundaries=(0, 4, 8))
-        self.outcome = outcome
-        self.calls = []
-
-    def apply_result(self, *, correct, total, extras, accepted):
-        self.calls.append((correct, total, extras, accepted))
-        if self.outcome == "advance":
-            self.identity = "together"
-        elif self.outcome == "speedup":
-            self.bpm = 55
-        return "Continue"
-
-
-def take(*, clean=False, passed=None):
-    return SimpleNamespace(
-        clean=clean, passed=clean if passed is None else passed,
-        correct=1, extra_notes=0,
-        notes=[SimpleNamespace(status="wrong")])
-
-
-def test_evidence_uses_previous_stage_before_plan_advancement(monkeypatch):
-    plan = Plan(outcome="advance")
-    seen = []
-    def observe(**kwargs):
-        seen.append((kwargs["stage_key"],kwargs["bpm"],plan.identity))
-        return None
-    monkeypatch.setattr(module, "observe_assessed_take", observe)
-    result = module.commit_assessed_result(
-        plan=plan, result=take(clean=True), fingerprint="piece",
-        automatic=True, mode="practice", warmup=False,
-        observe=lambda *_: None, plan_remediation=lambda *a, **kw: None)
-    assert seen == [("right-hand", 50, "right-hand")]
-    assert result.previous_stage == "right-hand"
-    assert result.stage_changed
-    assert not result.accelerated
-    assert plan.calls == [(1, 1, 0, True)]
-
-
-def test_tempo_progress_is_not_mistaken_for_new_score_revision(monkeypatch):
-    monkeypatch.setattr(module, "observe_assessed_take", lambda **kw: None)
-    plan = Plan(outcome="speedup")
-    outcome = module.commit_assessed_result(
-        plan=plan, result=take(clean=True), fingerprint="piece",
-        automatic=True, mode="practice", warmup=False,
-        observe=lambda *_: None, plan_remediation=lambda *a, **kw: None)
-    assert outcome.accelerated and not outcome.stage_changed
-    assert outcome.previous_bpm == 50
-    assert plan.bpm == 55
-
-
-def test_remediation_requires_unaccepted_automatic_practice(monkeypatch):
-    calls = []
-    monkeypatch.setattr(module, "observe_assessed_take",
-                        lambda **kw: "needs_pitch_work")
-    def remediate(*args, **kwargs):
-        calls.append((args,kwargs))
-        return {"remediate":True}
-    plan = Plan()
-    outcome = module.commit_assessed_result(
-        plan=plan, result=take(clean=False), fingerprint="piece",
-        automatic=True, mode="practice", warmup=False,
-        observe=lambda *_: None, plan_remediation=remediate)
-    assert outcome.remediation == {"remediate":True}
-    assert calls[0][1]["stage_key"] == "right-hand"
-    assert calls[0][1]["boundaries"] == (0, 4, 8)
-    assert plan.calls == [(1, 1, 0, False)]
-
-    for auto, mode, warmup in [
-        (False, "practice", False),
-        (True, "perform", False),
-        (True, "practice", True),
-    ]:
-        calls.clear()
-        outcome = module.commit_assessed_result(
-            plan=Plan(), result=take(clean=False), fingerprint="piece",
-            automatic=auto, mode=mode, warmup=warmup,
-            observe=lambda *_: None, plan_remediation=remediate)
-        assert outcome.remediation is None
-        assert calls == []
-
-
-def test_accepted_warning_uses_passed_not_clean_for_stage_advancement(monkeypatch):
-    """Advisory amber timings may pass while failing the stricter clean criterion."""
-    monkeypatch.setattr(module, "observe_assessed_take", lambda **kw: None)
-    plan = Plan(outcome="advance")
-    result = module.commit_assessed_result(
-        plan=plan, result=take(clean=False, passed=True), fingerprint="piece",
-        automatic=True, mode="practice", warmup=False,
-        observe=lambda *_: None, plan_remediation=lambda *args, **kw: None)
-    assert result.stage_changed
-    assert plan.calls == [(1, 1, 0, True)]
+def test_evidence_uses_performed_stage_and_bpm_before_install(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        result = _pending(engine,"correct")
+        stage,bpm=engine.plan.identity,engine.plan.bpm
+        pending=engine._prepare_teaching("full_result",result)
+        receipt=engine.attempt_settlement.settle(pending,plan=engine.plan,binding=engine._teaching_binding(),now=engine.now())
+        assert receipt.previous_stage==stage and receipt.previous_bpm==bpm
+        assert engine.db.execute("SELECT t.stage_key,a.bpm FROM learning_assessments a JOIN learning_attempts t USING(attempt_id)").fetchall()==[(stage,bpm)]
+        assert receipt.accelerated and not receipt.stage_changed
+        assert engine.plan.bpm>bpm
+        assert engine.attempt_settlement.settle(pending,plan=engine.plan,binding=engine._teaching_binding(),now=engine.now()) is receipt
+        assert engine.db.execute("SELECT count(*) FROM learning_assessments").fetchone()[0]==1
+    finally:
+        engine.db.close()

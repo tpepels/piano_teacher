@@ -11,7 +11,8 @@ from piano_teacher.application.mistake_responses import (
     available_mistake_policies, register_mistake_policy,
     resolve_mistake_policy, rolling_response, whole_response,
 )
-from piano_teacher.application.rolling_recovery import plan_rolling_recovery
+from piano_teacher.application.rolling_recovery import project_rolling_response
+from piano_teacher.application.mistake_responses import rolling_response, resolve_mistake_policy
 from piano_teacher.learning import LearningPlan
 from piano_teacher.lesson_settings import SETTINGS
 from piano_teacher.library import ScoreLibrary
@@ -19,6 +20,14 @@ from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.recovery import RecoveryDecision
 from piano_teacher.server import PracticeEngine
 
+
+
+def plan_rolling_recovery(decision, *, identity, bpm, previous_key, previous_count,
+        grid, first_bar, now, allow_guided=True, strategy="adaptive", context=None, minimum_bpm=SETTINGS.minimum_bpm):
+    chosen = rolling_response(resolve_mistake_policy(strategy),decision,identity=identity,bpm=bpm,
+        minimum_bpm=min(bpm,minimum_bpm),previous_key=previous_key,previous_count=previous_count,
+        grid=grid,allow_guided=allow_guided,context=context)
+    return project_rolling_response(chosen,decision,grid=grid,first_bar=first_bar,before_bpm=bpm,now=now)
 
 def _decision():
     return RecoveryDecision(12.0, 4.0, 5, 2, 3)
@@ -268,7 +277,8 @@ def test_micro_loop_failed_complete_take_rewinds_to_difficult_bar_without_master
         prior_stage = engine.plan.identity
         finish = engine.visual_transport.run_at + 12 * 60 / 100 + .2
         engine._finish_full_passage(result, 12.0, 12 * 60 / 100, finish)
-        assert engine.plan.bpm == 90
+        assert engine.plan.bpm == 100
+        assert engine._presentation_bpm == 90
         assert engine.visual_transport.pending_rewind == 8.0
         assert engine.visual_transport.practice_preparation is not None
         assert engine.visual_transport._retry_previous_pass

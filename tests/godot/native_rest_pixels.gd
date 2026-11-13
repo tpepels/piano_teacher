@@ -188,6 +188,12 @@ func run() -> void:
         "Independent voices remain on native renderer without collisions")
     check(renderer.layout.unavoidable_rest_overlaps == 0,
         "Ordinary polyphonic fixtures must not require compromised rest positions")
+    # Fitting evaluates the same source repeatedly. Once positions have
+    # been prepared, another layout must still use unshifted source ink.
+    var planned: Dictionary = renderer.layout.rest_lane_offsets.duplicate()
+    renderer.layout.layout_rest_lanes(gap,renderer.timeline.pixels_per_beat)
+    check(renderer.layout.rest_lane_offsets == planned,
+        "Repeated rest planning preserves the selected lanes")
     var heads: Dictionary = renderer.layout.engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
         renderer.layout.ordered_events,gap,heads,renderer.glyphs.bounds)

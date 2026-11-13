@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from piano_teacher.application.stage_change import (
-    StageChange, apply_stage_change, prepare_stage_change, guided_reentry,
+    StageChange, prepare_stage_change,
 )
 
 
@@ -44,56 +44,32 @@ def test_invalid_step_selection_is_rejected_before_effects(invalid):
     assert not plan.events
 
 
-def test_prepared_step_changes_and_tempo_do_not_touch_transport():
-    plan = Plan()
-    step = prepare_stage_change(plan, "select_step", {"number": "2"})
-    assert step == StageChange("select_step", number=2)
-    assert step.resets_open_position and not step.tempo_only
-    apply_stage_change(plan, step, warmup=False)
-    tempo = prepare_stage_change(plan, "tempo", {"bpm": "55"})
-    assert tempo.tempo_only and not tempo.resets_open_position
-    apply_stage_change(plan, tempo, warmup=False)
-    apply_stage_change(plan, StageChange("next"), warmup=False)
-    apply_stage_change(plan, StageChange("previous"), warmup=False)
-    assert plan.events == [("step", 2), ("bpm", 55),
-                           ("jump", 1), ("jump", -1)]
+def test_prepared_step_and_tempo_are_scalar_intents():
+    plan=Plan()
+    assert prepare_stage_change(plan,"select_step",{"number":"2"})==StageChange("select_step",number=2)
+    tempo=prepare_stage_change(plan,"tempo",{"bpm":"55"})
+    assert tempo.tempo_only and tempo.bpm==55 and not tempo.resets_open_position
+    assert not plan.events
 
 
 def test_warmup_hand_change_requires_previous_mastered_stage():
-    plan = Plan()
-    hand = prepare_stage_change(plan, "hand", {"hand": "left"})
-    with pytest.raises(ValueError, match="three clean passes"):
-        apply_stage_change(plan, hand, warmup=True)
-    plan.mastered["first"] = True
-    apply_stage_change(plan, hand, warmup=True)
-    assert plan.events == [("hand", "left")]
+    plan=Plan()
+    with pytest.raises(ValueError,match="three clean passes"):
+        prepare_stage_change(plan,"hand",{"hand":"left"},warmup=True)
+    plan.mastered["first"]=True
+    assert prepare_stage_change(plan,"hand",{"hand":"left"},warmup=True).hand=="left"
 
-
-@pytest.mark.parametrize("action", ["unknown", "bad_action", "calibrate"])
+@pytest.mark.parametrize("action",["unknown","bad_action","calibrate"])
 def test_unsupported_action_reports_original_error(action):
-    with pytest.raises(ValueError, match="Unsupported action"):
-        apply_stage_change(Plan(), StageChange(action), warmup=False)
+    with pytest.raises(ValueError,match="Unsupported action"):
+        prepare_stage_change(Plan(),action,{})
 
 
-def test_guided_reentry_preserves_source_anchor_only_after_matching_tempo_change():
-    change=StageChange("tempo")
-    assert guided_reentry(
-        change=change,was_guided=True,course_guided=True,
-        previous_return=("right",4.0),current_stage="right").route == "same_fragment"
-    assert guided_reentry(
-        change=change,was_guided=True,course_guided=True,
-        previous_return=("right",4.0),current_stage="right").recovery
-    assert not guided_reentry(
-        change=change,was_guided=True,course_guided=True,
-        previous_return=("right",4.0),current_stage="left").recovery
-    assert guided_reentry(
-        change=change,was_guided=False,course_guided=True,
-        previous_return=None,current_stage="right").route == "none"
-    hand=guided_reentry(
-        change=StageChange("hand",hand="left"),was_guided=True,
-        course_guided=True,previous_return=None,current_stage="left")
-    assert (hand.route,hand.explicit_learn)==("course",True)
-    ordinary=guided_reentry(
-        change=StageChange("next"),was_guided=True,
-        course_guided=False,previous_return=None,current_stage="right")
-    assert (ordinary.route,ordinary.recovery)==("fresh",False)
+def test_guided_tempo_choice_retains_the_exact_fragment():
+    from dataclasses import replace
+    from teaching_fixtures import teaching
+    p,event,state=teaching(mode="learn")
+    state=replace(state,route=replace(state.route,guided_range=(4.,8.),guided_return=(p.identity,4.)))
+    event=replace(event,kind="manual",assessment=None,action="tempo",manual=StageChange("tempo",bpm=55))
+    decision=p.lesson_generator.decide_teaching(event,state)
+    assert (decision.next_exposure.from_beat,decision.next_exposure.end_beat,decision.next_exposure.bpm)==(4.,8.,55)

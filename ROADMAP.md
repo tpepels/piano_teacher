@@ -1,6 +1,6 @@
 # Piano Teacher — single development roadmap
 
-**Authoritative plan • 2026-11-04 • MIDI input only**
+**Authoritative plan • updated 2026-11-13 • MIDI input only**
 
 This is the sole active phase plan. Other `docs/` files are technical
 specifications, dated research evidence, verification protocols or archived
@@ -20,8 +20,9 @@ selected `ExerciseStage` and stage-specific tempo policy must agree across
 native notation, Listen, visual transport, physical MIDI grading, feedback
 and saved progress. The unchanged original MIDI is the final performance.
 
-New installations select adaptive **Coda + Fukuda**. Existing explicit
-preferences are respected. Lessons are meaningfully transformed from
+The desktop lesson strategy is adaptive **Coda + Fukuda**
+(`coda-fukuda-midi`); saved selections of removed strategies migrate to this
+default. Lessons are meaningfully transformed from
 source material, not editorial renamings of the same notes. No artificial
 mastery from visual previews; three accepted full-target performances required
 (the exact warning allowance is defined by `Assessment.passed`, below).
@@ -315,6 +316,20 @@ Mastery still requires three accepted full-target takes; strictly clean takes
 are a separate metric, and the practice labels now say accepted passes.
 `learning.statistics` on the in-process API reports these measurements,
 timing residuals, comparable retry outcomes and unknown/pruned coverage.
+
+**P1 software report completed (2026-11-13):** The existing Settings → Learning
+history → Practice statistics disclosure now provides All history/Current piece,
+Refresh and bounded page controls with loading/error/empty states. Query version
+1/report schema 2 validates source/session/date/stage/hand/performed-BPM/scope/
+policy filters and stable 250-default/1,000-maximum attempt cursors. Shared detail
+bytes, observations, related rows and metric tables have explicit caps and
+missingness. Original pitch assignments, signed quantiles/local tempo context,
+note-location exposure denominators, tempo history, recorded phase intersections,
+censored recorded mastery and six descriptive fixed-policy arms use the single
+ledger. Read-only worker/WAL snapshots keep report work outside the musical
+engine lock. This does not close physical latency/instrument, clean-machine
+release or human learning-effect gates. See the
+[Task 5 software receipt](.superpowers/sdd/2026-11-13-roadmap-completion/task-5-report.md).
 
 The selectable `evidence-adaptive` policy uses actual source error clusters,
 source attack density and compatible prior outcomes to repeat, isolate, slow,
@@ -996,3 +1011,103 @@ passage boundaries and backend tempo, not physical display speed. Full
 24-shard scientific notation proof, original Chopin drawing failures,
 long-run input/reconnection/audio latency and learner trials remain open.
 **Phase 2 and Phase 6 are not certified complete.**
+
+
+### 2026-11-13 — mastered-stage retention and bounded software verification
+
+This continuation was verified locally on the working tree based on
+`92d03a63`, including the pre-existing uncommitted changes. The results below
+describe that local tree, not a new committed or remote CI revision.
+
+- **G2-6, mastered stages:** feedback-driven Coda/Fukuda reselection now keeps
+  the exact mastered scaffold definitions, source/version/content identities,
+  earned tempos and visible progress. Unmastered stages continue adapting;
+  the original remains last. Reopening recovers exact mastered candidates
+  from the immutable catalog before filtering saved credit. Unknown historical
+  or mismatched content keys remain uncredited. Real Bach MIDI regressions
+  cover both original and scaffold cursors, repeated feedback and reopening.
+- **G2-9, real-generator decisions:** new tests exercise actual accepted-warning,
+  failed and correct original takes at passage and whole-piece scope. They
+  check decision-time state preservation, safe continuation announcements,
+  actual settlement/rerouting and retained mastery. Mastery still requires
+  three accepted full-target performances. Independent review also checked
+  rollback after a real-generator replan with mastered left-hand stages.
+- **Notation audit execution:** post-group photograph selection now seeks into
+  the sorted capture inventory instead of scanning every preceding frame for
+  each connector. A 100,000-clock regression requires fewer than 32 indexed
+  reads for three late witnesses. Existing clocks, strict onset exclusion,
+  half-beat window, pixel criteria and negative controls are preserved.
+- **Runnable focused acceptance:** the hybrid workflow uses current continuous
+  score-flow/admission fixtures, absolute fixture paths and the existing Godot
+  error-detecting wrapper. It honors `GODOT_BIN`, `godot` and `godot4` and
+  includes the new mastery regressions. The newly reachable picker fixture
+  now checks readable labels, exact provenance tooltips and selected indexes
+  against the current UI. Fifteen executable script regressions cover errors,
+  failure markers, path handling, binary selection and the documented modes.
+
+| Local gate | Observed result |
+| --- | --- |
+| `scripts/ci-smoke.sh` with `.venv/bin/python` | **751 passed**, 14.30 s |
+| `scripts/verify-hybrid-workflow.sh --all`, focused portion | **172 passed**, 15.35 s; all four Godot fixture failure counts zero |
+| Same command, real MIDI generator corpus | **17 passed**, 7.17 s |
+| Workflow and post-group photographic regression modules | **21 passed**, 1.58 s |
+| `scripts/check-godot-syntax.sh` | `GODOT_STARTUP_SYNTAX_OK`; all 37 behavior/UI fixture failure counts zero |
+
+Task-scoped checks additionally passed 87 adaptive/progress/settlement tests,
+36 connector tests and 58 related notation contracts; these suites overlap
+and their counts must not be added. All three implementation tasks passed
+independent spec and code-quality review. The Godot gate retains existing
+deliberate failure-injection diagnostics and teardown warnings; its successful
+exit does not certify leak-free long sessions. The README/product contract
+now reflects the sole desktop strategy and saved-selection migration already
+implemented before this continuation.
+
+**Remaining gates:** the full 24-shard source-symbol photographic audit and
+unresolved genuine notation mismatches, the affected non-bundled Beethoven/
+imported MIDI reproductions, USB/Bluetooth/audio/GPU practice acceptance,
+original-paper parity, comparative learner outcomes and clean-machine release
+acceptance remain open. The 25–45 minute full suite and long CI were not run
+in this bounded continuation. Full Coda/Fukuda policy/tempo/transport decision
+ownership still needs its explicit contract; per-note Fukuda contributor
+regeneration remains a report-only option. **No phase is closed by these
+software checks.**
+
+### 2026-11-13 — full remaining-work continuation (in progress)
+
+The owner requested all remaining and deferred work, then specified that
+software testing should continue and physical hardware acceptance will follow.
+The complete work inventory and evidence live in the current completion plan;
+the following items have fresh local evidence:
+
+- **Peace Piece source-onset blocker repaired and reviewed.** Beams crossed
+  explicit tuplet boundaries, causing Verovio to apply a tuplet ratio to an
+  ordinary following note. The beam-scope correction preserves original
+  generated XML exactly except for beam elements, including IDs, onsets,
+  durations, pitches, voices and ties. All four failing passages (31, 37, 53,
+  67) pass. The old expected-failure allowance was removed: the complete
+  17-piece chord/phrase corpus passes all 1,240 phrases, 3,687 chords and
+  39,301 note glyphs; 216 focused regressions pass.
+- **Polyphonic rest collisions and printed-rest ownership repaired and
+  reviewed.** Repeated layout now measures the original baseline instead of
+  accumulating prior trial offsets. Independent photographic ownership
+  recognises stable fragments of the same source-end practice-rest pair,
+  retaining strict current-frame/source-boundary and foreign-ink controls.
+  Both original quarantined failures pass unmasked and their entries were
+  removed. The final 81 controls and 240 related tests pass.
+- **The Pathétique MIDI is available locally.** Its SHA-256 is
+  `95723184515859acd321be57e8b4d1dcae3e18ebc57e0eab6895f33619c509a2`.
+  Native first/middle/last-measure diagnostics pass on it, Fairytale of New
+  York, the additional Prelude I file and Where Is My Mind. Earlier blanket
+  missing-file statements are historical; actual full production Listen/
+  retry/reopen and hardware acceptance remain their own obligations.
+- **Current control/harness migrations are being verified.** The real
+  embedded control journey passes 15 assertions. Ordered-signal regression
+  checks also pass under controlled CPU load. These changes are awaiting
+  their task review and complete current-head acceptance.
+
+The original-paper [threshold/figure audit](docs/verification/fukuda-paper-audit-2026-11-13.md)
+now records the inspected primary PDF and MIDI-domain substitutions. It does
+not award numerical/figure parity or human effectiveness. Bounded P1 analytics
+and its usable report, full teaching-decision ownership, deferred orchestration,
+complete scientific notation proof, package/realtime acceptance and final
+full-suite evidence remain active work. No phase has been closed.

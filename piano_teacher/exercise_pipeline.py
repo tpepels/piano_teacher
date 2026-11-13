@@ -28,6 +28,18 @@ class ExerciseStage:
     def shaped_tempo(self) -> bool:
         return self.tempo_policy is not None
 
+    def effective_bpm(self, bpm: float) -> float:
+        """Tempo this stage actually sounds at for a selected (ladder) BPM."""
+        if self.tempo_policy is None:
+            return float(bpm)
+        return float(self.tempo_policy.effective_bpm(bpm))
+
+    def ladder_bpm(self, effective_bpm: float) -> float:
+        """Selected BPM at which this stage sounds at effective_bpm."""
+        if self.tempo_policy is None:
+            return float(effective_bpm)
+        return float(self.tempo_policy.ladder_bpm(effective_bpm))
+
     def tempo_map(self, bpm: float) -> TempoMap | None:
         if self.tempo_policy is None:
             return None

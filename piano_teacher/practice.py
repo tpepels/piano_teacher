@@ -86,6 +86,10 @@ class Assessment:
     extra_notes: int
     unmatched_played: tuple[PlayedNote, ...] = ()
 
+    def __post_init__(self):
+        object.__setattr__(self,"notes",tuple(self.notes))
+        object.__setattr__(self,"unmatched_played",tuple(self.unmatched_played))
+
     @property
     def correct(self) -> int:
         return sum(n.status == "correct" for n in self.notes)

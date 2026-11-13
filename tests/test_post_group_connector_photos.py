@@ -44,3 +44,25 @@ def test_existing_early_onset_neighbor_search_is_unchanged():
     # nearby-clocks query. Both must use saved clocks, never an invented time.
     assert frames.nearby_clocks([.5],limit=3) == [.75,.125,.875]
     assert frames.post_group_clocks([.5],limit=3) == [.75,.875,1.]
+
+
+def test_late_post_group_witness_lookup_uses_bounded_indexed_access():
+    class IndexedClocks(tuple):
+        reads = 0
+        def __iter__(self):
+            raise AssertionError('Post-group witnesses must not scan every performance clock')
+        def __getitem__(self, index):
+            self.reads += 1
+            return super().__getitem__(index)
+
+    frames = CapturedFrames.__new__(CapturedFrames)
+    frames.clocks = IndexedClocks(index * .15 for index in range(100_000))
+    assert frames.post_group_clocks([14998.5]) == [
+        14998.65, 14998.8, 14998.949999999999]
+    assert frames.clocks.reads < 32
+
+
+def test_post_group_selection_preserves_exact_half_beat_and_epsilon_edges():
+    frames = frames_with([.00001, .0000100001, .25, .50001, .5000101])
+    assert frames.post_group_clocks([0.], limit=10) == [
+        .0000100001, .25, .50001]

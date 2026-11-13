@@ -81,19 +81,19 @@ def test_history_failure_preserves_pending_take_and_durable_state(
         result = _pending(engine, "correct")
         before = _durable_counts(engine)
         stage, streak = engine.plan.identity, engine.plan.streak
-        observed = engine.practice_policy.observe
+        observed = engine.measurement.persist
 
         def fail_after_observe(*args, **kwargs):
             observed(*args, **kwargs)
             raise RuntimeError("history write failure")
 
-        monkeypatch.setattr(engine.practice_policy, "observe", fail_after_observe)
+        monkeypatch.setattr(engine.measurement, "persist", fail_after_observe)
         with pytest.raises(RuntimeError, match="history write failure"):
             engine._commit_pending()
         assert engine.pending_result is result
         assert engine.plan.identity == stage and engine.plan.streak == streak
         assert _durable_counts(engine) == before
-        monkeypatch.setattr(engine.practice_policy, "observe", observed)
+        monkeypatch.delattr(engine.measurement, "persist")
         engine._commit_pending()
         assert engine.pending_result is None
         assert engine.db.execute("SELECT count(*) FROM learning_assessments").fetchone()[0] == 1

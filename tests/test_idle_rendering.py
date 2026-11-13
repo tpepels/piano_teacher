@@ -1,12 +1,13 @@
-"""Unchanged backend polls must let the actual Godot framebuffer sleep."""
+"""Unchanged polls must reuse retained source ink while the blank world moves."""
 import json
+import os
 from pathlib import Path
 import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_idle_polls_sleep_but_changed_feedback_and_playback_still_render(tmp_path):
+def test_identical_polls_reuse_retained_ink_while_world_and_playback_move(tmp_path):
     from piano_teacher.server import PracticeEngine
     from test_native_fingering import _godot, _run_godot
 
@@ -24,7 +25,9 @@ def test_idle_polls_sleep_but_changed_feedback_and_playback_still_render(tmp_pat
         "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility",
         "--script", str(ROOT / "tests/godot/idle_rendering.gd"), "--", str(tmp_path),
         str(ROOT / "tests/godot/native_production_fixture.gd")],
-        timeout=45)
+        timeout=45, env={**os.environ,"HOME":str(tmp_path/"home"),
+            "XDG_DATA_HOME":str(tmp_path/"data"),"XDG_CONFIG_HOME":str(tmp_path/"config"),
+            "XDG_CACHE_HOME":str(tmp_path/"cache")})
     output = result.stdout + result.stderr
     (tmp_path / "godot.log").write_text(output)
     assert result.returncode == 0, output

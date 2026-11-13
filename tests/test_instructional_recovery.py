@@ -399,7 +399,7 @@ def test_entire_recovery_restores_chosen_tempo_then_three_full_takes_reveal_chor
             pending = e.state()
             assert pending['phase'] != 'loading'
             assert stage not in e.plan.mastered
-            assert e._stage_handoff_visual_beat is not None
+            assert e.teaching_continuation.handoff_world is not None
             assert e.visual_transport.next_at > now[0]
             now[0] = e.visual_transport.next_at+.01
             continued = e.state()

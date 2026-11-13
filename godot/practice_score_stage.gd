@@ -211,7 +211,7 @@ func _ready() -> void:
     count_in = GameCountIn.new()
     count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
     # Four large beat pulses sit above the staff, without a modal overlay.
-    count_in.position = Vector2(24, 24)
+    count_in.position = Vector2(164, 24)
     count_in.size = Vector2(270, 72)
     count_in.visible = false
     score_frame.add_child(count_in)

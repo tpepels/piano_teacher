@@ -271,3 +271,29 @@ def test_guided_learning_owns_its_future_visual_score_decisions(learner):
     assert third["plan_id"] != second["plan_id"]
     assert third["deadline_at_ms"] > now[0] * 1000
     assert engine.plan.streak == 0 and not engine.plan.mastered
+
+
+def test_guided_completion_honors_injected_reintegration_without_redecision(learner,monkeypatch):
+    from dataclasses import replace
+    from piano_teacher.teaching_decisions import TeachingExposure
+    e,_now=learner
+    begin(e)
+    cls=type(e.plan.lesson_generator)
+    original=cls.decide_teaching
+    calls=[]
+    def choose(self,event,state):
+        calls.append(event.kind)
+        decision=original(self,event,state)
+        if event.kind=="guided_completed":
+            exposure=TeachingExposure(state.course.key,state.course.hand,0.,None,
+                state.progress.bpm,"practice",False,False,True,"count_in")
+            return replace(decision,continuation="reintegrate",next_exposure=exposure)
+        return decision
+    monkeypatch.setattr(cls,"decide_teaching",choose)
+    for pitch,down in [(60,True),(60,False),(60,True),(60,False),(64,True),(67,True)]:
+        send(e,pitch,down)
+    assert e.mode=="practice" and e.awaiting_score_revision==e.score_revision
+    assert calls==["guided_completed"] and not e.plan.mastered
+    e.geometry()
+    e.control("score_ready",revision=e.score_revision)
+    assert calls==["guided_completed"] and e.running

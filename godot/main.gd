@@ -60,6 +60,7 @@ var library_catalog = LibraryCatalogCoordinator.new()
 var settings_request
 var learning_status_request
 var learning_status_pending := false
+var statistics_coordinator
 var library_view: LibraryScreen
 var settings_pending := false
 var preferences: Dictionary = {}
@@ -139,7 +140,6 @@ var timeline_model_retry_after_ms: int:
         return score_session.timeline_model_retry_after_ms if score_session != null else 0
 
 var state_request_started_ms := 0
-var last_published_control_started_ms := -1
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
@@ -151,7 +151,7 @@ var frame_meter = FrameMeter.new()
 var frame_coordinator
 var state_presenter
 var command_failure_presenter
-var command_state = CommandRequestState.new()
+var command_coordinator = preload("res://practice_command_coordinator.gd").new()
 var command_success_presenter
 var command_success_effects
 var lesson_request
@@ -169,7 +169,6 @@ var live_midi_feedback = LiveMidiFeedback.new()
 var state_poll_timer: Timer
 var inprocess_bus: Node
 var score_runway
-var _pending_stream_renderer
 var native_started := false
 
 func _ready() -> void:
@@ -243,6 +242,7 @@ func _ready() -> void:
         _new_request(library_catalog.on_health))
     settings_request = _new_request(_on_settings)
     learning_status_request = _new_request(_on_learning_status)
+    statistics_coordinator.configure(_new_request(statistics_coordinator.on_report), settings_view.statistics_view)
     lesson_request = _new_request(_on_lesson)
     state_poll_timer = Timer.new()
     state_poll_timer.wait_time = 0.15
@@ -282,18 +282,28 @@ func _ready() -> void:
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(
         library_view,practice_view,settings_view,lesson_session)
-    command_success_effects = CommandSuccessEffects.new(
-        command_success_presenter,
-        Callable(self,"_on_state"),
-        Callable(self,"_navigate"),
-        Callable(self,"_request_settings"),
-        Callable(self,"_request_library"),
-        Callable(self,"_request_library_health"),
-        Callable(self,"_refresh_score_status"))
+    command_success_effects = CommandSuccessEffects.new(command_success_presenter)
+    command_success_effects.publish_state.connect(_on_state)
+    command_success_effects.navigate_practice.connect(_navigate)
+    command_success_effects.request_settings.connect(_request_settings)
+    command_success_effects.request_library.connect(_request_library)
+    command_success_effects.request_library_health.connect(_request_library_health)
+    command_success_effects.refresh_score.connect(_refresh_score_status)
     metronome_frame = MetronomeFrameCoordinator.new(
         settings_view,practice_view,visual_transport_clock,
         Callable(self,"_transport_beat_at"),Callable(self,"_count_tick"),
         Callable(self,"_raw_click"))
+    command_coordinator.configure(practice_view,settings_view,metronome_frame,score_flow,
+        visual_transport_clock,action_request,command_failure_presenter)
+    command_coordinator.succeeded.connect(command_success_effects.apply)
+    command_coordinator.learning_accepted.connect(_learning_command_accepted)
+    command_coordinator.library_requested.connect(func(piece: String, resume_saved: bool):
+        call_deferred("_open_library_piece",piece,resume_saved))
+    command_coordinator.refresh_requested.connect(_poll)
+    command_coordinator.fingering_changed.connect(func(message: String):
+        fingering_save_error = message
+        _present_fingering_status(last_state.get("fingering",{})))
+    command_coordinator.score_error_cleared.connect(func(): score_error = "")
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -492,7 +502,7 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 func _navigate(screen: String) -> void:
     var decision: Dictionary = NavigationPolicy.plan(
         screen,current_screen,str(last_state.get("phase","")),
-        command_state.pending,command_state.operation,command_state.control_action)
+        command_coordinator.state.pending,command_coordinator.state.operation,command_coordinator.state.control_action)
     screen = str(decision["target"])
     var previous_screen: String = str(decision["previous"])
     if bool(decision["remember_settings"]):
@@ -644,6 +654,8 @@ func _update_responsive_layout() -> void:
     practice_view.apply_viewport(size, ui_scale)
 
 func _build_settings_screen() -> void:
+    statistics_coordinator = preload("res://learning_statistics_coordinator.gd").new()
+    add_child(statistics_coordinator)
     var page := _screen("Settings")
     screens["settings"] = page
     settings_view = SettingsScreen.new()
@@ -673,8 +685,10 @@ func _build_settings_screen() -> void:
     settings_view.history_export_requested.connect(func(path: String, include_detail: bool):
         _send_command("learning.export", {"path": path, "include_detail": include_detail}))
     settings_view.piece_history_delete_requested.connect(func(fingerprint: String):
+        statistics_coordinator.invalidate()
         _send_command("learning.delete_piece", {"fingerprint": fingerprint, "confirm": true}))
     settings_view.learner_history_delete_requested.connect(func():
+        statistics_coordinator.invalidate()
         _send_command("learning.delete_learner", {"confirm": true}))
     settings_view.calibration_requested.connect(func(action: String):
         _send_action({"action": action}))
@@ -824,19 +838,19 @@ func _on_library_health(code: int, body: PackedByteArray) -> void:
     library_catalog.on_health(code, body)
 
 func _start_library_health() -> void:
-    library_catalog.start_health(command_state.pending)
+    library_catalog.start_health(command_coordinator.state.pending)
 
 
 func _open_library_piece(identifier: String, resume_saved := false) -> void:
     # Pause requests are asynchronous. Store a quick selection and open it
     # once the transport has acknowledged the pause, rather than dropping
-    # the click while command_state.pending is true.
-    if command_state.pending:
-        command_state.queue_library(identifier,resume_saved)
+    # the click while command_coordinator.state.pending is true.
+    if command_coordinator.state.pending:
+        command_coordinator.state.queue_library(identifier,resume_saved)
         library_view.present_open_status("Preparing your selected music…")
         return
     library_view.present_open_status("Opening score…")
-    command_state.resume_requested = resume_saved
+    command_coordinator.state.resume_requested = resume_saved
     _send_command("library.open", {"id": identifier})
 
 
@@ -880,11 +894,13 @@ func _on_learning_status(code: int, body: PackedByteArray) -> void:
     var parsed = _decode_json(body)
     if parsed is Dictionary:
         settings_view.present_learning_status(parsed)
+        statistics_coordinator.update_context(str(parsed.get("current_fingerprint", "")), str(parsed.get("learner_id", "")))
 
 func _learning_command_accepted(operation: String, values: Dictionary) -> void:
     if operation == "learning.export":
         settings_view.present_message("Learning history exported to " + str(values.get("path", "chosen file")))
     else:
+        statistics_coordinator.invalidate()
         settings_view.present_message("Current piece history and learning progress deleted."
             if operation == "learning.delete_piece" else "All learner history and learning progress deleted.")
         lesson_session.invalidate()
@@ -949,7 +965,7 @@ func _poll() -> void:
     if score_session != null and not practice_view.is_source_picker_open():
         score_session.poll(Time.get_ticks_msec())
 
-    if not state_pending and not command_state.pending:
+    if not state_pending and not command_coordinator.state.pending:
         state_pending = true
         state_request_started_ms = Time.get_ticks_msec()
         if state_request.request("state.snapshot") != OK:
@@ -977,7 +993,7 @@ func _process(_delta: float) -> void:
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
         last_state,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,
-        command_state.pending,current_screen,_native_score_ready(),living_chords,
+        command_coordinator.state.pending,current_screen,_native_score_ready(),living_chords,
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
         score_effects.record_preview(arrivals,practice_view.stage)
@@ -1009,11 +1025,11 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         state_pending = false
         # A pre-action snapshot can arrive after the control response. It
         # must not put a fresh count-in or paused attempt back in its old state.
-        if (command_state.started_ms > 0 and
-                state_request_started_ms <= command_state.started_ms) or (
-                last_published_control_started_ms >= 0 and
-                state_request_started_ms <= last_published_control_started_ms):
-            # Old polls remain invalid even after command_state.finish()
+        if (command_coordinator.state.started_ms > 0 and
+                state_request_started_ms <= command_coordinator.state.started_ms) or (
+                command_coordinator.last_published_control_started_ms >= 0 and
+                state_request_started_ms <= command_coordinator.last_published_control_started_ms):
+            # Old polls remain invalid even after command_coordinator.state.finish()
             # clears started_ms. Never replace a newer graded transport
             # with the earlier READY/paused snapshot.
             return
@@ -1024,6 +1040,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     _check_state_contract(parsed)
+    statistics_coordinator.update_context(str(parsed.get("piece_fingerprint", "")))
     if frame_diagnostics:
         var phase_name: String = str(parsed.get("phase", ""))
         var attempt: int = int(parsed.get("transport_id", -1))
@@ -1050,6 +1067,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         practice_view.suppress_piano_input(parsed)
         return
     last_state = parsed
+    command_coordinator.last_state = parsed
     settings_view.present_midi_key_range(
         parsed.get("midi_key_range",{}) if parsed.get("midi_key_range") is Dictionary else {})
     _update_visual_frame_rate(parsed)
@@ -1150,7 +1168,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         # prepared key until the next animation frame.
         practice_view.stage.renderer.present_flow(world,parsed,beat)
     state_presenter.present(
-        parsed,current_screen,command_state.pending,_native_score_ready(),
+        parsed,current_screen,command_coordinator.state.pending,_native_score_ready(),
         fingering_save_error,
         demo_player != null and bool(demo_player.get("audio_error")),
         sample_started_ms < 0,received_ms,phase0_smoke_mode)
@@ -1218,151 +1236,14 @@ func _on_timeline_model(code: int, body: PackedByteArray) -> void:
 
 
 func _send_action(command: Dictionary) -> void:
-    var requested: String = str(command.get("action", ""))
-    var previous_action: String = command_state.control_action
-    if not command_state.action_requested(requested):
-        # Busy operations still show their current action; Pause/Stop queues.
-        practice_view.begin_action(requested, previous_action)
-        return
-    practice_view.begin_action(requested)
-    if not requested in ["start","restart","resume"]:
-        metronome_frame.cancel_reserved_count_in()
-    var rest_phase: bool = not bool(last_state.get("running",false)) and \
-        str(last_state.get("pause_context",last_state.get("phase",""))) in [
-            "feedback","recovering","preview_gap"]
-    if requested == "resume" and rest_phase and \
-            str(last_state.get("mode","practice")) == "practice" and \
-            practice_view.stage.renderer != null:
-        # Resume in the rest between takes: there is no paused take to
-        # reserve. Report where the announced next take's source can still
-        # be admitted offscreen; the engine re-announces its deadline no
-        # earlier than that (the axis kept moving during the pause).
-        var rest_at_ms: int = Time.get_ticks_msec()
-        var rest_now: float = score_flow.project(rest_at_ms)
-        var rest_renderer = practice_view.stage.renderer
-        command = command.duplicate(true)
-        # The announced copy may already be on the staff (it opens one bar
-        # ahead on the empty strip): while still ahead of the playhead the
-        # take keeps it, like Resume of a paused take, re-timed to reach the
-        # playhead where it now is. Otherwise report where fresh ink fits.
-        var copy_onset: float = rest_renderer.announced_copy_onset(rest_now)
-        # Godot alone decides the reuse (I3): the copy keeps its count-in
-        # only with at least one count-in PULSE (a dotted quarter in
-        # compound meters) at the announced tempo, plus the engine's
-        # published snapshot latency, still ahead; otherwise a fresh copy.
-        var plan: Dictionary = last_state.get("score_queue_next",{}) \
-            if last_state.get("score_queue_next") is Dictionary else {}
-        var plan_bpm: float = maxf(1.0,float(plan.get("bpm",
-            last_state.get("bpm",score_flow.bpm))))
-        var pulse: float = CountInCueTimeline.pulse_beats(plan.get(
-            "count_in_meter",last_state.get("count_in_meter")))
-        var rest_bpm: float = float(last_state.get("bpm",score_flow.bpm))
-        if is_finite(copy_onset) and StreamAdmission.lead_seconds(copy_onset,
-                rest_now,rest_bpm) < pulse*60.0/plan_bpm+float(
-                    last_state.get("short_rest_latency_seconds",0.0)):
-            copy_onset = NAN
-        if is_finite(copy_onset):
-            command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
-                copy_onset,rest_now,float(last_state.get("bpm",score_flow.bpm)))
-            command["reuse_announced_score"] = true
-        else:
-            var earliest: float = rest_renderer.earliest_continuation_world(
-                rest_now,0.0,float(last_state.get("next_count_in_beats",0.0)))
-            if is_finite(earliest):
-                command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
-                    earliest,rest_now,float(last_state.get("bpm",score_flow.bpm)))
-        command.merge(rest_renderer.short_rest_geometry(),true)
-        if command.has("presentation_lead_seconds") and \
-                visual_transport_clock.has_backend_offset:
-            command["presentation_deadline_ms"] = float(rest_at_ms) + \
-                float(command["presentation_lead_seconds"])*1000.0 - \
-                visual_transport_clock.backend_offset_ms
-        command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(
-            float(practice_view.stage.renderer.practice_timeline.get(
-                "gap",{}).get("duration_beats",0.0)),
-            practice_view.stage.renderer._stream_right_beats(),
-            practice_view.stage.renderer._stream_header_beats(0.0))
-        _send_command("practice.command", command)
-        return
-    if requested in ["start","restart","resume"] and \
-            str(last_state.get("mode","practice")) in ["practice","perform"] and \
-            practice_view.stage.renderer != null:
-        # The user's action reserves the next musical deadline beyond all
-        # notes still moving on the visual bar. The engine, not the GUI,
-        # applies this lead to MIDI grading and count-in.
-        var reserved_at_ms: int = Time.get_ticks_msec()
-        var visual_now: float = score_flow.project(reserved_at_ms)
-        var renderer = practice_view.stage.renderer
-        var opening: float = maxf(0.0,float(last_state.get("play_from_beat",0.0)))
-        if requested == "resume":
-            opening = maxf(opening,opening+_transport_beat_at(Time.get_ticks_msec()))
-        # One preflighted transaction plans the maximal retractable suffix,
-        # verifies a future admission, then commits it with one graded deadline.
-        # Failure cannot mutate the online queue before a valid plan exists.
-        # The engine publishes the one count-in bar this action gets; on an
-        # empty strip the opening is placed exactly that far ahead.
-        # Play/Resume open one count-in bar plus the engine's published
-        # snapshot latency ahead (I5): the first syllable then falls after
-        # this frame's reservation work, and the count-in bar itself still
-        # ends exactly at the take's first beat.
-        var count_in_slot: float = float(last_state.get("next_count_in_beats",0.0))
-        if requested in ["start","resume"] and count_in_slot > 0.0:
-            count_in_slot += float(last_state.get("short_rest_latency_seconds",0.0))* \
-                float(last_state.get("bpm",score_flow.bpm))/60.0
-        var reserved: Dictionary = renderer.reserve_transport_action(
-            requested,visual_now,opening,count_in_slot)
-        if reserved.is_empty():
-            command_state.abort_action()
-            practice_view.finish_action()
-            practice_view.present_message(
-                "Score reservation failed · see SCORE_TRANSPORT diagnostic")
-            return
-        _pending_stream_renderer = renderer
-        command = command.duplicate(true)
-        # World beats to seconds at the rate the axis moves at AFTER this
-        # command: Play's count-in and Retry's rest run at the selected BPM
-        # (a tempo-mapped take, e.g. a slowdown stage, ran at its own rate
-        # until now); a mid-take Resume continues inside the take's map.
-        var lead_bpm: float = StreamAdmission.command_lead_bpm(requested,
-            score_flow.bpm,float(last_state.get("bpm",score_flow.bpm)))
-        command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
-            float(reserved["start_world"]),visual_now,lead_bpm)
-        if visual_transport_clock.has_backend_offset:
-            # The reserved deadline itself (backend clock): the engine
-            # measures the lead when it processes the command.
-            command["presentation_deadline_ms"] = float(reserved_at_ms) + \
-                float(command["presentation_lead_seconds"])*1000.0 - \
-                visual_transport_clock.backend_offset_ms
-        if requested == "resume":
-            command["reuse_pending_score"] = bool(
-                reserved.get("reused_unplayed_count_in",false))
-        # Godot knows this deadline now: speak its count-in from it, on
-        # every beat, before the engine's state confirms the take (M4).
-        if not bool(reserved.get("reused_unplayed_count_in",false)):
-            metronome_frame.reserve_count_in(float(reserved_at_ms)+
-                float(command["presentation_lead_seconds"])*1000.0,
-                float(last_state.get("bpm",score_flow.bpm)),
-                # One count-in bar: next_count_in_beats IS that bar (an idle
-                # snapshot's count_in_bar_beats can still be a default).
-                float(last_state.get("next_count_in_beats",0.0)),
-                last_state.get("next_count_in_meter",
-                    last_state.get("count_in_meter")),
-                float(last_state.get("next_count_in_beats",0.0)),requested)
-        var written_rest: float = float(renderer.practice_timeline.get(
-            "gap",{}).get("duration_beats",0.0))
-        command["continuous_horizon_beats"] = StreamAdmission.automatic_horizon(
-            written_rest,renderer._stream_right_beats(),
-            renderer._stream_header_beats(0.0))
-        command.merge(renderer.short_rest_geometry(),true)
-    _send_command("practice.command", command)
-
+    command_coordinator.request_action(command,last_state)
 
 func _present_fingering_status(summary: Variant) -> void:
     var issues: int = practice_view.stage.renderer.annotations.fingering_placement_issues.size() if _native_score_ready() else 0
     practice_view.stage.present_fingering(summary, issues, fingering_save_error)
 
 func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
-    if command_state.pending or not _native_score_ready() or layout_pending or timeline_model_pending or \
+    if command_coordinator.state.pending or not _native_score_ready() or layout_pending or timeline_model_pending or \
             int(last_state.get("revision",-1)) != timeline_model_revision or \
             native_score_piece_fingerprint != str(last_state.get("piece_fingerprint","")):
         fingering_save_error = "Wait for the current score operation to finish, then try again."
@@ -1377,102 +1258,13 @@ func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
         payload["fingerprint"] = fingerprint
     _send_command("fingering.correct",payload)
 
-func _flush_transport_action() -> void:
-    var action: String = command_state.take_transport()
-    if not action.is_empty():
-        _send_action({"action":action})
-
-func _cancel_pending_stream_arm() -> void:
-    if _pending_stream_renderer != null and \
-            is_instance_valid(_pending_stream_renderer):
-        _pending_stream_renderer.cancel_stream_arm()
-    _pending_stream_renderer = null
 
 
 func _send_command(operation: String, payload: Dictionary) -> void:
-    if not command_state.begin(operation,Time.get_ticks_msec()):
-        if operation == "practice.command":
-            _cancel_pending_stream_arm()
-            # No take starts: a reserved count-in must not be spoken (I2).
-            metronome_frame.cancel_reserved_count_in()
-        return
-    practice_view.present_busy(true)
-    settings_view.present_busy(true)
-    var err: int = command_state.dispatch(action_request,operation,payload)
-    if err != OK:
-        if operation == "practice.command":
-            _cancel_pending_stream_arm()
-            # No take starts: a reserved count-in must not be spoken (I2).
-            metronome_frame.cancel_reserved_count_in()
-        practice_view.present_busy(false)
-        settings_view.present_busy(false)
-        if operation == "practice.command":
-            practice_view.finish_action()
-        var message := "Cannot reach practice engine (status %d)" % err
-        if operation == "fingering.correct":
-            fingering_save_error = message
-            _present_fingering_status(last_state.get("fingering",{}))
-        var queued_library_failed: bool = command_state.discard_library()
-        command_failure_presenter.present(message,operation,queued_library_failed)
-        _flush_transport_action()
+    command_coordinator.request_command(operation,payload)
 
 func _on_action(code: int, body: PackedByteArray) -> void:
-    # Only the active request may publish a success or error. A timed-out
-    # callback or a canceled worker completion has no live command owner.
-    if not command_state.pending:
-        return
-    var completed: Dictionary = command_state.finish()
-    practice_view.present_busy(false)
-    settings_view.present_busy(false)
-    var operation: String = str(completed["operation"])
-    if operation == "practice.command":
-        practice_view.finish_action()
-    var resume_saved: bool = bool(completed["resume_saved"])
-    var completed_action: String = str(completed["action"])
-    if code != 0:
-        if operation == "practice.command":
-            _cancel_pending_stream_arm()
-            # No take starts: a reserved count-in must not be spoken (I2).
-            metronome_frame.cancel_reserved_count_in()
-        var message := _command_failure(code, body)
-        if operation == "fingering.correct":
-            fingering_save_error = message
-            _present_fingering_status(last_state.get("fingering",{}))
-        var queued_library_failed: bool = command_state.discard_library()
-        command_failure_presenter.present(message,operation,queued_library_failed)
-        _flush_transport_action()
-        return
-    var opened: Variant = _decode_json(body) if operation == "library.open" else null
-    if operation in ["learning.export", "learning.delete_piece", "learning.delete_learner"]:
-        var result = _decode_json(body)
-        _learning_command_accepted(operation, result if result is Dictionary else {})
-    var decision: Dictionary = CommandSuccessPolicy.decide(
-        operation,completed_action,resume_saved,opened)
-    if str(decision["kind"]) == "fingering":
-        fingering_save_error = ""
-    elif str(decision["kind"]) == "library_open":
-        score_error = ""
-    if bool(decision.get("publish_state",false)):
-        last_published_control_started_ms = maxi(
-            last_published_control_started_ms,int(completed["started_ms"]))
-    if operation == "practice.command" and \
-            _pending_stream_renderer != null and \
-            is_instance_valid(_pending_stream_renderer):
-        # Commit the provisional source owner only after successful backend
-        # acknowledgement, before the response publishes its transport ID.
-        _pending_stream_renderer.acknowledge_stream_arm()
-    if operation == "practice.command":
-        metronome_frame.acknowledge_reserved_count_in(Time.get_ticks_msec())
-    command_success_effects.apply(decision,opened,
-        code,body,int(completed["started_ms"]))
-    if operation == "practice.command":
-        _pending_stream_renderer = null
-    _flush_transport_action()
-    _poll()
-    var deferred_library: Dictionary = command_state.take_library()
-    if not str(deferred_library["piece"]).is_empty():
-        call_deferred("_open_library_piece",
-            str(deferred_library["piece"]),bool(deferred_library["resume_saved"]))
+    command_coordinator.accept_response(command_coordinator.request_token,code,body)
 
 func _apply_practice_control(decision: Dictionary) -> void:
     if decision.has("message"):

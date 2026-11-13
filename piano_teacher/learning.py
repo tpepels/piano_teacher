@@ -13,10 +13,11 @@ from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant
 from .musical_groups import grouping_for_piece, MusicalGrouping
 from .lesson_settings import SETTINGS
+from . import teaching_course as course_policy
 from .tempo_difficulty import suggested_start_bpm
 from .repeated_passages import exact_repetition_signature
 from .lesson_generators import (
-    Exercise, LessonGenerator, build_lesson_generator,
+    Exercise, LessonGenerator, LessonPlanDefinition, build_lesson_generator,
     lesson_generator_registration,
     lesson_hands,
 )
@@ -76,7 +77,6 @@ class LearningPlan:
         self._variants_cached: tuple | None = None
         self.streak = 0
         self.failures = 0
-        self.bpm = self.start_bpm
         self.target_bpm = piece.bpm
         self.mastered: dict[str, int] = {}
         # Tempo is a ladder for each source passage/hand/variant, not just
@@ -89,6 +89,46 @@ class LearningPlan:
         self._repeated_groups: tuple[dict[str, tuple], dict[tuple, list[str]]] | None = None
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
         self._lesson_step_numbers: dict[str, int] = {}
+        self.bpm = self.target_bpm
+        self.bpm = self.stage_start_bpm
+
+    def capture_teaching_state(self):
+        return {key: value.copy() if isinstance(value, (dict, list, set)) else value
+                for key, value in vars(self).items()}
+
+    def restore_teaching_state(self, state):
+        vars(self).clear()
+        vars(self).update(state)
+
+    def teaching_progress(self) -> course_policy.PlanProgress:
+        return course_policy.PlanProgress(
+            (self.index, self.hand_index, self.variant_index), self.bpm, self.target_bpm,
+            self.streak, self.failures, tuple(sorted(self.mastered.items())),
+            tuple(sorted(self.stage_tempos.items())), tuple(sorted(self.transferable_tempos)))
+
+    def course_state(self) -> course_policy.CourseState:
+        return course_policy.CourseState(self.piece, self.lesson_definition,
+            self.teaching_progress(), self.profile,
+            self.generator_registration.course_version if self.generator_registration else self.route_version,
+            self.warmup)
+
+    def apply_teaching_progress(self, progress, *, definition, expected) -> None:
+        """Install an already validated decision, without any policy invocation."""
+        if self.teaching_progress() != expected:
+            raise ValueError("Teaching progress changed before installation")
+        if definition is not self.lesson_definition:
+            self._install_definition(definition)
+        self.index, self.hand_index, self.variant_index = progress.cursor
+        self.bpm, self.target_bpm = progress.bpm, progress.target_bpm
+        self.streak, self.failures = progress.streak, progress.failures
+        self.mastered = dict(progress.mastered)
+        self.stage_tempos = dict(progress.stage_tempos)
+        self.transferable_tempos = set(progress.transferable_tempos)
+        self._variants_cached = None
+
+    def _install_course(self, course) -> None:
+        self.apply_teaching_progress(course.progress, definition=course.definition,
+                                     expected=self.teaching_progress())
 
     route_version = 3
 
@@ -98,13 +138,18 @@ class LearningPlan:
 
     @property
     def start_bpm(self) -> int:
-        if self.warmup:
-            return min(getattr(self, "target_bpm", self.piece.bpm), self.piece.bpm)
-        target = getattr(self, "target_bpm", self.piece.bpm)
-        baseline = min(target, max(SETTINGS.minimum_bpm, SETTINGS.start_tempo_bpm))
-        return min(target, suggested_start_bpm(
-            self.active_phrase, self.hand,
-            default_bpm=baseline, minimum_bpm=SETTINGS.minimum_bpm))
+        return course_policy.start_bpm(self.course_state())
+
+    @property
+    def minimum_stage_bpm(self) -> int:
+        return course_policy.minimum_bpm(self.course_state())
+
+    def carried_bpm(self) -> int | None:
+        return course_policy.carried_bpm(self.course_state())
+
+    @property
+    def stage_start_bpm(self) -> int:
+        return course_policy.stage_start_bpm(self.course_state())
 
     @property
     def exercise(self) -> Exercise:
@@ -170,119 +215,47 @@ class LearningPlan:
     def _refresh_generator(
         self, updated: LessonGenerator, *, focus_ids: frozenset[str],
     ) -> bool:
-        """Replan without discarding unaffected progress, BPM or active cursor.
-
-        A failed original-score attempt may enter the relevant new scaffold;
-        a successful correction keeps the current lesson if it still exists.
-        Repairs that disappear resolve to the nearest remaining source phrase.
-        """
         if updated is self.lesson_generator:
             return False
-        previous_key = self.identity
-        previous_exercise_key = self.exercise.key
-        previous_range = (self.active_phrase.first_bar,
-                          self.active_phrase.last_bar)
-        previous_kind = self.exercise.kind
-        previous_hand = self.hand
-        previous_level = self.active_variant.level
-        previous_bpm = self.bpm
-        previous_streak = self.streak
-        definition = updated.generate(self.piece)
-        old_exercises = self.exercises
+        course = course_policy.refresh_course(self.course_state(), updated.generate(self.piece), focus_ids=focus_ids)
+        self._install_course(course)
         self.lesson_generator = updated
+        return True
+
+    def _preserve_mastered_stages(
+        self, definition: LessonPlanDefinition, previous: LessonPlanDefinition,
+        keys: Mapping[str, int],
+    ) -> LessonPlanDefinition:
+        course = replace(self.course_state(), definition=previous,
+                         progress=replace(self.teaching_progress(), mastered=tuple(sorted(keys.items()))))
+        return course_policy.preserve_mastered(course, definition)
+
+    def _install_definition(self, definition: LessonPlanDefinition) -> None:
         self.lesson_definition = definition
         self.exercises = definition.exercises
         self._variants_cached = None
         self._lesson_steps_cache = None
         self._lesson_step_numbers = {}
         self._repeated_groups = None
-        # Focus a newly diagnosed, actually failed source attack on the first
-        # source passage containing it. An existing selected step survives when
-        # its source IDs and stage definition are unchanged.
-        candidate = None
-        if focus_ids and previous_level == "original":
-            matching = [(i, ex) for i, ex in enumerate(self.exercises)
-                        if ex.kind == "learn" and any(
-                            n.source_id in focus_ids for n in ex.phrase.notes)]
-            # Prefer the previous source range when a user practised a
-            # particular passage, otherwise the earliest diagnosed passage.
-            candidate = next(((i, ex) for i, ex in matching
-                              if ex.key == previous_exercise_key),
-                             matching[0] if matching else None)
-        if candidate is not None:
-            self.index, target = candidate
-            self.hand_index = (self.hands.index(previous_hand)
-                               if previous_hand in self.hands else 0)
-            self.variant_index = 0
-            self.streak = self.failures = 0
-            self.bpm = self._tempo_for_current_stage()
-            return True
-        retained = next((step for step in self.lesson_steps
-                         if step.key == previous_key), None)
-        if retained is not None:
-            self.index = retained.exercise_index
-            self.hand_index = self.hands.index(retained.hand)
-            self.variant_index = next(i for i, v in enumerate(self.variants)
-                                      if v.level == retained.level)
-            self.bpm = previous_bpm
-            self.streak = previous_streak
-            return True
-        # Source content may change when a repair disappears. Prefer the same
-        # passage and hand; otherwise resume at the next surviving source
-        # section instead of arbitrarily restarting at exercise zero.
-        nearby = next(((i, ex) for i, ex in enumerate(self.exercises)
-                       if ex.key == previous_exercise_key), None)
-        if nearby is None:
-            nearby = next(((i, ex) for i, ex in enumerate(self.exercises)
-                           if ex.kind == previous_kind and
-                           ex.phrase.first_bar >= previous_range[0]),
-                          (len(self.exercises) - 1, self.exercises[-1]))
-        self.index = nearby[0]
-        self.hand_index = (self.hands.index(previous_hand)
-                           if previous_hand in self.hands else 0)
-        self.variant_index = next(
-            (i for i, variant in enumerate(self.variants)
-             if variant.level == previous_level),
-            len(self.variants) - 1 if previous_level == "original" else 0)
-        self.streak = self.failures = 0
-        self.bpm = self._tempo_for_current_stage()
-        return True
+
+    def restore_mastered_stages(self, keys: Mapping[str, int]) -> None:
+        """Recover only exact current-course identities from its source catalog."""
+        catalog = getattr(self.lesson_generator, "catalog", None)
+        if not isinstance(catalog, LessonPlanDefinition):
+            return
+        definition = self._preserve_mastered_stages(self.lesson_definition, catalog, keys)
+        if definition is not self.lesson_definition:
+            level = self.active_variant.level
+            self._install_definition(definition)
+            self.variant_index = next(i for i, stage in enumerate(self.stages)
+                                      if stage.variant.level == level)
 
     def revisit_source_errors(self, ids: frozenset[str]) -> bool:
-        """Repeat a relevant scaffold after a *repeated* original-note failure.
-
-        A second failure can contain the same status/ID as the previous take.
-        It still warrants a return to the previously generated simplification;
-        no recompilation or mastery transfer is necessary.
-        """
-        if not ids or self.active_variant.level != "original":
+        before = self.course_state()
+        chosen = course_policy.revisit_course(before, ids)
+        if chosen is before:
             return False
-        target = next(((i, ex) for i, ex in enumerate(self.exercises)
-                       if ex.kind == "learn" and any(
-                           n.source_id in ids for n in ex.phrase.notes)
-                       and any(len(self.lesson_definition.stages(ex, hand)) > 1
-                               for hand in lesson_hands(ex))),
-                      None)
-        if target is None:
-            return False
-        i, ex = target
-        previous_hand = self.hand
-        error_hands = {n.hand for n in ex.phrase.notes
-                       if n.source_id in ids}
-        available = lesson_hands(ex)
-        hand = next((h for h in (previous_hand, "right", "left", "both")
-                     if h in available
-                     and (h == "both" or h in error_hands)
-                     and len(self.lesson_definition.stages(ex, h)) > 1),
-                    None)
-        if hand is None:
-            return False
-        self.index = i
-        self.hand_index = available.index(hand)
-        self.variant_index = 0
-        self._variants_cached = None
-        self.streak = self.failures = 0
-        self.bpm = self._tempo_for_current_stage()
+        self._install_course(chosen)
         return True
 
     def _pipeline_stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
@@ -293,20 +266,8 @@ class LearningPlan:
         return tuple(stage.variant for stage in self.lesson_definition.stages(exercise,hand))
 
     def _stage_key(self, exercise: Exercise, hand: str, variant: ExerciseVariant) -> str:
-        phrase = variant.phrase
-        events = [(n.start - phrase.start, n.end - phrase.start, n.pitch, n.track, n.channel, n.hand)
-                  for n in phrase.notes]
-        signature = hashlib.sha256(json.dumps((phrase.end - phrase.start, events),
-                                             separators=(",", ":")).encode()).hexdigest()[:16]
-        # Unique generator identity forbids unrelated mastery or BPM migration.
-        profile = ":warmup" if self.warmup else f":{self.profile}"
-        # Sparse MIDI-domain Coda transformations change source attack
-        # placement relative to the previous v5 catalog. Do not inherit
-        # completed steps or tempo mastery under different musical content.
-        version = (self.generator_registration.course_version
-                   if self.generator_registration is not None
-                   else self.route_version)
-        return f"course:{version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
+        version = self.generator_registration.course_version if self.generator_registration is not None else self.route_version
+        return course_policy.stage_key(exercise, hand, variant, self.profile, version, self.warmup)
 
     @property
     def lesson_steps(self) -> tuple[LessonStep, ...]:
@@ -355,43 +316,11 @@ class LearningPlan:
     def identity(self) -> str:
         return self._stage_key(self.exercise, self.hand, self.active_variant)
 
-    def _repeated_stage_index(self) -> tuple[dict[str, tuple], dict[tuple, list[str]]]:
-        if self._repeated_groups is not None:
-            return self._repeated_groups
-        by_key: dict[str, tuple] = {}
-        by_signature: dict[tuple, list[str]] = {}
-        for step in self.lesson_steps:
-            if step.kind != "learn":
-                continue  # Longer bridges/performances must prove themselves.
-            exercise = self.exercises[step.exercise_index]
-            variant = next(v for v in self._stage_variants(exercise, step.hand)
-                           if v.level == step.level)
-            signature = exact_repetition_signature(
-                self.piece, variant.phrase, step.hand, step.level,
-                minimum_attacks=SETTINGS.repeated_tempo_min_attacks)
-            if signature is None:
-                continue
-            by_key[step.key] = signature
-            by_signature.setdefault(signature, []).append(step.key)
-        self._repeated_groups = by_key, by_signature
-        return self._repeated_groups
-
     def _tempo_for_current_stage(self) -> int:
         # A stage with its own local history keeps its own BPM, including
         # failure-driven slowdowns. Only genuinely UNSEEN repeated passages
         # may inherit a higher starting tempo from already visited stages.
-        key = self.identity
-        if key in self.stage_tempos:
-            return self.stage_tempos[key]
-        by_key, by_signature = self._repeated_stage_index()
-        signature = by_key.get(key)
-        if signature is None:
-            return self.start_bpm
-        shared = (self.stage_tempos[other]
-                  for other in by_signature[signature]
-                  if other != key and other in self.stage_tempos
-                  and other in self.transferable_tempos)
-        return min(self.target_bpm, max([self.start_bpm, *shared]))
+        return course_policy.tempo_for_stage(self.course_state())
 
     def restore_location(self, *, kind: str, first_bar: int, last_bar: int,
                          hand: str, level: str) -> None:
@@ -435,152 +364,38 @@ class LearningPlan:
         self.select(min(len(self.exercises) - 1, max(0, self.index + amount)))
 
     def select_step(self, number: int) -> None:
-        """Navigate directly to a hand and variant without awarding mastery."""
-        if not 1 <= number <= len(self.lesson_steps):
-            raise ValueError("Lesson step out of bounds")
-        step = self.lesson_steps[number - 1]
-        if step.key == self.identity:
-            return
-        self.stage_tempos[self.identity] = self.bpm
-        self.index = step.exercise_index
-        self.hand_index = self.hands.index(step.hand)
-        self.variant_index = next(i for i, variant in enumerate(self.variants)
-                                  if variant.level == step.level)
-        self.bpm = self._tempo_for_current_stage()
-        self.streak = 0
-        self.failures = 0
+        self._install_course(course_policy.manual_progress(self.course_state(), "select_step", number=number))
 
     def select(self, index: int) -> None:
-        if not 0 <= index < len(self.exercises):
-            raise ValueError("Exercise index out of bounds")
-        self.stage_tempos[self.identity] = self.bpm
-        self.index = index
-        self.hand_index = 0
-        self.variant_index = 0
-        self.bpm = self._tempo_for_current_stage()
-        self.streak = 0
-        self.failures = 0
+        self._install_course(course_policy.manual_progress(self.course_state(), "select", number=index))
 
     def set_hand(self, hand: str) -> None:
-        if hand not in self.hands:
-            raise ValueError(f"Hand {hand!r} unavailable")
-        self.stage_tempos[self.identity] = self.bpm
-        self.hand_index = self.hands.index(hand)
-        self.variant_index = 0
-        self.streak = self.failures = 0
-        self.bpm = self._tempo_for_current_stage()
+        self._install_course(course_policy.manual_progress(self.course_state(), "hand", hand=hand))
 
     def set_bpm(self, bpm: int) -> None:
-        if bpm < SETTINGS.minimum_bpm or bpm > SETTINGS.maximum_bpm:
-            raise ValueError(f"BPM must be between {SETTINGS.minimum_bpm} and {SETTINGS.maximum_bpm}")
-        self.bpm = bpm
-        self.target_bpm = bpm
-        # Changing the target invalidates old tempo ladders globally.
-        self.stage_tempos.clear()
-        self.transferable_tempos.clear()
-        self.streak = self.failures = 0
+        self._install_course(course_policy.manual_progress(self.course_state(), "tempo", bpm=bpm))
 
     def tempo_rungs(self) -> tuple[int, ...]:
-        """Integer tempo ladder from the active MIDI stage to song target."""
-        start, target = self.start_bpm, self.target_bpm
-        if start >= target:
-            return (target,)
-        return tuple(sorted(set(
-            start + round((target - start) * i / SETTINGS.automatic_tempo_steps)
-            for i in range(SETTINGS.automatic_tempo_steps + 1)
-        )))
+        return course_policy.tempo_rungs(self.course_state())
 
     def _next_automatic_bpm(self) -> int:
-        rungs = self.tempo_rungs()
-        if self.bpm < rungs[0]:
-            # Deliberate manual slowdown below the shared start.
-            return min(rungs[0], self.bpm + max(
-                SETTINGS.minimum_tempo_step_bpm,
-                round((self.target_bpm - rungs[0]) / SETTINGS.automatic_tempo_steps)))
-        return next((bpm for bpm in rungs if bpm > self.bpm), self.target_bpm)
+        return course_policy.next_bpm(self.course_state())
 
     def decrease_tempo(self) -> int:
-        """Lower only the active stage tempo; keep the piece's target."""
-        if self.bpm > SETTINGS.minimum_bpm:
-            self.bpm = max(SETTINGS.minimum_bpm, self.bpm - SETTINGS.manual_tempo_step_bpm)
-            self.streak = self.failures = 0
-            self.stage_tempos[self.identity] = self.bpm
-            if self.bpm <= self.start_bpm:
-                self.transferable_tempos.discard(self.identity)
+        self._install_course(course_policy.manual_progress(self.course_state(), "tempo_down"))
         return self.bpm
 
     def increase_tempo(self) -> int:
-        """Learner skips the slow tempo rungs, not the proof of mastery.
-
-        A manual increase is persisted for this source unit/hand/variant and
-        counts towards its target, but never awards a clean run or a new step.
-        """
-        if self.bpm < SETTINGS.maximum_bpm:
-            # Below the musical target, land exactly on it. A further +
-            # deliberately allows faster-than-original practice without
-            # changing the piece-wide target or historic mastery.
-            ceiling = (self.target_bpm if self.bpm < self.target_bpm
-                       else SETTINGS.maximum_bpm)
-            self.bpm = min(ceiling, self.bpm + SETTINGS.manual_tempo_step_bpm)
-            self.streak = 0
-            self.failures = 0
-            self.stage_tempos[self.identity] = self.bpm
-            self.transferable_tempos.add(self.identity)
+        self._install_course(course_policy.manual_progress(self.course_state(), "tempo_up"))
         return self.bpm
 
     def bpm_after(self, accepted: bool) -> float:
-        """The tempo apply_result gives this stage's next take (same stage).
-
-        An accepted take below the target steps up one automatic rung; any
-        other same-stage outcome keeps the tempo. The engine announces the
-        next take with this BPM and settlement applies exactly that value.
-        """
-        if accepted and self.bpm < self.target_bpm:
-            return self._next_automatic_bpm()
-        return self.bpm
+        return course_policy.next_bpm(self.course_state()) if accepted and self.bpm < self.target_bpm else self.bpm
 
     def apply_result(self, *, correct: int, total: int, extras: int = 0,
                      accepted: bool | None = None,
                      next_bpm: float | None = None) -> str:
-        """Accepted takes restore tempo; three full target-speed passes earn mastery.
-
-        Recovery slowdowns happen on five pitch errors in a two-bar window.
-        Partial retries never call this method.
-        """
-        if total <= 0:
-            return "No notes to assess"
-        clean = correct == total and extras == 0 if accepted is None else accepted
-        if not clean:
-            self.streak = 0
-            self.failures += 1
-            return f"Repeat - {correct}/{total} correct, {extras} extra"
-        self.failures = 0
-        if self.bpm < self.target_bpm:
-            self.streak = 0
-            # The announced next take's tempo, when one was announced.
-            self.bpm = self._next_automatic_bpm() if next_bpm is None else next_bpm
-            self.stage_tempos[self.identity] = self.bpm
-            self.transferable_tempos.add(self.identity)
-            return f"Tempo increased to {self.bpm} BPM"
-        self.transferable_tempos.add(self.identity)
-        self.streak += 1
-        if self.streak < SETTINGS.clean_runs_to_master:
-            label = "Clean" if correct == total and extras == 0 else "Accepted"
-            return f"{label} pass {self.streak}/{SETTINGS.clean_runs_to_master} - repeat"
-        self.streak = 0
-        previous = self.identity
-        self.stage_tempos[previous] = self.bpm
-        self.mastered[previous] = self.target_bpm
-        if self.variant_index + 1 < len(self.variants):
-            self.variant_index += 1
-            self.bpm = self._tempo_for_current_stage()
-            return f"Mastered {previous}; introducing {self.active_variant.level}"
-        if self.hand_index + 1 < len(self.hands):
-            self.hand_index += 1
-            self.variant_index = 0
-            self.bpm = self._tempo_for_current_stage()
-            return f"Mastered {previous}; now {self.hand} hand"
-        if self.index + 1 < len(self.exercises):
-            self.select(self.index + 1)
-            return f"Mastered {previous}; next passage"
-        return "Piece mastered"
+        course, message = course_policy.assessed_progress(self.course_state(), correct=correct,
+            total=total, extras=extras, accepted=accepted, selected_bpm=next_bpm)
+        self._install_course(course)
+        return message

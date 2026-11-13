@@ -54,12 +54,8 @@ class EngineCommands:
                 raise ValueError("Command payload must be a JSON object")
             engine = self.engine
             if operation == "learning.statistics":
-                if set(values) - {"fingerprint"}:
-                    raise ValueError("Unknown learning statistics input")
-                fingerprint = values.get("fingerprint")
-                if fingerprint is not None and (type(fingerprint) is not str or not fingerprint.strip()):
-                    raise ValueError("Piece fingerprint must be a nonempty string")
-                return self._reply(OK, engine.learning_statistics(fingerprint))
+                from .learning_statistics_query import validate_query
+                return self._reply(OK, engine.learning_statistics(query=validate_query(values)))
             if operation in self.READS:
                 if values:
                     raise ValueError(f"{operation} takes no input")

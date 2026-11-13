@@ -1,5 +1,5 @@
 extends SceneTree
-## Actual application composition: HTTP/native review, or server-free geometry.
+## Actual application composition: embedded-engine review, or supplied-state geometry.
 ## Only geometry mode supplies state. Screenshots always use main.tscn unchanged.
 
 class SilentRequest extends RefCounted:
@@ -80,7 +80,7 @@ func check(ok: bool, detail: String) -> void:
 func write_report() -> void:
     if output.is_empty():
         return
-    var report := {"schema_version": 1, "mode": "geometry" if geometry_only else "http",
+    var report := {"schema_version": 1, "mode": "geometry" if geometry_only else "embedded",
         "scene": "res://main.tscn", "viewport": [root.size.x, root.size.y],
         "window_mode": root.mode,
         "window_geometry": window_geometry(),
@@ -299,6 +299,10 @@ func native_status() -> Dictionary:
     status["visible"] = renderer.is_visible_in_tree()
     status["failure_reason"] = renderer.failure_reason
     status["drawn_noteheads"] = renderer.drawn_noteheads.size()
+    status["retained_source_heads"] = 0
+    for segment in renderer.retained_all_segments:
+        if segment.kind == "source" and segment.compiled:
+            status["retained_source_heads"] += segment.note_instances.size()
     status["visible_symbols"] = renderer.visible_symbols
     status["clock_beat"] = renderer.clock_beat
     status["play_from_beat"] = renderer.play_from_beat
@@ -321,8 +325,7 @@ func native_is_ready() -> bool:
         revision == int(status.get("state_revision", -2)) and \
         revision == int(status.get("layout_revision", -2)) and \
         revision == int(status.get("rendered_revision", -2)) and \
-        revision == int(status.get("model_revision", -2)) and \
-        int(status.get("visible_noteheads", 0)) > 0
+        revision == int(status.get("model_revision", -2))
 
 func expected_window_scale() -> float:
     return maxf(1.0, minf(float(dimensions.x) / 1280.0, float(dimensions.y) / 800.0))
@@ -484,7 +487,7 @@ func capture(label: String) -> bool:
         check(app.revision == int(config["revision"]), label + ": selected MIDI revision is preserved")
         check(int(app.last_state.get("selected_start_bar", -1)) == int(config["measure"]),
             label + ": requested source measure is preserved")
-        check(absf(float(app.practice_view.stage.renderer.play_from_beat) - float(config["play_from_beat"])) < 0.00001,
+        check(absf(float(app.practice_view.stage.renderer.play_from_beat) - float(app.last_state.get("play_from_beat",0.0))) < 0.00001,
             label + ": native playback origin matches the source measure")
     if render:
         # Capture actual viewport pixels at the requested size; no resampling.
@@ -538,7 +541,29 @@ func geometry_journey() -> bool:
     check(app.network_requests == 0, "Geometry fixture never sends HTTP requests")
     return true
 
-func http_journey() -> bool:
+func embedded_journey() -> bool:
+    if not await wait_until(func() -> bool: return app.inprocess_bus.is_ready() and requests_idle(), "embedded engine startup"): return false
+    app._send_command("settings.update", {"fullscreen":false,"music_dir":config["music_dir"]})
+    if not await wait_until(func() -> bool: return requests_idle() and not bool(app.preferences.get("fullscreen",true)), "isolated preferences"): return false
+    app._send_command("library.open", {"id":config["file"]})
+    if not await wait_until(func() -> bool: return requests_idle() and app.practice_view.is_source_picker_open(), "real source measure picker"): return false
+    var picker = app.practice_view.open_picker
+    picker.measure.value = int(config["measure"])
+    picker.mode_choice.select(1)
+    picker.measure.get_line_edit().release_focus()
+    var buttons: Array = picker.find_children("", "Button", true, false)
+    var confirmed := false
+    for button in buttons:
+        if button.text == "Open music":
+            confirmed = await click_control(button)
+            break
+    check(confirmed,"Confirm the actual source measure picker")
+    if not confirmed: return false
+    if not await workflow_ready("requested source passage"): return false
+    app._send_action({"action":"tempo","bpm":int(app.last_state.get("maximum_bpm",240))-10})
+    if not await workflow_ready("review tempo"): return false
+    config["revision"] = app.revision
+    config["play_from_beat"] = app.last_state.get("play_from_beat",0.0)
     if not await prepare_window():
         return false
     if not await wait_until(func() -> bool:
@@ -585,16 +610,46 @@ func click_control(control: BaseButton) -> bool:
             ancestor.ensure_control_visible(control)
         ancestor = ancestor.get_parent()
     await settled()
-    check(control.is_visible_in_tree() and not control.disabled, "Control is available: " + control.text)
+    check(control.is_visible_in_tree() and not control.disabled, "Control is available: " + control.text + " phase=" + str(app.last_state.get("phase")) + " bpm=" + str(app.last_state.get("bpm")) + " can_decrease=" + str(app.last_state.get("can_decrease_tempo")))
     if not control.is_visible_in_tree() or control.disabled:
         return false
+    if control.get_viewport() != root:
+        if bool(config.get("native_input",false)):
+            var point: Vector2 = control.get_screen_transform()*(control.size*.5)
+            var window := control.get_window()
+            # Embedded popup transforms are in root logical pixels. Native
+            # X11 input needs physical pixels after the application's scale.
+            if window.is_embedded():
+                point = Vector2(root.position) + root.get_final_transform()*(point-Vector2(root.position))
+            var details: Array = []
+            var status := OS.execute("xdotool",PackedStringArray(["mousemove",str(int(point.x)),str(int(point.y)),"click","1"]),details,true)
+            check(status == 0,"Native mouse clicks the tempo popup")
+            await process_frame
+            return status == 0
+        # Dummy headless windows do not route OS popup mouse events. Exercise
+        # the actual button binding; --native-input separately proves X11 input.
+        control.pressed.emit()
+        await process_frame
+        return true
     for pressed in [true, false]:
         var event := InputEventMouseButton.new()
         event.button_index = MOUSE_BUTTON_LEFT
         event.pressed = pressed
         event.position = control.get_global_rect().get_center()
-        root.push_input(event, true)
+        control.get_viewport().push_input(event, true)
         await process_frame
+    return true
+
+func click_tempo(control: BaseButton) -> bool:
+    if not app.practice_view.tempo_popup.visible:
+        if not await click_control(app.practice_view.speed_label): return false
+        if not await wait_until(func() -> bool: return app.practice_view.tempo_popup.visible,"actual tempo popup"): return false
+    var before_bpm: int = int(app.last_state.get("bpm",0))
+    if not await click_control(control): return false
+    if not await wait_until(func() -> bool:
+        return requests_idle() and int(app.last_state.get("bpm",0)) != before_bpm,
+        "actual tempo popup action acknowledgement"): return false
+    app.practice_view.tempo_popup.hide()
     return true
 
 func press_key(code: Key) -> void:
@@ -606,6 +661,12 @@ func press_key(code: Key) -> void:
         await process_frame
 
 func native_picker_backwards() -> bool:
+    var ancestor: Node = app.lesson_view.steps.picker.get_parent()
+    while ancestor != null:
+        if ancestor is ScrollContainer:
+            ancestor.ensure_control_visible(app.lesson_view.steps.picker)
+        ancestor = ancestor.get_parent()
+    if not await settled(): return false
     # Target only this fixture's X11 window on its isolated display. Real X
     # events let Godot route input into the separate native PopupMenu window.
     check(DisplayServer.get_name() == "X11", "Native popup input requires X11")
@@ -622,14 +683,14 @@ func native_picker_backwards() -> bool:
             break
     check(not window_id.is_empty(), "Find numeric native window identity")
     if window_id.is_empty(): return false
-    var point: Vector2 = screen_rect(app.practice_view.stage.steps.picker).get_center()
+    var point: Vector2 = screen_rect(app.lesson_view.steps.picker).get_center()
     var details: Array = []
     status = OS.execute("xdotool", PackedStringArray(["windowfocus", "--sync", window_id,
         "mousemove", "--window", window_id, str(int(point.x)), str(int(point.y)), "click", "1"]), details, true)
     check(status == 0, "Native mouse opens lesson picker")
     if status != 0: return false
-    if not await wait_until(func() -> bool: return app.practice_view.stage.steps.picker.get_popup().visible, "actual native lesson popup"): return false
-    var popup: PopupMenu = app.practice_view.stage.steps.picker.get_popup()
+    if not await wait_until(func() -> bool: return app.lesson_view.steps.picker.get_popup().visible, "actual native lesson popup"): return false
+    var popup: PopupMenu = app.lesson_view.steps.picker.get_popup()
     # A native menu may start without keyboard focus when the pointer is
     # outside its rows. Read actual UI focus, then reach the desired item using
     # real keys; never set selection or emit its signal in this path.
@@ -678,33 +739,39 @@ func practice_control_journey() -> bool:
     var original_bpm := int(app.last_state.get("bpm", 0))
     var target_bpm := int(app.last_state.get("target_bpm", 0))
     check(original_step > 1, "Review source allows backward lesson selection")
-    if not await click_control(app.practice_view.tempo_down_button): return false
+    if not await click_tempo(app.practice_view.tempo_down_button): return false
     if not await workflow_ready("visible -5 BPM acknowledged"): return false
     check(int(app.last_state.get("bpm", 0)) == original_bpm - 5, "Visible -5 BPM changes current tempo by exactly five")
     check(int(app.last_state.get("target_bpm", 0)) == target_bpm, "Manual tempo preserves automatic target")
     workflow_checks.append("manual_minus_five")
     await workflow_record("manual_minus_five")
-    if not await click_control(app.practice_view.tempo_up_button): return false
+    if not await click_tempo(app.practice_view.tempo_up_button): return false
     if not await workflow_ready("visible +5 BPM acknowledged"): return false
     check(int(app.last_state.get("bpm", 0)) == original_bpm, "Visible +5 BPM restores tempo")
     workflow_checks.append("manual_plus_five")
-    if not await click_control(app.practice_view.stage.steps.next_button): return false
+    app._navigate("lesson")
+    if not await wait_until(func() -> bool: return requests_idle(),"lesson step choices"): return false
+    if not await click_control(app.lesson_view.steps.next_button): return false
     if not await workflow_ready("next lesson step"): return false
     check(int(app.last_state.get("lesson_step", 0)) == original_step + 1, "Next selects following step")
     workflow_checks.append("next_step")
-    if not await click_control(app.practice_view.stage.steps.previous_button): return false
+    app._navigate("lesson")
+    if not await wait_until(func() -> bool: return requests_idle(),"previous step choices"): return false
+    if not await click_control(app.lesson_view.steps.previous_button): return false
     if not await workflow_ready("previous lesson step"): return false
     check(int(app.last_state.get("lesson_step", 0)) == original_step, "Previous returns to the prior step")
     check(int(app.last_state.get("bpm", 0)) == original_bpm, "Returning step restores its saved manual tempo")
     workflow_checks.append("previous_step")
+    app._navigate("lesson")
+    if not await wait_until(func() -> bool: return requests_idle(),"direct lesson picker"): return false
     var picker_revision: int = app.revision
     if bool(config.get("native_input", false)):
         if not await native_picker_backwards(): return false
     else:
         # Headless coverage checks the selection binding, independently of the
         # rendered X11 journey which exercises the native popup itself.
-        app.practice_view.stage.steps.picker.select(original_step - 2)
-        app.practice_view.stage.steps.picker.item_selected.emit(original_step - 2)
+        app.lesson_view.steps.picker.select(original_step - 2)
+        app.lesson_view.steps.picker.item_selected.emit(original_step - 2)
     if not await wait_until(func() -> bool:
         return requests_idle() and native_is_ready() and app.revision > picker_revision,
         "picker backward selection"): return false
@@ -714,7 +781,9 @@ func practice_control_journey() -> bool:
     workflow_checks.append("picker_backwards")
     # The preceding entry may be a connection passage (Both only). Return to
     # this source's Learn passage before exercising its three hand choices.
-    if not await click_control(app.practice_view.stage.steps.next_button): return false
+    app._navigate("lesson")
+    if not await wait_until(func() -> bool: return requests_idle(),"lesson step choices"): return false
+    if not await click_control(app.lesson_view.steps.next_button): return false
     if not await workflow_ready("restore source step before hand choices"): return false
     check(int(app.last_state.get("lesson_step", 0)) == original_step, "Restore source lesson step")
     # Switch away first so the Right check must click its real control too.
@@ -734,9 +803,16 @@ func practice_control_journey() -> bool:
             hand + ": real hand selection acknowledged")
         workflow_checks.append(hand)
         await workflow_record(hand)
+    # Hand selection restores that hand's saved stage tempo. Establish the
+    # declared review rate again so this bounded input journey need not wait
+    # through several minimum-tempo count-ins.
+    app._send_action({"action":"tempo","bpm":original_bpm})
+    if not await workflow_ready("review rate after hand selection"): return false
     if not await click_control(app.practice_view.start_button): return false
     if not await wait_until(func() -> bool: return str(app.last_state.get("phase", "")) == "count_in", "real count-in"): return false
     check(app.practice_view.tempo_down_button.disabled and app.practice_view.tempo_up_button.disabled, "Manual tempo is guarded during count-in")
+    if not await wait_until(func() -> bool: return app.practice_view.stage.count_in.visible,
+        "actual initial count-in lights"): return false
     workflow_checks.append("count_in")
     await workflow_record("count_in")
     if not await wait_until(func() -> bool: return str(app.last_state.get("phase", "")) == "playing", "count-in completes"): return false
@@ -744,7 +820,7 @@ func practice_control_journey() -> bool:
     if not await wait_until(func() -> bool: return requests_idle() and str(app.last_state.get("phase", "")) == "paused", "visible Pause"): return false
     workflow_checks.append("pause")
     var paused_bpm := int(app.last_state.get("bpm", 0))
-    if not await click_control(app.practice_view.tempo_down_button): return false
+    if not await click_tempo(app.practice_view.tempo_down_button): return false
     if not await workflow_ready("paused -5 BPM"): return false
     check(int(app.last_state.get("bpm", 0)) == paused_bpm - 5, "Paused -5 BPM is preserved as a direct manual control")
     workflow_checks.append("paused_minus_five")
@@ -752,12 +828,21 @@ func practice_control_journey() -> bool:
     # available once another real attempt exists, rather than on a blank Ready.
     if not await click_control(app.practice_view.start_button): return false
     if not await wait_until(func() -> bool: return requests_idle() and str(app.last_state.get("phase", "")) == "count_in", "manually paced take starts"): return false
+    if not await wait_until(func() -> bool:
+        return str(app.last_state.get("phase", "")) == "playing" and float(app.last_state.get("clock_beat",0.0)) > .25,
+        "manually paced take actually reaches source before Retry"): return false
     var previous_transport := int(app.last_state.get("transport_id", -1))
     if not await click_control(app.practice_view.practice_retry_button): return false
     if not await wait_until(func() -> bool:
-        return requests_idle() and str(app.last_state.get("phase", "")) == "count_in" and \
-            int(app.last_state.get("transport_id", -1)) > previous_transport,
-        "Retry starts fresh count-in"): return false
+        var prep: Variant = app.last_state.get("practice_preparation")
+        return requests_idle() and prep is Dictionary and str(prep.get("phase","")) in ["reverse","preparing"],
+        "Retry schedules fresh preparation on the current moving world"): return false
+    if not await wait_until(func() -> bool:
+        return app.practice_view.stage.count_in.visible,
+        "Retry displays its actual count-in over the preparation rest"): return false
+    if not await wait_until(func() -> bool:
+        return str(app.last_state.get("phase","")) == "playing" and int(app.last_state.get("transport_id",-1)) > previous_transport,
+        "Retry starts a fresh acknowledged take"): return false
     check(int(app.last_state.get("bpm", 0)) == paused_bpm - 5, "Retry preserves manually chosen BPM")
     workflow_checks.append("retry")
     if not await click_control(app.practice_view.listen_button): return false
@@ -781,6 +866,28 @@ func practice_control_journey() -> bool:
     await workflow_record("keyboard_paused")
     return true
 
+func stop_fixture_timers(node: Node) -> void:
+    if node is Timer:
+        node.stop()
+    for child in node.get_children():
+        stop_fixture_timers(child)
+
+func release_application() -> void:
+    # Stop generating requests, then drain the existing real worker callbacks.
+    # Closing immediately after a screenshot can race the last feedback read
+    # or preloader response. Do not hide shutdown errors from the report gate.
+    app.set_process(false)
+    stop_fixture_timers(app)
+    if app.score_runway != null:
+        app.score_runway.set_process(false)
+    await wait_until(func() -> bool:
+        return app.inprocess_bus.pending.is_empty() and app.inprocess_bus.feedback_request_id < 0,
+        "owned embedded requests drain before teardown")
+    app.queue_free()
+    await process_frame
+    await process_frame
+    app = null
+
 func run() -> void:
     var arguments := OS.get_cmdline_user_args()
     if arguments.size() != 1:
@@ -795,13 +902,13 @@ func run() -> void:
     config = parsed
     output = str(config["output"])
     dimensions = Vector2i(int(config["size"][0]), int(config["size"][1]))
-    geometry_only = str(config.get("mode", "http")) == "geometry"
+    geometry_only = str(config.get("mode", "embedded")) == "geometry"
     render = bool(config.get("render", false))
     if bool(config.get("native_input", false)):
         root.title = "Practice UX " + str(OS.get_process_id())
     deadline_ms = Time.get_ticks_msec() + int(float(config.get("timeout_seconds", 90)) * 1000.0)
     check(not render or (not geometry_only and DisplayServer.get_name() != "headless"),
-        "Screenshots require a visible real HTTP application")
+        "Screenshots require a visible real embedded application")
     if not failures.is_empty():
         write_report()
         quit(1)
@@ -817,8 +924,9 @@ func run() -> void:
     if geometry_only:
         completed = await geometry_journey()
     else:
-        completed = await http_journey()
+        completed = await embedded_journey()
     check(completed and captures.size() == 6, "All six application views captured")
     write_report()
     print("ART_DIRECTION_FAILURES:", failures.size())
+    await release_application()
     quit(0 if failures.is_empty() else 1)

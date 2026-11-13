@@ -78,6 +78,7 @@ var _history_default_path := ""
 var _current_fingerprint := ""
 var _deletion_fingerprint := ""
 var _history_busy := false
+var statistics_view: VBoxContainer
 
 func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
@@ -384,6 +385,8 @@ func _build_learning_controls(parent: VBoxContainer) -> void:
     parent.add_child(_label("Saved practice results", 14, MUTED))
     history_summary_label = _label("Loading local learning history…", 13, MUTED)
     parent.add_child(history_summary_label)
+    statistics_view = preload("res://learning_statistics_view.gd").new()
+    _disclosure(parent, "Practice statistics", statistics_view)
     history_actions_body = _stack(10)
     history_toggle = _disclosure(parent,"Retention, export and deletion",history_actions_body)
     var retention_row := HFlowContainer.new()

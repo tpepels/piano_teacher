@@ -18,7 +18,12 @@ from .learning_ledger import LearningLedger, SCHEMA_VERSION
 
 class ProgressRepository:
     def __init__(self, db_path: Path) -> None:
+        self.db_path = Path(db_path).resolve()
         self.db = sqlite3.connect(db_path, check_same_thread=False)
+        # Bounded read-only analytical snapshots must not block the musical
+        # worker's evidence/progress commit. WAL keeps the single canonical
+        # writer and its existing savepoints while allowing concurrent readers.
+        self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA foreign_keys=ON")
         self.db.execute("CREATE TABLE IF NOT EXISTS sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER)")
         columns={row[1] for row in self.db.execute("PRAGMA table_info(sessions)")}
@@ -86,6 +91,12 @@ class ProgressRepository:
                WHERE fingerprint=? AND strategy=?""",
             (fingerprint, p.profile),
         ).fetchone()
+        saved_mastery = dict(self.db.execute(
+            "SELECT exercise, bpm FROM mastery WHERE fingerprint=?", (fingerprint,)))
+        # Feedback can omit mastered candidates from the initial selection.
+        # Recover exact catalog definitions before filtering durable credit;
+        # unknown versions/content never match the current course keys.
+        p.restore_mastered_stages(saved_mastery)
         current = {step.key: step for step in p.lesson_steps}
         exact = False
         if row and restore_session and isinstance(row[0], str):
@@ -123,10 +134,7 @@ class ProgressRepository:
         ):
             if key in p.stage_tempos:
                 p.transferable_tempos.add(key)
-        for key, bpm in self.db.execute(
-            "SELECT exercise, bpm FROM mastery WHERE fingerprint=?",
-            (fingerprint,),
-        ):
+        for key, bpm in saved_mastery.items():
             if key in current:
                 p.mastered[key] = bpm
 

@@ -194,14 +194,14 @@ def test_completed_take_owns_only_transport_and_session_persistence():
     server = (ROOT/"piano_teacher/server.py").read_text()
     assessment = (ROOT/"piano_teacher/application/assessment_settlement.py").read_text()
     evidence = (ROOT/"piano_teacher/application/assessment_evidence.py").read_text()
-    commit = (ROOT/"piano_teacher/application/assessment_commit.py").read_text()
+    commit = (ROOT/"piano_teacher/application/attempt_settlement.py").read_text()
     assert "assess_completed_take(" in server
-    assert "commit_assessed_result(" in server
+    assert "self.attempt_settlement.settle(" in server
     assert "def assess_completed_take(" in assessment
     assert "def observe_assessed_take(" in evidence
-    assert "def commit_assessed_result(" in commit
-    assert "observe_assessed_take(" in commit
-    assert commit.index("observe_assessed_take(") < commit.index("message = plan.apply_result(")
+    assert "def settle(" in commit
+    assert "plan.apply_result(" not in commit
+    assert commit.index("self.capture.persist()") < commit.index("plan.apply_teaching_progress(")
     # Check executable dependencies, not prose in module docstrings.
     import ast
     for source in (assessment, evidence, commit):
@@ -217,9 +217,9 @@ def test_completed_take_owns_only_transport_and_session_persistence():
 def test_teaching_selection_and_preparation_are_learner_owned():
     server = (ROOT/"piano_teacher/server.py").read_text()
     learner = (ROOT/"piano_teacher/application/learner_progress.py").read_text()
-    assert "self.learner_progress.next_course_unit(" in server
-    assert "record_preparation=self.learner_progress.record_guided_preparation" in server
-    assert "self.guided_session.commit_completed_preparation(" in server
+    assert "self.learner_progress.teaching_credits(" in server
+    assert "self.attempt_settlement.settle(" in server
+    assert "record_preparation=" not in server
     assert "def next_course_unit(" in learner
     assert "def record_guided_preparation(" in learner
 
@@ -259,7 +259,7 @@ def test_transition_selection_and_guidance_own_narrow_inputs():
     assert "run_before_assessment(" not in transitions
     assert "self.guided_session.advance(" in server
     assert "self.guided_session.bind(" in server
-    assert "self.guided_session.commit_completed_preparation(" in server
+    assert "self.attempt_settlement.settle(" in server
     assert "self.guided_session.marks(" in server
     assert "engine." not in guided
 
@@ -305,7 +305,7 @@ def test_control_dispatch_is_pure_and_domain_effects_are_locked():
                    "_control_learning", "_control_transport"):
         assert f"def {method}(" in server
     assert "prepare_stage_change(" in server
-    assert "apply_stage_change(" in server
+    assert "self.session_commands.apply_progress(" in server
     assert "engine." not in stage
 
 

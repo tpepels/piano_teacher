@@ -83,7 +83,7 @@ def test_resume_with_long_presentation_lead_keeps_one_bar_count_in(engine):
     now[0] += 30.0
     assert e.state()["next_count_in_beats"] == pytest.approx(4.0)
     e.control("resume", presentation_lead_seconds=11.0)
-    assert e._resume_grading_after == pytest.approx(now[0] + 11.0)
+    assert e.midi_ingress.resume_grading_after == pytest.approx(now[0] + 11.0)
     assert e.count_in_beats == pytest.approx(4.0)
     assert e.state()["count_in_beats"] == pytest.approx(4.0)
 
@@ -100,7 +100,7 @@ def test_resume_lead_of_one_count_in_bar_is_the_graded_deadline(engine):
     lead = count_in*60/40
     e.control("resume", presentation_lead_seconds=lead)
     # No hidden four-beat minimum on top of the renderer's reservation.
-    assert e._resume_grading_after == pytest.approx(now[0] + lead)
+    assert e.midi_ingress.resume_grading_after == pytest.approx(now[0] + lead)
     assert e.count_in_beats == pytest.approx(count_in)
 
 

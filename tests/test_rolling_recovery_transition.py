@@ -2,10 +2,19 @@
 from dataclasses import FrozenInstanceError
 import pytest
 
-from piano_teacher.application.rolling_recovery import plan_rolling_recovery
+from piano_teacher.application.rolling_recovery import project_rolling_response
+from piano_teacher.application.mistake_responses import rolling_response, resolve_mistake_policy
 from piano_teacher.lesson_settings import SETTINGS
 from piano_teacher.recovery import RecoveryDecision
 
+
+
+def plan_rolling_recovery(decision, *, identity, bpm, previous_key, previous_count,
+        grid, first_bar, now, allow_guided=True, strategy="adaptive", context=None, minimum_bpm=SETTINGS.minimum_bpm):
+    chosen = rolling_response(resolve_mistake_policy(strategy),decision,identity=identity,bpm=bpm,
+        minimum_bpm=min(bpm,minimum_bpm),previous_key=previous_key,previous_count=previous_count,
+        grid=grid,allow_guided=allow_guided,context=context)
+    return project_rolling_response(chosen,decision,grid=grid,first_bar=first_bar,before_bpm=bpm,now=now)
 
 def test_repeated_failure_is_escalated_only_for_exact_same_source_chunk():
     decision = RecoveryDecision(8., 4., 5, 2, 3)

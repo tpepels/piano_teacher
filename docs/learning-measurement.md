@@ -8,7 +8,9 @@ Implementation and verification status are tracked in ROADMAP. Only
 
 P0 uses `application/learning_capture.py` and `learning_ledger.py`;
 [verification and remaining gates](verification/learning-measurement-2026-11-04.md)
-record actual coverage. P1 analytics below remain a specification.
+record actual coverage. The bounded P1 query/report and Settings view are
+implemented; the [2026-11-13 Task 5 receipt](../.superpowers/sdd/2026-11-13-roadmap-completion/task-5-report.md)
+records software evidence and the remaining physical/release/human gates.
 
 ## Decisions and scope
 
@@ -225,6 +227,59 @@ the existing in-process queue. They read ledger snapshots, not live plans.
 Index learner/session time; attempt session and source/stage/hand/BPM/time;
 source-note/attempt; decision/attempt/policy/time; and outcome/decision/state.
 No query mutates settlement, progress or a policy.
+
+The implemented `learning.statistics` request has query `version: 1` and report
+`schema_version: 2`; the canonical ledger remains schema version 1. Requests
+accept exact `fingerprint`, `session_id`, `stage_key`, `hand`, `scope`, `policy`,
+inclusive UTC `date_from`/`date_to` dates, and performed `bpm_min`/`bpm_max`.
+`limit` defaults to 250 and cannot exceed 1,000. `cursor` freezes the insertion
+high-water mark and binds learner, filters, limits and the preceding identity;
+new attempts do not enter later pages. Deleted anchors expire the cursor.
+Unknown context does not match a known-value filter.
+
+Retained detail shares a 2 MiB default/4 MiB maximum `detail_budget_bytes` cap.
+At most 10,000 original observations and 4,000 rows per related event/decision/
+outcome table are captured; related truncation counts are lower bounds when
+the row cap is reached. Error locations have a 1,000-row cap per dimension;
+local timing contexts and fixed-policy cohorts each have a 250-row cap.
+Recorded phases have a 20,000-interval/64-phase-name cap and indexed intersections.
+All omitted samples/locations/cohorts remain qualified in the report. Exact
+linear quantiles use only these bounded retained residuals. The old
+`precise_note_rate` remains a combined grading-status rate; `pitch.accuracy`
+uses independent pitch assignments. Extra-note rates name their separate
+assessed-obligation denominator, which survives detail pruning.
+
+Native statistics work uses the existing read-only asset worker and a separate
+`mode=ro`, `query_only` SQLite connection. A bounded read transaction captures
+rows; rollback releases its snapshot before pure report formatting, and the
+connection closes on both success and failure. The musical engine lock is not
+acquired. The canonical repository uses WAL so read snapshots cannot block
+grading commits; WAL/SHM files are SQLite storage, not another history writer.
+Bounded snapshots limit WAL retention; they do not disable normal checkpointing.
+Post-format checks reject a changed learner or erased selected attempts.
+
+Practice time intersects recorded, unioned per-session phase intervals with
+recorded attempt bounds. Missing/unflushed/pruned intervals stay unknown;
+incomplete coverage cannot become a complete time-to-mastery estimate. Mastery
+uses recorded eligibility, frozen target/criterion and progression awards,
+with unfinished, earlier-page and filtered/imported gaps qualified. It never
+awards retrospective credit from three reconstructed passes. Error location
+denominators are required-note obligations at each source note/onset/measure,
+hand/stage/performed-tempo context, explicitly labeled as such.
+
+Six fixed baseline arms retain original rule IDs and captured resolved policy
+parameters. Cross-policy grading-context hashes omit only the frozen `retry`
+and `retry_version` fields; every other grading/generator/guidance fact stays
+in the identity. Proximal and unsupported full-target verification denominators
+stay separate. Unknown calibration/input/map context excludes a comparable
+outcome denominator. Uncaptured expertise and precollection exposure stay
+unknown; descriptive grouping is not a causal or learning-effect estimate.
+
+The Settings → Learning history → Practice statistics disclosure provides All
+history/Current piece, Refresh, Previous/Next, loading, error and empty states.
+Its coordinator cancels obsolete requests, coalesces duplicate refreshes and
+rejects stale learner/current-piece replies. The text view discloses its short
+list limits; typed reports retain the larger bounded tables and coverage.
 
 P1 includes a functional read-only statistics view using existing screen/layout
 conventions, with the same coverage labels as exports and typed queries. A

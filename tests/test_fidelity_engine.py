@@ -73,18 +73,18 @@ def test_piece_key_and_clef_metadata_reach_active_lesson_compiler(tmp_path, monk
         captured.update(kwargs)
         return original(phrase, **kwargs)
     monkeypatch.setattr(score_artifacts, 'build_lesson_score', record)
-    e = PracticeEngine(tmp_path/'metadata-data', enable_midi=False)
-    e.library.update(exercise_strategy='source-progression')  # MusicXML is not a MIDI-only Coda source
-    try:
-        e.load(str(path))
-        e.geometry()
-        assert captured.get('key_signatures'), 'Source keys must reach the actual lesson compiler'
-        assert captured.get('clef_changes'), 'Source clefs must reach the actual lesson compiler'
-        assert captured['key_signatures'] == e.plan.piece.key_signatures
-        assert captured['clef_changes'] == e.plan.piece.clef_changes
-        assert e.geometry()['staff_clefs']['left']['sign'] == 'G'
-    finally:
-        e.db.close()
+    # XML remains a supported internal source; desktop selection is MIDI only.
+    piece, _ = server.import_piece(path)
+    selected = score_artifacts.ScoreSelection(piece, piece.phrases[0], 'left',
+        'source-metadata', 1, path.name)
+    from piano_teacher.preprocessing_cache import PreprocessingCache
+    artifacts = score_artifacts.ScoreArtifacts(PreprocessingCache(tmp_path/'metadata-data'))
+    geometry = artifacts.geometry(selected)
+    assert captured.get('key_signatures'), 'Source keys must reach the actual lesson compiler'
+    assert captured.get('clef_changes'), 'Source clefs must reach the actual lesson compiler'
+    assert captured['key_signatures'] == piece.key_signatures
+    assert captured['clef_changes'] == piece.clef_changes
+    assert geometry['staff_clefs']['left']['sign'] == 'G'
 
 
 def test_ordinary_midi_identity_metadata_does_not_invalidate_saved_course_progress(tmp_path):
@@ -122,21 +122,27 @@ def test_ordinary_midi_identity_metadata_does_not_invalidate_saved_course_progre
 
 
 def test_corrected_pickup_course_keeps_history_and_resets_incompatible_streak(tmp_path):
-    path = tmp_path/'Pickup progress.musicxml'
-    path.write_text('''<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Right hand</part-name></score-part></part-list>
-<part id="P1"><measure number="0" implicit="yes"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note></measure>
-<measure number="1"><note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration></note></measure></part></score-partwise>''')
+    path = tmp_path/'Pickup progress.mid'
+    midi = mido.MidiFile(ticks_per_beat=480)
+    midi.tracks.append(mido.MidiTrack([
+        mido.MetaMessage('track_name', name='Right hand'),
+        mido.MetaMessage('time_signature', numerator=1, denominator=4),
+        mido.Message('note_on', note=60, velocity=80),
+        mido.Message('note_off', note=60, time=480),
+        mido.MetaMessage('time_signature', numerator=4, denominator=4),
+        mido.Message('note_on', note=62, velocity=80),
+        mido.Message('note_off', note=62, time=1920)]))
+    midi.save(path)
     data = tmp_path/'pickup-progress-data'
     old = PracticeEngine(data, enable_midi=False)
-    old.library.update(exercise_strategy='source-progression')  # MusicXML is not a MIDI-only Coda source
     try:
         old.load(str(path))
         piece = old.plan.piece
         # Reproduce the old inferred 4/4 grid for the same unchanged source file.
-        old_notes = tuple(Note(n.start,n.end,n.pitch,n.track,n.channel,n.hand) for n in piece.notes)
+        old_notes = tuple(Note(n.start,n.end,n.pitch,n.track,n.channel,n.hand,n.source_id) for n in piece.notes)
         legacy = replace(piece, notes=old_notes, bar_boundaries=(0,4,8),
                          phrases=(Phrase(1,1,2,0,8,old_notes),))
-        old.plan = LearningPlan(legacy, exercise_strategy='source-progression')
+        old.plan = LearningPlan(legacy, exercise_strategy=old.library.settings['exercise_strategy'])
         old.plan.set_bpm(88)
         old.plan.streak = 2
         old_key = old.plan.identity

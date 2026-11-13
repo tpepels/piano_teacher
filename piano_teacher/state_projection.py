@@ -108,6 +108,9 @@ class TempoSnapshot(_Snapshot):
     streak: int = 0
     rungs: tuple[int, ...] = ()
     minimum_bpm: int = 12
+    # The active stage's lowest selected BPM (a slowdown stage needs more
+    # to stay at minimum_bpm); "-" is offered only above it.
+    stage_minimum_bpm: int = 12
     maximum_bpm: int = 300
     clean_runs_required: int = 3
     manual_tempo_step_bpm: int = 5
@@ -297,7 +300,7 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "clean_runs_required": tempo.clean_runs_required,
         "manual_tempo_step_bpm": tempo.manual_tempo_step_bpm,
         "start_bpm": tempo.start_bpm, "automatic_tempo_steps": tempo.automatic_tempo_steps,
-        "tempo_rungs": list(tempo.rungs), "can_decrease_tempo": tempo.bpm > tempo.minimum_bpm,
+        "tempo_rungs": list(tempo.rungs), "can_decrease_tempo": tempo.bpm > tempo.stage_minimum_bpm,
         "piece_fingerprint": lesson.fingerprint,
         "minimum_bpm": tempo.minimum_bpm, "maximum_bpm": tempo.maximum_bpm,
         "can_increase_tempo": tempo.bpm < tempo.maximum_bpm,

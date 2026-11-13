@@ -53,16 +53,26 @@ class LearningCapture:
         self.assistance_used = False
         self.guidance_state = None
 
+    _STATE_FIELDS = ("run_id", "session_id", "origin", "attempt_id", "context", "sealed",
+        "decisions", "waiting_decision", "parent_decision", "episode", "verification_episode",
+        "guided", "phase", "phase_at", "intervals", "closed", "assistance_used", "guidance_state")
+
+    def capture_state(self):
+        return deepcopy({key: getattr(self,key) for key in self._STATE_FIELDS})
+
+    def restore_state(self, snapshot):
+        for key,value in snapshot.items():
+            setattr(self,key,value)
+
     @contextmanager
     def atomic(self):
         """Restore sealed IDs and episode/phase RAM if the shared savepoint fails."""
-        before = deepcopy({k: v for k, v in vars(self).items() if k != "ledger"})
+        before = self.capture_state()
         try:
             with sqlite_atomic(self.ledger.db):
                 yield
         except BaseException:
-            for key, value in before.items():
-                setattr(self, key, value)
+            self.restore_state(before)
             raise
 
     def phase_changed(self, phase: str, now: float) -> None:
@@ -176,11 +186,16 @@ class LearningCapture:
             self.sealed.update({"unscored_reason": "no_source_obligations",
                                 "extra_notes": result.extra_notes})
 
-    def decision(self, data: dict) -> str | None:
+    def decision(self, data: dict, *, decision_id: str | None = None) -> str | None:
         if self.attempt_id is None:
             return None
-        decision_id = identifier()
+        decision_id = decision_id or identifier()
         data = deepcopy(data)
+        for existing_id, existing in self.decisions:
+            if existing_id == decision_id:
+                if {k: v for k, v in existing.items() if k != "episode_id"} != data:
+                    raise ValueError("Conflicting teaching decision identity")
+                return decision_id
         if self._verification_ready():
             self.episode = None
         if self.episode is None:

@@ -6,12 +6,8 @@ recovery display. The engine alone applies decisions and owns transport.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Sequence
 
-from ..lesson_settings import SETTINGS
 from ..recovery_projection import RecoveryDisplay, recovery_display
-from ..recovery import RecoveryDecision
-from .mistake_responses import resolve_mistake_policy, rolling_response
 
 
 @dataclass(frozen=True)
@@ -27,34 +23,14 @@ class RollingRecoveryTransition:
     reason: str = "registered_policy"
 
 
-def plan_rolling_recovery(decision: RecoveryDecision, *, identity: str,
-                          bpm: int, previous_key: tuple | None,
-                          previous_count: int, grid: Sequence[float],
-                          first_bar: int, now: float,
-                          allow_guided: bool = True,
-                          strategy: str = "adaptive", context=None) -> RollingRecoveryTransition:
-    policy = resolve_mistake_policy(strategy)
-    chosen = rolling_response(
-        policy, decision, identity=identity, bpm=bpm,
-        minimum_bpm=SETTINGS.minimum_bpm,
-        previous_key=previous_key, previous_count=previous_count,
-        grid=grid, allow_guided=allow_guided, context=context)
-    adjusted = replace(decision, restart_beat=chosen.restart_beat)
-    display = recovery_display(
-        adjusted, grid=grid, first_bar=first_bar,
-        before_bpm=bpm, after_bpm=chosen.bpm, now=now,
-        guided=chosen.guided)
-    if strategy != "adaptive":
+def project_rolling_response(chosen, decision, *, grid, first_bar, before_bpm, now):
+    """Project an already selected response; never choose policy or tempo."""
+    display = recovery_display(replace(decision,restart_beat=chosen.restart_beat),
+        grid=grid,first_bar=first_bar,before_bpm=before_bpm,after_bpm=chosen.bpm,
+        now=now,guided=chosen.guided)
+    if chosen.mode != "adaptive":
         notice = dict(display.notice)
-        notice["kind"] = "slowdown" if chosen.bpm < bpm else "repeat"
-        notice["response"] = strategy
-        if strategy == "steady-repeat":
-            instruction = display.next_action
-        elif strategy == "finish-then-review":
-            instruction = "Finish the phrase; review errors after the take."
-        else:
-            instruction = display.next_action
-        display = replace(display, notice=notice, next_action=instruction)
-    return RollingRecoveryTransition(
-        chosen.bpm, chosen.trouble_key, chosen.count, chosen.guided,
-        display, chosen.restart_beat, chosen.mode, chosen.action, chosen.reason)
+        notice.update(kind="slowdown" if chosen.bpm < before_bpm else "repeat",response=chosen.mode)
+        display = replace(display,notice=notice)
+    return RollingRecoveryTransition(chosen.bpm,chosen.trouble_key,chosen.count,
+        chosen.guided,display,chosen.restart_beat,chosen.mode,chosen.action,chosen.reason)

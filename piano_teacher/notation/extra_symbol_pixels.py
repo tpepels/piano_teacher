@@ -828,7 +828,8 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
     # Practice silence is drawn after the original source ends. Its two
     # whole-rest contours are not authored MusicXML events, so inspect the
     # independently photographed source-end meter and exact moving PNG
-    # positions before claiming either. No lone rest earns an exemption.
+    # positions before claiming either. Contour-registration fragments may
+    # share that one photographed trajectory; no lone rest earns ownership.
     procedural = confirmed_gap_tracks(written,snapshots)
     procedural_frames = 0
     source_by_id = {e['source']['id']: e for e in written.symbols if e['visible']}

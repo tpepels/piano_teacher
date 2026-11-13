@@ -27,11 +27,25 @@ if [[ ! -f native/godot-cpp/SConstruct ]]; then
 fi
 PYTHON_VERSION="$("$PIANO_PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 echo "Building with CPython ABI $PYTHON_VERSION"
+# Never link into an inode that a running Godot editor may have mapped.
+# Build on the destination filesystem; only a successful linker can publish.
+mkdir -p godot/native/bin
+PIANO_BUILD_DIR="$(mktemp -d "$PWD/godot/native/bin/.build-XXXXXX")"
+trap 'rm -rf "$PIANO_BUILD_DIR"' EXIT
 (
   cd native
-  scons platform=linux target=template_release -j2
+  scons platform=linux target=template_release piano_output_dir="$PIANO_BUILD_DIR" -j2
 )
-test -s godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+PIANO_BUILT_BINARY="$PIANO_BUILD_DIR/libpiano_bridge.linux.template_release.x86_64.so"
+test -s "$PIANO_BUILT_BINARY"
+"$PIANO_PYTHON" - "$PIANO_BUILT_BINARY" \
+  godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so <<'PY'
+import os
+import sys
+with open(sys.argv[1], "rb") as binary:
+    os.fsync(binary.fileno())
+os.replace(sys.argv[1], sys.argv[2])
+PY
 cp native/piano_bridge.gdextension.in godot/native/piano_bridge.gdextension
 printf '%s\n' "$PYTHON_VERSION" > godot/native/python-abi.txt
 # Record successful native source/ABI/binary hashes and invalidate older smokes.

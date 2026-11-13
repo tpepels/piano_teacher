@@ -4,7 +4,7 @@ Decoded PNG evidence is LRU bounded to 16 frames. Registration caches retain
 only scalar anchors, not image support sets. Each instance owns its own clock
 index and caches; neither callers nor native telemetry provide coordinates.
 """
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 
@@ -75,14 +75,14 @@ class CapturedFrames:
             return []
         end = max(float(value) for value in targets)
         selected = []
-        for clock in self.clocks:
-            if clock <= end + 1e-5:
-                continue
-            if clock > end + .5 + 1e-5:
+        index = bisect_right(self.clocks, end + 1e-5)
+        latest = end + .5 + 1e-5
+        while index < len(self.clocks) and len(selected) < limit:
+            clock = self.clocks[index]
+            if clock > latest:
                 break
             selected.append(clock)
-            if len(selected) >= limit:
-                break
+            index += 1
         return selected
 
     def frame(self, beat):

@@ -6,11 +6,15 @@ This is software CPU/RSS evidence; it cannot establish piano/display latency.
 from __future__ import annotations
 
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
 import resource
 import statistics
+import subprocess
+import sys
+import tempfile
 import time
 
 import pytest
@@ -32,6 +36,21 @@ def _percentile(values, portion):
 @pytest.mark.parametrize("label,filename,min_source_notes", REAL_SCORES)
 def test_real_score_cold_and_cached_native_pipeline(
         label, filename, min_source_notes, tmp_path):
+    # ru_maxrss is process-lifetime, so a prior scientific raster test must
+    # not consume this score's 512 MiB budget. Measure each source in a fresh
+    # interpreter, serially across cooperating benchmark invocations.
+    with (Path(tempfile.gettempdir()) / "piano-phase6-resource.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        command = [sys.executable, "-c",
+            "import runpy,sys; from pathlib import Path; "
+            "runpy.run_path(sys.argv[1])['_measure_real_score'](sys.argv[2],sys.argv[3],int(sys.argv[4]),Path(sys.argv[5]))",
+            str(Path(__file__).resolve()), label, filename, str(min_source_notes), str(tmp_path)]
+        result = subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=90)
+    (tmp_path / "benchmark.log").write_text(result.stdout+result.stderr)
+    assert result.returncode == 0, result.stdout+result.stderr
+
+
+def _measure_real_score(label, filename, min_source_notes, tmp_path):
     path = ROOT / "midi" / filename
     assert path.is_file()
     original = path.read_bytes()
@@ -41,7 +60,11 @@ def test_real_score_cold_and_cached_native_pipeline(
     elapsed = {}
     # Budgets have clear margin above measured GitHub runner times, but
     # reject the original >27s startup and >22ms P95 frame-service stalls.
-    report = {"score": filename, "sha256":expected_fingerprint,
+    report = {"conditions":{"process":"fresh interpreter per source",
+                            "scheduling":"serial advisory resource lock; no concurrent audit intended",
+                            "load_average":list(os.getloadavg()),
+                            "cpu_affinity":sorted(os.sched_getaffinity(0))},
+              "score": filename, "sha256":expected_fingerprint,
               "limits": {"cold_load_ms": 15000 if label=="hanon" else 8000,
                          "cold_ink_ms": 20000,
                          "next_stage_ink_ms": 4000,

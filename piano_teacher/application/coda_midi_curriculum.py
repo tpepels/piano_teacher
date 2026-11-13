@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 from ..exercise_contracts import TempoMap, TempoSegment
 from ..exercise_generator import ExerciseVariant
 from ..exercise_pipeline import ExerciseStage
+from ..lesson_settings import SETTINGS
 from ..music import Phrase, Piece
 from ..research.coda_midi_grid import midi_coda_quantization
 from ..research.coda_midi_sparse import sparse_midi_coda
@@ -24,15 +25,27 @@ from ..research.coda_author_catalog import (
 
 @dataclass(frozen=True)
 class CodaHalfSpeed:
-    """MIDI playback equivalent of the author's x2/x4 written slowdown."""
+    """MIDI playback equivalent of the author's x2/x4 written slowdown.
+
+    The learner's selected (ladder) BPM is divided by the factor, but a
+    slow stage never sounds below the app's minimum tempo (owner decision
+    2026-11-11). Transport, Listen and grading all read this one map.
+    """
     factor: int = 2
     name: str = "coda-slowdown-tempo"
 
-    def generate(self, plan, bpm: float) -> TempoMap:
+    def effective_bpm(self, bpm: float) -> float:
         if bpm <= 0 or self.factor not in AUTHOR_SLOWDOWN_FACTORS:
             raise ValueError("Coda slowdown factor must be 2 or 4 and BPM positive")
+        return max(float(SETTINGS.minimum_bpm), float(bpm)/self.factor)
+
+    def ladder_bpm(self, effective_bpm: float) -> float:
+        """Selected BPM at which this stage sounds at effective_bpm."""
+        return float(effective_bpm)*self.factor
+
+    def generate(self, plan, bpm: float) -> TempoMap:
         return TempoMap(self.name, (
-            TempoSegment(0.0, plan.duration_beats, float(bpm)/self.factor),
+            TempoSegment(0.0, plan.duration_beats, self.effective_bpm(bpm)),
         ))
 
 

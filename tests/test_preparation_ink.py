@@ -22,8 +22,12 @@ def test_count_in_preserves_actual_opening_and_recovery_accidentals_and_ledgers(
                         boundaries=(0,4,8), hand="right")
     result = subprocess.run([GODOT, '--display-driver', 'x11', '--audio-driver', 'Dummy',
         '--path', str(ROOT / 'godot'), '--script', str(ROOT / 'tests/godot/preparation_ink.gd'),
-        '--', str(tmp_path)], capture_output=True, text=True, timeout=30)
+        '--', str(tmp_path)], capture_output=True, text=True, timeout=30,
+        env={**os.environ,"HOME":str(tmp_path/"home"),
+             "XDG_DATA_HOME":str(tmp_path/"data"),"XDG_CONFIG_HOME":str(tmp_path/"config"),
+             "XDG_CACHE_HOME":str(tmp_path/"cache")})
     output = result.stdout + result.stderr
+    (tmp_path / "godot.log").write_text(output)
     assert result.returncode == 0, output
     assert 'SCRIPT ERROR' not in output, output
     assert 'PREPARATION_INK_FAILURES:0' in output, output

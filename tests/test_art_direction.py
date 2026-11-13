@@ -93,7 +93,7 @@ def native_composition_report():
                             "transport", "primary_transport", "navigation")},
                   "native": {"checked": True, "renderer_script": "res://notation/native/view.gd",
                              "score_ready": True, "native_ready": True, "visible": True,
-                             "drawn_noteheads": 3, "visible_noteheads": 2,
+                             "drawn_noteheads": 3, "visible_noteheads": 2, "retained_source_heads": 3,
                              "revision": 4, "state_revision": 4, "layout_revision": 4,
                              "rendered_revision": 4, "model_revision": 4,
                              "failure_reason": "", "action_pending": False, "pending_action": ""},
@@ -120,6 +120,7 @@ def test_art_direction_accepts_native_readiness_without_removed_flags(tmp_path):
     ("score_ready", False, "ready"),
     ("native_ready", False, "ready"),
     ("visible_noteheads", 0, "noteheads"),
+    ("retained_source_heads", 0, "retained source"),
     ("model_revision", 3, "stale"),
 ])
 def test_art_direction_rejects_invalid_native_evidence(tmp_path, field, value, detail):
@@ -128,6 +129,9 @@ def test_art_direction_rejects_invalid_native_evidence(tmp_path, field, value, d
     report["native_environment"] = "1"
     for capture in report["captures"]:
         capture["native"]["enabled"] = True
-    report["captures"][0]["native"][field] = value
+    # READY deliberately keeps source ink offscreen. Actual Playing must
+    # expose painted heads; all phases must still have compiled source ink.
+    index = 1 if field == "visible_noteheads" else 0
+    report["captures"][index]["native"][field] = value
     with pytest.raises(RuntimeError, match=detail):
         validate_report(report, (800, 600), output=tmp_path, require_native=True, render=False)

@@ -37,10 +37,13 @@ func _score() -> void:
 func _initialize() -> void:
     var failures := 0
     var presenter := Presenter.new(events)
-    var handler := Effects.new(presenter, Callable(self,"_state"),
-        Callable(self,"_navigate"), Callable(self,"_settings"),
-        Callable(self,"_library"), Callable(self,"_health"),
-        Callable(self,"_score"))
+    var handler := Effects.new(presenter)
+    handler.publish_state.connect(_state)
+    handler.navigate_practice.connect(_navigate)
+    handler.request_settings.connect(_settings)
+    handler.request_library.connect(_library)
+    handler.request_library_health.connect(_health)
+    handler.refresh_score.connect(_score)
     var body := PackedByteArray()
     var cases: Array = [
         ["practice.command","calibration_apply",false,null,

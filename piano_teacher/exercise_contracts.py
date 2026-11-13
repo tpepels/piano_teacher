@@ -170,14 +170,28 @@ class TempoMap:
 
 
 class TempoStrategy(Protocol):
+    """A stage's tempo shape for a selected (ladder) BPM.
+
+    effective_bpm gives the tempo the stage first sounds at; ladder_bpm is
+    its inverse. LearningPlan uses both to carry earned tempo between a
+    passage's stages and to keep slow stages at or above the minimum BPM.
+    """
     name: str
     def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap: ...
+    def effective_bpm(self, bpm: float) -> float: ...
+    def ladder_bpm(self, effective_bpm: float) -> float: ...
 
 
 @dataclass(frozen=True)
 class ConstantTempo:
     name: str = "constant-tempo"
     is_identity: bool = True
+
+    def effective_bpm(self, bpm: float) -> float:
+        return float(bpm)
+
+    def ladder_bpm(self, effective_bpm: float) -> float:
+        return float(effective_bpm)
 
     def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap:
         return TempoMap(self.name, (TempoSegment(0, plan.duration_beats, float(target_bpm)),))

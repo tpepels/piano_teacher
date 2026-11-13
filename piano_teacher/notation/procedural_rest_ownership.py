@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections import Counter
 from math import isfinite
+from statistics import median
 
 
 def _source_gap_duration(written) -> float | None:
@@ -85,7 +86,11 @@ def _pair_at(snapshot, *, source_end: float, gap_beats: float,
                 continue
             x0,y0,x1,y1 = obj["bbox"]
             center_x,center_y = (x0+x1)*.5,(y0+y1)*.5
-            if (abs(center_y-expected_y) <= .3*staff.gap
+            # A shape near the midpoint must still lie strictly AFTER
+            # occupied source music and within this one full-meter gap.
+            source_x = camera+(source_end-float(snapshot["clock"]))*density
+            if (source_x < x0 and x1 < source_x+gap_beats*density
+                    and abs(center_y-expected_y) <= .3*staff.gap
                     and abs(center_x-expected_x) <= 2.0*staff.gap):
                 choices.append(obj)
         if len(choices) != 1:
@@ -106,21 +111,44 @@ def confirmed_gap_tracks(written, snapshots) -> dict:
     if duration is None or density is None:
         return {}
     source_end = float(written.bars[-1])
-    pairs = Counter()
-    for snapshot in snapshots:
+    observations = []
+    for index, snapshot in enumerate(snapshots):
         if "error" in snapshot:
             continue
         matched = _pair_at(snapshot,source_end=source_end,
                            gap_beats=duration,density=density)
         if matched:
-            pairs[tuple(obj["track"] for obj in matched)] += 1
-    if not pairs:
+            # Register contours on the independently measured source axis.
+            centers = tuple((obj["bbox"][0]+obj["bbox"][2])*.5
+                            -snapshot["camera"]+snapshot["clock"]*density
+                            for obj in matched)
+            observations.append((index, tuple(obj["track"] for obj in matched), centers))
+    counts = Counter(pair for _, pair, _ in observations)
+    stable = {pair for pair, count in counts.items() if count >= 3}
+    if not stable:
         return {}
-    ranked = pairs.most_common(2)
-    if ranked[0][1] < 3 or (len(ranked) > 1 and ranked[1][1] == ranked[0][1]):
+    anchors = [row for row in observations if row[1] in stable]
+    axis = tuple(median(row[2][hand] for row in anchors) for hand in (0,1))
+    # Track IDs are local contour registrations, not musical identities.
+    # Strong fragments must all describe the SAME physical rest pair.
+    if any(abs(row[2][hand]-axis[hand]) > 3.0
+           for row in anchors for hand in (0,1)):
         return {}
-    return dict(tracks=frozenset(ranked[0][0]), source_end=source_end,
-                gap_beats=duration, density=density)
+    accepted = set(stable)
+    first, last = anchors[0][0], anchors[-1][0]
+    for pair in counts.keys()-stable:
+        rows = [row for row in observations if row[1] == pair]
+        # A brief loss of contour registration can split both tracks.
+        # Bridge only an interior fragment of the already proven pair;
+        # a changing single track or new trajectory has no ownership.
+        if (all(first < row[0] < last for row in rows)
+                and all(set(pair).isdisjoint(anchor) for anchor in stable)
+                and all(abs(row[2][hand]-axis[hand]) <= 3.0
+                        for row in rows for hand in (0,1))):
+            accepted.add(pair)
+    return dict(tracks=frozenset(track for pair in accepted for track in pair),
+                pairs=frozenset(accepted), source_end=source_end,
+                gap_beats=duration, density=density, axis=axis)
 
 
 def verified_procedural_pair(snapshot, confirmed):
@@ -130,6 +158,11 @@ def verified_procedural_pair(snapshot, confirmed):
     pair = _pair_at(snapshot,source_end=confirmed["source_end"],
                     gap_beats=confirmed["gap_beats"],
                     density=confirmed["density"])
-    if not pair or {obj["track"] for obj in pair} != confirmed["tracks"]:
+    if not pair or tuple(obj["track"] for obj in pair) not in confirmed["pairs"]:
         return ()
+    for hand, obj in enumerate(pair):
+        center = (obj["bbox"][0]+obj["bbox"][2])*.5-snapshot["camera"]+(
+            snapshot["clock"]*confirmed["density"])
+        if abs(center-confirmed["axis"][hand]) > 3.0:
+            return ()
     return pair

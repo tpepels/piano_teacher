@@ -157,7 +157,7 @@ def test_singleton_artwork_roundtrips_through_cache(tmp_path, monkeypatch):
 def generated_rest_source(tmp_path):
     """The real lesson builder removes XML rest IDs; the model assigns its own."""
     from dataclasses import replace
-    from piano_teacher.server import PracticeEngine
+    from piano_teacher.importing.pieces import import_piece
     from piano_teacher.notation.lesson import build_lesson_score
     from piano_teacher.notation.model import build_score_model
     from piano_teacher.engraving.engraving import render_layout
@@ -174,29 +174,24 @@ def generated_rest_source(tmp_path):
     <tuplet type="stop" number="1"/></notations></note>
     <note id="after"><pitch><step>E</step><octave>5</octave></pitch><duration>20</duration>
     <voice>1</voice><type>quarter</type></note></measure></part></score-partwise>''')
-    engine = PracticeEngine(tmp_path/"cache", enable_midi=False)
-    # The default Coda/Fukuda course is MIDI-only; this is a MusicXML source.
-    engine.library.update(exercise_strategy="source-progression")
-    try:
-        engine.load(str(path))
-        engine.plan.restore_location(kind="learn", first_bar=1, last_bar=1, hand="right", level="original")
-        piece = engine.plan.piece
-        score = build_lesson_score(engine.display_phrase(), boundaries=piece.bar_boundaries,
-            time_signatures=piece.time_signatures, source_musicxml=piece.source_musicxml)
-        xml = ET.fromstring(score.musicxml)
-        target = next(n for n in xml.find("part").findall("measure/note")
-                      if n.find("time-modification") is not None)
-        assert target.get("id") is None
-        start = target.find("notations/tuplet[@type='start']")
-        start.set("show-number", "both")
-        start.set("bracket", "yes")
-        score = replace(score, musicxml=ET.tostring(xml, encoding="unicode"))
-        model = build_score_model(score, boundaries=piece.bar_boundaries, hand="right")
-        engraving = render_layout(score, 1, 1, "right", total_beats=score.phrase.end,
-                                  bpm=120, continuous=True)
-        return list(engraving.pages), model
-    finally:
-        engine.db.close()
+    # This is an original MusicXML notation test; select its source phrase
+    # directly instead of routing it through the MIDI-only desktop course.
+    piece, _ = import_piece(path)
+    phrase, = piece.phrases
+    score = build_lesson_score(phrase, boundaries=piece.bar_boundaries,
+        time_signatures=piece.time_signatures, source_musicxml=piece.source_musicxml)
+    xml = ET.fromstring(score.musicxml)
+    target = next(n for n in xml.find("part").findall("measure/note")
+                  if n.find("time-modification") is not None)
+    assert target.get("id") is None
+    start = target.find("notations/tuplet[@type='start']")
+    start.set("show-number", "both")
+    start.set("bracket", "yes")
+    score = replace(score, musicxml=ET.tostring(xml, encoding="unicode"))
+    model = build_score_model(score, boundaries=piece.bar_boundaries, hand="right")
+    engraving = render_layout(score, 1, 1, "right", total_beats=score.phrase.end,
+                              bpm=120, continuous=True)
+    return list(engraving.pages), model
 
 
 def test_generated_model_rest_id_binds_to_the_real_anonymous_svg_rest(generated_rest_source):
