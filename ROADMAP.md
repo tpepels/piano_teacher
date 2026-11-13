@@ -1111,3 +1111,51 @@ not award numerical/figure parity or human effectiveness. Bounded P1 analytics
 and its usable report, full teaching-decision ownership, deferred orchestration,
 complete scientific notation proof, package/realtime acceptance and final
 full-suite evidence remain active work. No phase has been closed.
+
+
+### 2026-11-13 — interrupted Codex tree recovered and independently verified
+
+The user's committed interrupted tree at `9b337e7` was repaired **directly on
+`main`**, without a new strategy, presentation timeline, worktree, or parallel
+generator. GitHub CI evidence for the four originally red workflows:
+
+| Gate | Current verified software evidence |
+| --- | --- |
+| Python fast contract | [Green at `72b1df1`](https://github.com/tpepels/piano_teacher/actions/runs/43486658577) |
+| Godot 4.7.2 startup syntax, score queue and coordinators | [Green at `7b6431c`](https://github.com/tpepels/piano_teacher/actions/runs/43482142798) |
+| Embedded CPython native production UI, Moonlight journey and bridge | [Full runtime smoke green at `7b6431c`](https://github.com/tpepels/piano_teacher/actions/runs/43483147421) |
+| Full imported-MIDI engraving and assessment recovery | [Green at `623dcce`](https://github.com/tpepels/piano_teacher/actions/runs/43481051758) |
+| Independent dense real-score framebuffer | [Green at `72b1df1`](https://github.com/tpepels/piano_teacher/actions/runs/43486658564): 168 focused pixel checks passed, 1 skipped; full-source Hanon passed, Chopin remains **XFAIL**, not certified |
+
+Corrections include extracting production smoke/test assumptions from deleted
+`main.command_state` and obsolete standalone Fukuda fixture; preserving
+untimed Learn versus explicit graded Practice during stage promotion; valid
+assessment fixtures and command/atomic-settlement architecture checks; keeping
+the P1 statistics receipt in tracked documentation; honoring the renderer's
+actual 29-pixel left clipping boundary when the independent image verifier
+claims visible noteheads; verifying real subdued two-sided ledger ink without
+allowing corrupted Liszt fixtures to pass; and treating a photographed,
+source-declared, partly clipped F-clef's *paired ornamental dots* as unresolved
+clef context rather than invented augmentation dots. None of these accepts an
+unobserved source note or waives the actual negative pixel controls.
+
+**Independent full-symbol audit detail:** Hanon measures 37–40 now has **zero
+full-symbol audit errors**. Chopin Nocturne Op. 9 No. 2, measures 13–16, still
+has **208 independent symbol-verification errors** in the matching
+[full-source artifacts](https://github.com/tpepels/piano_teacher/actions/runs/43486658564/artifacts/14069180172).
+All 77 sampled written active pitch noteheads and all 7 ledger obligations
+verify; six of ten beam groups remain mismatched or unverified (four verify);
+four rest placement obligations mismatch despite all four rest glyphs being
+recognized. Numerous stem/flag/rhythm/tuplet bindings remain unverified or
+unsupported. The Chopin test is explicitly expected to fail and **must not
+be represented as passing or silently retired**. Its original xfail wording
+refers to historical beam discrepancies and is not evidence for the current
+208-error breakdown.
+
+The full 24-shard scientific source-symbol proof, remaining genuine Chopin
+pixel/source mismatches, non-bundled imported-score reproduction, unified
+Coda/Fukuda control-decision ownership, original-paper numeric/figure
+parity, complete package/realtime recovery and the original physical
+instrument/learner study gates remain open. Hardware, external learner outcomes
+and clean-machine release acceptance cannot be inferred from CI. **Phase 2,
+Phase 4, Phase 6 and Phase 7 exit gates have not been closed.**
