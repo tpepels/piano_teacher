@@ -51,6 +51,12 @@ export LD_LIBRARY_PATH="$HERE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_
 PY_VER="$("$HERE/runtime/python/bin/python3" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 export PYTHONPATH="$HERE:$HERE/runtime/python/lib/python$PY_VER/site-packages"
 export PATH="$HERE/bin:$PATH"
+# CI verifies the installed *package*, from a relocated clean extraction.
+# This opt-in mode never touches normal desktop startup or the score clock.
+if [[ "${PIANO_TEACHER_HEADLESS_SMOKE:-0}" == "1" ]]; then
+  exec "$HERE/bin/godot" --headless --audio-driver Dummy --quit-after 180 \
+    --path "$HERE/godot" -- --in-process
+fi
 exec "$HERE/bin/godot" --path "$HERE/godot" -- --in-process "$@"
 LAUNCH
 chmod +x "$STAGE/PianoTeacher"

@@ -23,7 +23,7 @@ jobs:
   smoke:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -159,3 +159,80 @@ jobs:
           timeout 100s bash scripts/package-inprocess.sh
           test -s dist/piano-teacher-linux-x86_64/godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
           test -x dist/piano-teacher-linux-x86_64/PianoTeacher
+
+      - name: Produce an actual relocatable standalone tarball
+        env:
+          PIANO_GODOT_BINARY: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          export PIANO_BUNDLED_PYTHON_HOME="$(python -c 'import sys; print(sys.prefix)')"
+          export PIANO_BUNDLED_NODE="$(command -v node)"
+          unset PIANO_PACKAGE_AUDIT_ONLY
+          timeout 180s bash scripts/package-inprocess.sh
+          test -s dist/piano-teacher-linux-x86_64.tar.gz
+          sha256sum dist/piano-teacher-linux-x86_64.tar.gz > dist/standalone-sha256.txt
+      - name: Upload the exact built runtime for a genuinely fresh OS test
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-native-linux-py314-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: |
+            dist/piano-teacher-linux-x86_64.tar.gz
+            dist/standalone-sha256.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  clean-machine:
+    name: Relocated packaged app on a clean Ubuntu filesystem
+    needs: smoke
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    timeout-minutes: 8
+    steps:
+      - name: Install operating-system shared libraries only
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            ca-certificates libasound2t64 libgl1 libx11-6 libxcursor1 \
+            libxinerama1 libxi6 libxrandr2 libfontconfig1 libfreetype6 \
+            libstdc++6 libgcc-s1
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-native-linux-py314-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: /tmp/standalone-input
+      - name: Validate archive hash, relocate, import and boot without development source
+        env:
+          REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          cd /tmp/standalone-input
+          sha256sum --check standalone-sha256.txt
+          mkdir -p /tmp/fresh-user/runtime /tmp/fresh-user/home
+          tar -xzf piano-teacher-linux-x86_64.tar.gz -C /tmp/fresh-user/runtime
+          cd /tmp/fresh-user/runtime/piano-teacher-linux-x86_64
+          test -x ./PianoTeacher
+          test -x ./runtime/python/bin/python3
+          test -x ./bin/godot
+          test -x ./bin/node
+          test -s ./godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+          ! ldd ./godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so | grep 'not found'
+          # PATH deliberately excludes hosted Python/Godot/Node; the actual
+          # installed package must supply all three to its own launcher.
+          env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV \
+            PATH=/usr/bin:/bin HOME=/tmp/fresh-user/home \
+            LD_LIBRARY_PATH="$PWD/runtime/python/lib" \
+            PYTHONHOME="$PWD/runtime/python" \
+            PYTHONPATH="$PWD:$PWD/runtime/python/lib/python3.14/site-packages" \
+            ./runtime/python/bin/python3 -c \
+            'import piano_teacher, mido, rtmidi, verovio, music21, cairosvg, PIL; print("BUNDLED_IMPORTS_OK")'
+          mkdir -p /tmp/fresh-user/home/.config /tmp/fresh-user/home/.local/share
+          env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV \
+            PATH=/usr/bin:/bin HOME=/tmp/fresh-user/home \
+            XDG_CONFIG_HOME=/tmp/fresh-user/home/.config \
+            XDG_DATA_HOME=/tmp/fresh-user/home/.local/share \
+            PIANO_TEACHER_HEADLESS_SMOKE=1 \
+            timeout 75s ./PianoTeacher > /tmp/standalone-boot.log 2>&1
+          cat /tmp/standalone-boot.log
+          grep -F 'Godot Engine' /tmp/standalone-boot.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Failed to load.*GDExtension|No module named|Invalid call.*base' /tmp/standalone-boot.log; then
+            echo 'Packaged production scene emitted a runtime failure' >&2
+            exit 1
+          fi
+          echo "CLEAN_STANDALONE_OS_BOOT_OK $REVISION"

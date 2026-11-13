@@ -60,6 +60,7 @@ jobs:
             tests/test_teaching_decisions.py::test_teaching_source_safe_response_expands_held_notes_without_grid_index_crash \
             tests/test_teaching_decisions.py::test_teaching_source_safe_response_keeps_uninterrupted_fractional_source_range \
             tests/test_teaching_decisions.py::test_guided_settlement_routes_before_auto_feedback_and_keeps_recovery_owner \
+            tests/test_teaching_decisions.py::test_hybrid_decider_never_reenters_old_diagnosis_or_remediation \
             2>&1 | tee "$RUNNER_TEMP/engraving-recovery/results.txt"
       - name: Preserve exact failing cases
         if: always()
