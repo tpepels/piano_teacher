@@ -8,7 +8,7 @@ func _initialize() -> void:
     call_deferred("run")
 func run() -> void:
     check(ResourceLoader.exists("res://practice_command_coordinator.gd"),"command lifecycle owner absent")
-    check(ResourceLoader.exists("res://practice_snapshot_coordinator.gd"),"snapshot acceptance owner absent")
+    check(ResourceLoader.exists("res://practice_frame_coordinator.gd"),"frame snapshot projection owner absent")
     var stage = load("res://practice_score_stage.gd").new()
     root.add_child(stage)
     for dimensions in [Vector2(800,460), Vector2(1600,700)]:
