@@ -2,6 +2,7 @@ extends SceneTree
 # Render the same native view.gd used in Practice, from real score model and
 # authentic Verovio atlas. Export anchor metadata for machine-checked
 # Verovio/native comparison; this is NOT the retired ScoreStrip renderer.
+const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -292,7 +293,12 @@ func _audit() -> void:
                 continue
             var expected_x: float = renderer.timeline.screen_x(
                 float(event.get("beat", 0.0)),at,camera_x)
-            if expected_x > 20.0 and expected_x < renderer.size.x-20.0:
+            # The production clip owns the left system gutter (29 px).
+            # Note centers within it are intentionally clipped, never
+            # "omitted visible notes". Keep every center beyond the gutter
+            # as a strict positive rendering obligation.
+            if expected_x > StreamLifecycle.LEFT_GUTTER_PX+1.0 and \
+                    expected_x < renderer.size.x-20.0:
                 expected_heads[str(event.get("id", ""))] = expected_x
         for event in renderer.layout.ordered_events:
             if str(event.get("kind","")) != "rest":

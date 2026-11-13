@@ -102,7 +102,16 @@ class CapturedFrames:
             beam_edge = ((rgb[:, :, 0] >= 115) &
                          (rgb[:, :, 1] >= 130) &
                          (rgb[:, :, 2] >= 120))
+            # Physical ledger rules use the same subdued ink as staff rails.
+            # Their alpha-blended wing pixels are not in bright()'s pale
+            # notehead mask; keep independent photographic support. Exclude
+            # the darker background and mint transport overlay explicitly.
+            neutral = rgb.max(axis=2) - rgb.min(axis=2) < 36
+            ledger_ink = ((rgb[:, :, 0] >= 29) & (rgb[:, :, 0] < 155) &
+                          (rgb[:, :, 1] >= 55) & (rgb[:, :, 2] >= 49) &
+                          neutral & ~cyan)
             self.frames[beat] = dict(name=name, pixels=bright(image),
+                                     ledger_ink=ledger_ink,
                                      beam_edge=beam_edge,
                                      motion=translating_ink(image),
                                      staves=self.staff_rails.detect(image),

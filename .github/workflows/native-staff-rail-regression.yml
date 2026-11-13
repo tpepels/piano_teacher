@@ -9,6 +9,10 @@ on:
       - 'tests/test_native_staff_rail_recovery.py'
       - 'tests/test_full_notation_difficult_cases.py'
       - 'piano_teacher/notation/phase3_pixels.py'
+      - 'piano_teacher/notation/captured_frames.py'
+      - 'piano_teacher/notation/ledger_pixels.py'
+      - 'tests/godot/native_verovio_overlay.gd'
+      - 'tests/test_phase3_ledger_pixels.py'
       - 'piano_teacher/notation/pixel_proof.py'
       - 'piano_teacher/notation/photographed_staff_rails.py'
       - 'piano_teacher/notation/captured_frames.py'
@@ -66,6 +70,8 @@ jobs:
         run: |
           timeout 100s python -m pytest -q --tb=short \
             tests/test_photo_cache.py \
+            tests/test_phase3_ledger_pixels.py \
+            tests/test_phase3_ledger_coverage.py \
             tests/test_native_pixel_proof.py \
             tests/test_feature_pixel_ownership.py \
             tests/test_connector_beam_pixel_profile.py \

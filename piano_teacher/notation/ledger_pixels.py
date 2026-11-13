@@ -146,20 +146,30 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                 frame = frames.frame(target)
                 shift, registration = frames.shift(beat, target, required[0][0]['staff'])
                 pixels = frame['pixels']
+                ledger_pixels = frame['ledger_ink']
                 if shift:
-                    # Integer reindexing only: preserve every observed pixel
-                    # while reusing the strict onset/chord head registration.
+                    # Bright head masks and the actual dim ledger wings are
+                    # translated by the SAME independently measured motion.
                     aligned = np.zeros_like(pixels)
+                    aligned_ledger = np.zeros_like(ledger_pixels)
                     if 0 < shift < pixels.shape[1]:
                         aligned[:, :-shift] = pixels[:, shift:]
+                        aligned_ledger[:, :-shift] = ledger_pixels[:, shift:]
                     elif -pixels.shape[1] < shift < 0:
                         aligned[:, -shift:] = pixels[:, :shift]
+                        aligned_ledger[:, -shift:] = ledger_pixels[:, :shift]
                 else:
                     aligned = pixels
+                    aligned_ledger = ledger_pixels
+                # A filled head legitimately obscures the rule behind it.
+                # Require measured left AND right wings extending beyond
+                # the independently registered bright notehead silhouette;
+                # counting the dim ink alone would make that gap look broken.
+                ledger_support = aligned | aligned_ledger
                 notes = frames.notes_by_beat[beat]
                 heads, errors = register_noteheads(aligned, frame['staves'], written, notes, glyphs,
                                                    playhead_x=frame['playhead_x'])
-                contexts = {staff: ledger_context_rows(aligned, rail, written,
+                contexts = {staff: ledger_context_rows(ledger_support, rail, written,
                     [n for n in notes if n['staff'] == staff], playhead_x=frame['playhead_x'])
                     for staff, rail in frame['staves'].items()}
                 for note, row in required:
@@ -172,7 +182,7 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                             'head_half' if note['note_type'] == 'half' else 'head_black')
                     head = _ledger_visible_head(heads[sid], glyphs[name])
                     rail = frame['staves'][note['staff']]
-                    segments = [_ledger_segment(aligned, rail, head, step, contexts[note['staff']],
+                    segments = [_ledger_segment(ledger_support, rail, head, step, contexts[note['staff']],
                                 frame['occluded_columns']-shift)
                                 for step in row['features']['ledger']['expected_steps']]
                     for segment in segments:

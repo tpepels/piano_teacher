@@ -224,3 +224,42 @@ def test_ledger_helper_ignores_native_geometry_and_keeps_existing_api_scope(tmp_
     assert check(folder)['coverage']['verified'] == 4
     original = verify_note_feature_pixels((FIXTURE/'score.musicxml').read_text(), folder, hand='right')
     assert all('ledger' not in r['features'] for r in original['measured'])
+
+
+def test_subdued_actual_ledger_wings_remain_verifiable_without_accepting_missing_ink(tmp_path):
+    """Native ledger rules use dim staff-rail ink, not the pale head color."""
+    folder = tmp_path / "dim"
+    shutil.copytree(WHOLE_FIXTURE, folder)
+    baseline = whole_check(folder)
+    observation = next(r["features"]["ledger"] for r in baseline["measured"]
+                       if r["source_id"] == LISZT_WHOLE_ID)
+    assert observation["status"] == "verified"
+    evidence = observation["evidence"]
+    frame = folder / evidence["frame"]
+    left, top, right, bottom = evidence["segments"][0]["bbox"]
+    head_left, _, head_right, _ = evidence["head_bbox"]
+    with Image.open(frame) as raw:
+        image = raw.convert("RGB")
+    pixels = image.load()
+    # Alter the genuine measured wings only, preserving the independently
+    # registered head and every neighboring source event.
+    for y in range(top, bottom):
+        for x in list(range(left, head_left)) + list(range(head_right, right)):
+            if all(component > 150 for component in pixels[x,y]):
+                pixels[x,y] = (120,138,133)
+    image.save(frame)
+    recovered = whole_check(folder)
+    found = next(r["features"]["ledger"] for r in recovered["measured"]
+                 if r["source_id"] == LISZT_WHOLE_ID)
+    assert found["status"] == "verified", found
+    # Erasing the entire right wing remains a known mismatch even if all
+    # other frames still carry the intact, now-dim ledger.
+    with Image.open(frame) as raw:
+        erased = raw.convert("RGB")
+    draw = ImageDraw.Draw(erased)
+    draw.rectangle((head_right, top, right+1, bottom), fill=erased.getpixel((erased.width-1,0)))
+    erased.save(frame)
+    after = whole_check(folder)
+    missing = next(r["features"]["ledger"] for r in after["measured"]
+                   if r["source_id"] == LISZT_WHOLE_ID)
+    assert missing["status"] == "mismatch", missing
