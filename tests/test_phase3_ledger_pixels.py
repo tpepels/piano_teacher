@@ -226,40 +226,35 @@ def test_ledger_helper_ignores_native_geometry_and_keeps_existing_api_scope(tmp_
     assert all('ledger' not in r['features'] for r in original['measured'])
 
 
-def test_subdued_actual_ledger_wings_remain_verifiable_without_accepting_missing_ink(tmp_path):
-    """Native ledger rules use dim staff-rail ink, not the pale head color."""
-    folder = tmp_path / "dim"
-    shutil.copytree(WHOLE_FIXTURE, folder)
-    baseline = whole_check(folder)
-    observation = next(r["features"]["ledger"] for r in baseline["measured"]
-                       if r["source_id"] == LISZT_WHOLE_ID)
-    assert observation["status"] == "verified"
-    evidence = observation["evidence"]
-    frame = folder / evidence["frame"]
-    left, top, right, bottom = evidence["segments"][0]["bbox"]
-    head_left, _, head_right, _ = evidence["head_bbox"]
-    with Image.open(frame) as raw:
-        image = raw.convert("RGB")
-    pixels = image.load()
-    # Alter the genuine measured wings only, preserving the independently
-    # registered head and every neighboring source event.
-    for y in range(top, bottom):
-        for x in list(range(left, head_left)) + list(range(head_right, right)):
-            if all(component > 150 for component in pixels[x,y]):
-                pixels[x,y] = (120,138,133)
-    image.save(frame)
-    recovered = whole_check(folder)
-    found = next(r["features"]["ledger"] for r in recovered["measured"]
-                 if r["source_id"] == LISZT_WHOLE_ID)
-    assert found["status"] == "verified", found
-    # Erasing the entire right wing remains a known mismatch even if all
-    # other frames still carry the intact, now-dim ledger.
-    with Image.open(frame) as raw:
-        erased = raw.convert("RGB")
-    draw = ImageDraw.Draw(erased)
-    draw.rectangle((head_right, top, right+1, bottom), fill=erased.getpixel((erased.width-1,0)))
-    erased.save(frame)
-    after = whole_check(folder)
-    missing = next(r["features"]["ledger"] for r in after["measured"]
-                   if r["source_id"] == LISZT_WHOLE_ID)
-    assert missing["status"] == "mismatch", missing
+@pytest.mark.parametrize("mutation", [
+    "intact", "missing-left", "missing-right", "detached-left",
+    "disconnected-right", "wrong-y",
+])
+def test_dark_ledger_requires_both_physical_written_wings(mutation):
+    """A dark native rule may be proved without bright ink in the head."""
+    import numpy as np
+    from types import SimpleNamespace
+    from piano_teacher.notation.ledger_pixels import _dim_ledger_wings
+
+    pixels = np.zeros((490, 310), dtype=bool)
+    head = {"bbox": [100, 411, 128, 433]}
+    rail = SimpleNamespace(gap=22.0, bottom=400.0)
+    # C below staff: written ledger step -2 is y=422. The notehead
+    # overlaps the rule, so source ink may exist only in its actual wings.
+    left, right, top = (92, 101), (127, 136), 421
+    if mutation == "detached-left":
+        left = (82, 91)
+    if mutation == "disconnected-right":
+        right = (130, 139)
+    if mutation == "wrong-y":
+        top = 429
+    if mutation != "missing-left":
+        pixels[top:top+2, left[0]:left[1]] = True
+    if mutation != "missing-right":
+        pixels[top:top+2, right[0]:right[1]] = True
+    observation = _dim_ledger_wings(pixels, rail, head, -2, np.array([], dtype=int))
+    assert (observation["status"] == "verified") == (mutation == "intact"), observation
+    if mutation == "intact":
+        assert observation["continuous"]
+        assert observation["left_extension_spaces"] >= .12
+        assert observation["right_extension_spaces"] >= .12

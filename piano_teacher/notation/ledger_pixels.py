@@ -243,6 +243,7 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                     head = _ledger_visible_head(heads[sid], glyphs[name])
                     rail = frame['staves'][note['staff']]
                     segments = []
+                    bright_statuses = []
                     for step in row['features']['ledger']['expected_steps']:
                         # Preserve every previously certified pale-ledger
                         # witness. New dim-rail evidence is an alternative
@@ -250,6 +251,7 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                         # wings or an excuse to relabel playhead occlusion.
                         bright_line = _ledger_segment(aligned, rail, head, step,
                             bright_contexts[note['staff']], frame['occluded_columns']-shift)
+                        bright_statuses.append(bright_line['status'])
                         dim_line = _dim_ledger_wings(aligned_ledger, rail, head, step,
                             frame['occluded_columns']-shift)
                         if bright_line['status'] == 'verified':
@@ -269,7 +271,9 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                         segment['registration_bbox'][0] += shift
                         segment['registration_bbox'][2] += shift
                     status = next((s['status'] for s in segments if s['status'] != 'verified'), 'verified')
-                    witnesses[sid].append(dict(frame=frame['name'], status=status, segments=segments,
+                    bright_status = next((state for state in bright_statuses if state != 'verified'), 'verified')
+                    witnesses[sid].append(dict(frame=frame['name'], status=status,
+                        bright_status=bright_status, segments=segments,
                         head_bbox=[head['bbox'][0]+shift, head['bbox'][1], head['bbox'][2]+shift, head['bbox'][3]],
                         registration_bbox=[head['registration_bbox'][0]+shift, head['registration_bbox'][1],
                                            head['registration_bbox'][2]+shift, head['registration_bbox'][3]],
@@ -280,6 +284,18 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                         status='unverified', reason=str(exc)))
         for note, row in required:
             choices = witnesses[note['source']['id']]
+            # A source that demonstrably has pale physical ledger lines in
+            # another frame cannot silently switch to a weaker dim-only
+            # witness in a damaged frame. Retain the original strict bright
+            # mismatch as a veto. Consistently dim printed ink (Hanon)
+            # remains eligible for the two-wing physical dim verifier.
+            if any(w.get('bright_status') == 'verified' for w in choices):
+                for witness in choices:
+                    if (witness.get('status') == 'verified' and
+                            witness.get('bright_status') not in (None, 'verified')):
+                        witness['status'] = witness['bright_status']
+                        witness['segments'] = []
+                        witness['reason'] = 'An intact pale ledger in another photo conflicts with this dim-only witness'
             bad = next((w for w in choices if w['status'] == 'mismatch'), None)
             selected = bad or next((w for w in choices if w['status'] == 'verified'), choices[0])
             observation = row['features']['ledger']
