@@ -230,14 +230,30 @@ jobs:
             PYTHONPATH="$PWD:$PWD/runtime/python/lib/python3.14/site-packages" \
             ./runtime/python/bin/python3 -c \
             'import piano_teacher, mido, rtmidi, verovio, music21, cairosvg, PIL; print("BUNDLED_IMPORTS_OK")'
+          # Diagnostic evidence must survive a failed executable invocation;
+          # shell -e previously exited before printing the useful Godot log.
+          ldd ./bin/godot > /tmp/standalone-godot-ldd.txt
+          cat /tmp/standalone-godot-ldd.txt
+          if grep -F 'not found' /tmp/standalone-godot-ldd.txt; then
+            echo 'Bundled Godot executable cannot link on clean Ubuntu' >&2
+            exit 1
+          fi
           mkdir -p /tmp/fresh-user/home/.config /tmp/fresh-user/home/.local/share
-          env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV \
+          if env -u PYTHONPATH -u PYTHONHOME -u VIRTUAL_ENV \
             PATH=/usr/bin:/bin HOME=/tmp/fresh-user/home \
             XDG_CONFIG_HOME=/tmp/fresh-user/home/.config \
             XDG_DATA_HOME=/tmp/fresh-user/home/.local/share \
             PIANO_TEACHER_HEADLESS_SMOKE=1 \
-            timeout 75s ./PianoTeacher > /tmp/standalone-boot.log 2>&1
+            timeout 75s ./PianoTeacher > /tmp/standalone-boot.log 2>&1; then
+            boot_status=0
+          else
+            boot_status=$?
+          fi
           cat /tmp/standalone-boot.log
+          if test "$boot_status" -ne 0; then
+            echo "Relocated production Godot boot exited $boot_status" >&2
+            exit "$boot_status"
+          fi
           grep -F 'Godot Engine' /tmp/standalone-boot.log
           if grep -E 'SCRIPT ERROR|Parse Error|Failed to load.*GDExtension|No module named|Invalid call.*base' /tmp/standalone-boot.log; then
             echo 'Packaged production scene emitted a runtime failure' >&2
