@@ -399,7 +399,7 @@ def _reference_column(art, x):
     return _runs(art['mask'][:, column]) if 0 <= column < art['mask'].shape[1] else []
 
 
-def _stem(pixels, anchors, up):
+def _stem(pixels, anchors, up, *, edge=None):
     gap = anchors[0]['gap']
     outer = max(anchors, key=lambda a: a['y']) if up else min(anchors, key=lambda a: a['y'])
     high, low = min(a['y'] for a in anchors), max(a['y'] for a in anchors)
@@ -409,7 +409,19 @@ def _stem(pixels, anchors, up):
     for x in range(math.floor(left), math.ceil(right)+1):
         if not 0 <= x < pixels.shape[1]:
             continue
-        for top, bottom in _runs(pixels[:, x]):
+        # The actual Godot antialias layer can produce an entirely
+        # continuous 144/159/155 shaft between pale notehead and beam.
+        # A pure bright-ink threshold splits it into unrelated islands.
+        # Inspect *photographed* neutral mid-tone support, not invented
+        # source geometry, and require true bright ink near both ends.
+        column = edge[:, x] if edge is not None else pixels[:, x]
+        for top, bottom in _runs(column):
+            if edge is not None:
+                head_center = outer["y"]
+                near_head = pixels[max(top, round(head_center-gap*.7)):min(bottom, round(head_center+gap*.7)+1), x].any()
+                near_beam = pixels[max(top, bottom-round(gap*2)):bottom, x].any() if not up else pixels[top:min(bottom, top+round(gap*2)), x].any()
+                if not near_head or not near_beam:
+                    continue
             if up:
                 valid = top <= high-1.25*gap and bottom >= low-.3*gap and bottom <= low+.5*gap
             else:
@@ -462,7 +474,8 @@ def _beam(row, frames, target):
         if any(lo <= x <= hi for x in frame['occluded_columns']):
             raise ValueError('Measured coloured playhead occludes an actual stem attachment')
     try:
-        stems = [_stem(frame['pixels'], chord, up) for chord in chords]
+        stems = [_stem(frame['pixels'], chord, up, edge=frame.get('beam_edge'))
+                 for chord in chords]
     except ValueError as exc:
         return 'mismatch', str(exc), dict(anchors=anchors)
     if any(stems[0]['x'] <= x <= stems[-1]['x'] for x in frame['occluded_columns']):

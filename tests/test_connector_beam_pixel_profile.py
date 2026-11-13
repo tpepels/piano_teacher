@@ -99,3 +99,32 @@ def test_detached_real_tuplet_bracket_is_not_invented_fourth_beam():
     pixels[207:212, 430:501] = False
     remaining = _photographed_beam_runs(frame, 190, 240, 438)
     assert (207, 212) not in remaining
+
+
+
+def test_real_subdued_antialias_stem_connects_actual_head_to_source_beam():
+    """Chopin bar 14 has measured 144/159/155 shaft pixels, not white."""
+    import pytest
+    from piano_teacher.notation.connector_pixels import _stem
+    bright = np.zeros((75, 75), dtype=bool)
+    edge = np.zeros_like(bright)
+    bright[20:24, 30] = True       # exact pale notehead attachment
+    bright[39:47, 30] = True       # exact pale beam attachment
+    edge[20:47, 30] = True         # continuously photographed gray shaft
+    anchors = [{"x": 35., "y": 21., "gap": 10.}]
+    with pytest.raises(ValueError, match="absent"):
+        _stem(bright, anchors, False)
+    stem = _stem(bright, anchors, False, edge=edge)
+    assert stem["top"] == 20 and stem["bottom"] == 47
+    assert stem["x"] == 30.
+
+    # A genuinely erased multi-pixel gap in both photographic masks
+    # remains a failure. No source-interpolated stem may bridge it.
+    edge[30:35, 30] = False
+    with pytest.raises(ValueError, match="absent"):
+        _stem(bright, anchors, False, edge=edge)
+
+    # A broad unrelated polygon is not accepted as a thin stem.
+    edge[20:47, 27:33] = True
+    with pytest.raises(ValueError, match="too broad"):
+        _stem(bright, anchors, False, edge=edge)
