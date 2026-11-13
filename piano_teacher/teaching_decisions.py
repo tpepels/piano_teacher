@@ -145,7 +145,7 @@ class TeachingDecision:
 
 def source_safe_response(response, *, phrase, hand, grid):
     """Expand bounded source measures so no authored hold is cut."""
-    if response.end_beat is None or response.action in ("continue", "pause", "repair"):
+    if response.end_beat is None or response.action in ("continue", "pause"):
         return response
     start, end = response.restart_beat, response.end_beat
     notes = tuple(n for n in phrase.notes if hand == "both" or n.hand == hand)
