@@ -33,6 +33,14 @@ def encode_manifest(cases: list[str]) -> bytes:
     return ("\n".join(sorted(cases)) + ("\n" if cases else "")).encode("ascii")
 
 
+def unverified_semantics(report: dict) -> list[dict]:
+    """Original-source exit requires every actual obligation to verify."""
+    if not isinstance(report, dict) or not isinstance(report.get("elements"), list):
+        raise ValueError("Missing original-source semantic obligation ledger")
+    return [row for row in report["elements"]
+            if not isinstance(row, dict) or row.get("status") != "verified"]
+
+
 def _int(value):
     return type(value) is int and value >= 0
 

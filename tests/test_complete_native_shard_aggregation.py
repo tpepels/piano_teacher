@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from dataclasses import dataclass
 import pytest
-from scripts.audits.aggregate_shards import check, case_identity, encode_manifest
+from scripts.audits.aggregate_shards import check, case_identity, encode_manifest, unverified_semantics
 
 REV = "a" * 40
 
@@ -106,3 +106,12 @@ def test_edited_case_manifest_not_accepted(tmp_path):
     root = audit(tmp_path)
     (root / f"native-complete-shard-1-{REV}" / "case-manifest.txt").write_text("g:"+"f"*64+"\n")
     assert any("manifest digest" in e for e in check(root,REV,shard_count=4)["failures"])
+
+
+@pytest.mark.parametrize("status", ["mismatch", "unverified", "ambiguous", "unsupported", "unknown"])
+def test_entire_original_semantic_ledger_is_required_not_just_hard_mismatches(status):
+    rows = [{"status": "verified", "id": "ok"}, {"status": status, "id": "remaining"}]
+    assert unverified_semantics({"elements": rows}) == [rows[1]]
+    assert unverified_semantics({"elements": rows[:1]}) == []
+    with pytest.raises(ValueError, match="semantic"):
+        unverified_semantics({"passed": True, "complete": True})

@@ -15,7 +15,7 @@ from .capture_store import ROOT, atomic_json
 from .case_types import AuditCase
 from .proof_execution import symbol_error
 from .batch_checkpoint import BatchCheckpoint
-from .aggregate_shards import case_identity, encode_manifest
+from .aggregate_shards import case_identity, encode_manifest, unverified_semantics
 
 
 def execute_case_jobs(jobs, *, workers, case_timeout, memory_limit_mib, resume,
@@ -92,9 +92,18 @@ def run_batch(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
                 source_name = path.resolve().relative_to(ROOT.resolve()).as_posix()
                 manifest_ids.append(case_identity(source_name, "semantics", semantic_case))
                 semantics = planning.source_semantics(path, piece)
-                for row in semantics["elements"]:
-                    if row["status"] in {"mismatch", "unverified"}:
+                # A mismatched, ambiguous OR unsupported original obligation
+                # cannot be silently treated as semantic success. The
+                # original report's "passed" only tests mismatches; the
+                # complete 24-shard gate requires its strict "complete".
+                missing_semantics = unverified_semantics(semantics)
+                for row in missing_semantics:
+                    if isinstance(row, dict):
                         summary["failures"].append(f"{path.name}: " + symbol_error(row))
+                    else:
+                        summary["failures"].append(f"{path.name}: malformed semantic obligation")
+                if not semantics.get("complete") and not missing_semantics:
+                    summary["failures"].append(f"{path.name}: original semantic ledger is incomplete")
                 directory = out/f"{source_index:02d}-{path.stem}"
                 directory.mkdir(parents=True,exist_ok=True)
                 (directory/"source-semantics.json").write_text(
