@@ -9,7 +9,7 @@ Implementation and verification status are tracked in ROADMAP. Only
 P0 uses `application/learning_capture.py` and `learning_ledger.py`;
 [verification and remaining gates](verification/learning-measurement-2026-11-04.md)
 record actual coverage. The bounded P1 query/report and Settings view are
-implemented; the [2026-11-13 Task 5 receipt](../.superpowers/sdd/2026-11-13-roadmap-completion/task-5-report.md)
+implemented; the [2026-11-13 Task 5 receipt](learning-statistics-p1-2026-11-13.md)
 records software evidence and the remaining physical/release/human gates.
 
 ## Decisions and scope

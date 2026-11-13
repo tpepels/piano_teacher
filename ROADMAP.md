@@ -329,7 +329,7 @@ censored recorded mastery and six descriptive fixed-policy arms use the single
 ledger. Read-only worker/WAL snapshots keep report work outside the musical
 engine lock. This does not close physical latency/instrument, clean-machine
 release or human learning-effect gates. See the
-[Task 5 software receipt](.superpowers/sdd/2026-11-13-roadmap-completion/task-5-report.md).
+[Task 5 software receipt](docs/verification/learning-statistics-p1-2026-11-13.md).
 
 The selectable `evidence-adaptive` policy uses actual source error clusters,
 source attack density and compatible prior outcomes to repeat, isolate, slow,
