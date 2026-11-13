@@ -253,7 +253,8 @@ def read_visual_inventory(xml: str, hand: str, origin: str, source_name: str = "
                         stem = node.findtext("stem")
                         if stem != "none" and (stem is not None or source["note_type"] not in {"whole", "breve", "long", "maxima"}):
                             emit("stem", source, path, direction=stem or "implicit")
-                        if source["note_type"] in _FLAG_TYPES and not node.findall("beam") and stem != "none":
+                        if (source["note_type"] in _FLAG_TYPES and node.find("chord") is None
+                                and not node.findall("beam") and stem != "none"):
                             emit("flag", source, path, note_type=source["note_type"])
                     if (kind == "note" and node.find("accidental") is None
                             and event["_accidental"] is not None):

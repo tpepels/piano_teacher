@@ -65,7 +65,8 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
             kind = note['note_type']
             if kind not in ('whole', 'breve', 'long', 'maxima'):
                 features['stem'] = feature_result('unverified', 'Current-image stem evidence required')
-            if kind in FLAG_COUNTS and not note['beams'] or kind not in ('whole', 'breve', 'long', 'maxima', 'half', 'quarter', *FLAG_COUNTS):
+            if (kind in FLAG_COUNTS and not note['beams'] and not note['chord']
+                    or kind not in ('whole', 'breve', 'long', 'maxima', 'half', 'quarter', *FLAG_COUNTS)):
                 features['flag'] = feature_result('unverified', 'Current-image flag evidence required')
             if kind == 'quarter':
                 features['flag_absence'] = feature_result('unverified', 'Current-image quarter flag absence required')

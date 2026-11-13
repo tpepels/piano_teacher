@@ -87,3 +87,37 @@ def test_public_structure_and_ledger_entry_points_are_their_owners_functions():
     from piano_teacher.notation import feature_pixels, structure_pixels, ledger_pixels
     assert feature_pixels.verify_structure_pixels is structure_pixels.verify_structure_pixels
     assert feature_pixels.verify_ledger_pixels is ledger_pixels.verify_ledger_pixels
+
+
+def test_musicxml_chord_tones_do_not_invent_individual_flags(tmp_path):
+    """One shaft/flag belongs to the actual chord leader, not every tone.
+
+    A beamed leader has no separate flag and its <chord/> tones inherit the
+    common beam. An unbeamed leader retains one mandatory flag, as does an
+    unrelated standalone eighth note on the same staff.
+    """
+    from piano_teacher.notation.feature_pixels import verify_note_feature_pixels
+    from piano_teacher.notation.visual_inventory import read_visual_inventory
+
+    def note(name, *, chord=False, beam=None):
+        pitch = "<pitch><step>" + name + "</step><octave>4</octave></pitch>"
+        return ('<note id="' + name + ('-ch' if chord else '-lead') + '">' +
+                ('<chord/>' if chord else '') + pitch +
+                '<duration>4</duration><voice>1</voice><type>eighth</type>' +
+                (f'<beam number="1">{beam}</beam>' if beam else '') + '</note>')
+    xml = ('<score-partwise version="4.0"><part-list>'
+           '<score-part id="RH"><part-name>Right Hand</part-name></score-part>'
+           '</part-list><part id="RH"><measure number="1"><attributes>'
+           '<divisions>8</divisions><time><beats>2</beats><beat-type>4</beat-type></time>'
+           '<clef><sign>G</sign><line>2</line></clef></attributes>'
+           + note('C', beam='begin') + note('E', chord=True)
+           + note('D', beam='end')
+           + note('F') + note('A', chord=True)
+           + note('G') + '</measure></part></score-partwise>')
+    inventory = read_visual_inventory(xml, "both", "generated")
+    flags = [e for e in inventory.elements if e["construct"] == "flag"]
+    assert sorted(x["source"]["id"] for x in flags) == ['F-lead', 'G-lead']
+    independent = verify_note_feature_pixels(xml, tmp_path, hand="right")
+    assert independent["by_construct"]["flag"]["expected"] == 2
+    assert independent["by_construct"]["flag"]["verified"] == 0  # No PNG: fail closed.
+    assert sum("stem" in r["features"] for r in independent["measured"]) == 6
