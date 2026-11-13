@@ -4,6 +4,7 @@ from __future__ import annotations
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
+from piano_teacher.practice import Assessment, NoteAssessment
 
 
 def _app(tmp_path):
@@ -31,7 +32,7 @@ def test_pending_feedback_commits_only_at_the_deadline(tmp_path, monkeypatch):
     try:
         called = []
         app.auto = True
-        app.pending_result = object()
+        app.pending_result = Assessment((NoteAssessment(app.plan.active_phrase.notes[0], "missed"),), 0)
         app.visual_transport.next_at = 200.0
         app.feedback_marks = [{"status":"missed"}]
         app.feedback_unmapped = 1
@@ -57,7 +58,7 @@ def test_no_auto_commit_when_feedback_is_manual(tmp_path, monkeypatch):
     app = _app(tmp_path)
     try:
         app.auto = False
-        app.pending_result = object()
+        app.pending_result = Assessment((NoteAssessment(app.plan.active_phrase.notes[0], "missed"),), 0)
         app.visual_transport.next_at = 10
         monkeypatch.setattr("piano_teacher.server.time.monotonic", lambda: 100.0)
         monkeypatch.setattr(app, "_commit_pending", lambda: (_ for _ in ()).throw(AssertionError("unexpected commit")))

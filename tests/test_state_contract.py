@@ -87,7 +87,12 @@ def test_godot_snapshot_consumers_read_only_contract_keys():
                  ("godot/practice_screen.gd", "parsed"),
                  ("godot/practice_state_presenter.gd", "parsed")]
     for path, name in consumers:
-        keys = set(re.findall(name + r'\.get\("([a-z_0-9]+)"', (ROOT / path).read_text()))
+        source = (ROOT / path).read_text()
+        if path == "godot/main.gd" and name == "parsed":
+            # _on_state consumes the snapshot; other callbacks handle
+            # separate learning.status responses with their own fields.
+            source = source.split("func _on_state(", 1)[1].split("\nfunc ", 1)[0]
+        keys = set(re.findall(name + r'\.get\("([a-z_0-9]+)"', source))
         assert keys <= set(state_contract.SCHEMA), (path, sorted(keys - set(state_contract.SCHEMA)))
 
 

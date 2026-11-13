@@ -156,7 +156,10 @@ def test_command_error_publication_has_injected_screen_dependencies():
     main = (ROOT / "godot/main.gd").read_text()
     presenter = (ROOT / "godot/command_failure_presenter.gd").read_text()
     handler = main.split("func _on_action(", 1)[1].split("\nfunc ", 1)[0]
-    assert "command_failure_presenter.present(message,operation,queued_library_failed)" in handler
+    owner = (ROOT/"godot/practice_command_coordinator.gd").read_text()
+    assert "command_coordinator.accept_response(" in handler
+    assert "command_failure_presenter.present(message,operation,queued_library_failed)" in owner
+    assert "command_coordinator.configure(" in main
     assert "CommandFailurePresenter.new(" in main
     assert "func _init(library, practice, settings, home)" in presenter
     assert "app." not in presenter
@@ -201,7 +204,9 @@ def test_completed_take_owns_only_transport_and_session_persistence():
     assert "def observe_assessed_take(" in evidence
     assert "def settle(" in commit
     assert "plan.apply_result(" not in commit
-    assert commit.index("self.capture.persist()") < commit.index("plan.apply_teaching_progress(")
+    # Ignore the earlier separately transactional failed-streak checkpoint.
+    settle = commit.split("    def settle(", 1)[1].split("\n    def ", 1)[0]
+    assert settle.index("self.capture.persist()") < settle.index("plan.apply_teaching_progress(")
     # Check executable dependencies, not prose in module docstrings.
     import ast
     for source in (assessment, evidence, commit):
@@ -228,7 +233,10 @@ def test_successful_command_route_has_no_application_dependency():
     main = (ROOT/"godot/main.gd").read_text()
     policy = (ROOT/"godot/command_success_policy.gd").read_text()
     response = main.split("func _on_action(",1)[1].split("\nfunc ",1)[0]
-    assert "CommandSuccessPolicy.decide(" in response
+    owner = (ROOT/"godot/practice_command_coordinator.gd").read_text()
+    assert "command_coordinator.accept_response(" in response
+    assert "CommandSuccessPolicy.decide(" in owner
+    assert "succeeded.emit(decision,opened,code,body," in owner
     assert "NavigationPolicy.plan(" in main
     assert "static func decide(" in policy
     assert "app." not in policy
@@ -269,7 +277,8 @@ def test_successful_command_view_effects_have_injected_dependencies():
     presenter = (ROOT/"godot/command_success_presenter.gd").read_text()
     assert "CommandSuccessPresenter.new(" in main
     effects = (ROOT/"godot/command_success_effects.gd").read_text()
-    assert "command_success_effects.apply(decision,opened," in main
+    assert "command_coordinator.succeeded.connect(command_success_effects.apply)" in main
+    assert "command_success_effects.publish_state.connect(_on_state)" in main
     assert "presenter.present_accepted(decision)" in effects
     assert "presenter.present_source_picker(opened)" in effects
     assert "app." not in effects and "get_tree()" not in effects
@@ -312,28 +321,40 @@ def test_control_dispatch_is_pure_and_domain_effects_are_locked():
 def test_command_request_owner_has_no_scene_or_application_dependencies():
     main = (ROOT/"godot/main.gd").read_text()
     queue = (ROOT/"godot/command_request_state.gd").read_text()
-    assert "CommandRequestState.new()" in main
-    assert "command_state.begin(operation,Time.get_ticks_msec())" in main
-    assert "command_state.finish()" in main
-    assert "command_state.take_transport()" in main
-    assert "command_state.queue_library(identifier,resume_saved)" in main
-    assert "command_state.discard_library()" in main
-    assert "command_state.take_library()" in main
+    owner = (ROOT/"godot/practice_command_coordinator.gd").read_text()
+    assert "var state = CommandRequestState.new()" in owner
+    assert "state.begin(operation,Time.get_ticks_msec())" in owner
+    assert "state.finish()" in owner
+    assert "state.take_transport()" in owner
+    assert "command_coordinator.state.queue_library(identifier,resume_saved)" in main
+    assert "state.discard_library()" in owner
+    assert "state.take_library()" in owner
     assert "app." not in queue and "get_tree()" not in queue
     assert "func dispatch(adapter, operation_name: String, payload: Dictionary)" in queue
     assert 'adapter.request(operation_name,payload)' in queue
-    assert "command_state.dispatch(action_request,operation,payload)" in main
+    assert "state.dispatch(action_request,operation,payload)" in owner
+    assert "command_coordinator.request_command(operation,payload)" in main
     assert "action_request.request(operation" not in main
 
 
 def test_learner_navigation_validates_before_transport_changes():
     learner = (ROOT/"piano_teacher/application/learner_progress.py").read_text()
     server = (ROOT/"piano_teacher/server.py").read_text()
+    manual = (ROOT/"piano_teacher/teaching_manual.py").read_text()
     for method in ("next_skippable_step", "original_placement_step",
                    "choose_trouble_spot", "mark_prior_steps_placed",
                    "reactivate_trouble"):
         assert f"def {method}(" in learner
-        assert f"learner_progress.{method}(" in server
+    # Manual source selection is validated in pure teaching decisions
+    # before engine transport and durable learner side effects.
+    assert "def choose_manual(event, state):" in manual
+    assert 'elif action == "skip_stage":' in manual
+    assert 'elif action == "place_original":' in manual
+    assert 'elif action == "revisit_trouble":' in manual
+    assert "prepare_stage_change(" in server
+    assert "self.session_commands.apply_progress(" in server
+    assert "self.learner_progress.mark_prior_steps_placed(" in server
+    assert "self.learner_progress.reactivate_trouble(" in server
     assert "learner_store.mark_skipped(" not in server
     assert "learner_store.reactivate(" not in server
 
@@ -355,12 +376,13 @@ def test_success_effects_keep_ordering_without_main_access():
     main = (ROOT/"godot/main.gd").read_text()
     effects = (ROOT/"godot/command_success_effects.gd").read_text()
     response = main.split("func _on_action(",1)[1].split("\nfunc ",1)[0]
-    assert "command_success_effects.apply(" in response
+    assert "command_coordinator.accept_response(" in response
+    assert "command_coordinator.succeeded.connect(command_success_effects.apply)" in main
     assert "match str(decision" not in response
     assert "func apply(decision: Dictionary" in effects
-    assert "publish_state.call(" in effects
-    assert "navigate_practice.call(" in effects
-    assert "request_settings.call()" in effects
+    assert "publish_state.emit(" in effects
+    assert "navigate_practice.emit(" in effects
+    assert "request_settings.emit()" in effects
     assert "app." not in effects and "request(" not in effects
 
 

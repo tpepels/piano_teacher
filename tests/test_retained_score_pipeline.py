@@ -154,14 +154,15 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     assert "StreamAdmission.automatic_horizon(" not in view
     assert "successor_reserved" not in view
     assert "final_mastery" not in view
-    assert "StreamAdmission.automatic_horizon(" in (ROOT/"godot/main.gd").read_text()
+    owner = (ROOT/"godot/practice_command_coordinator.gd").read_text()
+    assert "StreamAdmission.automatic_horizon(" in owner
     assert 'state.get("preview_only",false)' in view
     app = (ROOT/"godot/main.gd").read_text()
     backend = (ROOT/"piano_teacher/server.py").read_text()
-    assert "StreamAdmission.automatic_horizon(" in app
+    assert "StreamAdmission.automatic_horizon(" in owner
     assert "self._automatic_stream_deadline(" in backend
     assert "repeat_deadline(" in backend
-    assert app.count("_cancel_pending_stream_arm()") >= 3
+    assert owner.count("_cancel_pending_stream_arm()") >= 3
     assert "last_published_control_started_ms" in app
     assert "state_request_started_ms <= last_published_control_started_ms" in app
     assert "_pending_stream_renderer.acknowledge_stream_arm()" in app
