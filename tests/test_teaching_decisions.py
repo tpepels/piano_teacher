@@ -334,3 +334,32 @@ def test_guided_settlement_routes_before_auto_feedback_and_keeps_recovery_owner(
     assert 'selected.response.guided' in method[guided:timed]
     assert 'self._enter_selected_exposure(selected.next_exposure)' in method[guided:timed]
     assert 'self._apply_policy_response(selected.response' in method[guided:timed]
+
+
+def test_hybrid_decider_never_reenters_old_diagnosis_or_remediation(tmp_path, monkeypatch):
+    """A real failed original take must select Coda/Fukuda catalogue only."""
+    from test_assessment_atomicity import _engine, _pending
+    from piano_teacher.diagnosis_policies import RepeatedErrorPolicy
+    from piano_teacher.remediation import RemediationPlanner
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("obsolete heuristic lesson path invoked by the hybrid")
+    monkeypatch.setattr(RepeatedErrorPolicy, "recommend", forbidden)
+    monkeypatch.setattr(RemediationPlanner, "plan", forbidden)
+    e = _engine(tmp_path)
+    try:
+        result = _pending(e, "wrong")
+        pending = e._prepare_teaching("full_result", result)
+        decision = pending.decision
+        assert decision.remediation is None
+        assert decision.definition_after.generator_name == "coda-fukuda-midi"
+        assert decision.feedback_after
+        assert decision.next_exposure is not None
+        # An actual hybrid candidate, not an out-of-catalog synthetic note.
+        after = replace(pending.state.course, definition=decision.definition_after,
+                        progress=decision.progress_after)
+        assert after.stage.variant.level.startswith(("fukuda-midi-", "coda-"))
+        assert after.stage.variant.level != "original"
+    finally:
+        e.listen.cancel()
+        e.db.close()

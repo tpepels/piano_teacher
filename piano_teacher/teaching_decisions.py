@@ -166,7 +166,8 @@ def source_safe_response(response, *, phrase, hand, grid):
     return replace(response, restart_beat=start, end_beat=end)
 
 
-def decide_standard_teaching(event, state, *, generator=None):
+def decide_standard_teaching(event, state, *, generator=None,
+                             allow_heuristic_remediation=True):
     c, route, result = state.course, state.route, event.assessment
     chosen, message = c, ""
     response = remediation = None
@@ -213,7 +214,8 @@ def decide_standard_teaching(event, state, *, generator=None):
         if response is not None:
             chosen = chosen.with_progress(bpm=response.bpm)
         if (eligible and not result.passed and route.automatic and not route.warmup
-                and c.exercise.kind == "learn" and state.policy.whole_handler is None):
+                and c.exercise.kind == "learn" and state.policy.whole_handler is None
+                and allow_heuristic_remediation):
             evidence = AssessmentEvidence.from_result(c.key, result, route.performed_bpm)
             history = LearnerSnapshot(c.key, (state.diagnosis.recent + (evidence,))[-8:])
             recommendation = state.learner_strategy.recommend(history, state.diagnosis_strategy)
@@ -283,7 +285,18 @@ def decide_standard_teaching(event, state, *, generator=None):
 
 
 def decide_coda_fukuda_teaching(event, state, *, generator):
-    return decide_standard_teaching(event, state, generator=generator)
+    """Selected hybrid generator owns the entire error-driven lesson choice.
+
+    Its compiled original-attack catalog and graded source-ID feedback select
+    real Coda/Fukuda variants through with_feedback() and refresh_course().
+    A separate older diagnosis/RemediationPlanner is not a permissible
+    fallback: it can select an unrelated, non-catalog lesson after an error.
+    Common source-safe transport and mastery arithmetic remain shared.
+    """
+    if state.definition.generator_name != generator.name:
+        raise ValueError("Hybrid teacher cannot decide for a different course")
+    return decide_standard_teaching(event, state, generator=generator,
+                                    allow_heuristic_remediation=False)
 
 
 def validate_teaching_decision(decision, *, event, state):
