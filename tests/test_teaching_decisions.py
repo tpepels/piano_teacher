@@ -305,3 +305,32 @@ def test_teaching_source_safe_response_keeps_uninterrupted_fractional_source_ran
     response = WholeResponse(bpm=60, restart_beat=.5, end_beat=4., mode="adaptive")
     observed = source_safe_response(response, phrase=passage, hand="right", grid=(0., 4., 8.))
     assert observed is not response and observed.restart_beat == .5 and observed.end_beat == 4.
+
+
+def test_guided_settlement_routes_before_auto_feedback_and_keeps_recovery_owner():
+    """Auto error feedback cannot bypass a teacher-selected untimed lesson."""
+    from pathlib import Path
+    from types import SimpleNamespace
+    from piano_teacher.application.teaching_continuation import TeachingContinuation
+    from piano_teacher.application.mistake_responses import WholeResponse
+
+    response = WholeResponse(bpm=40, restart_beat=0., mode="adaptive",
+                             guided=True, action="guided")
+    selected = SimpleNamespace(continuation="guided", response=response,
+        remediation=None, next_exposure=SimpleNamespace(mode="learn"))
+    effect = TeachingContinuation.after_settlement(
+        selected, prepared=True, score_changed=True)
+    assert effect.action == "guided"
+
+    # Source contract on the *integrated* settlement owner, not only on
+    # an isolated continuation planner. Guided remediation and registered
+    # guided feedback must execute before the generic timed-response path.
+    server = Path(__file__).resolve().parents[1] / "piano_teacher/server.py"
+    method = server.read_text().split("    def _advance_pending_feedback(", 1)[1].split("\n    def ", 1)[0]
+    guided = method.index('if route == "guided":')
+    timed = method.index('if route == "response"')
+    assert guided < timed
+    assert 'if assignment is not None:' in method[guided:timed]
+    assert 'selected.response.guided' in method[guided:timed]
+    assert 'self._enter_selected_exposure(selected.next_exposure)' in method[guided:timed]
+    assert 'self._apply_policy_response(selected.response' in method[guided:timed]

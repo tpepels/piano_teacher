@@ -2392,15 +2392,25 @@ class PracticeEngine:
                 self.count_in_beats = start.count_in
                 return
             self._prepared_stage_published = False
-            if selected.response is not None and selected.next_exposure is not None and self.auto:
-                self._remediation_pending = None
+            # The selected teaching exposure has precedence over a timed
+            # policy reply. A prepared untimed Learn step must never be
+            # redirected to timed Practice just because feedback also carries
+            # a response. Preserve actual remediation/recovery ownership.
+            if route == "guided":
+                if assignment is not None:
+                    self._start_remedial_assignment(
+                        assignment, deadline=deadline, exposure=selected.next_exposure)
+                elif selected.response is not None and selected.response.guided:
+                    self._apply_policy_response(selected.response, now=now, deadline=deadline)
+                else:
+                    self._enter_selected_exposure(selected.next_exposure)
+                return
+            if route == "response" and selected.response is not None and \
+                    selected.next_exposure is not None and self.auto:
                 self._apply_policy_response(selected.response, now=now, deadline=deadline)
                 return
             if route == "remediation":
                 self._start_remedial_assignment(assignment,deadline=deadline, exposure=selected.next_exposure)
-                return
-            if route == "guided":
-                self._enter_selected_exposure(selected.next_exposure)
                 return
             if route == "await_score":
                 self.awaiting_score_revision = self.score_revision
