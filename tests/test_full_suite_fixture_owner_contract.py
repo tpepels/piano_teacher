@@ -20,6 +20,7 @@ GODOT = ROOT / "tests" / "godot"
     "art_direction.gd",
     "library_resume.gd",
     "native_camera.gd",
+    "native_library_diagnostic.gd",
 ])
 def test_full_suite_godot_fixtures_use_extracted_owner(name):
     source = (GODOT / name).read_text()
@@ -69,3 +70,22 @@ def test_navigation_adapter_validates_current_transport_metadata():
     assert '"continuation_header_beats"' in source
     assert "PENDING_NAVIGATION_BAD_DEADLINE" in source
     assert "PENDING_NAVIGATION_BAD_GEOMETRY" in source
+
+def test_readiness_sweep_uses_extracted_command_state():
+    source = (ROOT / "tests/readiness/r1_sweep.gd").read_text()
+    assert "app.command_coordinator.state" in source
+    assert "app.command_state" not in source
+
+
+def test_first_play_fixture_routes_recorded_action_to_real_owner():
+    source = (GODOT / "first_play_count_in.gd").read_text()
+    assert "command_coordinator.action_request = action_request" in source
+
+
+def test_full_suite_owns_and_cleans_its_temporary_directory():
+    source = (ROOT / "scripts/ci-full.sh").read_text()
+    assert "CI_FULL_TEMP_CLEANUP:" in source
+    assert "running_pytest()" in source
+    assert 'mktemp -d' in source
+    assert 'trap cleanup_full_tmp EXIT' in source
+    assert '--basetemp "$CI_FULL_TMP/pytest"' in source
