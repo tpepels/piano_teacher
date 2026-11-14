@@ -130,7 +130,7 @@ if legacy.is_symlink():
     raise RuntimeError(f'Refusing symlinked pytest temp root: {legacy}')
 if legacy.is_dir():
     if legacy.stat().st_uid != os.getuid():
-        raise RuntimeError(f"Refusing another user\'s pytest temp root: {legacy}")
+        raise RuntimeError(f"Refusing another user's pytest temp root: {legacy}")
     active = running_pytest()
     if active is not None:
         print(f'CI_FULL_TEMP_CLEANUP_SKIPPED: pytest PID {active} is running', flush=True)
