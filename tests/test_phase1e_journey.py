@@ -20,6 +20,58 @@ def music():
     return Piece("Journey",100,notes,(Phrase(1,1,2,0,8,notes),))
 
 
+def test_harder_outline_starts_fresh_after_three_clean_mastery_passes():
+    """Mastering a reduced chord skeleton does not prove outline speed."""
+    plan = LearningPlan(music())
+    plan.set_bpm(80)
+    assert plan.active_variant.level == "skeleton"
+    easier = plan.identity
+    required = len(plan.active_phrase.notes)
+    for _ in range(3):
+        plan.apply_result(correct=required,total=required)
+    assert plan.active_variant.level == "outline"
+    assert len(plan.active_phrase.notes) > required
+    assert plan.stage_tempos[easier] == 80
+    assert easier in plan.transferable_tempos
+    assert plan.carried_bpm is None
+    assert plan.bpm == plan.start_bpm == 40
+
+
+@pytest.mark.parametrize("changed,carried",[
+    ("same-source",80),("new-rhythm",None),
+])
+def test_earned_tempo_only_crosses_stage_boundaries_with_identical_source_ink(
+        changed,carried):
+    """A new technique with identical written notes can reuse actual speed.
+
+    A same-sized rearrangement, including unchanged source IDs, must restart:
+    the learner has not proved the new rhythm.
+    """
+    from dataclasses import replace
+    from piano_teacher import teaching_course
+
+    plan=LearningPlan(music())
+    base=plan.course_state()
+    first=base.stages[0]
+    key=base.key
+    original=first.variant
+    if changed=="new-rhythm":
+        notes=(replace(original.notes[0],
+                       end=original.notes[0].end+.125), *original.notes[1:])
+        phrase=replace(original.phrase,notes=notes)
+    else:
+        phrase=original.phrase
+    distinct=replace(first,variant=replace(original,level=changed,phrase=phrase))
+    sequences=dict(base.definition.stage_sequences)
+    sequences[(base.exercise.key,base.hand)]=(first,distinct,*base.stages[1:])
+    definition=replace(base.definition,stage_sequences=sequences)
+    progress=replace(base.progress,cursor=(0,0,1),bpm=80,target_bpm=80,
+                     stage_tempos=((key,80),),transferable_tempos=(key,))
+    current=replace(base,definition=definition,progress=progress)
+    assert teaching_course.carried_bpm(current)==carried
+    assert teaching_course.stage_start_bpm(current)==(80 if carried else 40)
+
+
 def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch):
     t=[100.0]
     monkeypatch.setattr(server.time,"monotonic",lambda:t[0])
