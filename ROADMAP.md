@@ -1520,3 +1520,52 @@ and independent 24-shard original-source audit unaccepted until each is run
 to completion. No legacy owner or compatibility code was restored, no
 assertion was deleted, and original notation, physical MIDI, release and
 pedagogical proof gates remain unchanged.
+
+### 2026-11-14 — full-suite rerun: isolate disk-quota failures and migrate remaining fixture owners
+
+After the earlier focused repair, the developer confirmed a **passing smoke
+run** and supplied a new **`ci-full.sh` output from
+`/tmp/pytest-of-tom/pytest-5`**. The release gate still failed:
+it showed separate early source/teaching/engraving failures, a late burst
+of `[Errno 122] Disk quota exceeded` and SQLite `disk I/O error`
+failures, and a five-case readiness fixture with repeated obsolete
+`App.command_state` property access. Do **not** count late quota-dependent
+failures as independent functional results.
+
+Direct source-level repairs on `main`:
+
+- `scripts/ci-full.sh` now checks that the historical pytest directory
+  belongs to the current user, rejects symlinked roots and refuses
+  precleanup if another pytest process is active. It reclaims the user's
+  retained numbered `pytest-N` session directories and the
+  `pytest-current` symlink while leaving unrelated `/tmp` entries
+  alone. The preflight uses `TMPDIR` directly rather than
+  `tempfile.gettempdir()`, so an already-exhausted quota cannot
+  prevent the cleanup itself. Each subsequent full run uses a
+  `mktemp`-created, private `TMPDIR` plus `--basetemp`, and
+  the shell EXIT trap removes that private tree on success or failure.
+  Commits `dc1e99a`, `3d2ff5c`, `594c4eb`.
+- `tests/readiness/r1_sweep.gd` updates its **four** remaining
+  references from deleted `App.command_state` to the actual
+  `App.command_coordinator.state` owner (`5d1b9df`).
+  This is a fixture correction; the Godot crash after the broken
+  90-second sweep may require separate diagnosis if reproduced.
+- `tests/godot/first_play_count_in.gd` now binds its recording request
+  to the coordinator, not only to the extracted Main field (`30af074`).
+  `tests/godot/native_library_diagnostic.gd` now checks the actual
+  coordinator's pending state (`1d3f201`).
+- `tests/test_retained_score_pipeline.py` now verifies
+  `_cues.observe` at its actual `MetronomeFrameCoordinator` owner
+  and confirms the command coordinator only reserves the countdown
+  (`df77f9c`). No production duplicate cue owner was added.
+- The cheap smoke ownership contract now covers the readiness script,
+  first-Play recording adapter, native library diagnostic and
+  full-script temporary cleanup (`cce9799`).
+
+**Verification:** the smoke success reported by the developer precedes
+these new commits. The script and the new regressions have **not yet
+been run** on the developer's Godot/Arch environment. Remaining red
+tests include independent continuation-deadline behavior,
+Coda/Fukuda teaching progress, native fingering, visual/pixel/Verovio
+proofs, workflow trust and a clean `ci-full.sh` result. Original
+24-shard verification and physical acceptance also remain open.
