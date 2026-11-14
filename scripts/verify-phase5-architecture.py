@@ -138,38 +138,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-, record, flags=re.M)
-                if len(paths) != 1 or not (root / "godot" / paths[0]).is_file():
-                    result.append(f"Package missing compiled count-in audio: {word}")
-
-        if (root / "godot/.mcp.json").exists():
-            result.append("Package includes a development-only MCP configuration")
-        if (root / "midi").exists():
-            result.append("Package includes developer MIDI repertoire")
-        for path in DEV_ONLY_GODOT_PATHS:
-            if (root / path).exists():
-                result.append(f"Package includes developer-only Godot fixture: {path}")
-            if path.endswith(".gd") and (root / (path+".uid")).exists():
-                result.append(f"Package includes developer-only Godot UID: {path}.uid")
-        project = root / "godot/project.godot"
-        if project.is_file() and ("MCPRuntimeServer" in project.read_text()
-                                  or "godot_mcp_toolkit" in project.read_text()):
-            result.append("Package still starts a development-only runtime")
-    return result
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument("--package", action="store_true")
-    args = parser.parse_args()
-    errors = audit_tree(args.root, package=args.package)
-    if errors:
-        print("\n".join(errors))
-        return 1
-    print("PHASE5_ARCHITECTURE_AUDIT_OK")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
