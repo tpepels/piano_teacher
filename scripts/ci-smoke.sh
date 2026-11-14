@@ -99,6 +99,8 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_retained_score_pipeline.py::test_legacy_ambience_source_cameras_and_recovery_variants_are_absent \
   tests/test_retained_score_pipeline.py::test_fingering_overlay_has_bounded_source_window \
   tests/test_phase3_ledger_pixels.py::test_ledger_witness_window_keeps_held_note_end_but_excludes_other_measures \
+  tests/test_phase3_ledger_pixels.py::test_mint_indicator_on_required_ledger_wing_does_not_create_false_missing_ink \
+  tests/test_phase3_ledger_pixels.py::test_mint_ledger_occlusion_cannot_reclassify_overlapping_head_center \
   tests/test_midi_polyphonic_stems.py \
   tests/test_midi_visual_fast_path.py \
   tests/test_midi_calibration.py \
