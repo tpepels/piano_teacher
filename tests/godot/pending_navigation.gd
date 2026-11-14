@@ -24,6 +24,9 @@ class FixtureApp extends "native_production_fixture.gd":
     func _ready() -> void:
         super._ready()
         action_request = RecordingRequest.new(wire_commands)
+        # Main's coordinator owns the actual outbound request adapter after
+        # Phase 5 extraction. Override the transport only at that boundary.
+        command_coordinator.action_request = action_request
 
     func _poll() -> void:
         pass
@@ -98,21 +101,21 @@ func test_pending_start_or_resume(action: String, destination: String) -> void:
         expected.append({"action": wanted})
     check(app.wire_commands == expected,
         action + " immediately followed by " + destination + " preserves the user's " + wanted + " intent: " + str(app.wire_commands))
-    check(app.command_state.pending == not wanted.is_empty(),
+    check(app.command_coordinator.state.pending == not wanted.is_empty(),
         "Only a real pending overlay pause should remain after acknowledgement")
 
 func test_quick_music_selection_survives_pending_pause() -> void:
     await show_state("playing")
     app._navigate("library")
-    check(app.command_state.pending, "Opening the music drawer requests a pause")
+    check(app.command_coordinator.state.pending, "Opening the music drawer requests a pause")
     app._open_library_piece("selected.mid")
-    check(app.command_state.queued_library_piece == "selected.mid",
+    check(app.command_coordinator.state.queued_library_piece == "selected.mid",
         "A quick music click is held while Pause is still in flight")
     acknowledge("paused")
     await process_frame
     check(app.wire_commands == [{"action": "pause"}, {"id": "selected.mid"}],
         "The selected file must open after Pause finishes: " + str(app.wire_commands))
-    check(app.command_state.queued_library_piece.is_empty(),
+    check(app.command_coordinator.state.queued_library_piece.is_empty(),
         "Successful queue draining must not reopen a song twice")
 
 
@@ -141,7 +144,7 @@ func test_start_picker_keyboard_is_modal() -> void:
 func test_response_before_poll() -> void:
     await show_state("ready")
     app._send_action({"action": "start"})
-    app.state_request_started_ms = app.command_state.started_ms
+    app.state_request_started_ms = app.command_coordinator.state.started_ms
     await show_state("playing") # A pre-action poll arrives while Start is pending.
     check(str(app.last_state.get("phase", "")) == "ready",
         "A pre-Start poll cannot publish while the command owns the pending snapshot")
@@ -168,7 +171,7 @@ func test_failed_request_flushes_intent() -> void:
     acknowledge("ready", 1)
     check(app.wire_commands == [{"action": "start"}, {"action": "pause"}],
         "A failed first response cannot strand the queued navigation intent: " + str(app.wire_commands))
-    check(app.command_state.pending, "The navigation request is sent after the first failure")
+    check(app.command_coordinator.state.pending, "The navigation request is sent after the first failure")
 
 func run() -> void:
     app = FixtureApp.new()
