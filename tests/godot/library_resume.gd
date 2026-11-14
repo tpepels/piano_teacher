@@ -41,6 +41,9 @@ class FixtureApp extends "res://main.gd":
         command_coordinator.configure(practice_view,settings_view,metronome_frame,
             score_flow,visual_transport_clock,action_request,command_failure_presenter)
         command_coordinator.succeeded.connect(command_success_effects.apply)
+        # The isolated fixture must retain the production deferred-open path.
+        command_coordinator.library_requested.connect(func(piece: String, resume_saved: bool):
+            call_deferred("_open_library_piece",piece,resume_saved))
         command_coordinator.learning_accepted.connect(_learning_command_accepted)
         command_coordinator.refresh_requested.connect(_poll)
         resized.connect(_update_responsive_layout)
