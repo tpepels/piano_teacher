@@ -74,6 +74,56 @@ def test_dense_capture_clocks_do_not_hide_a_clear_neighboring_ledger_witness(tmp
                for w in observation['evidence']['witnesses'] if w.get('segments'))
 
 
+def test_mint_indicator_on_required_ledger_wing_does_not_create_false_missing_ink():
+    """The ring crossing the half-note's right wing is observable occlusion.
+
+    This can downgrade a mismatch to UNVERIFIED but cannot certify ink.
+    The negative-control verifier must still reject absent physical wings.
+    """
+    import numpy as np
+    from types import SimpleNamespace
+    from piano_teacher.notation.ledger_pixels import (
+        _mint_masks_required_ledger_wing, _dim_ledger_wings)
+
+    staff = SimpleNamespace(bottom=230.88, gap=21.84)
+    head = dict(bbox=[493, 110, 521, 136])
+    missing = np.zeros((250, 650), dtype=bool)
+    # The photo at beat 4.20 has registered translation -19 pixels.
+    # Its mint ring spans the source right-hand wing near row 121.
+    mint = np.zeros((250, 650), dtype=bool)
+    mint[121:123, 501:513] = True
+
+    assert _dim_ledger_wings(missing, staff, head, 10,
+                             np.array([], dtype=int))["status"] == "mismatch"
+    assert _mint_masks_required_ledger_wing(mint, head, staff, 10, -19)
+    assert not _mint_masks_required_ledger_wing(None, head, staff, 10, -19)
+    assert not _mint_masks_required_ledger_wing(
+        np.zeros_like(mint), head, staff, 10, -19)
+
+    # A genuine missing wing in an unobstructed photograph remains a
+    # mismatch; unrelated colored UI pixels elsewhere cannot hide it.
+    mint.fill(False)
+    mint[121:123, 540:548] = True
+    assert not _mint_masks_required_ledger_wing(mint, head, staff, 10, -19)
+    mint.fill(False)
+    mint[75:85, 501:513] = True
+    assert not _mint_masks_required_ledger_wing(mint, head, staff, 10, -19)
+
+
+def test_mint_ledger_occlusion_cannot_reclassify_overlapping_head_center():
+    import numpy as np
+    from types import SimpleNamespace
+    from piano_teacher.notation.ledger_pixels import _mint_masks_required_ledger_wing
+
+    staff = SimpleNamespace(bottom=230.88, gap=21.84)
+    head = dict(bbox=[493, 110, 521, 136])
+    mint = np.zeros((250, 650), dtype=bool)
+    # This is inside the hollow notehead, but outside the compulsory
+    # left/right ledger wings. Only wing occlusion can invalidate proof.
+    mint[121:123, 504:510] = True
+    assert not _mint_masks_required_ledger_wing(mint, head, staff, 10, 0)
+
+
 def test_ledger_witness_window_keeps_held_note_end_but_excludes_other_measures():
     """The 4-beat A5 half note needs its captured 6-beat clear witness.
 
