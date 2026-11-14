@@ -39,7 +39,33 @@ def test_dense_capture_clocks_do_not_hide_a_clear_neighboring_ledger_witness(tmp
     actual=godot_run(ROOT/'tests/godot/native_verovio_overlay.gd',[payload,tmp_path],graphical=True,timeout=120)
     assert actual.returncode==0,actual.stdout+actual.stderr
     report=verify_ledger_pixels(xml,tmp_path,hand='right')
-    assert report['complete'],report
+    if not report['complete']:
+        # The full nested report is abbreviated by pytest's assertion
+        # formatter. Expose each actual PNG witness independently so the
+        # failing capture and its physical-ink rejection are identifiable.
+        # Never change the verdict or grant source-authored ledger ink.
+        for row in report['measured']:
+            observation=row['features']['ledger']
+            print('LEDGER_FRAME_DIAG_SUMMARY', json.dumps(dict(
+                source_id=row['source_id'], beat=row['beat'],
+                expected_steps=observation['expected_steps'],
+                selected_frame=observation['evidence'].get('frame'),
+                selected_status=observation['status'],
+                selected_reason=observation['reason'])))
+            for witness in observation['evidence'].get('witnesses', []):
+                print('LEDGER_FRAME_DIAG_WITNESS', json.dumps(dict(
+                    frame=witness.get('frame'), status=witness.get('status'),
+                    reason=witness.get('reason'),
+                    bright_status=witness.get('bright_status'),
+                    registration=witness.get('registration'),
+                    head_bbox=witness.get('head_bbox'),
+                    staff_gap=witness.get('staff_gap'),
+                    segments=[dict(step=s.get('step'), status=s.get('status'),
+                                   reason=s.get('reason'), bbox=s.get('bbox'),
+                                   head_bbox=s.get('head_bbox'),
+                                   expected_y=s.get('expected_y'))
+                              for s in witness.get('segments', [])])))
+    assert report['complete'], 'ledger photograph failed; see LEDGER_FRAME_DIAG_* above'
     row,=report['measured']
     observation=row['features']['ledger']
     assert observation['expected_steps']==[10]
