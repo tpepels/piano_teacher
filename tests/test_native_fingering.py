@@ -384,6 +384,7 @@ def test_real_application_popup_posts_correction_and_reloads_revision(captured, 
     shutil.copy(source_path, music / source_path.name)
     env = dict(os.environ, HOME=str(home), XDG_DATA_HOME=str(tmp_path / "data"),
                XDG_CONFIG_HOME=str(tmp_path / "config"), XDG_CACHE_HOME=str(tmp_path / "cache"),
+               PIANO_TEACHER_TIMING_DIAGNOSTICS="1",
                **embedded_python_env())
     def run_app(*mode_args):
         try:
