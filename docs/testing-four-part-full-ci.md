@@ -19,24 +19,29 @@ Run from the repository root after `git pull --ff-only`:
 ```bash
 bash scripts/ci-full.sh --plan
 bash scripts/ci-full.sh --shard 1
-bash scripts/ci-full.sh --shard 2
-bash scripts/ci-full.sh --shard 3
-bash scripts/ci-full.sh --shard 4
 bash scripts/ci-full.sh --status
 ```
 
-If one part fails, fix its failure and rerun **only that part**, e.g.
-`bash scripts/ci-full.sh --shard 3`. No earlier part is rerun.
+When a part passes, the runner **automatically starts the next part**.
+If any part fails or errors, it **stops immediately**, retaining the
+log and status of that part. After fixing it, resume at the failing part:
+
+```bash
+bash scripts/ci-full.sh --shard 3
+```
+
+This runs part 3 and, if it passes, starts part 4. Parts 1 and 2 are
+not rerun. You can also start at any other part directly.
 
 ```bash
 bash scripts/ci-full.sh --all
 ```
 
 This is also the default when invoking `bash scripts/ci-full.sh` without
-arguments. It runs all four sequentially, **continues after a failed part**
-so the output contains all observed failures, and automatically skips
-parts already recorded as passing on the same clean Git revision.
-`--all --force` reruns all four even if previously passing.
+arguments. It starts at part 1, advances to the next part **only when the
+previous part passes**, and halts on the first failure. Already-passing
+parts from the same clean Git revision are skipped. `--all --force`
+reruns them as well, still stopping on the first failure.
 
 ## Logs, proof and cleanup
 
@@ -64,8 +69,9 @@ a run if raw generated files are needed for diagnosis; it will print the
 retained path.
 
 Pass extra pytest flags for diagnosis after `--`, for example
-`bash scripts/ci-full.sh --shard 2 -- -x`. Partial/filtered runs do
-not count as a full-shard PASS.
+`bash scripts/ci-full.sh --shard 2 -- -x`. In this case **only shard 2**
+runs; diagnostic/filtered runs do not advance automatically or count
+as a full-shard PASS.
 
 The separate 24-shard original-symbol notation audit, native physical
 MIDI acceptance, packaging and learner-study gates remain outside this
