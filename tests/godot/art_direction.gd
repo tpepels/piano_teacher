@@ -273,10 +273,10 @@ func requests_idle() -> bool:
     # Geometry mode answers no score command, so only HTTP mode waits for them.
     var score_busy: bool = not geometry_only and (
         app.layout_pending or app.timeline_model_pending)
-    return not (app.command_state.pending or score_busy
+    return not (app.command_coordinator.state.pending or score_busy
         or app.library_catalog.pending or app.lesson_session.pending or
         app.settings_pending or app.device_pending or app.library_catalog.health_pending) and \
-        app.command_state.queued_transport.is_empty() and app.command_state.queued_library_piece.is_empty()
+        app.command_coordinator.state.queued_transport.is_empty() and app.command_coordinator.state.queued_library_piece.is_empty()
 
 func native_status() -> Dictionary:
     if app == null:
@@ -289,7 +289,7 @@ func native_status() -> Dictionary:
         "state_revision": int(app.last_state.get("revision", -1)),
         "layout_revision": app.layout_revision, "rendered_revision": app.rendered_revision,
         "model_revision": app.timeline_model_revision, "phase": app.last_state.get("phase", ""),
-        "action_pending": app.command_state.pending, "pending_action": app.command_state.queued_transport,
+        "action_pending": app.command_coordinator.state.pending, "pending_action": app.command_coordinator.state.queued_transport,
         "window_size": [root.size.x, root.size.y], "window_mode": root.mode,
         "window_geometry": window_geometry(),
         "covered_by_drawer": app.current_screen != "practice"}
