@@ -23,6 +23,10 @@ class FixtureApp extends "res://main.gd":
         score_queue.layout_request = SilentRequest.new()
         score_queue.model_request = SilentRequest.new()
         action_request = OfflineRequest.new()
+        # Main configured the owner before this fixture replaces its adapter.
+        # Keep real command arbitration and reserve/ack semantics, but never
+        # accidentally dispatch to the embedded production worker.
+        command_coordinator.action_request = action_request
         native_started = true  # No engine: every response is supplied below.
 
     func _poll() -> void:
@@ -92,7 +96,7 @@ func begin_take(action: String, play_from: float) -> bool:
     while not view.retained_ready() and Time.get_ticks_msec() < deadline:
         await process_frame
     app._send_action({"action": action})
-    if not app.command_state.pending:
+    if not app.command_coordinator.state.pending:
         push_error("Transport action was refused: no reservation reached the engine")
         return false
     var armed: int = view._stream_armed_serial
