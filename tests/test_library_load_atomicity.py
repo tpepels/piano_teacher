@@ -12,7 +12,7 @@ from piano_teacher.inprocess import EngineCommands
 from piano_teacher.server import PracticeEngine
 
 
-@pytest.mark.parametrize("failure", ["generator", "restore", "invalid_midi"])
+@pytest.mark.parametrize("failure", ["generator", "restore", "inference", "invalid_midi"])
 def test_library_open_failure_preserves_existing_practice_take(
         tmp_path, monkeypatch, failure):
     folder = tmp_path / "music"
@@ -52,6 +52,10 @@ def test_library_open_failure_preserves_existing_practice_take(
                 patched.setattr(server, "LearningPlan", explode)
             elif failure == "restore":
                 patched.setattr(engine.progress, "restore", fail_restore)
+            elif failure == "inference":
+                patched.setattr(engine.fingering, "prepare",
+                    lambda *_args: (_ for _ in ()).throw(
+                        RuntimeError("injected ONNX failure")))
             status, raw = bridge.request(
                 "library.open", json.dumps({"id": second.name}))
             assert status != 0
@@ -80,5 +84,50 @@ def test_library_open_failure_preserves_existing_practice_take(
             assert engine.score_revision == revision + 1
             assert not engine.running
             assert engine.recorder is None
+    finally:
+        engine.db.close()
+
+def test_whole_piece_inference_overlaps_curriculum_without_early_publication(
+        tmp_path, monkeypatch):
+    """The ONNX subprocess and immutable curriculum compile independently.
+
+    An inference stub refuses to finish before course compilation begins.
+    This regression deadlocks/fails on the old serialized load, and ensures
+    no incomplete fingering plan is attached to a published engine state.
+    """
+    from threading import Event, get_ident
+    from types import SimpleNamespace
+    from scripts.smoke_phase0 import make_fixture
+
+    path=tmp_path/"overlap.mid"
+    make_fixture(path)
+    engine=PracticeEngine(tmp_path/"engine",enable_midi=False)
+    compiled=Event()
+    inference_started=Event()
+    plan=SimpleNamespace(status="ready",assignments={})
+    caller=get_ident()
+    workers=[]
+    original=server.LearningPlan
+
+    def build(*args,**kwargs):
+        compiled.set()
+        return original(*args,**kwargs)
+
+    def infer(piece,fingerprint):
+        workers.append(get_ident())
+        inference_started.set()
+        assert compiled.wait(timeout=8), "fingering and course were serialized"
+        return plan
+
+    monkeypatch.setattr(server,"LearningPlan",build)
+    monkeypatch.setattr(engine.fingering,"prepare",infer)
+    try:
+        old_revision=engine.score_revision
+        engine.load(str(path))
+        assert inference_started.is_set()
+        assert workers and workers[0]!=caller
+        assert engine.score_revision==old_revision+1
+        assert engine.plan.piece.fingering_plan is plan
+        assert engine.source==str(path.resolve())
     finally:
         engine.db.close()
