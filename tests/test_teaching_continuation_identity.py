@@ -67,3 +67,17 @@ def test_mismatched_announcement_deadline_fails_closed():
     transport.retime_announcement(131.0)
     with pytest.raises(ValueError, match="no longer matches"):
         continuation.validate_announcement(take)
+
+
+def test_invalidated_deadline_reopens_only_with_fresh_serial():
+    transport = VisualTransport()
+    continuation = TeachingContinuation(None, transport)
+    take = pending()
+    continuation.announce(take, deadline=130.0)
+    old_serial = transport.announce_serial
+    # A withdrawn/overwritten future suffix must never be reused merely
+    # because the stale tuple still happens to contain the same source.
+    transport.next_at = 0.0
+    continuation.announce(take, deadline=140.0)
+    assert transport.announce_serial == old_serial + 1
+    assert transport.announced_deadline(0.0) == 140.0
