@@ -14,13 +14,15 @@ usage() {
     cat <<'HELP'
 Usage: bash scripts/ci-full.sh [--shard 1|2|3|4 | --all | --plan | --status] [--force] [-- pytest-options]
 
-  --shard N  Run only part N, saving its full log and exit status.
-  --all      Run every part (default), continuing after failed parts.
+  --shard N  Start at part N. Automatically run the next part only after a PASS.
+             Stop at the first failing part; retain its log and exit status.
+  --all      Start at part 1 (default), stopping at the first failed part.
              Skip parts that already passed on this clean Git revision.
   --force    Rerun previously passing parts when used with --all.
   --plan     Print the deterministic partition before running tests.
   --status   Print the four recorded statuses for the current commit.
-  --        Pass extra pytest arguments, for diagnosis only (not release-gate results).
+  --        Pass extra pytest arguments for diagnosis only (not release-gate results).
+             With --shard N, diagnostics run that part alone; no automatic next part.
 
 Logs: playtest-results/ci-full/<commit>/shard-N.log (retained after cleanup)
 Preserve temp artifacts explicitly with CI_FULL_KEEP_TMP=1.
@@ -199,18 +201,36 @@ run_part() {
     return "$result"
 }
 
-if [[ "$mode" == shard ]]; then
-    if run_part "$shard"; then :; else exit $?; fi
-    exit 0
+# A targeted diagnostic with extra pytest flags is intentionally limited
+# to its requested part. A filtered success is never a release PASS and
+# must not silently advance into unrelated parts.
+if [[ "$mode" == shard && ${#pytest_args[@]} -gt 0 ]]; then
+    run_part "$shard"
+    exit $?
 fi
 
-failed=0
-for number in 1 2 3 4; do
+start=1
+if [[ "$mode" == shard ]]; then start="$shard"; fi
+for ((number=start; number<=SHARDS; number++)); do
     if [[ "$force" -eq 0 && "$clean" -eq 1 && ${#pytest_args[@]} -eq 0 && -f "$out/shard-$number.status" && "$(cat "$out/shard-$number.status")" == PASS ]]; then
-        echo "CI_FULL_PART_SKIP: $number/$SHARDS already passed on $revision (use --force to rerun)"
+        echo "CI_FULL_PART_SKIP: $number/$SHARDS already passed on $revision (use --all --force to rerun)"
         continue
     fi
-    if run_part "$number"; then :; else failed=1; fi
+    if ! run_part "$number"; then
+        echo "CI_FULL_HALTED: part $number failed; later parts were not started"
+        status_summary || :
+        exit 1
+    fi
 done
-if status_summary; then :; else failed=1; fi
-exit "$failed"
+
+if [[ "$mode" == all ]]; then
+    # The complete gate needs passing evidence for all four parts on
+    # this exact clean revision.
+    status_summary
+else
+    # --shard N is an independent run of N and its green successors.
+    # A preceding part can still be NOT RUN without making this command
+    # appear to fail after all requested parts passed.
+    status_summary || :
+    echo "CI_FULL_SEQUENCE_DONE: parts $start-$SHARDS passed; release requires all four"
+fi
