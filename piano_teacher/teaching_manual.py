@@ -138,6 +138,11 @@ def choose_manual(event, state):
         if type(event.bar) is not int or not phrase.first_bar <= event.bar <= phrase.last_bar:
             raise ValueError("Choose a whole bar number inside the active passage")
         start = phrase_grid(phrase,c.piece.bar_boundaries)[event.bar-phrase.first_bar]
+        # A source-bar seek from Perform starts a graded *Practice* passage.
+        # The score-ready acknowledgement consumes this same exposure, so
+        # retaining mode="perform" here would silently re-enter Perform and
+        # award a performance review for a partial practice take.
+        mode = "learn" if route.mode == "learn" else "practice"
         continuation = "guided" if mode == "learn" else "continue"
     elif action in ("learn", "learn_retry", "learn_next", "course_stage"):
         if action == "learn_next" and not facts.guidance_completed:
