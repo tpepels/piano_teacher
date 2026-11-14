@@ -38,6 +38,10 @@ func _ready() -> void:
     command_coordinator.configure(practice_view,settings_view,metronome_frame,
         score_flow,visual_transport_clock,action_request,command_failure_presenter)
     command_coordinator.succeeded.connect(command_success_effects.apply)
+    # Keep production's post-acknowledgement deferred library selection.
+    # The former test fixture dropped the queued selection silently.
+    command_coordinator.library_requested.connect(func(piece: String, resume_saved: bool):
+        call_deferred("_open_library_piece",piece,resume_saved))
     _navigate("practice")
     resized.connect(_update_responsive_layout)
     _update_responsive_layout()
