@@ -104,7 +104,9 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
                     continue
                 import re
                 record = declared.read_text()
-                paths = re.findall(r'^path="res://([^"]+)"
+                paths = re.findall(r'^path="res://([^"]+)"' + r'$', record, flags=re.M)
+                if len(paths) != 1 or not (root / "godot" / paths[0]).is_file():
+                    result.append(f"Package missing compiled count-in audio: {word}")
         if (root / "godot/.mcp.json").exists():
             result.append("Package includes a development-only MCP configuration")
         if (root / "midi").exists():
