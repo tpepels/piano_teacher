@@ -10,6 +10,8 @@ import sys
 
 import pytest
 
+from scripts.ci_full_shards import file_plan
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -49,8 +51,11 @@ markers=["slow: slow tests"]
     env = dict(os.environ, PYTHON=sys.executable, TMPDIR=str(base),
                CI_FULL_RESULTS_DIR=str(out))
     launcher = ["bash", "scripts/ci-full.sh"]
+    broken_shard = file_plan(str(repo))[0]["tests/test_case_3.py"]
     first = run(*launcher, "--all", cwd=repo, env=env)
     assert first.returncode != 0, first.stdout + first.stderr
+    assert "CI_FULL_HALTED:" in first.stdout
+    assert first.stdout.count("CI_FULL_PART_START:") == broken_shard
     # An enclosing pytest process normally prevents legacy cleanup. If the
     # runner cannot see that parent, it may instead reclaim the old tree.
     if "CI_FULL_TEMP_CLEANUP_SKIPPED:" in first.stdout:
@@ -59,22 +64,52 @@ markers=["slow: slow tests"]
         assert "CI_FULL_TEMP_CLEANUP: removed 1" in first.stdout
         assert not legacy.exists(), "old pytest tree must be reclaimed"
     revision = run("git", "rev-parse", "--short=12", "HEAD", cwd=repo).stdout.strip()
-    states = {i: (out / revision / f"shard-{i}.status").read_text().strip()
-              for i in range(1, 5)}
-    assert sorted(states.values()) == ["FAIL", "PASS", "PASS", "PASS"]
-    assert all((out / revision / f"shard-{i}.log").is_file() for i in range(1, 5))
+    for i in range(1, 5):
+        status = out / revision / f"shard-{i}.status"
+        log = out / revision / f"shard-{i}.log"
+        if i < broken_shard:
+            assert status.read_text().strip() == "PASS"
+            assert log.is_file()
+        elif i == broken_shard:
+            assert status.read_text().strip() == "FAIL"
+            assert log.is_file()
+        else:
+            assert not status.exists() and not log.exists(), "green-only chaining must halt"
     assert not list(base.glob("piano-teacher-ci-full-*")), "shard tmp must be deleted"
 
     again = run(*launcher, "--all", cwd=repo, env=env)
     assert again.returncode != 0
-    assert again.stdout.count("CI_FULL_PART_SKIP:") == 3
+    assert again.stdout.count("CI_FULL_PART_SKIP:") == broken_shard - 1
     assert again.stdout.count("CI_FULL_PART_START:") == 1
-    # On another commit, prior PASS files cannot be silently reused.
-    (repo / "tests/test_case_3.py").write_text("def test_case_3():\n    assert True\n")
+    assert "CI_FULL_HALTED:" in again.stdout
+
+    # On a new Git commit, previous PASS records cannot be reused.
+    (repo / "tests/test_case_3.py").write_text("def test_case_3():\\n    assert True\\n")
     assert run("git", "add", ".", cwd=repo).returncode == 0
     assert run("git", "commit", "-qm", "fixed", cwd=repo).returncode == 0
     status = run(*launcher, "--status", cwd=repo, env=env)
     assert status.returncode != 0 and "INCOMPLETE (0/4" in status.stdout
-    fixed = run(*launcher, "--all", cwd=repo, env=env)
+
+    # Explicit --shard 3 runs shard 3 and then 4 automatically, not 1 or 2.
+    partial = run(*launcher, "--shard", "3", cwd=repo, env=env)
+    assert partial.returncode == 0, partial.stdout + partial.stderr
+    assert partial.stdout.count("CI_FULL_PART_START:") == 2
+    assert "CI_FULL_SEQUENCE_DONE: parts 3-4 passed" in partial.stdout
+    new_revision = run("git", "rev-parse", "--short=12", "HEAD", cwd=repo).stdout.strip()
+    for i in (3, 4):
+        assert (out / new_revision / f"shard-{i}.status").read_text().strip() == "PASS"
+    for i in (1, 2):
+        assert not (out / new_revision / f"shard-{i}.status").exists()
+
+    # Starting at one now advances to two, then skips already-green 3 and 4.
+    fixed = run(*launcher, "--shard", "1", cwd=repo, env=env)
     assert fixed.returncode == 0, fixed.stdout + fixed.stderr
+    assert fixed.stdout.count("CI_FULL_PART_START:") == 2
+    assert fixed.stdout.count("CI_FULL_PART_SKIP:") == 2
     assert "CI_FULL_COMPLETE: PASS (4/4" in fixed.stdout
+
+    # A complete gate is then a cheap status-only run on the same revision.
+    skip = run(*launcher, "--all", cwd=repo, env=env)
+    assert skip.returncode == 0, skip.stdout + skip.stderr
+    assert skip.stdout.count("CI_FULL_PART_SKIP:") == 4
+    assert skip.stdout.count("CI_FULL_PART_START:") == 0
