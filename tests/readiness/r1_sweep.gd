@@ -111,7 +111,7 @@ func _capture(name: String) -> void:
     capture_queue.append(name)
 
 func _press(button: Button, label: String) -> bool:
-    if app.command_state.pending:
+    if app.command_coordinator.state.pending:
         return false
     if button.disabled:
         _event("button_disabled",{"button":label})
@@ -374,7 +374,7 @@ func _process(_delta: float) -> bool:
                     _finish("midi_not_connected")
                     return true
                 return false
-            if app.command_state.pending or not _ready_score() or \
+            if app.command_coordinator.state.pending or not _ready_score() or \
                     str(s.get("device","")).is_empty():
                 if now-phase_ms > 30000:
                     _event("midi_device_not_in_state",{"device":s.get("device")})
@@ -395,7 +395,7 @@ func _process(_delta: float) -> bool:
                         app._send_action({"action":"select_step","number":wanted_step})
                     return false
                 if not _ready_score() or str(s.get("phase","")) != "ready" or \
-                        app.command_state.pending:
+                        app.command_coordinator.state.pending:
                     return false
                 flags["step_selected"] = true
                 stage_seen_ms = -1
@@ -543,7 +543,7 @@ func _rest_pause(s: Dictionary, now: int, running: bool, st_phase: String) -> bo
 
 func _idle_play(s: Dictionary, now: int, label: String) -> void:
     # If the engine stops and waits for the user, press Play like a user.
-    if bool(s.get("running",false)) or app.command_state.pending:
+    if bool(s.get("running",false)) or app.command_coordinator.state.pending:
         idle_since_ms = -1
         return
     if idle_since_ms < 0:
