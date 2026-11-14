@@ -1308,6 +1308,12 @@ class PracticeEngine:
         self._prepare_practice(exposure=selected)
         self.open_from_beat = selected.from_beat
         self.review_end_beat = selected.end_beat or self.plan.active_phrase.end-self.plan.active_phrase.start
+        # _prepare_practice resets a previous retry range. Re-publish the
+        # bounded, source-selected weak passage after preparing the new take,
+        # exactly as the explicit review_retry command does. The frontend
+        # and review completion must agree on this one graded interval.
+        self.retry_range = {"start_beat": self.open_from_beat,
+                            "end_beat": self.review_end_beat}
         self.awaiting_score_revision = None
         self.auto = False
         self.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
