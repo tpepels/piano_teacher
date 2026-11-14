@@ -38,6 +38,7 @@ const CommandSuccessEffects := preload("res://command_success_effects.gd")
 const PracticeControlPolicy := preload("res://practice_control_policy.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const NoteStatusInk := preload("res://note_status_ink.gd")
+const StatusInkWarmup := preload("res://status_ink_warmup.gd")
 const CountInCueTimeline := preload("res://countin_cue_timeline.gd")
 const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
 const CountInVoicePlayer := preload("res://countin_voice_player.gd")
@@ -752,12 +753,6 @@ func _on_score_published(published_revision: int) -> void:
 
 var _status_head_interiors: Dictionary = {}
 
-func _free_after_frames(node: Node, frames: int) -> void:
-    for _i in range(frames):
-        await get_tree().process_frame
-    if is_instance_valid(node):
-        node.queue_free()
-
 func _warm_status_heads(renderer) -> void:
     # Round 4 (I5): the first coloured head of a score built its head
     # interior masks (the status "fill" pass) inside the first take, a
@@ -789,7 +784,7 @@ func _warm_status_heads(renderer) -> void:
     # pipeline, the interior textures' upload and the glow sizes' glyph
     # rasterization also happen now (GL Compatibility does them lazily).
     var gap: float = float(renderer.staff_gap()) if renderer.has_method("staff_gap") else 10.0
-    var warm := Node2D.new()
+    var warm := StatusInkWarmup.new()
     warm.name = "StatusInkWarmup"
     renderer.add_child(warm)
     for pass_name in NoteStatusInk.PASSES:
@@ -804,7 +799,6 @@ func _warm_status_heads(renderer) -> void:
                 for scale in [1.0,NoteStatusInk.INNER_SCALE,NoteStatusInk.OUTER_SCALE]:
                     glyphs.paint(layer,str(head),4.0,4.0,gap*scale,faint,true))
         warm.add_child(layer)
-    _free_after_frames(warm,3)
     if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
         print("STATUS_HEADS_WARMED: ",glyphs.head_images.size()," ms=",
             (Time.get_ticks_usec()-started)/1000)
