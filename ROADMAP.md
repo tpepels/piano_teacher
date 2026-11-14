@@ -1748,3 +1748,47 @@ Shards 2–4 and all physical acceptance gates are still unverified.
 The next local command is `bash scripts/ci-full.sh --shard 1`;
 the existing runner automatically starts shard 2 only if shard 1
 completes with no failure/error.
+
+
+### 2026-11-14 — shard 1 second clean run: two isolated failures
+
+After `381145d2f758`, the user ran the new four-shard CI.
+**Shard 1:** 1,165 passed, 8 skipped, **2 failed** in 275.35 seconds;
+shards 2–4 correctly did not start. No disk-quota errors were reported.
+ALSA warnings occurred but did not cause the listed failures.
+
+- `test_guided_completion_honors_injected_reintegration_without_redecision`
+  asserted `e.mode == "practice"` immediately after the final MIDI
+  input, before invoking the backend's frame/update tick. The production
+  MIDI ingress deliberately records physical events without committing
+  durable guided progress or regenerating score inside the timing-critical
+  callback. The normal `engine.state()` tick calls
+  `_run_pre_assessment_transition() -> _save_guided_preparation()`,
+  applies the chosen `guided_completed` decision once and opens the
+  selected practice exposure. The test now explicitly checks that the
+  MIDI callback has **not** performed storage work, then checks the
+  transition after one state tick while retaining the exact
+  `calls == ["guided_completed"]` invariant (`e2cdc91`).
+- `test_dense_capture_clocks_do_not_hide_a_clear_neighboring_ledger_witness`
+  found a physical A5 half-note ledger but the verifier treated a
+  `mismatch` from another selected photograph as a veto. A fixture
+  captures clocks `0, .0625, .125, 3.9375, 4, 4.0625, 6, 8` for the
+  source note at beat 4. The start and the 4.0625 neighboring frame can
+  be occluded by the fixed playhead; the held note's end at beat 6 is
+  a valid unoccluded photographic witness. The original unbounded
+  `nearby_clocks(limit=12)` also consulted photographs at beat 0 and
+  beat 8, which may produce an unrelated fatal mismatch after image
+  registration. The verifier now admits actual photos between
+  `beat-1.25` and `beat+max(1.25, duration+.125)`, preserving
+  the beat-6 witness and excluding images from other measures
+  (`e9c79ec`, `25b741d`). The independent physical two-wing
+  threshold and **same-window mismatch veto remain unchanged**.
+  A focused clock-window regression is added to the original
+  framebuffer test module (`0e44fbb`).
+
+Both focused regressions now run in smoke (`69908b2`).
+**Acceptance still open:** These are a timing-boundary test correction and
+a tighter physical-verification scope, not confirmed production rendering
+fixes. The original failing tests have not been rerun on the user's
+Godot environment, and full four-shard release/physical acceptance is
+still incomplete.
