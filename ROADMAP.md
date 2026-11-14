@@ -1275,3 +1275,42 @@ timing and sustained-play/count-in/reconnect recordings are not supplied;
 external-controlled learner outcomes, full original-paper figure parity,
 and clean-machine publish acceptance are unproven. Do not close Phase 2,
 Phase 4, Phase 6 or Phase 7 on the basis of these commits.
+
+### 2026-11-14 — local regression triage after `fb7d04c` (matching Godot rerun pending)
+
+A fresh user-side local run exposed **two independent test migration failures**
+after the command lifecycle was extracted from Main, without demonstrating a
+new production-level transport or grading error:
+
+- `tests/test_measurement_controls.py::test_settings_controls_drive_typed_commands_and_present_results`:
+  **743 passed, 1 failed** in the reported segment. Its Godot fixture still
+  constructed `CommandSuccessEffects` with seven positional arguments
+  although the class now accepts one presenter and signal connections.
+  Commit `93ec567` uses the production effect signals and explicitly
+  configures the existing `PracticeCommandCoordinator`, preserving the
+  typed Settings/history requests and their outcome assertions.
+- `tests/test_practice_screen.py::test_independent_practice_screen[app_busy_ack]`:
+  **159 passed, 1 failed** in its segment, with Godot reporting invalid
+  `App.command_state` followed by a 20-second Python subprocess timeout.
+  Commits `a9432d0` and `0d43017` drive the current
+  `command_coordinator.state` through the application's real response
+  handler and independently assert clearing of busy state on both successful
+  and failed acknowledgements, including count-in cleanup. The unrelated
+  intermediate segment reported **304 passed**.
+
+These commits change **test fixtures only**: no production safety checks,
+original-source graphical obligations, physical MIDI acceptance, or independent
+scientific audit assertions have been disabled. Source and commit inspection
+confirms the modifications on `main`; **the matching Godot executable is not
+available in this verification environment and no matching post-fix CI run
+has been observed here**. Keep the two regression gates **unverified** until
+they run against commit `0d43017` or a descendant. Rerun the affected Godot
+cases, `scripts/ci-smoke.sh` and `scripts/ci-extended.sh`; a source edit alone
+does not count as green CI.
+
+**Unchanged open exits:** full original-symbol 24-shard execution including
+Chopin physical beam/stem/flag/ledger evidence and resource-bound completion;
+complete Coda/Fukuda original-paper/parity and teacher-decision proof;
+real Pathétique/import/retry/reopen; physical USB/Bluetooth latency, count-in
+and sustained input tests; clean Ubuntu executable release; long-session and
+comparative learner studies. Phases 2, 4, 6 and 7 stay open.
