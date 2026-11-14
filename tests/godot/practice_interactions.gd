@@ -590,12 +590,12 @@ func test_modes() -> void:
     for pending_mode in ["listen", "perform"]:
         app._navigate("practice")
         await show_state("ready")
-        app.command_state.action_requested(pending_mode)
-        app.command_state.begin("practice.command",Time.get_ticks_msec())
+        app.command_coordinator.state.action_requested(pending_mode)
+        app.command_coordinator.state.begin("practice.command",Time.get_ticks_msec())
         app.commands.clear()
         app._navigate("library")
         check(app.commands.back().get("action") == "pause", "Opening music during preparation preserves the attempt")
-        app.command_state.finish()
+        app.command_coordinator.state.finish()
 
 func test_pause_choices() -> void:
     var paused := state("paused")
@@ -675,7 +675,7 @@ func test_focus_trap() -> void:
     check(not app.practice_view.pause_sheet.bar_choice.editable, "Unavailable Listen seek cannot be edited")
 
 func test_learner_progression() -> void:
-    app.command_state.begin("practice.command",Time.get_ticks_msec())
+    app.command_coordinator.state.begin("practice.command",Time.get_ticks_msec())
     app._process(0.0)
     check(app.settings_view.apply_tempo_button.disabled, "Tempo waits visibly for an in-flight pause instead of dropping a click")
     app._on_action(1,JSON.stringify({"error":"Pause failed"}).to_utf8_buffer())
@@ -778,7 +778,7 @@ func test_handsfree_midi_start_and_readability() -> void:
     await apply_state(failed)
     check(app.commands.is_empty(), "Piano key cannot override an automatic recovery")
     # There is no mode change when a warm-up is opened from the library.
-    app.command_state.begin("library.open",Time.get_ticks_msec())
+    app.command_coordinator.state.begin("library.open",Time.get_ticks_msec())
     app._on_action(0,JSON.stringify(ready).to_utf8_buffer())
     check(app.commands.is_empty(), "Opening an existing Perform warm-up must not force Learn")
 
