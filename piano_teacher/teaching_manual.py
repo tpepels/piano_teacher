@@ -85,12 +85,18 @@ def choose_manual(event, state):
         if not isinstance(event.reason, str) or not event.reason.strip() or index+1 >= len(options):
             raise ValueError("Choose an available next step and explain the skip")
         c = manual_progress(c, "select_step", number=index+2)
-        mode, continuation = "learn", "guided"
-        selected = next_guided_range(c, facts.credits)
-        if selected:
-            start, end = selected
+        # A whole-piece Perform step is an actual performance assessment.
+        # It has no guided note-finding phase, even when reached by explicit
+        # skips from an earlier learning stage.
+        if c.exercise.kind == "perform":
+            mode, continuation, start, end = "perform", "continue", 0., None
         else:
-            mode, continuation, start = "practice", "continue", 0.
+            mode, continuation = "learn", "guided"
+            selected = next_guided_range(c, facts.credits)
+            if selected:
+                start, end = selected
+            else:
+                mode, continuation, start = "practice", "continue", 0.
     elif action == "place_original":
         if route.warmup:
             raise ValueError("Warm-up stages unlock after three clean runs")
