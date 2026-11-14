@@ -33,6 +33,26 @@ def _percentile(values, portion):
     return ordered[min(len(ordered)-1, max(0, int(len(ordered)*portion+0.99999)-1))]
 
 
+def _fresh_process_rss_peak_mb():
+    """Measure this exec's high-water mark, excluding inherited fork history.
+
+    Linux getrusage(RUSAGE_SELF).ru_maxrss can retain a pytest parent's
+    high-water mark through fork+exec. Fresh subprocesses were reporting
+    exactly the same 1653.5 MiB even for unrelated scores. /proc/self/status
+    VmHWM belongs to this process's current memory image.
+    """
+    if sys.platform.startswith("linux"):
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("VmHWM:"):
+                parts = line.split()
+                if len(parts) == 3 and parts[2] == "kB":
+                    return round(int(parts[1]) / 1024.0, 1)
+        raise RuntimeError("Linux process peak RSS unavailable from /proc/self/status")
+    # On non-Linux the benchmark's original platform-specific units apply.
+    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (
+        1024.0 if sys.platform != "darwin" else 1024.0 ** 2), 1)
+
+
 @pytest.mark.parametrize("label,filename,min_source_notes", REAL_SCORES)
 def test_real_score_cold_and_cached_native_pipeline(
         label, filename, min_source_notes, tmp_path):
@@ -177,9 +197,9 @@ def _measure_real_score(label, filename, min_source_notes, tmp_path):
         assert captured.lesson.lesson_step_count == len(engine.plan.lesson_steps)
         assert len(captured.lesson.lesson_steps) < len(engine.plan.lesson_steps), (
             "A live state response must not copy a full large-score lesson path")
-        # ru_maxrss is KiB on Linux, covering interpreter+music21/Verovio.
-        report["rss_peak_mb"] = round(resource.getrusage(
-            resource.RUSAGE_SELF).ru_maxrss / 1024.0,1)
+        # Child process VmHWM excludes the pytest parent's inherited
+        # resource.ru_maxrss high-water mark; keep the 512 MiB limit.
+        report["rss_peak_mb"] = _fresh_process_rss_peak_mb()
         report["elapsed_ms"] = elapsed
         output = Path(os.environ.get("PIANO_PHASE6_PERF_OUT",str(tmp_path)))
         output.mkdir(parents=True,exist_ok=True)
