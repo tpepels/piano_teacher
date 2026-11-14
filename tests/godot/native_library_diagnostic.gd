@@ -78,7 +78,7 @@ func run() -> void:
         app.last_state["bpm"] = 240.0
         app.score_flow.sample(Time.get_ticks_msec(),240.0)
         app._send_action({"action": "start"})
-        check(app.command_state.pending, filename + ": Play must reserve a take")
+        check(app.command_coordinator.state.pending, filename + ": Play must reserve a take")
         var origin := 0.0
         for item in view._stream_queue.online:
             if int(item.get("take_owner", item["serial"])) == view._stream_armed_serial:
