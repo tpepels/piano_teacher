@@ -28,7 +28,21 @@ func _play_until_visible(app: Control) -> bool:
         "ready":app._native_score_ready(),"pending":app.command_coordinator.state.pending,
         "error":app.score_error,"labels":renderer.annotations.drawn_fingerings.size(),
         "heads":renderer.drawn_noteheads.size(),"screen":app.current_screen,
-        "title":app.last_state.get("title"),"message":app.library_view.library_message.text,"opstate":app.command_coordinator.state.operation,"catalog":app.library_catalog.get("catalog"),"fingering":app.last_state.get("fingering")}))
+        "title":app.last_state.get("title"),"message":app.library_view.library_message.text,
+        "opstate":app.command_coordinator.state.operation,
+        "catalog":app.library_catalog.get("catalog"),
+        "fingering":app.last_state.get("fingering"),
+        "auto":app.last_state.get("auto"),"preview_only":app.last_state.get("preview_only"),
+        "running":app.last_state.get("running"),"paused":app.last_state.get("paused"),
+        "next_plan":app.last_state.get("score_queue_next"),
+        "transport_id":app.last_state.get("transport_id"),
+        "clock_beat":app.last_state.get("clock_beat"),
+        "visual_scroll_beat":app.last_state.get("visual_scroll_beat"),
+        "stream_world_beat":renderer.stream_world_beat,
+        "stream_queue_size":renderer._stream_queue.online.size(),
+        "stream_armed_serial":renderer._stream_armed_serial,
+        "scheduled_plan_ids":renderer._scheduled_score_plan_ids,
+        "runway_origin":renderer.runway_origin_beat}))
     push_error(failures[-1])
     return false
 
