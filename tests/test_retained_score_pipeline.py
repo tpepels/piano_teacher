@@ -276,7 +276,12 @@ def test_transport_and_voice_have_no_parallel_production_owners():
     assert "preview_tail_withdrawal(" in planner
     assert 'planned["protected_take"]' in view
     assert "CountInCueTimeline" in cues or "func observe(" in cues
-    assert "_cues.observe(" in coordinator
+    # Musical/audio tick ownership moved to MetronomeFrameCoordinator;
+    # PracticeCommandCoordinator only reserves/cancels the spoken bar.
+    metronome = (ROOT / "godot/metronome_frame_coordinator.gd").read_text()
+    assert "_cues.observe(" in metronome
+    assert "_cues.observe(" not in coordinator
+    assert "metronome_frame.reserve_count_in(" in coordinator
     assert "count_tick_index" not in coordinator
     assert "recovery_click_tick" not in coordinator
     assert "AudioStreamPlayer.new()" not in visuals
