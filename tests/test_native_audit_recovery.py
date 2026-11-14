@@ -168,7 +168,15 @@ if __name__=='__main__':
             assert process_running(worker) and process_running(renderer)
             restarted=subprocess.run([sys.executable,str(runner)],cwd=root,
                 env=dict(env,RESTART='1'),stdout=log,stderr=subprocess.STDOUT,timeout=12)
-            assert restarted.returncode==0,(tmp_path/'run.log').read_text()
+            # A clean restart *must* reap the prior worker before planning.
+            # Its synthetic MIDI still has no independent written-score
+            # witness, so production returns 1 even when all jobs finish.
+            assert restarted.returncode==1,(tmp_path/'run.log').read_text()
+            restarted_summary=json.loads((out/'summary.json').read_text())
+            assert restarted_summary['state']=='failed'
+            assert restarted_summary['cases_checked']==restarted_summary['cases_expected']==3
+            assert any('midi_written_transcription' in failure
+                       for failure in restarted_summary['failures'])
             assert json.loads((tmp_path/'planning-check.json').read_text())==dict(worker=True,renderer=True)
             with ZipFile(tmp_path/'shard-interrupted.zip') as bundle:
                 assert json.loads(bundle.read('summary.json'))['state']=='running'
@@ -403,8 +411,12 @@ def test_batch_timeout_summary_resumes_without_repeating_completed_cases(tmp_pat
     (directory/'stuck'/'allow-completion').touch()
     second=audit.audit_library(out,'godot',include_fixtures=False,workers=1,
                                case_timeout=1,resume=True)
-    assert second['passed'] and second['state']=='passed'
+    # Both renderer checkpoints completed and the old result was reused,
+    # but raw MIDI remains unverifiable as an authored written score.
+    assert not second['passed'] and second['state']=='failed'
     assert second['cases_resumed']==1 and second['cases_checked']==second['cases_expected']==2
+    assert second['source_semantics_checked']==second['source_semantics_expected']==1
+    assert any('midi_written_transcription' in failure for failure in second['failures'])
     assert (directory/'one'/'executions').read_text()=='x'
     assert (directory/'stuck'/'executions').read_text()=='xx'
 

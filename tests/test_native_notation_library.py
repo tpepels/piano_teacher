@@ -96,9 +96,16 @@ def test_full_audit_exercises_all_original_sources_before_curriculum(tmp_path,mo
     assert set(calls[:first_stage])=={(p.name,True) for p in paths}
     assert not any(original for _,original in calls[first_stage:])
     assert {name for name,original in calls[first_stage:] if not original}=={p.name for p in paths}
-    assert summary['passed'] and summary['sources_checked']==summary['sources_expected']==2
+    # The mocked renderer proves all case scheduling and capture accounting.
+    # It cannot certify the independent *written* score of a raw MIDI file:
+    # MIDI has no authored beams, ties, rests or engraving obligations.
+    # The strict independent semantic denominator therefore fails closed.
+    assert not summary['passed'] and summary['state']=='failed'
+    assert summary['sources_checked']==summary['sources_expected']==2
     assert summary['measures_checked']==summary['measures_expected']==2
     assert summary['cases_checked']==summary['cases_expected']==len(calls)
+    assert summary['source_semantics_checked']==summary['source_semantics_expected']==2
+    assert any('midi_written_transcription' in failure for failure in summary['failures'])
 
 
 def test_source_changes_during_capture_cannot_produce_a_passing_library(tmp_path,monkeypatch):
