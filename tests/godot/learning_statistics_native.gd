@@ -89,7 +89,7 @@ func run() -> void:
     # state via the exact same native request/view path.
     app.settings_view.learner_history_delete_requested.emit()
     phase = "delete learner"
-    assert(await wait_for(func() -> bool: return not app.command_state.pending, "delete learner"))
+    assert(await wait_for(func() -> bool: return not app.command_coordinator.state.pending, "delete learner"))
     assert(await wait_for(func() -> bool: return not app.learning_status_pending, "fresh learner identity"))
     view.scope_picker.select(0)
     phase = "empty report"
