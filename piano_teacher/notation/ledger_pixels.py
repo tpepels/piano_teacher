@@ -152,23 +152,27 @@ def _dim_ledger_wings(dim_pixels, rail, head, step, occluded_columns):
         reason='Independent dim pixels form both source-required ledger wings',
         **facts, **candidates[0])
 
-# This is a *local* source-ink proof. Captures from other measures can
-# coincidentally register unrelated score ink after image translation, and
-# such a spurious mismatch must not veto an independently verified ledger
-# next to its source attack. Near misses still veto good photographs.
-MAX_LEDGER_WITNESS_DISTANCE_BEATS = 1.25
+# A source-local witness can be photographed after the end of a held
+# note: the printed source score keeps scrolling past the fixed playhead.
+# Preserve the entire written duration plus a small capture margin, while
+# rejecting distant OTHER-measure photographs that cannot attest this onset.
+MAX_LEDGER_PRE_ONSET_BEATS = 1.25
+MAX_LEDGER_POST_NOTE_MARGIN_BEATS = .125
 
 
-def _ledger_witness_clocks(beat: float, frames: CapturedFrames) -> list[float]:
-    """Only existing photographs near the source event can prove its ink.
+def _ledger_witness_clocks(beat: float, duration: float, frames: CapturedFrames) -> list[float]:
+    """Choose actual nearby captures without attributing other scores' ink.
 
-    The onset frame is retained even when the fixed playhead obscures the
-    ledger; subsequent captured clocks are examined in proximity order.
-    Unlike unconstrained '12 nearest' sampling, this cannot reach another
-    measure and misattribute its missing ink to the source note.
+    The fixed playhead may obscure a ledger at the written onset and a few
+    frames on either side. For long notes, the first unoccluded photographic
+    witness can be at the *end* of the held note, so do not truncate the
+    search to a fixed small neighborhood around the initial attack.
     """
+    last = beat+max(MAX_LEDGER_PRE_ONSET_BEATS,
+                    duration+MAX_LEDGER_POST_NOTE_MARGIN_BEATS)
+    first = beat-MAX_LEDGER_PRE_ONSET_BEATS
     return [beat, *(clock for clock in frames.nearby_clocks([beat], limit=12)
-                    if abs(clock-beat) <= MAX_LEDGER_WITNESS_DISTANCE_BEATS)]
+                    if first-1e-8 <= clock <= last+1e-8)]
 
 
 def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
@@ -219,7 +223,8 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
         # images from a distant measure create an unrelated veto mismatch.
         # Translated head registration and actual two-wing ink remain
         # mandatory for every accepted witness.
-        targets = _ledger_witness_clocks(beat, frames)
+        targets = _ledger_witness_clocks(beat,
+            max(float(note['duration']) for note, _row in required), frames)
         for target in targets:
             try:
                 source_errors = {}
