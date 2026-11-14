@@ -1371,3 +1371,63 @@ regressions for this local tested commit. It does not constitute full CI,
 24-shard original-symbol acceptance, physical MIDI/GPU/audio verification,
 original Coda/Fukuda research parity, clean-machine release acceptance
 or learner-study evidence. Those phase exit gates remain open.
+
+### 2026-11-14 — full-suite Arch Linux acceptance: 4,895 passing, 144 nonpassing (not certified)
+
+The developer ran the real `scripts/ci-full.sh` on Arch Linux / Godot
+4.7.2 (approximately 31 min 20 s). Final pytest verdict:
+**4,895 passed, 96 failed, 48 errors, 9 skipped, 1 xfailed**.
+Unlike the earlier 744-pass smoke and 532-pass extended results, **the
+full release gate is red and must stay open**.
+
+The complete supplied terminal traceback was classified by test outcome,
+without treating a secondary symptom as an independent production defect:
+- **58** rows ended in `[Errno 122] Disk quota exceeded` or SQLite
+  `disk I/O error`. The job retained results in
+  `/tmp/pytest-of-tom/pytest-399/`. These need adequate disk/quota and a
+  clean rerun before inferring an engraving/cache/SQLite regression.
+  `PreprocessingCache._write` deliberately tolerates failed filesystem
+  writes, which can also produce later cache-miss assertions. No evidence
+  assertion is to be relaxed.
+- **21** rows involve deleted `source-progression`/`coda-midi` desktop
+  preference selection. The sole user-selectable strategy remains
+  `coda-fukuda-midi`; direct MusicXML raster probes now explicitly set
+  the **registered internal** `WARMUP_STRATEGY` only on an isolated
+  fixture library instance. No deprecated preference has been restored.
+- **30** rows are Godot/startup/integration failures with mixed potential
+  causes; **35** other Python/pedagogical/notation failures remain
+  independently actionable. These category counts sum to 144 and are
+  diagnostic classifications, not counts of distinct root causes.
+- A concrete old-owner regression occurs in
+  `tests/godot/learning_statistics_native.gd`,
+  `pending_navigation.gd`, `practice_interactions.gd`,
+  `art_direction.gd` and `library_resume.gd`: old
+  `App.command_state` references or the seven-argument
+  `CommandSuccessEffects.new` fixture. These fixtures have been
+  migrated to the already-authoritative `command_coordinator.state`,
+  signal-based effects and explicit request adapter configuration.
+  The ownership-source test now asserts reservation inside the
+  extracted coordinator rather than Main.
+- Genuine failed assertions additionally concern continuous-queue
+  deadlines, pedagogical remediation and stage transitions, Perform
+  weak-passage routing, source-bar seek, independent fingering pixel
+  placement, source beam/stem audit, long-running native launch and
+  potentially real disk-cache persistence. They remain open, not
+  waived; retired internal remediation members must not be restored
+  merely to make old tests pass.
+
+**Code/test corrections on main, not yet locally rerun:** 2026-11-14
+full-suite fixture commits `90494da`, `c24e6e3`, `a1975f9`,
+`ac5928c`, `45c2e2b`, `1626192`,
+`bd1c667`, `4517d83`, `b4d5f4b`.
+These were reviewed against the current production constructor,
+signals, registered strategy and coordinator API. No matching Godot
+or pytest run has yet been observed after these commits.
+
+**Immediate validation order:** examine `df -h /tmp`,
+`quota -s` where supported, and `du -sh /tmp/pytest-of-tom`;
+preserve relevant failed-run evidence before cleaning obsolete pytest
+temporary runs. Then run the affected targeted migration/strategy
+tests and full suite in a writable environment. Keep original
+24-shard independent notation, physical MIDI, clean-machine release,
+Coda/Fukuda parity and real learner-study exits separately open.
