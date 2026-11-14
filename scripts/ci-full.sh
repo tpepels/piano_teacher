@@ -16,9 +16,10 @@ import os
 from pathlib import Path
 import re
 import shutil
-import tempfile
 
-base = Path(tempfile.gettempdir())
+# Do not call tempfile.gettempdir(): it probes writability by creating a
+# file, which fails before cleanup when the user's temp quota is exhausted.
+base = Path(os.environ.get("TMPDIR") or "/tmp")
 legacy = base / ("pytest-of-" + __import__("getpass").getuser())
 
 def running_pytest():
