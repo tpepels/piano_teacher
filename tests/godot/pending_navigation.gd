@@ -18,11 +18,19 @@ class RecordingRequest extends RefCounted:
         # metadata independently before omitting it from the comparison.
         # These are real production admission fields, not extra commands.
         if str(payload.get("action", "")) in ["start", "resume", "restart"]:
-            if not payload.has("presentation_deadline_ms") or                     not is_finite(float(payload["presentation_deadline_ms"])) or                     float(payload["presentation_deadline_ms"]) <= 0.0:
+            if not payload.has("presentation_deadline_ms"):
+                push_error("PENDING_NAVIGATION_BAD_DEADLINE")
+                return ERR_INVALID_PARAMETER
+            var deadline_ms: float = float(payload["presentation_deadline_ms"])
+            if not is_finite(deadline_ms) or deadline_ms <= 0.0:
                 push_error("PENDING_NAVIGATION_BAD_DEADLINE")
                 return ERR_INVALID_PARAMETER
             for key in ["continuation_clear_beats", "continuation_header_beats"]:
-                if not payload.has(key) or not is_finite(float(payload[key])) or                         float(payload[key]) < 0.0:
+                if not payload.has(key):
+                    push_error("PENDING_NAVIGATION_BAD_GEOMETRY: " + key)
+                    return ERR_INVALID_PARAMETER
+                var beats: float = float(payload[key])
+                if not is_finite(beats) or beats < 0.0:
                     push_error("PENDING_NAVIGATION_BAD_GEOMETRY: " + key)
                     return ERR_INVALID_PARAMETER
         var recorded := payload.duplicate(true)
