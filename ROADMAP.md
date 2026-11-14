@@ -1649,3 +1649,34 @@ this turn. The original continuation, visual readiness, fingering, native
 beam/tuplet/slur, teaching progression, and physical acceptance cases
 remain open until post-fix evidence passes. Distinguish new product fixes
 from CI infrastructure, and do not infer acceptance from source inspection.
+
+
+### 2026-11-14 — fix full CI preflight syntax and green-only shard chaining
+
+The user's first `bash scripts/ci-full.sh --shard 1` did not begin
+pytest: the embedded Python legacy cleanup contained the invalid
+single-quoted f-string `f'Refusing another user's ...'`. This
+raised a preflight `SyntaxError: unterminated string literal`.
+The preflight uses a valid double-quoted string now (commits
+`b558480`, `2cba0ac`).
+
+The requested execution rule is now explicit: `--shard N` runs part N;
+after a pass it automatically attempts N+1 through 4, skipping existing
+clean-revision PASS entries, and **halts at the first failure** without
+starting later parts. No-argument and `--all` starts at part 1 with
+the same green-only rule. A diagnostic with extra pytest arguments on
+`--shard N` stays in part N and cannot count as a full PASS.
+Change: `1d46a54`.
+
+Fast smoke now parses the Bash script with `bash -n`, compiles the
+embedded Python preflight with `ast.parse`, and checks that the
+green-only loop does not swallow failed statuses
+(`tests/test_ci_full_script_parse.py`, commit `97cea67`; smoke
+wiring `938ee02`). The independent fake-repository integration
+test was updated to check stop-on-failure, resuming after a new commit,
+and automatic advancement for `--shard 1`/`--shard 3`
+(`b70ffa0`, `7c41802`). Usage docs updated (`d32229f`).
+
+**Acceptance:** Source committed to `main`. The user's previous run
+exited in preflight before executing pytest; a post-fix local
+smoke/CI run has not yet been reported.
