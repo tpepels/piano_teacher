@@ -1897,3 +1897,72 @@ invalidates Shard 1's old-revision PASS as a **release gate**, so
 rerun `--shard 1` once Shard 2–4 are stable; it should skip
 already-green 2–4 on the same new revision.
 No full acceptance has yet been confirmed with these changes.
+
+
+### 2026-11-14 — shard 2 clean-storage rerun: four remaining acceptance failures
+
+Actual uploaded console log `Geplakte tekst(20261114-201454).txt`:
+smoke **783 passed**; four-part CI started at shard 2 on
+`9cc4326a0d6c`; **1,273 passed, 4 failed, 1 xfailed** in
+1,359.86 seconds. **No disk-quota failures**: the new
+`tmp_path_retention_policy=failed` fixed the prior quota
+cascade in this observed run. Shards 1, 3, and 4 have no
+current-revision release-gate evidence.
+
+Four remaining findings and source-level changes:
+
+- **Chopin-turn actual PNG fingering placement:** The blanket
+  2.35-space/1.9-horizontal guard introduced last round rejected
+  one valid `midi-t1-e219` digit (`placement_issues`) while
+  the original 2.45-space search could fit it. The guard had compared
+  a *union of all five digits' font boxes*, not the particular chosen
+  numeral's painted centroid. Godot's `FingeringAnnotations.metrics`
+  now exposes per-digit glyph bounds as well as the original union
+  collision envelope (`6a6c2f2`). The spatial packer checks each
+  candidate's actual digit centroid with a bounded raster margin
+  (1.25 px at gaps below 11 px, 0.4 px otherwise), while leaving
+  the independent **2.5-space radial / 2.1-space horizontal screenshot
+  requirements unchanged** (`facf32e`). These also address the
+  **compact six-pixel staff** mismatch that survived the previous
+  blanket-radius fix (observed 15.3855 px against 15.30 px).
+  Both Godot screenshot tests must be rerun; neither is accepted yet.
+- **Hanon whole-piece cold load:** actual fresh-process
+  `cold_load_ms = 16243.806`, above the unchanged
+  `15000` limit; memory 206 MiB, state P95 6.462 ms,
+  and engraving time all passed. Previously the startup added
+  serialized whole-piece ONNX inference time and independent
+  Coda/Fukuda curriculum compilation time. `PracticeEngine.load`
+  now runs its existing fingering preparation in one worker while
+  compiling/restoring the unchanged original-note lesson on the
+  main thread, and **does not publish a new score, stop the existing
+  take, or alter score revision until both complete successfully**
+  (`9cc30f5`). A regression proves overlap and adds an ONNX
+  failure to the failed-load atomicity matrix (`7d65fb4`).
+  The Phase 6 benchmark enables `SCORE_LOAD_STAGE` timing
+  diagnostics for independent import/inference/course durations,
+  without changing limits (`878f36a`). A new physical cold-load
+  timing run is necessary to confirm the budget.
+- **Chopin popup/revision continuous visual queue:** A real Godot
+  acceptance case corrected a fingering, loaded the new score
+  revision, then remained in `preview_gap` with 0 visible
+  heads and 0 finger labels until its 90-second timeout. It
+  reported a ready score but did not expose the authoritative
+  `score_queue_next` or native queue state. Do not treat this
+  as a test timing artifact or patch the test to pass. The
+  existing failure now records the backend's next plan,
+  transport/clock facts, renderer's queue count, owner serial,
+  scheduled identities and world position (`5a3fe9a`).
+  The focused native test now enables `SCORE_PLAN_QUEUE`
+  admission diagnostics so a rerun distinguishes an absent
+  backend schedule from a late/refused renderer enqueue
+  (`ef1bb55`). **This production defect remains unresolved
+  pending those actual scheduler facts.** No source or acceptance
+  requirement was weakened.
+
+Run focused tests before the 22-minute shard:
+`tests/test_library_load_atomicity.py`,
+the two failing fingering tests,
+`test_native_fingering.py::test_real_application_popup_posts_correction_and_reloads_revision[chopin-midi]`,
+and the Hanon Phase 6 benchmark. No independent Godot or full
+release run was possible in the model's sandbox. All changes
+are directly committed on `main`; acceptance is not claimed.
