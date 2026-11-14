@@ -83,8 +83,63 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
                 result.append(f"Package missing required asset: {path}")
         if (root / "godot/addons/godot_mcp_toolkit").exists():
             result.append("Package includes a development-only MCP server")
-        if (root / "godot/.godot").exists():
-            result.append("Package includes the Godot editor cache")
+        import_dir = root / "godot/.godot"
+        if import_dir.exists():
+            # A source distribution of a Godot app MUST carry its imported
+            # runtime audio/graphics. Never ship editor layouts, filesystem
+            # caches, editor plugins or test-generated scene data.
+            unexpected = sorted(p.name for p in import_dir.iterdir()
+                                if p.name != "imported")
+            if unexpected:
+                result.append("Package includes the Godot editor cache: " +
+                              ", ".join(unexpected))
+            prebuilt = import_dir / "imported"
+            if not prebuilt.is_dir() or not any(prebuilt.iterdir()):
+                result.append("Package has no compiled Godot imported runtime assets")
+            for word in ("ichi", "ni", "san", "shi"):
+                declared = root / "godot" / "assets" / "countin" / f"{word}.ogg.import"
+                source = root / "godot" / "assets" / "countin" / f"{word}.ogg"
+                if not declared.is_file() or not source.is_file():
+                    result.append(f"Package missing count-in source/import: {word}")
+                    continue
+                import re
+                record = declared.read_text()
+                paths = re.findall(r'^path="res://([^"]+)"
+        if (root / "godot/.mcp.json").exists():
+            result.append("Package includes a development-only MCP configuration")
+        if (root / "midi").exists():
+            result.append("Package includes developer MIDI repertoire")
+        for path in DEV_ONLY_GODOT_PATHS:
+            if (root / path).exists():
+                result.append(f"Package includes developer-only Godot fixture: {path}")
+            if path.endswith(".gd") and (root / (path+".uid")).exists():
+                result.append(f"Package includes developer-only Godot UID: {path}.uid")
+        project = root / "godot/project.godot"
+        if project.is_file() and ("MCPRuntimeServer" in project.read_text()
+                                  or "godot_mcp_toolkit" in project.read_text()):
+            result.append("Package still starts a development-only runtime")
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--package", action="store_true")
+    args = parser.parse_args()
+    errors = audit_tree(args.root, package=args.package)
+    if errors:
+        print("\n".join(errors))
+        return 1
+    print("PHASE5_ARCHITECTURE_AUDIT_OK")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+, record, flags=re.M)
+                if len(paths) != 1 or not (root / "godot" / paths[0]).is_file():
+                    result.append(f"Package missing compiled count-in audio: {word}")
+
         if (root / "godot/.mcp.json").exists():
             result.append("Package includes a development-only MCP configuration")
         if (root / "midi").exists():

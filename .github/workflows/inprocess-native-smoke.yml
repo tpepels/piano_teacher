@@ -194,7 +194,7 @@ jobs:
             ca-certificates libasound2t64 libgl1 libx11-6 libxcursor1 \
             libxinerama1 libxi6 libxrandr2 libfontconfig1 libfreetype6 \
             libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
-            libffi8 libstdc++6 libgcc-s1
+            libffi8 libsqlite3-0 libstdc++6 libgcc-s1
       - uses: actions/download-artifact@v4
         with:
           name: standalone-native-linux-py314-${{ github.event.workflow_run.head_sha || github.sha }}
@@ -213,6 +213,10 @@ jobs:
           test -x ./bin/godot
           test -x ./bin/node
           test -s ./godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+          for word in ichi ni san shi; do
+            test -s "./godot/assets/countin/$word.ogg.import"
+            grep -F "res://.godot/imported/" "./godot/assets/countin/$word.ogg.import"
+          done
           LD_LIBRARY_PATH="$PWD/runtime/python/lib" \
             ldd ./godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so \
             > /tmp/standalone-native-ldd.txt
@@ -229,7 +233,7 @@ jobs:
             PYTHONHOME="$PWD/runtime/python" \
             PYTHONPATH="$PWD:$PWD/runtime/python/lib/python3.14/site-packages" \
             ./runtime/python/bin/python3 -c \
-            'import piano_teacher, mido, rtmidi, verovio, music21, cairosvg, PIL; print("BUNDLED_IMPORTS_OK")'
+            'import piano_teacher, mido, rtmidi, sqlite3, verovio, music21, cairosvg, PIL; sqlite3.connect(":memory:").close(); print("BUNDLED_IMPORTS_OK")'
           # Diagnostic evidence must survive a failed executable invocation;
           # shell -e previously exited before printing the useful Godot log.
           ldd ./bin/godot > /tmp/standalone-godot-ldd.txt

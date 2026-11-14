@@ -73,3 +73,27 @@ def test_release_audit_rejects_developer_midi_and_mcp_configuration(tmp_path):
     errors = auditor.audit_tree(tmp_path, package=True)
     assert any("developer MIDI repertoire" in issue for issue in errors)
     assert any("development-only MCP configuration" in issue for issue in errors)
+
+
+def test_release_audit_accepts_only_compiled_runtime_imports(tmp_path):
+    pkg = tmp_path / "piano_teacher"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    import_dir = tmp_path / "godot" / ".godot"
+    (import_dir / "imported").mkdir(parents=True)
+    (import_dir / "imported" / "voice.oggvorbisstr").write_bytes(b"real binary")
+    score = tmp_path / "godot" / "assets" / "countin"
+    score.mkdir(parents=True)
+    for word in ("ichi", "ni", "san", "shi"):
+        (score / f"{word}.ogg").write_bytes(b"recording")
+        (score / f"{word}.ogg.import").write_text(
+            'path="res://.godot/imported/voice.oggvorbisstr"\n')
+    errors = auditor.audit_tree(tmp_path, package=True)
+    assert not any("editor cache" in error or "count-in" in error for error in errors)
+    (import_dir / "editor").mkdir()
+    errors = auditor.audit_tree(tmp_path, package=True)
+    assert any("editor cache" in error for error in errors)
+    (import_dir / "editor").rmdir()
+    (import_dir / "imported" / "voice.oggvorbisstr").unlink()
+    errors = auditor.audit_tree(tmp_path, package=True)
+    assert any("compiled count-in audio" in error for error in errors)

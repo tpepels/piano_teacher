@@ -80,6 +80,29 @@ for fixture in native_bridge_smoke production_ui_smoke production_session_journe
   rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
 done
 python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
+# The released folder cannot rely on the editor's first-launch importer.
+# Compile real Ogg/assets into the staged project with the bundled Godot
+# editor in CI, then preserve ONLY its required imported runtime bytes.
+# The editor cache itself, development scripts and test sources stay out.
+env PYTHONHOME="$STAGE/runtime/python" \
+  PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \
+  LD_LIBRARY_PATH="$STAGE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  timeout 90s "$STAGE/bin/godot" --headless --editor --import --path "$STAGE/godot"
+test -d "$STAGE/godot/.godot/imported"
+for name in ichi ni san shi; do
+  test -s "$STAGE/godot/assets/countin/$name.ogg"
+  test -s "$STAGE/godot/assets/countin/$name.ogg.import"
+  imported_path="$(sed -n 's/^path="res:\/\/\(.\+\)"$/\1/p' "$STAGE/godot/assets/countin/$name.ogg.import" | head -n 1)"
+  test -n "$imported_path"
+  test -s "$STAGE/godot/$imported_path" || {
+    echo "Missing prepared native count-in audio: $name ($imported_path)" >&2
+    exit 1
+  }
+done
+find "$STAGE/godot/.godot" -mindepth 1 -maxdepth 1 \
+  ! -name imported -exec rm -rf {} +
+# The architecture gate permits only those independently built import bytes.
+python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
 # Validate imports through the assembled prefix, not the builder environment.
 env PYTHONHOME="$STAGE/runtime/python" \
   PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \
