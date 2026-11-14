@@ -10,6 +10,8 @@ htmlcov/
 
 # Personal sessions, diagnostics and generated distributables.
 playtest-results/
+# Optional developer tee logs from manual four-part/full-suite runs.
+/ci-full*.log
 notation-check-results/
 dist/
 build/
