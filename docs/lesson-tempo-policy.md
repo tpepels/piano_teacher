@@ -55,6 +55,16 @@ For a song at 160 BPM and 12 automatic steps the ladder is 40, 50, 60,
 70, 80, 90, 100, 110, 120, 130, 140, 150, 160 BPM. Intermediate values
 are rounded to whole BPM and duplicates are removed for slower songs.
 
+When a mastered **simplified** stage unlocks a harder variant (for example
+skeleton → outline → original), the new variant gets its own starting tempo
+and clean-run count. Finishing a skeleton at 80 BPM does not establish that
+the extra outline notes are playable at 80 BPM. Previously proven speed may
+carry between consecutive variants only when they contain **identical original
+notes, attacks, releases, and ordering**; separate tempo policies convert
+through their audible BPM. The unchanged original-piece fingering predictions
+do not affect this tempo decision. Identical repetitions at other measure
+locations are handled separately by the exact-repetition policy below.
+
 When a full focused take is accepted, the backend advances to the next BPM rung
 after feedback, without changing any note onset. Tempo never changes in the
 middle of a take. The learner may use **− BPM** or **+ BPM** on the practice
