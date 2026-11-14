@@ -6,6 +6,7 @@ Communication with Godot uses an in-memory native command queue.
 from __future__ import annotations
 from dataclasses import asdict, replace
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import hashlib
 import json
@@ -799,47 +800,60 @@ class PracticeEngine:
                 print("SCORE_LOAD_STAGE: import", round((now-checkpoint)*1000, 1),
                       "ms", source.name, flush=True)
                 checkpoint = now
-            piece = replace(piece, fingering_plan=self.fingering.prepare(piece, fingerprint))
-            if diagnostics:
-                now = time.perf_counter()
-                print("SCORE_LOAD_STAGE: fingering", round((now-checkpoint)*1000, 1),
-                      "ms", "status", piece.fingering_plan.status, flush=True)
-                checkpoint = now
-            with self.lock:
-                # Construct and restore a complete candidate before changing
-                # the current session. A generator failure must leave the
-                # selected score, active MIDI take and source revision intact.
-                candidate = LearningPlan(piece, warmup=warmup,
-                    exercise_strategy=self.library.settings['exercise_strategy'],
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
-                    feedback=self.fukuda_mistakes.evidence(fingerprint))
-                self.progress.restore(candidate, fingerprint)
-                self._stop(reason="source_changed")
-                self._reset_trouble()
-                self.course_guided = False
-                self.source = str(source)
-                self.is_builtin_warmup = warmup
-                self.open_from_beat = 0.0
-                self.fingerprint = fingerprint
-                self._piece_generation += 1
-                self.score_artifacts.invalidate()
-                self.plan = candidate
-                if diagnostics:
-                    now = time.perf_counter()
-                    print("SCORE_LOAD_STAGE: curriculum", round((now-checkpoint)*1000, 1),
-                          "ms", self.plan.lesson_generator.name, flush=True)
-                    checkpoint = now
-                self.mode = "practice"
-                self.teaching = None
-                self.guided_range = None
-                self.score = score
-                self.feedback = "Press Start to practice"
-                self.next_action = "Press Start to practice."
-                self.score_revision += 1
-                self.pending_result = None
-                self._pending_assessed_bpm = None
-                self.feedback_marks = []
-                self.feedback_unmapped = 0
+            # Original MIDI fingering inference runs in a separate ONNX/Node
+            # process. Independent Coda/Fukuda course compilation consumes
+            # only notes, source IDs and meter, never predicted fingers.
+            # Compile them simultaneously instead of adding their startup
+            # costs. Keep the engine state lock and publish only AFTER both
+            # candidates succeeded; failed loads leave the old take intact.
+            def prepare_fingering():
+                started = time.perf_counter()
+                plan = self.fingering.prepare(piece, fingerprint)
+                return plan, (time.perf_counter()-started)*1000.0
+
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="piano-fingering") as worker:
+                predicted = worker.submit(prepare_fingering)
+                with self.lock:
+                    started_course = time.perf_counter()
+                    candidate = LearningPlan(piece, warmup=warmup,
+                        exercise_strategy=self.library.settings['exercise_strategy'],
+                        fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
+                        feedback=self.fukuda_mistakes.evidence(fingerprint))
+                    self.progress.restore(candidate, fingerprint)
+                    course_ms = (time.perf_counter()-started_course)*1000.0
+                    fingering_plan, infer_ms = predicted.result()
+                    # The compiled course's source notes are unchanged:
+                    # publish the complete original-piece fingering only
+                    # after both source-backed artifacts are ready.
+                    candidate.piece = replace(piece, fingering_plan=fingering_plan)
+                    if diagnostics:
+                        print("SCORE_LOAD_STAGE: fingering", round(infer_ms,1),
+                              "ms status", fingering_plan.status,flush=True)
+                        print("SCORE_LOAD_STAGE: curriculum", round(course_ms,1),
+                              "ms", candidate.lesson_generator.name,flush=True)
+                        print("SCORE_LOAD_STAGE: parallel_prepare",round((time.perf_counter()-checkpoint)*1000,1),
+                              "ms wall",source.name,flush=True)
+                    self._stop(reason="source_changed")
+                    self._reset_trouble()
+                    self.course_guided = False
+                    self.source = str(source)
+                    self.is_builtin_warmup = warmup
+                    self.open_from_beat = 0.0
+                    self.fingerprint = fingerprint
+                    self._piece_generation += 1
+                    self.score_artifacts.invalidate()
+                    self.plan = candidate
+                    self.mode = "practice"
+                    self.teaching = None
+                    self.guided_range = None
+                    self.score = score
+                    self.feedback = "Press Start to practice"
+                    self.next_action = "Press Start to practice."
+                    self.score_revision += 1
+                    self.pending_result = None
+                    self._pending_assessed_bpm = None
+                    self.feedback_marks = []
+                    self.feedback_unmapped = 0
             if diagnostics:
                 print("SCORE_LOAD_STAGE: ready", round((time.perf_counter()-began)*1000, 1),
                       "ms total", source.name, flush=True)
