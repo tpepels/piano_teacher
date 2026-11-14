@@ -1603,3 +1603,49 @@ full actual `piano_teacher` Godot/Verovio suite has **not been rerun**
 against the new scripts; the outstanding product defects and 24-shard
 original-symbol acceptance remain open. Usage details are in
 `docs/testing-four-part-full-ci.md`.
+
+### 2026-11-14 — full log received after four-shard runner, production corrections
+
+The uploaded release log `Geplakte tekst(20261114-154007).txt`
+contains **4,972 passed, 64 failed, 23 errors, 9 skipped, 1 xfailed** over
+**1,704.14 seconds**. Its first line is the old runner's
+`CI_FULL_TEMP_CLEANUP: removed 4 old pytest runs`, followed by one
+single 0–100% test sequence: this run did **not** exercise the new four-part
+release runner. The full run again exhausted the user's quota in
+`/tmp/piano-teacher-ci-full.*`. Consequently the late Verovio, warm-up,
+SQLite and diagnostic packaging failures are contaminated by
+`[Errno 122]` and must be rerun with the per-shard temp cleanup.
+The underlying storage cap/free-space requirements still need independent
+measurement; fresh private temp directories alone do not enlarge the
+user's quota.
+
+The log also revealed two independent production behavior defects:
+
+- **Explicit skip into final whole-piece Perform was entering Learn.**
+  `teaching_manual.choose_manual()` hardcoded `mode="learn"` after
+  every `skip_stage`, including the `perform` exercise. The selection now
+  enters Perform with a whole-piece opening and no guided fragment
+  (`5f7e438`). The pre-existing
+  `test_learner_progression.py::test_explicit_skips_arrive_at_uninterrupted_original_whole_piece_perform`
+  remains the behavioral acceptance.
+- **Pause/Resume discarded immutable future-score identity.**
+  `TeachingContinuation.announce()` re-called
+  `VisualTransport.announce_continuation()` even for the same pending
+  decision/source, incrementing `announce_serial` and changing Godot's
+  `plan_id` from suffix `:a1` to `:a2`. Re-timing now reuses the
+  original serial if (and only if) `announced_deadline()` confirms the
+  old future copy is still valid. A genuinely withdrawn or invalidated
+  future copy gets a new serial. If a future announcement was withdrawn
+  entirely before settlement, `validate_announcement` now permits
+  the assessment to settle and lets `_continuation_deadline` admit
+  a fresh copy with the full reading lead instead of failing the session.
+  Changes: `0bd9af4`, `b2d2083`; five regression cases in
+  `tests/test_teaching_continuation_identity.py` (`026c358`,
+  `f54b8e1`) and included in smoke (`557c0c8`).
+
+**Verification:** These production changes are source-level commits to
+`main`; they were not run in the developer's Godot environment during
+this turn. The original continuation, visual readiness, fingering, native
+beam/tuplet/slur, teaching progression, and physical acceptance cases
+remain open until post-fix evidence passes. Distinguish new product fixes
+from CI infrastructure, and do not infer acceptance from source inspection.
