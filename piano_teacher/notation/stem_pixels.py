@@ -153,6 +153,43 @@ def _stem(pixels, group, heads, marks):
     return result
 
 
+def _source_voice_directions(groups, marks):
+    """Resolve close polyphonic chord shafts from written voice/pitch order.
+
+    A chord can physically touch another voice's shaft. For exactly two
+    simultaneous voices containing a chord, the source's independent voice
+    layout resolves the natural direction: higher voice up, lower down,
+    source-voice order on overlapping pitch ranges. Explicit source stems
+    remain authoritative and are handled by _stem itself. Two isolated
+    voices without a chord deliberately retain strict matching, including
+    the shared-shaft and same-direction synthetic rejection tests.
+    """
+    if len(groups) != 2 or not any(len(group) > 1 for group in groups):
+        return {}
+    a, b = groups[0][0], groups[1][0]
+    if (a['part_index'], a['index'], a['staff'], a['beat']) != (
+            b['part_index'], b['index'], b['staff'], b['beat']):
+        return {}
+    if a['voice'] == b['voice']:
+        return {}
+    if any(marks[n['source']['id']]['stem'] in ('up', 'down')
+           for group in groups for n in group):
+        return {}
+    def heights(group):
+        return [n['spelling'][2]*7+'CDEFGAB'.index(n['spelling'][0]) for n in group]
+    first, second = heights(groups[0]), heights(groups[1])
+    if min(first) > max(second):
+        upper = 0
+    elif min(second) > max(first):
+        upper = 1
+    else:
+        def voice_key(value):
+            return tuple(int(x) if x.isdigit() else x.lower()
+                         for x in re.split(r'(\\d+)', value))
+        upper = min(range(2), key=lambda i: voice_key(groups[i][0]['voice']))
+    return {upper: 'up', 1-upper: 'down'}
+
+
 def measure_stem_ownership(pixels, groups, heads, marks):
     """Assign physical shafts once, allowing only declared chords to share.
 
@@ -202,12 +239,21 @@ def measure_stem_ownership(pixels, groups, heads, marks):
                 break
             component.update(neighbors)
         remaining.difference_update(component)
-        def matching(forbidden=None):
+        preferred = _source_voice_directions(groups, marks)
+
+        def allowed(i, node, expectation):
+            if not expectation or i not in expectation:
+                return True
+            return any(owner == i and value['evidence']['direction'] == expectation[i]
+                       for owner, value in physical[node]['options'])
+
+        def matching(forbidden=None, expectation=None):
             owners = {}
 
             def attach(i, seen):
                 for node in sorted(eligible[i]):
-                    if node in seen or forbidden == (i, node):
+                    if (node in seen or forbidden == (i, node)
+                            or not allowed(i, node, expectation)):
                         continue
                     seen.add(node)
                     if node not in owners or attach(owners[node], seen):
@@ -221,21 +267,52 @@ def measure_stem_ownership(pixels, groups, heads, marks):
 
         assignment = matching()
         # Another complete assignment must omit at least one chosen edge.
-        # Rechecking those edges avoids enumerating factorial permutations
-        # when a dense full-performance onset has insufficient shafts.
         unique = assignment is not None and not any(
             matching((i, node)) is not None for i, node in assignment.items())
+        expectation = None
+        if not unique and preferred:
+            # An actual source chord in another voice can touch both shafts.
+            # Resolve only if the source's independently known directions
+            # make the physical one-to-one assignment uniquely provable.
+            candidate = matching(expectation=preferred)
+            if candidate is not None and not any(
+                    matching((i, node), preferred) is not None
+                    for i, node in candidate.items()):
+                assignment, unique, expectation = candidate, True, preferred
+
+        def physical_proof(i, node, expectation=None):
+            choices = [value for owner, value in physical[node]['options']
+                       if owner == i and (not expectation or i not in expectation
+                                          or value['evidence']['direction'] == expectation[i])]
+            if len(choices) != 1:
+                return None
+            proof = deepcopy(choices[0])
+            runs = physical[node]['runs']
+            proof['evidence']['physical_shaft_id'] = 'shaft:'+':'.join(map(str, (
+                min(r[0] for r in runs), min(r[1] for r in runs),
+                max(r[0] for r in runs)+1, max(r[2] for r in runs))))
+            return proof
+
         for i in component:
             if unique:
-                node_index = assignment[i]
-                choices = [value for owner, value in physical[node_index]['options'] if owner == i]
-                if len(choices) == 1:
-                    measured[i] = deepcopy(choices[0])
-                    runs = physical[node_index]['runs']
-                    measured[i]['evidence']['physical_shaft_id'] = 'shaft:'+':'.join(map(str, (
-                        min(r[0] for r in runs), min(r[1] for r in runs),
-                        max(r[0] for r in runs)+1, max(r[2] for r in runs))))
+                proof = physical_proof(i, assignment[i], expectation)
+                if proof is not None:
+                    measured[i] = proof
                     continue
+            elif preferred and i in preferred:
+                # After erasing one chord's own shaft, the other complete
+                # voice remains independently verifiable. An absent stem
+                # cannot borrow the surviving shaft in the wrong direction.
+                surviving = [node for node in eligible[i]
+                             if allowed(i, node, preferred)]
+                if len(surviving) == 1 and all(
+                        not allowed(other, surviving[0], preferred)
+                        or surviving[0] not in eligible[other]
+                        for other in component if other != i):
+                    proof = physical_proof(i, surviving[0], preferred)
+                    if proof is not None:
+                        measured[i] = proof
+                        continue
             evidence = dict(measured[i]['evidence'],
                 competing_group_ids=[groups[j][0]['source']['id'] for j in sorted(component)],
                 physical_shaft_count=len(nodes))
