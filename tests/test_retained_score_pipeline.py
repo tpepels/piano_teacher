@@ -262,7 +262,11 @@ def test_transport_and_voice_have_no_parallel_production_owners():
     coordinator = (ROOT / "godot/metronome_frame_coordinator.gd").read_text()
     visuals = (ROOT / "godot/game_countin.gd").read_text()
     voice = (ROOT / "godot/countin_voice_player.gd").read_text()
-    assert "renderer.reserve_transport_action(" in main
+    # Phase 5 moved transport reservations into the single command owner.
+    coordinator = (ROOT / "godot/practice_command_coordinator.gd").read_text()
+    assert "renderer.reserve_transport_action(" in coordinator
+    assert "renderer.reserve_transport_action(" not in main
+    assert "command_coordinator.request_action(" in main
     assert "renderer.arm_stream_take(" not in main
     assert "renderer.trim_resume_speculation(" not in main
     assert "renderer.trim_future_queue(" not in main
