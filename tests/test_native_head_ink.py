@@ -64,8 +64,9 @@ def captures(tmp_path_factory):
         pytest.skip("Real native framebuffer checks require Godot 4 and DISPLAY")
     folder = tmp_path_factory.mktemp("native-head-ink")
     engine = PracticeEngine(folder / "cache", enable_midi=False)
-    # The default Coda/Fukuda course is MIDI-only; these are MusicXML sources.
-    engine.library.update(exercise_strategy="source-progression")
+    # Direct MusicXML sources exercise the importer and the native pixel
+    # renderer. The retired source-progression preference is not selectable;
+    # the active combined course is the only production generator.
     payloads, sources = [], {}
     try:
         for name, kind, down, voices in (
