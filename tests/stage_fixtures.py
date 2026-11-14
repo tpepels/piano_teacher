@@ -102,6 +102,16 @@ class StagedTestGenerator:
     long_first: bool = True
     name: str = "staged-test"
 
+    def decide_teaching(self, event, state):
+        """Use the production decision contract for test-only tempo shapes.
+
+        The embedded engine now invokes generator.decide_teaching for every
+        command. A staged test generator must honor that contract rather than
+        bypass it, or shaped-tempo transport tests fail before reaching music.
+        """
+        from piano_teacher.teaching_decisions import decide_standard_teaching
+        return decide_standard_teaching(event, state, generator=self)
+
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         boundaries = piece.bar_boundaries
         start = boundaries[0] if boundaries else piece.phrases[0].start
