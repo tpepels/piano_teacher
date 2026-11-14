@@ -21,7 +21,8 @@ def native_camera_run(tmp_path_factory):
     folder = tmp_path_factory.mktemp("native-camera")
     engine = PracticeEngine(folder / "cache", enable_midi=False)
     try:
-        engine.library.update(exercise_strategy="source-progression")
+        # Phase 5: the combined Coda/Fukuda course is the sole selectable
+        # generator; the independent native-raster assertions remain strict.
         engine.load(str(ROOT / "tests/fixtures/native_pixel_pitch_probe.musicxml"))
         payload = {"layout": engine.geometry(),
                    "model": engine.semantic_score()}
