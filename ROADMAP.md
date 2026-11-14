@@ -1469,3 +1469,54 @@ The reported 4,895-pass/96-fail/48-error full run remains the most
 recent full-suite evidence. Do not promote this repair set to
 accepted status without reruns; the other pedagogical, original
 notation, resource, native-start and 24-shard gates remain open.
+
+### 2026-11-14 — focused full-suite rerun: native camera, queued library and Perform Seek
+
+The developer supplied a **post-`2b09537` focused rerun** of ten
+previously failing/full-only test modules under Godot 4.7.2 on Arch Linux:
+**91 passed, 15 failed, 6 fixture errors in 77.88 seconds**. This is a
+targeted rerun, *not* a new `ci-full.sh` result.
+
+- **6 camera setup errors:** `tests/godot/native_camera.gd:95` still read
+  the deleted `App.command_state` after a genuine source model loaded.
+  The same fixture replaced Main's request adapter without replacing the
+  extracted coordinator's request port. Commit `b8356c3` uses
+  `command_coordinator.state` and synchronizes the offline adapter with
+  `command_coordinator.action_request`, preserving real reservation and
+  acknowledgement semantics.
+- **4 saved-library failures:** `library_resume.gd` configured the
+  coordinator but omitted Main's `library_requested` signal binding.
+  Therefore a queued **Continue** selection never opened after an accepted
+  Pause. Commit `17a65fa` restores its actual deferred open. The shared
+  native fixture had the same omission; `765b6b6` fixes the 11-case
+  pending-navigation harness.
+- **9 pending-navigation failures:** the fixture compared command bodies
+  against only `action`, but today's valid transport requests also carry
+  `presentation_deadline_ms`, `continuation_clear_beats`, and
+  `continuation_header_beats`. The updated recording adapter explicitly
+  validates these fields (finite positive deadline and nonnegative finite
+  geometry), then compares the original ordered user commands. Commits
+  `f84413c` and `2a05969` keep the tests strict and parser-safe.
+  The shared fixture's queued-open signal fixes the separate selection case.
+- **2 Perform→Seek grading failures:** `teaching_manual.choose_manual`
+  retained `mode="perform"` in the *prepared exposure* for a paused source-bar
+  Seek. The immediate `_seek()` display was Practice, but
+  `score_ready` consumed the retained exposure and switched the actual
+  graded take back to Perform, producing `performance_complete` for an
+  incomplete section. Commit `cf7f79a` makes a non-Learn source-bar Seek
+  select Practice at the authoritative decision layer.
+  `tests/test_paused_seek.py` now requires Practice still be active *after*
+  the score acknowledgement (`e6f3a9a`). A small pure decision test
+  guards both Perform and Practice entrances (`aea447c`).
+- **Early failure detection:** `tests/test_full_suite_fixture_owner_contract.py`
+  now covers the native camera adapter and queued library signal wiring,
+  while `scripts/ci-smoke.sh` includes the cheap Seek-mode decision test
+  (commits `64819f6` and `7bcc798`).
+
+**Acceptance:** these repairs have been committed to `main` but **no matching
+post-fix local Godot run is yet reported**. Keep all 21 observed failed/error
+cases open until the ten-module targeted suite passes, and keep full CI
+and independent 24-shard original-source audit unaccepted until each is run
+to completion. No legacy owner or compatibility code was restored, no
+assertion was deleted, and original notation, physical MIDI, release and
+pedagogical proof gates remain unchanged.
