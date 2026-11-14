@@ -1569,3 +1569,37 @@ tests include independent continuation-deadline behavior,
 Coda/Fukuda teaching progress, native fingering, visual/pixel/Verovio
 proofs, workflow trust and a clean `ci-full.sh` result. Original
 24-shard verification and physical acceptance also remain open.
+
+
+### 2026-11-14 — full Python release CI split into four independent modules sets
+
+`scripts/ci-full.sh` now supports `--shard 1`, `--shard 2`,
+`--shard 3`, `--shard 4`; `--all` (the no-argument default);
+`--plan`, `--status` and `--all --force`. The source-plan allocator
+`scripts/ci_full_shards.py` deterministically assigns every standard
+pytest Python test module to one of four weighted parts, without splitting
+a module's parametrizations or module-scoped fixtures. Crucially, selection
+occurs **before pytest imports/collects unassigned modules**, so an invalid
+test module is confined to its assigned part. The marker expression still
+includes all slow tests and the original strict quarantine hooks remain.
+
+Each part writes its own log and PASS/FAIL status to
+`playtest-results/ci-full/<revision>/shard-N.{log,status}`. The default
+four-part runner continues after a red part and skips a previously green
+part on the *same clean Git revision*. Any new commit requires renewed
+four-part release evidence; working-tree changes are diagnostic-only and
+never create release-pass records. The runner preserves the existing
+ownership-aware legacy pytest cleanup and uses a fresh private temp
+directory per part, removed at the end. It cleans old temp **before**
+attempting to create report files, to handle exhausted user quotas.
+
+Validation performed on a separate local miniature Git project:
+five pure partition/selection tests plus one end-to-end launcher test
+passed (6 tests total). The end-to-end test verifies that a **syntax
+error** in one test file fails only one part, that the other three pass
+and can be skipped on the same revision, that fixing it on a new commit
+invalidates old statuses, and that a fresh four-part gate can pass. The
+full actual `piano_teacher` Godot/Verovio suite has **not been rerun**
+against the new scripts; the outstanding product defects and 24-shard
+original-symbol acceptance remain open. Usage details are in
+`docs/testing-four-part-full-ci.md`.
