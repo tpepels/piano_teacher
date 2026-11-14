@@ -75,19 +75,42 @@ class TeachingContinuation:
         exposure = pending.decision.next_exposure
         if exposure is None:
             raise ValueError("Cannot announce a stopped teaching decision")
-        if self.schedule is not None and self.schedule.decision_id == pending.decision.decision_id:
-            if self.schedule.exposure != exposure:
-                raise ValueError("Announced teaching exposure changed")
-            if self.schedule.run_at != deadline:
-                self.generation += 1
-        self.schedule = TeachingSchedule(pending.decision.decision_id,exposure,deadline,self.generation)
-        self.transport.announce_continuation(exposure.from_beat,deadline,exposure.bpm)
+        repeat = self.schedule is not None and self.schedule.decision_id == pending.decision.decision_id
+        if repeat and self.schedule.exposure != exposure:
+            raise ValueError("Announced teaching exposure changed")
+        current = self.transport.announced_continuation
+        reusable = (repeat and current is not None and
+                    abs(current[0] - exposure.from_beat) <= 1e-7 and
+                    abs(current[2] - exposure.bpm) <= 1e-7)
+        if reusable:
+            # Pause/Resume re-times an already-admitted immutable future take.
+            # Publishing it again used to increment announce_serial and send
+            # Godot a different plan_id for notes it already had on screen.
+            self.transport.retime_announcement(deadline)
+        else:
+            # The old future copy was withdrawn or the decision changed.
+            # Only a genuinely new admission may receive a new identity.
+            self.transport.announce_continuation(
+                exposure.from_beat, deadline, exposure.bpm)
+        if repeat and self.schedule.run_at != deadline:
+            self.generation += 1
+        self.schedule = TeachingSchedule(
+            pending.decision.decision_id, exposure, deadline, self.generation)
 
     def validate_announcement(self, pending):
         if self.schedule is None or self.schedule.decision_id != pending.decision.decision_id:
             return
         expected = (self.schedule.exposure.from_beat,self.schedule.run_at,self.schedule.exposure.bpm)
-        if self.schedule.exposure != pending.decision.next_exposure or self.transport.announced_continuation != expected:
+        if self.schedule.exposure != pending.decision.next_exposure:
+            raise ValueError("Announced teaching exposure changed before settlement")
+        actual = self.transport.announced_continuation
+        if actual is None:
+            # The renderer may withdraw a future suffix before settlement.
+            # Finish the graded result, then grant a fresh full reading lead
+            # through _continuation_deadline rather than faulting the lesson.
+            self.schedule = None
+            return
+        if actual != expected:
             raise ValueError("Announced teaching schedule no longer matches the selected exposure")
 
     def advance(self, pending, *, now, readiness):
