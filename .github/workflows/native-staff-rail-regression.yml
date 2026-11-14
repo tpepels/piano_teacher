@@ -32,6 +32,20 @@ on:
       - 'tests/test_procedural_rest_ownership.py'
       - 'piano_teacher/notation/procedural_rest_ownership.py'
       - 'tests/test_post_group_connector_photos.py'
+      - 'scripts/audits/batch_run.py'
+      - 'tests/test_native_notation_library.py'
+      - 'tests/test_native_audit_recovery.py'
+      - 'tests/test_connector_pixels.py'
+      - 'tests/godot/library_application.gd'
+      - 'tests/godot/native_production_fixture.gd'
+      - 'tests/godot/native_fingering_application.gd'
+      - 'tests/test_library_screen.py'
+      - 'tests/test_home_screen.py'
+      - 'tests/test_settings_ownership.py'
+      - 'tests/test_lesson_ownership.py'
+      - 'tests/test_native_retirement.py'
+      - 'tests/test_polyphonic_stem_pixels.py'
+      - 'tests/test_moonlight_tuplet_pixels.py'
 
 permissions:
   contents: read
@@ -109,5 +123,59 @@ jobs:
           path: |
             ${{ runner.temp }}/rail-proof/
             ${{ runner.temp }}/full-symbol-proof/
+          if-no-files-found: warn
+          retention-days: 14
+
+  local-triage:
+    name: Reproduce complete 2026-11-13 local failure families
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install native framebuffer runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]'
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o /tmp/godot.zip
+          mkdir -p /tmp/godot-bin
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 755 /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Reproduce the originally reported failures without hiding native ink
+        run: |
+          mkdir -p "$RUNNER_TEMP/local-triage"
+          set -o pipefail
+          timeout 1150s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -m pytest -q -rx --tb=short \
+              --basetemp="$RUNNER_TEMP/local-triage/captures" \
+              --junitxml="$RUNNER_TEMP/local-triage/junit.xml" \
+              tests/test_native_notation_library.py \
+              tests/test_native_audit_recovery.py \
+              tests/test_connector_pixels.py::test_no_usable_reference_frame_cannot_be_certified \
+              tests/test_library_screen.py \
+              tests/test_settings_ownership.py \
+              tests/test_home_screen.py \
+              tests/test_lesson_ownership.py \
+              tests/test_native_retirement.py::test_scroll_velocity_audit_measures_actual_native_source_heads \
+              tests/test_polyphonic_stem_pixels.py::test_native_independent_half_voices_keep_separate_shafts_and_erasure_is_local \
+              tests/test_phase3_ledger_pixels.py::test_dense_capture_clocks_do_not_hide_a_clear_neighboring_ledger_witness \
+              tests/test_moonlight_tuplet_pixels.py::test_corrupted_fresh_godot_bracket_cannot_use_occluded_frames \
+              2>&1 | tee "$RUNNER_TEMP/local-triage/pytest.txt"
+      - name: Save genuine framebuffers and failure details
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-20261113-triage-${{ github.sha }}
+          path: ${{ runner.temp }}/local-triage/
           if-no-files-found: warn
           retention-days: 14
