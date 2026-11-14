@@ -258,7 +258,14 @@ def test_inprocess_fingering_reads_and_corrects_source_assignments(engine, music
     status, initial = api("fingering.status")
     assert status == OK
     assert set(initial["assignments"]) == {n.source_id for n in engine.plan.piece.notes}
-    source_id, original = next(iter(_fingers(engine.semantic_score()).items()))
+    # An arbitrary finger 5 on the first *lowest* tone of the opening
+    # right-hand chord is physically impossible: LumiKey correctly leaves
+    # the remaining overlapping tones unassigned. Exercise the editable
+    # source contract with an isolated right-hand attack instead.
+    engine.control("select_step", number=len(engine.plan.lesson_steps))
+    source_id = next(n.source_id for n in engine.plan.piece.notes
+                     if n.hand == "right" and n.start >= 1.0)
+    original = _fingers(engine.semantic_score())[source_id]
     status, corrected = api("fingering.correct", {"source_id": source_id, "finger": 5})
     assert status == OK and corrected["revision"] == engine.score_revision
     assert _fingers(engine.semantic_score())[source_id]["finger"] == 5
