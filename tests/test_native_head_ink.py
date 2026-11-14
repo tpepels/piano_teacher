@@ -64,9 +64,10 @@ def captures(tmp_path_factory):
         pytest.skip("Real native framebuffer checks require Godot 4 and DISPLAY")
     folder = tmp_path_factory.mktemp("native-head-ink")
     engine = PracticeEngine(folder / "cache", enable_midi=False)
-    # Direct MusicXML sources exercise the importer and the native pixel
-    # renderer. The retired source-progression preference is not selectable;
-    # the active combined course is the only production generator.
+    # Internal MusicXML notation fixtures use the registered source-preserving
+    # baseline. It is not exposed in the desktop preference picker.
+    from piano_teacher.exercise_strategies import WARMUP_STRATEGY
+    engine.library.settings["exercise_strategy"] = WARMUP_STRATEGY
     payloads, sources = [], {}
     try:
         for name, kind, down, voices in (
