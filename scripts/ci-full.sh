@@ -65,7 +65,6 @@ if [[ "$clean" -eq 0 ]]; then
     out="${out}-dirty"
     echo 'CI_FULL_NON_GATE: working tree is modified; logs only, no release PASS status.'
 fi
-mkdir -p "$out"
 
 status_summary() {
     local number state count=0
@@ -153,6 +152,9 @@ if [[ "$mode" == plan ]]; then
     "$PYTHON" -m scripts.ci_full_shards
     exit $?
 fi
+# Reclaim old cache before creating release output directories: an exhausted
+# user quota must not block the cleanup that is supposed to free it.
+mkdir -p "$out"
 
 # One trap cleans the currently running shard even on Ctrl-C or pytest failure.
 CI_FULL_TMP=''
