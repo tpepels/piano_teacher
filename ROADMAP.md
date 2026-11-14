@@ -1,6 +1,6 @@
 # Piano Teacher — single development roadmap
 
-**Authoritative plan • updated 2026-11-13 • MIDI input only**
+**Authoritative plan • updated 2026-11-14 • MIDI input only**
 
 This is the sole active phase plan. Other `docs/` files are technical
 specifications, dated research evidence, verification protocols or archived
@@ -1314,3 +1314,32 @@ complete Coda/Fukuda original-paper/parity and teacher-decision proof;
 real Pathétique/import/retry/reopen; physical USB/Bluetooth latency, count-in
 and sustained input tests; clean Ubuntu executable release; long-session and
 comparative learner studies. Phases 2, 4, 6 and 7 stay open.
+
+### 2026-11-14 — short-session GPU warmup lifetime regression (software rerun pending)
+
+The user's latest local run at `c72640a` confirmed the two earlier
+command-fixture migrations: targeted tests **2 passed**, smoke **744 passed**,
+and the extended run passed successive segments of **304, 160, 41, 1, 12,
+and 1 tests**, before a later segment reported **12 passed, 1 failed**.
+The failure was
+`tests/test_note_reactions.py::test_engine_feedback_events_reach_the_production_ledger_once`:
+authentic event/ledger checks completed (`NOTE_REACTIONS_FAILURES:0`), but
+Godot emitted `Resumed function '_free_after_frames()' after await, but
+class instance is gone` at `res://main.gd`, so the run correctly failed
+despite correct musical feedback.
+
+**Production correction:** `godot/main.gd` no longer awaits
+`SceneTree.process_frame` in a Main-owned cleanup coroutine. The three-frame
+GPU status-ink warmup now lives in `godot/status_ink_warmup.gd`, a temporary
+renderer-owned `Node2D` with bounded `_process` lifetime. A parent or Main
+teardown destroys it without any suspended Main method. Its head masks,
+shader materials and normal rendering preparation have not been removed.
+`tests/test_status_ink_warmup.py` additionally tests early owner teardown
+and normal frame-bounded expiry; the original production-ledger test retains
+its strict Godot error detection. Changes are in `a7e872c`, `5563a03`
+and `20067ec` on `main`.
+
+**Acceptance remains open** until the affected production-ledger regression,
+new lifecycle test, smoke and extended suites pass on the same committed
+revision with Godot 4.7.2. No independent notational, original-source,
+physical MIDI or standalone-release acceptance is inferred from this fix.
