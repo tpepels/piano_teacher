@@ -1680,3 +1680,71 @@ and automatic advancement for `--shard 1`/`--shard 3`
 **Acceptance:** Source committed to `main`. The user's previous run
 exited in preflight before executing pytest; a post-fix local
 smoke/CI run has not yet been reported.
+
+
+### 2026-11-14 — first actual four-part CI result: shard 1 (51fcaa39c695)
+
+**Observed on the developer's local Godot/Node environment:** smoke
+`777 passed`; first shard collected **1,150 cases across 110 modules**;
+**1,142 passed, 7 failed, 1 xfailed**, 602.20 s. The runner correctly
+reported `CI_FULL_HALTED` and did **not** start shards 2–4. No
+disk-quota error occurred in this shard.
+
+All seven reported failures have been investigated; source changes on
+`main` are pending a fresh local acceptance run:
+
+- **Fingering in-process correction (one failure):**
+  The test chose finger 5 for the first, low right-hand note of an
+  opening three-note chord and then demanded that the genuinely
+  constrained LumiKey solver preserve numbers on all the other
+  overlapping tones. This can require a physically impossible
+  ascending chord assignment; the engine correctly leaves such
+  predictions absent. The API test now opens the full original
+  source and chooses a non-overlapping RH note at beat >= 1 to check
+  correction, score revision and removal without demanding impossible
+  predictions (`c932d9f`). The behavior of explicitly impossible
+  constraints remains fail-closed; no fictitious fingering was added.
+- **Real-score RSS budget (two failures, Moonlight and Hanon):**
+  Both nominally fresh benchmark children printed the **same**
+  1,653.5 MiB peak and failed a 512 MiB ceiling despite meeting
+  rendering and state latency limits. On Linux,
+  `resource.getrusage(RUSAGE_SELF).ru_maxrss` can retain the pytest
+  parent's high-water mark across fork+exec; reproduced in an
+  independent Python subprocess probe. Read this *child process's*
+  `/proc/self/status` `VmHWM` instead, retaining the **same
+  512 MiB budget** (`d71f99e`). A regression checks against
+  actual VmHWM (`6067295`). This corrects the measurement;
+  a real child peak above 512 MiB will still fail.
+- **Native half-note independent polyphonic shafts (two failures):**
+  The matcher found native ink but assigned both directions/shafts to
+  two close-register voice groups as *ambiguous*. For exactly two
+  source voices where at least one group is an actual written chord,
+  when original physical matching is ambiguous, prefer the
+  *independent MusicXML voice/pitch direction* (the same upper/lower
+  decision as Godot's own `voice_layout.gd`). Require an actual
+  matching physical shaft for each source voice; a missing/erased
+  shaft must remain unverified while another intact voice may still
+  be independently verified. Explicit stems and two isolated-voice
+  negative controls are not reinterpreted. Source proof code:
+  `fe8f8a0`, `ed1d8c8`; extra source-direction regression cases:
+  `6d0afe3`. **The two actual native PNG erasure tests have
+  not been rerun.** Do not claim the native renderer corrected or
+  relax the proof thresholds without that evidence.
+- **Shaped-tempo/rest transport (two failures):**
+  Both tests stopped at `AttributeError:
+  StagedTestGenerator.decide_teaching` before testing timing. The
+  test-only `StagedTestGenerator` now implements the same
+  `decide_standard_teaching` protocol as the embedded engine,
+  preserving its custom two-phase tempo stages (`b08102b`).
+  The intended timeline assertions remain unchanged. A rerun is
+  required to determine whether their downstream transport behavior
+  still passes.
+
+**Classification:** This round repaired a test generator, corrected a
+benchmark metric, corrected an unplayable test input, and enhanced
+source-directed *verification* of physically distinct shafts. It did
+**not** demonstrate a new production user-experience improvement.
+Shards 2–4 and all physical acceptance gates are still unverified.
+The next local command is `bash scripts/ci-full.sh --shard 1`;
+the existing runner automatically starts shard 2 only if shard 1
+completes with no failure/error.
