@@ -19,6 +19,7 @@ GODOT = ROOT / "tests" / "godot"
     "practice_interactions.gd",
     "art_direction.gd",
     "library_resume.gd",
+    "native_camera.gd",
 ])
 def test_full_suite_godot_fixtures_use_extracted_owner(name):
     source = (GODOT / name).read_text()
@@ -46,3 +47,25 @@ def test_notation_probes_do_not_select_retired_desktop_strategies():
     midi_source = (ROOT / "tests/test_full_native_open_with_lumikey.py").read_text()
     assert 'set_preferences(exercise_strategy="coda-midi")' not in midi_source
     assert 'set_preferences(exercise_strategy="coda-fukuda-midi")' in midi_source
+
+def test_native_camera_uses_offline_adapter_on_real_command_owner():
+    source = (GODOT / "native_camera.gd").read_text()
+    assert "command_coordinator.action_request = action_request" in source
+    assert "app.command_coordinator.state.pending" in source
+    assert ".command_state" not in source
+
+
+@pytest.mark.parametrize("name", ["native_production_fixture.gd", "library_resume.gd"])
+def test_deferred_library_selection_survives_success_acknowledgement(name):
+    source = (GODOT / name).read_text()
+    assert "command_coordinator.library_requested.connect(" in source
+    assert 'call_deferred("_open_library_piece",piece,resume_saved)' in source
+
+
+def test_navigation_adapter_validates_current_transport_metadata():
+    source = (GODOT / "pending_navigation.gd").read_text()
+    assert '"presentation_deadline_ms"' in source
+    assert '"continuation_clear_beats"' in source
+    assert '"continuation_header_beats"' in source
+    assert "PENDING_NAVIGATION_BAD_DEADLINE" in source
+    assert "PENDING_NAVIGATION_BAD_GEOMETRY" in source
