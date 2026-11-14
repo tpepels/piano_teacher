@@ -152,6 +152,25 @@ def _dim_ledger_wings(dim_pixels, rail, head, step, occluded_columns):
         reason='Independent dim pixels form both source-required ledger wings',
         **facts, **candidates[0])
 
+# This is a *local* source-ink proof. Captures from other measures can
+# coincidentally register unrelated score ink after image translation, and
+# such a spurious mismatch must not veto an independently verified ledger
+# next to its source attack. Near misses still veto good photographs.
+MAX_LEDGER_WITNESS_DISTANCE_BEATS = 1.25
+
+
+def _ledger_witness_clocks(beat: float, frames: CapturedFrames) -> list[float]:
+    """Only existing photographs near the source event can prove its ink.
+
+    The onset frame is retained even when the fixed playhead obscures the
+    ledger; subsequent captured clocks are examined in proximity order.
+    Unlike unconstrained '12 nearest' sampling, this cannot reach another
+    measure and misattribute its missing ink to the source note.
+    """
+    return [beat, *(clock for clock in frames.nearby_clocks([beat], limit=12)
+                    if abs(clock-beat) <= MAX_LEDGER_WITNESS_DISTANCE_BEATS)]
+
+
 def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
     """Prove each source-required ledger step in actual PNGs, separately.
 
@@ -195,11 +214,12 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
     glyphs = feature_glyphs()
     for beat, required in by_clock.items():
         witnesses = defaultdict(list)
-        # A dense sampling grid can put the four nearest frames inside the
-        # same narrow playhead occlusion. Inspect more real neighboring
-        # clocks; measured translation and a fully visible physical line
-        # remain mandatory in every accepted witness.
-        targets = [beat, *frames.nearby_clocks([beat], limit=12)]
+        # A dense sampling grid can put the nearest frames inside the
+        # fixed playhead. Search more *local* real photographs; do not let
+        # images from a distant measure create an unrelated veto mismatch.
+        # Translated head registration and actual two-wing ink remain
+        # mandatory for every accepted witness.
+        targets = _ledger_witness_clocks(beat, frames)
         for target in targets:
             try:
                 source_errors = {}
