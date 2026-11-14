@@ -137,6 +137,12 @@ class CapturedFrames:
                           neutral & ~cyan)
             self.frames[beat] = dict(name=name, pixels=bright(image),
                                      ledger_ink=ledger_ink,
+                                     # The circular mint beat marker can mask
+                                     # ledger wings without touching the tall
+                                     # fixed playhead columns. Retain its
+                                     # observed pixel mask; it never counts
+                                     # as notation evidence.
+                                     mint_overlay=cyan,
                                      beam_edge=beam_edge,
                                      motion=translating_ink(image),
                                      staves=self.staff_rails.detect(image),
