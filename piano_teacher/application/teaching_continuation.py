@@ -80,6 +80,7 @@ class TeachingContinuation:
             raise ValueError("Announced teaching exposure changed")
         current = self.transport.announced_continuation
         reusable = (repeat and current is not None and
+                    self.transport.announced_deadline(exposure.from_beat) is not None and
                     abs(current[0] - exposure.from_beat) <= 1e-7 and
                     abs(current[2] - exposure.bpm) <= 1e-7)
         if reusable:
