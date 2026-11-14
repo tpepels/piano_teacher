@@ -104,15 +104,22 @@ func metrics(font_size: int) -> Dictionary:
     var server := TextServerManager.get_primary_interface()
     var ink := Rect2()
     var width := 0.0
+    var digits: Dictionary = {}
+    var baseline := Vector2(1.0,font.get_ascent(font_size))
+    var rid: RID = font.get_rids()[0]
     for digit in range(1,6):
         width = maxf(width,font.get_string_size(str(digit),HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x)
-        var rid: RID = font.get_rids()[0]
         var glyph: int = server.font_get_glyph_index(rid,font_size,str(digit).unicode_at(0),0)
         var box := Rect2(server.font_get_glyph_offset(rid,Vector2i(font_size,0),glyph),
             server.font_get_glyph_size(rid,Vector2i(font_size,0),glyph))
+        # The union reserves conservative collision space for all five
+        # digits. The *individual* glyph box measures this actual finger's
+        # visible centroid relative to the same draw_string() baseline.
+        digits[digit] = Rect2(baseline+box.position,box.size)
         ink = box if digit == 1 else ink.merge(box)
     var value := {"cell":Vector2(ceilf(width)+2.0,ceilf(font.get_height(font_size))),
-        "ink_offset":Vector2(1.0,font.get_ascent(font_size))+ink.position,"ink_size":ink.size}
+        "ink_offset":baseline+ink.position,"ink_size":ink.size,
+        "digit_ink":digits}
     fingering_metrics_cache[font_size] = value
     return value
 
