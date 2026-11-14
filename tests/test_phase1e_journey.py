@@ -33,7 +33,7 @@ def test_harder_outline_starts_fresh_after_three_clean_mastery_passes():
     assert len(plan.active_phrase.notes) > required
     assert plan.stage_tempos[easier] == 80
     assert easier in plan.transferable_tempos
-    assert plan.carried_bpm is None
+    assert plan.carried_bpm() is None
     assert plan.bpm == plan.start_bpm == 40
 
 
