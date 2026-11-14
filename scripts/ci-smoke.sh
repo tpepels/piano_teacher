@@ -13,6 +13,7 @@ find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 timeout 65s "$PYTHON" -m pytest -q \
   tests/test_phase5_architecture_audit.py \
   tests/test_full_suite_fixture_owner_contract.py \
+  tests/test_ci_full_shards.py \
   tests/test_seek_mode_owner.py \
   tests/test_repository_hygiene.py \
   tests/test_practice_warning_policy.py \
