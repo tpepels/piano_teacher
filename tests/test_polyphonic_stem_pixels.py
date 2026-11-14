@@ -284,3 +284,38 @@ def test_actual_parallel_unison_types_need_their_own_heads_and_shafts(tmp_path, 
         assert not all(r['features']['stem']['status'] == 'verified'
             for r in proof['measured'] if r['beat'] == clock), proof
     intact.save(filename)
+
+
+@pytest.mark.parametrize('groups,expected', [
+    ([(('C', 5), ('E', 5)), (('G', 5),)], {0: 'down', 1: 'up'}),
+    ([(('C', 5),), (('E', 5), ('G', 5))], {0: 'down', 1: 'up'}),
+    ([(('C', 5), ('E', 5)), (('E', 5), ('G', 5))], {0: 'up', 1: 'down'}),
+])
+def test_polyphonic_chord_source_direction_is_independent_of_native_pixels(groups, expected):
+    from piano_teacher.notation.feature_source import read_feature_marks
+    from piano_teacher.notation.head_registration import source_chord_groups
+    from piano_teacher.notation.proof import read_written_score
+    from piano_teacher.notation.stem_pixels import _source_voice_directions
+
+    xml = source(groups)
+    written = read_written_score(xml)
+    notes = [n for n in written.symbols if n['kind'] == 'note']
+    assert _source_voice_directions(source_chord_groups(notes),
+                                    read_feature_marks(xml)) == expected
+
+
+def test_disjoint_or_explicit_stems_cannot_use_polyphonic_chord_inference():
+    from piano_teacher.notation.feature_source import read_feature_marks
+    from piano_teacher.notation.head_registration import source_chord_groups
+    from piano_teacher.notation.proof import read_written_score
+    from piano_teacher.notation.stem_pixels import _source_voice_directions
+
+    for groups, stems in (
+        ([(('G', 5),), (('E', 4),)], ()),
+        ([(('C', 5), ('E', 5)), (('G', 5),)], ['up', 'down']),
+    ):
+        xml = source(groups, explicit=stems)
+        written = read_written_score(xml)
+        notes = [n for n in written.symbols if n['kind'] == 'note']
+        assert _source_voice_directions(source_chord_groups(notes),
+                                        read_feature_marks(xml)) == {}
