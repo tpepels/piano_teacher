@@ -63,6 +63,18 @@ static func pack(candidates: Array, metrics: Dictionary, gap: float,
             for candidate in positions:
                 var ink_rect := Rect2(candidate["position"],ink_size)
                 var rect := Rect2(ink_rect.position-ink_offset,extent)
+                # The candidate optimizer uses a union of the five digits'
+                # font boxes, while the actual rendered digit can have a
+                # slightly different ink centroid after rasterization.
+                # In extremely narrow staves (gap around 6px), accepting
+                # candidates at 2.45 spaces puts visible ink beyond the
+                # 2.5-space source-note attachment limit. Leave explicit
+                # margin for font metrics and subpixel snapping instead of
+                # displaying a visually detached number.
+                var actual_center: Vector2 = ink_rect.get_center()
+                if actual_center.distance_to(head)>gap*2.35 or \
+                        absf(actual_center.x-head.x)>gap*1.9:
+                    continue
                 if rect.position.y < 0.0 or rect.end.y > viewport_height or not is_clear(
                         ink_rect,bins,cell,staff_lines,viewport_height):
                     continue
