@@ -1344,7 +1344,7 @@ new lifecycle test, smoke and extended suites pass on the same committed
 revision with Godot 4.7.2. No independent notational, original-source,
 physical MIDI or standalone-release acceptance is inferred from this fix.
 
-### 2026-11-14 — local rerun after status-ink lifetime repair (reported, final parser pending)
+### 2026-11-14 — local rerun after status-ink lifetime repair (all listed gates green)
 
 Developer local checkout fast-forwarded from `c72640ab` to `20f61468`
 and ran Godot 4.7.2 on Arch Linux.
@@ -1358,14 +1358,13 @@ and ran Godot 4.7.2 on Arch Linux.
   `TRANSPORT_ALIAS_CALLERS: 0` and `TRANSPORT_OWNER_ONLY_OK`.
   The two earlier command fixture failures are also covered by the
   previous explicitly reported targeted 2/2 and smoke 744/744 passes.
-- `scripts/ci-extended.sh`: the seven reported pytest sections passed
+- `scripts/ci-extended.sh`: all seven reported pytest sections passed
   **304 + 160 + 41 + 1 + 12 + 1 + 13 = 532 tests**.
-  The pasted output then ended immediately after the Godot 4.7.2 startup
-  banner. Script inspection shows its **last gate**
-  is `scripts/check_godot_parse.py --godot "$GODOT" --timeout 25`.
-  Its exit status/success marker is not in the supplied output, so the
-  **whole extended script must remain pending**, notwithstanding all 532
-  shown pytest passes.
+  Its final `scripts/check_godot_parse.py --godot "$GODOT" --timeout 25`
+  printed the normal Godot 4.7.2 banner; the developer then confirmed
+  `echo $?` returned **0** immediately after the script. Therefore the
+  **entire extended script passed on the local checkout at `20f61468`**.
+  This is user-provided local exit-status evidence, not a GitHub Actions run.
 
 This retires the specific observed command fixture and Main-teardown
 regressions for this local tested commit. It does not constitute full CI,
