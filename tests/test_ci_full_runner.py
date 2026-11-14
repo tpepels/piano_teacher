@@ -33,7 +33,8 @@ markers=["slow: slow tests"]
     (repo / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n")
     for i in range(8):
         (repo / "tests" / f"test_case_{i}.py").write_text(
-            f"def test_case_{i}():\n    assert {i} != 3\n")
+            "def test_case_3(:\n" if i == 3 else
+            f"def test_case_{i}():\n    assert True\n")
     assert run("git", "init", "-q", cwd=repo).returncode == 0
     assert run("git", "config", "user.email", "ci@example.invalid", cwd=repo).returncode == 0
     assert run("git", "config", "user.name", "CI", cwd=repo).returncode == 0
