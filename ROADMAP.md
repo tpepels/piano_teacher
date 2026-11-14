@@ -1838,3 +1838,62 @@ inspection and screenshot-level math support the fix, but there was
 end-to-end framebuffer test must still pass on the user's machine.
 This repair changes the **independent notation verifier**, not the
 renderer; the physical ledger was already present.
+
+
+### 2026-11-14 — four-part release CI: shard 1 passes, shard 2 quota and compact-fingering triage
+
+The developer uploaded actual `shard-1.log`, `shard-1.status`,
+`shard-2.log`, and `shard-2.status`. **Shard 1: PASS**
+(1,236 passed, 8 skipped, 248.85 s). **Shard 2: FAIL**
+(1,262 passed, 8 failed, 6 errors, 1 xfailed, 827.46 s).
+Shard 2 did NOT start shard 3 because the green-only runner stopped.
+One independent behavioral error is proven, and an independent storage
+failure corrupted most of the late audit test results.
+
+**Disk quota:** The `tests/test_verification_runner_failures.py`
+signal/compression cases use `_compression_logs` to write 3 distinct
+7 MiB incompressible files per parameterization, plus the actual
+resulting ZIP archives. At pytest's default
+`tmp_path_retention_policy=all`, successful function-scoped directories
+accumulate until the *end* of the entire shard. This explains why later
+`test_verify_notation_recovery` fixture copies failed with
+`OSError: [Errno 122] Disk quota exceeded`, why multiple nested
+driver invocations could not create their scripts, and why the three
+late SQLite constructors failed with `disk I/O error`.
+Subsequent cache-persistence tests `test_verovio_note_templates`
+and `test_verovio_tuplet_fragments` found missing cached entries;
+the code intentionally handles cache write errors as nonfatal,
+so these findings remain **storage-contaminated**, not verified
+algorithmic cache defects. The runner now invokes pytest with
+`-o tmp_path_retention_policy=failed`, which is supported by the
+pinned pytest>=8 contract. Passed `tmp_path` directories are
+reclaimed at each test's teardown; failed evidence and
+session-scoped fixture directories survive until the shard ends
+(`9878f91`). A standalone subprocess regression verifies
+that a passed case's 32 KiB artifact is deleted before the next case
+while a deliberately failed case retains its artifact
+(`0878925`); it was run successfully in the model's local pytest 9.0.2
+environment and is now in smoke (`c62c596`).
+This reduces peak storage requirements; it does **not** certify that
+the developer's underlying disk/user quota is large enough.
+
+**Real native compact-fingering defect:** The 210 px high native canvas
+has 6.12 px staff spaces. A displayed digit's physical-ink centroid
+was 15.386 px from its notehead, just beyond the strict
+`2.5*gap=15.30 px` attachment boundary. The original placement
+candidate used the union of all five font glyphs and permitted
+centroids as far as `2.45*gap` before actual per-digit rasterization.
+The native spatial compositor now rejects candidates more than
+2.35 staff spaces away, or more than 1.9 horizontally, before
+adding any label or reserving its rectangle (`12ff6e4`).
+It still searches the existing fallbacks; if none fits, it reports
+a `placement_issue` rather than drawing an unattached digit.
+The unchanged screenshot-level test must verify the fix in Godot.
+
+**Next local development check:** Pull `main` and run
+`bash scripts/ci-full.sh --shard 2`. Shards 3 and 4 begin
+automatically only if their predecessor passes. The new commit
+invalidates Shard 1's old-revision PASS as a **release gate**, so
+rerun `--shard 1` once Shard 2–4 are stable; it should skip
+already-green 2–4 on the same new revision.
+No full acceptance has yet been confirmed with these changes.
