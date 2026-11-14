@@ -10,8 +10,21 @@ class RecordingRequest extends RefCounted:
     # Start/Resume carry timing derived from the renderer's score admission.
     # These scenarios assert which commands are sent, and in what order.
     const ADMISSION_TIMING := ["presentation_lead_seconds",
-        "continuous_horizon_beats", "reuse_pending_score"]
+        "continuous_horizon_beats", "reuse_pending_score",
+        "presentation_deadline_ms", "continuation_clear_beats",
+        "continuation_header_beats"]
     func request(_operation: String, payload: Dictionary) -> int:
+        # Navigation asserts command intent and order. Verify the transport
+        # metadata independently before omitting it from the comparison.
+        # These are real production admission fields, not extra commands.
+        if str(payload.get("action", "")) in ["start", "resume", "restart"]:
+            if not payload.has("presentation_deadline_ms") or                     not is_finite(float(payload["presentation_deadline_ms"])) or                     float(payload["presentation_deadline_ms"]) <= 0.0:
+                push_error("PENDING_NAVIGATION_BAD_DEADLINE")
+                return ERR_INVALID_PARAMETER
+            for key in ["continuation_clear_beats", "continuation_header_beats"]:
+                if not payload.has(key) or not is_finite(float(payload[key])) or                         float(payload[key]) < 0.0:
+                    push_error("PENDING_NAVIGATION_BAD_GEOMETRY: " + key)
+                    return ERR_INVALID_PARAMETER
         var recorded := payload.duplicate(true)
         for key in ADMISSION_TIMING:
             recorded.erase(key)
