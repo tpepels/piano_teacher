@@ -48,6 +48,25 @@ def test_dense_capture_clocks_do_not_hide_a_clear_neighboring_ledger_witness(tmp
                for w in observation['evidence']['witnesses'] if w.get('segments'))
 
 
+def test_ledger_witness_window_keeps_held_note_end_but_excludes_other_measures():
+    """The 4-beat A5 half note needs its captured 6-beat clear witness.
+
+    Unrelated captures at 0.125 or 8.0 cannot manufacture a veto for a
+    source note at beat 4. The true onset and local damaged frames remain.
+    """
+    from piano_teacher.notation.ledger_pixels import _ledger_witness_clocks
+
+    class Captures:
+        def nearby_clocks(self, _targets, *, limit):
+            assert limit == 12
+            return [3.9375, 4.0625, 6.0, 0.125, 8.0, 0.0]
+
+    retained = _ledger_witness_clocks(4.0, 2.0, Captures())
+    assert retained == [4.0, 3.9375, 4.0625, 6.0]
+    short = _ledger_witness_clocks(4.0, .5, Captures())
+    assert short == [4.0, 3.9375, 4.0625]
+
+
 def check(folder=FIXTURE):
     return verify_ledger_pixels((FIXTURE/'score.musicxml').read_text(), folder, hand='right')
 
