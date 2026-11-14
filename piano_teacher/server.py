@@ -1328,7 +1328,11 @@ class PracticeEngine:
             return None
 
     def _seek(self, bar):
-        # Validate before cancelling any paused clock, feedback, or score ack.
+        # A seek must never guess a measure from synthetic/fallback bar
+        # numbering. Validate original source boundaries *before* preparing
+        # any command or cancelling a paused transport.
+        if self._seek_grid() is None:
+            raise ValueError("Seeking requires the original source measure grid")
         effect = self._manual_effect("seek",values={"bar":bar})
         selected = self._install_command(effect)
         if selected.mode == "learn":
