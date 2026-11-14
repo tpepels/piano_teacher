@@ -28,13 +28,21 @@ class FixtureApp extends "res://main.gd":
             library_view, practice_view, settings_view, home_view)
         command_success_presenter = CommandSuccessPresenter.new(
             library_view, practice_view, settings_view, lesson_session)
-        command_success_effects = CommandSuccessEffects.new(
-            command_success_presenter, _on_state, _navigate,
-            _request_settings, _request_library, _request_library_health,
-            _refresh_score_status)
+        command_success_effects = CommandSuccessEffects.new(command_success_presenter)
+        command_success_effects.publish_state.connect(_on_state)
+        command_success_effects.navigate_practice.connect(_navigate)
+        command_success_effects.request_settings.connect(_request_settings)
+        command_success_effects.request_library.connect(_request_library)
+        command_success_effects.request_library_health.connect(_request_library_health)
+        command_success_effects.refresh_score.connect(_refresh_score_status)
         metronome_frame = MetronomeFrameCoordinator.new(
             settings_view, practice_view, visual_transport_clock,
             _transport_beat_at, _count_tick, _raw_click)
+        command_coordinator.configure(practice_view,settings_view,metronome_frame,
+            score_flow,visual_transport_clock,action_request,command_failure_presenter)
+        command_coordinator.succeeded.connect(command_success_effects.apply)
+        command_coordinator.learning_accepted.connect(_learning_command_accepted)
+        command_coordinator.refresh_requested.connect(_poll)
         resized.connect(_update_responsive_layout)
         _update_responsive_layout()
         set_process(false)
@@ -147,11 +155,11 @@ func run() -> void:
         app._send_action({"action": "pause"})
         app.commands.clear()
         app.home_view.resume_button.pressed.emit()
-        check(app.command_state.queued_library_piece == "Collection/real.mid",
+        check(app.command_coordinator.state.queued_library_piece == "Collection/real.mid",
             "Continue queues the recent piece behind an in-flight Pause")
         app._on_action(400,
             JSON.stringify({"error": "Pause rejected"}).to_utf8_buffer())
-        check(app.command_state.queued_library_piece.is_empty() and not app.command_state.queued_library_resume,
+        check(app.command_coordinator.state.queued_library_piece.is_empty() and not app.command_coordinator.state.queued_library_resume,
             "Failed actions must discard queued library selection and resume intent")
         check(app.library_view.library_message.text.contains("Pause rejected")
             and not app.library_view.library_message.text.contains("Preparing"),
