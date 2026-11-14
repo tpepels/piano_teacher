@@ -85,6 +85,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_engine_update_refactor.py \
   tests/test_guided_session.py \
   tests/test_guided_engine.py::test_engine_guided_session_is_the_single_controller_and_recovery_owner \
+  tests/test_guided_engine.py::test_guided_completion_honors_injected_reintegration_without_redecision \
   tests/test_coordination_boundaries.py::test_transition_selection_and_guidance_own_narrow_inputs \
   tests/test_coordination_boundaries.py::test_successful_command_view_effects_have_injected_dependencies \
   tests/test_learner_progress_coordination.py \
@@ -97,6 +98,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_retained_score_pipeline.py::test_frame_path_never_reassembles_source_or_preparation_ink \
   tests/test_retained_score_pipeline.py::test_legacy_ambience_source_cameras_and_recovery_variants_are_absent \
   tests/test_retained_score_pipeline.py::test_fingering_overlay_has_bounded_source_window \
+  tests/test_phase3_ledger_pixels.py::test_ledger_witness_window_keeps_held_note_end_but_excludes_other_measures \
   tests/test_midi_polyphonic_stems.py \
   tests/test_midi_visual_fast_path.py \
   tests/test_midi_calibration.py \
