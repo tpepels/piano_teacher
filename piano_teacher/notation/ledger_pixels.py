@@ -152,6 +152,35 @@ def _dim_ledger_wings(dim_pixels, rail, head, step, occluded_columns):
         reason='Independent dim pixels form both source-required ledger wings',
         **facts, **candidates[0])
 
+def _mint_masks_required_ledger_wing(mint_pixels, head, rail, step, shift):
+    """Only photographed mint pixels over a REQUIRED ledger wing obstruct proof.
+
+    The fixed transport line is tall, but its circular beat marker is short
+    and may hide a physical wing just outside the head. The original vertical
+    occlusion-columns test misses it. Reclassify only a failed physical
+    witness as unverified; this mask can NEVER certify a ledger line.
+    `shift` is the measured source-to-photo translation: registered heads
+    are in aligned coordinates, while the mask is in original photo pixels.
+    """
+    if mint_pixels is None:
+        return False
+    gap = rail.gap
+    expected_y = rail.bottom-step*gap/2
+    top = max(0, math.floor(expected_y-1.5))
+    bottom = min(mint_pixels.shape[0], math.ceil(expected_y+1.5)+1)
+    if top >= bottom:
+        return False
+    left, _top, right, _bottom = head['bbox']
+    extension = math.ceil(.12*gap)
+    for start, end in ((left-extension-1, left+1),
+                       (right-1, right+extension+1)):
+        first = max(0, math.floor(start+shift))
+        last = min(mint_pixels.shape[1], math.ceil(end+shift))
+        if first < last and mint_pixels[top:bottom, first:last].any():
+            return True
+    return False
+
+
 # A source-local witness can be photographed after the end of a held
 # note: the printed source score keeps scrolling past the fixed playhead.
 # Preserve the entire written duration plus a small capture margin, while
@@ -290,6 +319,18 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                             segments.append(bright_line)
                         else:
                             segments.append(dim_line)
+                        # A circular mint beat indicator can cover the thin
+                        # required wing without intersecting the vertical
+                        # playhead columns. A missing pixel behind the actual
+                        # indicator is inconclusive, not a missing ledger.
+                        # Only convert a failed witness to UNVERIFIED. A clean
+                        # photographed mismatch still vetoes other frames.
+                        if (segments[-1]['status'] == 'mismatch' and
+                                _mint_masks_required_ledger_wing(
+                                    frame.get('mint_overlay'), head, rail, step, shift)):
+                            segments[-1] = dict(segments[-1],
+                                status='unverified',
+                                reason='Observed mint beat indicator covers required ledger wing')
                     for segment in segments:
                         if 'bbox' in segment:
                             segment['bbox'][0] += shift
