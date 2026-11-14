@@ -32,7 +32,7 @@ def running_pytest():
             if directory.stat().st_uid != os.getuid():
                 continue
             args = [part.decode(errors="replace") for part in
-                    (directory / "cmdline").read_bytes().split(b"\\0") if part]
+                    (directory / "cmdline").read_bytes().split(bytes([0])) if part]
         except (OSError, ProcessLookupError, PermissionError):
             continue
         if (any(Path(arg).name in {"pytest", "py.test"} for arg in args)
