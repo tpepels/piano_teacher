@@ -185,7 +185,7 @@ def _source_voice_directions(groups, marks):
     else:
         def voice_key(value):
             return tuple(int(x) if x.isdigit() else x.lower()
-                         for x in re.split(r'(\\d+)', value))
+                         for x in re.split(r'(\d+)', value))
         upper = min(range(2), key=lambda i: voice_key(groups[i][0]['voice']))
     return {upper: 'up', 1-upper: 'down'}
 
