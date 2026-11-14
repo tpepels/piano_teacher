@@ -61,7 +61,7 @@ if legacy.is_dir():
 PY
 
 # A private temp root prevents overlap with any other pytest command and
-# ensures even the 24-shard/full-renderer run does not accumulate old copies.
+# ensures the full suite's native renderer probes do not accumulate old copies.
 CI_FULL_TMP="$(mktemp -d "${TMPDIR:-/tmp}/piano-teacher-ci-full.XXXXXXXX")"
 cleanup_full_tmp() {
     if [[ -z "${CI_FULL_TMP:-}" || ! -d "$CI_FULL_TMP" ]]; then
