@@ -84,7 +84,7 @@ markers=["slow: slow tests"]
     assert "CI_FULL_HALTED:" in again.stdout
 
     # On a new Git commit, previous PASS records cannot be reused.
-    (repo / "tests/test_case_3.py").write_text("def test_case_3():\\n    assert True\\n")
+    (repo / "tests/test_case_3.py").write_text("def test_case_3():\n    assert True\n")
     assert run("git", "add", ".", cwd=repo).returncode == 0
     assert run("git", "commit", "-qm", "fixed", cwd=repo).returncode == 0
     status = run(*launcher, "--status", cwd=repo, env=env)
