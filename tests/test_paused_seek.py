@@ -29,6 +29,9 @@ def test_paused_seek_reloads_practice_at_source_bar_with_fresh_count_in(lesson, 
     assert e.state()['phase'] == 'loading'
     started = acknowledge(e)
     assert started['phase'] == 'count_in' and started['play_from_beat'] == grid[2]
+    # The acknowledged take must keep Practice, including when Seek followed
+    # Perform; the previous selection re-entered Perform at score_ready.
+    assert started['mode'] == 'practice'
     assert started['midi_notes'] == 0 and started['clock_beat'] < 0
     partial = finish_take(e, now, grid[-1])
     assert partial['phase'] == 'recovering' and partial['streak'] == 0
