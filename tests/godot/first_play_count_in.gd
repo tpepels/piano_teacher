@@ -32,6 +32,9 @@ class FixtureApp extends "native_production_fixture.gd":
     func _ready() -> void:
         super._ready()
         action_request = RecordingRequest.new(wire_commands)
+        # Native production fixture configured the coordinator with its original
+        # adapter. Keep the actual dispatch owner on this recording transport.
+        command_coordinator.action_request = action_request
     func _count_tick(_accent: bool, _sampled_beat: float = NAN) -> void:
         clicks += 1
     func _raw_click(_accent: bool) -> void:
