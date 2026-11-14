@@ -21,8 +21,11 @@ def native_camera_run(tmp_path_factory):
     folder = tmp_path_factory.mktemp("native-camera")
     engine = PracticeEngine(folder / "cache", enable_midi=False)
     try:
-        # Phase 5: the combined Coda/Fukuda course is the sole selectable
-        # generator; the independent native-raster assertions remain strict.
+        # This direct MusicXML source is an internal notation fixture, not
+        # a user-selectable lesson. Exercise the real load/engraving path
+        # with the registered source-preserving baseline.
+        from piano_teacher.exercise_strategies import WARMUP_STRATEGY
+        engine.library.settings["exercise_strategy"] = WARMUP_STRATEGY
         engine.load(str(ROOT / "tests/fixtures/native_pixel_pitch_probe.musicxml"))
         payload = {"layout": engine.geometry(),
                    "model": engine.semantic_score()}
