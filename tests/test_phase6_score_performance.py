@@ -65,7 +65,12 @@ def test_real_score_cold_and_cached_native_pipeline(
             "import runpy,sys; from pathlib import Path; "
             "runpy.run_path(sys.argv[1])['_measure_real_score'](sys.argv[2],sys.argv[3],int(sys.argv[4]),Path(sys.argv[5]))",
             str(Path(__file__).resolve()), label, filename, str(min_source_notes), str(tmp_path)]
-        result = subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=90)
+        # On a real-score cold-load regression, identify which part of
+        # independent import / ONNX inference / Coda+Fukuda compilation is
+        # slow. The actual 15 s and 8 s budgets stay unchanged.
+        diagnostic_env = dict(os.environ, PIANO_TEACHER_TIMING_DIAGNOSTICS="1")
+        result = subprocess.run(command,cwd=ROOT,capture_output=True,text=True,
+                                timeout=90,env=diagnostic_env)
     (tmp_path / "benchmark.log").write_text(result.stdout+result.stderr)
     assert result.returncode == 0, result.stdout+result.stderr
 
