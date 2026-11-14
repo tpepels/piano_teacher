@@ -292,7 +292,12 @@ def test_guided_completion_honors_injected_reintegration_without_redecision(lear
     monkeypatch.setattr(cls,"decide_teaching",choose)
     for pitch,down in [(60,True),(60,False),(60,True),(60,False),(64,True),(67,True)]:
         send(e,pitch,down)
-    assert e.mode=="practice" and e.awaiting_score_revision==e.score_revision
+    # The physical MIDI callback only records notes. The application update
+    # tick settles guided evidence and persists the one chosen continuation;
+    # neither database writes nor score reloading belong in the MIDI thread.
+    assert e.mode=="learn" and calls==[]
+    state=e.state()
+    assert state["mode"]=="practice" and e.awaiting_score_revision==e.score_revision
     assert calls==["guided_completed"] and not e.plan.mastered
     e.geometry()
     e.control("score_ready",revision=e.score_revision)
