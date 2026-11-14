@@ -102,14 +102,28 @@ def minimum_bpm(course):
 
 
 def carried_bpm(course):
+    """Reuse earned tempo only when this stage has the same actual source ink.
+
+    A mastered skeleton's speed does not prove that an outline containing
+    more attacks (or a changed rhythmic exercise) can be played at that speed.
+    Each genuinely new source task starts its own difficulty-adjusted ladder.
+    Distinct lessons containing an exactly repeated passage still share
+    earned tempo through tempo_for_stage(), with independent assessment.
+    """
     if course.warmup:
         return None
     p = course.progress
     tempos = dict(p.stage_tempos)
-    earned = [stage.effective_bpm(tempos[key]) for stage in course.stages[:p.cursor[2]]
-              if (key := stage_key(course.exercise, course.hand, stage.variant, course.profile,
-                                   course.course_version, course.warmup)) in p.transferable_tempos
-              and key in tempos]
+    current_notes = course.stage.variant.notes
+    earned = [
+        stage.effective_bpm(tempos[key])
+        for stage in course.stages[:p.cursor[2]]
+        if stage.variant.notes == current_notes
+        if (key := stage_key(course.exercise, course.hand, stage.variant,
+                            course.profile, course.course_version,
+                            course.warmup)) in p.transferable_tempos
+        and key in tempos
+    ]
     if not earned:
         return None
     return max(SETTINGS.minimum_bpm, min(p.target_bpm,
