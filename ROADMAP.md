@@ -1431,3 +1431,41 @@ temporary runs. Then run the affected targeted migration/strategy
 tests and full suite in a writable environment. Keep original
 24-shard independent notation, physical MIDI, clean-machine release,
 Coda/Fukuda parity and real learner-study exits separately open.
+
+### 2026-11-14 — source-grid seek and weak-section retry repairs; fast full-suite ownership gate
+
+The full-suite triage yielded two additional production-command defects:
+
+- `PracticeEngine._practice_weak()` selected the weak source interval
+  but, after `_prepare_practice()` cleared the previous review state,
+  did not publish `retry_range`. It now republishes the chosen
+  `start_beat`/`end_beat` pair from the same source-bound exposure.
+  The original `tests/test_listen_perform.py` assertion for a later
+  two-bar weak section remains strict (commit `fe0c972`).
+- `PracticeEngine._seek()` could accept a manual source-bar seek
+  even when `_seek_grid()` had no authoritative imported measure
+  boundaries. It now rejects the request before applying a teaching
+  command or mutating the paused transport. The original
+  `tests/test_paused_seek.py` rejection test is retained
+  (commit `43b258c`).
+
+The original-source MusicXML pixel/camera fixtures are verified *by source
+inspection* to require the registered internal `WARMUP_STRATEGY`.
+The desktop setting validator still exposes only
+`coda-fukuda-midi`. Their isolated fixtures set the internal baseline
+for their direct importer probes (commits `bd1c667`, `4517d83`).
+
+A new `tests/test_full_suite_fixture_owner_contract.py` checks that
+the five full-only Godot fixture files cannot reintroduce Main-owned
+`command_state`, that the mock action request is configured on the
+actual coordinator, that the saved-library fixture uses signals, and
+that source-only MusicXML tests use the internal strategy. It was added
+to the existing fast push gate `scripts/ci-smoke.sh` (commits
+`3f355e9`, `ce42197`).
+
+**Verification status:** commits were written directly to `main`,
+but **no matching post-fix local pytest/Godot runs are available**.
+The reported 4,895-pass/96-fail/48-error full run remains the most
+recent full-suite evidence. Do not promote this repair set to
+accepted status without reruns; the other pedagogical, original
+notation, resource, native-start and 24-shard gates remain open.
