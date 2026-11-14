@@ -15,20 +15,20 @@ func _play_until_visible(app: Control) -> bool:
         await process_frame
         # A new score revision promotes a new renderer; never hold the old one.
         renderer = app.practice_view.stage.renderer
-        if not app.command_state.pending and str(app.last_state.get("phase","")) == "ready" and \
+        if not app.command_coordinator.state.pending and str(app.last_state.get("phase","")) == "ready" and \
                 app._native_score_ready() and renderer.retained_ready():
             app._toggle_playing()
         if not renderer.annotations.drawn_fingerings.is_empty() and \
-                renderer.drawn_noteheads.size() > 0 and not app.command_state.pending:
+                renderer.drawn_noteheads.size() > 0 and not app.command_coordinator.state.pending:
             await process_frame
             await RenderingServer.frame_post_draw
             return true
     failures.append("Play never brought fingered notation on screen: "+JSON.stringify({
         "phase":app.last_state.get("phase"),"loaded":app.last_state.get("loaded"),
-        "ready":app._native_score_ready(),"pending":app.command_state.pending,
+        "ready":app._native_score_ready(),"pending":app.command_coordinator.state.pending,
         "error":app.score_error,"labels":renderer.annotations.drawn_fingerings.size(),
         "heads":renderer.drawn_noteheads.size(),"screen":app.current_screen,
-        "title":app.last_state.get("title"),"message":app.library_view.library_message.text,"opstate":app.command_state.operation,"catalog":app.library_catalog.get("catalog"),"fingering":app.last_state.get("fingering")}))
+        "title":app.last_state.get("title"),"message":app.library_view.library_message.text,"opstate":app.command_coordinator.state.operation,"catalog":app.library_catalog.get("catalog"),"fingering":app.last_state.get("fingering")}))
     push_error(failures[-1])
     return false
 
@@ -106,7 +106,7 @@ func _run() -> void:
             failures.append("App right click did not open the fingering editor")
         else:
             renderer.annotations.fingering_popup.id_pressed.emit(changed)
-        if app.command_state.operation != "fingering.correct":
+        if app.command_coordinator.state.operation != "fingering.correct":
             failures.append("Popup must send fingering.correct through the production command request")
         if app.action_request.timeout < 300.0:
             failures.append("Whole-piece inference must not inherit the short control request timeout")
@@ -199,7 +199,7 @@ func _run() -> void:
     app.last_state["piece_fingerprint"] = "another-loaded-piece"
     app.fingering_save_error = ""
     app._on_fingering_change_requested(source,changed)
-    if app.command_state.pending or app.fingering_save_error.is_empty():
+    if app.command_coordinator.state.pending or app.fingering_save_error.is_empty():
         failures.append("An old native view cannot correct a newly loaded piece")
     app.last_state = current
     var file := FileAccess.open(folder.path_join("restore-report.json"),FileAccess.WRITE)

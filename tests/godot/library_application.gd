@@ -41,6 +41,18 @@ class OfflineApp extends "res://main.gd":
         metronome_frame = MetronomeFrameCoordinator.new(
             settings_view,practice_view,visual_transport_clock,
             _transport_beat_at,_count_tick,_raw_click)
+        # Same command state, signals and request ownership as production Main.
+        command_coordinator.configure(practice_view,settings_view,metronome_frame,
+            score_flow,visual_transport_clock,action_request,command_failure_presenter)
+        command_coordinator.succeeded.connect(command_success_effects.apply)
+        command_coordinator.learning_accepted.connect(_learning_command_accepted)
+        command_coordinator.library_requested.connect(func(piece: String, resume_saved: bool):
+            call_deferred("_open_library_piece",piece,resume_saved))
+        command_coordinator.refresh_requested.connect(_poll)
+        command_coordinator.fingering_changed.connect(func(message: String):
+            fingering_save_error = message
+            _present_fingering_status(last_state.get("fingering",{})))
+        command_coordinator.score_error_cleared.connect(func(): score_error = "")
         _update_responsive_layout()
         set_process(false)
     func _poll() -> void: pass
@@ -93,12 +105,12 @@ func test_app_pending_failure(app: Control) -> void:
     app._send_action({"action":"pause"})
     app.commands.clear()
     entries(view)[0].pressed.emit()
-    check(app.command_state.queued_library_piece == "Collection/real.mid" and app.command_state.queued_library_resume,
+    check(app.command_coordinator.state.queued_library_piece == "Collection/real.mid" and app.command_coordinator.state.queued_library_resume,
         "Quick Continue retains both identifier and resume intent behind Pause")
     app._on_action(1,JSON.stringify({"error":"Pause rejected"}).to_utf8_buffer())
     app._on_library(0,JSON.stringify(catalog()).to_utf8_buffer())
     app._update_responsive_layout()
-    check(app.command_state.queued_library_piece.is_empty() and not app.command_state.queued_library_resume,
+    check(app.command_coordinator.state.queued_library_piece.is_empty() and not app.command_coordinator.state.queued_library_resume,
         "A failed Pause discards queued music and resume intent")
     check(control(view,"LibraryMessage").visible and control(view,"LibraryMessage").text.contains("Pause rejected"),
         "The owned Library screen retains a failed queued selection after refresh")

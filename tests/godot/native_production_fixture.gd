@@ -32,6 +32,12 @@ func _ready() -> void:
     metronome_frame = MetronomeFrameCoordinator.new(
         settings_view,practice_view,visual_transport_clock,
         _transport_beat_at,_count_tick,_raw_click)
+    # Source fixture must route score_ready through a real configured
+    # command coordinator, even though its outbound transport is stubbed.
+    # The old unconfigured coordinator dereferenced a null practice view.
+    command_coordinator.configure(practice_view,settings_view,metronome_frame,
+        score_flow,visual_transport_clock,action_request,command_failure_presenter)
+    command_coordinator.succeeded.connect(command_success_effects.apply)
     _navigate("practice")
     resized.connect(_update_responsive_layout)
     _update_responsive_layout()
