@@ -64,9 +64,15 @@ pull a new revision, any earlier shard PASS values do not transfer.
 The runner cleans retained legacy `/tmp/pytest-of-<user>/pytest-N` runs
 only when no competing pytest process is detected. Each new part has a
 private temporary directory and removes it on exit, including when a
-test fails. The logs above remain available. Set `CI_FULL_KEEP_TMP=1` for
-a run if raw generated files are needed for diagnosis; it will print the
-retained path.
+test fails. **During each part**, pytest uses
+`tmp_path_retention_policy=failed`: every successful test's
+`tmp_path` is deleted immediately after that test instead of
+accumulating hundreds of megabytes of framebuffer and incompressible-ZIP
+artifacts. Failed test directories remain available while the shard runs.
+Session-scoped `tmp_path_factory` allocations remain until the shard
+exits, as designed. The shard log remains in the revision-specific result
+folder. Set `CI_FULL_KEEP_TMP=1` if raw failure artifacts are needed
+after the shard; it will print the retained directory.
 
 Pass extra pytest flags for diagnosis after `--`, for example
 `bash scripts/ci-full.sh --shard 2 -- -x`. In this case **only shard 2**
