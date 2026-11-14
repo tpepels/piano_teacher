@@ -43,10 +43,16 @@ func run() -> void:
             app.practice_view.present_busy(true)
             var locked: bool = app.practice_view.tempo_up_button.disabled
             var owner = app.command_coordinator.state
-            var started: bool = owner.action_requested("tempo_up") and                 owner.begin("practice.command",Time.get_ticks_msec())
+            var started: bool = owner.action_requested("tempo_up")
+            if started:
+                started = owner.begin("practice.command",Time.get_ticks_msec())
             app.command_coordinator.request_token += 1
             app._on_action(code,PackedByteArray())
-            var cleared: bool = not app.practice_view.tempo_up_button.disabled                 and not owner.pending and owner.control_action.is_empty()
+            var cleared: bool = (
+                not app.practice_view.tempo_up_button.disabled
+                and not owner.pending
+                and owner.control_action.is_empty()
+            )
             if not locked or not started or not cleared:
                 failures += 1
                 print("PRACTICE_SCREEN_FAIL:Worker acknowledgement must clear Practice busy state, status=",code)
