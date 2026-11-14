@@ -110,12 +110,12 @@ def test_original_large_midi_saved_coda_starts_bounded_not_whole_score(tmp_path)
     path = ROOT / "midi" / "Moonlight_Sonata_I.midi"
     engine = PracticeEngine(tmp_path / "coda", enable_midi=False)
     try:
-        engine.set_preferences(exercise_strategy="coda-midi")
+        engine.set_preferences(exercise_strategy="coda-fukuda-midi")
         engine.load(str(path))
         plan = engine.plan
         piece = plan.piece
         assert len(piece.notes) >= 1000
-        assert plan.lesson_generator.name == "coda-midi"
+        assert plan.lesson_generator.name == "coda-fukuda-midi"
         assert len(piece.bar_boundaries) > 15
         assert plan.exercises[0].kind == "learn"
         first = plan.exercises[0].phrase
