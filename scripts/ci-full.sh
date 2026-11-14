@@ -184,7 +184,12 @@ run_part() {
     # The plugin excludes other shards BEFORE pytest imports any test file.
     # The four deterministic file plans cover the full suite; no xfail or
     # slow-test filters change.
-    if TMPDIR="$CI_FULL_TMP" "$PYTHON" -m pytest -q -m 'slow or not slow' -p scripts.ci_full_shards "--full-ci-shard=$number" --basetemp "$CI_FULL_TMP/pytest" tests "${pytest_args[@]}" 2>&1 | tee "$output"; then
+    # Heavy framebuffer and signal/ZIP tests create hundreds of MiB of
+    # real artifacts. Pytest's default "all" retention leaves EVERY passing
+    # tmp_path until the shard exits, exhausting a modest /tmp user quota.
+    # "failed" deletes each PASS directory as soon as its test ends, while
+    # preserving failure evidence and any session-scoped fixture artifacts.
+    if TMPDIR="$CI_FULL_TMP" "$PYTHON" -m pytest -q -m 'slow or not slow' -p scripts.ci_full_shards "--full-ci-shard=$number" -o tmp_path_retention_policy=failed --basetemp "$CI_FULL_TMP/pytest" tests "${pytest_args[@]}" 2>&1 | tee "$output"; then
         result=0
     else
         result=$?
