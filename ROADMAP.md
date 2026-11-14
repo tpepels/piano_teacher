@@ -1792,3 +1792,49 @@ a tighter physical-verification scope, not confirmed production rendering
 fixes. The original failing tests have not been rerun on the user's
 Godot environment, and full four-shard release/physical acceptance is
 still incomplete.
+
+### 2026-11-14 — uploaded physical ledger PNGs: mint beat marker occlusion
+
+The developer supplied the **actual 73-file Godot capture bundle**
+`piano-ledger-failure.zip` from the failing dense-clock ledger test.
+Independent inspection of the photographed PNGs confirms that the
+A5 half note's **one ledger rule is really drawn**, with source-consistent
+wings on both sides of the hollow head. The musical source and native
+score require a ledger at upper step 10, Y about 121.68 px at the
+captured 21.84 px staff gap. A photo at beat 4.20 has its mint beat
+indicator physically over the right-hand ledger wing. The source
+pixel mask (`CapturedFrames.frame()`) excluded mint from dim staff
+ink but recorded only the **tall vertical playhead** as occlusion.
+The round indicator is much shorter than 35% of image height, so
+the verifier treated the ring-covered wing as genuinely missing,
+set `mismatch`, and this vetoed independent clean photographs.
+
+The uploaded RGB captures show the exact distinction: at beat 4.20
+the right-wing required pixel range is mint-colored; at beats 4.35,
+4.50 and 5.10 both physical wings remain visibly drawn without
+overlay. Image translation independently matches the moving score
+at the expected pixel displacement (beat 4.20: -19 px; beat 4.50:
+-48 px). The previous wider clock-window change alone could not
+solve this masked-ink issue.
+
+**Source correction:** `CapturedFrames.frame()` now retains the
+actual photographed mint pixel mask (`9332881`).
+`ledger_pixels._mint_masks_required_ledger_wing()` inspects only
+the original mask at the expected physical ledger rows and required
+left/right wing intervals, accounting for independently measured
+image translation. If **and only if** a ledger witness would be
+`mismatch` and mint really covers a compulsory wing, it becomes
+`unverified`. No missing ledger gains `verified` status; clean
+`mismatch` witnesses still veto and every passing result still
+requires actual two-wing physical ink (`5a2c17f`). Two targeted
+negative/positive helper regressions are in
+`tests/test_phase3_ledger_pixels.py` (`7673ddb`) and run in the
+fast smoke suite (`58d38f1`).
+
+**Evidence:** The mint-mask behavior was independently exercised
+against five uploaded PNGs in the model workspace. A source-text
+inspection and screenshot-level math support the fix, but there was
+**no local Godot release-suite rerun** during this turn. The failing
+end-to-end framebuffer test must still pass on the user's machine.
+This repair changes the **independent notation verifier**, not the
+renderer; the physical ledger was already present.
