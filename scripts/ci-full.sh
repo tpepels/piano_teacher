@@ -64,7 +64,12 @@ PY
 # ensures even the 24-shard/full-renderer run does not accumulate old copies.
 CI_FULL_TMP="$(mktemp -d "${TMPDIR:-/tmp}/piano-teacher-ci-full.XXXXXXXX")"
 cleanup_full_tmp() {
-    if [[ -n "${CI_FULL_TMP:-}" && -d "$CI_FULL_TMP" ]]; then
+    if [[ -z "${CI_FULL_TMP:-}" || ! -d "$CI_FULL_TMP" ]]; then
+        return
+    fi
+    if [[ "${CI_FULL_KEEP_TMP:-0}" == "1" ]]; then
+        printf 'CI_FULL_TEMP_RETAINED: %s\\n' "$CI_FULL_TMP"
+    else
         rm -rf -- "$CI_FULL_TMP"
     fi
 }
