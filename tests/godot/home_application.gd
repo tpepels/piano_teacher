@@ -14,7 +14,7 @@ func run() -> void:
         app._on_library(0,JSON.stringify(catalog()).to_utf8_buffer())
         view.resume_button.pressed.emit()
         check(app.commands == [{"operation":"library.open","payload":{"id":"Collection/real.mid"}}]
-            and app.command_state.resume_requested, "Home Continue uses the real application saved-place route")
+            and app.command_coordinator.state.resume_requested, "Home Continue uses the real application saved-place route")
         app._on_action(1,JSON.stringify({"error":"Unreadable"}).to_utf8_buffer())
         check(view.recent_label.text == "Unreadable", "The application presents action errors to Home through values")
         app._on_library(1,PackedByteArray())
