@@ -123,6 +123,8 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_continuous_practice_loop.py::test_backend_authored_preview_queue_plan_survives_restart \
   tests/test_continuous_practice_loop.py::test_backend_recovery_queue_plan_keeps_identical_midi_deadline \
   tests/test_practice_stage_tempo_ladder.py::test_tempo_up_can_exceed_original_target_without_overwriting_per_song_progress \
+  tests/test_phase1e_journey.py::test_harder_outline_starts_fresh_after_three_clean_mastery_passes \
+  tests/test_phase1e_journey.py::test_earned_tempo_only_crosses_stage_boundaries_with_identical_source_ink \
   tests/test_assessment_service.py \
   tests/test_state_projection.py \
   tests/test_strategy_preferences_atomic.py \
