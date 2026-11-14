@@ -18,6 +18,22 @@ from .batch_checkpoint import BatchCheckpoint
 from .aggregate_shards import case_identity, encode_manifest, unverified_semantics
 
 
+def _source_manifest_name(path: Path) -> str:
+    """Identify imported audit sources, including local MIDI outside the checkout.
+
+    Repository paths retain their canonical public names. An external input
+    gets a stable opaque path hash plus basename: no host path leaked and
+    equal filenames in different locations cannot collide. Content bytes
+    remain independently bound by the complete input provenance hash.
+    """
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        identifier = sha256(os.fsencode(resolved)).hexdigest()[:16]
+        return f"external/{identifier}/{resolved.name}"
+
+
 def execute_case_jobs(jobs, *, workers, case_timeout, memory_limit_mib, resume,
                       godot_version, progress=None):
     """Compose the independent executor with this CLI's case execution."""
@@ -89,7 +105,7 @@ def run_batch(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
             semantic_case = AuditCase("source-semantics", str(path), 1, 1)
             if case_catalog.case_shard(path, semantic_case, shard_count) == shard_index:
                 summary["source_semantics_expected"] += 1
-                source_name = path.resolve().relative_to(ROOT.resolve()).as_posix()
+                source_name = _source_manifest_name(path)
                 manifest_ids.append(case_identity(source_name, "semantics", semantic_case))
                 semantics = planning.source_semantics(path, piece)
                 # A mismatched, ambiguous OR unsupported original obligation
@@ -128,7 +144,7 @@ def run_batch(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
     # 24-partition corpus contains every original case exactly once.
     try:
         for plan in plans:
-            source_name = plan.path.resolve().relative_to(ROOT.resolve()).as_posix()
+            source_name = _source_manifest_name(plan.path)
             for phase in ("originals", "focused", "stages"):
                 for case, _phrase, _variant in getattr(plan, phase):
                     manifest_ids.append(case_identity(source_name, phase, case))

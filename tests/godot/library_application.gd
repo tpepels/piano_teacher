@@ -29,10 +29,15 @@ class OfflineApp extends "res://main.gd":
             library_view,practice_view,settings_view,home_view)
         command_success_presenter = CommandSuccessPresenter.new(
             library_view,practice_view,settings_view,lesson_session)
-        command_success_effects = CommandSuccessEffects.new(
-            command_success_presenter,_on_state,_navigate,
-            _request_settings,_request_library,_request_library_health,
-            _refresh_score_status)
+        # Match the current signal-owned production API. The previous
+        # seven-argument constructor was deleted from Main.
+        command_success_effects = CommandSuccessEffects.new(command_success_presenter)
+        command_success_effects.publish_state.connect(_on_state)
+        command_success_effects.navigate_practice.connect(_navigate)
+        command_success_effects.request_settings.connect(_request_settings)
+        command_success_effects.request_library.connect(_request_library)
+        command_success_effects.request_library_health.connect(_request_library_health)
+        command_success_effects.refresh_score.connect(_refresh_score_status)
         metronome_frame = MetronomeFrameCoordinator.new(
             settings_view,practice_view,visual_transport_clock,
             _transport_beat_at,_count_tick,_raw_click)

@@ -54,7 +54,9 @@ def music(tmp_path):
 @pytest.fixture
 def engine(tmp_path):
     instance = PracticeEngine(tmp_path / "state", enable_midi=False)
-    instance.set_preferences(exercise_strategy="source-progression")
+    # The selectable desktop course is the combined Coda/Fukuda generator.
+    # Baseline source-progression is reserved for internal warm-up fixtures.
+    instance.set_preferences(exercise_strategy="coda-fukuda-midi")
     yield instance
     instance.db.close()
 
@@ -133,7 +135,8 @@ def test_complete_lesson_path_projects_saved_fingers_without_inference(engine, m
         engine.control("tempo_down")
         assert _fingers(engine.semantic_score()) == _fingers(model)
     assert {"left", "right", "both"} <= hands
-    assert {"skeleton", "original"} <= levels
+    assert "original" in levels
+    assert any(level != "original" for level in levels)
     assert set(seen) == {n.source_id for n in plan.piece.notes}
 
 

@@ -376,3 +376,20 @@ def test_single_shard_matches_the_previous_complete_case_set():
 def test_invalid_shard_configuration_is_rejected(index, count, tmp_path):
     with pytest.raises(ValueError, match="shard"):
         audit.audit_library(tmp_path, "godot", shard_index=index, shard_count=count)
+
+
+def test_external_source_manifest_names_are_stable_unique_and_private(tmp_path):
+    from scripts.audits.batch_run import _source_manifest_name
+    first = tmp_path / "one" / "same.mid"
+    second = tmp_path / "two" / "same.mid"
+    first.parent.mkdir()
+    second.parent.mkdir()
+    first.write_bytes(b"MThd")
+    second.write_bytes(b"MThd")
+    a = _source_manifest_name(first)
+    b = _source_manifest_name(second)
+    assert a == _source_manifest_name(first)
+    assert a != b
+    assert a.startswith("external/") and a.endswith("/same.mid")
+    assert str(tmp_path) not in a
+    assert _source_manifest_name(Path(__file__).resolve()).startswith("tests/")
