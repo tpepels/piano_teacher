@@ -1966,3 +1966,47 @@ the two failing fingering tests,
 and the Hanon Phase 6 benchmark. No independent Godot or full
 release run was possible in the model's sandbox. All changes
 are directly committed on `main`; acceptance is not claimed.
+
+### 2026-11-14 — shard 2 near-green: harder-stage tempo regression
+
+Developer uploaded `Geplakte tekst(20261114-214244).txt` from
+`534bfb5409b2`: fast atomicity/fingering/popup checks **8 passed**
+(69.46 s); the Hanon cold-load benchmark **1 passed** (15.02 s
+pytest total); full **shard 2: 1,350 passed, 1 failed** (579.72 s).
+No quota, new-fingering, cold-load, or preview/popup errors appeared.
+
+The one failure was `test_phase1e_journey.py::
+test_failure_slowdown_recovery_and_three_clean_mastery`: after three
+clean target-tempo passes of an eight-note `skeleton`, the actual
+larger `outline` started at 80 BPM instead of its 40 BPM novice
+baseline. This test expectation predates recent tempo-policy
+refactoring and is independently supported by original commit
+`7cf85e5` and `docs/lesson-tempo-policy.md`. We **did not
+change the existing journey test or relax any tempo bound**.
+
+Root cause: pure `teaching_course.carried_bpm()` transferred the
+previous step's earned effective BPM into **every later stage of the
+same passage**, even when the source attack count or rhythm changed.
+For an actual harder variant this gives unearned speed credit.
+The corrected transfer reads actual `stage.variant.notes` and
+carries speed only from an earlier stage with the **identical ordered
+Note tuple**. Source-note changes and rhythm transforms start the
+new stage at `stage_start_bpm` independently. Tempo-map-only
+changes with identical source notes can still convert through
+`effective_bpm` and `ladder_bpm`. Existing cross-measure
+exact-repeat transfer via `tempo_for_stage` is unchanged.
+Production fix `97871c0`.
+
+New low-cost regressions exercise three actual target-tempo mastery
+passes unlocking the harder outline at 40 BPM, equivalent source
+stages inheriting real earned 80 BPM, and a retimed variant
+not inheriting despite identical attack identities (`82b79dd`).
+Documentation updated (`64e4038`), all focused tests included
+in smoke (`627bad8`).
+
+**Acceptance outstanding:** no local pytest rerun possible from
+model tooling. Run
+`.venv/bin/python -m pytest -q tests/test_phase1e_journey.py`
+first, then `bash scripts/ci-full.sh --shard 2` for green-only
+continuation into 3 and 4, and finally shard 1 on the same clean
+revision. The full four-part release gate is NOT complete.
