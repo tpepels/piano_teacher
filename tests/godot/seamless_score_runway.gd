@@ -4,6 +4,7 @@ extends SceneTree
 const Runway := preload("res://score_runway.gd")
 const Session := preload("res://score_asset_session.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
+const StreamQueue := preload("res://score_stream_queue.gd")
 
 class MockView:
     extends Control
@@ -104,6 +105,16 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
+    # Rest-to-header clearance uses the real semantic rest/barline boundary;
+    # a live outgoing SOURCE still gets the full 60-pixel collision margin.
+    var rest_boundary := StreamQueue.peer_popin_after(
+        18.0,96.0,400.0,96.0,StreamQueue.PEER_REST_MARGIN_PX)
+    var source_boundary := StreamQueue.peer_popin_after(
+        18.0,96.0,400.0,96.0)
+    check(is_equal_approx(rest_boundary,18.0+6.0/96.0) and
+        is_equal_approx(source_boundary,18.0+60.0/96.0) and
+        rest_boundary < source_boundary,
+        "printed rest clears with raster padding; source ink keeps full peer margin")
     var stage := MockStage.new()
     root.add_child(stage)
     var session := Session.new(stage.renderer)
