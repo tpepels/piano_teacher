@@ -121,8 +121,8 @@ static func plan(renderer, action: String, world: float,
         "opening":source_opening,"start_world":onset,"empty_strip":false,
         "first_pixel_x":first_pixel_x,
         "first_ink_delay_seconds":
-            maxf(0.0,(first_pixel_x-width)/density)*60.0/
-                maxf(1.0,float(renderer.bpm)),
+            Admission.lead_seconds(maxf(0.0,(first_pixel_x-width)/density),0.0,
+                maxf(1.0,float(renderer.bpm))),
         "remaining_count":survivors.size(),
         "withdraw_owners":withdrawn["owners"].duplicate(),
         "reason":"new_immutable_future_slot"}
