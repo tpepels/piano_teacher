@@ -116,6 +116,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_midi_connection.py \
   tests/test_rolling_recovery_transition.py \
   tests/test_musical_scheduler.py \
+  tests/test_source_svg_stem_references.py \
   tests/test_continuation_deadline.py::test_last_boundary_rolling_slowdown_uses_one_written_rest_not_a_second_horizon \
   tests/test_mistake_responses.py \
   tests/test_teaching_decisions.py::test_teaching_source_safe_response_expands_held_notes_without_grid_index_crash \
