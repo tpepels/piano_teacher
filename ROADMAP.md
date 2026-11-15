@@ -2010,3 +2010,70 @@ model tooling. Run
 first, then `bash scripts/ci-full.sh --shard 2` for green-only
 continuation into 3 and 4, and finally shard 1 on the same clean
 revision. The full four-part release gate is NOT complete.
+
+### 2026-11-15 — shard 2: stale test metrics and late announced count-in race
+
+The developer's full `Geplakte tekst(20261115-062740).txt` release
+log on `9896080be49c` shows **1,349 passed, 4 skipped, 2 failed**
+(613.76 s, shard 2), with shards 3–4 correctly not started.
+The original `test_phase1e_journey` tempo progression issue is gone.
+No disk-quota cascade is reported.
+
+1. **Headless fingering spatial fixture:** The test's synthetic
+   `metrics` dictionary had only `cell`, `ink_offset`, and
+   `ink_size`. Production `FingeringAnnotations.metrics()` was
+   upgraded to provide `digit_ink` for all five numeral glyphs,
+   used for precise physical attachment. The old fake metrics
+   cause `SCRIPT ERROR: Invalid access to property/key 'digit_ink'`
+   and leave the headless SceneTree running until its 20-second
+   Python subprocess timeout. The synthetic fixture now supplies
+   real-shaped `digit_ink` for digits 1–5 (`dcbc0de`).
+   The production geometric thresholds and placement behavior are
+   unchanged.
+
+2. **Chopin persisted-popup restore lost every future note:**
+   During the second fresh application run, initial READY/Play and
+   revision reload succeeded. The native renderer then became empty
+   while the backend continued disconnected `preview_gap` cycles.
+   Original `SCORE_PLAN_QUEUE` diagnostics explicitly show
+   repeated `refused_inside_or_overlap` with **no same-layer ink
+   blockers**, and `elapsed` after each deadline. A concrete first
+   occurrence: world beat **10.683**, backend-graded deadline
+   **16.374333**, announced count-in **6.0**, current header
+   **2.723670**; the deadline was **5.6913 beats in the future**.
+   `StreamAdmission.position()` correctly refused the already
+   *inside-viewport* source under offscreen append rules, but
+   `empty_strip_start()` incorrectly required a **new full
+   six-beat count-in starting from this later snapshot**.
+   The backend's six-beat count-in had already been announced before
+   this frame, so that comparison refused every succeeding copy.
+   Global score motion continued but no source was admitted.
+
+   `ScoreStreamAdmission.announced_empty_strip_start` now retains
+   the existing full-bar boundary when it can be met, but permits
+   an **already-announced practice continuation** on an otherwise
+   empty and physically clear strip when the original source beat
+   is still at least
+   `max(MIN_READING_BEATS, header+OFFSCREEN_MARGIN_BEATS)` ahead.
+   Its absolute graded deadline is unchanged. The original source,
+   peer ink, peer rest, and earlier-layer clearance rules all veto
+   a conflicting insertion. Nonpractice Listen/Perform/Learn
+   onsets keep their original full-bar timestamp-equality proof.
+   Changes: `1984808`, `c3b5a8b`.
+
+   Original failed timestamps, too-late notes, another source still
+   ahead, and blocking peer source/rest cases are now exercised
+   by actual Godot policy tests `tests/godot/score_stream_admission.gd`
+   (`8092729`). A new Python/headless-Godot wrapper integrates
+   this previously standalone script into the complete pytest
+   collection (`e629698`), and manual extended CI invokes it
+   (`59da9eb`). Further refusals now include peer-layer floors
+   and remaining deadline lead in `SCORE_PLAN_QUEUE` logs
+   (`dafe1c0`).
+
+**Not yet verified on the user's Godot machine.** The CI gate
+still requires a focused `tests/test_fingering_spatial_layout.py`
+and `tests/test_score_stream_admission.py` run, the Chopin
+application restore test and the full four-shard acceptance on
+the *same clean commit*. Do not claim that the renderer is fixed
+from source inspection alone.
