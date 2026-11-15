@@ -432,8 +432,13 @@ def _stem(pixels, anchors, up, *, edge=None):
             # still has to be continuous, bright at both ends, thin, and
             # at least 1.25 spaces long; missing/erased stem pixels cannot
             # be supplied by the source or by a nearby voice.
-            head_top = min(a['bbox'][1] for a in anchors)
-            head_bottom = max(a['bbox'][3] for a in anchors)
+            # Synthetic thin-shaft pixel proofs supply centre points without
+            # a photographed head rectangle; preserve their previous bounded
+            # half-space acceptance instead of demanding optional metadata.
+            head_top = min((a['bbox'][1] if 'bbox' in a else a['y']-.35*gap)
+                           for a in anchors)
+            head_bottom = max((a['bbox'][3] if 'bbox' in a else a['y']+.35*gap)
+                              for a in anchors)
             if up:
                 valid = (top <= high-1.25*gap and bottom >= low-.3*gap
                          and bottom <= head_bottom+.15*gap)
