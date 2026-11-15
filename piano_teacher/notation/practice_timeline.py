@@ -22,7 +22,8 @@ from ..lesson_timing import preparation_meter
 SCHEMA = "piano-teacher-practice-timeline-v1"
 # Unloaded-state placeholder only: loaded gaps always come from source meter.
 # Used by both transport state and its snapshot projection.
-UNLOADED_GAP_BEATS = 4.0
+UNLOADED_METER = (4, 4)
+UNLOADED_GAP_BEATS = UNLOADED_METER[0] * 4.0 / UNLOADED_METER[1]
 
 
 def _preparation_duration(meter) -> float:
