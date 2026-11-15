@@ -58,7 +58,13 @@ def test_beam_photographic_window_contains_actual_three_level_ink_without_recons
     low, high = _beam_sample_band(tip, gap, 3, photographed.shape[0])
     assert _photographed_beam_runs(frame, low, high, 6) == [
         (198, 204), (207, 212), (215, 220)]
-    assert _beam_sample_band(tip, gap, 1, 260) == (old_low, old_high)
+    # The single-beam window was narrowed deliberately: a wider scan also
+    # captures adjacent time-signature ink as a spurious extra beam. Three
+    # source-owned levels still require their full, photographed window.
+    single_low, single_high = _beam_sample_band(tip, gap, 1, 260)
+    assert (single_low, single_high) == (round(tip-gap), round(tip+gap))
+    assert _photographed_beam_runs(frame, single_low, single_high, 6) == [
+        (207, 212), (215, 220)]
     # A genuinely missing source beam is never painted by the new window.
     photographed[198:204, 6] = False
     assert len(_photographed_beam_runs(frame, low, high, 6)) == 2
