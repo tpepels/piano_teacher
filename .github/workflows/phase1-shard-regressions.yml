@@ -7,6 +7,8 @@ on:
       - '.github/workflows/phase1-shard-regressions.yml'
       - 'piano_teacher/notation/stem_pixels.py'
       - 'godot/notation/native/fingering_annotations.gd'
+      - 'godot/notation/native/fingering_obstacles.gd'
+      - 'godot/notation/native/symbol_painter.gd'
       - 'godot/notation/native/fingering_spatial_layout.gd'
       - 'godot/notation/native/voice_layout.gd'
       - 'tests/test_native_voice_collisions.py'
