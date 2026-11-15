@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from .music import Note, Phrase
+from .application.musical_scheduler import SCHEDULER
 
 
 class BeatClock(Protocol):
@@ -27,6 +28,6 @@ def expected_note_seconds(phrase: Phrase, clock: BeatClock, from_beat: float = 0
         release = min(note.end, phrase.end) - phrase.start
         return (clock.seconds_at(attack) - origin,
                 clock.seconds_at(release) - origin,
-                60.0 / clock.bpm_at(attack))
+                SCHEDULER.seconds_per_beat(clock.bpm_at(attack)))
 
     return expected

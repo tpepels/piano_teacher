@@ -9,6 +9,7 @@ from .music import Phrase, note_name, source_note_id
 from .practice import Assessment, note_dimensions
 from typing import Callable
 from .engraving.geometry import locate_beat
+from .application.musical_scheduler import SCHEDULER
 
 
 def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *,
@@ -82,7 +83,7 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
     # coordinate, with an explicit estimated-position marker near the system.
     for played in assessment.unmatched_played:
         beat = (elapsed_to_beat(played.onset) if elapsed_to_beat is not None
-                else played_from_beat + played.onset * bpm / 60)
+                else played_from_beat + SCHEDULER.seconds_beats(played.onset,bpm))
         if beat < 0 or beat > layout.get("beats", 0):
             unmapped += 1
             continue
