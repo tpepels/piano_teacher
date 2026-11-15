@@ -135,6 +135,13 @@ func run() -> void:
     check(native._stream_leading_spaces(0.0)==1.6 and
             native._stream_leading_spaces(2.0)==1.6,
         "identical continuing context has a short REAL painted-ink clip")
+    native.inherited_opening_context.clear()
+    native._opening_context_printed = true
+    check(native._stream_leading_spaces(0.0)==1.6,
+        "the second take of the same score must clip its duplicated header")
+    native._opening_context_printed = false
+    check(native._stream_leading_spaces(0.0)==15.0,
+        "new standalone scores must keep their original context ink")
     native.free()
     var stage := MockStage.new()
     root.add_child(stage)
