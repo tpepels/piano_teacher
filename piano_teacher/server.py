@@ -783,8 +783,6 @@ class PracticeEngine:
                 feedback_take=self._feedback_take())
 
     def load(self, path: str, *, warmup: bool = False):
-        # A new plan: no previous take's written rest applies (M6).
-        self._rest_take_end = None
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = checkpoint = time.perf_counter()
         with self._fingering_lock:
@@ -810,26 +808,36 @@ class PracticeEngine:
 
             with ThreadPoolExecutor(max_workers=1, thread_name_prefix="piano-fingering") as worker:
                 predicted = worker.submit(prepare_fingering)
+                # Snapshot database-backed facts under the state lock. Course
+                # compilation and the external fingering worker may both take
+                # seconds; neither may block state polling or live MIDI.
                 with self.lock:
-                    started_course = time.perf_counter()
-                    candidate = LearningPlan(piece, warmup=warmup,
-                        exercise_strategy=self.library.settings['exercise_strategy'],
-                        fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
-                        feedback=self.fukuda_mistakes.evidence(fingerprint))
+                    strategy = self.library.settings["exercise_strategy"]
+                    mistakes = self.fukuda_mistakes.problematic(fingerprint)
+                    evidence = self.fukuda_mistakes.evidence(fingerprint)
+                started_course = time.perf_counter()
+                candidate = LearningPlan(piece, warmup=warmup,
+                    exercise_strategy=strategy,
+                    fukuda_mistakes=mistakes, feedback=evidence)
+                with self.lock:
                     self.progress.restore(candidate, fingerprint)
-                    course_ms = (time.perf_counter()-started_course)*1000.0
-                    fingering_plan, infer_ms = predicted.result()
-                    # The compiled course's source notes are unchanged:
-                    # publish the complete original-piece fingering only
-                    # after both source-backed artifacts are ready.
-                    candidate.piece = replace(piece, fingering_plan=fingering_plan)
-                    if diagnostics:
-                        print("SCORE_LOAD_STAGE: fingering", round(infer_ms,1),
-                              "ms status", fingering_plan.status,flush=True)
-                        print("SCORE_LOAD_STAGE: curriculum", round(course_ms,1),
-                              "ms", candidate.lesson_generator.name,flush=True)
-                        print("SCORE_LOAD_STAGE: parallel_prepare",round((time.perf_counter()-checkpoint)*1000,1),
-                              "ms wall",source.name,flush=True)
+                course_ms = (time.perf_counter()-started_course)*1000.0
+                # Never await inference while holding the engine state lock.
+                # The separate fingering mutex still serializes loads and edits.
+                fingering_plan, infer_ms = predicted.result()
+                # Publish only once both candidates succeeded. Until then the
+                # previous score, transport and snapshot remain authoritative.
+                candidate.piece = replace(piece, fingering_plan=fingering_plan)
+                if diagnostics:
+                    print("SCORE_LOAD_STAGE: fingering", round(infer_ms,1),
+                          "ms status", fingering_plan.status,flush=True)
+                    print("SCORE_LOAD_STAGE: curriculum", round(course_ms,1),
+                          "ms", candidate.lesson_generator.name,flush=True)
+                    print("SCORE_LOAD_STAGE: parallel_prepare",round((time.perf_counter()-checkpoint)*1000,1),
+                          "ms wall",source.name,flush=True)
+                with self.lock:
+                    # A new plan: no previous take's written rest applies (M6).
+                    self._rest_take_end = None
                     self._stop(reason="source_changed")
                     self._reset_trouble()
                     self.course_guided = False
