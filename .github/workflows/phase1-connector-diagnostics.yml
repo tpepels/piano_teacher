@@ -95,6 +95,29 @@ jobs:
             tests/test_source_beam_pixel_fidelity.py::test_beam_photographic_window_contains_actual_three_level_ink_without_reconstructing_it \
             tests/test_verovio_wide_tuplet.py::test_real_native_recovered_tuplet_has_independently_identified_number \
             tests/test_verovio_wide_tuplet.py::test_corrupted_recovered_real_numeral_is_rejected
+      - name: Inspect remaining real-source chord verification discrepancies
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from piano_teacher.notation.feature_pixels import verify_note_feature_pixels
+          cases=[
+              ('NATIVE_KEY',Path('tests/fixtures/native_structure_key'),'score.musicxml'),
+              ('CHORD_FEATURE',Path('tests/fixtures/feature_pixels/chords'),'source.musicxml'),
+          ]
+          for name,folder,filename in cases:
+              report=verify_note_feature_pixels((folder/filename).read_text(),folder,hand='right')
+              print('CHORD_DISCREPANCY_COVERAGE',name,json.dumps(report['by_construct']['stem']),flush=True)
+              for row in report['measured']:
+                  if name=='NATIVE_KEY' and row['beat']!=3.0:
+                      continue
+                  stem=row['features'].get('stem')
+                  if stem is None or stem['status']=='verified':
+                      continue
+                  print('CHORD_DISCREPANCY',name,json.dumps(
+                      {'beat':row['beat'],'staff':row['staff'],'spelling':row['spelling'],
+                       'stem':stem},default=str),flush=True)
+          PY
       - name: Capture authored beam and tuplet failures with strict source checks
         run: |
           mkdir -p "$RUNNER_TEMP/connectors"
