@@ -139,3 +139,12 @@ A native bridge scan found no references to the retired APIs.
 These results validate the code integration sweep. Full four-shard release
 testing, the exact local Godot+ALSA physical 2.25-bar acceptance, and
 physical keyboard acceptance remain separate gates.
+
+## Horizontal-spacing policy and cross-component regressions
+
+The horizontal scale is independent of musical deadline calculations. The
+single score-wide defaults, actual Verovio header measurements, adjustment
+limits and remaining release evidence are documented in
+[the timing and spacing audit](timing-and-spacing-audit-2026-11-15.md).
+`tests/test_timing_geometry_contract.py` verifies mixed-meter geometry,
+multiple densities, header clearance and tempo-change continuity in Godot.
