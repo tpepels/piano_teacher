@@ -164,13 +164,15 @@ static func compatible_opening_context(outgoing: Dictionary,
         return false
     if outgoing.get("keys",{}) != incoming.get("keys",{}):
         return false
-    var staves := ["right","left"] if next_hand == "both" else [next_hand]
+    var staves: Array = ["right","left"] if next_hand == "both" else [next_hand]
+    var previous_clefs: Dictionary = outgoing.get("clefs",{})
+    var next_clefs: Dictionary = incoming.get("clefs",{})
     for staff in staves:
         var default_clef: Dictionary = {
             "sign":"G" if staff == "right" else "F",
             "line":2 if staff == "right" else 4, "octave_change":0}
-        var a: Dictionary = outgoing.get("clefs",{}).get(staff,default_clef)
-        var b: Dictionary = incoming.get("clefs",{}).get(staff,default_clef)
+        var a: Dictionary = previous_clefs.get(staff,default_clef)
+        var b: Dictionary = next_clefs.get(staff,default_clef)
         if a != b:
             return false
     return true
