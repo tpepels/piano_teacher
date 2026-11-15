@@ -148,5 +148,49 @@ func _initialize() -> void:
     check(is_equal_approx(Admission.retry_start(take,2.0,5.0,1.5,4.0,d,g,4.0),
             maxf(2.0+5.0+1.5+Admission.OFFSCREEN_MARGIN_BEATS,8.0+1.5)),
         "a Retry opens just beyond the right edge, after exposed ink, no travel")
+    # Exact physical Chopin restore failure (2026-11-15): the plan was
+    # already announced with a complete 12/8 count-in. The renderer first
+    # saw it 0.31 beats later, with 5.69 of 6 beats STILL ahead. The score
+    # queue was empty; rejecting because the full bar did not start NOW
+    # left every subsequent take with zero noteheads.
+    var restored_world := 10.683
+    var restored_deadline := 16.3743333333333
+    var restored_header := 2.72367047885257
+    var restored_density := 121.16003112793
+    var restored_gap := 22.0
+    check(not is_finite(Admission.position(
+            [],restored_world,6.5,restored_header,restored_deadline,
+            0.0,restored_density,restored_gap,0.5)),
+        "a late announced take cannot enter through the offscreen append gate")
+    check(is_equal_approx(Admission.announced_empty_strip_start(
+            [],restored_world,6.0,restored_header,restored_deadline,
+            NAN,restored_density,restored_gap,0.5),restored_deadline),
+        "a real announced take with 5.69 beats ahead opens on a clear strip")
+    check(is_equal_approx(Admission.empty_strip_start(
+            [],restored_world,6.0,restored_header,NAN,
+            restored_density,restored_gap,0.5),restored_world+6.0),
+        "an initial unannounced empty-strip start still needs its entire bar")
+    # The exception NEVER introduces a late or obstructed head. A newly
+    # encountered, nearly elapsed deadline cannot be placed at the playhead.
+    check(not is_finite(Admission.announced_empty_strip_start(
+            [],restored_world,6.0,restored_header,restored_world+2.8,
+            NAN,restored_density,restored_gap,0.5)),
+        "a mostly elapsed take is rejected if its first ink lacks safe lead")
+    var conflicting_source: Array = [{
+        "kind":"source","world_origin":restored_world+.5,
+        "source_floor":0.0,"source_ceiling":.5}]
+    check(not is_finite(Admission.announced_empty_strip_start(
+            conflicting_source,restored_world,6.0,restored_header,
+            restored_deadline,NAN,restored_density,restored_gap,0.5)),
+        "a source still ahead must block a late announced source")
+    check(not is_finite(Admission.announced_empty_strip_start(
+            [],restored_world,6.0,restored_header,restored_deadline,
+            restored_world+1.0,restored_density,restored_gap,0.5)),
+        "peer source ink still ahead blocks late empty-strip admission")
+    check(not is_finite(Admission.announced_empty_strip_start(
+            [],restored_world,6.0,restored_header,restored_deadline,
+            NAN,restored_density,restored_gap,0.5,
+            restored_deadline-.5)),
+        "a peer written rest must be fully cleared before the new header")
     print("SCORE_STREAM_ADMISSION_FAILURES:",failures)
     quit(0 if failures==0 else 1)
