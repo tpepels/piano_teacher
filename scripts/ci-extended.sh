@@ -32,6 +32,7 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_midi_device_coordinator.py \
   tests/test_rest_lane_layout.py \
   tests/test_fingering_spatial_layout.py \
+  tests/test_score_stream_admission.py \
   tests/test_library_screen.py \
   tests/test_settings_ownership.py \
   tests/test_home_screen.py \
