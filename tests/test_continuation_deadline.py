@@ -268,6 +268,68 @@ def test_an_announced_continuation_is_exactly_the_take_that_runs(engine, scenari
         assert plan["bpm"] > BPM, "the count-in is announced at the stepped tempo"
 
 
+def _chosen_teacher(monkeypatch, app, choose=None):
+    """Instrument the selected generator's current, validated teaching API.
+
+    The previous test patched removed LearningPlan feedback mutation and
+    remediation helpers. The production owner is now decide_teaching, and
+    it publishes one immutable TeachingDecision before any announcement.
+    """
+    generator_class = type(app.plan.lesson_generator)
+    original = generator_class.decide_teaching
+    calls = []
+
+    def decide(self, event, state):
+        selected = original(self, event, state)
+        if event.kind == "full_result":
+            if choose is not None:
+                selected = choose(selected, state, event)
+            calls.append((event, state, selected))
+        return selected
+
+    monkeypatch.setattr(generator_class, "decide_teaching", decide)
+    return calls
+
+
+def _reroute_decision(choice):
+    """Choose a real current-course stage or a source-bound remedial target."""
+    from dataclasses import replace
+    from piano_teacher.remediation import RemedialAssignment
+    from piano_teacher.teaching_course import steps
+
+    def choose(decision, state, event):
+        if choice == "move_stage":
+            available = [entry for entry in steps(state.course)
+                         if entry[3] != state.course.key]
+            assert available, "Fixture requires an actual second teaching stage"
+            cursor = tuple(available[0][:3])
+            progress = replace(decision.progress_after, cursor=cursor)
+            selected_course = state.course.with_progress(cursor=cursor)
+            assert decision.next_exposure is not None
+            exposure = replace(decision.next_exposure,
+                stage_key=selected_course.key,hand=selected_course.hand,
+                from_beat=0.0,end_beat=None,preparation="handoff",
+                bpm=progress.bpm)
+            return replace(decision, progress_after=progress,
+                           next_exposure=exposure, continuation="advance",
+                           remediation=None, response=None)
+        if choice == "remediation":
+            selected = state.course.stage.variant
+            # This two-measure fixture has a real first-bar grid boundary at
+            # beat 4. The remedial attempt stays scored and source-bound.
+            assignment = RemedialAssignment(
+                "timing-practice", "rhythm", 0.0, 4.0, selected,
+                state.course.key, "assessment_weakness")
+            assert decision.next_exposure is not None
+            exposure = replace(decision.next_exposure,
+                from_beat=0.0,end_beat=4.0,preparation="rewind")
+            return replace(decision, remediation=assignment,response=None,
+                           next_exposure=exposure,continuation="repair")
+        raise ValueError("Unknown teaching test choice")
+
+    return choose
+
+
 @pytest.mark.parametrize("reason", ["mastery", "feedback_moves_stage", "remediation"])
 def test_a_take_whose_settlement_can_reroute_is_not_announced(engine, monkeypatch, reason):
     app, now = engine()
@@ -275,60 +337,49 @@ def test_a_take_whose_settlement_can_reroute_is_not_announced(engine, monkeypatc
         app.plan.bpm = app.plan.target_bpm
         from piano_teacher.lesson_settings import SETTINGS
         app.plan.streak = SETTINGS.clean_runs_to_master - 1
-    elif reason == "feedback_moves_stage":
-        _feedback_refresh(monkeypatch, app, moves=True)
+        chosen = _chosen_teacher(monkeypatch, app)
     else:
-        monkeypatch.setattr(app, "_decide_remediation", lambda result: setattr(
-            app, "_decided_remediation", (app.plan.identity, "remedial section")))
+        chosen = _chosen_teacher(monkeypatch, app,
+            _reroute_decision("move_stage" if reason == "feedback_moves_stage"
+                              else "remediation"))
     start_with_horizon(app)
     if reason != "remediation":
         play_clean(app)
     _, rest = finish_take(app, now)
+    assert len(chosen) == 1, "the selected generator decides once at take end"
+    decision = app.attempt_settlement.pending.decision
+    if reason == "mastery":
+        assert decision.continuation in ("advance","stop")
+    elif reason == "feedback_moves_stage":
+        assert decision.next_exposure.stage_key != chosen[0][1].course.key
+    else:
+        assert decision.remediation is not None
     assert rest["phase"] in ("feedback", "recovering")
     assert "score_queue_next" not in rest
     assert app.visual_transport.announced_continuation is None
 
 
-def _feedback_refresh(monkeypatch, app, *, moves: bool):
-    """An original-level stage whose feedback refresh moves (or keeps) the stage."""
-    plan_type = type(app.plan)
-    monkeypatch.setattr(plan_type, "accepts_performance_feedback", property(lambda _p: True))
-    calls = []
-
-    def refresh(plan, evidence, *, prefer_repair=True, focus_ids=None):
-        calls.append(dict(evidence))
-        if moves:
-            plan.stage_tempos = dict(plan.stage_tempos, _moved=True)
-            monkeypatch.setattr(plan_type, "identity", property(
-                lambda p: "moved-stage" if p.stage_tempos.get("_moved") else "kept"))
-        return moves
-    monkeypatch.setattr(plan_type, "refresh_from_feedback", refresh)
-
-    def changes(plan, evidence):
-        calls.append(dict(evidence))
-        return moves
-    monkeypatch.setattr(plan_type, "feedback_changes_generator", changes)
-    return calls
-
-
 def test_an_original_level_take_that_keeps_its_stage_is_announced(engine, monkeypatch):
-    """Item 1 (round 3): feedback refresh is decided at take end; only a take
-    that really re-engraves another stage goes unannounced."""
+    """One generator decision is bound before both announcing and settling.
+
+    Settlement must apply that exact decision without running the generator
+    again or changing the MIDI-graded onset of already reserved source ink.
+    """
     app, now = engine()
-    calls = _feedback_refresh(monkeypatch, app, moves=False)
+    calls = _chosen_teacher(monkeypatch, app)
     start_with_horizon(app)
     play_clean(app)
     _, rest = finish_take(app, now)
-    assert calls, "the refresh was decided at take end"
+    assert len(calls) == 1
+    decision = app.attempt_settlement.pending.decision
+    assert decision.next_exposure.stage_key == app.plan.identity
     assert "score_queue_next" in rest
     plan = rest["score_queue_next"]
     now[0] = plan["deadline_at_ms"] / 1000 + .01
     started = app.state()
     assert started["running"] and started["transport_id"] == plan["transport_id"]
     assert app.visual_transport.run_at * 1000 == pytest.approx(plan["deadline_at_ms"])
-    # The dry run restored the plan exactly: settlement refreshed it again.
-    assert len(calls) == 2
-
+    assert len(calls) == 1, "settlement must not reselect teaching"
 
 def _play_pattern(app, pattern: str):
     phrase = app.plan.active_phrase
@@ -350,40 +401,40 @@ def _play_pattern(app, pattern: str):
     app.recorder.presses = presses
 
 
-def test_take_end_remediation_decision_equals_the_settlement_computation(engine):
-    """The remediation decided when a take ends is exactly what the former
-    settlement-time computation (ledger including this take -> observe ->
-    planner) returns, across several failure histories."""
-    from piano_teacher.diagnosis_policies import AssessmentEvidence
+def test_repeated_failure_history_uses_one_validated_teaching_decision_per_take(
+        engine, monkeypatch):
+    """Repeated pitch, timing and hold errors must not trigger a second choice.
+
+    Decisions include all retry, remediation, tempo and selected-exposure
+    effects. The settlement receipt must contain the IDENTICAL immutable
+    generator decision, not a recalculated result after durable evidence.
+    """
     app, now = engine()
+    calls = _chosen_teacher(monkeypatch, app)
     history = ["late", "late", "late", "short", "short", "short",
                "wrong", "wrong", "missed", "late", "short", "wrong"]
     decisions = []
     for pattern in history:
-        if not (app.running and app.visual_transport.play_from_beat == 0
-                and app.review_end_beat is None):
+        if app.running or app.attempt_settlement.pending is not None:
             app.control("stop")
-            start_with_horizon(app)
+        start_with_horizon(app)
         _play_pattern(app, pattern)
         finish_take(app, now)
-        result = app.pending_result
-        assert result is not None and not result.passed
-        stage, decided = app._decided_remediation
-        bpm = app._pending_assessed_bpm
-        # Settle the take (the next take starts) so the ledger holds it.
-        now[0] = max(now[0], app.visual_transport.next_at) + .01
-        app.state()
-        recommendation = app.practice_policy.observe(
-            app.fingerprint, AssessmentEvidence.from_result(stage, result, bpm))
-        old = (app.remediation_planner.plan(
-            recommendation, result, app.plan.active_variant, stage_key=stage,
-            boundaries=app.plan.piece.bar_boundaries)
-            if recommendation is not None else None)
-        assert decided == old, (pattern, decided, old)
-        decisions.append(decided)
-    assert any(d is None for d in decisions)
-    assert any(d is not None for d in decisions), "no history produced a remediation"
-
+        pending = app.attempt_settlement.pending
+        assert pending is not None and pending.receipt is None
+        assert pending.assessment is not None and not pending.assessment.passed
+        assert pending.decision.expected == pending.state.binding
+        before = len(calls)
+        decision = pending.decision
+        receipt = app._commit_pending()
+        assert receipt is not None
+        assert len(calls) == before
+        assert pending.receipt is not None
+        assert pending.receipt.decision is decision
+        decisions.append(decision)
+    assert len(calls) == len(history)
+    assert all(item.event_id for item in decisions)
+    assert len({item.event_id for item in decisions}) == len(history)
 
 CLEAR, HEADER = 0.3, 2.4  # beats, as Godot reports them (short_rest_geometry)
 
@@ -453,44 +504,59 @@ def test_play_runs_at_the_reserved_deadline_even_when_the_command_was_delayed(en
 
 
 def test_an_unexpected_generator_error_at_take_end_leaves_the_take_unannounced(
-        engine, monkeypatch, caplog):
-    """Round 4 item 4: any generator error in the take-end decision means
-    "unannounced" and is logged with its traceback; settlement decides."""
-    app, now = engine()
-    plan_type = type(app.plan)
-    monkeypatch.setattr(plan_type, "accepts_performance_feedback", property(lambda _p: True))
+        engine, monkeypatch):
+    """Generator faults fail closed before an immutable new score is admitted.
 
-    def broken(plan, evidence):
-        raise KeyError("generator bug")
-    monkeypatch.setattr(plan_type, "feedback_changes_generator", broken)
-    monkeypatch.setattr(plan_type, "refresh_from_feedback",
-                        lambda plan, evidence, **_kw: False)
+    A failed authoritative choice must surface its original exception and
+    retain the graded result for repair. No fallback policy may silently
+    announce a different deadline or grant lesson progress.
+    """
+    app, now = engine()
+    initial = app.plan.teaching_progress()
+    generator_class = type(app.plan.lesson_generator)
+    original = generator_class.decide_teaching
+
+    def broken(self, event, state):
+        if event.kind == "full_result":
+            raise KeyError("generator bug")
+        return original(self, event, state)
+
+    monkeypatch.setattr(generator_class, "decide_teaching", broken)
     start_with_horizon(app)
     play_clean(app)
-    with caplog.at_level("ERROR"):
-        _, rest = finish_take(app, now)
-    assert "score_queue_next" not in rest
+    with pytest.raises(KeyError, match="generator bug"):
+        finish_take(app, now)
+    assert app.pending_result is not None
+    assert app.plan.teaching_progress() == initial
     assert app.visual_transport.announced_continuation is None
-    assert any("re-engraving decision failed" in r.getMessage() and r.exc_info
-               for r in caplog.records)
+    assert app.attempt_settlement.pending is None
 
 
 @pytest.mark.parametrize("outcome", ["clean", "failed"])
-def test_an_unannounced_take_settles_during_its_written_rest(engine, monkeypatch, outcome):
-    """Round 4: a take whose settlement may re-engrave is unannounced, but
-    it settles at once (during the written rest bar), not at the end of the
-    rest, so the next source can still open straight after that bar."""
+def test_unannounced_new_stage_waits_for_prepared_ink_without_graded_start(
+        engine, monkeypatch, outcome):
+    """A reselected source may not begin while its real engraving is missing.
+
+    The old test forced a removed LearningPlan refresh callback. The current
+    source decision is made once and must wait for verified future-stage
+    readiness, while the presentation axis keeps scrolling.
+    """
     app, now = engine()
-    _feedback_refresh(monkeypatch, app, moves=True)
+    calls = _chosen_teacher(monkeypatch,app,_reroute_decision("move_stage"))
     start_short(app)
     if outcome == "clean":
         play_clean(app)
     end_at, rest = finish_take(app, now)
+    assert len(calls) == 1
+    assert app.attempt_settlement.pending.decision.next_exposure.stage_key != app.plan.identity
     assert "score_queue_next" not in rest
-    now[0] = end_at + 0.5
+    before_transport = app.transport_id
+    now[0] = end_at + .5
     app.state()
-    assert app.pending_result is None, "settled within half a second of the take end"
-
+    assert not app.running and app.transport_id == before_transport
+    assert app.visual_transport.announced_continuation is None
+    assert app.pending_result is not None
+    assert app.attempt_settlement.pending.receipt is None
 
 def test_stop_forgets_the_last_take_end(engine):
     """Round 4 fix wave M6: no later rest can follow a stopped session."""
