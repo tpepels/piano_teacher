@@ -142,5 +142,5 @@ def test_automatic_rests_are_at_most_about_two_bars(continuation_run):
     assert automatic, checked["takes"]
     for take in automatic:
         assert "preceding_source_seconds" in take, take
-        assert take["rest_bars"] is not None and take["rest_bars"] <= 2.25, take
+        assert take["rest_bars"] is not None and take["rest_bars"] <= 2.25, json.dumps(take, indent=2)
         assert take["rest_ok"], take
