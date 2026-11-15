@@ -1,0 +1,68 @@
+name: Phase 1 overlapping voice connector evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase1-connector-diagnostics.yml'
+permissions:
+  contents: read
+jobs:
+  connector-pixels:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install precise real score and actual framebuffer dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]' numpy
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o "$RUNNER_TEMP/godot.zip"
+          mkdir -p "$RUNNER_TEMP/godot-bin"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
+          sudo install -m 755 "$RUNNER_TEMP/godot-bin/Godot_v4.7.2-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Capture authored beam and tuplet failures with strict source checks
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/connectors"
+          xvfb-run -a -s '-screen 0 2000x1100x24' \
+            timeout 365s python -m pytest -q --tb=short \
+            -k 'beamed-overlap or tuplet-overlap' \
+            --basetemp="$RUNNER_TEMP/connectors/captures" \
+            tests/test_native_voice_collisions.py
+      - name: Explain original reference and actual bitmap independently
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          from piano_teacher.notation.connector_pixels import verify_beam_pixels,verify_tuplet_pixels
+          base=Path(os.environ['RUNNER_TEMP'])/'connectors/captures'
+          for case, verifier in [('beamed-overlap0',verify_beam_pixels),
+                                 ('tuplet-overlap0',verify_tuplet_pixels)]:
+              folder=base/case
+              xml=(folder/'source.musicxml').read_text()
+              report=verifier(xml,folder,hand='right')
+              (folder/'diagnostic-connector-proof.json').write_text(json.dumps(report,indent=2,default=str))
+              print('CONNECTOR_CASE',case, 'COVERAGE',report.get('coverage'))
+              for item in report.get('measured',[]):
+                  print('CONNECTOR_MEASUREMENT',case,json.dumps(item,default=str)[:18000])
+          PY
+      - name: Keep exact SVG and framebuffer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase1-source-connector-${{ github.sha }}
+          path: ${{ runner.temp }}/connectors/
+          retention-days: 14
+          if-no-files-found: warn
