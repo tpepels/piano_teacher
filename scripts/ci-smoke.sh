@@ -105,6 +105,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_phase3_ledger_pixels.py::test_mint_ledger_occlusion_cannot_reclassify_overlapping_head_center \
   tests/test_midi_polyphonic_stems.py \
   tests/test_polyphonic_chord_asset_directions.py \
+  tests/test_readiness_rest_tempo.py \
   tests/test_midi_visual_fast_path.py \
   tests/test_midi_calibration.py \
   tests/test_calibration_grading_integration.py \
