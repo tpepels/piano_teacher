@@ -58,11 +58,15 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
     var measure_index: int = _measure_index_at_or_after(
         timeline.measures,left-.00001)
     var previous_measure: Dictionary = (
-        timeline.measures[measure_index-1] if measure_index > 0 else {})
+        timeline.measures[measure_index-1] if measure_index > 0 else
+        view.inherited_opening_context)
     for index in range(measure_index,timeline.measures.size()):
         var measure: Dictionary = timeline.measures[index]
         var at: float = float(measure.get("start_beat",0.0))
-        var first: bool = index == 0
+        # A prepared same-context handoff carries its clef/key/meter
+        # from the preceding live score. No duplicate initial header ink
+        # is painted, matching the smaller measured leading clip bound.
+        var first: bool = index == 0 and view.inherited_opening_context.is_empty()
         if at > right+.00001:
             break
         if not frame.event_visible(measure):
@@ -76,7 +80,7 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
             context_painter.paint_barline(target,frame,barline,gap)
         var crowded_meter: bool = context_painter.paint_context(
             target,frame,measure,previous_measure,x,gap,first)
-        if not first and not crowded_meter and x>=0.0 and x<=retained_width:
+        if index > 0 and not crowded_meter and x>=0.0 and x<=retained_width:
             target.draw_string(font,Vector2(x+gap*.4,
                 layout.staff_center("right")-gap*4.3),
                 str(int(measure.get("number",0))),
