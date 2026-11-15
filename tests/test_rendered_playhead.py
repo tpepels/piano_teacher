@@ -21,7 +21,11 @@ def test_rendered_playhead_stays_fixed_on_every_moving_frame(tmp_path):
                              str(ROOT / "tests/godot/recovery_motion_capture.gd"),
                              "--", str(tmp_path), str(tmp_path),
                              "res://visual_transport_clock.gd", "--check"],
-                            capture_output=True, text=True, timeout=30)
+                            # GPU readback and font/atlas warmup vary under
+                            # the full four-shard workload. This is only a
+                            # process watchdog, never a pixel acceptance
+                            # tolerance; all 36 real frames must still pass.
+                            capture_output=True, text=True, timeout=90)
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "SCRIPT ERROR" not in output, output
