@@ -20,7 +20,8 @@ from .pixel_ink import pixel_runs
 @lru_cache(maxsize=512)
 def reference_stem_extension(kind: str, intervals: tuple[int, ...],
                              direction: str, base_pitch: int = 34,
-                             clef: tuple[str, int, int] = ('G', 2, 0)) -> float:
+                             clef: tuple[str, int, int] = ('G', 2, 0),
+                             automatic: bool = False) -> float:
     """Ask independent Verovio for this *written register* and clef.
 
     Stem extension is register-sensitive, especially for a forced UP chord
@@ -39,7 +40,7 @@ def reference_stem_extension(kind: str, intervals: tuple[int, ...],
         notes.append(f'<note id="ref{i}">' + ('<chord/>' if i else '') +
                      f'<pitch><step>{"CDEFGAB"[index]}</step><octave>{octave}</octave></pitch>'
                      f'<duration>{round(values[kind]*10080)}</duration><type>{kind}</type>' +
-                     (f'<stem>{direction}</stem>' if not i else '') + '</note>')
+                     (f'<stem>{direction}</stem>' if not i and not automatic else '') + '</note>')
     xml = ('<score-partwise version="4.0"><part-list><score-part id="P1">'
            '<part-name>Piano</part-name></score-part></part-list><part id="P1">'
            '<measure number="1"><attributes><divisions>10080</divisions>'
@@ -69,7 +70,12 @@ def reference_stem_extension(kind: str, intervals: tuple[int, ...],
             ys.append(float(re.search(r'translate\([^,]+,\s*([-0-9.]+)', use.get('transform')).group(1)))
     if len(ys) != len(intervals) or gap <= 0:
         raise ValueError('Independent chord stem/head accounting failed')
-    return (min(ys)-min(ends))/gap if direction == 'up' else (max(ends)-max(ys))/gap
+    extension = (min(ys)-min(ends))/gap if direction == 'up' else (max(ends)-max(ys))/gap
+    if automatic and extension < 1.0:
+        # The original, unforced chord engraves in the opposite direction.
+        # It cannot supply a reference for a differently directed shaft.
+        raise ValueError('Unforced source chord has the opposite stem direction')
+    return extension
 
 
 def source_verovio_stem_extensions(folder: Path) -> dict[str, dict[str, float]]:
@@ -210,6 +216,21 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
                            if written is not None else ('G', 2, 0))
             standalone = reference_stem_extension(
                 group[0]['note_type'], intervals, direction, absolute[0], source_clef)
+            # A chord with no authored stem direction is engraved with
+            # Verovio's natural stem, like the production chord template.
+            # Forcing <stem>up/down</stem> changes some legitimate chord
+            # shaft lengths by half a staff space, creating a false failure.
+            # Preserve the forced reference for explicit source stems and
+            # for directions the unforced chord does not actually use.
+            if len(group) > 1 and not any(
+                    marks[n['source']['id']]['stem'] in ('up', 'down')
+                    for n in group):
+                try:
+                    standalone = reference_stem_extension(
+                        group[0]['note_type'], intervals, direction,
+                        absolute[0], source_clef, automatic=True)
+                except ValueError:
+                    pass
             authored = ((source_reference or {}).get(event_identity(group[0]),{})
                         if len(group) == 1 and group[0].get('beams') else {})
             # Only original beamed notes may shorten an independently
