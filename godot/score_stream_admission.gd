@@ -189,6 +189,41 @@ static func empty_strip_start(passes: Array, world: float,
     return start
 
 
+static func announced_empty_strip_start(passes: Array, world: float,
+        count_in_beats: float, header_beats: float, deadline: float,
+        peer_floor: float, density: float, gap: float,
+        score_duration: float, peer_rest_floor: float = NAN) -> float:
+    # The backend has ALREADY published the exact monotonic deadline and
+    # count-in. A later frame may receive it a fraction of a beat after the
+    # count-in began. Do not require a fresh *entire* count-in from receipt:
+    # that rejected every Chopin repeat by 0.2-0.7 beats, permanently
+    # leaving the moving staff empty after its score revision.
+    #
+    # Keep the original full-bar slot when available. A late announcement
+    # is admissible ONLY on an otherwise empty, unblocked strip, with a
+    # fully future source beat and a header still ahead of the playhead.
+    # The deadline is NEVER moved, and an obstructing old source/peer/rest
+    # remains a hard refusal.
+    if not is_finite(deadline) or not is_finite(count_in_beats) or \
+            count_in_beats <= 0.0 or deadline <= world:
+        return NAN
+    var full_slot: float = empty_strip_start(passes,world,count_in_beats,
+        header_beats,peer_floor,density,gap,score_duration,peer_rest_floor)
+    if not is_finite(full_slot):
+        return NAN
+    if deadline >= full_slot-.0001:
+        return deadline
+    # These are minimum remaining lead and left-edge guarantees, not a
+    # new count-in duration. The learner's count-in began before this
+    # renderer snapshot arrived; its original graded deadline remains.
+    var safe_lead: float = maxf(MIN_READING_BEATS,
+        header_beats+OFFSCREEN_MARGIN_BEATS)
+    var safe_slot: float = empty_strip_start(passes,world,safe_lead,
+        header_beats,peer_floor,density,gap,score_duration,peer_rest_floor)
+    return deadline if is_finite(safe_slot) and \
+        deadline >= safe_slot-.0001 else NAN
+
+
 static func position(passes: Array, world: float, right_beats: float,
         header_beats: float, intended: float = NAN,
         travel_beats: float = 0.0, density: float = 96.0,
