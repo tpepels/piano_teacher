@@ -4,7 +4,8 @@ extends RefCounted
 const Geometry := preload("res://notation/native/geometry.gd")
 const InkSpacing := preload("res://notation/native/ink_spacing.gd")
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
-const MAX_STAFF_GAP := 22.0
+const Spacing := preload("res://notation/shared/spacing_policy.gd")
+const MAX_STAFF_GAP := Spacing.MAX_STAFF_GAP
 var score
 var texture_bands: Dictionary = {}
 
