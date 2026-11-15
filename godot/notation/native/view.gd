@@ -353,7 +353,9 @@ func load_score(candidate: Dictionary) -> bool:
     # use the largest staff that preserves reading context. Crucially each
     # candidate recomputes true ink collision clearance; never just cap BPM
     # distance or hide/shift a source accidental.
-    var fitted: Dictionary = ViewportFit.choose(layout,ink_geometry,density,PLAYHEAD_FRACTION)
+    var fitted: Dictionary = ViewportFit.choose(
+        layout,ink_geometry,density,PLAYHEAD_FRACTION,
+        _first_source_header_spaces())
     if not fitted["ok"]:
         failure_reason = fitted["error"]
         notice = failure_reason
