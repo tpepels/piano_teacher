@@ -2208,3 +2208,33 @@ readiness run. The complete gate is unchanged, and the release remains
 blocked until this acceptance test and all four full CI shards pass on
 the same final revision. Do not declare the 2.8-bar issue resolved from
 static math or source-only tests.
+
+
+### 2026-11-15 — rest timing density response after physical retest
+
+The actual local `fullrest` focused rerun at `c9918b1` still failed the
+strict 2.25-bar automatic-rest invariant: take 5 was 2.80 bars
+(13.988 s) at 24 BPM after a 27 BPM, 4.444-second two-beat take.
+The first graded notehead alignment was <=0.21 px, the count-in was
+`[1, 2]`, and its rhythm was correct. Changing the semantic-rest
+peer raster margin from 60 px to 6 px alone did not solve the temporal gap.
+
+The subsequent source update selects a larger **whole-score native
+horizontal density** for short-meter material when the complete authentic
+opening header plus the printed rest would exceed a conservative
+1.85-bar source-geometry budget. It preserves every clef, key, meter
+and source note, applies the same linear beat-to-pixel density to the
+entire passage, and retains the three-beat lookahead candidate selection.
+This leaves headroom below the unchanged <=2.25-bar physical limit for
+a tempo step or delayed state announcement. The density floor is computed
+from the genuine glyph bounds and staff gap, not a fixed false header
+width. Godot regression checks cover the budget and preserve the 60 px
+source-to-source separation; the readiness capture now includes the actual
+selected pixels-per-beat and rest geometry per take.
+
+**Physical status: unverified on the new revision.** Do not call the
+issue fixed until the `fullrest` acceptance passes on the local real
+Godot/ALSA runtime. The four full shards on the same release SHA remain
+mandatory. A startup workflow failure on an intermediate revision exposed
+an overly broad peer mock and was corrected by isolating the mock peer
+from the fallback runway view before requesting the final CI rerun.
