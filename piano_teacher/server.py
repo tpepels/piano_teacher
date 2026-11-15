@@ -1479,7 +1479,8 @@ class PracticeEngine:
                 self._prepared_stage_published = True
                 self.visual_transport.visual_offset_beats = (self.teaching_continuation.handoff_world
                     if self.teaching_continuation.handoff_world is not None else
-                    self.visual_transport.visual_offset_beats+previous_duration+SETTLEMENT_SECONDS*outcome.previous_bpm/60.)
+                    self.visual_transport.visual_offset_beats+previous_duration+
+                    SCHEDULER.seconds_beats(SETTLEMENT_SECONDS,outcome.previous_bpm))
             else:
                 self.score_artifacts.invalidate()
                 self.visual_transport.visual_offset_beats = 0.0
@@ -1625,8 +1626,8 @@ class PracticeEngine:
         # spoke its one count-in bar from the announced deadline during the
         # rest. A continuation that still has a whole bar of lead counts
         # that last bar itself (owner decision: one bar before every take).
-        lead_beats = ((self.visual_transport.run_at - self.now())
-                      * self.plan.bpm / 60.0)
+        lead_beats = SCHEDULER.seconds_beats(
+            self.visual_transport.run_at-self.now(),self.plan.bpm)
         if self.count_in_bar_beats > 0 and \
                 lead_beats >= self.count_in_bar_beats - 1e-6:
             self.count_in_beats = SCHEDULER.count_in_beats(
@@ -3203,8 +3204,9 @@ class PracticeEngine:
             state["next_count_in_meter"] = self._next_count_in_meter()
             state["short_rest_latency_seconds"] = SHORT_REST_LATENCY_SECONDS
             state["resume_count_in_beat"] = (
-                (calibration_sample_at - self.midi_ingress.resume_grading_after)
-                * self.plan.bpm / 60.0
+                SCHEDULER.seconds_beats(
+                    calibration_sample_at-self.midi_ingress.resume_grading_after,
+                    self.plan.bpm)
                 if self.running and not self.visual_transport.paused
                 and calibration_sample_at < self.midi_ingress.resume_grading_after
                 and self.plan is not None else None)

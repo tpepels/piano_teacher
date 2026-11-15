@@ -274,3 +274,31 @@ def test_recovery_rewind_budget_is_calculated_once_at_start_tempo():
         feedback_seconds=2,passage_beats=8,bpm=12)==4
     assert SCHEDULER.count_in_beats(2,24)==2
     assert SCHEDULER.count_in_beats(4,120)==4
+
+
+def test_timing_math_has_one_implementation_across_production_owners():
+    """Reject another hand-coded beats/BPM time formula in an engine path."""
+    import ast
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[1]
+    owned=[
+        "piano_teacher/server.py",
+        "piano_teacher/visual_transport.py",
+        "piano_teacher/application/attempt_progression.py",
+        "piano_teacher/application/transport_commands.py",
+        "piano_teacher/application/teaching_continuation.py",
+    ]
+    offenders=[]
+    for filename in owned:
+        tree=ast.parse((root/filename).read_text(),filename=filename)
+        for node in ast.walk(tree):
+            if not isinstance(node,ast.BinOp) or not isinstance(
+                    node.op,(ast.Mult,ast.Div)):
+                continue
+            if any(isinstance(side,ast.Constant) and type(side.value) in (
+                    int,float) and side.value==60.0
+                   for side in (node.left,node.right)):
+                offenders.append((filename,node.lineno))
+    assert not offenders,(
+        "Musical beat/time arithmetic belongs to SCHEDULER only: "
+        +repr(offenders))
