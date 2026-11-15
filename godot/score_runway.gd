@@ -437,7 +437,9 @@ func _short_handoff() -> Dictionary:
     # straight after that rest bar by the pop-in rule (lead counted from
     # the take end).
     return {"clear":0.0,"lead":StreamQueue.peer_popin_after(
-        maxf(rest,trailing),old_density,playhead,density)+
+        maxf(rest,trailing),old_density,playhead,density,
+        StreamQueue.PEER_REST_MARGIN_PX if rest >= trailing else
+        StreamQueue.PEER_MARGIN_PX)+
         _future._stream_header_beats(0.0)+
         StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 
