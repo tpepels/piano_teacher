@@ -2238,3 +2238,50 @@ Godot/ALSA runtime. The four full shards on the same release SHA remain
 mandatory. A startup workflow failure on an intermediate revision exposed
 an overly broad peer mock and was corrected by isolating the mock peer
 from the fallback runway view before requesting the final CI rerun.
+
+
+### 2026-11-15 — final-boundary rolling recovery: causal fix (supersedes density workaround)
+
+The second real Godot/ALSA `fullrest` retest at `53ad3228` still
+measured the same **13.99 s / 2.80 bars** between the 27 BPM take and
+the 24 BPM automatic take. The score density was **263.226 px/beat**,
+with confirmed native rest geometry clear **2.142794** and header
+**0.513622** beats. Source onset and count-in alignment remained correct.
+
+The unchanged gap exposed a separate backend route: rolling-error
+recovery at the *last* scored source boundary intercepted completion
+before `_complete_attempt` could create its bounded short-rest
+announcement. Its `_apply_rolling_recovery` path scheduled
+`feedback_seconds` of reversal, a complete measure of rest, and
+the missing offscreen horizon **serially**. Shortening native glyph
+margins could never correct that backend delay.
+
+**Implemented:** timed rolling recovery at the final boundary now
+records the exact outgoing graded source end and outgoing BPM
+*before* applying the slower teaching decision; uses
+`_short_rest_deadline` with the genuine outgoing time,
+tempo-change epoch and incoming count-in; and passes that deadline
+to `_schedule_preparation`. The animation fits inside the rest
+interval, without an additional reading-horizon delay. Mid-passage
+recovery with still-live immutable source suffix keeps its original
+conservative reservation; it does not falsely apply end-of-score
+clearance to future notes. The normal next-take renderer continues
+to enforce peer ink clearance and authentic source headers.
+
+A new **real-engine deterministic regression** in
+`tests/test_continuation_deadline.py` forces five mistakes at the
+last source boundary, verifies the consequent tempo slowdown, a
+single announced future deadline, <=2.25 bars of rest and the
+identical graded run_at when the next attempt actually starts. It
+is explicitly included in `scripts/ci-smoke.sh`, not merely
+added to a test file. CI on `857675bb` passed **794 tests,
+3 skipped**, including this regression. The speculative
+whole-score density floor from the previous section was then
+**reverted** to preserve legibility and reading lookahead; the
+physical take-specific score-density/rest-geometry diagnostics
+remain.
+
+**Remaining acceptance:** rerun the exact local real MIDI/Godot
+`test_automatic_rests_are_at_most_about_two_bars` on the latest
+commit; strict bound remains **2.25 bars**. The full four release
+shards must still run together on the same final SHA.
