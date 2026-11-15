@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/phase1-connector-diagnostics.yml'
+      - 'piano_teacher/notation/connector_pixels.py'
+      - 'tests/test_native_voice_collisions.py'
 permissions:
   contents: read
 jobs:
@@ -33,7 +35,6 @@ jobs:
           unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
           sudo install -m 755 "$RUNNER_TEMP/godot-bin/Godot_v4.7.2-stable_linux.x86_64" /usr/local/bin/godot
       - name: Capture authored beam and tuplet failures with strict source checks
-        continue-on-error: true
         run: |
           mkdir -p "$RUNNER_TEMP/connectors"
           xvfb-run -a -s '-screen 0 2000x1100x24' \
@@ -42,6 +43,7 @@ jobs:
             --basetemp="$RUNNER_TEMP/connectors/captures" \
             tests/test_native_voice_collisions.py
       - name: Explain original reference and actual bitmap independently
+        if: always()
         run: |
           python - <<'PY'
           import json,os
