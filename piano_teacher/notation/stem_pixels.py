@@ -121,13 +121,24 @@ def source_verovio_stem_extensions(folder: Path) -> dict[str, dict[str, float]]:
                     continue
                 head_y = float(match.group(1))
                 rectangles = [n for n in stems[0].iter() if n.tag == svg_ns+'rect']
-                if not rectangles:
-                    continue
-                # The first stem rect is the original Verovio content bbox;
-                # the second is its wider registration bbox.
-                rect = rectangles[0]
-                top = float(rect.get('y','nan'))
-                bottom = top+float(rect.get('height','nan'))
+                if rectangles:
+                    # Diagnostic SVG embeds precise content-bounding boxes.
+                    rect = rectangles[0]
+                    top = float(rect.get('y','nan'))
+                    bottom = top+float(rect.get('height','nan'))
+                else:
+                    # Production Verovio SVG omits diagnostic rectangles and
+                    # encodes its authentic shaft directly as an M/L path.
+                    # Hanon source beam ends use this representation.
+                    paths = [n for n in stems[0].iter() if n.tag == svg_ns+'path']
+                    if not paths:
+                        continue
+                    values = re.findall(r'-?(?:\\d+(?:\\.\\d*)?|\\.\\d+)',
+                                        paths[0].get('d',''))
+                    if len(values) < 4:
+                        continue
+                    ys = [float(v) for v in values[1::2]]
+                    top,bottom = min(ys),max(ys)
                 if not all(map(math.isfinite,(head_y,top,bottom))):
                     continue
                 up = (head_y-top)/gap
