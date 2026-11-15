@@ -1,0 +1,52 @@
+name: Full CI release shard 1 on exact committed revision
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase1-full-shard.yml'
+permissions:
+  contents: read
+concurrency:
+  group: full-release-shard-1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  entire-shard-one:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+      PYTHON: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install actual Verovio, MIDI, graphical test and LumiKey prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]' numpy
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o "$RUNNER_TEMP/godot.zip"
+          mkdir -p "$RUNNER_TEMP/godot-bin"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
+          sudo install -m 755 "$RUNNER_TEMP/godot-bin/Godot_v4.7.2-stable_linux.x86_64" /usr/local/bin/godot
+          bash scripts/setup-fingering.sh
+      - name: Run ALL 1277 selected shard 1 tests without excluding native pixel contracts
+        run: |
+          set -o pipefail
+          timeout 1400s xvfb-run -a -s '-screen 0 2000x1100x24' \
+            bash scripts/ci-full.sh --shard 1
+      - name: Preserve the release log and exact Git revision even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-full-shard-1-${{ github.sha }}
+          path: playtest-results/ci-full/
+          retention-days: 14
+          if-no-files-found: warn
