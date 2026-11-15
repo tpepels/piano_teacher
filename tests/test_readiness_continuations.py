@@ -140,14 +140,7 @@ def test_automatic_rests_are_at_most_about_two_bars(continuation_run):
     _, checked = continuation_run
     automatic = [t for t in checked["takes"] if t.get("automatic")]
     assert automatic, checked["takes"]
-    # The scenario deliberately pauses and resumes IN the final written
-    # rest. Wall-clock silence then contains the user's hold and can exceed
-    # two bars. The independent invariant already distinguishes rest_paused;
-    # require the strict P5 bound for every uninterrupted continuation.
-    uninterrupted = [t for t in automatic if not t.get("rest_paused")]
-    assert uninterrupted, checked["takes"]
-    for take in uninterrupted:
-        assert take["rest_bars"] is not None and take["rest_bars"] <= 2.25, take
     for take in automatic:
-        assert take["rest_bars"] is not None, take
+        assert "preceding_source_seconds" in take, take
+        assert take["rest_bars"] is not None and take["rest_bars"] <= 2.25, take
         assert take["rest_ok"], take
