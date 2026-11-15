@@ -64,7 +64,7 @@ static func engine_count_in_deadline_ms(state: Dictionary, action: String,
     if action == "resume" and countdown != null and float(countdown) < 0.0 and \
             state.has("clock_sampled_at_ms"):
         return float(state["clock_sampled_at_ms"])+offset_ms- \
-            float(countdown)*60000.0/bpm
+            TempoTimeline.seconds_from_beats(float(countdown),bpm)*1000.0
     if state.has("visual_run_at_ms"):
         return float(state["visual_run_at_ms"])+offset_ms
     return NAN
@@ -104,7 +104,7 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
         # countdown of this transport) may still report a count-in beat:
         # it was already spoken. A later take (an announced continuation)
         # has its own countdown and is never suppressed.
-        _count_in_owned_until_ms = deadline+60000.0/bpm
+        _count_in_owned_until_ms = deadline+TempoTimeline.seconds_from_beats(1.0,bpm)*1000.0
         _count_in_owned_transport = int(state.get("transport_id",-1))
         _reserved = {}
         return false
