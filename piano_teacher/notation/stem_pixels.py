@@ -6,7 +6,9 @@ to each onset, including every competing source group and actual shaft.
 from collections import defaultdict
 from copy import deepcopy
 from functools import lru_cache
+from pathlib import Path
 import re
+import math
 from xml.etree import ElementTree as ET
 
 from .feature_contract import feature_result
@@ -70,6 +72,77 @@ def reference_stem_extension(kind: str, intervals: tuple[int, ...],
     return (min(ys)-min(ends))/gap if direction == 'up' else (max(ends)-max(ys))/gap
 
 
+def source_verovio_stem_extensions(folder: Path) -> dict[str, dict[str, float]]:
+    """Read per-note stem extensions from independent ORIGINAL Verovio SVG.
+
+    The canonical source audit captures this exact source-score SVG beside
+    the Godot PNG. Its authored beam slope and genuine per-register shaft
+    lengths are not equal to standalone glyph references: using the latter
+    wrongly rejects actual Hanon sixteenth-beam endpoints. No native layout,
+    Godot asset, timing metadata or current-image measurement enters this
+    reference. If an external source reference is unavailable, the established
+    standalone Verovio test still supplies the reference.
+    """
+    out = {}
+    svg_ns = '{http://www.w3.org/2000/svg}'
+    for path in sorted(Path(folder).glob('verovio-*.svg')):
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        for staff in root.iter():
+            if staff.get('class') != 'staff':
+                continue
+            rails = []
+            for item in staff:
+                if item.tag != svg_ns+'path':
+                    continue
+                values = re.findall(r'-?(?:\\d+(?:\\.\\d*)?|\\.\\d+)',item.get('d',''))
+                if len(values) >= 2:
+                    rails.append(float(values[1]))
+            if len(rails) < 5:
+                continue
+            gap = (max(rails[:5])-min(rails[:5]))/4.0
+            if gap <= 0:
+                continue
+            for note in staff.iter():
+                sid = note.get('id','')
+                if note.get('class') != 'note' or not sid:
+                    continue
+                heads = [n for n in note.iter() if n.get('class') == 'notehead']
+                stems = [n for n in note.iter() if n.get('class') == 'stem']
+                if not heads or not stems:
+                    continue
+                use = next((n for n in heads[0].iter() if n.tag == svg_ns+'use'),None)
+                if use is None:
+                    continue
+                match = re.search(r'translate\\(\\s*[-+0-9.]+[ ,]+([-+0-9.]+)',use.get('transform',''))
+                if match is None:
+                    continue
+                head_y = float(match.group(1))
+                rectangles = [n for n in stems[0].iter() if n.tag == svg_ns+'rect']
+                if not rectangles:
+                    continue
+                # The first stem rect is the original Verovio content bbox;
+                # the second is its wider registration bbox.
+                rect = rectangles[0]
+                top = float(rect.get('y','nan'))
+                bottom = top+float(rect.get('height','nan'))
+                if not all(map(math.isfinite,(head_y,top,bottom))):
+                    continue
+                up = (head_y-top)/gap
+                down = (bottom-head_y)/gap
+                if up > 0 and bottom <= head_y+.5*gap:
+                    out[sid]={'up':up}
+                elif down > 0 and top >= head_y-.5*gap:
+                    out[sid]={'down':down}
+                elif up > down and up > 0:
+                    out[sid]={'up':up}
+                elif down > 0:
+                    out[sid]={'down':down}
+    return out
+
+
 def _stem_runs_touch(first, second):
     """Adjacent continuous columns are one physical shaft, not two owners."""
     return any(abs(x-xx) <= 1 and max(top, yy) < min(bottom, end)
@@ -91,7 +164,7 @@ def _stem_run_clusters(runs):
     return clusters
 
 
-def _stem(pixels, group, heads, marks, *, written=None):
+def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
     ids = [event_identity(n) for n in group]
     evidence = dict(group_id=group[0]['source']['id'], shared_source_ids=ids)
     if len(group) > 6:
@@ -123,12 +196,18 @@ def _stem(pixels, group, heads, marks, *, written=None):
         try:
             source_clef = (clef_at(written,group[0]['index'],group[0]['staff'])
                            if written is not None else ('G', 2, 0))
-            extension = reference_stem_extension(
-                group[0]['note_type'], intervals, direction, absolute[0], source_clef)
+            authored = (source_reference or {}).get(group[0]['source']['id'],{})
+            extension = authored.get(direction)
+            if extension is None:
+                extension = reference_stem_extension(
+                    group[0]['note_type'], intervals, direction, absolute[0], source_clef)
         except (ValueError, StopIteration, TypeError) as exc:
             return feature_result('unsupported', str(exc), **evidence)
         references[direction] = extension
-        minimum = max(0, extension-.21)*gap
+        # The comparison stays at .21 printed staff spaces. A half-pixel
+        # projection uncertainty is required when converting a vector
+        # Verovio shaft cap to a clipped, anti-aliased integer PNG run.
+        minimum = max(0, extension-.21)*gap-.5
         sign = 1 if direction == 'up' else -1
         columns=None
         for h in hs:
@@ -164,7 +243,8 @@ def _stem(pixels, group, heads, marks, *, written=None):
                        **evidence, reference_extensions=references,
                        observed_attached_ink=diagnostics,
                        reference_base_pitch=absolute[0],
-                       reference_clef=source_clef)
+                       reference_clef=source_clef,
+                       reference_origin=("original_source_svg" if (source_reference or {}).get(group[0]['source']['id']) else "standalone_verovio"))
     options = []
     for direction in ('up', 'down'):
         for runs in _stem_run_clusters([c[1:] for c in candidates if c[0] == direction]):
@@ -219,7 +299,7 @@ def _source_voice_directions(groups, marks):
     return {upper: 'up', 1-upper: 'down'}
 
 
-def measure_stem_ownership(pixels, groups, heads, marks, *, written=None):
+def measure_stem_ownership(pixels, groups, heads, marks, *, written=None, source_reference=None):
     """Assign physical shafts once, allowing only declared chords to share.
 
     A column may cross another voice's head. Joint ownership can still be
@@ -227,7 +307,7 @@ def measure_stem_ownership(pixels, groups, heads, marks, *, written=None):
     shaft touching several independent groups cannot certify just its lowest
     head while silently ignoring the other attached source obligations.
     """
-    measured = [_stem(pixels, group, heads, marks, written=written) for group in groups]
+    measured = [_stem(pixels, group, heads, marks, written=written, source_reference=source_reference) for group in groups]
     options = [(i, value) for i, result in enumerate(measured)
                for value in result.get('_shaft_options', [])]
     physical = []

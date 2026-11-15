@@ -27,7 +27,7 @@ from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
 from .raster_matching import photographed_playhead_columns
 from .reference_font import feature_glyphs
-from .stem_pixels import measure_stem_ownership
+from .stem_pixels import measure_stem_ownership, source_verovio_stem_extensions
 from .structure_pixels import verify_structure_pixels
 
 __all__ = ("verify_note_feature_pixels", "verify_structure_pixels", "verify_ledger_pixels")
@@ -55,6 +55,9 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
         if note['kind'] == 'note' and note['visible']:
             by_clock[round(float(note['beat']), 8)].append(note)
     rail_witness = PhotographedStaffRails(folder)
+    # Independent original-score Verovio shaft lengths, including genuine
+    # beam-end slopes. Capture once; never derive required ink from Godot.
+    source_reference = source_verovio_stem_extensions(folder)
     measured = []
     for beat, notes in sorted(by_clock.items()):
         rows = {}
@@ -95,7 +98,7 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
                                   occlusion_columns=photographed_playhead_columns(image))
         groups = source_chord_groups(notes)
         owned_stems = measure_stem_ownership(pixels, groups, heads, marks,
-                                              written=written)
+                                              written=written, source_reference=source_reference)
         for group, stem in zip(groups, owned_stems):
             active = [n for n in group if n['source']['id'] in rows]
             if not active:
