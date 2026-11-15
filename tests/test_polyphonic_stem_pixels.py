@@ -201,7 +201,15 @@ def test_native_independent_half_voices_keep_separate_shafts_and_erasure_is_loca
     (tmp_path/'intact-stem-proof.json').write_text(json.dumps(report, indent=2))
     actual = stems(report)
     assert len(actual) == sum(map(len, groups))
-    assert all(row['status'] == 'verified' for row in actual.values()), actual
+    physical = {sid: {
+        "status":row["status"],"reason":row["reason"],
+        "direction":row["evidence"].get("direction"),
+        "reference":row["evidence"].get("reference_extensions"),
+        "observed":row["evidence"].get("observed_attached_ink"),
+        "base_pitch":row["evidence"].get("reference_base_pitch"),
+        "clef":row["evidence"].get("reference_clef"),
+    } for sid,row in actual.items()}
+    assert all(row['status'] == 'verified' for row in actual.values()), physical
     assert len({row['evidence']['physical_shaft_id'] for row in actual.values()}) == 2
 
     target = actual['v1n0']['evidence']
