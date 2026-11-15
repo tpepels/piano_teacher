@@ -103,7 +103,7 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
             "count_in_meter",last_state.get("count_in_meter")))
         var rest_bpm: float = float(last_state.get("bpm",score_flow.bpm))
         if is_finite(copy_onset) and StreamAdmission.lead_seconds(copy_onset,
-                rest_now,rest_bpm) < pulse*60.0/plan_bpm+float(
+                rest_now,rest_bpm) < StreamAdmission.lead_seconds(pulse,0.0,plan_bpm)+float(
                     last_state.get("short_rest_latency_seconds",0.0)):
             copy_onset = NAN
         if is_finite(copy_onset):
