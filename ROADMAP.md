@@ -2181,3 +2181,30 @@ The remaining failures were (1) `test_native_independent_half_voices_keep_separa
 **Still unverified:** The new source-register correction to `groups3` and shortened **actual** automatic rest are not in those four graphical CI scopes. They need a fresh local focused rerun. If the stem remains incomplete, its new report includes observed physical ink and exact independent reference; do not label the case fixed or loosen its physical erasure control. If the rest remains >2.25 real bars, inspect the resulting `tests/readiness` events and next-stage schedule rather than excluding an automatic take.
 
 Once the focused cases are green, rerun `bash scripts/ci-full.sh --shard 3` and let shard 4 continue, then execute all four shards on the same final SHA. Release acceptance remains **incomplete** until every physical test and shard passes.
+
+
+### 2026-11-15 — local 2.8-bar retry and isolated rest clearance
+
+The focused local rerun after `f741f22` passed the E5/G5 polyphonic
+half-note physical-shaft test. The **automatic continuation limit remains
+failing**: take 5 measured 2.8 bars at 24 BPM (2-beat measure), against
+an unchanged 2.25-bar threshold. This is the only failed test of that
+2-test focused rerun.
+
+The next source change on `main` separates live source-to-source collision
+clearance (the existing 60 pixels) from a completed *printed rest* ending
+at its own final barline (6 pixels of raster padding). The change was
+applied consistently to `ScoreStreamQueue.minimum_peer_opening`, the
+future-stage `ScoreRunway._short_handoff`, and the same-stage
+`NativeView.short_rest_geometry`. The full authentic clef, key and meter
+remain printed; no committed notes or graded deadlines are moved
+independently of their score copies. `tests/godot/seamless_score_runway.gd`
+now checks both margins through the actual peer-queue decision, and
+`tests/readiness/invariants.py` reports prior/current steps, BPMs and
+exact source/rest timing in the failing take.
+
+**Unverified:** The change has not yet passed a real full-session
+readiness run. The complete gate is unchanged, and the release remains
+blocked until this acceptance test and all four full CI shards pass on
+the same final revision. Do not declare the 2.8-bar issue resolved from
+static math or source-only tests.
