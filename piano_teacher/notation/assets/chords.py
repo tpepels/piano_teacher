@@ -264,6 +264,65 @@ def verovio_chord_stems(pages) -> dict[str, bool]:
     return result
 
 
+def polyphonic_chord_directions(model: dict) -> dict[str, bool]:
+    """Engrave polyphonic chords with the native source-voice stem direction.
+
+    The independent full-chord Verovio atlas and the native single-note
+    renderer must choose the same direction. Preserve any source-authored
+    stem; source beams retain higher priority in chord_instances().
+    """
+    by_onset = defaultdict(list)
+    by_lane = defaultdict(list)
+    for event in model.get("notation_events", ()):
+        if event.get("kind") != "note":
+            continue
+        key = (str(event.get("staff", "right")),
+               int(event.get("measure", 0)),
+               round(float(event.get("beat", 0.0)), 8))
+        lane = (*key, str(event.get("voice", "1")))
+        by_lane[lane].append(event)
+        if not event.get("chord") and event.get("note_type") not in (
+                "whole", "breve", "long", "maxima"):
+            by_onset[key].append(event)
+
+    result = {}
+    for key, leaders in by_onset.items():
+        if len(leaders) < 2 or len({str(e.get("voice", "1"))
+                                   for e in leaders}) != len(leaders):
+            continue
+        def voice_key(event):
+            return tuple((0, int(v)) if v.isdigit() else (1, v.casefold())
+                         for v in re.split(r"(\d+)", str(event.get("voice", "1"))))
+        leaders = sorted(leaders, key=voice_key)
+        ranges = []
+        for e in leaders:
+            lane = (*key, str(e.get("voice", "1")))
+            pitches = [diatonic(n["spelling"]) for n in by_lane[lane]]
+            ranges.append((min(pitches), max(pitches)))
+        if len(leaders) == 2:
+            if ranges[0][0] > ranges[1][1]:
+                upper = 0
+            elif ranges[1][0] > ranges[0][1]:
+                upper = 1
+            else:
+                upper = 0
+            upward = {upper}
+        else:
+            # Match native VoiceLayout: rank the middle of each actual
+            # register; pitch ties retain source voice order.
+            ordered = sorted(range(len(leaders)),
+                             key=lambda i: (-(ranges[i][0]+ranges[i][1]), i))
+            upward = set(ordered[:(len(leaders)+1)//2])
+        for i, leader in enumerate(leaders):
+            lane = (*key, str(leader.get("voice", "1")))
+            members = by_lane[lane]
+            if (len(members) > 1 and
+                    not any(str(n.get("stem", "")) in ("up", "down")
+                            for n in members)):
+                result[str(leader.get("id", ""))] = i in upward
+    return result
+
+
 def chord_instances(model: dict, pages, *,
                     stem_directions: dict[str, bool] | None = None) -> dict[str, dict]:
     """Leader id -> the instance template that engraves exactly that chord.
@@ -274,6 +333,7 @@ def chord_instances(model: dict, pages, *,
     """
     stems = verovio_chord_stems(pages)
     beams = stem_directions or {}
+    voice_directions = polyphonic_chord_directions(model)
     result: dict[str, dict] = {}
     for leader, notes, measure in chord_lanes(model):
         shape, _ = _shape_or_reason(leader, notes, measure)
@@ -286,6 +346,11 @@ def chord_instances(model: dict, pages, *,
             direction = "auto"
         elif leader_id in beams:
             direction = "up" if beams[leader_id] else "down"
+        elif leader_id in voice_directions:
+            # Use a complete, source-directed Verovio chord asset with the
+            # same direction as the neighboring native voice. Never
+            # synthesize a Godot-drawn replacement stem.
+            direction = "up" if voice_directions[leader_id] else "down"
         elif page is not None:
             direction = "up" if page else "down"
         else:
