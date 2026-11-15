@@ -11,16 +11,20 @@ from xml.etree import ElementTree as ET
 
 from .feature_contract import feature_result
 from .feature_source import event_identity
+from .pixel_context import clef_at
 from .pixel_ink import pixel_runs
 
 
 @lru_cache(maxsize=512)
-def reference_stem_extension(kind: str, intervals: tuple[int, ...], direction: str) -> float:
-    """Ask Verovio about the same chord interval pattern in a neutral register.
+def reference_stem_extension(kind: str, intervals: tuple[int, ...],
+                             direction: str, base_pitch: int = 34,
+                             clef: tuple[str, int, int] = ('G', 2, 0)) -> float:
+    """Ask independent Verovio for this *written register* and clef.
 
-    This is independently engraved from source intervals, never read from a
-    native atlas. Verovio legitimately shortens stems for some chord/flag
-    combinations; a universal three-space rule rejects its own engraving.
+    Stem extension is register-sensitive, especially for a forced UP chord
+    high on the treble staff. A neutral B4/D5 chord cannot certify the
+    legitimate, shorter E5/G5 physical shaft. Source pitch, clef, kind and
+    direction are independent of the native framebuffer and asset atlas.
     """
     import verovio
     values = {'half': 2, 'quarter': 1, 'eighth': .5, '16th': .25,
@@ -29,7 +33,7 @@ def reference_stem_extension(kind: str, intervals: tuple[int, ...], direction: s
         raise ValueError('No independent stem reference for this written type')
     notes = []
     for i, offset in enumerate(intervals):
-        octave, index = divmod(34+offset, 7)
+        octave, index = divmod(base_pitch+offset, 7)
         notes.append(f'<note id="ref{i}">' + ('<chord/>' if i else '') +
                      f'<pitch><step>{"CDEFGAB"[index]}</step><octave>{octave}</octave></pitch>'
                      f'<duration>{round(values[kind]*10080)}</duration><type>{kind}</type>' +
@@ -37,8 +41,10 @@ def reference_stem_extension(kind: str, intervals: tuple[int, ...], direction: s
     xml = ('<score-partwise version="4.0"><part-list><score-part id="P1">'
            '<part-name>Piano</part-name></score-part></part-list><part id="P1">'
            '<measure number="1"><attributes><divisions>10080</divisions>'
-           '<time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign>'
-           '<line>2</line></clef></attributes>'+''.join(notes)+
+           '<time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>'
+           f'{clef[0]}</sign><line>{clef[1]}</line>' +
+           (f'<clef-octave-change>{clef[2]}</clef-octave-change>' if clef[2] else '') +
+           '</clef></attributes>'+''.join(notes)+
            '</measure></part></score-partwise>')
     toolkit = verovio.toolkit()
     toolkit.setOptions({'breaks': 'none', 'header': 'none', 'footer': 'none', 'font': 'Leipzig'})
@@ -85,7 +91,7 @@ def _stem_run_clusters(runs):
     return clusters
 
 
-def _stem(pixels, group, heads, marks):
+def _stem(pixels, group, heads, marks, *, written=None):
     ids = [event_identity(n) for n in group]
     evidence = dict(group_id=group[0]['source']['id'], shared_source_ids=ids)
     if len(group) > 6:
@@ -108,7 +114,10 @@ def _stem(pixels, group, heads, marks):
     # retaining a sub-step raster tolerance, rather than a fixed print length.
     for direction in directions or ('up', 'down'):
         try:
-            extension = reference_stem_extension(group[0]['note_type'], intervals, direction)
+            source_clef = (clef_at(written,group[0]['index'],group[0]['staff'])
+                           if written is not None else ('G', 2, 0))
+            extension = reference_stem_extension(
+                group[0]['note_type'], intervals, direction, absolute[0], source_clef)
         except (ValueError, StopIteration, TypeError) as exc:
             return feature_result('unsupported', str(exc), **evidence)
         references[direction] = extension
@@ -190,7 +199,7 @@ def _source_voice_directions(groups, marks):
     return {upper: 'up', 1-upper: 'down'}
 
 
-def measure_stem_ownership(pixels, groups, heads, marks):
+def measure_stem_ownership(pixels, groups, heads, marks, *, written=None):
     """Assign physical shafts once, allowing only declared chords to share.
 
     A column may cross another voice's head. Joint ownership can still be
@@ -198,7 +207,7 @@ def measure_stem_ownership(pixels, groups, heads, marks):
     shaft touching several independent groups cannot certify just its lowest
     head while silently ignoring the other attached source obligations.
     """
-    measured = [_stem(pixels, group, heads, marks) for group in groups]
+    measured = [_stem(pixels, group, heads, marks, written=written) for group in groups]
     options = [(i, value) for i, result in enumerate(measured)
                for value in result.get('_shaft_options', [])]
     physical = []
