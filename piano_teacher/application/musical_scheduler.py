@@ -18,13 +18,17 @@ import math
 @dataclass(frozen=True, slots=True)
 class MusicalDeadline:
     route: str
-    run_at: float
+    deadline_at: float
     count_in_at: float
     bounds: tuple[tuple[str, float], ...]
 
     def __post_init__(self):
-        if not math.isfinite(self.run_at) or not math.isfinite(self.count_in_at):
+        if not math.isfinite(self.deadline_at) or not math.isfinite(self.count_in_at):
             raise ValueError("Invalid musical deadline")
+
+    @property
+    def run_at(self) -> float:
+        return self.deadline_at
 
 
 @dataclass(frozen=True, slots=True)
