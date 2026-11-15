@@ -109,6 +109,7 @@ def check_run(run: Path) -> dict:
         warmup = playing[0] if playing else None
         graded = [r for r in playing[1:] if 0.0 <= r["tb"] <= 0.5]
         take: dict = {"tid": tid, "bpm": bpm, "bar_beats": bar,
+                      "step": meta.get("step"),
                       "reached_first_beat": bool(graded)}
         if not graded:
             takes.append(take)
@@ -233,6 +234,8 @@ def check_run(run: Path) -> dict:
             source_ms = _take_duration_ms(prev_meta)
             prev_end = prev["first_beat_t_exact"] + source_ms
             take["preceding_source_seconds"] = round(source_ms/1000.0, 3)
+            take["previous_step"] = prev_meta.get("step")
+            take["previous_bpm"] = prev_meta.get("bpm")
             # A Pause inside the previous take moves its end: its last
             # playing frame is the real end (round 4: rests of re-engraved
             # takes after a paused take were overstated by the pause).
@@ -246,6 +249,9 @@ def check_run(run: Path) -> dict:
                                            if retries else None)
             take["rest_seconds"] = round((first_beat_t - prev_end) / 1000.0, 2)
             take["rest_bars"] = round((first_beat_t - prev_end) / (bar * beat_ms), 2) if bar else None
+            take["rest_clock"] = {"previous_end_ms": round(prev_end, 2),
+                                  "current_downbeat_ms": round(first_beat_t, 2),
+                                  "source_duration_ms": round(source_ms, 2)}
         take["first_beat_t_exact"] = first_beat_t
         # A take with notes in its first beat must have measured onsets.
         take["notes_in_first_beat"] = first_beat_notes.get(tid, 0)
