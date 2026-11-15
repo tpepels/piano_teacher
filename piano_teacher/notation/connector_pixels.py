@@ -953,19 +953,35 @@ def _verify(xml, folder, hand, reference_svgs, kind):
                     witnesses.append(witness)
                 except (OSError, ValueError, KeyError, IndexError, AssertionError) as exc:
                     failures.append(dict(beat=float(target), reason=str(exc)))
-            bad = next((w for w in witnesses if w['status'] != 'verified'), None)
+            # A photo whose playhead covers the bracket can still prove
+            # the numeral, but is unavailable as full-connector evidence.
+            # Do not let that partial, legitimately occluded photo veto a
+            # separate intact photograph. Genuine mismatches and ambiguous
+            # independent contours must still veto the entire connector.
+            occluded = [w for w in witnesses if w['status'] == 'unverified'
+                        and w.get('bracket_occluded')]
+            bad = next((w for w in witnesses
+                        if w['status'] != 'verified' and not w.get('bracket_occluded')), None)
+            complete = [w for w in witnesses if w['status'] == 'verified']
+            unavailable = failures + [
+                dict(frame=w['frame'], reason=w['reason'], numeral_match=w.get('numeral_match'))
+                for w in occluded]
             if bad:
                 record.update(status=bad['status'], reason=bad['reason'], evidence=bad)
-            elif witnesses:
-                # A source-bound connector is often partly outside the
-                # viewport at its first onset. Require independent valid
-                # screenshot witnesses, but keep unusable frames visible in
-                # the evidence rather than interpreting them as mismatches.
-                record.update(status='verified', reason=witnesses[0]['reason'], evidence=dict(
-                    **{k: v for k, v in witnesses[0].items() if k not in {'status', 'reason'}},
-                    witnesses=witnesses, unavailable_witnesses=failures))
+            elif complete:
+                # Certification is based only on independently intact PNGs.
+                # Unusable photos remain exposed for source diagnostics.
+                record.update(status='verified', reason=complete[0]['reason'], evidence=dict(
+                    **{k: v for k, v in complete[0].items() if k not in {'status', 'reason'}},
+                    witnesses=complete, unavailable_witnesses=unavailable))
+            elif occluded:
+                # The complete bracket is not certified. Retain the measured
+                # numerator for diagnostics and destructive proof controls.
+                record.update(status='unverified', reason=occluded[0]['reason'],
+                              evidence=dict(occluded[0], unavailable_witnesses=unavailable))
             else:
-                record.update(reason='No unambiguous common PNG witness', evidence=dict(unavailable_witnesses=failures))
+                record.update(reason='No unambiguous common PNG witness',
+                              evidence=dict(unavailable_witnesses=unavailable))
         measured.append(record)
     counts = Counter(r['status'] for r in measured)
     coverage = dict(expected=len(measured), **{s: counts[s] for s in STATUSES})
