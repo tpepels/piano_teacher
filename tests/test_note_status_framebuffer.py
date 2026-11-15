@@ -40,6 +40,17 @@ def capture(tmp_path_factory):
                                         .convert("RGB")).astype(int)
               for frame in report["frames"]}
     frames = {frame["name"]: frame for frame in report["frames"]}
+    # The native painter deliberately fills hollow glyph apertures with a
+    # translucent status tint. Retain its authentic masks so contour checks
+    # can distinguish that fill from leftover white source head ink, even when
+    # a staff rule splits the aperture in the baseline screenshot.
+    report["_hollow_masks"] = {
+        head: {
+            "alpha": np.asarray(Image.open(folder / filename).convert("RGBA"))[:, :, 3] / 255.0,
+            "bounds": tuple(data["assets"]["native_glyphs"][head]["bounds"]),
+        }
+        for head, filename in report["hollow_interior_files"].items()
+    }
     return report, frames, images
 
 
@@ -109,6 +120,36 @@ def _grow(mask, steps):
     return mask
 
 
+def _hollow_fill_mask(instance, report, origin, shape):
+    """Project the production hollow-head fill alpha to this framebuffer crop.
+
+    Its source is Godot's actual glyph image, not a hole guessed from the
+    composited baseline: staff lines can cross the aperture, especially on
+    whole notes that lie on a rule.
+    """
+    asset = report["_hollow_masks"].get(instance["head"])
+    if asset is None:
+        return np.zeros(shape, dtype=bool)
+    alpha = asset["alpha"]
+    bounds = asset["bounds"]
+    cx, cy = instance["position"]
+    scale = float(instance["gap"]) / 250.0
+    left = cx - float(bounds[2]) * scale * .5
+    top = cy + float(bounds[1]) * scale
+    width, height = float(bounds[2]) * scale, float(bounds[3]) * scale
+    y0, x0 = origin
+    ys, xs = np.mgrid[y0:y0 + shape[0], x0:x0 + shape[1]]
+    u = (xs + .5 - left) / width * alpha.shape[1]
+    v = (ys + .5 - top) / height * alpha.shape[0]
+    inside = (u >= 0) & (v >= 0) & (u < alpha.shape[1]) & (v < alpha.shape[0])
+    ix = np.clip(u.astype(int), 0, alpha.shape[1] - 1)
+    iy = np.clip(v.astype(int), 0, alpha.shape[0] - 1)
+    # One-pixel margin absorbs Godot's bilinear texture filtering. Only the
+    # deliberately filled aperture is excluded; the outer contour stays
+    # subject to the original strict white-ink/doubled-edge checks.
+    return _grow(inside & (alpha[iy, ix] > .03), 1)
+
+
 def _edge_error(instance, frame, report, base, graded):
     """Deviation from a perfect in-place recolor b(1-a)+tint*a of the head.
 
@@ -148,9 +189,12 @@ def _edge_error(instance, frame, report, base, graded):
             continue
         keep &= mine <= (xs - ox) ** 2 + ((ys - oy) / .8) ** 2
     if instance["head"] != "head_black":
-        # C5: a hollow head's enclosed interior is softly tinted as well; the
-        # in-place recolor model covers the head's ink, not that interior.
-        keep &= ~_grow(_hole(a), 2)
+        # C5: the hollow aperture has its own MIX-blended fill pass.
+        # The untouched source screenshot is not enough to infer its mask:
+        # staff ink may run through the aperture and split the visible hole.
+        # Exclude exactly the native painter's fill region while continuing
+        # to verify its outside ink contour for residual white/double edges.
+        keep &= ~_hollow_fill_mask(instance, report, (y0, x0), a.shape)
     sample = error[keep & (a > .05)]
     return sample, a
 
@@ -210,11 +254,24 @@ def test_recolor_replaces_the_white_head_without_a_doubled_contour(capture):
         sample, _ = _edge_error(item, frames["graded"], report,
                                 images["baseline"], images["graded"])
         assert sample.size > 100, item["event_id"]
-        assert sample.mean() <= 6.0, (item["status"], item["head"], sample.mean())
+        assert sample.mean() <= 6.0, (item["event_id"], item["status"], item["head"], sample.mean())
         assert np.percentile(sample, 95) <= 32.0, (
             item["status"], item["head"], np.percentile(sample, 95))
         measured += 1
     assert measured >= 10
+
+
+def test_original_white_whole_note_contour_would_still_fail_recolor_check(capture):
+    """Masking the intentional interior must not mask doubled source edges."""
+    report, frames, images = capture
+    item = next(item for item in _colored(frames["graded"])
+                if item["head"] == "head_whole" and item["status"] == "early_onset")
+    assert _on_screen(item, images["graded"].shape[1])
+    ghosted = images["graded"].copy()
+    x0, y0, x1, y1 = _box(item, 3, ghosted.shape[1])
+    ghosted[y0:y1, x0:x1] = images["baseline"][y0:y1, x0:x1]
+    sample, _ = _edge_error(item, frames["graded"], report, images["baseline"], ghosted)
+    assert sample.size > 100 and sample.mean() > 6.0
 
 
 def test_glow_is_extremely_subtle_and_follows_the_notehead_mask(capture):
