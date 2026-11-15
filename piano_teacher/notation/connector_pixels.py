@@ -811,21 +811,24 @@ def _tuplet(row, frames, target):
     y = anchors[first]['y']+(y0-ref_first[1])*scale
     if any(x <= column <= x+template.shape[1] for column in frame['occluded_columns']):
         raise ValueError('Measured coloured playhead occludes the source numeral')
-    # A small printed numeral can have fewer than fifteen raster rows.
-    # Subpixel antialias coverage then differs between the original SVG
-    # raster and Godot's downsample. Keep the full Dice and uniqueness
-    # requirements, but evaluate four bounded alpha cutoffs of the SAME
-    # independently sourced contour; no missing pixels are reconstructed.
-    candidates = []
-    for resampling in (Image.Resampling.BILINEAR, Image.Resampling.BICUBIC,
-                       Image.Resampling.LANCZOS):
-        for cutoff in (80, 96, 112, 128, 144, 160, 176, 192, 208):
-            candidate = _resized_art(number, gap, cutoff, resampling)
-            (fit, px, py), uniqueness = _fit_mask(
-                frame['pixels'], candidate, x, y, math.ceil(gap*.5))
-            candidates.append((fit, uniqueness, cutoff, px, py, candidate, resampling))
-    score, margin, cutoff, nx, ny, template, resampling = max(
-        candidates, key=lambda item: (item[0], item[1]))
+    # Retain the established source-raster witness when it is conclusive.
+    # Tiny recovered numerals can quantize differently after a second GPU
+    # downsample; only then compare bounded alternative rasterizations of
+    # the SAME source SVG outline. The Dice and unique-fit gates are unchanged.
+    (score, nx, ny), margin = _fit_mask(
+        frame['pixels'], template, x, y, math.ceil(gap*.5))
+    cutoff, resampling = 96, Image.Resampling.BILINEAR
+    if score < .79 or margin < .05:
+        candidates = []
+        for sampling in (Image.Resampling.BILINEAR, Image.Resampling.BICUBIC,
+                         Image.Resampling.LANCZOS):
+            for threshold in (80, 96, 112, 128, 144, 160, 176, 192, 208):
+                candidate = _resized_art(number, gap, threshold, sampling)
+                (fit, px, py), uniqueness = _fit_mask(
+                    frame['pixels'], candidate, x, y, math.ceil(gap*.5))
+                candidates.append((fit, uniqueness, threshold, px, py, candidate, sampling))
+        score, margin, cutoff, nx, ny, template, resampling = max(
+            candidates, key=lambda item: (item[0], item[1]))
     if score < .79 or margin < .05:
         return 'mismatch', 'Actual numeral contour lacks the source identity or a unique bounded fit', dict(
             expected_numeral=digits, match=round(score, 4), margin=round(margin, 4),
