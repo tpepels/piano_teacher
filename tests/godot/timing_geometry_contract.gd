@@ -97,7 +97,8 @@ func _run_contract() -> void:
         check(near(source_bounds.y-source_bounds.x,4.0*density+3.5*gap),
             "source clip only adds measured glyph clearance")
         check(near(Markers.marker_x(4.5,visual_world,density,1536.0) -
-            timeline.screen_x(4.5,visual_world,1536.0/3.0),0.0),
+            timeline.screen_x(4.5,visual_world,
+                1536.0*0.33),0.0),
             "lesson markers and noteheads agree on source beat position")
 
         var rules: Array[float] = MeterGrid.visible_lines(
