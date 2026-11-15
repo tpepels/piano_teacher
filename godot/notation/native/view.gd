@@ -163,6 +163,10 @@ var _stream_armed_serial := -1
 var _stream_arm_rollback: Dictionary = {}
 var _stream_arm_acknowledged := false
 var _stream_serial := 0
+# A piece prints its full starting clef/key/meter once. Subsequent copies
+# in the continuous stream crop the repeated first-measure header, retaining
+# the written gap/rest and the same immutable note/music time.
+var _opening_context_printed := false
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
 
@@ -301,6 +305,10 @@ func _archive_source_identity(candidate: Dictionary) -> String:
 
 
 func load_score(candidate: Dictionary) -> bool:
+    # A newly loaded source must be independently readable; only the
+    # explicitly prepared same-context stage handoff may inherit another
+    # score's header. A previous take in this renderer is not transferable.
+    _opening_context_printed = false
     connector_geometry.clear_cache()
     annotations.clear()
     drawn_note_instances.clear()
@@ -799,6 +807,8 @@ func _stream_add_take(source_beat: float, start_world: float,
             return
         added += 1
     _stream_serial = first_serial+windows.size()-1
+    if source_beat <= .0001:
+        _opening_context_printed = true
     _stream_live_serial = first_serial
     _stream_last_admitted = first_serial
 
@@ -811,8 +821,8 @@ func _stream_leading_spaces(opening: float) -> float:
     # For a handoff with identical context, the new score's initial
     # context is deliberately not repainted (SourcePassPainter), so
     # reserve only regular source/barline clipping clearance instead.
-    return (1.6 if not inherited_opening_context.is_empty() else 15.0) \
-        if opening <= .0001 else 1.6
+    return (1.6 if not inherited_opening_context.is_empty() or
+        _opening_context_printed else 15.0) if opening <= .0001 else 1.6
 
 
 func _stream_header_beats(opening: float) -> float:
@@ -899,7 +909,7 @@ func _transport_admission_receipt(planned: Dictionary,
                 "source_ceiling":timeline.duration_beats,
                 "clip_floor":opening,
                 "clip_ceiling":timeline.duration_beats,
-                "clip_leading_spaces":15.0 if opening <= .0001 else 1.6
+                "clip_leading_spaces":_stream_leading_spaces(opening)
             },timeline.pixels_per_beat,staff_gap(),
                 timeline.duration_beats).x/
                     maxf(1.0,timeline.pixels_per_beat) -
