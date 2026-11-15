@@ -352,7 +352,9 @@ func _process(_delta: float) -> bool:
             # The rest-duration verifier must use its graded tempo map,
             # otherwise it invents an extra bar of silence.
             "tempo_segments":s.get("tempo_segments",[]),
-            "pf":s.get("play_from_beat")})
+            "pf":s.get("play_from_beat"),
+            "score_density":renderer.timeline.pixels_per_beat,
+            "rest_geometry":renderer.short_rest_geometry()})
         last_tid = tid
         # The performer reads the plan when it sees the NEXT take start.
         var index: int = takes.size()
