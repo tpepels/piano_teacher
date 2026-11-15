@@ -2077,3 +2077,87 @@ and `tests/test_score_stream_admission.py` run, the Chopin
 application restore test and the full four-shard acceptance on
 the *same clean commit*. Do not claim that the renderer is fixed
 from source inspection alone.
+
+
+### 2026-11-15 — shard 3: five failures after shard 2 passes
+
+Actual attached `Geplakte tekst(20261115-113432).txt` release run
+on `8d4b44e62693`: focused fingering spatial, future-only admission
+and Chopin popup **3 passed** in 49.13 s. **Shard 2 passed**
+(1,352 passed, 4 skipped, 496.83 s). **Shard 3 failed**
+(1,417 passed, 5 failed, 4 skipped, 381.03 s);
+shard 4 was not started. No quota or earlier popup failure reappeared.
+The release is still incomplete.
+
+1. **Container provenance contract:** `test_phase4_workflows` assumed
+   every container job uses `actions/checkout`, raising
+   `StopIteration` on `inprocess-native-smoke.yml / clean-machine`.
+   That isolated Ubuntu job deliberately downloads the SHA-specific
+   installed artifact and contains no Git repository. The test now
+   requires an artifact download and forbids `GITHUB_WORKSPACE`/
+   `git config` in such jobs; containers that actually check out
+   still require an immediate exact workspace trust step
+   (`324cf913`). Inspected all the workflow's steps and other
+   container workflows. This is a test-contract correction, not
+   removal of a workspace provenance gate.
+
+2. **Polyphonic half-note native chords (groups2/groups3):** Both
+   tests reject the framebuffer as `ambiguous`; the strict test
+   requires two independent physical shafts and erasure to affect
+   only one voice. The source-independent stem pixel verifier's
+   preferred directions use actual voice/register order. Native
+   isolated notes use that same rule, but Verovio *compound chord*
+   templates were selected exclusively from the source page's
+   unqualified chord stem. In a crossed pair the chord and the
+   isolated voice could choose inconsistent rules. The Python
+   chord asset generator now derives polyphonic chord directions
+   from the same per-onset/staff/voice pitch ranges as native
+   `VoiceLayout.stem_directions`, including 3+ voice ranks;
+   explicit stems and source beams keep priority, and the asset
+   is still a **real Verovio-engraved whole-chord sprite**, not
+   a Godot-drawn replacement shaft (`ed7d115`).
+   Source-only tests cover both formerly failing crossed-voice
+   orderings, overlapping ranges, authored stems, beams,
+   separate onsets, and three-voice source order
+   (`e6cd9e6`). The unchanged physical/erasure tests remain the
+   release gate. These two cases are NOT confirmed passing yet.
+
+3. **Automatic rests around two bars:** The failing `tid=5`
+   showed 3.0 instead of <=2.25 bars. Further inspection found
+   that `tests/readiness/invariants.py` inferred the preceding
+   take's `source_end` using `len*60/nominal_bpm`.
+   The Coda/Fukuda stage can run at half nominal speed, so this
+   arithmetic can classify **one bar of sounding source notes**
+   as additional silence. The capture now records the actual
+   `tempo_segments` for each graded take (`7228fe5`).
+   The verifier computes exact source duration through the
+   production `TempoMap.seconds_at` before measuring the gap
+   (`a355038`); incorrect/missing segment coverage causes an
+   explicit failure instead of an invented pass. The STRICT
+   <=2.25 bound on every automatically classified take remains
+   intact (`cfd8cd5`), reversing an earlier attempt to treat the
+   case as a deliberate rest pause. Focused half-speed, variable,
+   partial, and malformed-map tests were added (`ce50ab2`).
+   This is a correction of evidence accounting; if the full
+   scenario still reports 3 real bars, the backend continuation
+   must be investigated separately.
+
+4. **Graphical playhead capture:** Its outer 30 s watchdog
+   elapsed after `NATIVE_MODEL_READY`, before the 36-frame
+   report. The capture script had an awaited `process_frame`
+   AND a synchronous `RenderingServer.force_draw()` before
+   every GPU readback. It now awaits the actual
+   `RenderingServer.frame_post_draw` signal instead of forcing
+   nested main-thread frame rendering (`be6a07b`). A progress
+   record reports each of its three 12-frame BPM sets.
+   The outer watchdog is now 90 s for cold GPU setup, while
+   all **36 real rendered timing-line pixels still face the
+   original 2-pixel/color thresholds** (`7764f33`).
+   The revised physical capture is not yet locally verified.
+
+All new source/tempo and container provenance regressions are
+included in the fast smoke gate (`1583b14`, `1cc7644`).
+The immediate acceptance path is the five focused failures plus
+the source-only regressions, followed by `ci-full.sh --shard 3`;
+shard 4 follows if green. **All four shards must finally pass on
+the same revision** (earlier shard-2 PASS belongs to an older SHA).
