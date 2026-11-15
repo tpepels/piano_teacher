@@ -189,10 +189,11 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
     if directions - {'up', 'down'} or len(directions) > 1:
         return feature_result('unsupported', 'Conflicting, absent or specialized explicit stem declarations', **evidence)
     low, high = min(h['y'] for h in hs), max(h['y'] for h in hs)
-    # The registered head's actual raster silhouette, rather than a guessed
-    # half-space radius, limits how far a continuous shaft may overlap its
-    # attachment end. Hollow heads and high-density antialiasing frequently
-    # extend beyond half a staff space from the musical head centre.
+    # A source head can connect to a continuous stem whose first raster
+    # pixel extends into the adjacent staff space. Cap the HEAD side at one
+    # staff space (or the independently registered head contour), while the
+    # far tip still must satisfy the strict original Verovio reference.
+    # A shorter half-space cap rejected complete visible polyphonic stems.
     head_top = min(h['bbox'][1] for h in hs)
     head_bottom = max(h['bbox'][3] for h in hs)
     absolute = [int(n['spelling'][2])*7+'CDEFGAB'.index(n['spelling'][0]) for n in group]
@@ -209,7 +210,7 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
                            if written is not None else ('G', 2, 0))
             standalone = reference_stem_extension(
                 group[0]['note_type'], intervals, direction, absolute[0], source_clef)
-            authored = ((source_reference or {}).get(group[0]['source']['id'],{})
+            authored = ((source_reference or {}).get(event_identity(group[0]),{})
                         if len(group) == 1 and group[0].get('beams') else {})
             # Only original beamed notes may shorten an independently
             # engraved standalone reference. Their end shafts can naturally
@@ -247,9 +248,9 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
                             diagnostics[direction]["max_connected_extension_spaces"],round(measured,3))
                 if direction == 'up':
                     valid = (low-8*gap <= top <= low-minimum and
-                             high-.5*gap <= bottom <= max(high+.5*gap,head_bottom+1))
+                             high-gap <= bottom <= max(high+gap,head_bottom+1))
                 else:
-                    valid = (min(low-.5*gap,head_top-1) <= top <= low+.5*gap
+                    valid = (min(low-gap,head_top-1) <= top <= low+gap
                              and high+minimum <= bottom <= high+8*gap)
                 if valid and all(top <= h['y'] <= bottom for h in hs):
                     candidates.append((direction, x, top, bottom))
@@ -261,7 +262,7 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
                        reference_clef=source_clef,
                        reference_origin=("original_source_beam_svg" if any(
                            n.get('beams') for n in group) and
-                           (source_reference or {}).get(group[0]['source']['id']) else
+                           (source_reference or {}).get(event_identity(group[0])) else
                            "standalone_verovio"))
     options = []
     for direction in ('up', 'down'):
