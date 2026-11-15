@@ -31,6 +31,9 @@ func register_peer(view: Control) -> void:
 
 # Clearance between outgoing and incoming ink, in pixels.
 const PEER_MARGIN_PX := 60.0
+# Printed rests already provide a whole-measure separation and a final
+# barline. Keep a raster safety gap, not the source-to-source 60 px cushion.
+const PEER_REST_MARGIN_PX := 6.0
 
 func minimum_peer_opening(density: float,
         viewport_width: float, playhead_x: float,
@@ -63,20 +66,22 @@ func minimum_peer_opening(density: float,
             var peer_end: float = float(item["world_origin"]) + \
                 peer_bounds.y/peer_density
             earliest = maxf(earliest,
-                peer_popin_after(peer_end,peer_density,playhead_x,density)
+                peer_popin_after(peer_end,peer_density,playhead_x,density,
+                    PEER_REST_MARGIN_PX if is_rest else PEER_MARGIN_PX)
                 if popping_in else peer_opening_after(peer_end,
                 peer_density,peer_playhead,density,viewport_width,playhead_x))
     return earliest
 
 
 static func peer_popin_after(peer_end: float, peer_density: float,
-        playhead_x: float, density: float) -> float:
+        playhead_x: float, density: float,
+        margin_px: float = PEER_MARGIN_PX) -> float:
     # Ink that opens on the EMPTY strip (owner P5): the outgoing layer's last
     # pixel has passed the playhead. Ink of another density then never
     # overlaps it: a slower incoming layer only falls further behind, and a
     # faster one is still right of the old ink's last pixel when that pixel
     # leaves past the left edge (a pure linear bound on screen positions).
-    var floor_beat: float = peer_end + PEER_MARGIN_PX/maxf(1.0,density)
+    var floor_beat: float = peer_end + margin_px/maxf(1.0,density)
     if density > peer_density:
         floor_beat += playhead_x*(density-peer_density)/(peer_density*density)
     return floor_beat
