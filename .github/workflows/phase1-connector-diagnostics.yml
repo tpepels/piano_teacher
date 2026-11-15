@@ -42,6 +42,15 @@ jobs:
             -k 'beamed-overlap or tuplet-overlap' \
             --basetemp="$RUNNER_TEMP/connectors/captures" \
             tests/test_native_voice_collisions.py
+      - name: Keep negative beam, stem and bracket erasure proofs strict
+        if: always()
+        run: |
+          timeout 150s xvfb-run -a -s '-screen 0 2000x1100x24' \
+            python -m pytest -q --tb=short \
+              tests/test_connector_pixels.py \
+              tests/test_connector_beam_pixel_profile.py \
+              tests/test_post_group_connector_photos.py \
+              tests/test_tuplet_adaptive_raster_bounds.py
       - name: Explain original reference and actual bitmap independently
         if: always()
         run: |
