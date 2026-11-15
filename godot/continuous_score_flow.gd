@@ -1,4 +1,5 @@
 extends RefCounted
+const TempoTimeline := preload("res://tempo_timeline.gd")
 ## One endless, forward-only presentation axis for the Practice canvas.
 ##
 ## Backend transport, MIDI assessment and Listen scheduling do not read this.
@@ -11,15 +12,18 @@ var bpm := 40.0
 var initialized := false
 # Beats still owed after a retroactive switch to a slower rate.
 var _slow_debt := 0.0
+# A late slowdown repays at most this fraction of each future step, so the
+# visual axis strictly advances even while it reconciles an earlier epoch.
+const MAX_SLOWDOWN_REPAY_FRACTION := 0.5
 
 func sample(at_ms: int, selected_bpm: float = NAN) -> float:
     if not initialized:
         initialized = true
         last_ms = at_ms
     elif at_ms > last_ms:
-        var step: float = float(at_ms-last_ms) * bpm / 60000.0
+        var step: float = TempoTimeline.beats_from_milliseconds(float(at_ms-last_ms), bpm)
         # Repay at most half of each step: the axis slows, never stops.
-        var paid: float = minf(_slow_debt,step*0.5)
+        var paid: float = minf(_slow_debt,step*MAX_SLOWDOWN_REPAY_FRACTION)
         _slow_debt -= paid
         beat += step-paid
         last_ms = at_ms
@@ -38,7 +42,7 @@ func switch_rate_at(at_ms: float, next_bpm: float) -> void:
     if not initialized or not is_finite(at_ms) or not is_finite(next_bpm) or \
             next_bpm <= 0.0 or at_ms >= float(last_ms):
         return
-    var correction: float = (float(last_ms)-at_ms)*(next_bpm-bpm)/60000.0
+    var correction: float = TempoTimeline.beats_from_milliseconds(float(last_ms)-at_ms,next_bpm-bpm)
     if correction >= 0.0:
         beat += correction
     else:
@@ -48,8 +52,8 @@ func switch_rate_at(at_ms: float, next_bpm: float) -> void:
 func project(at_ms: int) -> float:
     if not initialized:
         return 0.0
-    var step: float = float(maxi(0,at_ms-last_ms)) * bpm / 60000.0
-    return beat + step - minf(_slow_debt,step*0.5)
+    var step: float = TempoTimeline.beats_from_milliseconds(float(maxi(0,at_ms-last_ms)),bpm)
+    return beat + step - minf(_slow_debt,step*MAX_SLOWDOWN_REPAY_FRACTION)
 
 func project_authored_future(at_ms: int, sampled_ms: int,
         source_beat: float, nominal_bpm: float,
@@ -66,19 +70,18 @@ func project_authored_future(at_ms: int, sampled_ms: int,
     # deadline (at most half of each step): the axis reaches the deadline
     # that much later, so the projection must subtract it too.
     var owed: float = maxf(0.0,_slow_debt-minf(_slow_debt,
-        float(maxi(0,sampled_ms-last_ms))*bpm/60000.0*0.5))
+        TempoTimeline.beats_from_milliseconds(float(maxi(0,sampled_ms-last_ms)),bpm)*MAX_SLOWDOWN_REPAY_FRACTION))
     if delta_seconds <= 0.0 or authored_segments.is_empty() or \
             not is_finite(source_beat) or not is_finite(nominal_bpm) or \
             nominal_bpm <= 0.0:
-        var advance: float = delta_seconds*bpm/60.0
-        return local_world + advance - minf(owed,advance*0.5)
-    var timing = preload("res://tempo_timeline.gd")
-    var before: float = timing.seconds_at_beat(
+        var advance: float = TempoTimeline.beats_from_seconds(delta_seconds,bpm)
+        return local_world + advance - minf(owed,advance*MAX_SLOWDOWN_REPAY_FRACTION)
+    var before: float = TempoTimeline.seconds_at_beat(
         source_beat,nominal_bpm,authored_segments)
-    var after: float = timing.beat_at_seconds(
+    var after: float = TempoTimeline.beat_at_seconds(
         before+delta_seconds,nominal_bpm,authored_segments)
     var mapped: float = maxf(0.0,after-source_beat)
-    return local_world+mapped-minf(owed,mapped*0.5)
+    return local_world+mapped-minf(owed,mapped*MAX_SLOWDOWN_REPAY_FRACTION)
 
 
 func reset() -> void:
