@@ -5,6 +5,7 @@ const CommandRequestState := preload("res://command_request_state.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const CountInCueTimeline := preload("res://countin_cue_timeline.gd")
+const TempoTimeline := preload("res://tempo_timeline.gd")
 signal succeeded(decision: Dictionary, opened: Variant, code: int, body: PackedByteArray, started_ms: int)
 signal learning_accepted(operation: String, values: Dictionary)
 signal library_requested(piece: String, resume_saved: bool)
@@ -152,8 +153,9 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         # ends exactly at the take's first beat.
         var count_in_slot: float = float(last_state.get("next_count_in_beats",0.0))
         if requested in ["start","resume"] and count_in_slot > 0.0:
-            count_in_slot += float(last_state.get("short_rest_latency_seconds",0.0))* \
-                float(last_state.get("bpm",score_flow.bpm))/60.0
+            count_in_slot += TempoTimeline.beats_from_seconds(
+                float(last_state.get("short_rest_latency_seconds",0.0)),
+                float(last_state.get("bpm",score_flow.bpm)))
         var reserved: Dictionary = renderer.reserve_transport_action(
             requested,visual_now,opening,count_in_slot)
         if reserved.is_empty():
