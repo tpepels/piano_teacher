@@ -25,7 +25,10 @@ from .diagnosis_policies import LearnerSnapshot
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
-from .application.musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS, SETTLEMENT_SECONDS
+from .application.musical_scheduler import (
+    SCHEDULER, SNAPSHOT_LATENCY_SECONDS, SETTLEMENT_SECONDS,
+    RestMeasurement, ContinuationMeasurement,
+)
 
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
@@ -555,7 +558,9 @@ class PracticeEngine:
             self.next_action = instruction
         elif deadline is not None:
             self._continue_at(
-                self._continuation_deadline(deadline, response.restart_beat),
+                SCHEDULER.continuation(
+                    self._collect_continuation_measurement(deadline, response.restart_beat),
+                    now=self.now(),bpm=self._presentation_bpm),
                 from_beat=response.restart_beat)
             self.next_action = instruction
         else:
@@ -1648,7 +1653,9 @@ class PracticeEngine:
             return
         # Godot owns the reuse decision (one count-in pulse plus the published
         # latency still ahead, at the announced tempo); it is not re-decided.
-        short = (self._short_rest_deadline(0.0,from_beat=announced[0],now=now)
+        short = (SCHEDULER.measured_rest(
+                self._collect_rest_measurement(from_beat=announced[0],source_end=0.0),
+                now=now,bpm=self._presentation_bpm)
                  if self._short_rest is not None and not reuse else None)
         deadline = SCHEDULER.fresh_resume(
             now=now,old_deadline=announced[1],
@@ -1663,34 +1670,19 @@ class PracticeEngine:
             self.visual_transport.announce_continuation(
                 announced[0],deadline,announced[2])
 
-    def _continuation_deadline(self, deadline: float, from_beat: float) -> float:
-        """The ONE graded run_at of an automatic same-stage continuation.
-
-        A continuation scheduled when the previous take finished was
-        announced (score_queue_next) with this exact deadline, so Godot
-        admitted its source offscreen at that world position. It starts
-        unchanged: adding another reading lead here made the graded beat
-        follow the visible ink by (horizon - rest) beats (R1 P1/M1).
-
-        An unannounced continuation (a policy changed the source opening at
-        settlement) gets a fresh full offscreen horizon from now, so its ink
-        can still be admitted beyond the right edge before it is graded.
-        """
-        announced = self.visual_transport.announced_deadline(from_beat)
-        if self.plan is None or not self.auto:
-            return deadline
-        if announced is not None and abs(announced-deadline)<=1e-9:
-            return announced
-        short = self._short_rest_deadline(
-            None if self._rest_take_end is not None else deadline,
-            from_beat=from_beat)
-        return SCHEDULER.automatic(
-            announced_at=announced,from_beat_matches=announced is not None,
-            deadline=deadline,now=self.now(),bpm=self._presentation_bpm,
+    def _collect_continuation_measurement(self, deadline: float,
+                                          from_beat: float
+                                          ) -> ContinuationMeasurement:
+        """Sample queue and engraving facts; deadline calculus lives in SCHEDULER."""
+        return ContinuationMeasurement(
+            deadline=deadline,
+            announced_at=self.visual_transport.announced_deadline(from_beat),
             rest_beats=self.visual_transport.visual_gap_beats,
             horizon_beats=self._continuous_horizon_beats,
-            short_rest_at=short)
-
+            rest=self._collect_rest_measurement(
+                from_beat=from_beat,
+                source_end=deadline if self._rest_take_end is None else None),
+            automatic=self.plan is not None and self.auto)
 
 
     def _start_rate_bpm(self, from_beat: float, bpm: float) -> float:
@@ -1847,8 +1839,9 @@ class PracticeEngine:
                     + SNAPSHOT_LATENCY_SECONDS) if self._short_rest is not None else 0.0
                 # A re-engraved continuation still opens after the written
                 # rest bar of the take it follows.
-                after_rest = self._short_rest_deadline(
-                    from_beat=self.open_from_beat) if lead > 0.0 else None
+                after_rest = SCHEDULER.measured_rest(
+                self._collect_rest_measurement(from_beat=self.open_from_beat),
+                now=self.now(),bpm=self._presentation_bpm) if lead > 0.0 else None
                 if after_rest is not None:
                     lead = max(lead, after_rest - self.now())
                 self.start(
@@ -1935,35 +1928,32 @@ class PracticeEngine:
             raise ValueError("Invalid short-rest geometry")
         self._short_rest = (clear, header)
 
-    def _short_rest_deadline(self, take_end: float | None = None, *,
-                             from_beat: float = 0.0,
-                             now: float | None = None) -> float | None:
-        """The graded run_at of the take that follows a written rest bar.
+    def _collect_rest_measurement(self, *,
+                                  from_beat: float = 0.0,
+                                  source_end: float | None = None
+                                  ) -> RestMeasurement | None:
+        """Read authored meter and actual native glyph clearance only.
 
-        The next source opens right after the rest bar printed behind the
-        last take (take_end, default: the last finished take), but never
-        closer than one count-in bar plus the snapshot latency from now,
-        so its count-in is always whole. The rest is printed at the tempo
-        of the take it follows. The deadline is where Godot admits the ink.
+        This routine has no timing arithmetic. The musical scheduler owns
+        the outgoing/incoming tempo conversion, count-in and deadline.
         """
         if self._short_rest is None or self.plan is None or self._presentation_bpm <= 0:
             return None
         clear, header = self._short_rest
-        rest_bpm = self._presentation_bpm
-        if take_end is None:
+        outgoing_bpm = self._presentation_bpm
+        if source_end is None:
             if self._rest_take_end is None:
                 return None
-            take_end, rest_bpm = self._rest_take_end
-        now = self.now() if now is None else now
+            source_end,outgoing_bpm = self._rest_take_end
         _, bar, _ = self.attempt_progression.count_in_bar(
-            phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
-            time_signatures=self.plan.piece.time_signatures, position=from_beat)
-        return SCHEDULER.short_rest(
-            now=now,source_end=take_end,outgoing_bpm=rest_bpm,
-            incoming_bpm=self._presentation_bpm,
+            phrase=self.plan.active_phrase,
+            boundaries=self.plan.piece.bar_boundaries,
+            time_signatures=self.plan.piece.time_signatures,
+            position=from_beat)
+        return RestMeasurement(
+            source_end=source_end,outgoing_bpm=outgoing_bpm,
             clear_beats=clear,header_beats=header,
-            count_in_beats=bar,latency=SNAPSHOT_LATENCY_SECONDS,
-            tempo_epoch=self._tempo_epoch).run_at
+            count_in_beats=bar,tempo_epoch=self._tempo_epoch)
 
 
     def _update_continuous_horizon(self, value) -> None:
@@ -1973,16 +1963,6 @@ class PracticeEngine:
         if not math.isfinite(horizon) or not 0.0 <= horizon <= 64.0:
             raise ValueError("Invalid continuous score reading horizon")
         self._continuous_horizon_beats = horizon
-
-    def _automatic_stream_deadline(self, deadline: float) -> float:
-        # The semantic printed rest is already counted in the engine's
-        # automatic next_at. Add only the missing offscreen reading lead
-        # before the SAME MIDI-graded run_at is scheduled.
-        return SCHEDULER.missing_horizon(
-            deadline=deadline,rest_beats=self.visual_transport.visual_gap_beats,
-            reading_horizon_beats=self._continuous_horizon_beats,
-            bpm=self._presentation_bpm)
-
 
     def _presentation_lead(self, kwargs: dict) -> float:
         """Lead to the world position Godot reserved for this command.
@@ -2410,7 +2390,9 @@ class PracticeEngine:
                         "practice_timeline"]["stride_beats"]
                 target = selected.next_exposure.from_beat
                 # The deadline already announced for this repeat, unchanged.
-                self._continue_at(self._continuation_deadline(deadline, target),
+                self._continue_at(SCHEDULER.continuation(
+                    self._collect_continuation_measurement(deadline, target),
+                    now=self.now(),bpm=self._presentation_bpm),
                                   from_beat=target)
             else:
                 self.visual_transport.next_at = 0
@@ -2448,7 +2430,9 @@ class PracticeEngine:
             self.feedback = f"Retrying {assignment.focus} with the music still moving"
             self.next_action = "Play this section, then return to the complete passage."
             self._continue_at(
-                self._continuation_deadline(deadline, review.start_beat),
+                SCHEDULER.continuation(
+                    self._collect_continuation_measurement(deadline, review.start_beat),
+                    now=self.now(),bpm=self._presentation_bpm),
                 from_beat=review.start_beat)
             return
         if assignment.guided:
@@ -2532,8 +2516,9 @@ class PracticeEngine:
                 and self.plan.identity == pending.state.binding.stage_key
                 and decision.end_beat >= phrase.end-phrase.start-1e-7):
             self._rest_take_end = (scored_end, outgoing_bpm)
-            short_deadline = self._short_rest_deadline(
-                from_beat=transition.restart_beat, now=now)
+            short_deadline = SCHEDULER.measured_rest(
+                self._collect_rest_measurement(from_beat=transition.restart_beat),
+                now=now,bpm=self._presentation_bpm)
         self._schedule_preparation(transition.restart_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds,
@@ -2574,12 +2559,18 @@ class PracticeEngine:
             self.measurement.finish()
             self.running = False
             self.visual_transport._preview_loop_pending = True
-            short = self._short_rest_deadline(self.visual_transport.run_at + duration)
+            short = SCHEDULER.measured_rest(
+                self._collect_rest_measurement(from_beat=0.0,source_end=self.visual_transport.run_at + duration),
+                now=self.now(),bpm=self._presentation_bpm)
             self.visual_transport.announce_continuation(0.0, short if short is not None else
-                self._automatic_stream_deadline(SCHEDULER.repeat(
-                    run_at=self.visual_transport.run_at,source_seconds=duration,
-                    gap_beats=self.visual_transport.visual_gap_beats,
-                    bpm=self.plan.bpm)), self.plan.bpm)
+                SCHEDULER.missing_horizon(
+                    deadline=SCHEDULER.repeat(
+                        run_at=self.visual_transport.run_at,source_seconds=duration,
+                        gap_beats=self.visual_transport.visual_gap_beats,
+                        bpm=self.plan.bpm),
+                    rest_beats=self.visual_transport.visual_gap_beats,
+                    reading_horizon_beats=self._continuous_horizon_beats,
+                    bpm=self._presentation_bpm), self.plan.bpm)
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn progress."
             if now >= self.visual_transport.next_at:
@@ -2724,7 +2715,9 @@ class PracticeEngine:
                     feedback_seconds=self.feedback_seconds,
                     passage_beats=total_beats,bpm=self.plan.bpm),
                 announce=same_timed,
-                short_deadline=self._short_rest_deadline(None, from_beat=target))
+                short_deadline=SCHEDULER.measured_rest(
+                self._collect_rest_measurement(from_beat=target),
+                now=self.now(),bpm=self._presentation_bpm))
         if self.is_builtin_warmup and decision.invalidate_failed_streak:
             self.auto = False
             self.visual_transport.cancel_preparation()
@@ -2754,9 +2747,14 @@ class PracticeEngine:
                 run_at=self.visual_transport.run_at,source_seconds=duration,
                 gap_beats=self.visual_transport.visual_gap_beats,bpm=self.plan.bpm)
             if same_timed:
-                short = self._short_rest_deadline(self.visual_transport.run_at+duration)
+                short = SCHEDULER.measured_rest(
+                self._collect_rest_measurement(from_beat=0.0,source_end=self.visual_transport.run_at+duration),
+                now=self.now(),bpm=self._presentation_bpm)
                 self.teaching_continuation.announce(pending,
-                    deadline=short if short is not None else self._automatic_stream_deadline(deadline))
+                    deadline=short if short is not None else SCHEDULER.missing_horizon(
+                        deadline=deadline,rest_beats=self.visual_transport.visual_gap_beats,
+                        reading_horizon_beats=self._continuous_horizon_beats,
+                        bpm=self._presentation_bpm))
             else:
                 self.visual_transport.announced_continuation = None
                 self.visual_transport.next_at = now if self._short_rest is not None else deadline
@@ -2817,7 +2815,9 @@ class PracticeEngine:
             deadline = self.visual_transport.next_at
             self.visual_transport.visual_offset_beats += self._source_model()[
                 "practice_timeline"]["stride_beats"]
-            self._continue_at(self._continuation_deadline(deadline, 0.0))
+            self._continue_at(SCHEDULER.continuation(
+                    self._collect_continuation_measurement(deadline, 0.0),
+                    now=self.now(),bpm=self._presentation_bpm))
         elif decision.action == "feedback":
             self._advance_pending_feedback(now)
         elif decision.action == "rewind_due":
@@ -2827,7 +2827,9 @@ class PracticeEngine:
             else:
                 target = self.visual_transport.pending_rewind
                 self._continue_at(
-                    self._continuation_deadline(self.visual_transport.next_at, target),
+                    SCHEDULER.continuation(
+                    self._collect_continuation_measurement(self.visual_transport.next_at, target),
+                    now=self.now(),bpm=self._presentation_bpm),
                     from_beat=target)
         return decision.consumed
 

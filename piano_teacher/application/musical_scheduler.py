@@ -53,6 +53,28 @@ class PreparationDeadline:
     reverse_seconds: float
 
 
+@dataclass(frozen=True, slots=True)
+class RestMeasurement:
+    """Facts reported by engraving and the outgoing graded score clock."""
+    source_end: float
+    outgoing_bpm: float
+    clear_beats: float
+    header_beats: float
+    count_in_beats: float
+    tempo_epoch: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class ContinuationMeasurement:
+    """No calculated deadline: a snapshot of immutable queue/score facts."""
+    deadline: float
+    announced_at: float | None
+    rest_beats: float
+    horizon_beats: float
+    rest: RestMeasurement | None
+    automatic: bool
+
+
 class MusicalScheduler:
     """All backend decisions about absolute musical time.
 
@@ -220,6 +242,43 @@ class MusicalScheduler:
         return cls.resolve("short_rest",now=now,bpm=incoming_bpm,
             count_in_beats=count_in_beats,latency=latency,
             physical_at=physical)
+
+    @classmethod
+    def measured_rest(cls, rest: RestMeasurement | None, *,
+                      now: float, bpm: float,
+                      latency: float = SNAPSHOT_LATENCY_SECONDS
+                      ) -> float | None:
+        if rest is None:
+            return None
+        return cls.short_rest(now=now,source_end=rest.source_end,
+            outgoing_bpm=rest.outgoing_bpm,incoming_bpm=bpm,
+            clear_beats=rest.clear_beats,header_beats=rest.header_beats,
+            count_in_beats=rest.count_in_beats,latency=latency,
+            tempo_epoch=rest.tempo_epoch).run_at
+
+    @classmethod
+    def continuation(cls, measured: ContinuationMeasurement, *,
+                     now: float, bpm: float,
+                     latency: float = SNAPSHOT_LATENCY_SECONDS) -> float:
+        """Compute one continuation deadline from all physical measurements.
+
+        An existing, identical score plan wins unchanged. The result is the
+        only run_at used by MIDI grading and by immutable future source ink.
+        """
+        if not measured.automatic:
+            return measured.deadline
+        if measured.announced_at is not None and abs(
+                measured.announced_at-measured.deadline)<=1e-9:
+            return measured.deadline
+        short_at = cls.measured_rest(
+            measured.rest,now=now,bpm=bpm,latency=latency)
+        return cls.automatic(
+            announced_at=measured.announced_at,
+            from_beat_matches=measured.announced_at is not None,
+            deadline=measured.deadline,now=now,bpm=bpm,
+            rest_beats=measured.rest_beats,
+            horizon_beats=measured.horizon_beats,
+            short_rest_at=short_at)
 
     @classmethod
     def automatic(cls, *, announced_at: float | None, from_beat_matches: bool,
