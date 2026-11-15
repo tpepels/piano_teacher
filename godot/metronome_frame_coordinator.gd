@@ -2,6 +2,7 @@ extends RefCounted
 ## One authoritative musical clock drives every count-in audio/visual cue.
 ## Only calibration has its separate, intentional measurement epoch.
 const CueTimeline := preload("res://countin_cue_timeline.gd")
+const TempoTimeline := preload("res://tempo_timeline.gd")
 ## The backend grades MIDI; this class owns only audio/UI frame counters.
 var settings_view
 var practice_view
@@ -97,7 +98,7 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
             _reserved["deadline_ms"] = engine
     var deadline: float = float(_reserved["deadline_ms"])
     var bpm: float = float(_reserved["bpm"])
-    var beat: float = (float(now_ms)-deadline)*bpm/60000.0
+    var beat: float = TempoTimeline.beats_from_milliseconds(float(now_ms)-deadline,bpm)
     if beat >= 0.0:
         # For one beat the same take's own transport (running or resumed
         # countdown of this transport) may still report a count-in beat:
@@ -177,7 +178,7 @@ func _announced_count_in(state: Dictionary, now_ms: int) -> bool:
     # The announced take's own start tempo (a tempo-step repeat counts in
     # at its new BPM, not at the rest's).
     var bpm: float = maxf(1.0,float(plan.get("bpm",state.get("bpm",60.0))))
-    var beat: float = (float(now_ms)-deadline_ms)/60000.0*bpm
+    var beat: float = TempoTimeline.beats_from_milliseconds(float(now_ms)-deadline_ms,bpm)
     if not is_finite(beat) or not CueTimeline.counting(beat,1,bar_beats):
         return false
     _count_in("retry:%d:%s" % [int(state.get("revision",-1)),
@@ -208,13 +209,13 @@ func update(state: Dictionary, state_tick_ms: int,
         # epoch, not from the midpoint of a potentially queued request.
         var start_backend_ms: float = float(calibration.get("start_at_ms",NAN))
         if is_finite(start_backend_ms) and bool(clock.has_backend_offset):
-            beat = (float(now_ms)-float(clock.backend_offset_ms)-
-                start_backend_ms)*bpm/60000.0
+            beat = TempoTimeline.beats_from_milliseconds(
+                float(now_ms)-float(clock.backend_offset_ms)-start_backend_ms,bpm)
         else:
             # Before the first clock calibration, retain a bounded startup
             # preview; the backend will publish its epoch on the next poll.
             beat = float(calibration.get("beat",-2.0)) + \
-                maxf(0.0,float(now_ms-state_tick_ms)/1000.0)*bpm/60.0
+                TempoTimeline.beats_from_milliseconds(maxf(0.0,float(now_ms-state_tick_ms)),bpm)
         var count_in := maxi(0,int(calibration.get("count_in",4)))
         var ticks_per_round := maxi(1,int(calibration.get("ticks",8)))
         var total := count_in + ticks_per_round * maxi(
@@ -268,7 +269,7 @@ func update(state: Dictionary, state_tick_ms: int,
     if resume_value != null and moving:
         var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
         var resume_beat: float = float(resume_value) + \
-            maxf(0.0,float(now_ms-state_tick_ms))*bpm/60000.0
+            TempoTimeline.beats_from_milliseconds(maxf(0.0,float(now_ms-state_tick_ms)),bpm)
         if resume_beat < 0.0:
             # A Resume that reuses the paused count-in keeps its original
             # first-beat deadline, so its countdown is the same musical axis
