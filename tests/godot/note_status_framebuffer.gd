@@ -154,6 +154,16 @@ func _run() -> void:
     feedback.present({"piece_fingerprint":"status-probe","revision":revision,
         "transport_id":3,"mode":"practice","preview_only":true})
     frames.append(await _status_frame("suppressed",6.5))
+    # Export the exact authentic hollow-head fill masks rendered by the
+    # production painter. A staff rule can cross the whole-note aperture, so
+    # the baseline framebuffer alone cannot reliably reconstruct this mask.
+    var interior_files: Dictionary = {}
+    for head in ["head_half","head_whole"]:
+        var interior: Texture2D = renderer.glyphs.head_interior(head)
+        assert(interior != null, "Missing authentic hollow-head interior " + head)
+        var filename: String = head + "-interior.png"
+        assert(interior.get_image().save_png(folder.path_join(filename)) == OK)
+        interior_files[head] = filename
     var bg: Color = renderer.Design.STAGE
     var ink: Color = renderer.NOTE_INK
     var tints: Dictionary = {}
@@ -165,6 +175,7 @@ func _run() -> void:
         "playhead_x":renderer.size.x*renderer.PLAYHEAD_FRACTION,
         "background":[bg.r,bg.g,bg.b],"ink":[ink.r,ink.g,ink.b,ink.a],
         "tints":tints,"ids":ids,"take_a":key_a,"take_b":key_b,"repeat_origin":repeat_origin,
+        "hollow_interior_files":interior_files,
         "outcomes":outcomes,"paints":{"before":paints_before,
             "graded":paints_graded,"moved":paints_moved},
         "glow":{"inner_scale":Ink.INNER_SCALE,"outer_scale":Ink.OUTER_SCALE,
