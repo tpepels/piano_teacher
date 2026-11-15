@@ -817,12 +817,13 @@ func _stream_right_beats() -> float:
 
 
 func _stream_leading_spaces(opening: float) -> float:
-    # The first score has a large authentic clef/key/meter header.
-    # For a handoff with identical context, the new score's initial
-    # context is deliberately not repainted (SourcePassPainter), so
-    # reserve only regular source/barline clipping clearance instead.
-    return (1.6 if not inherited_opening_context.is_empty() or
-        _opening_context_printed else 15.0) if opening <= .0001 else 1.6
+    # Only the FIRST printed source opening needs a full initial header.
+    # A same-context handoff inherits it; further takes of this very
+    # score clip the duplicated context without modifying real source ink.
+    if opening > .0001:
+        return 1.6
+    return 1.6 if (not inherited_opening_context.is_empty() or
+        _opening_context_printed) else 15.0
 
 
 func _stream_header_beats(opening: float) -> float:
@@ -902,6 +903,14 @@ func _transport_admission_receipt(planned: Dictionary,
         return {}
     # A bounded, externally inspectable receipt for every accepted user
     # transport. This is the SAME deadline later sent to the backend.
+    var printed_leading_spaces := 15.0 if opening <= .0001 else 1.6
+    for item in _stream_queue.online:
+        if str(item.get("kind","")) == "source" and
+                int(item.get("take_owner",-1)) == _stream_armed_serial and
+                absf(float(item.get("source_floor",-INF))-opening) < .00001:
+            printed_leading_spaces = float(item.get("clip_leading_spaces",
+                printed_leading_spaces))
+            break
     var entry_seconds: float = maxf(0.0,
         (float(reserved["start_world"])-opening+
             StreamAdmission.clip_bounds({
@@ -909,7 +918,7 @@ func _transport_admission_receipt(planned: Dictionary,
                 "source_ceiling":timeline.duration_beats,
                 "clip_floor":opening,
                 "clip_ceiling":timeline.duration_beats,
-                "clip_leading_spaces":_stream_leading_spaces(opening)
+                "clip_leading_spaces":printed_leading_spaces
             },timeline.pixels_per_beat,staff_gap(),
                 timeline.duration_beats).x/
                     maxf(1.0,timeline.pixels_per_beat) -
