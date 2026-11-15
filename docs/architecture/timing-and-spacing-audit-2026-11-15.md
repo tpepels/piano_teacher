@@ -43,7 +43,10 @@ velocity** while preparing the next passage. That is separate from
 
 The semantic timeline, lesson-step markers, native viewport fitter, real
 glyph-ink clearance and stream admission now reference these values rather
-than defining their own initial defaults.
+than defining their own initial defaults. The authentic clef/key header's
+86/17-space origin and 14/17-space key-column increment are also computed
+once by `ContextPainter.clef_lead_pixels()`; note painting, transition-clip
+clearance and first-source admission all use that rule.
 
 **Geometry invariant:** for quarter-note beat coordinates `b1` and `b2`,
 every note spacing and principal barline spacing is
@@ -99,7 +102,7 @@ physical or temporal constraints as one number would break ownership.
 `tests/test_timing_geometry_contract.py`, checks the shared spacing defaults,
 pickup/4/4/3/4/6/8 source widths at four distinct pixel densities, source
 note spacing, exact barline clearance, typed rest and source clip extents,
-lesson-step marker alignment, meter grid placement, 40/80/120 BPM velocity,
+lesson-step marker alignment, header-column clearance, meter grid placement, 40/80/120 BPM velocity,
 a forward rate change, a delayed slowdown, source immutability and
 piecewise-authored tempo-map roundtrips. It is a deterministic geometry
 test, **not** a claim that every hardware/rendering race is covered.
