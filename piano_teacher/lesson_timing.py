@@ -1,4 +1,4 @@
-"""Count-in length: one full bar of the preparation meter."""
+"""Select the authentic preparation meter, including short pickups."""
 from __future__ import annotations
 
 
@@ -21,13 +21,3 @@ def preparation_meter(meter: tuple[int, int] | None,
     return meter
 
 
-def lead_in_beats(bar_beats: float, bpm: float) -> float:
-    """The count-in is always one full bar of the preparation meter.
-
-    Owner decision 2026-11-08: "Ichi, Ni, San, Shi" over the whole bar at
-    any tempo (6 s for 4/4 at 40 BPM). The former count_in_max_seconds
-    cap, which shortened slow count-ins to half-beat steps, is removed.
-    """
-    if bar_beats <= 0 or bpm <= 0:
-        raise ValueError("Count-in requires positive meter and BPM")
-    return float(bar_beats)

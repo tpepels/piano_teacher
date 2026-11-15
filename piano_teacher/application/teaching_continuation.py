@@ -109,7 +109,7 @@ class TeachingContinuation:
         if actual is None:
             # The renderer may withdraw a future suffix before settlement.
             # Finish the graded result, then grant a fresh full reading lead
-            # through _continuation_deadline rather than faulting the lesson.
+            # through the single scheduler rather than faulting the lesson.
             self.schedule = None
             return
         if actual != expected:

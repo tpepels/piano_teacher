@@ -55,14 +55,6 @@ class AttemptStep:
     duration: float = 0.0
 
 
-def repeat_deadline(*, run_at: float, duration: float,
-                    gap_beats: float, bpm: float) -> float:
-    """Use the musical origin, not the time the clock was polled."""
-    return SCHEDULER.repeat(run_at=run_at,source_seconds=duration,
-                            gap_beats=gap_beats,bpm=bpm)
-
-
-
 class AttemptProgression:
     def __init__(self) -> None:
         self._phrase = None

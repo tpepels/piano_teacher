@@ -5,11 +5,6 @@ executed by PracticeEngine/VisualTransport under the existing session lock.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-import math
-from typing import Literal
-from .musical_scheduler import SCHEDULER
-
 PAUSABLE_PHASES = frozenset((
     "playing", "count_in", "feedback", "recovering",
     "loading", "guided_wait", "preview_gap"))
@@ -30,31 +25,3 @@ def resume_timeline(*, paused: bool, learning: bool, running: bool,
     return not learning and (running or preview_pending or automatic_feedback)
 
 
-def scheduled_offscreen_start(deadline: float, lead_beats: float,
-                              bpm: float) -> float:
-    """One future MIDI deadline for an already engraved lesson handoff.
-
-    The UI supplies the entire offscreen reading horizon including its
-    header. The engine applies it to its own graded transport; no second
-    scrolling timeline or speculative on-screen source insertion exists.
-    """
-    return SCHEDULER.offscreen(deadline=deadline,lead_beats=lead_beats,bpm=bpm)
-
-
-
-def planned_retry_reverse_seconds(
-    *, reading_lead_seconds: float, semantic_rest_seconds: float,
-) -> float:
-    """Place the graded retry at the already engraved world's future onset.
-
-    The visible preparation contains one genuine written empty measure.
-    Subtract that measure from the supplied total lead. The prior implementation
-    treated the total lead as just the reverse-animation duration and inserted
-    the entire rest AGAIN, making the sound/score start late by one measure.
-
-    No-UI engine calls still use their established intrinsic preparation
-    schedule; this function applies only to an explicitly reserved world onset.
-    """
-    return SCHEDULER.reserved_retry_reverse(
-        lead_seconds=reading_lead_seconds,
-        rest_seconds=semantic_rest_seconds)

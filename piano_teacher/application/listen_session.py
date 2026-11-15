@@ -15,7 +15,8 @@ import uuid
 from ..demo import DemoAudioCache
 from ..exercise_generator import ExerciseVariant
 from ..exercise_contracts import TempoMap
-from ..lesson_timing import lead_in_beats, preparation_meter
+from ..lesson_timing import preparation_meter
+from .musical_scheduler import SCHEDULER
 from ..measure_grid import phrase_grid
 from ..music import source_note_id
 
@@ -71,7 +72,7 @@ class ListenSession:
                 "instrument": "Preparing piano audio",
                 "duration_seconds": (selected.tempo_map.duration_seconds
                                      if selected.tempo_map is not None
-                                     else (audio_end-variant.phrase.start)*60/selected.bpm),
+                                     else SCHEDULER.beats_seconds(audio_end-variant.phrase.start,selected.bpm)),
                 "ready": False, "stage_key": selected.stage_key,
                 "source_ids": [f"{selected.stage_key}:{index}" for index in variant.source_indices],
                 "canonical_source_ids": [source_note_id(note, index)
@@ -91,11 +92,11 @@ class ListenSession:
                 # Audio synthesis takes fixed-BPM notes. Warp note positions
                 # through the exact tempo map while retaining source IDs.
                 warped_notes = tuple(replace(note,
-                    start=offset+tempo_map.seconds_at(note.start-offset)*selected.bpm/60,
-                    end=offset+tempo_map.seconds_at(note.end-offset)*selected.bpm/60)
+                    start=offset+SCHEDULER.seconds_beats(tempo_map.seconds_at(note.start-offset),selected.bpm),
+                    end=offset+SCHEDULER.seconds_beats(tempo_map.seconds_at(note.end-offset),selected.bpm))
                     for note in variant.notes)
                 warped = replace(variant.phrase, notes=warped_notes,
-                    end=offset+tempo_map.duration_seconds*selected.bpm/60)
+                    end=offset+SCHEDULER.seconds_beats(tempo_map.duration_seconds,selected.bpm))
                 variant = replace(variant, phrase=warped)
             audio = cache.render(variant, selected.bpm)
         except Exception as exc:
@@ -162,9 +163,10 @@ class ListenSession:
             count_meter = meter if meter is not None else (max(1, round(bar_beats)), 4)
             if meter is not None:
                 bar_beats = meter[0]*4/meter[1]
-            count_beats = lead_in_beats(bar_beats, selected.bpm)
+            count_beats = SCHEDULER.count_in_beats(bar_beats,selected.bpm)
             self._started = True
-            return ListenStart(bar_beats, count_meter, count_beats, count_beats*60/selected.bpm)
+            return ListenStart(bar_beats,count_meter,count_beats,
+                SCHEDULER.beats_seconds(count_beats,selected.bpm))
 
     def finished(self, *, now: float, run_at: float) -> bool:
         with self._lock:

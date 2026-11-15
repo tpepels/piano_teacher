@@ -25,12 +25,8 @@ from .diagnosis_policies import LearnerSnapshot
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
-from .application.musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
+from .application.musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS, SETTLEMENT_SECONDS
 
-# Poll/frame latency allowed between announcing a short-rest continuation
-# (sampled when it is announced, after the take-end work) and Godot
-# admitting it; the ink still opens a full count-in bar ahead.
-SHORT_REST_LATENCY_SECONDS = SNAPSHOT_LATENCY_SECONDS
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.future_score import FutureScore
@@ -57,13 +53,10 @@ from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.control_dispatch import ControlDispatcher
 from .application.score_ack import ScoreAckState, choose_score_ack_action
-from .application.transport_commands import (
-    require_pausable, resume_timeline,
-    scheduled_offscreen_start, planned_retry_reverse_seconds,
-)
+from .application.transport_commands import require_pausable, resume_timeline
 from .application.stage_change import prepare_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
-from .application.attempt_progression import AttemptProgression, AttemptTick, repeat_deadline, SETTLEMENT_SECONDS
+from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.assessment_settlement import assess_completed_take
 from .application.guided_session import GuidedSession, GuidedFragment
 from .application.tempo_map_cache import TempoMapCache
@@ -1584,7 +1577,7 @@ class PracticeEngine:
     def _next_count_in_beats(self) -> float:
         """The one count-in bar a user Play or Resume gets now.
 
-        One full bar of the starting measure at any tempo (lead_in_beats,
+        One full bar of the starting measure at any tempo (scheduler count-in,
         owner decision 2026-11-08). The renderer places an opening on an empty strip
         exactly this far ahead of the playhead, so Play to first note is one
         count-in bar and the score and graded deadlines stay identical.
@@ -1851,7 +1844,7 @@ class PracticeEngine:
                 # latency allowed, and publish that run_at as its plan.
                 lead = (SCHEDULER.beats_seconds(
                     self._next_count_in_beats(),self.plan.bpm)
-                    + SHORT_REST_LATENCY_SECONDS) if self._short_rest is not None else 0.0
+                    + SNAPSHOT_LATENCY_SECONDS) if self._short_rest is not None else 0.0
                 # A re-engraved continuation still opens after the written
                 # rest bar of the take it follows.
                 after_rest = self._short_rest_deadline(
@@ -1969,7 +1962,7 @@ class PracticeEngine:
             now=now,source_end=take_end,outgoing_bpm=rest_bpm,
             incoming_bpm=self._presentation_bpm,
             clear_beats=clear,header_beats=header,
-            count_in_beats=bar,latency=SHORT_REST_LATENCY_SECONDS,
+            count_in_beats=bar,latency=SNAPSHOT_LATENCY_SECONDS,
             tempo_epoch=self._tempo_epoch).run_at
 
 
@@ -2108,9 +2101,9 @@ class PracticeEngine:
                     rest_beats = float(preparation_measure_descriptor(
                         selected, 0.0, source["staff_order"],
                         following_measure=following)["duration_beats"])
-                reverse_seconds = planned_retry_reverse_seconds(
-                    reading_lead_seconds=presentation_lead_seconds,
-                    semantic_rest_seconds=SCHEDULER.beats_seconds(
+                reverse_seconds = SCHEDULER.reserved_retry_reverse(
+                    lead_seconds=presentation_lead_seconds,
+                    rest_seconds=SCHEDULER.beats_seconds(
                         rest_beats,self.plan.bpm))
             self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
             self.visual_transport.paused = False
@@ -2373,7 +2366,7 @@ class PracticeEngine:
                 start = self.teaching_continuation.handoff(now=now,deadline=deadline,
                     lead_beats=self._future_stage_lead_beats,clear_beats=self._future_stage_clear_beats,
                     count_in_beats=self._next_count_in_beats(),bpm=self.plan.bpm,
-                    rest_take_end=self._rest_take_end,latency=SHORT_REST_LATENCY_SECONDS)
+                    rest_take_end=self._rest_take_end,latency=SNAPSHOT_LATENCY_SECONDS)
                 self._future_stage_lead_beats = 0.
                 self._future_stage_clear_beats = None
                 if self._future_stage_short_rest is not None:
@@ -2583,8 +2576,8 @@ class PracticeEngine:
             self.visual_transport._preview_loop_pending = True
             short = self._short_rest_deadline(self.visual_transport.run_at + duration)
             self.visual_transport.announce_continuation(0.0, short if short is not None else
-                self._automatic_stream_deadline(repeat_deadline(
-                    run_at=self.visual_transport.run_at, duration=duration,
+                self._automatic_stream_deadline(SCHEDULER.repeat(
+                    run_at=self.visual_transport.run_at,source_seconds=duration,
                     gap_beats=self.visual_transport.visual_gap_beats,
                     bpm=self.plan.bpm)), self.plan.bpm)
             self.feedback = "Timing preview - repeating after one empty measure"
@@ -2757,8 +2750,9 @@ class PracticeEngine:
         if not self.auto:
             self.visual_transport.next_at = 0
         elif not self.visual_transport._retry_previous_pass:
-            deadline = repeat_deadline(run_at=self.visual_transport.run_at, duration=duration,
-                gap_beats=self.visual_transport.visual_gap_beats, bpm=self.plan.bpm)
+            deadline = SCHEDULER.repeat(
+                run_at=self.visual_transport.run_at,source_seconds=duration,
+                gap_beats=self.visual_transport.visual_gap_beats,bpm=self.plan.bpm)
             if same_timed:
                 short = self._short_rest_deadline(self.visual_transport.run_at+duration)
                 self.teaching_continuation.announce(pending,
@@ -2918,7 +2912,7 @@ class PracticeEngine:
             time_signatures=self.plan.piece.time_signatures, position=announced[0])
         floor = SCHEDULER.resolve(
             "post_settlement_snapshot",now=self.now(),bpm=self.plan.bpm,
-            count_in_beats=bar,latency=SHORT_REST_LATENCY_SECONDS).run_at
+            count_in_beats=bar,latency=SNAPSHOT_LATENCY_SECONDS).run_at
         if announced[1] < floor:
             self.visual_transport.retime_announcement(floor)
 
@@ -3202,7 +3196,7 @@ class PracticeEngine:
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
             state["next_count_in_beats"] = self._next_count_in_beats()
             state["next_count_in_meter"] = self._next_count_in_meter()
-            state["short_rest_latency_seconds"] = SHORT_REST_LATENCY_SECONDS
+            state["short_rest_latency_seconds"] = SNAPSHOT_LATENCY_SECONDS
             state["resume_count_in_beat"] = (
                 SCHEDULER.seconds_beats(
                     calibration_sample_at-self.midi_ingress.resume_grading_after,
