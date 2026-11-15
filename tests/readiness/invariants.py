@@ -110,6 +110,8 @@ def check_run(run: Path) -> dict:
         graded = [r for r in playing[1:] if 0.0 <= r["tb"] <= 0.5]
         take: dict = {"tid": tid, "bpm": bpm, "bar_beats": bar,
                       "step": meta.get("step"),
+                      "score_density": meta.get("score_density"),
+                      "rest_geometry": meta.get("rest_geometry"),
                       "reached_first_beat": bool(graded)}
         if not graded:
             takes.append(take)
