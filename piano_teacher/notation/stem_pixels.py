@@ -207,11 +207,15 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
         try:
             source_clef = (clef_at(written,group[0]['index'],group[0]['staff'])
                            if written is not None else ('G', 2, 0))
-            authored = (source_reference or {}).get(group[0]['source']['id'],{})
-            extension = authored.get(direction)
-            if extension is None:
-                extension = reference_stem_extension(
-                    group[0]['note_type'], intervals, direction, absolute[0], source_clef)
+            standalone = reference_stem_extension(
+                group[0]['note_type'], intervals, direction, absolute[0], source_clef)
+            authored = ((source_reference or {}).get(group[0]['source']['id'],{})
+                        if len(group) == 1 and group[0].get('beams') else {})
+            # Only original beamed notes may shorten an independently
+            # engraved standalone reference. Their end shafts can naturally
+            # be shorter to meet a sloped source beam. All other notes and
+            # chords retain their original strict standalone Verovio bound.
+            extension = min(standalone,authored[direction]) if direction in authored else standalone
         except (ValueError, StopIteration, TypeError) as exc:
             return feature_result('unsupported', str(exc), **evidence)
         references[direction] = extension
@@ -255,7 +259,10 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
                        observed_attached_ink=diagnostics,
                        reference_base_pitch=absolute[0],
                        reference_clef=source_clef,
-                       reference_origin=("original_source_svg" if (source_reference or {}).get(group[0]['source']['id']) else "standalone_verovio"))
+                       reference_origin=("original_source_beam_svg" if any(
+                           n.get('beams') for n in group) and
+                           (source_reference or {}).get(group[0]['source']['id']) else
+                           "standalone_verovio"))
     options = []
     for direction in ('up', 'down'):
         for runs in _stem_run_clusters([c[1:] for c in candidates if c[0] == direction]):
