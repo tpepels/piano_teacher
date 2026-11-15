@@ -301,7 +301,11 @@ func barline_left_limit(x: float, mark: Dictionary, gap: float) -> float:
 
 func context_meter_x(measure: Dictionary, x: float, gap: float,
         opening: bool, right_limit: float = INF) -> float:
-    var center: float = x-gap*1.6-(76.0*gap/17.0 if opening else 0.0)
+    # The initial meter, clef and keys already have distinct layout
+    # columns. Shifting the *whole* block another 76/17 staff spaces
+    # left made the printed header unnecessarily wide, adding an entire
+    # extra bar of queue clearance at slow practice tempos.
+    var center: float = x-gap*1.6
     if not is_finite(right_limit):
         return center
     var half_width := 0.0
@@ -317,7 +321,9 @@ func context_meter_x(measure: Dictionary, x: float, gap: float,
 func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_measure: Dictionary, x: float,
         gap: float, opening: bool, meter_right_limit: float = INF) -> bool:
     var header_scale: float = gap/17.0
-    var header_shift: float = 76.0*header_scale if opening else 0.0
+    # Full authentic header ink remains on every repeat, but its
+    # columns are compact: there is no extra opening-only blank spacer.
+    var header_shift: float = 0.0
     var crowded_meter: bool = meter_is_crowded(measure,previous_measure,gap)
     for staff in score_layout.visible_staves():
         var center: float = score_layout.staff_center(staff)
