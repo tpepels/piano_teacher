@@ -21,9 +21,10 @@ jobs:
       - name: Install Arch native renderer, Python, model and X framebuffer
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango nodejs npm xorg-server-xvfb xorg-xauth mesa libglvnd
       - uses: actions/checkout@v4
+      - name: Trust exact checkout workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install actual test package and trained fingering providers
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]' numpy
           bash scripts/setup-fingering.sh
