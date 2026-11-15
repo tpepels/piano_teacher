@@ -304,14 +304,17 @@ def _runs(values):
 def _beam_sample_band(tip: float, gap: float, levels: int, height: int) -> tuple[int, int]:
     """Bound the photographed column for its source-required beam stack.
 
-    One thick beam fits the historical ±1.5-space interval. Each additional
-    source level occupies its own actual ink row plus a gap, possibly on the
-    opposite side of the stem tip. A fixed 1.5-space crop incorrectly makes
-    intact Chopin third-level ink appear two pixels thick. This only widens
-    the photographic search region: exact reference level-count, thickness,
-    spacing and every physical column remain mandatory in _beam().
+    For a single primary beam, its actual Verovio stroke is attached at
+    the measured stem tip and occupies less than one staff space. The old
+    1.5-space window also admitted a separate, bright time-signature '4'
+    above an overlapping second-voice stem, incorrectly classifying it as
+    another beam level. For multiple beams keep the expanded staff-space
+    window needed for genuine secondary and third-level ink, including
+    the verified Chopin multi-beam source. Original reference level-count,
+    thickness, spacing and every actual photographed column are still
+    required by _beam(); a missing beam is never reconstructed.
     """
-    radius = (1.5 + .70 * max(0, levels - 1)) * gap
+    radius = (1.0 if levels == 1 else 1.5 + .70 * (levels - 1)) * gap
     return max(0, round(tip - radius)), min(height, round(tip + radius))
 
 
