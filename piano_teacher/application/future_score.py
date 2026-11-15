@@ -15,8 +15,10 @@ from .score_artifacts import ScoreArtifacts, ScoreSelection
 from ..preprocessing_cache import PreprocessingCache
 from ..clock import Clock, monotonic
 
+# Exactly the same two prepared future stages bound both lookahead and the
+# waiting queue. A second independent queue limit silently drops stages.
 MAX_LOOKAHEAD = 2
-MAX_QUEUED = 2
+MAX_QUEUED = MAX_LOOKAHEAD
 MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 0.5
 
