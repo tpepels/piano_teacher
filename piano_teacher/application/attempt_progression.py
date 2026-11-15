@@ -11,9 +11,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..lesson_timing import lead_in_beats, preparation_meter
-from .musical_scheduler import SCHEDULER
+from .musical_scheduler import SCHEDULER, SETTLEMENT_SECONDS
 
-SETTLEMENT_SECONDS = .20
 from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
 from ..music import Phrase
 

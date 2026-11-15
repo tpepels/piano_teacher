@@ -221,3 +221,33 @@ def test_invalid_geometry_and_deadlines_fail_closed(invalid):
                            reading_lead_seconds=invalid)
     with pytest.raises(ValueError):
         SCHEDULER.offscreen(deadline=100,lead_beats=invalid,bpm=24)
+
+
+def test_immutable_passage_plan_has_named_fields_and_tuple_compatibility():
+    plan=SCHEDULER.passage(from_beat=4,deadline=130,bpm=24)
+    assert plan==(4.0,130.0,24.0)
+    assert plan.from_beat==4
+    assert plan.run_at==130
+    assert plan.bpm==24
+    with pytest.raises(AttributeError):
+        plan.run_at=140
+    shifted=SCHEDULER.shift_passage(plan,seconds=2.5)
+    assert shifted==(4,132.5,24)
+    assert plan==(4,130,24)
+    retimed=SCHEDULER.retime_passage(shifted,deadline=140)
+    assert retimed==(4,140,24)
+
+
+def test_authored_tempo_epoch_is_stable_except_when_stage_or_bpm_changes():
+    key,epoch=SCHEDULER.tempo_epoch(
+        stage="first",bpm=27,now=100,prior_key=None,prior_epoch=None)
+    assert epoch==100
+    key,epoch=SCHEDULER.tempo_epoch(
+        stage="first",bpm=27,now=110,prior_key=key,prior_epoch=epoch)
+    assert epoch==100
+    key,epoch=SCHEDULER.tempo_epoch(
+        stage="first",bpm=24,now=111,prior_key=key,prior_epoch=epoch)
+    assert epoch==111
+    key,epoch=SCHEDULER.tempo_epoch(
+        stage="second",bpm=24,now=120,prior_key=key,prior_epoch=epoch)
+    assert epoch==120

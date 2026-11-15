@@ -30,7 +30,7 @@ from .lesson_timing import lead_in_beats
 # Poll/frame latency allowed between announcing a short-rest continuation
 # (sampled when it is announced, after the take-end work) and Godot
 # admitting it; the ink still opens a full count-in bar ahead.
-SHORT_REST_LATENCY_SECONDS = 0.4
+SHORT_REST_LATENCY_SECONDS = SNAPSHOT_LATENCY_SECONDS
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.future_score import FutureScore
@@ -64,7 +64,7 @@ from .application.transport_commands import (
 from .application.stage_change import prepare_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick, repeat_deadline, SETTLEMENT_SECONDS
-from .application.musical_scheduler import SCHEDULER
+from .application.musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .application.assessment_settlement import assess_completed_take
 from .application.guided_session import GuidedSession, GuidedFragment
 from .application.tempo_map_cache import TempoMapCache
@@ -685,11 +685,9 @@ class PracticeEngine:
         return self.tempo_map_cache.get(self.plan.active_stage, self.plan.bpm)
 
     def _elapsed_beat(self, elapsed_seconds: float) -> float:
-        tempo = self._active_tempo_map()
-        if tempo is not None and elapsed_seconds >= 0:
-            origin = tempo.seconds_at(self.visual_transport.play_from_beat)
-            return tempo.beat_at(origin+elapsed_seconds)-self.visual_transport.play_from_beat
-        return SCHEDULER.seconds_beats(elapsed_seconds,self.plan.bpm)
+        return SCHEDULER.elapsed_beats(
+            self._active_tempo_map(),self.visual_transport.play_from_beat,
+            elapsed_seconds,self.plan.bpm)
 
     def _elapsed_seconds(self, beat: float) -> float:
         tempo = self._active_tempo_map()
@@ -1715,10 +1713,9 @@ class PracticeEngine:
         """
         if self.plan is None:
             return
-        key = (self.plan.identity, float(self._presentation_bpm))
-        if key != self._tempo_key:
-            self._tempo_key = key
-            self._tempo_epoch = now
+        self._tempo_key,self._tempo_epoch = SCHEDULER.tempo_epoch(
+            stage=self.plan.identity,bpm=self._presentation_bpm,now=now,
+            prior_key=self._tempo_key,prior_epoch=self._tempo_epoch)
 
 
 

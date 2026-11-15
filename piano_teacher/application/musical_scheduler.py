@@ -12,7 +12,21 @@ The renderer may reject an infeasible plan; it cannot silently move it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NamedTuple
 import math
+
+
+# These values were previously an anonymous 3-tuple. A NamedTuple keeps the
+# existing immutable public contract while giving every consumer named fields.
+# A renderer can only draw this exact plan or explicitly reject it.
+class PassagePlan(NamedTuple):
+    from_beat: float
+    run_at: float
+    bpm: float
+
+
+SNAPSHOT_LATENCY_SECONDS = .4
+SETTLEMENT_SECONDS = .20
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +72,44 @@ class MusicalScheduler:
         if not all(math.isfinite(x) for x in (seconds, bpm)) or bpm <= 0:
             raise ValueError("Invalid seconds or BPM")
         return seconds * bpm / 60.0
+
+
+    @classmethod
+    def elapsed_beats(cls, tempo_map, from_beat: float,
+                      elapsed_seconds: float, bpm: float) -> float:
+        if tempo_map is not None and elapsed_seconds >= 0:
+            origin = cls.source_seconds(tempo_map,from_beat,bpm)
+            return tempo_map.beat_at(origin+elapsed_seconds)-from_beat
+        return cls.seconds_beats(elapsed_seconds,bpm)
+
+    @staticmethod
+    def tempo_epoch(*, stage: str, bpm: float, now: float,
+                    prior_key: tuple | None, prior_epoch: float | None
+                    ) -> tuple[tuple, float | None]:
+        """The only clock epoch at which a teaching speed change occurs."""
+        if not math.isfinite(now) or not math.isfinite(bpm) or bpm <= 0:
+            raise ValueError("Invalid tempo transition")
+        key=(stage,float(bpm))
+        return (key,now) if key != prior_key else (key,prior_epoch)
+
+    @staticmethod
+    def passage(*, from_beat: float, deadline: float, bpm: float) -> PassagePlan:
+        if not all(math.isfinite(x) for x in (from_beat,deadline,bpm)) or (
+                from_beat < 0 or bpm <= 0):
+            raise ValueError("Invalid immutable passage plan")
+        return PassagePlan(float(from_beat),float(deadline),float(bpm))
+
+    @classmethod
+    def retime_passage(cls, source: PassagePlan, *, deadline: float
+                       ) -> PassagePlan:
+        return cls.passage(from_beat=source.from_beat,
+                           deadline=deadline,bpm=source.bpm)
+
+    @classmethod
+    def shift_passage(cls, source: PassagePlan, *, seconds: float
+                      ) -> PassagePlan:
+        return cls.retime_passage(source,deadline=cls.shift_epoch(
+            source.run_at,seconds,active=True))
 
     @staticmethod
     def source_seconds(tempo_map, beat: float, bpm: float) -> float:

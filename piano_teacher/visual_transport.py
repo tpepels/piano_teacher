@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
 from .notation.practice_timeline import preparation_measure_descriptor
-from .application.musical_scheduler import SCHEDULER
+from .application.musical_scheduler import SCHEDULER, PassagePlan
 
 
 @dataclass
@@ -37,7 +37,7 @@ class VisualTransport:
     # same stage, published unchanged as score_queue_next while the rest
     # runs, and started with exactly this run_at and BPM. Nothing adds a
     # lead or recomputes the tempo later.
-    announced_continuation: tuple[float, float, float] | None = None
+    announced_continuation: PassagePlan | None = None
     # Identity of the announcement (part of score_queue_next.plan_id). A new
     # announcement is new ink; a re-timed one keeps its admitted ink.
     announce_serial: int = 0
@@ -45,15 +45,15 @@ class VisualTransport:
     def announce_continuation(self, source_from_beat: float,
                               deadline: float, bpm: float) -> None:
         self.announce_serial += 1
-        self.announced_continuation = (
-            float(source_from_beat), float(deadline), float(bpm))
+        self.announced_continuation = SCHEDULER.passage(
+            from_beat=source_from_beat,deadline=deadline,bpm=bpm)
         self.next_at = float(deadline)
 
     def retime_announcement(self, deadline: float) -> None:
         """Keep the announced (already admitted) ink; move only its deadline
         to where that ink now reaches the playhead (Resume in a rest)."""
-        floor, _, bpm = self.announced_continuation
-        self.announced_continuation = (floor, float(deadline), bpm)
+        self.announced_continuation = SCHEDULER.retime_passage(
+            self.announced_continuation,deadline=deadline)
         self.next_at = float(deadline)
 
     def announced_deadline(self, source_from_beat: float) -> float | None:
@@ -213,9 +213,8 @@ class VisualTransport:
         self.next_at = SCHEDULER.shift_epoch(
             self.next_at,duration,active=bool(self.next_at))
         if self.announced_continuation is not None:
-            floor, deadline, bpm = self.announced_continuation
-            self.announced_continuation = (
-                floor,SCHEDULER.shift_epoch(deadline,duration,active=True),bpm)
+            self.announced_continuation = SCHEDULER.shift_passage(
+                self.announced_continuation,seconds=duration)
         self._visual_rewind_at = SCHEDULER.shift_epoch(
             self._visual_rewind_at,duration,
             active=self._visual_rewind_from is not None)
