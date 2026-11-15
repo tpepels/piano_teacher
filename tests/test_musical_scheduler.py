@@ -9,10 +9,6 @@ import pytest
 from piano_teacher.application.musical_scheduler import (
     SCHEDULER, MusicalDeadline, PreparationDeadline,
 )
-from piano_teacher.application.transport_commands import (
-    scheduled_offscreen_start, planned_retry_reverse_seconds,
-)
-from piano_teacher.application.attempt_progression import repeat_deadline
 from piano_teacher.visual_transport import VisualTransport
 
 
@@ -56,8 +52,8 @@ def test_authored_slowdown_is_integrated_by_source_map_not_nominal_tempo():
 
 
 def test_repeat_and_preview_use_previous_grading_origin_not_poll_time():
-    deadline = repeat_deadline(run_at=100,duration=4.4444444,
-                               gap_beats=2,bpm=27)
+    deadline = SCHEDULER.repeat(run_at=100,source_seconds=4.4444444,
+                                gap_beats=2,bpm=27)
     assert deadline==pytest.approx(100+4.4444444+2*60/27)
     assert deadline==SCHEDULER.repeat(run_at=100,source_seconds=4.4444444,
                                        gap_beats=2,bpm=27)
@@ -101,8 +97,8 @@ def test_authoritative_announced_retry_does_not_gain_another_horizon():
 
 
 def test_manual_retry_uses_one_written_rest_and_preserves_reserved_onset():
-    assert planned_retry_reverse_seconds(
-        reading_lead_seconds=12.0,semantic_rest_seconds=10.0)==2.0
+    assert SCHEDULER.reserved_retry_reverse(
+        lead_seconds=12.0,rest_seconds=10.0)==2.0
     vt=VisualTransport()
     end=vt.schedule_preparation({"duration_beats":4},
         source_from_beat=0,from_visual=10,now=100,
@@ -155,7 +151,7 @@ def test_lesson_handoff_uses_physical_clearance_and_count_in_in_parallel():
 def test_tempo_up_or_down_uses_new_rate_without_retiming_notes(bpm):
     lead=SCHEDULER.offscreen(deadline=100,lead_beats=4,bpm=bpm)
     assert lead==pytest.approx(100+240/bpm)
-    assert scheduled_offscreen_start(100,4,bpm)==lead
+    assert lead==pytest.approx(100+SCHEDULER.beats_seconds(4,bpm))
 
 
 def test_pause_resume_shifts_all_active_epochs_and_preserves_zero_sentinels():

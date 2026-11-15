@@ -160,8 +160,8 @@ def test_legacy_ambience_source_cameras_and_recovery_variants_are_absent():
     app = (ROOT/"godot/main.gd").read_text()
     backend = (ROOT/"piano_teacher/server.py").read_text()
     assert "StreamAdmission.automatic_horizon(" in owner
-    assert "self._automatic_stream_deadline(" in backend
-    assert "repeat_deadline(" in backend
+    assert "SCHEDULER.missing_horizon(" in backend
+    assert "SCHEDULER.repeat(" in backend
     assert owner.count("_cancel_pending_stream_arm()") >= 3
     assert "last_published_control_started_ms" in app
     assert "state_request_started_ms <= command_coordinator.last_published_control_started_ms" in app

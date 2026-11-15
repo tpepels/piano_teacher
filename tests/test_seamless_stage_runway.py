@@ -10,7 +10,7 @@ import pytest
 
 from piano_teacher import server as backend
 from piano_teacher.application.score_artifacts import ScoreArtifacts
-from piano_teacher.application.attempt_progression import SETTLEMENT_SECONDS
+from piano_teacher.application.musical_scheduler import SETTLEMENT_SECONDS
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import Assessment, NoteAssessment

@@ -407,11 +407,11 @@ def test_short_rest_opens_the_repeat_one_count_in_bar_after_the_ink_has_passed(e
     plan = rest["score_queue_next"]
     spb = 60 / BPM
     bar = 4.0
-    from piano_teacher.server import SHORT_REST_LATENCY_SECONDS
+    from piano_teacher.application.musical_scheduler import SNAPSHOT_LATENCY_SECONDS
     # Round 4: the repeat opens right after the written rest bar (CLEAR)
     # plus its header, never inside one count-in bar from the announcement.
     expected = max(end_at + (CLEAR + HEADER) * spb,
-                   now[0] + SHORT_REST_LATENCY_SECONDS + bar * spb)
+                   now[0] + SNAPSHOT_LATENCY_SECONDS + bar * spb)
     assert plan["deadline_at_ms"] / 1000 == pytest.approx(expected)
     assert (expected - end_at) / spb <= 2 * bar, "rest + count-in within two bars"
     now[0] = expected + .01
