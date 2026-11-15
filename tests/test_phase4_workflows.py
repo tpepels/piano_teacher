@@ -19,7 +19,19 @@ def test_container_provenance_uses_an_explicit_exact_workspace_trust_step():
             if "container" not in job:
                 continue
             steps = job["steps"]
-            checkout = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/checkout@"))
+            checkout = next((i for i, step in enumerate(steps)
+                             if step.get("uses", "").startswith("actions/checkout@")), None)
+            if checkout is None:
+                # A relocated, clean-machine packaged-app test deliberately
+                # has no checkout, repository or Git workspace. Its only
+                # executable inputs must come from a downloaded artifact.
+                assert any(step.get("uses", "").startswith(
+                    "actions/download-artifact@") for step in steps)
+                assert all("GITHUB_WORKSPACE" not in step.get("run", "")
+                           for step in steps)
+                assert all("git config" not in step.get("run", "")
+                           for step in steps)
+                continue
             command = 'git config --global --add safe.directory "$GITHUB_WORKSPACE"'
             assert steps[checkout + 1].get("run") == command
 
