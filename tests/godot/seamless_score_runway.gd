@@ -24,6 +24,10 @@ class MockView:
         return true
     var timeline := {"pixels_per_beat": 100.0}
     var stream_passes: Array = []
+    var _stream_queue = StreamQueue.new()
+    const PLAYHEAD_FRACTION := .33
+    func staff_gap() -> float:
+        return 22.0
     var offline_stream_queue: Array = []
     func stream_pass_count() -> int:
         return stream_passes.size()
@@ -115,6 +119,25 @@ func run() -> void:
         is_equal_approx(source_boundary,18.0+60.0/96.0) and
         rest_boundary < source_boundary,
         "printed rest clears with raster padding; source ink keeps full peer margin")
+    # Exercise the real peer queue, not merely the helper's optional argument.
+    var peer := MockView.new()
+    peer.size = Vector2(1000,240)
+    peer.timeline["duration_beats"] = 10.0
+    peer._stream_queue.online = [
+        {"kind":"source","world_origin":3.0,"source_floor":0.0,
+            "source_ceiling":10.0,"clip_floor":0.0,"clip_ceiling":10.0,
+            "clip_leading_spaces":0.0,"clip_trailing_spaces":0.0},
+        {"kind":"rest","world_origin":13.0,
+            "source_floor":0.0,"source_ceiling":2.0},
+    ]
+    var successor := StreamQueue.new()
+    successor.register_peer(peer)
+    check(is_equal_approx(successor.minimum_peer_opening(
+        96.0,1000.0,330.0,true,"rest"),15.0+6.0/96.0),
+        "a written rest admits the next header after its final barline with raster clearance")
+    check(is_equal_approx(successor.minimum_peer_opening(
+        96.0,1000.0,330.0,true,"source"),13.0+60.0/96.0),
+        "authored source notes still enforce the full peer margin")
     var stage := MockStage.new()
     root.add_child(stage)
     var session := Session.new(stage.renderer)
