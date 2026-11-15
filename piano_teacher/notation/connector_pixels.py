@@ -577,11 +577,11 @@ def _beam(row, frames, target):
         staff_lines=list(frame['staves'][events[0]['staff']].lines))
 
 
-def _resized_art(art, gap):
+def _resized_art(art, gap, cutoff=96):
     x0, y0, x1, y1 = art['bbox']
     image = Image.fromarray(art['mask'].astype('uint8')*255)
     return np.asarray(image.resize((max(1, round((x1-x0)*gap/24)),
-                                    max(1, round((y1-y0)*gap/24))), Image.Resampling.BILINEAR)) > 96
+                                    max(1, round((y1-y0)*gap/24))), Image.Resampling.BILINEAR)) > cutoff
 
 
 def _fit_mask(pixels, mask, x, y, radius):
@@ -750,14 +750,14 @@ def _digit_glyphs():
     return glyphs
 
 
-def _digits(row, pixels, gap, nx, ny):
+def _digits(row, pixels, gap, nx, ny, cutoff=96):
     number = row['number']
     glyphs = _digit_glyphs()
     result = []
     for code, part in zip(row['numeral_codes'], row['number_parts']):
         if part is None or code not in glyphs:
             raise ValueError('Reference numeral contains an unsupported or empty glyph')
-        template = _resized_art(part, gap)
+        template = _resized_art(part, gap, cutoff)
         x = nx+(part['bbox'][0]-number['bbox'][0])*gap/24
         y = ny+(part['bbox'][1]-number['bbox'][1])*gap/24
         (score, px, py), _ = _fit_mask(pixels, template, x, y, 1)
@@ -811,14 +811,27 @@ def _tuplet(row, frames, target):
     y = anchors[first]['y']+(y0-ref_first[1])*scale
     if any(x <= column <= x+template.shape[1] for column in frame['occluded_columns']):
         raise ValueError('Measured coloured playhead occludes the source numeral')
-    (score, nx, ny), margin = _fit_mask(frame['pixels'], template, x, y, math.ceil(gap*.5))
+    # A small printed numeral can have fewer than fifteen raster rows.
+    # Subpixel antialias coverage then differs between the original SVG
+    # raster and Godot's downsample. Keep the full Dice and uniqueness
+    # requirements, but evaluate four bounded alpha cutoffs of the SAME
+    # independently sourced contour; no missing pixels are reconstructed.
+    candidates = []
+    for cutoff in (96, 128, 160, 192):
+        candidate = _resized_art(number, gap, cutoff)
+        (fit, px, py), uniqueness = _fit_mask(
+            frame['pixels'], candidate, x, y, math.ceil(gap*.5))
+        candidates.append((fit, uniqueness, cutoff, px, py, candidate))
+    score, margin, cutoff, nx, ny, template = max(
+        candidates, key=lambda item: (item[0], item[1]))
     if score < .79 or margin < .05:
         return 'mismatch', 'Actual numeral contour lacks the source identity or a unique bounded fit', dict(
-            expected_numeral=digits, match=round(score, 4), margin=round(margin, 4))
+            expected_numeral=digits, match=round(score, 4), margin=round(margin, 4),
+            source_alpha_cutoff=cutoff)
     number_box = [nx, ny, nx+template.shape[1], ny+template.shape[0]]
-    digit_evidence = _digits(row, frame['pixels'], gap, nx, ny)
+    digit_evidence = _digits(row, frame['pixels'], gap, nx, ny, cutoff)
     evidence = dict(expected_numeral=digits, numeral_match=round(score, 4), numeral_margin=round(margin, 4),
-        digits=digit_evidence,
+        source_alpha_cutoff=cutoff, digits=digit_evidence,
         number_bbox=number_box, anchors=anchors, staff_gap=gap,
         staff_lines=list(frame['staves'][events[0]['staff']].lines), bbox=number_box)
     if len(digit_evidence) != len(codes) or any(d['match'] < .79 or d['margin'] < .03 for d in digit_evidence):
