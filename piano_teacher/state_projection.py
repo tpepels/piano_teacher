@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, fields
 from types import MappingProxyType
 
 from .measure_grid import bar_number_at
-from .notation.practice_timeline import UNLOADED_GAP_BEATS
+from .notation.practice_timeline import UNLOADED_GAP_BEATS, UNLOADED_METER
 from .music import note_name
 from .application.musical_scheduler import SCHEDULER
 
@@ -167,8 +167,8 @@ class TimingSnapshot(_Snapshot):
     review_end_beat: float | None = None
     awaiting_score_revision: int | None = None
     count_in_beats: float = 0.0
-    count_in_bar_beats: float = 4.0
-    count_in_meter: tuple[int, int] = (4, 4)
+    count_in_bar_beats: float = UNLOADED_GAP_BEATS
+    count_in_meter: tuple[int, int] = UNLOADED_METER
     midi_notes: int = 0
     visual_offset_beats: float = 0.0
     visual_gap_beats: float = UNLOADED_GAP_BEATS
