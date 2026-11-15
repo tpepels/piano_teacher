@@ -3,6 +3,7 @@ extends RefCounted
 ## Borrows geometry/indices; owns only staff lines and authentic sprite envelopes.
 const Geometry := preload("res://notation/native/geometry.gd")
 const FingeringSpatialLayout := preload("res://notation/native/fingering_spatial_layout.gd")
+const ContextPainter := preload("res://notation/native/context_painter.gd")
 
 var score_layout
 var connector_geometry
@@ -23,6 +24,79 @@ func block(rect: Rect2, bins: Dictionary, cell: float) -> void:
 func is_clear(rect: Rect2, bins: Dictionary, cell: float) -> bool:
     return FingeringSpatialLayout.is_clear(rect,bins,cell,staff_lines,score_layout.size.y)
 
+## Reserve the ACTUAL clef, key and meter glyph boxes before choosing a
+## fingering location. These are painted by ContextPainter as source ink,
+## not represented by note events or barline strokes. Previously a finger
+## placed over an opening 4/4 could be completely invisible in the captured
+## framebuffer despite being marked as placed by the packing algorithm.
+func _block_context_glyph(name: String, x: float, y: float,
+        glyph_gap: float, bins: Dictionary, cell: float) -> void:
+    var bounds: Array = score_layout.glyphs.bounds.get(name,[])
+    if bounds.size() != 4:
+        return
+    var unit: float = glyph_gap/250.0
+    block(Rect2(x-float(bounds[2])*unit*.5,
+        y+float(bounds[1])*unit,
+        float(bounds[2])*unit,float(bounds[3])*unit),bins,cell)
+
+func _block_written_context(gap: float, bins: Dictionary, cell: float) -> void:
+    var painter = ContextPainter.new(score_layout,null)
+    var density: float = score_layout.timeline.pixels_per_beat
+    var previous: Dictionary = {}
+    for measure in score_layout.timeline.measures:
+        var opening: bool = previous.is_empty()
+        var x: float = float(measure.get("start_beat",0.0))*density
+        var crowded: bool = painter.meter_is_crowded(measure,previous,gap)
+        for hand in score_layout.visible_staves():
+            var center: float = score_layout.staff_center(hand)
+            var clef: Dictionary = score_layout.clef_for(hand,measure)
+            var sign: String = str(clef.get("sign","G"))
+            var keys: Dictionary = measure.get("keys",{})
+            var signature: int = int(keys.get(hand,0))
+            var previous_keys: Dictionary = previous.get("keys",{})
+            var key_changed: bool = signature != int(previous_keys.get(hand,999))
+            var changes: Array = []
+            if key_changed:
+                var old: int = int(previous_keys.get(hand,0))
+                if not opening:
+                    for step in Geometry.key_cancellation_steps(clef,old,signature):
+                        changes.append({"step":step,"name":"accidental_natural"})
+                for step in Geometry.signature_steps(clef,signature):
+                    changes.append({"step":step,"name":"accidental_sharp" if signature > 0 else "accidental_flat"})
+            if opening or score_layout.clef_for(hand,previous) != clef:
+                var name: String = {"G":"clef_g","F":"clef_f","C":"clef_c"}.get(sign,"")
+                var octave: int = int(clef.get("octave_change",0))
+                var variant: String = name+("_8vb" if octave == -1 else
+                    "_8va" if octave == 1 else "_15mb" if octave == -2 else
+                    "_15ma" if octave == 2 else "")
+                if score_layout.glyphs.bounds.has(variant):
+                    name = variant
+                var origin_y: float = center+(
+                    3.0-float(clef.get("line",2 if sign == "G" else 4 if sign == "F" else 3)))*gap
+                var columns: int = maxi(absi(signature),changes.size())
+                _block_context_glyph(name,x-(86.0+float(columns)*14.0)*gap/17.0,
+                    origin_y,gap,bins,cell)
+            if key_changed:
+                for i in range(changes.size()):
+                    var mark: Dictionary = changes[i]
+                    var gx: float = x-(39.0+float(changes.size()-i)*14.0)*gap/17.0
+                    var gy: float = Geometry.note_y(int(mark["step"]),center+gap*2.0,gap)
+                    _block_context_glyph(str(mark["name"]),gx,gy,gap,bins,cell)
+            if opening or previous.get("meter",[]) != measure.get("meter",[]):
+                var values: Array = measure.get("meter",[4,4])
+                var scale: float = gap*ContextPainter.CROWDED_METER_SCALE if crowded else gap
+                var meter_x: float = painter.crowded_meter_x(measure,x,gap) if crowded else \
+                    painter.context_meter_x(measure,x,gap,opening)
+                for row in range(mini(2,values.size())):
+                    var digits: String = str(int(values[row]))
+                    var first_x: float = meter_x-float(digits.length()-1)*scale*1.10*.5
+                    var y: float = center+(-.95 if row == 0 else .8)*scale
+                    for i in range(digits.length()):
+                        _block_context_glyph("time_"+digits[i],
+                            first_x+float(i)*scale*1.10,y,scale,bins,cell)
+        previous = measure
+
+
 ## Append source-coordinate reservations to caller-owned bins.
 func build(gap: float, bins: Dictionary, cell: float, play_from_beat: float = 0.0) -> void:
     var density: float = score_layout.timeline.pixels_per_beat
@@ -32,6 +106,7 @@ func build(gap: float, bins: Dictionary, cell: float, play_from_beat: float = 0.
     for hand in ["right","left"]:
         for line in range(-2,3):
             staff_lines.append(Rect2(-gap*12.0,score_layout.staff_center(hand)+float(line)*gap-.5,span+gap*12.0,1.0))
+    _block_written_context(gap,bins,cell)
     for event in score_layout.ordered_events:
         event_obstacles(event,gap,bins,cell)
     # Source beam masks and their stretched native stems, including chords.
