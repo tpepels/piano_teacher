@@ -95,7 +95,12 @@ def test_corrupted_fresh_godot_bracket_cannot_use_occluded_frames(fresh_capture,
     if damage in {"left-hook", "right-hook"}:
         edge = np.zeros_like(selected)
         start, stop = (left, left+5) if damage == "left-hook" else (right-5, right)
-        edge[top+4:bottom+1, start:stop] = True
+        # The photographed hook extends upwards from its horizontal arm.
+        # Cropping off the first four rows can select *zero* real pixels
+        # when the source's short cap is rasterized at the top of the box.
+        # Remove the full observed endpoint strip and keep the same
+        # >=8-pixel mutation and independent failure obligations.
+        edge[top:bottom, start:stop] = True
         selected &= edge
     elif damage == "interrupt":
         edge = np.zeros_like(selected)
