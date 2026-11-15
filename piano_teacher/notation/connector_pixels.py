@@ -884,7 +884,13 @@ def _tuplet(row, frames, target):
         # would then misreport occluded source ink as a detached hook.
         if any(0 <= x-box[0]+dx < mask.shape[1] and expected_columns[x-box[0]+dx]
                for x in frame['occluded_columns'] for dx in (-1, 0, 1)):
-            raise ValueError('Measured coloured playhead occludes the bracket witness')
+            # The numeral has already been independently measured here.
+            # Preserve that valid partial proof even though the photographed
+            # playhead prevents independent bracket verification. Treating
+            # this as an exception discards the number's genuine pixel
+            # witness and makes destructive numeral tests impossible.
+            return 'unverified', 'Measured coloured playhead occludes the bracket witness', dict(
+                **evidence, bracket_occluded=True)
         fit, bx, by, overlapping_pixels = _fit_bracket(frame['pixels'], mask, box, template, number_box, gap)
         if overlapping_pixels > max(2, mask.sum()*.02):
             return 'ambiguous', 'Bracket and independently matched numeral silhouettes overlap', dict(
