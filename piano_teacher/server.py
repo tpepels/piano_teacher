@@ -2525,6 +2525,13 @@ class PracticeEngine:
             pending = self._prepare_teaching("rolling_result", assessed, rolling=decision, end_beat=decision.end_beat)
         assessed = pending.assessment
         response = pending.decision.response
+        # Rolling recovery may fire at the *final* scored boundary, before
+        # _complete_attempt runs. Preserve the exact old-tempo end BEFORE
+        # settling, since the recovery decision may reduce the new BPM.
+        outgoing_bpm = self.plan.bpm
+        scored_end = self.visual_transport.run_at + (
+            self._elapsed_seconds(decision.end_beat) -
+            self._elapsed_seconds(self.visual_transport.play_from_beat))
         if response.action == "continue":
             from .measure_grid import next_chunk_end
             following = next_chunk_end(grid, decision.end_beat)
@@ -2552,9 +2559,25 @@ class PracticeEngine:
         self._pending_rolling = None
         self.measurement.finish()
         self._note_tempo(now)
+        # A recovery at the final boundary must use the SAME one-rest,
+        # one-count-in deadline as an ordinary completed take. Previously
+        # it fell through to reverse + complete rest + extra offscreen
+        # horizon, which produced 2.8 empty bars in the real MIDI/Godot
+        # 27 -> 24 BPM retry. The reverse animation fits inside the rest.
+        #
+        # Mid-passage recovery cannot apply the end-of-passage rest
+        # geometry while later source notes are still immutable on screen.
+        short_deadline = None
+        if (not transition.guided and transition.action != "pause"
+                and self.plan.identity == pending.state.binding.stage_key
+                and decision.end_beat >= phrase.end-phrase.start-1e-7):
+            self._rest_take_end = (scored_end, outgoing_bpm)
+            short_deadline = self._short_rest_deadline(
+                from_beat=transition.restart_beat, now=now)
         self._schedule_preparation(transition.restart_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
-            reverse_seconds=self.feedback_seconds)
+            reverse_seconds=self.feedback_seconds,
+            short_deadline=short_deadline)
         self._trouble_key = transition.trouble_key
         self._trouble_count = transition.trouble_count
         self._guided_recovery_pending = transition.guided
