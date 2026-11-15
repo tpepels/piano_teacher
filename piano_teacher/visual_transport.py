@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
-from .notation.practice_timeline import preparation_measure_descriptor
+from .notation.practice_timeline import (
+    preparation_measure_descriptor, UNLOADED_GAP_BEATS,
+)
 from .application.musical_scheduler import SCHEDULER, PassagePlan
 
 
@@ -31,7 +33,7 @@ class VisualTransport:
     practice_preparation: dict | None = None
     _preparation_pending: bool = False
     _preparation_at: float = 0.0
-    visual_gap_beats: float = 4.0
+    visual_gap_beats: float = UNLOADED_GAP_BEATS
     # The one announced automatic continuation: (source_from_beat, graded
     # run_at, start BPM). Set when the engine schedules the next take of the
     # same stage, published unchanged as score_queue_next while the rest
