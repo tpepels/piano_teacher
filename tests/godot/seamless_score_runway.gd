@@ -26,10 +26,6 @@ class MockView:
         return true
     var timeline := {"pixels_per_beat": 100.0}
     var stream_passes: Array = []
-    var _stream_queue = preload("res://score_stream_queue.gd").new()
-    const PLAYHEAD_FRACTION := .33
-    func staff_gap() -> float:
-        return 22.0
     var offline_stream_queue: Array = []
     func stream_pass_count() -> int:
         return stream_passes.size()
@@ -78,6 +74,14 @@ class MockView:
     func set_transport_overlay_enabled(enabled: bool) -> void:
         transport_overlay_enabled = enabled
 
+class MockPeer:
+    extends Control
+    const PLAYHEAD_FRACTION := .33
+    var timeline := {"pixels_per_beat":96.0,"duration_beats":10.0}
+    var _stream_queue = preload("res://score_stream_queue.gd").new()
+    func staff_gap() -> float:
+        return 22.0
+
 class MockStage:
     extends Node
     var renderer
@@ -122,7 +126,7 @@ func run() -> void:
         rest_boundary < source_boundary,
         "printed rest clears with raster padding; source ink keeps full peer margin")
     # Exercise the real peer queue, not merely the helper's optional argument.
-    var peer := MockView.new()
+    var peer := MockPeer.new()
     peer.size = Vector2(1000,240)
     peer.timeline["duration_beats"] = 10.0
     peer._stream_queue.online = [
