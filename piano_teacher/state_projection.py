@@ -6,6 +6,7 @@ from types import MappingProxyType
 
 from .measure_grid import bar_number_at
 from .music import note_name
+from .application.musical_scheduler import SCHEDULER
 
 
 def _freeze(value):
@@ -258,7 +259,7 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
     start_beat = timing.play_from_beat if timing.review_end_beat is not None else 0.0
     elapsed = timing.now-timing.run_at
     active_beat = (timing.mapped_clock_beat if timing.mapped_clock_beat is not None
-                   else elapsed*tempo.bpm/60)
+                   else SCHEDULER.seconds_beats(elapsed,tempo.bpm))
     exercise_beat = timing.play_from_beat+max(0.0, active_beat)
     progress = (min(1.0, max(0.0, (exercise_beat-start_beat)/max(1e-6, practice_end-start_beat)))
                 if timing.running else 0.0)
@@ -325,13 +326,15 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "count_in_bar_beats": timing.count_in_bar_beats, "count_in_meter": list(timing.count_in_meter),
         "midi_notes": timing.midi_notes, "preview_only": timing.preview_only,
         "progress": progress, "duration": (
-            sum((min(practice_end, float(segment["end_beat"])) -
-                 max(start_beat, float(segment["start_beat"]))) * 60 / float(segment["bpm"])
+            sum(SCHEDULER.beats_seconds(
+                    min(practice_end,float(segment["end_beat"])) -
+                    max(start_beat,float(segment["start_beat"])),
+                    float(segment["bpm"]))
                 for segment in timing.tempo_segments
                 if float(segment["end_beat"]) > start_beat and
                    float(segment["start_beat"]) < practice_end)
             if timing.tempo_segments else
-            (practice_end-start_beat)*60/tempo.bpm),
+            SCHEDULER.beats_seconds(practice_end-start_beat,tempo.bpm)),
         "beat": exercise_beat if timing.running else 0.0, "duration_beats": total_beats,
         "running": timing.running, "feedback": "Paused" if timing.paused else snapshot.feedback,
         "feedback_marks": _payload(timing.feedback_marks if feedback_phase in

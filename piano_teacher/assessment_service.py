@@ -12,6 +12,7 @@ from .measure_grid import phrase_grid, two_bar_chunks, bar_number_at
 from .practice import evaluate
 from .feedback import project_assessment
 from .live_feedback import settled_assessment, expired_attack_misses
+from .application.musical_scheduler import SCHEDULER
 
 
 class AssessmentService:
@@ -71,7 +72,7 @@ class AssessmentService:
                 issues.append(issue)
             for note in result.unmatched_played:
                 local = (elapsed_to_beat(note.onset) if elapsed_to_beat is not None else
-                         played_from_beat + note.onset * bpm / 60)
+                         played_from_beat + SCHEDULER.seconds_beats(note.onset,bpm))
                 if start-1e-7 <= local < end-1e-7:
                     counts["extra"] += 1
                     issues.append({"bar": bar_number_at(grid, local, phrase.first_bar),
@@ -111,7 +112,7 @@ class AssessmentService:
         if total<=0 or elapsed_seconds<0:
             return []
         per_bar=total/max(1,phrase.last_bar-phrase.first_bar+1)
-        now_beat=played_from_beat+elapsed_seconds*bpm/60
+        now_beat=played_from_beat+SCHEDULER.seconds_beats(elapsed_seconds,bpm)
         settled=settled_assessment(phrase,hand,bpm,played,
                                   from_beat=played_from_beat,
                                   until_beat=now_beat,beats_per_bar=per_bar)

@@ -16,6 +16,7 @@ from .music import Phrase, source_note_id
 from .exercise_contracts import TempoMap
 from .grading_tolerance import onset_tolerance, duration_tolerance
 from .lesson_settings import SETTINGS
+from .application.musical_scheduler import SCHEDULER
 
 
 class LiveInputView:
@@ -105,8 +106,8 @@ class LiveInputView:
                     beat = note.start - phrase.start
                     if tempo_map is not None:
                         return (tempo_map.seconds_at(beat) - origin,
-                                60.0 / tempo_map.bpm_at(beat))
-                    return ((beat - from_beat) * 60.0 / bpm, 60.0 / bpm)
+                                SCHEDULER.seconds_per_beat(tempo_map.bpm_at(beat)))
+                    return (SCHEDULER.signed_beats_seconds(beat-from_beat,bpm), SCHEDULER.seconds_per_beat(bpm))
 
                 def held_seconds(note):
                     # Identical to practice.evaluate's expected duration.
@@ -114,17 +115,18 @@ class LiveInputView:
                     release = min(note.end, phrase.end) - phrase.start
                     if tempo_map is not None:
                         return tempo_map.seconds_at(release) - tempo_map.seconds_at(attack)
-                    return (release - attack) * 60.0 / bpm
+                    return SCHEDULER.beats_seconds(release-attack,bpm)
 
                 candidates = []
                 nearby = []
                 self.prepare(phrase)
                 beat = (tempo_map.beat_at(origin + at) if tempo_map is not None
-                        else from_beat + at * bpm / 60.0)
+                        else from_beat + SCHEDULER.seconds_beats(at,bpm))
                 # All matching windows are under ~2 beats at allowed tempos.
                 # A buffer handles tempo changes at the boundary.
                 search_radius = max(2.0, 0.5 * max(
-                    bpm, tempo_map.bpm_at(beat) if tempo_map is not None else bpm)/60.0)
+                    SCHEDULER.beat_rate(
+                    max(bpm,tempo_map.bpm_at(beat) if tempo_map is not None else bpm)))
                 left = bisect_left(self._onset_beats, beat - search_radius)
                 right = bisect_right(self._onset_beats, beat + search_radius)
                 for index, note in self._ordered_notes[left:right]:

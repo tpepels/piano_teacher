@@ -93,10 +93,25 @@ class MusicalScheduler:
         return float(bar_beats)
 
     @staticmethod
-    def beats_seconds(beats: float, bpm: float) -> float:
-        if not all(math.isfinite(x) for x in (beats, bpm)) or beats < 0 or bpm <= 0:
+    def signed_beats_seconds(beats: float, bpm: float) -> float:
+        """Signed score-relative beat delta (may precede the downbeat)."""
+        if not all(math.isfinite(x) for x in (beats,bpm)) or bpm <= 0:
             raise ValueError("Invalid beat duration or BPM")
         return beats * 60.0 / bpm
+
+    @classmethod
+    def beats_seconds(cls, beats: float, bpm: float) -> float:
+        if beats < 0:
+            raise ValueError("Invalid negative beat duration")
+        return cls.signed_beats_seconds(beats,bpm)
+
+    @classmethod
+    def seconds_per_beat(cls, bpm: float) -> float:
+        return cls.beats_seconds(1.0,bpm)
+
+    @classmethod
+    def beat_rate(cls, bpm: float) -> float:
+        return cls.seconds_beats(1.0,bpm)
 
     @staticmethod
     def seconds_beats(seconds: float, bpm: float) -> float:
@@ -152,7 +167,7 @@ class MusicalScheduler:
         if not math.isfinite(beat):
             raise ValueError("Invalid source beat")
         if tempo_map is None:
-            return beat * 60.0 / bpm
+            return MusicalScheduler.signed_beats_seconds(beat,bpm)
         return tempo_map.seconds_at(beat)
 
     @classmethod

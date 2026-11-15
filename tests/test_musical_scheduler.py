@@ -298,3 +298,12 @@ def test_timing_math_has_one_implementation_across_production_owners():
     assert not offenders,(
         "Musical beat/time arithmetic belongs to SCHEDULER only: "
         +repr(offenders))
+
+
+def test_musical_conversions_include_signed_pickups_and_live_tempos():
+    assert SCHEDULER.signed_beats_seconds(-.5,24)==pytest.approx(-1.25)
+    assert SCHEDULER.beat_rate(24)==pytest.approx(.4)
+    assert SCHEDULER.seconds_per_beat(24)==pytest.approx(2.5)
+    assert SCHEDULER.seconds_beats(-1.25,24)==pytest.approx(-.5)
+    with pytest.raises(ValueError):
+        SCHEDULER.beats_seconds(-.5,24)

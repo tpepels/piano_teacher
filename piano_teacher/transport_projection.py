@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping
+from .application.musical_scheduler import SCHEDULER
 
 if TYPE_CHECKING:
     from .exercise_contracts import TempoMap
@@ -53,10 +54,10 @@ def project_visual_motion(
         elapsed = now-state.run_at
         if elapsed < end_time:
             beat = tempo_map.beat_at(source_time+elapsed)
-            speed = tempo_map.bpm_at(beat)/60.0
+            speed = SCHEDULER.beat_rate(tempo_map.bpm_at(beat))
         else:
-            beat = length+(elapsed-end_time)*state.bpm/60.0
-            speed = state.bpm/60.0
+            beat = length+SCHEDULER.seconds_beats(elapsed-end_time,state.bpm)
+            speed = SCHEDULER.beat_rate(state.bpm)
         return (state.visual_offset+beat, 0.0 if state.paused else speed,
                 state.visual_offset+length+(state.gap_beats if forward_gap else 0.0))
 
@@ -65,16 +66,16 @@ def project_visual_motion(
     target = state.visual_offset + length
 
     if state.running:
-        position += (now-state.run_at)*state.bpm/60
-        speed = state.bpm/60
+        position += SCHEDULER.seconds_beats(now-state.run_at,state.bpm)
+        speed = SCHEDULER.beat_rate(state.bpm)
     elif state.preparation_pending and now >= state.preparation_at:
         if state.preparation_measure is None:
             raise ValueError("Active preparation must have a measure")
         measure = state.preparation_measure
         target = measure["end_beat"]
         position = min(target, measure["start_beat"]
-                       + (now-state.preparation_at)*state.bpm/60)
-        speed = state.bpm/60 if position < target else 0.0
+                       + SCHEDULER.seconds_beats(now-state.preparation_at,state.bpm))
+        speed = SCHEDULER.beat_rate(state.bpm) if position < target else 0.0
     elif state.rewind_from is not None:
         if state.rewind_to is None:
             raise ValueError("Active rewind must have a target")
@@ -90,6 +91,6 @@ def project_visual_motion(
         # or a state query later. Keep the one continuous visual axis moving
         # until a different transport phase is actually published.
         position = state.visual_offset + max(
-            length, state.play_from_beat + (now-state.run_at)*state.bpm/60)
-        speed = state.bpm/60
+            length, state.play_from_beat + SCHEDULER.seconds_beats(now-state.run_at,state.bpm))
+        speed = SCHEDULER.beat_rate(state.bpm)
     return position, 0.0 if state.paused else speed, target

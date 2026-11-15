@@ -7,6 +7,7 @@ No video-frame clock or Godot interaction is involved.
 from __future__ import annotations
 from .music import Phrase
 from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
+from .application.musical_scheduler import SCHEDULER
 
 
 def settled_assessment(phrase: Phrase, hand: str, bpm: float,
@@ -14,7 +15,7 @@ def settled_assessment(phrase: Phrase, hand: str, bpm: float,
                        until_beat: float, beats_per_bar: float) -> Assessment | None:
     if bpm <= 0 or beats_per_bar <= 0:
         raise ValueError("Tempo and measure length must be positive")
-    grace = .12 * bpm / 60  # 120 ms after expected note release
+    grace = SCHEDULER.seconds_beats(.12,bpm)  # 120 ms after expected note release
     earliest = max(from_beat, until_beat - 2*beats_per_bar)
     required = tuple(
         n for n in phrase.notes
@@ -30,8 +31,8 @@ def settled_assessment(phrase: Phrase, hand: str, bpm: float,
                      phrase.start+from_beat, phrase.end, required)
     # Do not classify notes that occur later in the take as "extras" yet.
     # This also makes deterministic prerecorded performance fixtures valid.
-    upto = (until_beat-from_beat)*60/bpm+.12
-    since = max(0.0,(earliest-from_beat)*60/bpm-.15)
+    upto = SCHEDULER.beats_seconds(until_beat-from_beat,bpm)+.12
+    since = max(0.0,SCHEDULER.beats_seconds(earliest-from_beat,bpm)-.15)
     eligible = [n for n in played if since <= n.onset <= upto]
     result = evaluate(passage, hand, bpm, eligible)
     # Project only required settled notes here. Early/key mistakes remain
@@ -53,7 +54,7 @@ def expired_attack_misses(phrase: Phrase, hand: str, bpm: float,
     """
     if bpm <= 0:
         raise ValueError("Tempo must be positive")
-    seconds_per_beat = 60.0 / bpm
+    seconds_per_beat = SCHEDULER.seconds_per_beat(bpm)
     search_window = max(.35, .65 * seconds_per_beat)
     elapsed = (until_beat - from_beat) * seconds_per_beat
     start = max(from_beat, window_start_beat if window_start_beat is not None else from_beat)
