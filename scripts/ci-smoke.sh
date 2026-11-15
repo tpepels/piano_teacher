@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-python}"
 "$PYTHON" -m compileall -q piano_teacher tests scripts
 "$PYTHON" scripts/audit-transport-forwarding.py
+"$PYTHON" scripts/audit-musical-scheduler.py
 "$PYTHON" scripts/generate_state_contract.py --check
 find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 # Focused, self-contained MIDI and state/assessment contracts.
