@@ -27,11 +27,6 @@ var transport_overlay_enabled := true
 var runway_overlay := false
 var runway_origin_beat := 0.0
 var runway_cutoff_beat := INF
-# A pre-engraved next lesson may inherit the previous stage's unchanged
-# clef/key/meter on the SAME continuous staff. Its opening then contains
-# no duplicate context ink; normal freshly opened scores still print it.
-# Set ONLY before load_score() compiles the immutable retained source.
-var inherited_opening_context: Dictionary = {}
 var fingering_pass_clocks: Array = []
 
 func set_transport_overlay_enabled(enabled: bool) -> void:
@@ -163,10 +158,6 @@ var _stream_armed_serial := -1
 var _stream_arm_rollback: Dictionary = {}
 var _stream_arm_acknowledged := false
 var _stream_serial := 0
-# A piece prints its full starting clef/key/meter once. Subsequent copies
-# in the continuous stream crop the repeated first-measure header, retaining
-# the written gap/rest and the same immutable note/music time.
-var _opening_context_printed := false
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
 
@@ -305,10 +296,6 @@ func _archive_source_identity(candidate: Dictionary) -> String:
 
 
 func load_score(candidate: Dictionary) -> bool:
-    # A newly loaded source must be independently readable; only the
-    # explicitly prepared same-context stage handoff may inherit another
-    # score's header. A previous take in this renderer is not transferable.
-    _opening_context_printed = false
     connector_geometry.clear_cache()
     annotations.clear()
     drawn_note_instances.clear()
@@ -742,24 +729,6 @@ func _stream_source_windows(opening: float) -> Array[Vector2]:
         _source_ink_intervals)
 
 
-func _source_ending_restores_opening_context() -> bool:
-    # A repeat can omit its starting clef/key/meter only if the score ends
-    # with that same notation context. Otherwise the next copy MUST
-    # explicitly show the source's reset signature and meter.
-    var measures: Array = timeline.measures
-    if measures.is_empty():
-        return false
-    var opening: Dictionary = measures[0]
-    var ending: Dictionary = measures[-1]
-    if opening.get("meter",[]) != ending.get("meter",[]) or \
-            opening.get("keys",{}) != ending.get("keys",{}):
-        return false
-    for staff in layout.visible_staves():
-        if layout.clef_for(staff,opening) != layout.clef_for(staff,ending):
-            return false
-    return true
-
-
 func _stream_add_take(source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool = false) -> void:
     _stream_last_admitted = -1
@@ -785,7 +754,7 @@ func _stream_add_take(source_beat: float, start_world: float,
         var clip_floor: float = bounds.x
         var clip_ceiling: float = bounds.y
         var leading_spaces: float = (
-            _stream_leading_spaces(bounds.x) if is_first else 0.0)
+            15.0 if bounds.x <= .0001 else 1.6) if is_first else 0.0
         var trailing_spaces: float = 2.2 if is_last else 0.0
         var specs: Array = [{
             "kind":"source","owner_serial":serial,
@@ -825,8 +794,6 @@ func _stream_add_take(source_beat: float, start_world: float,
             return
         added += 1
     _stream_serial = first_serial+windows.size()-1
-    if source_beat <= .0001:
-        _opening_context_printed = _source_ending_restores_opening_context()
     _stream_live_serial = first_serial
     _stream_last_admitted = first_serial
 
@@ -834,18 +801,8 @@ func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
 
 
-func _stream_leading_spaces(opening: float) -> float:
-    # Only the FIRST printed source opening needs a full initial header.
-    # A same-context handoff inherits it; further takes of this very
-    # score clip the duplicated context without modifying real source ink.
-    if opening > .0001:
-        return 1.6
-    return 1.6 if (not inherited_opening_context.is_empty() or
-        _opening_context_printed) else 15.0
-
-
 func _stream_header_beats(opening: float) -> float:
-    return _stream_leading_spaces(opening)*staff_gap()/ \
+    return (15.0 if opening <= .0001 else 1.6)*staff_gap()/ \
         maxf(1.0,timeline.pixels_per_beat)
 
 
@@ -921,14 +878,6 @@ func _transport_admission_receipt(planned: Dictionary,
         return {}
     # A bounded, externally inspectable receipt for every accepted user
     # transport. This is the SAME deadline later sent to the backend.
-    var printed_leading_spaces := 15.0 if opening <= .0001 else 1.6
-    for item in _stream_queue.online:
-        if str(item.get("kind","")) == "source" and \
-                int(item.get("take_owner",-1)) == _stream_armed_serial and \
-                absf(float(item.get("source_floor",-INF))-opening) < .00001:
-            printed_leading_spaces = float(item.get("clip_leading_spaces",
-                printed_leading_spaces))
-            break
     var entry_seconds: float = maxf(0.0,
         (float(reserved["start_world"])-opening+
             StreamAdmission.clip_bounds({
@@ -936,7 +885,7 @@ func _transport_admission_receipt(planned: Dictionary,
                 "source_ceiling":timeline.duration_beats,
                 "clip_floor":opening,
                 "clip_ceiling":timeline.duration_beats,
-                "clip_leading_spaces":printed_leading_spaces
+                "clip_leading_spaces":15.0 if opening <= .0001 else 1.6
             },timeline.pixels_per_beat,staff_gap(),
                 timeline.duration_beats).x/
                     maxf(1.0,timeline.pixels_per_beat) -
@@ -1063,22 +1012,11 @@ func short_rest_geometry() -> Dictionary:
     var trailing: float = 2.2*staff_gap()/density
     var after: float = rest if rest >= trailing else \
         trailing+StreamAdmission.REST_GAP_BEATS
-    # This describes the NEXT take's source, not the CURRENT initial
-    # opening. The command coordinator sends it with Play BEFORE that
-    # first source has been enqueued. The following source inherits the
-    # current key/clef/meter when the last measure matches the first;
-    # using the initial 15-space header here inserted one redundant bar
-    # into every automatic repeat even though its duplicate header was
-    # clipped from the physical stream.
-    var repeat_header_spaces: float = 1.6 if (
-        not inherited_opening_context.is_empty() or
-        _source_ending_restores_opening_context()) else 15.0
     return {"continuation_clear_beats":
             after+StreamQueue.PEER_MARGIN_PX/density+
             StreamAdmission.OFFSCREEN_MARGIN_BEATS,
         "continuation_header_beats":
-            repeat_header_spaces*staff_gap()/density+
-            StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+            _stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 
 
 func announced_copy_onset(world: float) -> float:
