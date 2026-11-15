@@ -27,6 +27,11 @@ var transport_overlay_enabled := true
 var runway_overlay := false
 var runway_origin_beat := 0.0
 var runway_cutoff_beat := INF
+# A pre-engraved next lesson may inherit the previous stage's unchanged
+# clef/key/meter on the SAME continuous staff. Its opening then contains
+# no duplicate context ink; normal freshly opened scores still print it.
+# Set ONLY before load_score() compiles the immutable retained source.
+var inherited_opening_context: Dictionary = {}
 var fingering_pass_clocks: Array = []
 
 func set_transport_overlay_enabled(enabled: bool) -> void:
@@ -754,7 +759,7 @@ func _stream_add_take(source_beat: float, start_world: float,
         var clip_floor: float = bounds.x
         var clip_ceiling: float = bounds.y
         var leading_spaces: float = (
-            15.0 if bounds.x <= .0001 else 1.6) if is_first else 0.0
+            _stream_leading_spaces(bounds.x) if is_first else 0.0)
         var trailing_spaces: float = 2.2 if is_last else 0.0
         var specs: Array = [{
             "kind":"source","owner_serial":serial,
@@ -801,8 +806,17 @@ func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
 
 
+func _stream_leading_spaces(opening: float) -> float:
+    # The first score has a large authentic clef/key/meter header.
+    # For a handoff with identical context, the new score's initial
+    # context is deliberately not repainted (SourcePassPainter), so
+    # reserve only regular source/barline clipping clearance instead.
+    return (1.6 if not inherited_opening_context.is_empty() else 15.0) \
+        if opening <= .0001 else 1.6
+
+
 func _stream_header_beats(opening: float) -> float:
-    return (15.0 if opening <= .0001 else 1.6)*staff_gap()/ \
+    return _stream_leading_spaces(opening)*staff_gap()/ \
         maxf(1.0,timeline.pixels_per_beat)
 
 
