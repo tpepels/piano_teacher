@@ -1,9 +1,11 @@
 """Verovio-engraved chord sprites, one per chord shape of a prepared score.
 
-Every chord is engraved by Verovio itself, from the score's own Verovio
-pages. Each chord gets an *instance* template at its real clef, staff
-position and spelling, with the stem Verovio gave it on those pages; each
-head is bound to its notation event by the template's note element order
+Every chord is engraved by Verovio itself, with source-informed
+stem direction. Each chord gets an *instance* template at its real clef,
+staff position and spelling: its stem comes from an explicit source beam,
+then from the native-consistent multiple-voice placement, then from the
+original score's Verovio pages. Each head is bound to its notation event
+by the template's note element order
 (``leaders``: leader id -> member ids in template note order). Verovio's head
 arrangement depends on all of those: seconds flip sides with the stem, whole
 notes take a virtual stem from their position, and a far ledger head can
@@ -327,9 +329,11 @@ def chord_instances(model: dict, pages, *,
                     stem_directions: dict[str, bool] | None = None) -> dict[str, dict]:
     """Leader id -> the instance template that engraves exactly that chord.
 
-    Direction: a source beam's, else Verovio's own stem on the page. Whole
-    notes have no visible stem: their template writes none, so Verovio's
-    virtual stem comes from the same staff position it had in the score.
+    Direction: a source beam's, then an independently authored voice's
+    native-compatible direction when another voice sounds at the onset,
+    otherwise Verovio's own stem on the source page. Authored explicit
+    source stems are never overwritten. Whole notes have no visible stem;
+    the virtual direction still comes from Verovio's score position.
     """
     stems = verovio_chord_stems(pages)
     beams = stem_directions or {}
