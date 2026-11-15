@@ -751,7 +751,7 @@ func _source_ending_restores_opening_context() -> bool:
         return false
     var opening: Dictionary = measures[0]
     var ending: Dictionary = measures[-1]
-    if opening.get("meter",[]) != ending.get("meter",[]) or
+    if opening.get("meter",[]) != ending.get("meter",[]) or \
             opening.get("keys",{}) != ending.get("keys",{}):
         return false
     for staff in layout.visible_staves():
