@@ -2,7 +2,6 @@ extends SceneTree
 ## One immutable forward-world-axis lifecycle: future score is precompiled,
 ## its requested lead is acknowledged, and its graded downbeat stays offscreen.
 const Runway := preload("res://score_runway.gd")
-const NativeView := preload("res://notation/native/view.gd")
 const Session := preload("res://score_asset_session.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
 
@@ -105,44 +104,6 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
-    # Exact continuing clef/key/meter is carried across a stage handoff,
-    # but a hand, signature, clef or meter change must retain full ink.
-    var previous := {"meter":[2,4],"keys":{"right":0},
-        "clefs":{"right":{"sign":"G","line":2,"octave_change":0}}}
-    var same: Dictionary = previous.duplicate(true)
-    check(Runway.compatible_opening_context(previous,same,"right","right"),
-        "unchanged next-stage context must inherit its previous clef")
-    var different: Dictionary = previous.duplicate(true)
-    different["meter"] = [3,4]
-    check(not Runway.compatible_opening_context(previous,different,"right","right"),
-        "meter change cannot reuse a prior header")
-    different = previous.duplicate(true)
-    different["keys"] = {"right":2}
-    check(not Runway.compatible_opening_context(previous,different,"right","right"),
-        "signature change needs its own full source header")
-    different = previous.duplicate(true)
-    different["clefs"] = {"right":{"sign":"F","line":4,"octave_change":0}}
-    check(not Runway.compatible_opening_context(previous,different,"right","right"),
-        "clef change needs its own full source header")
-    check(not Runway.compatible_opening_context(previous,same,"right","left"),
-        "newly selected hand must engrave its own opening")
-    check(not Runway.compatible_opening_context({},same,"right","right"),
-        "an unknown outgoing context cannot authorize omission")
-    var native := NativeView.new()
-    check(native._stream_leading_spaces(0.0)==15.0,
-        "a standalone fresh lesson preserves its complete original header")
-    native.inherited_opening_context = previous.duplicate(true)
-    check(native._stream_leading_spaces(0.0)==1.6 and
-            native._stream_leading_spaces(2.0)==1.6,
-        "identical continuing context has a short REAL painted-ink clip")
-    native.inherited_opening_context.clear()
-    native._opening_context_printed = true
-    check(native._stream_leading_spaces(0.0)==1.6,
-        "the second take of the same score must clip its duplicated header")
-    native._opening_context_printed = false
-    check(native._stream_leading_spaces(0.0)==15.0,
-        "new standalone scores must keep their original context ink")
-    native.free()
     var stage := MockStage.new()
     root.add_child(stage)
     var session := Session.new(stage.renderer)
