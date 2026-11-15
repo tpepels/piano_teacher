@@ -1859,7 +1859,7 @@ func _paint_empty_moving_staff() -> void:
         for rule in range(5):
             var y: float = center+(float(rule)-2.0)*line_gap
             draw_line(Vector2(0.0,y),Vector2(size.x,y),
-                Color(NOTE_INK,.43),1.15,true)
+                Color(NOTE_INK,.43),SymbolPainter.STAFF_LINE_WIDTH,true)
     var ph: float = size.x*PLAYHEAD_FRACTION
     var pulse_width: float = 4.0*density
     var phase: float = fposmod(stream_world_beat*density,pulse_width)
@@ -1908,7 +1908,8 @@ func _draw() -> void:
         for line_index in range(5):
             var y: float = center+(float(line_index)-2.0)*gap
             draw_line(Vector2(0,y),Vector2(size.x,y),
-                Color(ink,.48 if selected else .28),1.15,true)
+                Color(ink,SymbolPainter.STAFF_LINE_ALPHA if selected else .28),
+                SymbolPainter.STAFF_LINE_WIDTH,true)
     # Empty idle and paused canvas: source ink is hidden while barlines
     # continue to move. Staff and playhead remain fixed and legible.
     if not runway_overlay:
