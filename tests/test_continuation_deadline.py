@@ -500,3 +500,37 @@ def test_stop_forgets_the_last_take_end(engine):
     assert app._rest_take_end is not None
     app.control("stop")
     assert app._rest_take_end is None
+
+
+def test_last_boundary_rolling_slowdown_uses_one_written_rest_not_a_second_horizon(engine):
+    """A rolling recovery at the final source bar bypasses full-take completion.
+
+    That route must still announce a short, immutable future deadline:
+    feedback/reverse animation may not add a second offscreen horizon.
+    """
+    from piano_teacher.recovery import RecoveryDecision
+    app, now = engine()
+    start_short(app)
+    outgoing_bpm = app.plan.bpm
+    phrase = app.plan.active_phrase
+    end_at = (app.visual_transport.run_at +
+              (phrase.end - phrase.start) * 60.0 / outgoing_bpm)
+    now[0] = end_at + .01
+    # Five errors at the last grid boundary select a timed slower recovery.
+    decision = RecoveryDecision(8.0, 4.0, 5, 0, 5)
+    app._apply_rolling_recovery(
+        decision, phrase, (0.0, 4.0, 8.0), 8.0, now[0])
+    plan = app.visual_transport.announced_continuation
+    assert plan is not None, "the timed final-boundary recovery must be announced"
+    assert app.plan.bpm < outgoing_bpm, "the recovery exercise must step down tempo"
+    assert app._rest_take_end == pytest.approx((end_at, outgoing_bpm))
+    next_deadline = plan[1]
+    bar_seconds = 4.0 * 60.0 / app.plan.bpm
+    assert 0.0 < next_deadline - end_at <= 2.25 * bar_seconds
+    assert app.visual_transport.next_at == pytest.approx(next_deadline)
+    assert app.visual_transport.practice_preparation is not None
+    # The attempt that actually runs must use the one announced deadline.
+    now[0] = next_deadline + .01
+    started = app.state()
+    assert started["running"]
+    assert app.visual_transport.run_at == pytest.approx(next_deadline)
