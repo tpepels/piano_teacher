@@ -20,8 +20,14 @@ func _initialize() -> void:
         "event_ids":["a"], "head":Vector2(180,135),
         "up":true, "direction":-1.0, "chord":false, "staff_center":160.0
     }]
+    # The real annotation painter supplies individual glyph bounds in
+    # addition to the conservative union used for collision checking.
+    # Synthetic test metrics must exercise that same pack() contract.
+    var digit_boxes := {}
+    for digit in range(1,6):
+        digit_boxes[digit] = Rect2(1,5,12,13)
     var metrics := {"cell":Vector2(14,20),"ink_offset":Vector2(1,5),
-        "ink_size":Vector2(12,13)}
+        "ink_size":Vector2(12,13),"digit_ink":digit_boxes}
     var packed: Dictionary = FingeringSpatialLayout.pack(samples,metrics,
         20,400,64,bins,[],15)
     if packed["layout"].size() != 1 or not packed["issues"].is_empty():
