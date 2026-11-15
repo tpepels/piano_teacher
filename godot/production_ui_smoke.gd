@@ -163,11 +163,11 @@ func _process(_delta: float) -> bool:
         # stores it as clip_leading_spaces on every immutable source strip.
         # The old fixed-15 test rejected legitimately offscreen READY ink
         # even when the real leading glyph margin was only seven spaces.
-        var first_bounds: Vector2 = Admission.clip_bounds(
+        var leading_bounds: Vector2 = Admission.clip_bounds(
             prepared,density,renderer.staff_gap(),renderer.timeline.duration_beats)
         var first_ink_x: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
             (float(prepared["world_origin"])-renderer.stream_world_beat) * \
-            density + first_bounds.x
+            density + leading_bounds.x
         if first_ink_x <= renderer.size.x+12.0:
             _fail("Ready source was placed within the visible staff")
             return true
