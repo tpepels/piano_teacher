@@ -154,30 +154,6 @@ func _advance_tails(global_beat: float) -> void:
         _tails.pop_front()
 
 
-static func compatible_opening_context(outgoing: Dictionary,
-        incoming: Dictionary, active_hand: String, next_hand: String) -> bool:
-    # Inherit an opening only when the same staff's meter, key and clef
-    # continue unmodified. Other stages still engrave their entire header.
-    if active_hand != next_hand or outgoing.is_empty() or incoming.is_empty():
-        return false
-    if outgoing.get("meter",[]) != incoming.get("meter",[]):
-        return false
-    if outgoing.get("keys",{}) != incoming.get("keys",{}):
-        return false
-    var staves: Array = ["right","left"] if next_hand == "both" else [next_hand]
-    var previous_clefs: Dictionary = outgoing.get("clefs",{})
-    var next_clefs: Dictionary = incoming.get("clefs",{})
-    for staff in staves:
-        var default_clef: Dictionary = {
-            "sign":"G" if staff == "right" else "F",
-            "line":2 if staff == "right" else 4, "octave_change":0}
-        var a: Dictionary = previous_clefs.get(staff,default_clef)
-        var b: Dictionary = next_clefs.get(staff,default_clef)
-        if a != b:
-            return false
-    return true
-
-
 func _on_future_reply(code: int, body: PackedByteArray) -> void:
     if code != 0:
         _register_preload_failure(
@@ -223,17 +199,6 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         # Use the NEXT stage's published hand, not the current stage's hand.
         # Pre-engraving must already occupy the eventual single-staff lane.
         _future.active_hand = str(value.get("hand","both"))
-        var old_measures: Array = stage.renderer.timeline.measures
-        var next_measures: Array = model_data.get("measures",[])
-        if not old_measures.is_empty() and not next_measures.is_empty():
-            var outgoing: Dictionary = old_measures[-1]
-            var incoming: Dictionary = next_measures[0]
-            if compatible_opening_context(outgoing,incoming,
-                    str(stage.renderer.active_hand),str(_future.active_hand)):
-                # Must be published BEFORE load_score engraves its
-                # immutable retained source; only then may the new source
-                # use a short clip-left clearance after the written rest.
-                _future.inherited_opening_context = outgoing.duplicate(true)
     # Preserve the active learner's horizontal density setting across
     # precompiled stages; retain native collision fitting if it needs more.
     if is_instance_valid(stage.renderer):
