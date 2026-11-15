@@ -60,9 +60,9 @@ func _block_written_context(gap: float, bins: Dictionary, cell: float) -> void:
                 var old: int = int(previous_keys.get(hand,0))
                 if not opening:
                     for step in Geometry.key_cancellation_steps(clef,old,signature):
-                        changes.append({"step":step,"name":"accidental_natural"})
+                        changes.append({"step":step,"name":"acc_natural"})
                 for step in Geometry.signature_steps(clef,signature):
-                    changes.append({"step":step,"name":"accidental_sharp" if signature > 0 else "accidental_flat"})
+                    changes.append({"step":step,"name":"acc_sharp" if signature > 0 else "acc_flat"})
             if opening or score_layout.clef_for(hand,previous) != clef:
                 var name: String = {"G":"clef_g","F":"clef_f","C":"clef_c"}.get(sign,"")
                 var octave: int = int(clef.get("octave_change",0))
