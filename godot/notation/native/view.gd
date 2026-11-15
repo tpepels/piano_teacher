@@ -1042,8 +1042,13 @@ func short_rest_geometry() -> Dictionary:
     var trailing: float = 2.2*staff_gap()/density
     var after: float = rest if rest >= trailing else \
         trailing+StreamAdmission.REST_GAP_BEATS
+    # A complete rest already separates the score copies. Its final barline
+    # needs only the small raster clearance used by live peer admission.
+    # A source whose final glyph extends beyond the rest retains 60 px.
+    var margin: float = (StreamQueue.PEER_REST_MARGIN_PX if rest >= trailing
+        else StreamQueue.PEER_MARGIN_PX)
     return {"continuation_clear_beats":
-            after+StreamQueue.PEER_MARGIN_PX/density+
+            after+margin/density+
             StreamAdmission.OFFSCREEN_MARGIN_BEATS,
         "continuation_header_beats":
             _stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
