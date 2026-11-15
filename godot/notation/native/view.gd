@@ -1063,11 +1063,22 @@ func short_rest_geometry() -> Dictionary:
     var trailing: float = 2.2*staff_gap()/density
     var after: float = rest if rest >= trailing else \
         trailing+StreamAdmission.REST_GAP_BEATS
+    # This describes the NEXT take's source, not the CURRENT initial
+    # opening. The command coordinator sends it with Play BEFORE that
+    # first source has been enqueued. The following source inherits the
+    # current key/clef/meter when the last measure matches the first;
+    # using the initial 15-space header here inserted one redundant bar
+    # into every automatic repeat even though its duplicate header was
+    # clipped from the physical stream.
+    var repeat_header_spaces: float = 1.6 if (
+        not inherited_opening_context.is_empty() or
+        _source_ending_restores_opening_context()) else 15.0
     return {"continuation_clear_beats":
             after+StreamQueue.PEER_MARGIN_PX/density+
             StreamAdmission.OFFSCREEN_MARGIN_BEATS,
         "continuation_header_beats":
-            _stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+            repeat_header_spaces*staff_gap()/density+
+            StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 
 
 func announced_copy_onset(world: float) -> float:
