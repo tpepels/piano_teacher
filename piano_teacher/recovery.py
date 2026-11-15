@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from .measure_grid import chunk_start_at_end
 from .music import Phrase
 from .practice import PlayedNote, evaluate
+from .application.musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True)
@@ -46,7 +47,7 @@ def check_rolling_two_bar_window(phrase: Phrase, hand: str, bpm: int,
                      and (hand == "both" or note.hand == hand))
     if len(selected) < threshold:
         return None
-    seconds = 60.0 / bpm
+    seconds = SCHEDULER.seconds_per_beat(bpm)
     offset = (start - from_beat) * seconds
     relative = [PlayedNote(note.pitch, note.onset - offset,
                            note.release - offset if note.release is not None else None)
@@ -106,7 +107,7 @@ def check_two_bar_window(phrase: Phrase, hand: str, bpm: int,
                      and (hand == "both" or n.hand == hand))
     if len(selected) < threshold:
         return None
-    seconds = 60.0 / bpm
+    seconds = SCHEDULER.seconds_per_beat(bpm)
     window_seconds = (start_beat - from_beat) * seconds
     relative = [PlayedNote(n.pitch, n.onset - window_seconds,
                            n.release - window_seconds if n.release is not None else None)

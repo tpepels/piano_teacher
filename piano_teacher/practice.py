@@ -7,6 +7,7 @@ from typing import Callable, Literal
 from .music import Note, Phrase
 from .lesson_settings import SETTINGS
 from .grading_tolerance import onset_tolerance, duration_tolerance
+from .application.musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True)
@@ -141,7 +142,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
     """
     if bpm <= 0:
         raise ValueError("Practice BPM must be positive")
-    seconds_per_beat = 60.0 / bpm
+    seconds_per_beat = SCHEDULER.seconds_per_beat(bpm)
     expected = [n for n in phrase.notes if hand == "both" or n.hand == hand]
     unused = set(range(len(played)))
     assessments: list[NoteAssessment] = []

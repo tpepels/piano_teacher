@@ -14,6 +14,7 @@ from typing import Protocol
 from .exercise_generator import ExerciseVariant
 from .music import Phrase
 from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
+from .application.musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True)
@@ -124,7 +125,7 @@ class TempoMap:
         for segment in self.segments:
             if beat <= segment.start_beat:
                 break
-            elapsed += (min(beat, segment.end_beat) - segment.start_beat) * 60.0 / segment.bpm
+            elapsed += SCHEDULER.beats_seconds(min(beat,segment.end_beat)-segment.start_beat,segment.bpm)
             if beat <= segment.end_beat:
                 break
         return elapsed
@@ -138,14 +139,14 @@ class TempoMap:
         if not isfinite(seconds):
             raise ValueError("Time must be finite")
         if seconds <= 0:
-            return seconds * self.segments[0].bpm / 60.0
+            return SCHEDULER.seconds_beats(seconds,self.segments[0].bpm)
         elapsed = 0.0
         for segment in self.segments:
-            end = elapsed + (segment.end_beat-segment.start_beat)*60/segment.bpm
+            end = elapsed + SCHEDULER.beats_seconds(segment.end_beat-segment.start_beat,segment.bpm)
             if seconds <= end:
-                return segment.start_beat + (seconds-elapsed)*segment.bpm/60
+                return segment.start_beat + SCHEDULER.seconds_beats(seconds-elapsed,segment.bpm)
             elapsed = end
-        return self.duration_beats + (seconds-elapsed)*self.segments[-1].bpm/60.0
+        return self.duration_beats + SCHEDULER.seconds_beats(seconds-elapsed,self.segments[-1].bpm)
 
     def bpm_at(self, beat: float) -> float:
         for segment in self.segments:

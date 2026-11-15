@@ -23,6 +23,7 @@ from typing import Sequence
 from .exercise_generator import ExerciseVariant
 from .music import Note, Phrase, Piece
 from .practice import PlayedNote
+from .application.musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True)
@@ -240,7 +241,7 @@ def detect_midi_mistakes(
         raise ValueError("Fukuda requires unique original MIDI source IDs")
     unused = set(range(len(played)))
     aligned_beats = [a.score_beat for a in aligned]
-    seconds_per_beat = 60 / bpm
+    seconds_per_beat = SCHEDULER.seconds_per_beat(bpm)
     if len(aligned) > 1:
         span = aligned[-1].score_beat - aligned[0].score_beat
         elapsed = aligned[-1].performed_seconds - aligned[0].performed_seconds
@@ -268,7 +269,7 @@ def detect_midi_mistakes(
     for group in by_pitch.values():
         group.sort()
     all_onsets.sort()
-    window = max(.4, 1.25 * 60 / bpm)
+    window = max(.4, SCHEDULER.beats_seconds(1.25,bpm))
     candidates = []
     targets = [(n, target_for(n)) for n in notes]
     for n, target in targets:
@@ -382,8 +383,8 @@ def rule_fast_thinning(source: ExerciseVariant, *,
                     before.end<=n.start+1e-7 and
                     n.end<=after.start+1e-7):
                 continue
-            if max((n.start-before.start)*60/bpm,
-                   (after.start-n.start)*60/bpm)>threshold_seconds:
+            if max(SCHEDULER.signed_beats_seconds(n.start-before.start,bpm),
+                   SCHEDULER.signed_beats_seconds(after.start-n.start,bpm))>threshold_seconds:
                 continue
             if mistakes is not None and n.source_id not in mistakes:
                 continue
