@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
 from .notation.practice_timeline import preparation_measure_descriptor
+from .application.musical_scheduler import SCHEDULER
 
 
 @dataclass
@@ -109,7 +110,9 @@ class VisualTransport:
     def schedule_source_preparation(
         self, source_model: dict, *, source_from_beat: float,
         from_visual: float, now: float, reverse_seconds: float,
-        bpm: float,
+        bpm: float, horizon_beats: float = 0.0,
+        short_deadline: float | None = None, announce: bool = True,
+        reading_lead_included: bool = True,
     ) -> float:
         """Derive the single written rest from the source's meter and staves.
 
@@ -129,11 +132,16 @@ class VisualTransport:
         return self.schedule_preparation(
             measure, source_from_beat=source_from_beat,
             from_visual=from_visual, now=now,
-            reverse_seconds=reverse_seconds, bpm=bpm)
+            reverse_seconds=reverse_seconds, bpm=bpm,
+            horizon_beats=horizon_beats,short_deadline=short_deadline,
+            announce=announce,reading_lead_included=reading_lead_included)
 
     def schedule_preparation(
         self, measure: dict, *, source_from_beat: float,
         from_visual: float, now: float, reverse_seconds: float, bpm: float,
+        horizon_beats: float = 0.0,
+        short_deadline: float | None = None, announce: bool = True,
+        reading_lead_included: bool = True,
     ) -> float:
         """Reverse in-place, then traverse one authentic empty measure."""
         measure["end_beat"] = self.visual_offset_beats + source_from_beat
@@ -147,10 +155,16 @@ class VisualTransport:
         self.pending_rewind = source_from_beat
         self._visual_rewind_from = from_visual
         self._visual_rewind_to = measure["start_beat"]
-        self._visual_rewind_at = now
-        self._visual_rewind_seconds = max(.05, reverse_seconds)
-        self._preparation_at = now + self._visual_rewind_seconds
-        self.next_at = self._preparation_at + measure["duration_beats"] * 60 / bpm
+        plan = SCHEDULER.prepare(
+            now=now,reverse_seconds=reverse_seconds,
+            rest_beats=measure["duration_beats"],
+            horizon_beats=horizon_beats,bpm=bpm,
+            include_reading=reading_lead_included or not announce,
+            short_deadline=short_deadline,announce=announce)
+        self._visual_rewind_at = plan.reverse_at
+        self._visual_rewind_seconds = plan.reverse_seconds
+        self._preparation_at = plan.prepare_at
+        self.next_at = plan.run_at
         self._preview_loop_pending = False
         return self.next_at
 
@@ -195,17 +209,18 @@ class VisualTransport:
         if not self.paused:
             raise ValueError("Transport is not paused")
         duration = now - self.paused_at
-        if shift_run_at:
-            self.run_at += duration
-        if self.next_at:
-            self.next_at += duration
+        self.run_at = SCHEDULER.shift_epoch(self.run_at,duration,active=shift_run_at)
+        self.next_at = SCHEDULER.shift_epoch(
+            self.next_at,duration,active=bool(self.next_at))
         if self.announced_continuation is not None:
             floor, deadline, bpm = self.announced_continuation
-            self.announced_continuation = (floor, deadline + duration, bpm)
-        if self._visual_rewind_from is not None:
-            self._visual_rewind_at += duration
-        if self._preparation_pending:
-            self._preparation_at += duration
+            self.announced_continuation = (
+                floor,SCHEDULER.shift_epoch(deadline,duration,active=True),bpm)
+        self._visual_rewind_at = SCHEDULER.shift_epoch(
+            self._visual_rewind_at,duration,
+            active=self._visual_rewind_from is not None)
+        self._preparation_at = SCHEDULER.shift_epoch(
+            self._preparation_at,duration,active=self._preparation_pending)
         self.paused_at = 0.0
         self.paused = False
 

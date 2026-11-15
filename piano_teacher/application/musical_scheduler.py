@@ -51,7 +51,7 @@ class MusicalScheduler:
 
     @staticmethod
     def seconds_beats(seconds: float, bpm: float) -> float:
-        if not all(math.isfinite(x) for x in (seconds, bpm)) or seconds < 0 or bpm <= 0:
+        if not all(math.isfinite(x) for x in (seconds, bpm)) or bpm <= 0:
             raise ValueError("Invalid seconds or BPM")
         return seconds * bpm / 60.0
 
@@ -238,6 +238,24 @@ class MusicalScheduler:
         floor = (short_rest_at if short_rest_at is not None
                  else cls.offscreen(deadline=now,lead_beats=horizon_beats,bpm=bpm))
         return max(now+reading_lead_seconds,floor)
+
+    @classmethod
+    def resume_playing(cls, *, now: float, origin: float, bpm: float,
+                       count_in_beats: float, reading_lead_seconds: float,
+                       already_waiting: float, reuse: bool) -> tuple[float, float]:
+        """Move a paused graded take and its one count-in together.
+
+        Resuming a still-unused source binds its exact reserved world
+        origin. Otherwise only the missing reading lead is added; a lead
+        that was already published is never charged twice.
+        """
+        if reuse:
+            deadline = now+reading_lead_seconds
+            return deadline,deadline
+        total_lead = max(cls.beats_seconds(count_in_beats,bpm),
+                         reading_lead_seconds)
+        additional = max(0.0,total_lead-already_waiting)
+        return origin+additional,now+max(total_lead,already_waiting)
 
     @staticmethod
     def shift_epoch(epoch: float, duration: float, *, active: bool) -> float:

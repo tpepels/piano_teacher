@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..lesson_timing import lead_in_beats, preparation_meter
+from .musical_scheduler import SCHEDULER
 
 SETTLEMENT_SECONDS = .20
 from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
@@ -58,7 +59,8 @@ class AttemptStep:
 def repeat_deadline(*, run_at: float, duration: float,
                     gap_beats: float, bpm: float) -> float:
     """Use the musical origin, not the time the clock was polled."""
-    return run_at + duration + gap_beats * 60.0 / bpm
+    return SCHEDULER.repeat(run_at=run_at,source_seconds=duration,
+                            gap_beats=gap_beats,bpm=bpm)
 
 
 
@@ -115,7 +117,8 @@ class AttemptProgression:
             from_beat=from_beat, count_in_bar_beats=bar_beats,
             count_in_meter=meter, count_in_beats=count_in,
             next_boundary_beat=next_chunk_end(grid,from_beat),
-            run_at=now+count_in*60/bpm,
+            run_at=SCHEDULER.initial(now=now,bpm=bpm,
+                count_in_beats=count_in).run_at,
             next_action=("Watch the moving score; connect a piano for feedback."
                 if preview else
                 f"Play from bar {bar_number_at(grid,from_beat,phrase.first_bar)} at {bpm} BPM."))
@@ -143,7 +146,8 @@ class AttemptProgression:
         duration = seconds_at(ending)-seconds_at(tick.from_beat)
         settlement = SETTLEMENT_SECONDS
         if tick.preview or (tick.auto and tick.review_end is None):
-            settlement = min(settlement,tick.gap_beats*60/tick.bpm)
+            settlement = min(settlement,
+                             SCHEDULER.beats_seconds(tick.gap_beats,tick.bpm))
         if tick.now < tick.run_at+duration+settlement:
             return AttemptStep("waiting",boundary,grid)
         return AttemptStep("complete",boundary,grid,

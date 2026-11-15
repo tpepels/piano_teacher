@@ -6,7 +6,7 @@ LearningPlan navigation, or the engine; mode/session owners execute its effects.
 from dataclasses import dataclass, replace
 from ..teaching_course import steps
 from .score_artifacts import ScoreSelection
-from .transport_commands import scheduled_offscreen_start
+from .musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +26,7 @@ class ContinuationReadiness:
     outgoing_bpm: float
     reported_failure: tuple | None = None
     prepared_on_time: bool = False
+    short_rest_geometry_ready: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,23 +138,27 @@ class TeachingContinuation:
             self.transport.next_at = now+.10
             return ContinuationEffect("await","Preparing the next lesson while scrolling")
         self.reservation = (selection.identity,prebuilt)
-        if self.handoff_world is None and not readiness.prepared_on_time:
+        if (self.handoff_world is None and not readiness.prepared_on_time
+                and not readiness.short_rest_geometry_ready):
+            # No exact measured clearance: reserve the conservative
+            # offscreen slot before settlement. Once the renderer supplied
+            # complete short-rest geometry, the handoff deadline itself
+            # includes all clearance and the extra two beats are redundant.
             self.handoff_world = readiness.visual_beat+2.
-            self.transport.next_at = now+2.*60./readiness.outgoing_bpm
+            self.transport.next_at = SCHEDULER.late_ready(
+                now=now,outgoing_bpm=readiness.outgoing_bpm)
             return ContinuationEffect("await")
         return ContinuationEffect("settle")
 
     @staticmethod
     def handoff(*, now, deadline, lead_beats, clear_beats, count_in_beats, bpm, rest_take_end, latency):
-        rest_lead = (clear_beats or 0.)+lead_beats
-        if clear_beats is not None:
-            lead_beats = max(lead_beats,count_in_beats)+latency*bpm/60.
-        next_deadline = scheduled_offscreen_start(max(deadline,now),lead_beats,bpm)
-        if clear_beats is not None and rest_take_end is not None:
-            take_end,rest_bpm = rest_take_end
-            remaining = rest_lead-max(0.,now-take_end)*rest_bpm/60.
-            next_deadline = now+max(max(0.,remaining)*60./bpm,latency+count_in_beats*60./bpm)
-        return ContinuationEffect("start",deadline=next_deadline,count_in=min(lead_beats,count_in_beats))
+        plan = SCHEDULER.handoff(
+            now=now,previous_deadline=deadline,lead_beats=lead_beats,
+            clear_beats=clear_beats,count_in_beats=count_in_beats,
+            bpm=bpm,rest_take_end=rest_take_end,latency=latency)
+        count_in = (count_in_beats if clear_beats is not None
+                    else min(lead_beats,count_in_beats))
+        return ContinuationEffect("start",deadline=plan.run_at,count_in=count_in)
 
     @staticmethod
     def after_settlement(decision, *, score_changed, prepared):

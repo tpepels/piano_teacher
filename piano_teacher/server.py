@@ -64,6 +64,7 @@ from .application.transport_commands import (
 from .application.stage_change import prepare_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick, repeat_deadline, SETTLEMENT_SECONDS
+from .application.musical_scheduler import SCHEDULER
 from .application.assessment_settlement import assess_completed_take
 from .application.guided_session import GuidedSession, GuidedFragment
 from .application.tempo_map_cache import TempoMapCache
@@ -688,13 +689,11 @@ class PracticeEngine:
         if tempo is not None and elapsed_seconds >= 0:
             origin = tempo.seconds_at(self.visual_transport.play_from_beat)
             return tempo.beat_at(origin+elapsed_seconds)-self.visual_transport.play_from_beat
-        return elapsed_seconds * self.plan.bpm / 60.0
+        return SCHEDULER.seconds_beats(elapsed_seconds,self.plan.bpm)
 
     def _elapsed_seconds(self, beat: float) -> float:
         tempo = self._active_tempo_map()
-        if tempo is not None:
-            return tempo.seconds_at(beat)
-        return beat * 60.0 / self.plan.bpm
+        return SCHEDULER.source_seconds(tempo,beat,self.plan.bpm)
 
     def exercise_diagnostics(self) -> dict:
         with self.lock:
@@ -1551,16 +1550,17 @@ class PracticeEngine:
             self.count_in_meter = list(scheduled.count_in_meter)
             self.count_in_beats = scheduled.count_in_beats
             self.next_boundary_beat = scheduled.next_boundary_beat
-            self.visual_transport.run_at = (scheduled.run_at if scheduled_deadline is None
-                                            else scheduled_deadline)
-            if scheduled_deadline is None and presentation_lead_seconds > 0:
-                # The renderer's reserved score deadline is the graded
-                # deadline. Any lead longer than the count-in is silent:
-                # the count-in stays the single bar before the first beat
-                # (owner decision 2026-11-08: one "Ichi Ni San Shi" only).
-                self.visual_transport.run_at = max(
-                    self.visual_transport.run_at,
-                    self.now() + presentation_lead_seconds)
+            # The one chosen graded deadline is shared by MIDI, count-in
+            # and all immutable future notation. Renderer reservations are
+            # absolute; they do not receive a second count-in or reading lead.
+            self.visual_transport.run_at = SCHEDULER.initial(
+                now=scheduled.run_at-SCHEDULER.beats_seconds(
+                    scheduled.count_in_beats,self.plan.bpm),
+                bpm=self.plan.bpm,count_in_beats=scheduled.count_in_beats,
+                reserved_at=scheduled_deadline,
+                reading_lead_seconds=(
+                    presentation_lead_seconds if scheduled_deadline is None else 0.0),
+                continuation=scheduled_deadline is not None).run_at
             scope = ("preview" if self.preview_only else "perform" if mode == "perform" else
                      "partial" if self._automatic_remedial_review else
                      "section_review" if self.review_end_beat is not None else
@@ -1653,20 +1653,20 @@ class PracticeEngine:
             return
         # Godot owns the reuse decision (one count-in pulse plus the published
         # latency still ahead, at the announced tempo); it is not re-decided.
-        if reuse and lead_seconds > 0.0:
-            self.visual_transport.retime_announcement(now + float(lead_seconds))
-            return
-        floor = (self._short_rest_deadline(0.0, from_beat=announced[0], now=now)
-                 if self._short_rest is not None else
-                 now + self._continuous_horizon_beats * 60.0 / self.plan.bpm)
-        # The copy announced before the pause is not reused, so it never
-        # gets this take: always a NEW announcement (new plan identity) at
-        # the earliest place Godot reported for fresh ink. Keeping the old
-        # identity with resume()'s shifted deadline bound the take to the
-        # old copy 1.7-1.9 beats off the playhead (round 4, Hanon).
-        deadline = max(now + max(0.0, float(lead_seconds)), floor)
-        self.visual_transport.announce_continuation(
-            announced[0], deadline, announced[2])
+        short = (self._short_rest_deadline(0.0,from_beat=announced[0],now=now)
+                 if self._short_rest is not None and not reuse else None)
+        deadline = SCHEDULER.fresh_resume(
+            now=now,old_deadline=announced[1],
+            reading_lead_seconds=max(0.,float(lead_seconds)),
+            horizon_beats=self._continuous_horizon_beats,
+            bpm=self.plan.bpm,short_rest_at=short,
+            reuse=reuse and lead_seconds > 0)
+        if reuse and lead_seconds > 0:
+            self.visual_transport.retime_announcement(deadline)
+        else:
+            # Fresh identity because the old visible future was withdrawn.
+            self.visual_transport.announce_continuation(
+                announced[0],deadline,announced[2])
 
     def _continuation_deadline(self, deadline: float, from_beat: float) -> float:
         """The ONE graded run_at of an automatic same-stage continuation.
@@ -1682,20 +1682,19 @@ class PracticeEngine:
         can still be admitted beyond the right edge before it is graded.
         """
         announced = self.visual_transport.announced_deadline(from_beat)
-        if announced is not None and abs(announced - deadline) <= 1e-9:
-            return deadline
         if self.plan is None or not self.auto:
             return deadline
+        if announced is not None and abs(announced-deadline)<=1e-9:
+            return announced
         short = self._short_rest_deadline(
             None if self._rest_take_end is not None else deadline,
             from_beat=from_beat)
-        if short is not None:
-            # Settled early, during the written rest: open right after it.
-            return max(deadline, short)
-        if self._continuous_horizon_beats <= 0:
-            return deadline
-        return max(self._automatic_stream_deadline(deadline),
-                   self.now() + self._continuous_horizon_beats * 60.0 / self.plan.bpm)
+        return SCHEDULER.automatic(
+            announced_at=announced,from_beat_matches=announced is not None,
+            deadline=deadline,now=self.now(),bpm=self._presentation_bpm,
+            rest_beats=self.visual_transport.visual_gap_beats,
+            horizon_beats=self._continuous_horizon_beats,
+            short_rest_at=short)
 
 
 
@@ -1738,40 +1737,14 @@ class PracticeEngine:
         reading horizon on top made the retried ink arrive early (R1 P3).
         """
         self.visual_transport.schedule_source_preparation(
-            self._source_model(), source_from_beat=target,
-            from_visual=from_visual, now=now,
-            reverse_seconds=reverse_seconds, bpm=self._presentation_bpm)
-        if announce and short_deadline is not None:
-            # Short rest (P5): the repeat opens on the empty strip one
-            # count-in bar ahead; the engine's own rewind animation ends by
-            # then. This IS the announced deadline.
-            vt = self.visual_transport
-            vt.next_at = short_deadline
-            vt._preparation_at = min(vt._preparation_at, short_deadline)
-            vt._visual_rewind_seconds = max(
-                .05, min(vt._visual_rewind_seconds, vt._preparation_at - vt._visual_rewind_at))
-        elif not announce and short_deadline is not None:
-            # Round 4: a failed take whose settlement may re-engrave or
-            # reroute settles now, during its written rest bar, so whatever
-            # runs next opens straight after that bar (_continuation_deadline
-            # and the score acknowledgement use the recorded take end).
-            self.visual_transport.next_at = now
-        elif not reading_lead_included and announce:
-            # An unannounced take gets its whole reading horizon when it is
-            # settled (_continuation_deadline); adding it here as well would
-            # double the rest.
-            # An automatic recovery target may differ from the speculative
-            # next passage. Its newly queued source must have the SAME
-            # offscreen reading lead as a normal automatic repeat, after the
-            # authentic printed rest. Godot never moves old ink.
-            upcoming_rest = float(
-                self.visual_transport.practice_preparation["measure"][
-                    "duration_beats"])
-            missing = max(
-                0.0,
-                self._continuous_horizon_beats - upcoming_rest,
-            )
-            self.visual_transport.next_at += missing * 60.0 / self._presentation_bpm
+            self._source_model(),source_from_beat=target,
+            from_visual=from_visual,now=now,
+            reverse_seconds=reverse_seconds,bpm=self._presentation_bpm,
+            horizon_beats=self._continuous_horizon_beats,
+            reading_lead_included=reading_lead_included,
+            short_deadline=short_deadline,announce=announce)
+        # Rewind, semantic rest, optional horizon and the short deadline
+        # have already been resolved by the single scheduling engine.
         if announce:
             # Publish the already selected exposure with this exact deadline.
             pending = self.attempt_settlement.pending
@@ -1990,17 +1963,12 @@ class PracticeEngine:
         _, bar, _ = self.attempt_progression.count_in_bar(
             phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
             time_signatures=self.plan.piece.time_signatures, position=from_beat)
-        span = clear + header
-        after_rest = take_end + span * 60.0 / rest_bpm
-        epoch = self._tempo_epoch
-        if (epoch is not None and take_end < epoch < after_rest
-                and abs(self._presentation_bpm - rest_bpm) > 1e-9):
-            # Settled during the rest at another tempo: the presentation
-            # axis switched rate at that tempo epoch.
-            covered = (epoch - take_end) * rest_bpm / 60.0
-            after_rest = epoch + (span - covered) * 60.0 / self._presentation_bpm
-        return max(after_rest,
-                   now + SHORT_REST_LATENCY_SECONDS + bar * 60.0 / self._presentation_bpm)
+        return SCHEDULER.short_rest(
+            now=now,source_end=take_end,outgoing_bpm=rest_bpm,
+            incoming_bpm=self._presentation_bpm,
+            clear_beats=clear,header_beats=header,
+            count_in_beats=bar,latency=SHORT_REST_LATENCY_SECONDS,
+            tempo_epoch=self._tempo_epoch).run_at
 
 
     def _update_continuous_horizon(self, value) -> None:
@@ -2015,9 +1983,10 @@ class PracticeEngine:
         # The semantic printed rest is already counted in the engine's
         # automatic next_at. Add only the missing offscreen reading lead
         # before the SAME MIDI-graded run_at is scheduled.
-        gap = self.visual_transport.visual_gap_beats
-        missing = max(0.0, self._continuous_horizon_beats-gap)
-        return scheduled_offscreen_start(deadline, missing, self._presentation_bpm)
+        return SCHEDULER.missing_horizon(
+            deadline=deadline,rest_beats=self.visual_transport.visual_gap_beats,
+            reading_horizon_beats=self._continuous_horizon_beats,
+            bpm=self._presentation_bpm)
 
 
     def _presentation_lead(self, kwargs: dict) -> float:
@@ -2247,20 +2216,14 @@ class PracticeEngine:
                 # longer reading lead before it is silent (owner decision
                 # 2026-11-08). It never grows with the presentation lead.
                 count_in = self._next_count_in_beats()
-                if reuse_pending_score:
-                    self.visual_transport.run_at = now + presentation_lead_seconds
-                    self.midi_ingress.resume_grading_after = self.visual_transport.run_at
-                else:
-                    # The renderer reserves at least the published count-in
-                    # (next_count_in_beats); its lead is the score deadline.
-                    lead_seconds = max(count_in*60.0/self.plan.bpm,
-                        presentation_lead_seconds)
-                    already_waiting = max(0.0,self.midi_ingress.resume_grading_after-now)
-                    additional = max(0.0,lead_seconds-already_waiting)
-                    if additional > 0:
-                        self.visual_transport.run_at += additional
-                    self.midi_ingress.resume_grading_after = now + max(
-                        lead_seconds,already_waiting)
+                deadline,grading_after = SCHEDULER.resume_playing(
+                    now=now,origin=self.visual_transport.run_at,
+                    bpm=self.plan.bpm,count_in_beats=count_in,
+                    reading_lead_seconds=presentation_lead_seconds,
+                    already_waiting=max(0.,self.midi_ingress.resume_grading_after-now),
+                    reuse=reuse_pending_score)
+                self.visual_transport.run_at = deadline
+                self.midi_ingress.resume_grading_after = grading_after
                 self.count_in_beats = count_in
             elif (self.midi.connected and not self.preview_only
                   and self.pause_context == "playing"
@@ -2269,7 +2232,7 @@ class PracticeEngine:
                 # Preserve the established direct-MIDI transport contract;
                 # it does not have a connected renderer's reservations.
                 lead_beats = max(1.0,min(4.0,self.count_in_bar_beats))
-                lead_seconds = lead_beats*60.0/self.plan.bpm
+                lead_seconds = SCHEDULER.beats_seconds(lead_beats,self.plan.bpm)
                 self.visual_transport.run_at += lead_seconds
                 self.midi_ingress.resume_grading_after = now+lead_seconds
                 self.count_in_beats = lead_beats
@@ -2353,7 +2316,8 @@ class PracticeEngine:
         if self.auto and self.visual_transport.next_at and now >= self.visual_transport.next_at:
             readiness = ContinuationReadiness(self._future_stage_ready,self.score_revision,
                 self.fingerprint,self._visual_motion(now)[0],self.plan.bpm,
-                self._native_preload_failure,prepared_on_time)
+                self._native_preload_failure,prepared_on_time,
+                self._future_stage_clear_beats is not None)
             effect = self.teaching_continuation.advance(self.attempt_settlement.pending,now=now,readiness=readiness)
             if effect.action == "fault":
                 self.feedback = "Cannot prepare the next lesson score"
@@ -2947,7 +2911,9 @@ class PracticeEngine:
         _, bar, _ = self.attempt_progression.count_in_bar(
             phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
             time_signatures=self.plan.piece.time_signatures, position=announced[0])
-        floor = self.now() + SHORT_REST_LATENCY_SECONDS + bar * 60.0 / self.plan.bpm
+        floor = SCHEDULER.resolve(
+            "post_settlement_snapshot",now=self.now(),bpm=self.plan.bpm,
+            count_in_beats=bar,latency=SHORT_REST_LATENCY_SECONDS).run_at
         if announced[1] < floor:
             self.visual_transport.retime_announcement(floor)
 
