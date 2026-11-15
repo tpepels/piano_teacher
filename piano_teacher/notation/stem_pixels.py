@@ -97,7 +97,7 @@ def source_verovio_stem_extensions(folder: Path) -> dict[str, dict[str, float]]:
             for item in staff:
                 if item.tag != svg_ns+'path':
                     continue
-                values = re.findall(r'-?(?:\\d+(?:\\.\\d*)?|\\.\\d+)',item.get('d',''))
+                values = re.findall(r'-?(?:\d+(?:\.\d*)?|\.\d+)',item.get('d',''))
                 if len(values) >= 2:
                     rails.append(float(values[1]))
             if len(rails) < 5:
@@ -116,7 +116,7 @@ def source_verovio_stem_extensions(folder: Path) -> dict[str, dict[str, float]]:
                 use = next((n for n in heads[0].iter() if n.tag == svg_ns+'use'),None)
                 if use is None:
                     continue
-                match = re.search(r'translate\\(\\s*[-+0-9.]+[ ,]+([-+0-9.]+)',use.get('transform',''))
+                match = re.search(r'translate\(\s*[-+0-9.]+[ ,]+([-+0-9.]+)',use.get('transform',''))
                 if match is None:
                     continue
                 head_y = float(match.group(1))
@@ -133,7 +133,7 @@ def source_verovio_stem_extensions(folder: Path) -> dict[str, dict[str, float]]:
                     paths = [n for n in stems[0].iter() if n.tag == svg_ns+'path']
                     if not paths:
                         continue
-                    values = re.findall(r'-?(?:\\d+(?:\\.\\d*)?|\\.\\d+)',
+                    values = re.findall(r'-?(?:\d+(?:\.\d*)?|\.\d+)',
                                         paths[0].get('d',''))
                     if len(values) < 4:
                         continue
