@@ -144,6 +144,19 @@ func _run_contract() -> void:
     check(after_late_change >= five and flow.project(7000) > after_late_change,
         "a late slower-tempo notice never rewinds or stops the world")
 
+    # Every countdown, admission lead and display clock must agree on the
+    # same signed quarter-beat conversions, including negative count-in time.
+    for rate in [12.0,24.0,40.0,80.0,120.0,240.0]:
+        for signed_beats in [-8.0,-3.0,-0.25,0.0,0.125,1.0,4.0,12.0]:
+            var seconds: float = Tempo.seconds_from_beats(signed_beats,rate)
+            check(near(Tempo.beats_from_seconds(seconds,rate),signed_beats),
+                "signed BPM-to-seconds conversion is reversible")
+            check(near(Tempo.beats_from_milliseconds(seconds*1000.0,rate),
+                signed_beats),
+                "backend millisecond epochs agree with seconds and source beats")
+    check(near(Flow.MAX_SLOWDOWN_REPAY_FRACTION,0.5),
+        "late slowdown repays at most half a visual frame's forward progress")
+
     var segments := [
         {"start_beat":0.0,"end_beat":2.0,"bpm":40.0},
         {"start_beat":2.0,"end_beat":4.0,"bpm":120.0},
