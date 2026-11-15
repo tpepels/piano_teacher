@@ -21,6 +21,8 @@ import statistics
 import sys
 from pathlib import Path
 
+from piano_teacher.exercise_contracts import TempoMap, TempoSegment
+
 SYNC_PX = 2.0
 ONSET_PX = 2.0
 CUE_SPACING_FRACTION = 0.05   # cue spacing = the take's beat within 5 %
@@ -28,6 +30,37 @@ REST_MAX_BARS = 2.25          # written rest bar + count-in, automatic takes
 HEAD_WIDTH_SPACES = 1.18      # Bravura noteheadBlack advance (staff spaces)
 LAST_CUE_BEATS = 0.1          # last cue one take beat before the first beat
 FRAME_MS = 17.0               # cues and frames are observed per display frame
+
+
+def _take_duration_ms(metadata: dict) -> float:
+    """Exact graded duration; never infer authored tempo from nominal BPM.
+
+    A Coda slowdown at half speed can make a two-beat source last four
+    nominal beats. Dividing its length by the displayed ladder BPM
+    incorrectly attributes the extra bar to REST instead of audible notes.
+    Preserve the official TempoMap timing and reject malformed evidence.
+    """
+    length = float(metadata.get("len") or 0.0)
+    bpm = float(metadata.get("bpm") or 60.0)
+    if not length >= 0.0 or bpm <= 0.0:
+        raise ValueError("Invalid physical take duration or tempo")
+    raw = metadata.get("tempo_segments") or ()
+    if not raw:
+        return length * 60000.0 / bpm
+    original = TempoMap("readiness-proof", tuple(TempoSegment(
+        float(segment["start_beat"]), float(segment["end_beat"]),
+        float(segment["bpm"])) for segment in raw))
+    start = float(metadata.get("pf") or 0.0)
+    # An already sliced transport may publish a zero-origin tempo map,
+    # whereas the full stage publishes its source-absolute segments.
+    if original.duration_beats >= start+length-1e-7:
+        end = start+length
+    elif original.duration_beats >= length-1e-7:
+        start, end = 0.0, length
+    else:
+        raise ValueError("Graded tempo map omits physical take duration")
+    return 1000.0 * (original.seconds_at(end) -
+                     original.seconds_at(start))
 
 
 def _jsonl(path: Path) -> list[dict]:
@@ -194,8 +227,12 @@ def check_run(run: Path) -> dict:
         if index > 0 and "first_beat_t" in takes[index - 1]:
             prev = takes[index - 1]
             prev_meta = starts[tids[index - 1]]
-            prev_end = prev["first_beat_t_exact"] + float(prev_meta.get("len") or 0.0) * \
-                60000.0 / float(prev_meta.get("bpm") or bpm)
+            # The previous source interval is audible graded material,
+            # including authored Coda slowdowns and tempo changes. It is
+            # excluded from the rest clock using its exact tempo map.
+            source_ms = _take_duration_ms(prev_meta)
+            prev_end = prev["first_beat_t_exact"] + source_ms
+            take["preceding_source_seconds"] = round(source_ms/1000.0, 3)
             # A Pause inside the previous take moves its end: its last
             # playing frame is the real end (round 4: rests of re-engraved
             # takes after a paused take were overstated by the pause).
