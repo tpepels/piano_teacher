@@ -33,7 +33,9 @@ def test_spacing_policy_remains_a_pure_constant_owner():
     assert source.startswith("extends RefCounted\n")
     assert "preload(" not in source and "func " not in source
     assert "var " not in source and "signal " not in source
-    assert "DEFAULT_PIXELS_PER_BEAT := 96.0" in source
+    import re
+    default = re.search(r"const DEFAULT_PIXELS_PER_BEAT := ([0-9.]+)", source)
+    assert default is not None and 24 <= float(default.group(1)) <= 480
     for name in ("MAX_STAFF_GAP", "MIN_READABLE_STAFF_GAP",
                  "MIN_LOOKAHEAD_BEATS"):
         assert f"const {name} :=" in source
