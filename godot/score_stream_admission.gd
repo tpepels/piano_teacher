@@ -1,5 +1,6 @@
 extends RefCounted
 const Spacing := preload("res://notation/shared/spacing_policy.gd")
+const TempoTimeline := preload("res://tempo_timeline.gd")
 ## Single, forward-only source reservation contract. A Play/Resume action
 ## selects already pre-engraved, offscreen ink, or, on an empty strip, opens
 ## one count-in bar ahead of the playhead (empty_strip_start). It never pops
@@ -280,7 +281,8 @@ static func command_lead_bpm(action: String, flow_bpm: float,
 
 
 static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
-    return maxf(0.0,start_world-world)*60.0/maxf(1.0,bpm)
+    return TempoTimeline.seconds_from_beats(
+        maxf(0.0,start_world-world),maxf(1.0,bpm))
 
 static func engraved_clip_bounds(floor: float, ceiling: float,
         pixels_per_beat: float, staff_gap: float,
