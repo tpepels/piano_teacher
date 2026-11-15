@@ -121,9 +121,17 @@ def test_manual_restart_discards_the_previous_selected_retry_before_clean_take(r
     engine, now, _ = runtime
     take(engine, now)
     take(engine, now, settle=False)
-    assert engine._policy_retry[1].action == "isolate"
+    # The selected retry is owned by the pending teaching decision, not by
+    # a second PracticeEngine-local _policy_retry cache.
+    pending = engine.attempt_settlement.pending
+    assert pending is not None and pending.receipt is None
+    assert pending.decision.response is not None
+    assert pending.decision.response.action == "isolate"
+    generation = engine.attempt_settlement.cancellation_generation
     engine.control("restart")
-    assert engine._policy_retry is None
+    assert engine.attempt_settlement.pending is None
+    assert engine.pending_result is None
+    assert engine.attempt_settlement.cancellation_generation > generation
     engine.start(from_beat=0.)
     take(engine, now, wrong=())
     assert engine.review_end_beat is None
