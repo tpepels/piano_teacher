@@ -754,7 +754,8 @@ func _stream_add_take(source_beat: float, start_world: float,
         var clip_floor: float = bounds.x
         var clip_ceiling: float = bounds.y
         var leading_spaces: float = (
-            15.0 if bounds.x <= .0001 else 1.6) if is_first else 0.0
+            _first_source_header_spaces() if bounds.x <= .0001 else 1.6
+            ) if is_first else 0.0
         var trailing_spaces: float = 2.2 if is_last else 0.0
         var specs: Array = [{
             "kind":"source","owner_serial":serial,
@@ -801,9 +802,38 @@ func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
 
 
+func _first_source_header_spaces() -> float:
+    # The actual opening's authentic Verovio glyphs are positioned by
+    # ContextPainter in a compact sequence before source beat 0. Compute
+    # their leftmost clef edge from its source key and font box; this same
+    # conservative physical margin owns admission, clipping and retirement.
+    # There is never a fake/suppressed clef or a squeezed musical beat.
+    if timeline.measures.is_empty() or not glyphs.ready():
+        return 15.0
+    var opening: Dictionary = timeline.measures[0]
+    var keys: Dictionary = opening.get("keys",{})
+    var margin := 1.6
+    for staff in layout.visible_staves():
+        var clef: Dictionary = layout.clef_for(staff,opening)
+        var sign: String = str(clef.get("sign","G"))
+        var name: String = {"G":"clef_g","F":"clef_f","C":"clef_c"}.get(sign,"")
+        var box: Array = glyphs.bounds.get(name,[])
+        if box.size() != 4:
+            return 15.0
+        var key_count: int = absi(int(keys.get(staff,0)))
+        # The first clef anchor is 86/17 spaces to the left of the
+        # first source barline, plus 14/17 per printed key column.
+        # paint_clef() is centered in X, so the raster's left edge is
+        # another half glyph width left. A full extra space covers the
+        # thin barline, antialias and raster/viewport tolerances.
+        margin = maxf(margin,(86.0+14.0*float(key_count))/17.0+
+            float(box[2])/500.0+1.0)
+    return margin
+
+
 func _stream_header_beats(opening: float) -> float:
-    return (15.0 if opening <= .0001 else 1.6)*staff_gap()/ \
-        maxf(1.0,timeline.pixels_per_beat)
+    return (_first_source_header_spaces() if opening <= .0001 else 1.6)* \
+        staff_gap()/maxf(1.0,timeline.pixels_per_beat)
 
 
 func _stream_reserve_ready(world: float, opening: float) -> int:
@@ -885,7 +915,7 @@ func _transport_admission_receipt(planned: Dictionary,
                 "source_ceiling":timeline.duration_beats,
                 "clip_floor":opening,
                 "clip_ceiling":timeline.duration_beats,
-                "clip_leading_spaces":15.0 if opening <= .0001 else 1.6
+                "clip_leading_spaces":_first_source_header_spaces() if opening <= .0001 else 1.6
             },timeline.pixels_per_beat,staff_gap(),
                 timeline.duration_beats).x/
                     maxf(1.0,timeline.pixels_per_beat) -
