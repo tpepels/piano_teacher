@@ -94,7 +94,8 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
         heads, errors = register_noteheads(pixels, staves, written, notes, glyphs, playhead_x=timing_x,
                                   occlusion_columns=photographed_playhead_columns(image))
         groups = source_chord_groups(notes)
-        owned_stems = measure_stem_ownership(pixels, groups, heads, marks)
+        owned_stems = measure_stem_ownership(pixels, groups, heads, marks,
+                                              written=written)
         for group, stem in zip(groups, owned_stems):
             active = [n for n in group if n['source']['id'] in rows]
             if not active:
