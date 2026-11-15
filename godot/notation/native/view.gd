@@ -521,8 +521,8 @@ func _build_ink_safe_boundaries(gap: float) -> Array[Vector2]:
             else:
                 key_columns = maxi(key_columns,absi(new_key))
         if context_changed:
-            var header_left_px: float = (
-                (86.0+float(key_columns)*14.0)*gap/17.0+gap*2.5)
+            var header_left_px: float = ContextPainter.clef_lead_pixels(
+                key_columns,gap)+gap*2.5
             # A context change belongs semantically to its NEW measure.
             # If its leftward header is too wide to move the clip seam
             # before all that ink, do not move the seam slightly RIGHT and
@@ -821,12 +821,12 @@ func _first_source_header_spaces() -> float:
         if box.size() != 4:
             return 15.0
         var key_count: int = absi(int(keys.get(staff,0)))
-        # The first clef anchor is 86/17 spaces to the left of the
-        # first source barline, plus 14/17 per printed key column.
+        # The first clef anchor and every key column use the same physical
+        # header spacing rule as ContextPainter's actual glyph placement.
         # paint_clef() is centered in X, so the raster's left edge is
         # another half glyph width left. A full extra space covers the
         # thin barline, antialias and raster/viewport tolerances.
-        margin = maxf(margin,(86.0+14.0*float(key_count))/17.0+
+        margin = maxf(margin,ContextPainter.clef_lead_pixels(key_count,1.0)+
             float(box[2])/500.0+1.0)
     return margin
 
