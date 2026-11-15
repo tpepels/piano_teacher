@@ -1317,21 +1317,34 @@ func enqueue_recovery_queue(world: float, source_opening: float,
         staff_gap(),timeline.duration_beats)
     var on_empty := false
     if not is_finite(checked) and allow_count_in:
-        # Listen/Perform use the same engine-authored first note deadline.
-        # The source can appear during ONE count-in on an entirely empty
-        # staff; the existing source/rest/peer exposure rules still apply.
-        var onset: float = _empty_strip_onset(
-            remaining,stream_world_beat,count_in_beats,
-            _stream_header_beats(source_opening))
-        # Practice continuations (P5 short rests): the engine's deadline is
-        # the one source; it opens on the empty strip when no earlier than
-        # the empty-strip slot (one count-in bar ahead, after the gap).
-        if is_finite(onset) and ((deadline_at_or_after and
-                graded_deadline_world >= onset-.0001) or
-                absf(onset-graded_deadline_world) <= \
-                    StreamAdmission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS):
-            checked = graded_deadline_world
-            on_empty = true
+        # The initial command or an already announced backend continuation
+        # may use the empty-staff slot; source/rest/peer physical clearance
+        # remains mandatory. Practice plans have been announced BEFORE this
+        # snapshot, so a partial count-in has already elapsed. The first
+        # note still has a guaranteed future reading lead and retains its
+        # exact original grading deadline.
+        if deadline_at_or_after:
+            var density: float = maxf(1.0,timeline.pixels_per_beat)
+            var playhead: float = size.x*PLAYHEAD_FRACTION
+            checked = StreamAdmission.announced_empty_strip_start(
+                remaining,stream_world_beat,count_in_beats,
+                _stream_header_beats(source_opening),graded_deadline_world,
+                _stream_queue.minimum_peer_opening(
+                    density,size.x,playhead,true,"source"),
+                density,staff_gap(),timeline.duration_beats,
+                _stream_queue.minimum_peer_opening(
+                    density,size.x,playhead,true,"rest"))
+            on_empty = is_finite(checked)
+        else:
+            # Listen/Perform/Learn use one initial full count-in slot, with
+            # the original tight timestamp-to-slot equality requirement.
+            var onset: float = _empty_strip_onset(
+                remaining,stream_world_beat,count_in_beats,
+                _stream_header_beats(source_opening))
+            if is_finite(onset) and absf(onset-graded_deadline_world) <= \
+                    StreamAdmission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS:
+                checked = graded_deadline_world
+                on_empty = true
     if not is_finite(checked):
         var blocking: Array = []
         for item in remaining:
