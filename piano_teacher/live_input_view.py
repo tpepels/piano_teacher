@@ -124,9 +124,9 @@ class LiveInputView:
                         else from_beat + SCHEDULER.seconds_beats(at,bpm))
                 # All matching windows are under ~2 beats at allowed tempos.
                 # A buffer handles tempo changes at the boundary.
-                search_radius = max(2.0, 0.5 * max(
-                    SCHEDULER.beat_rate(
-                    max(bpm,tempo_map.bpm_at(beat) if tempo_map is not None else bpm)))
+                search_radius = max(2.0, 0.5*SCHEDULER.beat_rate(
+                    max(bpm,tempo_map.bpm_at(beat)
+                        if tempo_map is not None else bpm)))
                 left = bisect_left(self._onset_beats, beat - search_radius)
                 right = bisect_right(self._onset_beats, beat + search_radius)
                 for index, note in self._ordered_notes[left:right]:
