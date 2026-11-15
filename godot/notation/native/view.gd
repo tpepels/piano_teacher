@@ -1355,10 +1355,22 @@ func enqueue_recovery_queue(world: float, source_opening: float,
             if finish > stream_world_beat-1.0:
                 blocking.append([str(item.get("kind","source")),
                     snappedf(finish,.001)])
-        _diagnose_plan(identity,"refused_inside_or_overlap",
-            graded_deadline_world,{"count_in":count_in_beats,
+        var detail: Dictionary = {"count_in":count_in_beats,
             "header":_stream_header_beats(source_opening),
-            "ink_ends":blocking})
+            "deadline_lead":graded_deadline_world-stream_world_beat,
+            "ink_ends":blocking}
+        var density: float = maxf(1.0,timeline.pixels_per_beat)
+        var playhead: float = size.x*PLAYHEAD_FRACTION
+        var peer_source: float = _stream_queue.minimum_peer_opening(
+            density,size.x,playhead,true,"source")
+        var peer_rest: float = _stream_queue.minimum_peer_opening(
+            density,size.x,playhead,true,"rest")
+        if is_finite(peer_source):
+            detail["peer_source_floor"] = peer_source
+        if is_finite(peer_rest):
+            detail["peer_rest_floor"] = peer_rest
+        _diagnose_plan(identity,"refused_inside_or_overlap",
+            graded_deadline_world,detail)
         return false
     var incoming_left: float = checked - _stream_header_beats(source_opening)
     if not _stream_queue._clears_prior_layers(incoming_left,
