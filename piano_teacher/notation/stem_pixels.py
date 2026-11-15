@@ -105,6 +105,12 @@ def _stem(pixels, group, heads, marks, *, written=None):
     if directions - {'up', 'down'} or len(directions) > 1:
         return feature_result('unsupported', 'Conflicting, absent or specialized explicit stem declarations', **evidence)
     low, high = min(h['y'] for h in hs), max(h['y'] for h in hs)
+    # The registered head's actual raster silhouette, rather than a guessed
+    # half-space radius, limits how far a continuous shaft may overlap its
+    # attachment end. Hollow heads and high-density antialiasing frequently
+    # extend beyond half a staff space from the musical head centre.
+    head_top = min(h['bbox'][1] for h in hs)
+    head_bottom = max(h['bbox'][3] for h in hs)
     absolute = [int(n['spelling'][2])*7+'CDEFGAB'.index(n['spelling'][0]) for n in group]
     intervals = tuple(n-absolute[0] for n in absolute)
     candidates = []
@@ -146,9 +152,11 @@ def _stem(pixels, group, heads, marks, *, written=None):
                         diagnostics[direction]["max_connected_extension_spaces"] = max(
                             diagnostics[direction]["max_connected_extension_spaces"],round(measured,3))
                 if direction == 'up':
-                    valid = low-8*gap <= top <= low-minimum and high-.5*gap <= bottom <= high+.5*gap
+                    valid = (low-8*gap <= top <= low-minimum and
+                             high-.5*gap <= bottom <= max(high+.5*gap,head_bottom+1))
                 else:
-                    valid = low-.5*gap <= top <= low+.5*gap and high+minimum <= bottom <= high+8*gap
+                    valid = (min(low-.5*gap,head_top-1) <= top <= low+.5*gap
+                             and high+minimum <= bottom <= high+8*gap)
                 if valid and all(top <= h['y'] <= bottom for h in hs):
                     candidates.append((direction, x, top, bottom))
     if not candidates:
