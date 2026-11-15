@@ -109,6 +109,7 @@ def _stem(pixels, group, heads, marks, *, written=None):
     intervals = tuple(n-absolute[0] for n in absolute)
     candidates = []
     references = {}
+    diagnostics = {}
     # Require an unbroken actual column attached to every source chord head.
     # Its minimum outer extension comes from independent Verovio engraving,
     # retaining a sub-step raster tolerance, rather than a fixed print length.
@@ -132,10 +133,18 @@ def _stem(pixels, group, heads, marks, *, written=None):
             edges=(min(xs),max(xs)) if len(hs)>1 else ((max(xs) if sign==1 else min(xs)),)
             attached={x for edge in edges for x in range(edge-2,edge+3)}
             columns=attached if columns is None else columns & attached
+        diagnostics[direction] = {"intersecting_attachment_columns":len(columns),
+            "max_connected_extension_spaces":0.0}
         for x in sorted(columns):
             if not 0 <= x < pixels.shape[1]:
                 continue
             for top, bottom in pixel_runs(pixels[:, x]):
+                if all(top <= h['y'] <= bottom for h in hs):
+                    measured = ((low-top)/gap if direction == 'up'
+                                else (bottom-high)/gap)
+                    if measured > 0 and measured < 8.0:
+                        diagnostics[direction]["max_connected_extension_spaces"] = max(
+                            diagnostics[direction]["max_connected_extension_spaces"],round(measured,3))
                 if direction == 'up':
                     valid = low-8*gap <= top <= low-minimum and high-.5*gap <= bottom <= high+.5*gap
                 else:
@@ -144,7 +153,10 @@ def _stem(pixels, group, heads, marks, *, written=None):
                     candidates.append((direction, x, top, bottom))
     if not candidates:
         return feature_result('unverified', 'No continuous stem attached to every registered head with reference-supported extension',
-                       **evidence, reference_extensions=references)
+                       **evidence, reference_extensions=references,
+                       observed_attached_ink=diagnostics,
+                       reference_base_pitch=absolute[0],
+                       reference_clef=source_clef)
     options = []
     for direction in ('up', 'down'):
         for runs in _stem_run_clusters([c[1:] for c in candidates if c[0] == direction]):
