@@ -178,11 +178,11 @@ def _pages(written, strings):
 
 
 @lru_cache(maxsize=8)
-def _raster(svg, space, target_gap=24.):
-    """Rasterize ORIGINAL source vectors at the requested staff-space scale."""
+def _raster(svg, space):
+    """Rasterize original graphics at a fixed reference staff scale."""
     import cairosvg
     geom = parse_svg_geometry(svg)
-    width = max(1, round(geom.width * target_gap / (space * geom.height)))
+    width = max(1, round(geom.width * 24 / (space * geom.height)))
     if width > 18000:
         raise ValueError('Reference raster exceeds bounded width')
     png = cairosvg.svg2png(bytestring=svg.encode(), output_width=width)
@@ -199,8 +199,7 @@ def _reference_art(root, nodes, geom, events, identifiers):
     rails = geom.staff_systems[system]['staff_lines']
     space = rails[1] - rails[0]
     # Preserve complete original ancestry/defs for each owned graphic.
-    original_svgs = tuple(isolate(root, node) for node in nodes)
-    masks = [_raster(svg, space) for svg in original_svgs]
+    masks = [_raster(isolate(root, node), space) for node in nodes]
     if not masks:
         return None
     mask = np.logical_or.reduce(masks)
@@ -209,8 +208,7 @@ def _reference_art(root, nodes, geom, events, identifiers):
         return None
     scale = 24 / (space * geom.height)
     bbox = [int(xs.min()), int(ys.min()), int(xs.max()+1), int(ys.max()+1)]
-    return dict(mask=mask[bbox[1]:bbox[3], bbox[0]:bbox[2]].copy(),
-                source_svgs=original_svgs, source_space=space, gap=24.,
+    return dict(mask=mask[bbox[1]:bbox[3], bbox[0]:bbox[2]].copy(), gap=24.,
                 anchors=[(x*geom.width*scale, y*geom.height*scale) for x, y, _ in anchors],
                 stem_xs=[geom.stem_x.get(i, float('nan'))*geom.width*scale for i in identifiers],
                 bbox=bbox)
@@ -579,22 +577,11 @@ def _beam(row, frames, target):
         staff_lines=list(frame['staves'][events[0]['staff']].lines))
 
 
-def _resized_art(art, gap, cutoff=96, resampling=Image.Resampling.BILINEAR,
-                 *, direct=False):
-    if direct and art.get('source_svgs'):
-        # The original vector's subpixel contours survive a SINGLE raster
-        # at actual photographed staff size. Binary 24px -> 11px resizing
-        # loses boundary pixels on small Leipzig tuplet numerals.
-        masks = [_raster(svg, art['source_space'], float(gap))
-                 for svg in art['source_svgs']]
-        full = np.logical_or.reduce(masks)
-        ys, xs = np.nonzero(full)
-        if len(xs):
-            return full[ys.min():ys.max()+1, xs.min():xs.max()+1].copy()
+def _resized_art(art, gap):
     x0, y0, x1, y1 = art['bbox']
     image = Image.fromarray(art['mask'].astype('uint8')*255)
     return np.asarray(image.resize((max(1, round((x1-x0)*gap/24)),
-                                    max(1, round((y1-y0)*gap/24))), resampling)) > cutoff
+                                    max(1, round((y1-y0)*gap/24))), Image.Resampling.BILINEAR)) > 96
 
 
 def _fit_mask(pixels, mask, x, y, radius):
@@ -763,15 +750,14 @@ def _digit_glyphs():
     return glyphs
 
 
-def _digits(row, pixels, gap, nx, ny, cutoff=96,
-            resampling=Image.Resampling.BILINEAR, *, direct=False):
+def _digits(row, pixels, gap, nx, ny):
     number = row['number']
     glyphs = _digit_glyphs()
     result = []
     for code, part in zip(row['numeral_codes'], row['number_parts']):
         if part is None or code not in glyphs:
             raise ValueError('Reference numeral contains an unsupported or empty glyph')
-        template = _resized_art(part, gap, cutoff, resampling, direct=direct)
+        template = _resized_art(part, gap)
         x = nx+(part['bbox'][0]-number['bbox'][0])*gap/24
         y = ny+(part['bbox'][1]-number['bbox'][1])*gap/24
         (score, px, py), _ = _fit_mask(pixels, template, x, y, 1)
@@ -825,43 +811,14 @@ def _tuplet(row, frames, target):
     y = anchors[first]['y']+(y0-ref_first[1])*scale
     if any(x <= column <= x+template.shape[1] for column in frame['occluded_columns']):
         raise ValueError('Measured coloured playhead occludes the source numeral')
-    # Retain the established source-raster witness when it is conclusive.
-    # Tiny recovered numerals can quantize differently after a second GPU
-    # downsample; only then compare bounded alternative rasterizations of
-    # the SAME source SVG outline. The Dice and unique-fit gates are unchanged.
-    (score, nx, ny), margin = _fit_mask(
-        frame['pixels'], template, x, y, math.ceil(gap*.5))
-    cutoff, resampling, direct = 96, Image.Resampling.BILINEAR, False
-    if score < .79 or margin < .05:
-        source_template = _resized_art(number, gap, direct=True)
-        (source_score, source_x, source_y), source_margin = _fit_mask(
-            frame['pixels'], source_template, x, y, math.ceil(gap*.5))
-        if (source_score, source_margin) > (score, margin):
-            score, margin, nx, ny, template, direct = (
-                source_score, source_margin, source_x, source_y, source_template, True)
-    if score < .79 or margin < .05:
-        candidates = []
-        for sampling in (Image.Resampling.BILINEAR, Image.Resampling.BICUBIC,
-                         Image.Resampling.LANCZOS):
-            for threshold in (80, 96, 112, 128, 144, 160, 176, 192, 208):
-                candidate = _resized_art(number, gap, threshold, sampling)
-                (fit, px, py), uniqueness = _fit_mask(
-                    frame['pixels'], candidate, x, y, math.ceil(gap*.5))
-                candidates.append((fit, uniqueness, threshold, px, py, candidate, sampling))
-        best = max(candidates, key=lambda item: (item[0], item[1]))
-        if (best[0], best[1]) > (score, margin):
-            score, margin, cutoff, nx, ny, template, resampling = best
-            direct = False
+    (score, nx, ny), margin = _fit_mask(frame['pixels'], template, x, y, math.ceil(gap*.5))
     if score < .79 or margin < .05:
         return 'mismatch', 'Actual numeral contour lacks the source identity or a unique bounded fit', dict(
-            expected_numeral=digits, match=round(score, 4), margin=round(margin, 4),
-            source_alpha_cutoff=cutoff, source_resampling=resampling.name,
-            source_direct_raster=direct)
+            expected_numeral=digits, match=round(score, 4), margin=round(margin, 4))
     number_box = [nx, ny, nx+template.shape[1], ny+template.shape[0]]
-    digit_evidence = _digits(row, frame['pixels'], gap, nx, ny, cutoff, resampling, direct=direct)
+    digit_evidence = _digits(row, frame['pixels'], gap, nx, ny)
     evidence = dict(expected_numeral=digits, numeral_match=round(score, 4), numeral_margin=round(margin, 4),
-        source_alpha_cutoff=cutoff, source_resampling=resampling.name,
-        source_direct_raster=direct, digits=digit_evidence,
+        digits=digit_evidence,
         number_bbox=number_box, anchors=anchors, staff_gap=gap,
         staff_lines=list(frame['staves'][events[0]['staff']].lines), bbox=number_box)
     if len(digit_evidence) != len(codes) or any(d['match'] < .79 or d['margin'] < .03 for d in digit_evidence):
@@ -884,11 +841,9 @@ def _tuplet(row, frames, target):
         # would then misreport occluded source ink as a detached hook.
         if any(0 <= x-box[0]+dx < mask.shape[1] and expected_columns[x-box[0]+dx]
                for x in frame['occluded_columns'] for dx in (-1, 0, 1)):
-            # The numeral has already been independently measured here.
-            # Preserve that valid partial proof even though the photographed
-            # playhead prevents independent bracket verification. Treating
-            # this as an exception discards the number's genuine pixel
-            # witness and makes destructive numeral tests impossible.
+            # Numeral identity is already proven in this photograph.
+            # Preserve its actual pixel evidence while refusing to certify
+            # the bracket hidden behind the moving playhead.
             return 'unverified', 'Measured coloured playhead occludes the bracket witness', dict(
                 **evidence, bracket_occluded=True)
         fit, bx, by, overlapping_pixels = _fit_bracket(frame['pixels'], mask, box, template, number_box, gap)
@@ -953,11 +908,10 @@ def _verify(xml, folder, hand, reference_svgs, kind):
                     witnesses.append(witness)
                 except (OSError, ValueError, KeyError, IndexError, AssertionError) as exc:
                     failures.append(dict(beat=float(target), reason=str(exc)))
-            # A photo whose playhead covers the bracket can still prove
-            # the numeral, but is unavailable as full-connector evidence.
-            # Do not let that partial, legitimately occluded photo veto a
-            # separate intact photograph. Genuine mismatches and ambiguous
-            # independent contours must still veto the entire connector.
+            # An occluded bracket is an unavailable full-connector photo,
+            # not a contradiction of an intact witness in another frame.
+            # Still retain its already proven numeral if NO complete
+            # photograph exists (e.g. a very wide recovered tuplet).
             occluded = [w for w in witnesses if w['status'] == 'unverified'
                         and w.get('bracket_occluded')]
             bad = next((w for w in witnesses
@@ -969,14 +923,10 @@ def _verify(xml, folder, hand, reference_svgs, kind):
             if bad:
                 record.update(status=bad['status'], reason=bad['reason'], evidence=bad)
             elif complete:
-                # Certification is based only on independently intact PNGs.
-                # Unusable photos remain exposed for source diagnostics.
                 record.update(status='verified', reason=complete[0]['reason'], evidence=dict(
                     **{k: v for k, v in complete[0].items() if k not in {'status', 'reason'}},
                     witnesses=complete, unavailable_witnesses=unavailable))
             elif occluded:
-                # The complete bracket is not certified. Retain the measured
-                # numerator for diagnostics and destructive proof controls.
                 record.update(status='unverified', reason=occluded[0]['reason'],
                               evidence=dict(occluded[0], unavailable_witnesses=unavailable))
             else:
