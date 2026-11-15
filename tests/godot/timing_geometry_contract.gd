@@ -1,0 +1,149 @@
+extends SceneTree
+## Whole-axis spacing contract. Horizontal tuning is a presentation choice,
+## not another tempo calculation or a per-note engraving exception.
+const Spacing := preload("res://notation/shared/spacing_policy.gd")
+const Timeline := preload("res://notation/shared/timeline.gd")
+const Barline := preload("res://notation/native/barline_layout.gd")
+const ViewportFit := preload("res://notation/native/viewport_fit.gd")
+const InkGeometry := preload("res://notation/native/ink_geometry.gd")
+const Admission := preload("res://score_stream_admission.gd")
+const Markers := preload("res://score_step_timeline.gd")
+const MeterGrid := preload("res://moving_meter_grid.gd")
+const Flow := preload("res://continuous_score_flow.gd")
+const Tempo := preload("res://tempo_timeline.gd")
+
+var failures := 0
+
+func check(ok: bool, reason: String) -> void:
+    if not ok:
+        failures += 1
+        print("TIMING_GEOMETRY_FAIL: ", reason)
+
+func near(actual: float, wanted: float, tolerance: float = .0001) -> bool:
+    return is_finite(actual) and absf(actual-wanted) <= tolerance
+
+func _initialize() -> void:
+    call_deferred("_run_contract")
+
+func _run_contract() -> void:
+    # A real mixed-duration source axis: pickup (1/8), 4/4, 3/4, 6/8.
+    # The rest and notehead projections must use exactly the same quarter beats.
+    var measures := [
+        {"start_beat":0.0, "end_beat":0.5, "meter":[1,8]},
+        {"start_beat":0.5, "end_beat":4.5, "meter":[4,4]},
+        {"start_beat":4.5, "end_beat":7.5, "meter":[3,4]},
+        {"start_beat":7.5, "end_beat":10.5, "meter":[6,8]},
+    ]
+    var original := {
+        "schema":Timeline.SCHEMA, "beat_unit":"quarter", "revision":19,
+        "duration_beats":10.5, "measures":measures,
+        "notes":[
+            {"id":"pickup","onset_beats":0.0,"duration_beats":0.5},
+            {"id":"first","onset_beats":0.5,"duration_beats":1.0},
+            {"id":"syncopated","onset_beats":2.25,"duration_beats":0.25},
+            {"id":"three_four","onset_beats":4.5,"duration_beats":3.0},
+            {"id":"compound","onset_beats":7.5,"duration_beats":1.5},
+        ],
+    }
+    var source_before: String = JSON.stringify(original)
+    var timeline := Timeline.new()
+    check(timeline.load_model(original), "mixed source meter and notes load")
+    check(near(Timeline.DEFAULT_PIXELS_PER_BEAT,Spacing.DEFAULT_PIXELS_PER_BEAT),
+        "semantic timeline reads central default density")
+    check(near(ViewportFit.MAX_STAFF_GAP,Spacing.MAX_STAFF_GAP) and
+        near(InkGeometry.MAX_STAFF_GAP,Spacing.MAX_STAFF_GAP),
+        "viewport fitting and ink clearance use the same staff-size limit")
+    check(near(ViewportFit.MIN_LOOKAHEAD_BEATS,Admission.MIN_READING_BEATS) and
+        near(Admission.MIN_READING_BEATS,Spacing.MIN_LOOKAHEAD_BEATS),
+        "reading-space requirements share one policy")
+    var markers := Markers.new()
+    check(near(markers._density,Spacing.DEFAULT_PIXELS_PER_BEAT) and
+        near(markers._next_density,Spacing.DEFAULT_PIXELS_PER_BEAT),
+        "step labels inherit the default score scale")
+    markers.free()
+
+    var playhead := 510.0
+    var visual_world := 2.25
+    var gap := 20.0
+    for density in [48.0,96.0,144.0,240.0]:
+        check(timeline.set_density(density),
+            "select valid per-score density %.0f" % density)
+        var note_a: float = timeline.screen_x(0.5,visual_world,playhead)
+        var note_b: float = timeline.screen_x(2.25,visual_world,playhead)
+        check(near(note_b-note_a,1.75*density),
+            "separated source attacks preserve quarter-beat distance")
+        var boundary_x: Array = []
+        for measure in measures:
+            boundary_x.append(Barline.project(float(measure["start_beat"]),
+                timeline,visual_world,playhead,0.0,gap))
+        boundary_x.append(Barline.project(float(measures[-1]["end_beat"]),
+            timeline,visual_world,playhead,0.0,gap))
+        for index in range(measures.size()):
+            var width: float = boundary_x[index+1]-boundary_x[index]
+            var beats: float = float(measures[index]["end_beat"])-float(measures[index]["start_beat"])
+            check(near(width,beats*density),
+                "pickup, 4/4, 3/4 and 6/8 boundaries scale uniformly")
+        check(near(Barline.project(2.25,timeline,visual_world,playhead,0.0,gap) -
+            note_b,-gap*Barline.LEAD_STAFF_SPACES),
+            "staff-space boundary clearance does not change musical X")
+
+        var rest := {"kind":"rest","source_ceiling":3.0}
+        var rest_bounds: Vector2 = Admission.clip_bounds(rest,density,gap,10.5)
+        check(near(rest_bounds.y-rest_bounds.x,3.0*density),
+            "silent preparation measure has the same density as the source")
+        var source := {"kind":"source","clip_floor":0.5,"clip_ceiling":4.5,
+            "clip_leading_spaces":1.5,"clip_trailing_spaces":2.0}
+        var source_bounds: Vector2 = Admission.clip_bounds(source,density,gap,10.5)
+        check(near(source_bounds.y-source_bounds.x,4.0*density+3.5*gap),
+            "source clip only adds measured glyph clearance")
+        check(near(Markers.marker_x(4.5,visual_world,density,1536.0) -
+            timeline.screen_x(4.5,visual_world,1536.0/3.0),0.0),
+            "lesson markers and noteheads agree on source beat position")
+
+        var rules: Array[float] = MeterGrid.visible_lines(
+            5.0,4000.0,1500.0,density,0.0,measures)
+        for boundary in [0.0,0.5,4.5,7.5,10.5]:
+            check(rules.has(boundary),
+                "blank-staff rules use authored meter at density %.0f" % density)
+
+        for bpm in [40.0,80.0,120.0]:
+            var elapsed := 0.25
+            var moved: float = timeline.screen_x(2.25,
+                visual_world+elapsed*bpm/60.0,playhead)
+            check(near(note_b-moved,elapsed*timeline.pixels_per_second(bpm)),
+                "only velocity changes with BPM, never source note spacing")
+        check(near(Admission.empty_strip_start([],5.0,4.0,1.5,NAN,
+                density,gap,10.5),9.0),
+            "count-in slot is measured in beats regardless of density")
+
+    check(JSON.stringify(original) == source_before,
+        "changing density does not mutate source notes or measure boundaries")
+
+    # Speedups and slowdowns change the derivative of an endless world axis.
+    # A delayed retrospective slowdown may pay timing debt gradually, but
+    # must neither freeze nor rewind its published presentation coordinate.
+    var flow := Flow.new()
+    check(near(flow.sample(1000,60.0),0.0),"world begins at source-neutral zero")
+    var one: float = flow.sample(2000,60.0)
+    var two: float = flow.sample(3000,120.0)
+    var three: float = flow.sample(4000,120.0)
+    var four: float = flow.sample(5000,40.0)
+    var five: float = flow.sample(6000,40.0)
+    check(one < two and two < three and three < four and four < five,
+        "40/60/120 BPM changes never stop or reverse the visual bar")
+    flow.switch_rate_at(5500.0,20.0)
+    var after_late_change: float = flow.project(6000)
+    check(after_late_change >= five and flow.project(7000) > after_late_change,
+        "a late slower-tempo notice never rewinds or stops the world")
+
+    var segments := [
+        {"start_beat":0.0,"end_beat":2.0,"bpm":40.0},
+        {"start_beat":2.0,"end_beat":4.0,"bpm":120.0},
+        {"start_beat":4.0,"end_beat":6.0,"bpm":60.0},
+    ]
+    for beat in [0.0,0.5,1.75,2.0,2.5,3.9,4.0,5.5,6.0]:
+        var seconds: float = Tempo.seconds_at_beat(beat,80.0,segments)
+        check(near(Tempo.beat_at_seconds(seconds,80.0,segments),beat),
+            "authored fast/slow tempo map round-trips exact source beats")
+    print("TIMING_GEOMETRY_FAILURES:",failures)
+    quit(0 if failures == 0 else 1)
