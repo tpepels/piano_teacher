@@ -466,6 +466,34 @@ def test_load_inference_keeps_state_responsive_and_rejects_queued_old_piece_edit
     assert engine.state()["fingering"]["manual"] == 0
 
 
+def test_load_compilation_keeps_previous_state_responsive(engine, music, tmp_path, monkeypatch):
+    """Even slow curriculum compilation must not hold the live state lock."""
+    from piano_teacher import server
+
+    engine.load(str(music))
+    old_fingerprint = engine.fingerprint
+    other = _midi(tmp_path / "compilation.mid", transpose=7)
+    original = server.LearningPlan
+    started, release = Event(), Event()
+
+    def delayed(*args, **kwargs):
+        assert not engine.lock._is_owned()
+        started.set()
+        assert release.wait(10)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(server, "LearningPlan", delayed)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        loaded = workers.submit(engine.load, str(other))
+        try:
+            assert started.wait(10)
+            assert workers.submit(engine.state).result(timeout=2)["piece_fingerprint"] == old_fingerprint
+        finally:
+            release.set()
+        loaded.result(timeout=10)
+    assert engine.fingerprint != old_fingerprint
+
+
 @pytest.mark.usefixtures("lumikey_runtime")
 def test_concurrent_edits_survive_learning_plan_reset(engine, music, monkeypatch):
     engine.load(str(music))
