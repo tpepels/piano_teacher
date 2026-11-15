@@ -742,6 +742,24 @@ func _stream_source_windows(opening: float) -> Array[Vector2]:
         _source_ink_intervals)
 
 
+func _source_ending_restores_opening_context() -> bool:
+    # A repeat can omit its starting clef/key/meter only if the score ends
+    # with that same notation context. Otherwise the next copy MUST
+    # explicitly show the source's reset signature and meter.
+    var measures: Array = timeline.measures
+    if measures.is_empty():
+        return false
+    var opening: Dictionary = measures[0]
+    var ending: Dictionary = measures[-1]
+    if opening.get("meter",[]) != ending.get("meter",[]) or
+            opening.get("keys",{}) != ending.get("keys",{}):
+        return false
+    for staff in layout.visible_staves():
+        if layout.clef_for(staff,opening) != layout.clef_for(staff,ending):
+            return false
+    return true
+
+
 func _stream_add_take(source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool = false) -> void:
     _stream_last_admitted = -1
@@ -808,7 +826,7 @@ func _stream_add_take(source_beat: float, start_world: float,
         added += 1
     _stream_serial = first_serial+windows.size()-1
     if source_beat <= .0001:
-        _opening_context_printed = true
+        _opening_context_printed = _source_ending_restores_opening_context()
     _stream_live_serial = first_serial
     _stream_last_admitted = first_serial
 
