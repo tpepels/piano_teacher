@@ -7,6 +7,14 @@ const RenderPass := preload("res://notation/native/render_pass.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
+# One physical Verovio header-column rule. Engraving, clip clearance and
+# source-rest reservations must share these values, not retype 86/17,14/17.
+const HEADER_UNITS_PER_SPACE := 17.0
+const HEADER_CLEF_LEAD_UNITS := 86.0
+const HEADER_KEY_COLUMN_UNITS := 14.0
+
+static func clef_lead_pixels(columns: int, gap: float) -> float:
+    return (HEADER_CLEF_LEAD_UNITS + HEADER_KEY_COLUMN_UNITS*float(columns))*gap/HEADER_UNITS_PER_SPACE
 
 var score_layout
 var symbol_painter
@@ -320,7 +328,7 @@ func context_meter_x(measure: Dictionary, x: float, gap: float,
 
 func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_measure: Dictionary, x: float,
         gap: float, opening: bool, meter_right_limit: float = INF) -> bool:
-    var header_scale: float = gap/17.0
+    var header_scale: float = gap/HEADER_UNITS_PER_SPACE
     # Full authentic header ink remains on every repeat, but its
     # columns are compact: there is no extra opening-only blank spacer.
     var header_shift: float = 0.0
@@ -350,12 +358,12 @@ func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_meas
             # incoming accidentals. Reserve the complete block before placing
             # a clef, including when the destination signature is empty.
             var key_columns: int = maxi(absi(signature),change_marks.size())
-            paint_clef(canvas,frame,x-(86.0+float(key_columns)*14.0)*header_scale-header_shift,
+            paint_clef(canvas,frame,x-clef_lead_pixels(key_columns,gap)-header_shift,
                 center,clef,gap,frame.ink(staff))
         if key_changed:
             for i in range(change_marks.size()):
                 var mark: Dictionary = change_marks[i]
-                var glyph_x: float = x-(39.0+float(change_marks.size()-i)*14.0)*header_scale-header_shift
+                var glyph_x: float = x-(39.0+float(change_marks.size()-i)*HEADER_KEY_COLUMN_UNITS)*header_scale-header_shift
                 var glyph_y: float = Geometry.note_y(int(mark["step"]),
                     center+2.0*gap,gap)
                 symbol_painter.paint_accidental(canvas,frame,glyph_x,glyph_y,
