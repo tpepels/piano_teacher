@@ -1,5 +1,6 @@
 extends RefCounted
 const Spacing := preload("res://notation/shared/spacing_policy.gd")
+const TempoTimeline := preload("res://tempo_timeline.gd")
 # Phase B: one semantic quarter-beat axis, independent of Verovio geometry.
 # The backend transport/VisualTransportClock supplies clock_beat. This class
 # never owns a timer, tempo, renderer, MIDI grading, or interpolation curve.
@@ -109,7 +110,7 @@ func screen_x(event_beat: float, clock_beat: float, playhead_x: float,
         clock_beat, play_from_beat)
 
 func pixels_per_second(bpm: float) -> float:
-    return pixels_per_beat * bpm / 60.0
+    return pixels_per_beat * TempoTimeline.beats_from_seconds(1.0,bpm)
 
 func count_in_start(play_from_beat: float, count_in_beats: float) -> float:
     return play_from_beat - count_in_beats
