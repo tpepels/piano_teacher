@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/phase1-shard-regressions.yml'
       - 'piano_teacher/notation/stem_pixels.py'
+      - 'piano_teacher/notation/connector_pixels.py'
       - 'godot/notation/native/fingering_annotations.gd'
       - 'godot/notation/native/fingering_obstacles.gd'
       - 'godot/notation/native/symbol_painter.gd'
