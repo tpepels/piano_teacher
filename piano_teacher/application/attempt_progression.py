@@ -10,7 +10,7 @@ from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from ..lesson_timing import lead_in_beats, preparation_meter
+from ..lesson_timing import preparation_meter
 from .musical_scheduler import SCHEDULER, SETTLEMENT_SECONDS
 
 from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
@@ -111,7 +111,7 @@ class AttemptProgression:
             phrase=phrase, boundaries=boundaries,
             time_signatures=time_signatures, position=position)
         grid = self.grid_for(phrase, boundaries)
-        count_in = 0.0 if loop_continuation else lead_in_beats(bar_beats,bpm)
+        count_in = 0.0 if loop_continuation else SCHEDULER.count_in_beats(bar_beats,bpm)
         return AttemptStart(
             from_beat=from_beat, count_in_bar_beats=bar_beats,
             count_in_meter=meter, count_in_beats=count_in,

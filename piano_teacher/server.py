@@ -26,7 +26,6 @@ from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
 from .application.musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
-from .lesson_timing import lead_in_beats
 
 # Poll/frame latency allowed between announcing a short-rest continuation
 # (sampled when it is announced, after the take-end work) and Godot
@@ -773,7 +772,10 @@ class PracticeEngine:
                     phrase = self.plan.active_phrase
                     source_end = self.visual_transport.run_at + (self._elapsed_seconds(phrase.end-phrase.start)
                         - self._elapsed_seconds(self.visual_transport.play_from_beat))
-                    due = now >= source_end + self.visual_transport.visual_gap_beats*60/self.plan.bpm
+                    due = now >= SCHEDULER.offscreen(
+                        deadline=source_end,
+                        lead_beats=self.visual_transport.visual_gap_beats,
+                        bpm=self.plan.bpm)
                 if not deferred and (due or self.midi_ingress.deferred):
                     self.midi_ingress.deferred.append((message.copy(), now, corrected_at,
                                                 self.transport_id))
@@ -1596,7 +1598,7 @@ class PracticeEngine:
                 phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
                 time_signatures=self.plan.piece.time_signatures,
                 position=self.open_from_beat)
-        return lead_in_beats(bar_beats, self.plan.bpm) if bar_beats > 0 else 0.0
+        return SCHEDULER.count_in_beats(bar_beats,self.plan.bpm) if bar_beats > 0 else 0.0
 
     def _next_count_in_meter(self) -> list[int]:
         """The meter of that count-in bar (its syllables and pulses)."""
@@ -1627,7 +1629,8 @@ class PracticeEngine:
                       * self.plan.bpm / 60.0)
         if self.count_in_bar_beats > 0 and \
                 lead_beats >= self.count_in_bar_beats - 1e-6:
-            self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
+            self.count_in_beats = SCHEDULER.count_in_beats(
+                self.count_in_bar_beats,self.plan.bpm)
 
     def _reannounce_after_rest_pause(self, now: float, lead_seconds: float,
                                      *, reuse: bool = False) -> None:
@@ -1845,8 +1848,9 @@ class PracticeEngine:
                 # A take starting on a freshly (re-)engraved score: open it on
                 # the empty strip one count-in bar ahead, with the snapshot
                 # latency allowed, and publish that run_at as its plan.
-                lead = (self._next_count_in_beats() * 60.0 / self.plan.bpm
-                        + SHORT_REST_LATENCY_SECONDS) if self._short_rest is not None else 0.0
+                lead = (SCHEDULER.beats_seconds(
+                    self._next_count_in_beats(),self.plan.bpm)
+                    + SHORT_REST_LATENCY_SECONDS) if self._short_rest is not None else 0.0
                 # A re-engraved continuation still opens after the written
                 # rest bar of the take it follows.
                 after_rest = self._short_rest_deadline(
@@ -2105,7 +2109,8 @@ class PracticeEngine:
                         following_measure=following)["duration_beats"])
                 reverse_seconds = planned_retry_reverse_seconds(
                     reading_lead_seconds=presentation_lead_seconds,
-                    semantic_rest_seconds=rest_beats * 60.0 / self.plan.bpm)
+                    semantic_rest_seconds=SCHEDULER.beats_seconds(
+                        rest_beats,self.plan.bpm))
             self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
             self.visual_transport.paused = False
             self.visual_transport.paused_at = 0.0
@@ -2721,7 +2726,9 @@ class PracticeEngine:
             self.visual_transport._retry_previous_pass = True
             target = exposure.from_beat if exposure else self.visual_transport.play_from_beat
             self._schedule_preparation(target, now=now, from_visual=visual_from,
-                reverse_seconds=max(self.feedback_seconds, min(4., total_beats*60./self.plan.bpm/3.)),
+                reverse_seconds=SCHEDULER.recovery_rewind(
+                    feedback_seconds=self.feedback_seconds,
+                    passage_beats=total_beats,bpm=self.plan.bpm),
                 announce=same_timed,
                 short_deadline=self._short_rest_deadline(None, from_beat=target))
         if self.is_builtin_warmup and decision.invalidate_failed_streak:
@@ -3132,16 +3139,11 @@ class PracticeEngine:
                 duration = max(0.25,
                     self.display_phrase().end-self.display_phrase().start)
                 count_in = self._next_count_in_beats()
-                lead_seconds = max(count_in, 1.0)*60.0/self.plan.bpm
-                gap_seconds = max(2.0,self._continuous_horizon_beats)*60.0/self.plan.bpm
-                if self._guided_stream_deadline is None:
-                    self._guided_stream_deadline = now+lead_seconds
-                elif now > self._guided_stream_deadline + (
-                        duration*60.0/self.plan.bpm+gap_seconds):
-                    self._guided_stream_deadline = max(
-                        now+lead_seconds,
-                        self._guided_stream_deadline+
-                        duration*60.0/self.plan.bpm+gap_seconds+lead_seconds)
+                self._guided_stream_deadline = SCHEDULER.guided(
+                    now=now,previous_deadline=self._guided_stream_deadline,
+                    duration_beats=duration,count_in_beats=count_in,
+                    horizon_beats=self._continuous_horizon_beats,
+                    bpm=self.plan.bpm)
                 next_floor = 0.0
                 next_deadline = self._guided_stream_deadline*1000.0
                 next_transport = self.transport_id
@@ -3165,7 +3167,7 @@ class PracticeEngine:
                     # The take this source is graded as, and the one
                     # count-in bar spoken immediately before its deadline.
                     "transport_id": next_transport,
-                    "count_in_beats": (lead_in_beats(bar_beats, next_bpm)
+                    "count_in_beats": (SCHEDULER.count_in_beats(bar_beats,next_bpm)
                                        if bar_beats > 0 and next_bpm > 0
                                        else 0.0),
                     # That take's start tempo: its count-in is at this BPM.

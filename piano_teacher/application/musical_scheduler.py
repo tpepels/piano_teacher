@@ -62,6 +62,15 @@ class MusicalScheduler:
     """
 
     @staticmethod
+    def count_in_beats(bar_beats: float, bpm: float) -> float:
+        # One authored preparation bar at every rate, including very slow
+        # lessons. No independently capped count-in on any caller.
+        if not all(math.isfinite(x) for x in (bar_beats,bpm)) or (
+                bar_beats <= 0 or bpm <= 0):
+            raise ValueError("Count-in requires positive meter and BPM")
+        return float(bar_beats)
+
+    @staticmethod
     def beats_seconds(beats: float, bpm: float) -> float:
         if not all(math.isfinite(x) for x in (beats, bpm)) or beats < 0 or bpm <= 0:
             raise ValueError("Invalid beat duration or BPM")
@@ -318,6 +327,29 @@ class MusicalScheduler:
         if not math.isfinite(duration) or duration < 0:
             raise ValueError("Invalid pause duration")
         return epoch+duration if active else epoch
+
+    @classmethod
+    def guided(cls, *, now: float, previous_deadline: float | None,
+               duration_beats: float, count_in_beats: float,
+               horizon_beats: float, bpm: float) -> float:
+        """Source-bound untimed guided repeat, using one absolute deadline."""
+        lead = cls.beats_seconds(max(count_in_beats,1.0),bpm)
+        distance = cls.beats_seconds(
+            duration_beats+max(2.0,horizon_beats),bpm)
+        if previous_deadline is None:
+            return now+lead
+        if now > previous_deadline+distance:
+            return max(now+lead,previous_deadline+distance+lead)
+        return previous_deadline
+
+    @classmethod
+    def recovery_rewind(cls, *, feedback_seconds: float,
+                        passage_beats: float, bpm: float) -> float:
+        """Feedback animation may overlap the rest, never add another bar."""
+        if not math.isfinite(feedback_seconds) or feedback_seconds < 0:
+            raise ValueError("Invalid recovery feedback duration")
+        return max(feedback_seconds,
+                   min(4.0,cls.beats_seconds(passage_beats,bpm)/3.0))
 
     @classmethod
     def late_ready(cls, *, now: float, outgoing_bpm: float,

@@ -251,3 +251,26 @@ def test_authored_tempo_epoch_is_stable_except_when_stage_or_bpm_changes():
     key,epoch=SCHEDULER.tempo_epoch(
         stage="second",bpm=24,now=120,prior_key=key,prior_epoch=epoch)
     assert epoch==120
+
+
+def test_guided_untimed_repetition_does_not_add_the_horizon_twice():
+    assert SCHEDULER.guided(now=100,previous_deadline=None,
+        duration_beats=4,count_in_beats=2,horizon_beats=3,
+        bpm=24)==pytest.approx(105)
+    assert SCHEDULER.guided(now=106,previous_deadline=105,
+        duration_beats=4,count_in_beats=2,horizon_beats=3,
+        bpm=24)==105
+    # Once the full source plus reading horizon exited, the next entire
+    # count-in is placed from whichever absolute bound is later.
+    later=SCHEDULER.guided(now=125,previous_deadline=105,
+        duration_beats=4,count_in_beats=2,horizon_beats=3,bpm=24)
+    assert later==pytest.approx(max(130,105+7*60/24+5))
+
+
+def test_recovery_rewind_budget_is_calculated_once_at_start_tempo():
+    assert SCHEDULER.recovery_rewind(
+        feedback_seconds=.5,passage_beats=2,bpm=24)==pytest.approx(5/3)
+    assert SCHEDULER.recovery_rewind(
+        feedback_seconds=2,passage_beats=8,bpm=12)==4
+    assert SCHEDULER.count_in_beats(2,24)==2
+    assert SCHEDULER.count_in_beats(4,120)==4
