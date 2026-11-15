@@ -24,7 +24,7 @@ class MockView:
         return true
     var timeline := {"pixels_per_beat": 100.0}
     var stream_passes: Array = []
-    var _stream_queue = StreamQueue.new()
+    var _stream_queue = preload("res://score_stream_queue.gd").new()
     const PLAYHEAD_FRACTION := .33
     func staff_gap() -> float:
         return 22.0
