@@ -4,6 +4,7 @@ extends SceneTree
 const Spacing := preload("res://notation/shared/spacing_policy.gd")
 const Timeline := preload("res://notation/shared/timeline.gd")
 const Barline := preload("res://notation/native/barline_layout.gd")
+const ContextPainter := preload("res://notation/native/context_painter.gd")
 const ViewportFit := preload("res://notation/native/viewport_fit.gd")
 const InkGeometry := preload("res://notation/native/ink_geometry.gd")
 const Admission := preload("res://score_stream_admission.gd")
@@ -86,6 +87,12 @@ func _run_contract() -> void:
         check(near(Barline.project(2.25,timeline,visual_world,playhead,0.0,gap) -
             note_b,-gap*Barline.LEAD_STAFF_SPACES),
             "staff-space boundary clearance does not change musical X")
+        var first_clef: float = ContextPainter.clef_lead_pixels(0,gap)
+        var six_sharps: float = ContextPainter.clef_lead_pixels(6,gap)
+        check(near(six_sharps-first_clef,
+                6.0*ContextPainter.HEADER_KEY_COLUMN_UNITS*gap/
+                ContextPainter.HEADER_UNITS_PER_SPACE),
+            "header collision clearance and engraved key columns share spacing")
 
         var rest := {"kind":"rest","source_ceiling":3.0}
         var rest_bounds: Vector2 = Admission.clip_bounds(rest,density,gap,10.5)
