@@ -39,9 +39,9 @@ OLD_ARITHMETIC = re.compile(
 # it must convert quarter-beat deltas through TempoTimeline. Catch hidden
 # direct "60/BPM" variants even when they use different variable names.
 _GDSCRIPT_BEAT_UNIT = re.compile(
-    r"(?<![\\w.])(?:60(?:\\.0)?|60000(?:\\.0)?)(?![\\w.])"
+    r"(?<![\w.])(?:60(?:\.0)?|60000(?:\.0)?)(?![\w.])"
 )
-_GDSCRIPT_BPM_NAME = re.compile(r"\\b[a-zA-Z_]*bpm\\b",re.IGNORECASE)
+_GDSCRIPT_BPM_NAME = re.compile(r"\b[a-zA-Z_]*bpm\b",re.IGNORECASE)
 
 
 def _gd_direct_bpm_conversions(source: str) -> list[int]:
