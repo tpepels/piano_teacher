@@ -798,9 +798,9 @@ class PracticeEngine:
             # Original MIDI fingering inference runs in a separate ONNX/Node
             # process. Independent Coda/Fukuda course compilation consumes
             # only notes, source IDs and meter, never predicted fingers.
-            # Compile them simultaneously instead of adding their startup
-            # costs. Keep the engine state lock and publish only AFTER both
-            # candidates succeeded; failed loads leave the old take intact.
+            # Compile them simultaneously without holding the engine state
+            # lock across either expensive operation. Publish only AFTER
+            # both candidates succeed; a failed load preserves the old take.
             def prepare_fingering():
                 started = time.perf_counter()
                 plan = self.fingering.prepare(piece, fingerprint)
