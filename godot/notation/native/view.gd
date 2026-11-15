@@ -905,8 +905,8 @@ func _transport_admission_receipt(planned: Dictionary,
     # transport. This is the SAME deadline later sent to the backend.
     var printed_leading_spaces := 15.0 if opening <= .0001 else 1.6
     for item in _stream_queue.online:
-        if str(item.get("kind","")) == "source" and
-                int(item.get("take_owner",-1)) == _stream_armed_serial and
+        if str(item.get("kind","")) == "source" and \
+                int(item.get("take_owner",-1)) == _stream_armed_serial and \
                 absf(float(item.get("source_floor",-INF))-opening) < .00001:
             printed_leading_spaces = float(item.get("clip_leading_spaces",
                 printed_leading_spaces))
