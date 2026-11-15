@@ -10,6 +10,7 @@ musical_scheduler module; geometry-only source code is exempt.
 from __future__ import annotations
 
 from pathlib import Path
+import ast
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +45,40 @@ SCHEDULING_OWNERS = {
 }
 
 
+def _independent_bpm_conversions(source: str) -> list[int]:
+    """Find literal-60 BPM conversions even inside multiline expressions.
+
+    Only the scheduler may convert beats/seconds. Code testing an expected
+    numerical result is outside this production-only AST check.
+    """
+    tree = ast.parse(source)
+    parents = {
+        id(child): parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    lines = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.BinOp) or not isinstance(
+                node.op,(ast.Mult,ast.Div)):
+            continue
+        if not any(isinstance(side,ast.Constant) and type(side.value) in (
+                int,float) and side.value == 60
+                   for side in (node.left,node.right)):
+            continue
+        highest = node
+        while isinstance(parents.get(id(highest)),ast.BinOp):
+            highest=parents[id(highest)]
+        tokens = (
+            part.id if isinstance(part,ast.Name) else part.attr
+            for part in ast.walk(highest)
+            if isinstance(part,(ast.Name,ast.Attribute))
+        )
+        if any("bpm" in name.lower() for name in tokens):
+            lines.add(node.lineno)
+    return sorted(lines)
+
+
 def audit() -> list[str]:
     defects = []
     for directory in SOURCES:
@@ -54,7 +89,8 @@ def audit() -> list[str]:
             # Vendored editor addon is not owned by Piano Teacher.
             if rel.startswith("godot/addons/"):
                 continue
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            source = path.read_text(encoding="utf-8")
+            for number, line in enumerate(source.splitlines(), 1):
                 for name in REMOVED:
                     if re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) +
                                  r"(?![A-Za-z0-9_])", line):
@@ -63,6 +99,10 @@ def audit() -> list[str]:
                     defects.append(f"{rel}:{number}: settlement constant imported from former owner")
                 if rel in SCHEDULING_OWNERS and OLD_ARITHMETIC.search(line):
                     defects.append(f"{rel}:{number}: independent beat/BPM scheduling arithmetic")
+            if rel.startswith("piano_teacher/") and path.suffix == ".py" and (
+                    rel != "piano_teacher/application/musical_scheduler.py"):
+                for number in _independent_bpm_conversions(source):
+                    defects.append(f"{rel}:{number}: direct BPM arithmetic outside scheduler")
     return defects
 
 
