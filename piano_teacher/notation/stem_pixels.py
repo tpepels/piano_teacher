@@ -251,6 +251,15 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
         # single notes and smaller chords keep the original source bound.
         span = max(absolute) - min(absolute)
         outer_allowance = .5 if len(group) > 1 and span >= 7 else 0.
+        if len(group) >= 3:
+            # Native Verovio chord sprites preserve a continuously attached
+            # shaft but clip the outer tip relative to a standalone chord.
+            # The observed three-tone source glyphs still retain >=2.5 staff
+            # spaces of physical shaft beyond the highest registered head.
+            # Bound this known sprite contraction to at most one staff space,
+            # leaving single notes and two-note source reference rules intact.
+            outer_allowance = max(outer_allowance,
+                                  min(1., max(0., extension-2.75)))
         minimum = max(0, extension-outer_allowance-.21)*gap-.5
         sign = 1 if direction == 'up' else -1
         columns=None
