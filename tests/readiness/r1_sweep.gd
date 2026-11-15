@@ -348,6 +348,10 @@ func _process(_delta: float) -> bool:
             "preview":s.get("preview_only"),"bpm":s.get("bpm"),"step":step,
             "cib":s.get("count_in_bar_beats"),"ci":s.get("count_in_beats"),
             "cim":s.get("count_in_meter"),
+            # The actual source may play at half/evolving nominal BPM.
+            # The rest-duration verifier must use its graded tempo map,
+            # otherwise it invents an extra bar of silence.
+            "tempo_segments":s.get("tempo_segments",[]),
             "pf":s.get("play_from_beat")})
         last_tid = tid
         # The performer reads the plan when it sees the NEXT take start.
