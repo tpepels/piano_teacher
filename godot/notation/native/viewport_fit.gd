@@ -1,10 +1,11 @@
 extends RefCounted
 const InkSpacing := preload("res://notation/native/ink_spacing.gd")
+const Spacing := preload("res://notation/shared/spacing_policy.gd")
 ## Choose one authentic staff scale and one density for the entire source.
 ## No canvas, clock or tempo ownership. The caller installs the returned density.
-const MAX_STAFF_GAP := 22.0
-const MIN_LOOKAHEAD_BEATS := 3.0
-const MIN_READABLE_STAFF_GAP := 14.0
+const MAX_STAFF_GAP := Spacing.MAX_STAFF_GAP
+const MIN_LOOKAHEAD_BEATS := Spacing.MIN_LOOKAHEAD_BEATS
+const MIN_READABLE_STAFF_GAP := Spacing.MIN_READABLE_STAFF_GAP
 static func choose(score, ink_geometry, preferred: float, playhead_fraction: float) -> Dictionary:
     # Maintain at least 36px between repeated quick attacks. The existing
     # authentic-ink collision solver may raise this floor as necessary.
@@ -23,7 +24,7 @@ static func choose(score, ink_geometry, preferred: float, playhead_fraction: flo
     var max_usable_density: float = (
         viewport_width*(1.0-playhead_fraction)/MIN_LOOKAHEAD_BEATS)
     var fallbacks: Array = []
-    for candidate_gap in [MAX_STAFF_GAP,17.0,14.0,11.0,8.5]:
+    for candidate_gap in [MAX_STAFF_GAP,17.0,MIN_READABLE_STAFF_GAP,11.0,8.5]:
         var tested_gap: float = float(candidate_gap)
         score.layout_rest_lanes(tested_gap,density)
         var first: Dictionary = ink_geometry.minimum_density(density,tested_gap)
