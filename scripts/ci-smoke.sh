@@ -12,6 +12,7 @@ find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 # Focused, self-contained MIDI and state/assessment contracts.
 timeout 65s "$PYTHON" -m pytest -q \
   tests/test_phase5_architecture_audit.py \
+  tests/test_phase4_workflows.py::test_container_provenance_uses_an_explicit_exact_workspace_trust_step \
   tests/test_full_suite_fixture_owner_contract.py \
   tests/test_ci_full_shards.py \
   tests/test_ci_full_script_parse.py \
@@ -103,6 +104,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_phase3_ledger_pixels.py::test_mint_indicator_on_required_ledger_wing_does_not_create_false_missing_ink \
   tests/test_phase3_ledger_pixels.py::test_mint_ledger_occlusion_cannot_reclassify_overlapping_head_center \
   tests/test_midi_polyphonic_stems.py \
+  tests/test_polyphonic_chord_asset_directions.py \
   tests/test_midi_visual_fast_path.py \
   tests/test_midi_calibration.py \
   tests/test_calibration_grading_integration.py \
