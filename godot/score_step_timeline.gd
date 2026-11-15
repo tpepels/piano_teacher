@@ -3,6 +3,7 @@ extends Control
 ## being presented as replacement pages or interrupting score movement.
 const Design := preload("res://practice_theme.gd")
 const ScoreView := preload("res://notation/shared/view_base.gd")
+const Timeline := preload("res://notation/shared/timeline.gd")
 const FUTURE := Design.SECONDARY_INK
 var _loaded := false
 var _step := 0
@@ -14,8 +15,8 @@ var _current_start := 0.0
 var _next_start := INF
 var _beat := 0.0
 var _current_beat := 0.0
-var _density := 96.0
-var _next_density := 96.0
+var _density := Timeline.DEFAULT_PIXELS_PER_BEAT
+var _next_density := Timeline.DEFAULT_PIXELS_PER_BEAT
 
 # The marker belongs at the FIRST ENGRAVED ATTACK, not the containing barline.
 # A measure can start with rests; bar-start positioning labels those rests.
