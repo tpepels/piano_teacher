@@ -5,6 +5,14 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/phase1-full-shard.yml'
+      - 'piano_teacher/notation/stem_pixels.py'
+      - 'piano_teacher/notation/feature_pixels.py'
+      - 'godot/notation/native/fingering_obstacles.gd'
+      - 'godot/notation/native/fingering_annotations.gd'
+      - 'godot/notation/native/symbol_painter.gd'
+      - 'tests/test_source_svg_stem_references.py'
+      - 'tests/test_fingering_obstacle_geometry.py'
+      - 'tests/test_native_voice_collisions.py'
 permissions:
   contents: read
 concurrency:
