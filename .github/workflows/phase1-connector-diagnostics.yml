@@ -34,6 +34,33 @@ jobs:
           mkdir -p "$RUNNER_TEMP/godot-bin"
           unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
           sudo install -m 755 "$RUNNER_TEMP/godot-bin/Godot_v4.7.2-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Diagnose shard-2 real-source stem and tuplet evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/connectors/shard2"
+          PYTHONPATH=tests:. xvfb-run -a -s '-screen 0 2000x1100x24' python - <<'PY'
+          import json,os
+          from pathlib import Path
+          from piano_teacher.notation.feature_pixels import verify_note_feature_pixels
+          from piano_teacher.notation.connector_pixels import verify_tuplet_pixels
+          folder=Path('tests/fixtures/native_ledger_chord')
+          report=verify_note_feature_pixels((folder/'score.musicxml').read_text(),folder)
+          for row in report['measured']:
+              if row['beat']==0:
+                  print('SHARD2_CHORD',json.dumps(row,default=str),flush=True)
+          import test_verovio_wide_tuplet as test
+          class Factory:
+              def mktemp(self,name):
+                  folder=Path(os.environ['RUNNER_TEMP'])/'connectors/shard2'/name
+                  folder.mkdir(parents=True,exist_ok=True)
+                  return folder
+          folder=test.real_native_frames.__wrapped__(Factory())
+          proof=verify_tuplet_pixels((folder/'score.musicxml').read_text(),folder)
+          expected=[n['id'] for n in json.loads((test.SOURCE/'group-model.json').read_text())['notation_events']]
+          for row in proof['measured']:
+              if row.get('event_ids')==expected:
+                  print('SHARD2_TUPLET',json.dumps(row,default=str),flush=True)
+          (folder/'diagnostic-shard2-proof.json').write_text(json.dumps(proof,indent=2,default=str))
+          PY
       - name: Capture authored beam and tuplet failures with strict source checks
         run: |
           mkdir -p "$RUNNER_TEMP/connectors"
