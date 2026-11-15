@@ -194,6 +194,18 @@ func paint_note(canvas, frame: RenderPass, event: Dictionary, x: float,
             # silently revert to imitated musical ink.
             push_warning("Missing authentic Verovio note template: " + kind)
             return
+        # The reusable Verovio note template is engraved at one neutral
+        # register. Its downward quarter/half shaft ends around 3.2 staff
+        # spaces from a source-registered head, although independently
+        # engraved notes at their actual written register require 3.5.
+        # Complete that original Verovio stem using its OWN extracted
+        # longitudinal alpha mask, retaining cap, thickness and X anchor.
+        # This is restricted to unflagged isolated notes: a beamed note's
+        # tip is owned by the original beam geometry, and a flagged note's
+        # complete authentic sprite must preserve the attached flag.
+        if not normal_up and kind in ["quarter","half"]:
+            score_layout.glyphs.paint_note_stem(
+                canvas,kind,false,x,y,y+3.5*gap,gap,ink)
         paint_rhythm_dots(canvas,frame,x,y,int(event.get("dots",0)),ink,gap)
         paint_note_accidental(canvas,frame,event,x,y,ink,gap)
         frame.record_notehead(event,Vector2(x,y),score_layout.size.x,ink,{
