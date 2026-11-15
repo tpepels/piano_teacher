@@ -422,10 +422,21 @@ def _stem(pixels, anchors, up, *, edge=None):
                 near_beam = pixels[max(top, bottom-round(gap*2)):bottom, x].any() if not up else pixels[top:min(bottom, top+round(gap*2)), x].any()
                 if not near_head or not near_beam:
                     continue
+            # A simultaneous different-voice head can join the near end of
+            # the *same photographed stem column*. Bound that end by the
+            # independently registered source-head contour rather than by
+            # an assumed half-staff-space above/below its centre. The shaft
+            # still has to be continuous, bright at both ends, thin, and
+            # at least 1.25 spaces long; missing/erased stem pixels cannot
+            # be supplied by the source or by a nearby voice.
+            head_top = min(a['bbox'][1] for a in anchors)
+            head_bottom = max(a['bbox'][3] for a in anchors)
             if up:
-                valid = top <= high-1.25*gap and bottom >= low-.3*gap and bottom <= low+.5*gap
+                valid = (top <= high-1.25*gap and bottom >= low-.3*gap
+                         and bottom <= head_bottom+.15*gap)
             else:
-                valid = bottom >= low+1.25*gap and top <= high+.3*gap and top >= high-.5*gap
+                valid = (bottom >= low+1.25*gap and top <= high+.3*gap
+                         and top >= head_top-.15*gap)
             if valid and bottom-top <= 12*gap:
                 candidates.append((bottom-top, x, top, bottom))
     if not candidates:
@@ -620,12 +631,52 @@ def _bracket_topology(pixels, mask, x, y, number_box, gap):
     padded = np.pad(block, 1)
     supported = np.logical_or.reduce([padded[dy:dy+h, dx:dx+w]
                                       for dy in range(3) for dx in range(3)])
-    for part in (slice(0, max(2, round(gap*.3))), slice(max(0, w-round(gap*.3)), w)):
+    for part in (slice(0, max(2, round(gap*.3))),
+                 slice(max(0, w-round(gap*.3)), w)):
         required = mask[:, part]
+        if not required.any():
+            continue
         height = int(np.count_nonzero(required.any(axis=1)))
         observed_height = int(np.count_nonzero(block[:, part].any(axis=1)))
-        if required.sum() and (np.count_nonzero(required & supported[:, part])/required.sum() < .90
-                               or observed_height < height-2):
+        overlap = np.count_nonzero(required & supported[:, part])/required.sum()
+        if overlap >= .90 and observed_height >= height-2:
+            continue
+        # An engraver may space the original and practice score differently:
+        # the actual Verovio bracket can overhang the last head by a
+        # different fraction of one staff space. The numerator and complete
+        # connecting arm remain pixel-proven. Instead of certifying a blank
+        # *expected* column, seek the real vertical endpoint in the full
+        # photographed PNG within half a staff space of the original hook.
+        # The reference fixes its vertical contour; every intervening
+        # horizontal column must also be real bright ink. A cut/erased hook
+        # has no such vertical witness and remains a mismatch.
+        left_side = part.start == 0
+        indices = list(range(*part.indices(w)))
+        reference_x = x+max(indices, key=lambda col: np.count_nonzero(mask[:, col]))
+        reference_y = mask[:, reference_x-x]
+        arm_y = int(np.argmax(mask.sum(axis=1)))
+        recovery = False
+        radius = max(1, round(gap*.5))
+        for actual_x in range(reference_x-radius, reference_x+radius+1):
+            if not 0 <= actual_x < pixels.shape[1]:
+                continue
+            column = pixels[y:y+h, actual_x]
+            pad = np.pad(column, 1)
+            near = pad[:-2] | pad[1:-1] | pad[2:]
+            if (np.count_nonzero(reference_y & near)/max(1,reference_y.sum()) < .90
+                    or np.count_nonzero(column) < height-2):
+                continue
+            # Only the source-side horizontal stroke is a possible bridge.
+            # Requiring every actual pixel column stops a detached nearby
+            # stem or numeral from being called the tuplet endpoint.
+            inner_x = x+max(indices) if left_side else x+min(indices)
+            a, b = sorted((inner_x, actual_x))
+            if a < b and any(not pixels[max(0,y+arm_y-1):min(pixels.shape[0],y+arm_y+2),cx].any()
+                              for cx in range(a,b+1)):
+                continue
+            recovery = True
+            break
+        if not recovery:
             return 'Tuplet bracket endpoint hook is missing or detached'
     columns = np.arange(x, x+w)
     corridor = (columns >= number_box[0]-gap) & (columns < number_box[2]+gap)
