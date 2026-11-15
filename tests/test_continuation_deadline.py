@@ -268,6 +268,31 @@ def test_an_announced_continuation_is_exactly_the_take_that_runs(engine, scenari
         assert plan["bpm"] > BPM, "the count-in is announced at the stepped tempo"
 
 
+def _multistage_engine(engine):
+    """A genuine two-hand course with multiple valid source-backed stages.
+
+    The tiny original timing fixture deliberately has one right-hand stage.
+    A source-change contract must not invent an invalid next stage in that
+    fixture. Adding real left-hand MIDI notes gives the standard generator
+    right-hand, left-hand and together destinations without mocking source
+    identity or bypassing decision validation.
+    """
+    from dataclasses import replace
+    from piano_teacher.music import Note
+    app, now = engine()
+    left = (Note(0.,1.,48,1,0,"left","left-0"),
+            Note(4.,5.,50,1,0,"left","left-1"))
+    piece = app.plan.piece
+    notes = piece.notes + left
+    phrases = tuple(replace(phrase,notes=phrase.notes+left)
+                    for phrase in piece.phrases)
+    app.plan = LearningPlan(replace(piece,notes=notes,phrases=phrases),
+                            consolidate=True)
+    from piano_teacher.teaching_course import steps
+    assert len(steps(app.plan.course_state())) > 1
+    return app, now
+
+
 def _chosen_teacher(monkeypatch, app, choose=None):
     """Instrument the selected generator's current, validated teaching API.
 
@@ -332,7 +357,8 @@ def _reroute_decision(choice):
 
 @pytest.mark.parametrize("reason", ["mastery", "feedback_moves_stage", "remediation"])
 def test_a_take_whose_settlement_can_reroute_is_not_announced(engine, monkeypatch, reason):
-    app, now = engine()
+    app, now = (_multistage_engine(engine)
+                if reason == "feedback_moves_stage" else engine())
     if reason == "mastery":
         app.plan.bpm = app.plan.target_bpm
         from piano_teacher.lesson_settings import SETTINGS
@@ -541,7 +567,7 @@ def test_unannounced_new_stage_waits_for_prepared_ink_without_graded_start(
     source decision is made once and must wait for verified future-stage
     readiness, while the presentation axis keeps scrolling.
     """
-    app, now = engine()
+    app, now = _multistage_engine(engine)
     calls = _chosen_teacher(monkeypatch,app,_reroute_decision("move_stage"))
     start_short(app)
     if outcome == "clean":
