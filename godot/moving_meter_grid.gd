@@ -1,4 +1,6 @@
 extends RefCounted
+# Only before any source model exists; never used as a loaded score meter.
+const EMPTY_STAFF_METER_BEATS := 4.0
 ## Source-meter-accurate blank-staff barline locations. The axis is the same
 ## immutable continuous world coordinate as every retained source/rest strip.
 ## Only visible world beats are returned; a long imported score never causes
@@ -6,7 +8,7 @@ extends RefCounted
 
 static func visible_lines(world: float, width: float, playhead_x: float,
         density: float, origin: float, measures: Array,
-        fallback_beats: float = 4.0) -> Array[float]:
+        fallback_beats: float = EMPTY_STAFF_METER_BEATS) -> Array[float]:
     var scale: float = maxf(1.0,density)
     var left: float = world-playhead_x/scale
     var right: float = world+(width-playhead_x)/scale
@@ -19,7 +21,7 @@ static func visible_lines(world: float, width: float, playhead_x: float,
     var first: Dictionary = effective[0]
     var last: Dictionary = effective[-1]
     var first_start: float = float(first.get("start_beat",0.0))
-    var last_end: float = float(last.get("end_beat",4.0))
+    var last_end: float = float(last.get("end_beat",fallback_beats))
     var first_width: float = maxf(.25,
         float(first.get("end_beat",first_start+fallback_beats))-first_start)
     var last_width: float = maxf(.25,last_end-float(last.get("start_beat",0.0)))
