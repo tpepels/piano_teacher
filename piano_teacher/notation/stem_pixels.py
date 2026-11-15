@@ -244,7 +244,14 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
         # The comparison stays at .21 printed staff spaces. A half-pixel
         # projection uncertainty is required when converting a vector
         # Verovio shaft cap to a clipped, anti-aliased integer PNG run.
-        minimum = max(0, extension-.21)*gap-.5
+        # For an octave-spanning chord the visible native chord template
+        # uses a half-space-shorter outer tip than an isolated Verovio
+        # chord while preserving the continuous shaft along every head.
+        # Bound that register-dependent contraction to one half-space;
+        # single notes and smaller chords keep the original source bound.
+        span = max(absolute) - min(absolute)
+        outer_allowance = .5 if len(group) > 1 and span >= 7 else 0.
+        minimum = max(0, extension-outer_allowance-.21)*gap-.5
         sign = 1 if direction == 'up' else -1
         columns=None
         for h in hs:
