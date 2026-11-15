@@ -122,7 +122,7 @@ func visual_beat(at_ms: int) -> float:
                 (float(at_ms)-retry_start_ms)/1000.0 * retry_velocity,
                 minf(retry_from_beat, retry_start_beat),
                 maxf(retry_from_beat, retry_start_beat))
-        return retry_start_beat + (float(at_ms)-retry_preparation_ms)/60000.0 * retry_bpm
+        return retry_start_beat + TempoTimeline.beats_from_milliseconds(float(at_ms)-retry_preparation_ms,retry_bpm)
     if visual_epoch_enabled and (active or idle_continues_through_gap):
         return _visual_from_epoch(at_ms)
     if active:
@@ -140,7 +140,7 @@ func visual_beat(at_ms: int) -> float:
         else maxf(idle_visual_target, projected)
 
 func retry_count_in_beat(at_ms: int) -> float:
-    return (float(at_ms)-retry_deadline_ms)/60000.0*retry_bpm
+    return TempoTimeline.beats_from_milliseconds(float(at_ms)-retry_deadline_ms,retry_bpm)
 
 func retry_preparing(at_ms: int) -> bool:
     return retry_active and float(at_ms) >= retry_preparation_ms \
@@ -168,7 +168,7 @@ func now(now_ms: int) -> float:
     if elapsed <= 0.0:
         return beat
     if tempo_segments.is_empty():
-        beat += elapsed * bpm / 60.0
+        beat += TempoTimeline.beats_from_seconds(elapsed,bpm)
     else:
         timeline_elapsed_seconds += elapsed
         beat = _beat_at_seconds(timeline_elapsed_seconds, tempo_segments)
@@ -225,7 +225,7 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
     var next_elapsed: float = float(state.get("clock_elapsed_seconds", 0.0))
     if next_active:
         if next_segments.is_empty():
-            observed += float(received_ms - captured_ms) * next_bpm / 60000.0
+            observed += TempoTimeline.beats_from_milliseconds(float(received_ms-captured_ms),next_bpm)
         else:
             # Backend sends the same tempo segments and sampled elapsed
             # seconds. Extrapolate through the segment boundary, not at one BPM.
