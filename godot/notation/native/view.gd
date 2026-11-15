@@ -1359,12 +1359,12 @@ func enqueue_recovery_queue(world: float, source_opening: float,
             "header":_stream_header_beats(source_opening),
             "deadline_lead":graded_deadline_world-stream_world_beat,
             "ink_ends":blocking}
-        var density: float = maxf(1.0,timeline.pixels_per_beat)
-        var playhead: float = size.x*PLAYHEAD_FRACTION
+        var diagnostic_density: float = maxf(1.0,timeline.pixels_per_beat)
+        var diagnostic_playhead: float = size.x*PLAYHEAD_FRACTION
         var peer_source: float = _stream_queue.minimum_peer_opening(
-            density,size.x,playhead,true,"source")
+            diagnostic_density,size.x,diagnostic_playhead,true,"source")
         var peer_rest: float = _stream_queue.minimum_peer_opening(
-            density,size.x,playhead,true,"rest")
+            diagnostic_density,size.x,diagnostic_playhead,true,"rest")
         if is_finite(peer_source):
             detail["peer_source_floor"] = peer_source
         if is_finite(peer_rest):
