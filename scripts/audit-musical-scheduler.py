@@ -26,7 +26,7 @@ REMOVED = tuple("".join(parts) for parts in (
     ("_continuation_", "deadline"),
     ("SHORT_REST_", "LATENCY_SECONDS"),
 ))
-SOURCES = ("piano_teacher", "godot", "tests", "scripts")
+SOURCES = ("piano_teacher", "godot", "native", "tests", "scripts")
 EXTENSIONS = frozenset({".py", ".gd", ".sh", ".cpp", ".hpp", ".h"})
 BAD_IMPORT = re.compile(
     r"from\s+[^\n]*attempt_progression\s+import\s+[^\n]*\bSETTLEMENT_SECONDS\b"

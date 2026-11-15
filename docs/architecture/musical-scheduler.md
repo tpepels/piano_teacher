@@ -93,3 +93,49 @@ shards, the actual MIDI/ALSA + Godot
 (with the unchanged 2.25-bar bound), and physical keyboard
 acceptance must pass on the same revision. No bounded CI result should
 be represented as physical acceptance.
+
+
+## 2026-11-15 full-tree legacy removal sweep
+
+All previously exposed timing facades have been **deleted**, not forwarded.
+The pure scheduler now owns repeat and preview deadlines, manual retry rest
+budgeting, speed changes, pause/resume, source rest measurements, and
+cross-lesson handoffs. `server.py` retains only two **measurement capture**
+helpers (`_collect_rest_measurement` and
+`_collect_continuation_measurement`) that report immutable inputs to the
+central `SCHEDULER` methods; these helpers do no deadline arithmetic.
+
+The migration also replaced inline beat/BPM time arithmetic in
+`assessment_clock.py`, `assessment_service.py`, `exercise_contracts.py`,
+`practice.py`, `transport_projection.py`, `state_projection.py`,
+`live_input_view.py`, `live_feedback.py`, `feedback.py`, recovery
+and Fukuda MIDI calculations, `midi_calibration.py`, `listen_session.py`,
+and sample/demo audio synthesis. The score tempo map remains the authored
+piecewise definition; it uses the scheduler's common conversions rather
+than a second hard-coded 60/BPM expression.
+
+`scripts/audit-musical-scheduler.py` now inspects first-party Python,
+GDScript, native bridge, tests and scripts. It rejects obsolete API tokens
+and obsolete imports anywhere, and uses a Python AST walk to reject
+independent literal-60/BPM conversions across **all production Python**.
+It runs in the normal `scripts/ci-smoke.sh` push gate. Historical
+third-party addons are excluded; original source notation and score
+interpolation are still owned by the renderer and are independently
+accepted against physical glyphs.
+
+The additional `musical-scheduler-acceptance.yml` workflow runs all
+previously unselected source-clock and grading integration modules and
+eight Godot 4.7.2 immutable notation/transport fixtures. It exposed
+seven stale generator-API tests that were migrated to immutable
+`decide_teaching` decisions and proper two-hand stage fixtures, without
+restoring removed engine APIs or skipping assertions.
+
+**Verified on code revision `fa65a114`:** 429 Python integration tests
+passed (6 skipped), all eight real Godot fixtures passed, and the
+repo-wide audit reported zero obsolete references and zero independent
+production BPM conversions. The standard fast gate also passed.
+A native bridge scan found no references to the retired APIs.
+
+These results validate the code integration sweep. Full four-shard release
+testing, the exact local Godot+ALSA physical 2.25-bar acceptance, and
+physical keyboard acceptance remain separate gates.

@@ -2285,3 +2285,27 @@ remain.
 `test_automatic_rests_are_at_most_about_two_bars` on the latest
 commit; strict bound remains **2.25 bars**. The full four release
 shards must still run together on the same final SHA.
+
+
+### 2026-11-15 — complete scheduler API removal and test sweep
+
+- Removed the obsolete repeat, offscreen-start, retry-rewind, count-in,
+  short-rest and continuation-deadline facade functions and constants.
+  Consumers now invoke the single musical scheduler; no compatibility
+  aliases or deleted API references remain in production or tests.
+- Consolidated direct BPM conversions in source tempo maps, live MIDI
+  assessment/feedback, transport projections, recovery, Fukuda,
+  calibration and audio. Renderer-specific frame interpolation and
+  authentic physical glyph measurement retain their separate roles.
+- Added a full-source audit in `scripts/ci-smoke.sh` rejecting
+  reintroduction across first-party Python, Godot, native bridge, tests
+  and scripts, with AST checks for independent Python BPM formulas.
+- Converted stale historical teaching tests to the current immutable
+  generator decision contract, covering reroute, remediation, failure,
+  stable admitted-score identity and unprepared stage safety.
+- Added a dedicated Python+Godot integration workflow. On revision
+  `fa65a114`, Python: **429 passed, 6 skipped**; Godot 4.7.2: eight
+  source-flow, tempo, plan identity, admission and queue fixtures passed.
+  Fast CI and zero-reference audit passed.
+- **Not yet release-accepted:** complete four-shard suite and local
+  physical Godot/ALSA 2.25-bar rest acceptance against final main revision.
