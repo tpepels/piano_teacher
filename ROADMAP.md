@@ -2161,3 +2161,23 @@ The immediate acceptance path is the five focused failures plus
 the source-only regressions, followed by `ci-full.sh --shard 3`;
 shard 4 follows if green. **All four shards must finally pass on
 the same revision** (earlier shard-2 PASS belongs to an older SHA).
+
+
+### 2026-11-15 — shard-3 focused retry: 10 passing, 2 failing
+
+Local focused run at `948a436a`: **10 passed, 2 failed** in 141.99 s.
+The remaining failures were (1) `test_native_independent_half_voices_keep_separate_shafts_and_erasure_is_local[groups3]`, specifically the E5/G5 written half-note chord after the independent C5 voice verified, and (2) `test_automatic_rests_are_at_most_about_two_bars`: fifth automatic take, 24 BPM, 2-beat bar, still 3.0 bars rather than <=2.25. Earlier `groups2`, exact tempo-accounting unit tests, fixed playhead pixel test and workflow provenance passed.
+
+**Physical stem reference:** The independent Verovio reference had been engraved from the constant pitch index 34 (B4) regardless of the written source. In an upper register a forced-up chord's genuine extension can be shorter than this neutral reference. `stem_pixels.reference_stem_extension` now engraves the actual source pitch indices, source clef, note type and source-required direction. `feature_pixels` forwards the written-score evidence; the physical pixel-shaft ownership/mutation requirement stays unchanged. Failed evidence now records observed connected ink lengths, candidate column count, independent reference length and pitch/clef so that a further failure can be diagnosed from a compact pytest report. Commits: `daccf28`, `50770bc`, `880b306`, `d298dfb`.
+
+**Continuous automatic rest / header:** The original native first-measure context was initially treated as a fixed 15 staff-space left margin, and `ContextPainter` shifted that entire source header another 76/17 staff spaces left on every new and repeated take. Both overstates physical clipping/clearance and makes automatic continuations needlessly late at low BPM. An **unsafe interim proposal** to suppress or clip repeated headers was explicitly rejected by independent GitHub framebuffer tests: it erased the authentic repeated clef/key/meter and failed projected-overlap acceptance. It was completely reverted (`16861bb`, `a1b20b9`, `2a61f6c`, `5e9984d`). The final approach preserves the full genuine header **on every source copy**, moves its existing Verovio clef/key/meter columns together to remove the redundant left spacer (`1945bb8`), and derives the left clip/admission and rest geometry from the actual source clef raster width and number of printed key columns, plus one staff space safety margin (`4f589f3`). No source notes or graded deadlines are moved; the same physical bound controls queue admission, projection and retirement.
+
+**Verified at commit `4f589f3` by GitHub Actions:**
+- Current repeat/rest/header **real framebuffer**: PASS (the original header must appear in the replay with >=.85 similarity, one printed full measure of silence and a rejection on artificially erased header)
+- Godot 4.7.2 startup/regression tests: PASS, including the projected-overlap requirement
+- Phase 6 real-score framebuffer: PASS
+- Fast contract gate: PASS
+
+**Still unverified:** The new source-register correction to `groups3` and shortened **actual** automatic rest are not in those four graphical CI scopes. They need a fresh local focused rerun. If the stem remains incomplete, its new report includes observed physical ink and exact independent reference; do not label the case fixed or loosen its physical erasure control. If the rest remains >2.25 real bars, inspect the resulting `tests/readiness` events and next-stage schedule rather than excluding an automatic take.
+
+Once the focused cases are green, rerun `bash scripts/ci-full.sh --shard 3` and let shard 4 continue, then execute all four shards on the same final SHA. Release acceptance remains **incomplete** until every physical test and shard passes.
