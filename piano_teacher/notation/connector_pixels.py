@@ -178,11 +178,11 @@ def _pages(written, strings):
 
 
 @lru_cache(maxsize=8)
-def _raster(svg, space):
-    """Rasterize original graphics at a fixed reference staff scale."""
+def _raster(svg, space, target_gap=24.):
+    """Rasterize original source vectors at the requested staff-space scale."""
     import cairosvg
     geom = parse_svg_geometry(svg)
-    width = max(1, round(geom.width * 24 / (space * geom.height)))
+    width = max(1, round(geom.width * target_gap / (space * geom.height)))
     if width > 18000:
         raise ValueError('Reference raster exceeds bounded width')
     png = cairosvg.svg2png(bytestring=svg.encode(), output_width=width)
@@ -199,7 +199,8 @@ def _reference_art(root, nodes, geom, events, identifiers):
     rails = geom.staff_systems[system]['staff_lines']
     space = rails[1] - rails[0]
     # Preserve complete original ancestry/defs for each owned graphic.
-    masks = [_raster(isolate(root, node), space) for node in nodes]
+    original_svgs = tuple(isolate(root, node) for node in nodes)
+    masks = [_raster(svg, space) for svg in original_svgs]
     if not masks:
         return None
     mask = np.logical_or.reduce(masks)
@@ -208,7 +209,8 @@ def _reference_art(root, nodes, geom, events, identifiers):
         return None
     scale = 24 / (space * geom.height)
     bbox = [int(xs.min()), int(ys.min()), int(xs.max()+1), int(ys.max()+1)]
-    return dict(mask=mask[bbox[1]:bbox[3], bbox[0]:bbox[2]].copy(), gap=24.,
+    return dict(mask=mask[bbox[1]:bbox[3], bbox[0]:bbox[2]].copy(),
+                source_svgs=original_svgs, source_space=space, gap=24.,
                 anchors=[(x*geom.width*scale, y*geom.height*scale) for x, y, _ in anchors],
                 stem_xs=[geom.stem_x.get(i, float('nan'))*geom.width*scale for i in identifiers],
                 bbox=bbox)
@@ -577,7 +579,17 @@ def _beam(row, frames, target):
         staff_lines=list(frame['staves'][events[0]['staff']].lines))
 
 
-def _resized_art(art, gap):
+def _resized_art(art, gap, *, direct=False):
+    if direct and art.get('source_svgs'):
+        # Rasterize the independent original SVG directly at the measured
+        # printed staff scale: binary 24px -> 10px downsizing can lose a
+        # genuine tiny numeral's antialiased boundary pixels.
+        masks = [_raster(svg, art['source_space'], float(gap))
+                 for svg in art['source_svgs']]
+        full = np.logical_or.reduce(masks)
+        ys, xs = np.nonzero(full)
+        if len(xs):
+            return full[ys.min():ys.max()+1, xs.min():xs.max()+1].copy()
     x0, y0, x1, y1 = art['bbox']
     image = Image.fromarray(art['mask'].astype('uint8')*255)
     return np.asarray(image.resize((max(1, round((x1-x0)*gap/24)),
@@ -750,14 +762,14 @@ def _digit_glyphs():
     return glyphs
 
 
-def _digits(row, pixels, gap, nx, ny):
+def _digits(row, pixels, gap, nx, ny, *, direct=False):
     number = row['number']
     glyphs = _digit_glyphs()
     result = []
     for code, part in zip(row['numeral_codes'], row['number_parts']):
         if part is None or code not in glyphs:
             raise ValueError('Reference numeral contains an unsupported or empty glyph')
-        template = _resized_art(part, gap)
+        template = _resized_art(part, gap, direct=direct)
         x = nx+(part['bbox'][0]-number['bbox'][0])*gap/24
         y = ny+(part['bbox'][1]-number['bbox'][1])*gap/24
         (score, px, py), _ = _fit_mask(pixels, template, x, y, 1)
@@ -812,13 +824,21 @@ def _tuplet(row, frames, target):
     if any(x <= column <= x+template.shape[1] for column in frame['occluded_columns']):
         raise ValueError('Measured coloured playhead occludes the source numeral')
     (score, nx, ny), margin = _fit_mask(frame['pixels'], template, x, y, math.ceil(gap*.5))
+    direct = False
+    if score < .79 or margin < .05:
+        source_template = _resized_art(number, gap, direct=True)
+        (source_score, source_x, source_y), source_margin = _fit_mask(
+            frame['pixels'], source_template, x, y, math.ceil(gap*.5))
+        if (source_score, source_margin) > (score, margin):
+            score, margin, nx, ny, template, direct = (
+                source_score, source_margin, source_x, source_y, source_template, True)
     if score < .79 or margin < .05:
         return 'mismatch', 'Actual numeral contour lacks the source identity or a unique bounded fit', dict(
             expected_numeral=digits, match=round(score, 4), margin=round(margin, 4))
     number_box = [nx, ny, nx+template.shape[1], ny+template.shape[0]]
-    digit_evidence = _digits(row, frame['pixels'], gap, nx, ny)
+    digit_evidence = _digits(row, frame['pixels'], gap, nx, ny, direct=direct)
     evidence = dict(expected_numeral=digits, numeral_match=round(score, 4), numeral_margin=round(margin, 4),
-        digits=digit_evidence,
+        source_direct_raster=direct, digits=digit_evidence,
         number_bbox=number_box, anchors=anchors, staff_gap=gap,
         staff_lines=list(frame['staves'][events[0]['staff']].lines), bbox=number_box)
     if len(digit_evidence) != len(codes) or any(d['match'] < .79 or d['margin'] < .03 for d in digit_evidence):
