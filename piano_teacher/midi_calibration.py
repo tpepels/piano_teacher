@@ -9,6 +9,7 @@ it cannot isolate Bluetooth hardware transport delay.
 from __future__ import annotations
 
 from statistics import median
+from .application.musical_scheduler import SCHEDULER
 
 
 class MidiTapCalibration:
@@ -16,7 +17,7 @@ class MidiTapCalibration:
     count_in = 4
     ticks = 8
     rounds = 5
-    period = 60.0 / bpm
+    period = SCHEDULER.seconds_per_beat(bpm)
     round_beats = ticks  # no repeated count-in
     total_beats = count_in + rounds * ticks
     min_samples_per_round = 6

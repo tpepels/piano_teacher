@@ -14,6 +14,8 @@ from pathlib import Path
 import sys
 import wave
 
+from .application.musical_scheduler import SCHEDULER
+
 
 DEFAULT_SOUNDFONT = Path.home() / ".local/share/piano-teacher/soundfonts/salamander-grand-piano.sf2"
 
@@ -131,8 +133,8 @@ def render_wav(path: Path, variant, *, bpm: float, frames: int,
     phrase = variant.phrase
     events = []
     for note in variant.notes:
-        attack = round((note.start - phrase.start) * 60 / bpm * sample_rate)
-        release = max(attack + 1, round((note.end - phrase.start) * 60 / bpm * sample_rate))
+        attack = round(SCHEDULER.signed_beats_seconds(note.start-phrase.start,bpm)*sample_rate)
+        release = max(attack + 1, round(SCHEDULER.signed_beats_seconds(note.end-phrase.start,bpm)*sample_rate))
         if not 1 <= getattr(note, "velocity", 85) <= 127:
             raise ValueError("Sampled MIDI velocity must be between 1 and 127")
         events.append((attack, 1, note.pitch, int(getattr(note, "velocity", 85))))

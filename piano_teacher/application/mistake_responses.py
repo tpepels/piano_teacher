@@ -14,6 +14,7 @@ from math import isfinite
 from typing import Callable, Sequence
 
 from ..lesson_settings import SETTINGS
+from .musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True)
@@ -443,7 +444,7 @@ def _evidence_whole(facts: WholeEvidence) -> WholeResponse:
         onsets = {round(note.start, 7) for note in getattr(facts.phrase, "notes", ())}
         density = len(onsets) / (original_end - original_start)
     persistent_rhythm = all((a.timing_errors or 0) + (a.hold_errors or 0) > 0 for a in comparable[-2:])
-    if density * facts.bpm / 60 >= 4 and persistent_rhythm:
+    if density * SCHEDULER.beat_rate(facts.bpm) >= 4 and persistent_rhythm:
         return response("slow", "persistent_timing_under_source_load",
                         bpm=_scaled_bpm(facts.bpm, facts.minimum_bpm, .9))
     return response("repeat", "scattered_errors_require_full_target_reassessment")

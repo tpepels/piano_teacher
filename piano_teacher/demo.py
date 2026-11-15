@@ -21,6 +21,7 @@ from typing import Iterator
 import wave
 
 from .exercise_generator import ExerciseVariant
+from .application.musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True)
@@ -73,12 +74,12 @@ def _prepare(variant: ExerciseVariant, bpm: Real, sample_rate: int, chunk_frames
         frequency = 440 * 2 ** ((note.pitch - 69) / 12)
         if frequency >= sample_rate / 2:
             raise ValueError("Source pitch needs a higher audio sample rate")
-        first = round((onset-start)*60/bpm*sample_rate)
-        last = max(first+1, round((release-start)*60/bpm*sample_rate))
+        first = round(SCHEDULER.signed_beats_seconds(onset-start,bpm)*sample_rate)
+        last = max(first+1, round(SCHEDULER.signed_beats_seconds(release-start,bpm)*sample_rate))
         voices.append(_Voice(first, last, frequency))
         # Held source notes may cross the last engraved bar. Preserve them.
         audio_end = max(audio_end, release)
-    duration = (audio_end-start)*60/bpm
+    duration = SCHEDULER.signed_beats_seconds(audio_end-start,bpm)
     frames = math.ceil(duration*sample_rate-1e-9)
     if frames <= 0 or frames*2 > 0xffffffff-44:
         raise ValueError("Demo duration exceeds the PCM WAV file range")
