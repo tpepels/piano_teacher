@@ -5,6 +5,8 @@ const Runway := preload("res://score_runway.gd")
 const Session := preload("res://score_asset_session.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
+const ViewportFit := preload("res://notation/native/viewport_fit.gd")
+const Admission := preload("res://score_stream_admission.gd")
 
 class MockView:
     extends Control
@@ -138,6 +140,21 @@ func run() -> void:
     check(is_equal_approx(successor.minimum_peer_opening(
         96.0,1000.0,330.0,true,"source"),13.0+60.0/96.0),
         "authored source notes still enforce the full peer margin")
+    # A complete two-beat rest and authentic opening header must fit
+    # comfortably under the physical rest ceiling after native scaling.
+    # Do not hide/repaint header glyphs to satisfy the clock.
+    var floor_density: float = ViewportFit.automatic_rest_density_floor(
+        2.0,15.0,22.0)
+    var planned_span: float = 2.0 + (15.0*22.0+
+        StreamQueue.PEER_REST_MARGIN_PX)/floor_density + \
+        2.0*Admission.OFFSCREEN_MARGIN_BEATS
+    check(is_equal_approx(planned_span,
+        ViewportFit.AUTOMATIC_REST_TARGET_BARS*2.0) and
+        planned_span < 2.25*2.0,
+        "a two-beat practice rest plus complete header fits before the 2.25-bar limit")
+    check(ViewportFit.automatic_rest_density_floor(4.0,15.0,22.0) <
+        floor_density,
+        "short source bars must not inherit a four-beat header allowance")
     var stage := MockStage.new()
     root.add_child(stage)
     var session := Session.new(stage.renderer)
