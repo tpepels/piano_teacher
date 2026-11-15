@@ -908,19 +908,17 @@ func _transport_admission_receipt(planned: Dictionary,
         return {}
     # A bounded, externally inspectable receipt for every accepted user
     # transport. This is the SAME deadline later sent to the backend.
-    var entry_seconds: float = maxf(0.0,
-        (float(reserved["start_world"])-opening+
-            StreamAdmission.clip_bounds({
-                "kind":"source","source_floor":opening,
-                "source_ceiling":timeline.duration_beats,
-                "clip_floor":opening,
-                "clip_ceiling":timeline.duration_beats,
-                "clip_leading_spaces":_first_source_header_spaces() if opening <= .0001 else 1.6
-            },timeline.pixels_per_beat,staff_gap(),
-                timeline.duration_beats).x/
-                    maxf(1.0,timeline.pixels_per_beat) -
-            stream_world_beat-_stream_right_beats()) *
-            60.0/maxf(1.0,bpm))
+    var entry_beats: float = float(reserved["start_world"])-opening+ \
+        StreamAdmission.clip_bounds({
+            "kind":"source","source_floor":opening,
+            "source_ceiling":timeline.duration_beats,
+            "clip_floor":opening,
+            "clip_ceiling":timeline.duration_beats,
+            "clip_leading_spaces":_first_source_header_spaces() if opening <= .0001 else 1.6
+        },timeline.pixels_per_beat,staff_gap(),
+            timeline.duration_beats).x/maxf(1.0,timeline.pixels_per_beat) - \
+        stream_world_beat-_stream_right_beats()
+    var entry_seconds: float = StreamAdmission.lead_seconds(entry_beats,0.0,bpm)
     var receipt: Dictionary = {"action":str(planned["action"]),
         "mode":str(planned["mode"]),
         "start_world":float(reserved["start_world"]),
