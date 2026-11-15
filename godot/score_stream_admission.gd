@@ -1,9 +1,10 @@
 extends RefCounted
+const Spacing := preload("res://notation/shared/spacing_policy.gd")
 ## Single, forward-only source reservation contract. A Play/Resume action
 ## selects already pre-engraved, offscreen ink, or, on an empty strip, opens
 ## one count-in bar ahead of the playhead (empty_strip_start). It never pops
 ## a notehead in over, or ahead of, ink that is already visible.
-const MIN_READING_BEATS := 3.0
+const MIN_READING_BEATS := Spacing.MIN_LOOKAHEAD_BEATS
 # Keep the first printed pixel just beyond the viewport. Large margins
 # multiply into seconds of blank screen at slow practice tempos.
 const OFFSCREEN_MARGIN_BEATS := 0.12
@@ -148,7 +149,7 @@ static func ink_ahead_of(passes: Array, world: float, density: float,
 
 static func empty_strip_start(passes: Array, world: float,
         count_in_beats: float, header_beats: float, peer_floor: float,
-        density: float = 96.0, gap: float = 24.0,
+        density: float = Spacing.DEFAULT_PIXELS_PER_BEAT, gap: float = 24.0,
         score_duration: float = INF, peer_rest_floor: float = NAN) -> float:
     # Owner decision 2026-11-08: "the notes should appear closer to the
     # playhead, so the wait is about one bar". With nothing printed right of
@@ -226,7 +227,7 @@ static func announced_empty_strip_start(passes: Array, world: float,
 
 static func position(passes: Array, world: float, right_beats: float,
         header_beats: float, intended: float = NAN,
-        travel_beats: float = 0.0, density: float = 96.0,
+        travel_beats: float = 0.0, density: float = Spacing.DEFAULT_PIXELS_PER_BEAT,
         gap: float = 24.0, score_duration: float = INF) -> float:
     # One common append-only boundary. No existing passage is ever excluded
     # or retimed to make a replacement appear earlier.
@@ -239,7 +240,7 @@ static func position(passes: Array, world: float, right_beats: float,
 
 
 static func retry_start(passes: Array, world: float, right_beats: float,
-        header_beats: float, rest_beats: float, density: float = 96.0,
+        header_beats: float, rest_beats: float, density: float = Spacing.DEFAULT_PIXELS_PER_BEAT,
         gap: float = 24.0, score_duration: float = INF) -> float:
     # Owner, round 4 (item 7): a Retry opens at the right edge at once. Its
     # first printed pixel is just beyond the viewport and directly after
