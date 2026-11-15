@@ -35,6 +35,32 @@ OLD_ARITHMETIC = re.compile(
     r"\b(?:self\.plan\.bpm|self\._presentation_bpm|bpm)\s*/\s*60(?:\.0)?\b"
     r"|\b60(?:\.0)?\s*/\s*(?:self\.plan\.bpm|self\._presentation_bpm|bpm)\b"
 )
+# Godot is a projection client, not an independent timing calculator:
+# it must convert quarter-beat deltas through TempoTimeline. Catch hidden
+# direct "60/BPM" variants even when they use different variable names.
+_GDSCRIPT_BEAT_UNIT = re.compile(
+    r"(?<![\\w.])(?:60(?:\\.0)?|60000(?:\\.0)?)(?![\\w.])"
+)
+_GDSCRIPT_BPM_NAME = re.compile(r"\\b[a-zA-Z_]*bpm\\b",re.IGNORECASE)
+
+
+def _gd_direct_bpm_conversions(source: str) -> list[int]:
+    """Find numeric minute/BPM conversions on executable GDScript lines.
+
+    UI sizes, font sizes, score geometry, named tempo constants and default
+    BPM values are not conversions. Complex physical tempo-map calculations
+    belong inside res://tempo_timeline.gd only.
+    """
+    errors = []
+    for number, text in enumerate(source.splitlines(), 1):
+        code = text.split("#",1)[0]
+        if (_GDSCRIPT_BEAT_UNIT.search(code) and
+                _GDSCRIPT_BPM_NAME.search(code) and
+                ("*" in code or "/" in code)):
+            errors.append(number)
+    return errors
+
+
 SCHEDULING_OWNERS = {
     "piano_teacher/server.py",
     "piano_teacher/visual_transport.py",
@@ -103,6 +129,10 @@ def audit() -> list[str]:
                     rel != "piano_teacher/application/musical_scheduler.py"):
                 for number in _independent_bpm_conversions(source):
                     defects.append(f"{rel}:{number}: direct BPM arithmetic outside scheduler")
+            if rel.startswith("godot/") and path.suffix == ".gd" and (
+                    rel != "godot/tempo_timeline.gd"):
+                for number in _gd_direct_bpm_conversions(source):
+                    defects.append(f"{rel}:{number}: direct Godot BPM conversion outside tempo timeline")
     return defects
 
 
