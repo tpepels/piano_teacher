@@ -25,6 +25,7 @@ from .diagnosis_policies import LearnerSnapshot
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
+from .application.musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .lesson_timing import lead_in_beats
 
 # Poll/frame latency allowed between announcing a short-rest continuation
@@ -64,7 +65,6 @@ from .application.transport_commands import (
 from .application.stage_change import prepare_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick, repeat_deadline, SETTLEMENT_SECONDS
-from .application.musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .application.assessment_settlement import assess_completed_take
 from .application.guided_session import GuidedSession, GuidedFragment
 from .application.tempo_map_cache import TempoMapCache
