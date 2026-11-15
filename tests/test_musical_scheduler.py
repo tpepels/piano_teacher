@@ -8,6 +8,7 @@ import pytest
 
 from piano_teacher.application.musical_scheduler import (
     SCHEDULER, MusicalDeadline, PreparationDeadline,
+    RestMeasurement, ContinuationMeasurement,
 )
 from piano_teacher.visual_transport import VisualTransport
 
@@ -307,3 +308,49 @@ def test_musical_conversions_include_signed_pickups_and_live_tempos():
     assert SCHEDULER.seconds_beats(-1.25,24)==pytest.approx(-.5)
     with pytest.raises(ValueError):
         SCHEDULER.beats_seconds(-.5,24)
+
+
+def test_engravings_supply_measurements_not_independent_start_deadlines():
+    rest=RestMeasurement(
+        source_end=100.0,outgoing_bpm=27.0,
+        clear_beats=2.14279410045217,header_beats=.513621934902367,
+        count_in_beats=2.0,tempo_epoch=100.2)
+    planned=SCHEDULER.measured_rest(rest,now=100.2,bpm=24.0)
+    direct=SCHEDULER.short_rest(
+        now=100.2,source_end=rest.source_end,
+        outgoing_bpm=rest.outgoing_bpm,incoming_bpm=24.0,
+        clear_beats=rest.clear_beats,header_beats=rest.header_beats,
+        count_in_beats=rest.count_in_beats,
+        latency=.4,tempo_epoch=rest.tempo_epoch)
+    assert planned==pytest.approx(direct.run_at)
+    assert (planned-rest.source_end)/(2*60/24)<=2.25
+    assert SCHEDULER.measured_rest(None,now=100,bpm=24) is None
+
+
+def test_one_measurement_contract_owns_clean_repeat_slowdown_and_fallback():
+    rest=RestMeasurement(
+        source_end=100.0,outgoing_bpm=27,clear_beats=2,
+        header_beats=.4,count_in_beats=2,tempo_epoch=100.2)
+    facts=ContinuationMeasurement(
+        deadline=101.0,announced_at=None,rest_beats=2.0,
+        horizon_beats=9.0,rest=rest,automatic=True)
+    expected=SCHEDULER.measured_rest(rest,now=100.3,bpm=24)
+    assert SCHEDULER.continuation(facts,now=100.3,bpm=24)==expected
+    assert expected>=101
+    # Immutable announced copy takes precedence over any new physical floor.
+    bound=ContinuationMeasurement(
+        deadline=101.0,announced_at=101.0,rest_beats=2,
+        horizon_beats=9,rest=rest,automatic=True)
+    assert SCHEDULER.continuation(bound,now=100.3,bpm=24)==101
+    assert SCHEDULER.continuation(
+        ContinuationMeasurement(
+            deadline=101.0,announced_at=None,rest_beats=2,
+            horizon_beats=9,rest=rest,automatic=False),
+        now=100.3,bpm=24)==101
+    # With no native measurements, the engine uses the full unannounced
+    # offscreen horizon exactly once, never a hidden second count-in.
+    absent=ContinuationMeasurement(
+        deadline=101.0,announced_at=None,rest_beats=2,
+        horizon_beats=9,rest=None,automatic=True)
+    assert SCHEDULER.continuation(absent,now=100.3,bpm=24)==pytest.approx(
+        max(101+7*60/24,100.3+9*60/24))
