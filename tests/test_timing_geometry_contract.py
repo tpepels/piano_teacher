@@ -69,3 +69,37 @@ def test_header_clearance_is_derived_from_the_actual_header_painter():
     assert view.count("ContextPainter.clef_lead_pixels(") == 2
     assert "clef_lead_pixels(key_columns,gap)" in painter
     assert "HEADER_KEY_COLUMN_UNITS" in painter
+
+
+def test_first_party_godot_cannot_reimplement_bpm_second_arithmetic():
+    """The cross-language presentation client has one beat-unit conversion."""
+    from runpy import run_path
+
+    audit = run_path(str(ROOT / "scripts/audit-musical-scheduler.py"))
+    scan = audit["_gd_direct_bpm_conversions"]
+    assert scan("var beat = elapsed * bpm / 60000.0") == [1]
+    assert scan("var seconds = pulse*60.0/plan_bpm") == [1]
+    assert scan("var ticks = milliseconds * next_bpm / 60000") == [1]
+    assert scan('var bpm = float(state.get("bpm",60.0))') == []
+    assert scan("const PEER_MARGIN_PX := 60.0") == []
+    for path in (ROOT / "godot").rglob("*.gd"):
+        if "addons" in path.parts or path.name == "tempo_timeline.gd":
+            continue
+        assert scan(path.read_text()) == [], (
+            f"Independent beat-time conversion: {path.relative_to(ROOT)}")
+
+
+def test_staff_and_ledger_rails_share_painter_metrics():
+    view = (ROOT / "godot/notation/native/view.gd").read_text()
+    painter = (ROOT / "godot/notation/native/symbol_painter.gd").read_text()
+    assert "const STAFF_LINE_WIDTH := 1.15" in painter
+    assert "const STAFF_LINE_ALPHA := .48" in painter
+    assert view.count("SymbolPainter.STAFF_LINE_WIDTH") >= 2
+    assert "SymbolPainter.STAFF_LINE_ALPHA if selected else .28" in view
+
+
+def test_future_engraving_queue_and_lookahead_have_one_capacity():
+    from piano_teacher.application.future_score import MAX_LOOKAHEAD, MAX_QUEUED
+
+    assert MAX_QUEUED == MAX_LOOKAHEAD
+    assert MAX_LOOKAHEAD > 0
