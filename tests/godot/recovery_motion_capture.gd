@@ -61,8 +61,12 @@ func run() -> void:
             # Sample the production native compositor on every display frame.
             app._process(0.0)
             app.practice_view.stage.renderer.queue_redraw()
-            await process_frame
-            RenderingServer.force_draw()
+            # Wait for the actual GPU/compatibility frame completion. Calling
+            # synchronous force_draw() after an awaited process_frame caused
+            # dozens of nested framebuffer readbacks on CI and could exceed
+            # the outer subprocess limit even with a valid native model.
+            # frame_post_draw ensures every inspected pixel is rendered.
+            await RenderingServer.frame_post_draw
             var pixels: Image = root.get_texture().get_image()
             if not checking:
                 pixels.save_png(output + "/%d-%03d.png" % [bpm, frame])
@@ -94,6 +98,9 @@ func run() -> void:
             var wait_ms: int = start_ms + roundi(float(frame + 1) * 1000.0 / 30.0) - Time.get_ticks_msec()
             if wait_ms > 0:
                 await create_timer(float(wait_ms) / 1000.0).timeout
+        if checking:
+            print("RECOVERY_CAPTURE_PROGRESS:",bpm," frames=",12,
+                " elapsed_ms=",Time.get_ticks_msec()-start_ms)
     var file := FileAccess.open(output + "/motion.json", FileAccess.WRITE)
     file.store_string(JSON.stringify(samples))
     print("RECOVERY_CAPTURE_FRAMES:", samples.size())
