@@ -5,7 +5,7 @@ tempo. The former count_in_max_seconds cap (about four seconds, in half-beat
 steps) is removed.
 """
 import pytest
-from piano_teacher.lesson_timing import lead_in_beats
+from piano_teacher.application.musical_scheduler import SCHEDULER
 from test_phase1_camera import native_camera_run
 
 
@@ -13,13 +13,13 @@ from test_phase1_camera import native_camera_run
     (4, 100), (3, 100), (4, 40), (3, 40), (4, 20), (3, 12), (3, 120), (1.5, 31),
 ])
 def test_lead_in_is_exactly_one_measure_at_any_tempo(bar, bpm):
-    assert lead_in_beats(bar, bpm) == bar
+    assert SCHEDULER.count_in_beats(bar, bpm) == bar
 
 
 def test_invalid_count_in_inputs_fail():
     for args in [(0,40), (4,0), (-2,120)]:
         with pytest.raises(ValueError):
-            lead_in_beats(*args)
+            SCHEDULER.count_in_beats(*args)
 
 
 def test_godot_scrolling_is_unconditional_during_transport(native_camera_run):

@@ -138,6 +138,6 @@ def test_full_passage_routing_precedence_is_owned_by_selected_teacher():
 
 
 def test_preview_and_successful_loop_use_identical_rest_deadline():
-    from piano_teacher.application.attempt_progression import repeat_deadline
-    assert repeat_deadline(run_at=200.0, duration=4.5,
+    from piano_teacher.application.musical_scheduler import SCHEDULER
+    assert SCHEDULER.repeat(run_at=200.0, source_seconds=4.5,
                            gap_beats=3.0, bpm=90.0) == 206.5

@@ -313,13 +313,13 @@ def test_worker_resume_command_reserves_future_note_deadline(harness):
 
 
 def test_single_future_stage_schedule_respects_offscreen_source_reading_time():
-    from piano_teacher.application.transport_commands import scheduled_offscreen_start
-    assert scheduled_offscreen_start(100.0, 14.0, 31.0) == pytest.approx(
+    from piano_teacher.application.musical_scheduler import SCHEDULER
+    assert SCHEDULER.offscreen(deadline=100.0, lead_beats=14.0, bpm=31.0) == pytest.approx(
         100.0 + 14.0*60.0/31.0)
-    assert scheduled_offscreen_start(105.0, 0.0, 40.0) == 105.0
+    assert SCHEDULER.offscreen(deadline=105.0, lead_beats=0.0, bpm=40.0) == 105.0
     for lead in (float("nan"), float("inf"), -1.0, 65.0):
         with pytest.raises(ValueError, match="future notation"):
-            scheduled_offscreen_start(105.0, lead, 40.0)
+            SCHEDULER.offscreen(deadline=105.0, lead_beats=lead, bpm=40.0)
 
 
 def test_future_stage_acknowledgement_records_verified_offscreen_lead():

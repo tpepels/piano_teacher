@@ -9,7 +9,8 @@ import mido
 import pytest
 
 from scripts.check_user_midi_visual_regression import CASES, MIDI_DIR
-from piano_teacher.lesson_timing import preparation_meter, lead_in_beats
+from piano_teacher.lesson_timing import preparation_meter
+from piano_teacher.application.musical_scheduler import SCHEDULER
 from piano_teacher.importing.pieces import import_piece
 
 
@@ -97,7 +98,7 @@ def test_chopin_pickup_prepares_with_following_measure_not_half_a_beat():
     assert piece.time_signatures[1] == (0.5, 12, 8)
     meter = preparation_meter((1, 8), piece.time_signatures, 0.0)
     assert meter == (12, 8)
-    assert lead_in_beats(meter[0] * 4 / meter[1], 24) >= 1.0
+    assert SCHEDULER.count_in_beats(meter[0] * 4 / meter[1], 24) >= 1.0
     # The score remains faithful to the real imported pickup measure.
     assert piece.bar_boundaries[1] == pytest.approx(0.5)
 

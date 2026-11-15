@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 from piano_teacher.lesson_settings import SETTINGS, load_lesson_settings
-from piano_teacher import practice, lesson_timing, grading_tolerance
+from piano_teacher import practice, grading_tolerance
+from piano_teacher.application.musical_scheduler import SCHEDULER
 from piano_teacher.music import Note, Phrase
 from piano_teacher.practice import PlayedNote
 
@@ -35,8 +36,8 @@ def test_duration_threshold_changes_grade(monkeypatch):
 def test_count_in_is_one_full_bar_without_a_seconds_ceiling():
     # Owner decision 2026-11-08: the count-in is always a full bar; the
     # count_in_max_seconds policy key was removed.
-    assert lesson_timing.lead_in_beats(4, 60) == 4
-    assert lesson_timing.lead_in_beats(4, 20) == 4
+    assert SCHEDULER.count_in_beats(4, 60) == 4
+    assert SCHEDULER.count_in_beats(4, 20) == 4
     assert not hasattr(SETTINGS, "count_in_max_seconds")
 
 

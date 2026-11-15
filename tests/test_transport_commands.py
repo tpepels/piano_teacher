@@ -6,6 +6,7 @@ import pytest
 from piano_teacher.application.transport_commands import (
     require_pausable, resume_timeline,
 )
+from piano_teacher.application.musical_scheduler import SCHEDULER
 
 
 @pytest.mark.parametrize("mode,action,source_changed,expected",[
@@ -63,10 +64,9 @@ def test_resume_shifts_only_running_non_guided_deadlines(inputs, expected):
     (6.2,6.0,0.2),
 ])
 def test_retry_reading_lead_accounts_for_written_rest_once(lead, rest, expected):
-    from piano_teacher.application.transport_commands import planned_retry_reverse_seconds
-    assert planned_retry_reverse_seconds(
-        reading_lead_seconds=lead,
-        semantic_rest_seconds=rest) == pytest.approx(expected)
+    assert SCHEDULER.reserved_retry_reverse(
+        lead_seconds=lead,
+        rest_seconds=rest) == pytest.approx(expected)
 
 
 @pytest.mark.parametrize(("lead","rest"), [
@@ -77,8 +77,7 @@ def test_retry_reading_lead_accounts_for_written_rest_once(lead, rest, expected)
 ])
 def test_retry_reservation_fails_closed_if_rest_or_reading_lead_cannot_fit(
         lead, rest):
-    from piano_teacher.application.transport_commands import planned_retry_reverse_seconds
     with pytest.raises(ValueError, match="retry"):
-        planned_retry_reverse_seconds(
-            reading_lead_seconds=lead,
-            semantic_rest_seconds=rest)
+        SCHEDULER.reserved_retry_reverse(
+            lead_seconds=lead,
+            rest_seconds=rest)

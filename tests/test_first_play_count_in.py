@@ -17,7 +17,7 @@ import pytest
 
 from piano_teacher import server
 from piano_teacher.learning import LearningPlan
-from piano_teacher.lesson_timing import lead_in_beats
+from piano_teacher.application.musical_scheduler import SCHEDULER
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
 
@@ -60,7 +60,7 @@ def test_start_with_long_presentation_lead_keeps_one_bar_count_in(engine):
     e, now = engine
     e.start(presentation_lead_seconds=13.0)
     assert e.visual_transport.run_at == pytest.approx(now[0] + 13.0)
-    assert e.count_in_beats == pytest.approx(lead_in_beats(4.0, 60)) == 4.0
+    assert e.count_in_beats == pytest.approx(SCHEDULER.count_in_beats(4.0, 60)) == 4.0
     assert e.state()["count_in_beats"] == pytest.approx(4.0)
     assert e.state()["phase"] == "count_in"
 
