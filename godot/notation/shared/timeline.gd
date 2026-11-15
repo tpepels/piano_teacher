@@ -1,9 +1,10 @@
 extends RefCounted
+const Spacing := preload("res://notation/shared/spacing_policy.gd")
 # Phase B: one semantic quarter-beat axis, independent of Verovio geometry.
 # The backend transport/VisualTransportClock supplies clock_beat. This class
 # never owns a timer, tempo, renderer, MIDI grading, or interpolation curve.
 const SCHEMA := "piano-teacher-score-model-v1"
-const DEFAULT_PIXELS_PER_BEAT := 96.0
+const DEFAULT_PIXELS_PER_BEAT := Spacing.DEFAULT_PIXELS_PER_BEAT
 const MIN_PIXELS_PER_BEAT := 24.0
 const MAX_PIXELS_PER_BEAT := 480.0
 # Automatic source fitting is separate from the user preference range.
