@@ -95,6 +95,12 @@ jobs:
             tests/test_source_beam_pixel_fidelity.py::test_beam_photographic_window_contains_actual_three_level_ink_without_reconstructing_it \
             tests/test_verovio_wide_tuplet.py::test_real_native_recovered_tuplet_has_independently_identified_number \
             tests/test_verovio_wide_tuplet.py::test_corrupted_recovered_real_numeral_is_rejected
+      - name: Require intact three-tone chords and reject erased stems
+        run: |
+          xvfb-run -a -s '-screen 0 2000x1100x24' python -m pytest -q --tb=short \
+            tests/test_feature_pixel_ownership.py::test_note_feature_claims_are_local_to_each_call_and_do_not_escape_the_report \
+            tests/test_native_notation_library.py::test_legible_verovio_chord_stems_are_not_rejected_by_a_fixed_three_space_rule \
+            tests/test_native_notation_library.py::test_reference_stem_allowance_still_rejects_a_truncated_chord_stem
       - name: Inspect remaining real-source chord verification discrepancies
         run: |
           python - <<'PY'
