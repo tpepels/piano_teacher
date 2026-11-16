@@ -403,42 +403,97 @@ def test_original_white_whole_note_contour_would_still_fail_recolor_check(captur
     assert sample.size > 100 and sample.mean() > 6.0
 
 
+def _status_ink_reach(item, report, origin, shape):
+    """Pixels within 3 px of one colored head's authentic ink or hollow fill."""
+    near = _source_head_alpha(item, report, origin, shape) > .05
+    for _ in range(3):  # within 3 px of the authentic head ink
+        near = near | np.roll(near, 1, 0) | np.roll(near, -1, 0) | \
+            np.roll(near, 1, 1) | np.roll(near, -1, 1)
+    # The production C5 fill is made from the original glyph's enclosed
+    # alpha, not a hole inferred from a source template. A stem or a staff
+    # rule can open/split the apparent hole in the baseline; use the exact
+    # exported fill pixels and keep every other changed pixel accountable.
+    interior = (_hollow_fill_mask(item, report, origin, shape)
+                if item["head"] != "head_black" else np.zeros(shape, bool))
+    return near | interior, interior
+
+
+def _detached_glow(item, frame, report, base, graded):
+    """Changed pixels of this head's crop that no colored head accounts for.
+
+    Chord heads a second or a third apart share part of each other's crop.
+    The neighbour's own recolored ink is status ink bound to ITS authentic
+    mask, so every colored head whose mask reaches into the crop is modelled
+    with the same 3 px rule; nothing else may change.
+    """
+    x0, y0, x1, y1 = _box(item, 3, base.shape[1])
+    b, g = base[y0:y1, x0:x1], graded[y0:y1, x0:x1]
+    shape = b.shape[:2]
+    accounted, interior = _status_ink_reach(item, report, (y0, x0), shape)
+    neighbours = np.zeros(shape, bool)
+    gap = item["gap"]
+    for other in _colored(frame):
+        if other is item or abs(other["position"][0] - item["position"][0]) > 3 * gap \
+                or abs(other["position"][1] - item["position"][1]) > 3 * gap:
+            continue
+        neighbours = neighbours | _status_ink_reach(other, report, (y0, x0), shape)[0]
+    changed = np.abs(g - b).max(axis=2) > 0
+    return {"detached": changed & ~(accounted | neighbours), "changed": changed,
+            "interior": interior, "neighbours": neighbours, "base": b, "graded": g}
+
+
 def test_glow_is_extremely_subtle_and_follows_the_notehead_mask(capture):
     report, frames, images = capture
     base, graded = images["baseline"], images["graded"]
     bg = _rgb(report["background"])
     glowing = 0
+    shared = 0
     for item in _colored(frames["graded"]):
         if not _on_screen(item, base.shape[1]):
             continue
-        x0, y0, x1, y1 = _box(item, 3, base.shape[1])
-        b, g = base[y0:y1, x0:x1], graded[y0:y1, x0:x1]
-        _, coverage = _edge_error(item, frames["graded"], report, base, graded)
-        near = coverage > .05
-        for _ in range(3):  # within 3 px of the authentic head ink
-            near = near | np.roll(near, 1, 0) | np.roll(near, -1, 0) | \
-                np.roll(near, 1, 1) | np.roll(near, -1, 1)
-        # The production C5 fill is made from the original glyph's enclosed
-        # alpha, not a hole inferred from a source template. A stem or a staff
-        # rule can open/split the apparent hole in the baseline; use the exact
-        # exported fill pixels and keep every other changed pixel accountable.
-        interior = (_hollow_fill_mask(item, report, (y0, x0), coverage.shape)
-                    if item["head"] != "head_black" else
-                    np.zeros(coverage.shape, bool))
-        near = near | interior
-        changed = np.abs(g - b).max(axis=2) > 0
-        detached = changed & ~near
+        crop = _detached_glow(item, frames["graded"], report, base, graded)
+        detached, changed, interior = crop["detached"], crop["changed"], crop["interior"]
+        b, g = crop["base"], crop["graded"]
+        shared += bool((changed & crop["neighbours"]).any())
         assert not detached.any(), (
             "glow detached from authentic notehead/fill mask",
             item["event_id"], item["status"], item["head"],
             item["source"], item.get("template", ""),
             int(detached.sum()))
-        background = (np.abs(b - bg).max(axis=2) <= 12) & ~interior
+        # A neighbouring chord head's opaque core is not this head's glow.
+        background = (np.abs(b - bg).max(axis=2) <= 12) & ~interior & ~crop["neighbours"]
         lift = np.abs(g - b).max(axis=2)[background & changed]
         if lift.size:
             glowing += 1
             assert lift.max() <= 40, (item["status"], int(lift.max()))
     assert glowing >= 8, "colored heads carry a tiny contour glow"
+    assert shared >= 2, "the probe includes chord heads that share a crop"
+
+
+def test_stray_mark_beside_a_colored_chord_head_is_still_detached(capture):
+    """Accounting for a neighbouring chord head must not excuse other ink."""
+    report, frames, images = capture
+    base = images["baseline"]
+    chord = [item for item in _colored(frames["graded"])
+             if item["source"] == "chord" and _on_screen(item, base.shape[1])]
+    assert len(chord) >= 2, "the probe needs two colored heads of one chord"
+    item = chord[0]
+    crop = _detached_glow(item, frames["graded"], report, base, images["graded"])
+    changed = crop["changed"]
+    assert not crop["detached"].any()
+    x0, y0, x1, y1 = _box(item, 3, base.shape[1])
+    accounted = changed.copy()
+    for head in chord:
+        accounted |= _status_ink_reach(head, report, (y0, x0), changed.shape)[0]
+    free = np.argwhere(~accounted)
+    assert free.size, "no unaccounted pixel in the crop to mutate"
+    # One tinted pixel in the crop that neither chord head's mask reaches.
+    row, column = free[0]
+    marked = images["graded"].copy()
+    marked[y0 + row, x0 + column] = _rgb(report["tints"][item["status"]])
+    stray = _detached_glow(item, frames["graded"], report, base, marked)["detached"]
+    assert stray[row, column] and int(stray.sum()) == 1
+
 
 
 def test_hollow_heads_are_tinted_softly_inside_their_own_mask(capture):

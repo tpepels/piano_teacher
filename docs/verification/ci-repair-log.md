@@ -95,3 +95,28 @@ Physical USB/Bluetooth MIDI acceptance is not executable here and stays open.
 3. Quarantine entry: Chopin Nocturne Op. 9 No. 2 bars 13-16 beam verifier.
 4. Then the full gate, smoke, Godot syntax, hybrid focused and corpus on one
    clean commit.
+
+## 2026-11-16 — Phase B repair 1: note-status framebuffer
+
+- **Recolour error (production defect).** `StreamLifecycle.project` placed
+  each strip's clip `Control` at a fractional x. Godot renders a Control at
+  whole pixels, so the strip's ink sat up to half a pixel off the world axis
+  (0 px for a strip clipped at the integer gutter, about +0.43 px for the
+  next one), while projected notehead positions stayed exact. Measured on the
+  retained PNGs: ink and tint agreed with each other but both were 0.375-0.5
+  px from the reported head in later strips; mean recolour error up to 7.18.
+  Fix: the window sits on a whole pixel and the source takes the remainder.
+  After the fix every head measures at most 0.24 (limit 6.0, unchanged).
+  Regression: `tests/godot/stream_retained_lifecycle.gd` (fails without the
+  fix), plus the unchanged framebuffer thresholds.
+- **"Detached glow" (test model defect).** The 72/100 flagged pixels were the
+  recoloured ink of the other head of the same chord inside a shared crop.
+  The check now accounts for every coloured head whose authentic mask
+  reaches the crop with the same 3 px rule; a new negative control proves one
+  stray tinted pixel beside a chord head is still reported.
+- Files: `godot/notation/native/stream_lifecycle.gd`,
+  `tests/godot/stream_retained_lifecycle.gd`,
+  `tests/test_note_status_framebuffer.py`.
+- Run: note-status and palette framebuffer modules (22 passed), Godot syntax
+  gate, seven stream harnesses, 14 placement-sensitive framebuffer modules
+  (60 passed).

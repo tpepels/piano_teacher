@@ -104,6 +104,33 @@ func _exercise() -> void:
         rest.get_parent() == rest_pass["clip"] and
         source_pass["clip"].visible and rest_pass["clip"].visible,
         "one lifecycle attaches both clip roles")
+    # Godot renders a Control at whole pixels. The window must therefore sit
+    # on a whole pixel itself and the retained source must take the remainder,
+    # or its ink drifts up to half a pixel from the projected noteheads and
+    # from neighbouring strips.
+    var snapped_windows := 0
+    for fractional_world in [19.337,19.61,19.905]:
+        for pass_item in [source_pass,rest_pass]:
+            check(Lifecycle.project(pass_item,fractional_world,264.0,90.0,20.0,
+                owner.size,4.0),"fractional world keeps the strip presented")
+            var axis: float = 264.0 + \
+                (float(pass_item["world_origin"])-fractional_world)*90.0
+            var window: Control = pass_item["clip"]
+            var ink_origin: float = window.position.x + \
+                pass_item["segment"].position.x
+            check(absf(ink_origin-axis) < 0.0005,
+                "retained ink stays on the exact world axis at %.3f (%.4f != %.4f)" % [
+                    fractional_world,ink_origin,axis])
+            check(absf(window.position.x-roundf(window.position.x)) < 0.0001,
+                "the clip window sits on a whole pixel at %.3f" % fractional_world)
+            if absf(pass_item["segment"].position.x-
+                    roundf(pass_item["segment"].position.x)) > 0.05:
+                snapped_windows += 1
+    check(snapped_windows >= 4,
+        "the regression really exercises fractional source offsets")
+    check(Lifecycle.project(source_pass,19.0,264.0,90.0,20.0,
+        owner.size,4.0) and Lifecycle.project(rest_pass,19.0,264.0,
+        90.0,20.0,owner.size,4.0),"integral world restores the original placement")
     check(Lifecycle.activate(passes,1,"piece|1|1|practice",false),
         "transport acknowledgement binds the same owner without new ink")
     var draws_source: int = owner.source_draws

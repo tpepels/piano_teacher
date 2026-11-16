@@ -327,9 +327,16 @@ static func project(item: Dictionary, world: float, playhead_x: float,
     if right <= visible_left:
         clip.visible = false
         return true
-    clip.position = Vector2(visible_left,0.0)
-    clip.size = Vector2(maxf(1.0,right-visible_left),viewport.y)
-    segment.position = Vector2(-bounds.x-(visible_left-left),0.0)
+    # Godot draws a Control at whole pixels (its canvas transform is rounded
+    # when rendered), so a window at a fractional visible_left carried its
+    # source up to half a pixel off the world axis, differently per strip.
+    # Put the window on a whole pixel ourselves and give the remainder to
+    # the source: its ink is then exactly at left-bounds.x in every strip,
+    # which is also where its noteheads are projected.
+    var window_x: float = roundf(visible_left)
+    clip.position = Vector2(window_x,0.0)
+    clip.size = Vector2(maxf(1.0,right-window_x),viewport.y)
+    segment.position = Vector2(left-bounds.x-window_x,0.0)
     segment.visible = true
     clip.visible = true
     return true
