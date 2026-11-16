@@ -70,6 +70,12 @@ ensure_main_clean() {
 }
 ensure_main_clean
 "$PYTHON" -m pytest --version >/dev/null
+CODEX_POLICY=(--sandbox workspace-write)
+if "$CODEX" exec --help 2>&1 | grep -q -- '--approve-for-me'; then
+    # Recent CLI releases can automatically review workspace-write approvals,
+    # including Git operations, without opening an interactive dialog.
+    CODEX_POLICY=(--approve-for-me)
+fi
 
 # Each turn is an independent Codex invocation. Git commits and a checked-in
 # scope registry preserve progress across context windows or CLI restarts.
@@ -83,7 +89,7 @@ run_agent() {
     echo "CI_AGENT_TURN_START: $turn revision=$before"
     # Current Codex CLI: automatic approval review with a workspace-write
     # sandbox, not unsandboxed arbitrary execution.
-    if "$CODEX" exec --approve-for-me -C "$PWD" \
+    if "$CODEX" exec "${CODEX_POLICY[@]}" -C "$PWD" \
             --output-last-message "$summary_file" "$task" \
             2>&1 | tee "$log_file"; then
         code=0
@@ -125,17 +131,34 @@ gate() {
     return 1
 }
 
+# Preserve monotonic log IDs across process restarts. Restarting the runner
+# does not discard previous Codex summaries or independent shard evidence.
+counter="$OUT/round-counter"
 round=0
-while ((round < MAX_ROUNDS)); do
+if [[ -f "$counter" ]]; then
+    round="$(cat "$counter")"
+    [[ "$round" =~ ^[0-9]+$ ]] || {
+        echo "CI_AGENT_ERROR: invalid $counter" >&2; exit 2;
+    }
+fi
+attempts=0
+while ((attempts < MAX_ROUNDS)); do
+    attempts=$((attempts + 1))
     round=$((round + 1))
+    printf '%s\n' "$round" > "$counter"
     ensure_main_clean
     before="$(git rev-parse HEAD)"
 
     if ! scope_complete; then
         echo "CI_AGENT_PHASE_A: current-test scope audit, round $round"
-        task="You are the local repository agent for tpepels/piano_teacher. Read AGENTS.md and ROADMAP.md. PHASE A ONLY: inventory ALL current pytest files and test functions using python scripts/ci-scope.py --inventory and the four-shard plan. Review each against the actual current Godot + embedded Python application. Delete/rewrite only demonstrably obsolete cases, retain or fix current failures, revise smoke and quarantine references as warranted. Produce tests/ci-scope.json with schema=1, entries keyed by each remaining test module, each containing an existing current source path as owner and a concrete contract string. Produce docs/verification/ci-current-scope-audit.md documenting module-level and mixed-module review and every removed case with reason/replacement; its own final line must be exactly Scope audit: COMPLETE only after the review is genuinely complete. Pass python scripts/ci-scope.py --check, bash scripts/ci-full.sh --plan and collection checks. Commit coherent progress directly on main, no worktrees. DO NOT start full four-shard CI and DO NOT pretend the audit is complete when unfinished. When unable to finish in one turn, commit the partial audit evidence and continue on the next agent turn. Current revision: $before. See $OUT for prior turn logs."
+        task="You are the local repository agent for tpepels/piano_teacher. Read AGENTS.md and ROADMAP.md. PHASE A ONLY: inventory ALL pytest test files, 144+ Godot scripts and all .github workflow definitions using python scripts/ci-scope.py --inventory and the four-shard plan. Review each test case, native harness and workflow job against the actual current Godot + embedded Python application. Delete/rewrite only demonstrably obsolete cases, retain or fix current failures, revise smoke and quarantine references as warranted. Produce tests/ci-scope.json with schema=1, entries keyed by every remaining pytest module, Godot test script and CI workflow, each containing an existing current source path as owner and a concrete contract string. Produce docs/verification/ci-current-scope-audit.md documenting pytest, native-script and workflow review, including individual cases inside mixed modules and every removed case with reason/replacement; its own final line must be exactly Scope audit: COMPLETE only after the review is genuinely complete. Pass python scripts/ci-scope.py --check, bash scripts/ci-full.sh --plan and collection checks. Commit coherent progress directly on main, no worktrees. DO NOT start full four-shard CI and DO NOT pretend the audit is complete when unfinished. When unable to finish in one turn, commit the partial audit evidence and continue on the next agent turn. Current revision: $before. See $OUT for prior turn logs."
         run_agent "$round" "$task" "$before"
         continue
+    fi
+
+    if [[ "$audit_only" -eq 1 ]]; then
+        echo "CI_AGENT_PHASE_A_COMPLETE: reviewed current test/CI scope on $before"
+        exit 0
     fi
 
     echo "CI_AGENT_PHASE_B: fix first remaining current-CI failure, round $round"
@@ -172,5 +195,5 @@ while ((round < MAX_ROUNDS)); do
     run_agent "$round" "$task" "$before"
 done
 
-echo "CI_AGENT_STOP: exhausted CI_AGENT_MAX_ROUNDS=$MAX_ROUNDS; logs in $OUT" >&2
+echo "CI_AGENT_STOP: exhausted CI_AGENT_MAX_ROUNDS=$MAX_ROUNDS for this invocation; logs in $OUT" >&2
 exit 4
