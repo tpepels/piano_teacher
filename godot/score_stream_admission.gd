@@ -24,6 +24,16 @@ const PAUSED_REUSE_EPSILON_BEATS := .001
 # used for automatic practice continuations, which are bound by their
 # backend plan identity (NativeView._planned_owner), not by comparing onsets.
 const EMPTY_STRIP_DEADLINE_EPSILON_BEATS := .025
+# Conservative source clip extents in staff-space units. NativeView replaces
+# the first-header fallback with its measured Verovio clef/key ink when ready.
+# The internal header and trailing source clearance must match the physical
+# source strips, queue admission, and short-rest calculations.
+const UNKNOWN_FIRST_HEADER_SPACES := 15.0
+const INTERNAL_HEADER_SPACES := 1.6
+const SOURCE_TRAILING_SPACES := 2.2
+# Fallback used only by geometry-only callers that omit actual staff size.
+# Deliberately conservative relative to the fitted 22px native maximum.
+const FALLBACK_STAFF_GAP_PX := 24.0
 
 static func clip_bounds(item: Dictionary, density: float,
         gap: float, score_duration: float) -> Vector2:
@@ -150,7 +160,7 @@ static func ink_ahead_of(passes: Array, world: float, density: float,
 
 static func empty_strip_start(passes: Array, world: float,
         count_in_beats: float, header_beats: float, peer_floor: float,
-        density: float = Spacing.DEFAULT_PIXELS_PER_BEAT, gap: float = 24.0,
+        density: float = Spacing.DEFAULT_PIXELS_PER_BEAT, gap: float = FALLBACK_STAFF_GAP_PX,
         score_duration: float = INF, peer_rest_floor: float = NAN) -> float:
     # Owner decision 2026-11-08: "the notes should appear closer to the
     # playhead, so the wait is about one bar". With nothing printed right of
@@ -229,7 +239,7 @@ static func announced_empty_strip_start(passes: Array, world: float,
 static func position(passes: Array, world: float, right_beats: float,
         header_beats: float, intended: float = NAN,
         travel_beats: float = 0.0, density: float = Spacing.DEFAULT_PIXELS_PER_BEAT,
-        gap: float = 24.0, score_duration: float = INF) -> float:
+        gap: float = FALLBACK_STAFF_GAP_PX, score_duration: float = INF) -> float:
     # One common append-only boundary. No existing passage is ever excluded
     # or retimed to make a replacement appear earlier.
     var minimum: float = _future_start(
@@ -242,7 +252,7 @@ static func position(passes: Array, world: float, right_beats: float,
 
 static func retry_start(passes: Array, world: float, right_beats: float,
         header_beats: float, rest_beats: float, density: float = Spacing.DEFAULT_PIXELS_PER_BEAT,
-        gap: float = 24.0, score_duration: float = INF) -> float:
+        gap: float = FALLBACK_STAFF_GAP_PX, score_duration: float = INF) -> float:
     # Owner, round 4 (item 7): a Retry opens at the right edge at once. Its
     # first printed pixel is just beyond the viewport and directly after
     # the ink already exposed (no REST_GAP, no READY travel), and never
@@ -287,7 +297,9 @@ static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
 static func engraved_clip_bounds(floor: float, ceiling: float,
         pixels_per_beat: float, staff_gap: float,
         source_end: float = INF) -> Vector2:
-    var leading := staff_gap*(15.0 if floor <= .0001 else 1.6)
-    var trailing := staff_gap*2.2 if ceiling >= source_end-.0001 else 0.0
+    var leading := staff_gap*(UNKNOWN_FIRST_HEADER_SPACES if
+        floor <= .0001 else INTERNAL_HEADER_SPACES)
+    var trailing := staff_gap*SOURCE_TRAILING_SPACES if
+        ceiling >= source_end-.0001 else 0.0
     return Vector2(floor*pixels_per_beat-leading,
         ceiling*pixels_per_beat+trailing)
