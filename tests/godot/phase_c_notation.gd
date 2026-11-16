@@ -69,11 +69,12 @@ func _score() -> Dictionary:
 
 func run() -> void:
     var Geometry = load("res://notation/native/geometry.gd")
+    var InkSpacing = load("res://notation/native/ink_spacing.gd")
     var Renderer = load("res://notation/native/view.gd")
     var Timeline = load("res://notation/shared/timeline.gd")
-    check(Geometry != null and Renderer != null and Timeline != null,
+    check(Geometry != null and InkSpacing != null and Renderer != null and Timeline != null,
         "All Phase C scripts parse")
-    if Geometry == null or Renderer == null or Timeline == null:
+    if Geometry == null or InkSpacing == null or Renderer == null or Timeline == null:
         quit(1)
         return
     check_barline_source_clock()
@@ -94,21 +95,30 @@ func run() -> void:
         {"kind":"note","staff":"right","voice":"1","beat":0.0},
         {"kind":"note","staff":"right","voice":"1","beat":.5},
         {"kind":"note","staff":"right","voice":"1","beat":1.0}]
-    check(Geometry.required_density(spacing_eighth,96.0) >= 155.0,
-        "Readability: consecutive eighth-note attacks get at least 78 px")
+    check(InkSpacing.source_attack_intervals_fit(spacing_eighth,8192.0),
+        "Eighth-note attacks are representable on one source beat axis")
     var spacing_16th := [
         {"kind":"note","staff":"right","voice":"1","beat":0.0},
         {"kind":"note","staff":"right","voice":"1","beat":.25}]
-    check(Geometry.required_density(spacing_16th,96.0) >= 215.0,
-        "Readability: sixteenths widen through one global density")
+    check(InkSpacing.source_attack_intervals_fit(spacing_16th,8192.0),
+        "Sixteenth-note attacks stay source-representable")
     var spacing_64th := [
         {"kind":"note","staff":"right","voice":"1","beat":0.0},
         {"kind":"note","staff":"right","voice":"1","beat":.0625}]
-    check(approx(Geometry.required_density(spacing_64th,96.0),400.0),
-        "Fast 64th-note grouping preserves its previous fixed 400 px/beat")
-    check(approx(Geometry.required_density(spacing_eighth,96.0)*.5,
-        Geometry.required_density(spacing_eighth,96.0)*1.0/2.0),
-        "A larger density never introduces beat-dependent non-linear X")
+    check(InkSpacing.source_attack_intervals_fit(spacing_64th,8192.0),
+        "Fast 64th-note attacks may be fitted by actual glyph envelopes")
+    var pathological: Array = [
+        {"kind":"note","staff":"right","voice":"1","beat":0.0},
+        {"kind":"note","staff":"right","voice":"1","beat":0.002}]
+    check(not InkSpacing.source_attack_intervals_fit(pathological,8192.0),
+        "Distinct subpixel attacks in one source voice fail closed")
+    pathological[1]["voice"] = "2"
+    check(InkSpacing.source_attack_intervals_fit(pathological,8192.0),
+        "Separate voices do not inherit false temporal collisions")
+    pathological[1]["voice"] = "1"
+    pathological[1]["beat"] = 0.0
+    check(InkSpacing.source_attack_intervals_fit(pathological,8192.0),
+        "Simultaneous chord members are not successive source attacks")
 
     var renderer = Renderer.new()
     get_root().add_child(renderer)
@@ -283,10 +293,10 @@ func run() -> void:
         renderer.timeline.pixels_per_beat*.5),
         "Floating time signature never changes note position or speed")
     check(renderer.load_score(model),"Restore baseline notation after meter test")
-    check(renderer.timeline.pixels_per_beat >= 96.0
-        and renderer.timeline.pixels_per_beat <=
-            Geometry.required_density(model["notation_events"],96.0),
-        "Native whole-piece density follows actual glyph overlap, not duration alone")
+    check(renderer.timeline.pixels_per_beat >=
+            InkSpacing.readable_density(model["notes"],96.0) and
+        renderer.timeline.pixels_per_beat <= renderer.timeline.MAX_SCORE_PIXELS_PER_BEAT,
+        "Native whole-piece density follows active glyph fitting and readability")
     var density: float = renderer.timeline.pixels_per_beat
     check(approx(renderer.timeline.x_at_beat(.25),density*.25),
         "Source attacks retain quarter-beat geometry")
