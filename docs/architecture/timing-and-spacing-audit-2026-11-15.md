@@ -124,3 +124,85 @@ test, **not** a claim that every hardware/rendering race is covered.
 The code changes in this audit centralize only the matching visual-spacing
 defaults and add tests. They do **not** alter the tempo scheduler or claim
 full hardware/release certification.
+
+
+## Deeper full-tree policy sweep — same day
+
+The follow-up scan covered all **121 first-party Godot .gd files**, all
+**179 first-party non-research Python files**, and both C++ native bridge
+source files. The connected repository tree supplied file paths; the audit
+then inspected each first-party source file for beat/seconds arithmetic,
+constants, horizon, image/clip geometry, source-rest handling and queue
+policy. The existing audit also traverses test and script references and
+rejects the retired scheduling names. This is a **bounded source-code
+inventory**, not a proof that all semantically related policies can be
+identified by names or numeric literals.
+
+The changes made in this pass are:
+
+1. **Cross-language beat/time units**: `godot/tempo_timeline.gd` now has
+   signed `seconds_from_beats`, `beats_from_seconds` and
+   `beats_from_milliseconds`. The continuous world clock, transport clock,
+   metronome/reserved count-in, transport admission, native admission receipt,
+   stage command latency and score pixels-per-second use these functions.
+   Countdown and playback both depend on the same quarter-beat unit.
+   `scripts/audit-musical-scheduler.py` now rejects a direct Godot 60/BPM
+   formula outside `tempo_timeline.gd`, supplementing its existing
+   all-production-Python BPM/60 AST guard. This stops a common form of
+   duplicated calculation from returning.
+2. **Late slowdown repayment**: the continuous bar's existing one-half
+   repayment limit is named `MAX_SLOWDOWN_REPAY_FRACTION` and used in
+   `sample`, `project` and authored-future projection. No different
+   stop-or-rewind allowance was introduced.
+3. **Staff/ledger appearance**: the actual staff rails now read the
+   existing `SymbolPainter.STAFF_LINE_WIDTH` and
+   `STAFF_LINE_ALPHA` instead of independently typing their numbers. The
+   blank idle staff retains its deliberately quieter opacity.
+4. **Unloaded 4/4 placeholders**: `UNLOADED_METER` derives the default
+   visual-gap/count-in durations in both Python transport and state snapshot.
+   A loaded piece still replaces those placeholders from the *authored*
+   incoming meter; its actual rest is never assumed to be four beats.
+   Godot's meter grid explicitly names its separate **empty-staff-only**
+   visual fallback.
+5. **Future engraving**: the two-stage waiting-queue capacity now derives
+   from the same two-stage lookahead capacity. A next-stage handoff without
+   an outgoing renderer now uses `StreamAdmission.automatic_horizon` for
+   its shared offscreen clearance; the older conservative five-beat minimum
+   is kept as an explicit fallback.
+6. **Authentic header geometry**: the clef/key column spacing established
+   earlier in this audit is now also covered by a cross-component test.
+   `ContextPainter` supplies the actual paint offset to the native viewport's
+   clip and source-opening measurements.
+
+### Similar numbers that must remain separate
+
+| Similar-looking values | Why not merged |
+| --- | --- |
+| `StreamLifecycle.EXIT_MARGIN_PIXELS=60` and `ScoreStreamQueue.PEER_MARGIN_PX=60` | One controls retirement of already-exited ink, the other prevents a new peer from colliding on screen |
+| `PEER_REST_MARGIN_PX=6` and `OFFSCREEN_MARGIN_BEATS=0.12` | Pixels vs quarter beats; separate margin directions and source/rest policies |
+| `MusicalScheduler.SNAPSHOT_LATENCY_SECONDS=0.4` and `ListenSync.START_GUARD_SECONDS=0.40` | Backend command latency and an independent audio seeking guard |
+| `MusicalScheduler.SETTLEMENT_SECONDS=0.20` and `CountInCueTimeline.LATE_CUE_BEATS=0.2` | Wall seconds vs musical beats, which are tempo-dependent |
+| `Timeline.MAX_PIXELS_PER_BEAT=480` and `MAX_SCORE_PIXELS_PER_BEAT=8192` | User-selected preferences vs emergency source-authentic collision fitting |
+| `Admission.MIN_READING_BEATS=3`, `automatic_horizon`'s four-beat floor and the authored count-in measure | Minimum offscreen reading room, automatic repeat preparation, and actual source meter are different obligations |
+| `SymbolPainter.STAFF_LINE_WIDTH=1.15` vs `InkGeometry`'s more conservative ledger collision envelope | The painter's exact stroke width and the solver's safety rectangle intentionally differ |
+
+### New verification gates
+
+`tests/test_timing_geometry_contract.py` now includes mutation examples
+which reject direct `60000/BPM` and `60/BPM` formulas, the shared rail
+appearance contract, one lookahead/queue capacity, unloaded meter
+consistency and runway fallback reuse. The native GDScript fixture verifies
+signed unit conversions at 12–240 BPM, negative count-in beats, full
+quarter-beat widths and the monotonic late-slowdown repayment limit.
+
+The first-party GDScript numeric-conversion inventory was rescanned after
+these edits; the targeted source-level pattern reported **zero remaining
+matches** outside the owning tempo module. The repository was not built or
+executed here. Local tests, independent captured-frame acceptance and
+physical keyboard acceptance remain required before release.
+
+**Scope caveat:** Identical numbers can represent different policy, and
+identical behavior can be encoded using unrelated names and expressions.
+The source audit does not automatically detect every semantic alias,
+multi-line formula, third-party implementation or runtime synchronization
+fault. Those cannot be certified away by declaring the search exhaustive.
