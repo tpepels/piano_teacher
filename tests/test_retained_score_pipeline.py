@@ -230,7 +230,13 @@ def test_real_score_framebuffer_uses_production_world_axis():
     assert "xpos=round(playhead_x(image))" in phase3
     rest = (ROOT/"piano_teacher/notation/rest_intervention.py").read_text()
     assert "playhead_x(Image.fromarray(original" in rest
-    assert "PLAYHEAD_FRACTION := .33" in native
+    # One owner: the shared spacing policy defines the fraction; the view and
+    # the render pass only alias it (no second literal can drift).
+    spacing = (ROOT/"godot/notation/shared/spacing_policy.gd").read_text()
+    render_pass = (ROOT/"godot/notation/native/render_pass.gd").read_text()
+    assert "const PLAYHEAD_FRACTION := 0.33" in spacing
+    assert "const PLAYHEAD_FRACTION := Spacing.PLAYHEAD_FRACTION" in native
+    assert "const PLAYHEAD_FRACTION := Spacing.PLAYHEAD_FRACTION" in render_pass
 
 
 def test_production_journey_does_not_depend_on_removed_camera_switch():

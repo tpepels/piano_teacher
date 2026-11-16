@@ -168,7 +168,9 @@ fi
 # A GDScript preload syntax failure otherwise causes numerous unrelated
 # framebuffer/score tests to fail or wait for their full timeout.
 godot_binary=''
-if command -v godot >/dev/null 2>&1; then
+if [[ -n "${GODOT_BIN:-}" ]]; then
+    godot_binary="$GODOT_BIN"
+elif command -v godot >/dev/null 2>&1; then
     godot_binary="$(command -v godot)"
 elif command -v godot4 >/dev/null 2>&1; then
     godot_binary="$(command -v godot4)"
