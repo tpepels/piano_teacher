@@ -154,6 +154,30 @@ if [[ "$mode" == plan ]]; then
     "$PYTHON" -m scripts.ci_full_shards
     exit $?
 fi
+
+# Parse essential native entry points before the expensive four-shard suite.
+# A GDScript preload syntax failure otherwise causes numerous unrelated
+# framebuffer/score tests to fail or wait for their full timeout.
+godot_binary=''
+if command -v godot >/dev/null 2>&1; then
+    godot_binary="$(command -v godot)"
+elif command -v godot4 >/dev/null 2>&1; then
+    godot_binary="$(command -v godot4)"
+fi
+if [[ -n "$godot_binary" ]]; then
+    for gdscript in score_stream_admission.gd main.gd; do
+        echo "CI_FULL_GODOT_PARSE_START: $gdscript"
+        if ! "$godot_binary" --headless --path "$PWD/godot" \
+            --script "$PWD/godot/$gdscript" --check-only; then
+            echo "CI_FULL_GODOT_PARSE_FAIL: $gdscript" >&2
+            exit 1
+        fi
+    done
+    echo 'CI_FULL_GODOT_PARSE_PASS'
+else
+    echo 'CI_FULL_GODOT_PARSE_SKIPPED: Godot not installed'
+fi
+
 # Reclaim old cache before creating release output directories: an exhausted
 # user quota must not block the cleanup that is supposed to free it.
 mkdir -p "$out"
