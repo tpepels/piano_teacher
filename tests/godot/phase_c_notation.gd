@@ -119,6 +119,9 @@ func run() -> void:
     pathological[1]["beat"] = 0.0
     check(InkSpacing.source_attack_intervals_fit(pathological,8192.0),
         "Simultaneous chord members are not successive source attacks")
+    pathological[1]["beat"] = NAN
+    check(not InkSpacing.source_attack_intervals_fit(pathological,8192.0),
+        "Invalid source beat positions fail closed")
 
     var renderer = Renderer.new()
     get_root().add_child(renderer)
