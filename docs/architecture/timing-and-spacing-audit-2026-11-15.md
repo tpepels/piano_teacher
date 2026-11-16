@@ -263,3 +263,46 @@ a new preference may be installed. A Godot regression checks the hidden
 READY, unchanged-density and empty-owner cases. This extends the original
 transport-only density lock to the queue-immutability boundary; it does
 not introduce a new policy owner.
+
+
+### Fixed playhead fraction and projected lesson markers
+
+A later cross-module check found that `RenderPass` independently defined
+`PLAYHEAD_FRACTION=.33`, matching but not referencing
+`ScoreView.PLAYHEAD_FRACTION`. This affected which physical head among
+multiple instances is registered as nearest the fixed playhead.
+`Spacing.PLAYHEAD_FRACTION` now supplies both, while step markers inherit
+the same position. A single pure `Timeline.project_world_beat()` handles
+both score note positions and lesson marker positions, eliminating a
+second hand-written `(beat-world_beat)*density` projection.
+
+The local regression checks these ownership relationships and varying
+densities directly. The rendering code still requires the normal native
+Godot acceptance suite: source-clock equality alone does not establish
+the absence of glyph-mask errors.
+
+### Follow-up shard-1 failures reported at 29c26c5f
+
+- `test_frontend_has_time_driven_native_beam` used two different
+  monotonic samples to assert one renderer clock position. At 240 BPM,
+  `0.01` beats is just 2.5 ms. Re-sampling *after* a complete render
+  incorrectly classified a normal slow frame as clock drift. The
+  production frame itself still samples once and routes that stamp to
+  every consumer. The fixture now compares the renderer with the
+  transport clock at `Main.frame_ms`, that exact frame sample, with a
+  tighter `1e-5`-beat tolerance and explicit per-phase failure evidence.
+  This is a test time-base correction, not a relaxation of production
+  clock synchronization.
+- `test_recolor_replaces_the_white_head_without_a_doubled_contour`
+  exposed a disagreement between the original whole-note source
+  texture and the independently reconstructed cutout used to erase
+  and recolor it. An isolated whole-note template contains no stem or
+  flag, so it can be erased and recolored with the **exact source
+  template** through the existing `paint_note` function. Half-note
+  and composite heads retain their separate head-only cutouts, since
+  erasing the complete half-note would erase its stem. The framebuffer
+  thresholds, tinted-core requirement, and negative residual-white
+  control remain unchanged. The direct whole-note template check is
+  added to the status framebuffer regression.
+
+Neither fix is claimed tested until a local Godot run passes.
