@@ -335,6 +335,19 @@ def test_projected_standalone_heads_keep_their_exact_engraving_anchor(capture):
     assert observed >= 4
 
 
+def test_authentic_source_alpha_covers_each_visible_colored_head(capture):
+    """A zero/offscreen mask must fail before pixel or glow comparisons."""
+    report, frames, images = capture
+    for item in _colored(frames["graded"]):
+        if not _on_screen(item, images["graded"].shape[1]):
+            continue
+        x0, y0, x1, y1 = _box(item, 3, images["graded"].shape[1])
+        coverage = _source_head_alpha(item, report, (y0, x0), (y1 - y0, x1 - x0))
+        assert (coverage > .05).sum() > 100, (
+            item["event_id"], item["source"], item["head"],
+            item["position"], item["anchor"], float(coverage.max()))
+
+
 def test_recolor_replaces_the_white_head_without_a_doubled_contour(capture):
     report, frames, images = capture
     measured = 0
