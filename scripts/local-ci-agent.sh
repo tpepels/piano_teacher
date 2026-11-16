@@ -17,7 +17,8 @@ verification and require an empty quarantine. On each actual code change
 the full suite is tested again on the new revision.
 
 Log/status directory: playtest-results/local-ci-agent/
-Optional: CI_AGENT_MAX_ROUNDS=120 (default). Ctrl-C stops the launcher.
+Optional: CI_AGENT_MAX_ROUNDS=N to cap attempts (unlimited by default).
+Ctrl-C stops the launcher.
 On no progress, environment failure or dirty working tree, stops nonzero.
 Does not force-push, switch branches, create worktrees, or auto-stage files.
 HELP
@@ -34,10 +35,10 @@ done
 
 PYTHON="${PYTHON:-$PWD/.venv/bin/python}"
 CODEX="${CODEX_BIN:-codex}"
-MAX_ROUNDS="${CI_AGENT_MAX_ROUNDS:-120}"
+MAX_ROUNDS="${CI_AGENT_MAX_ROUNDS:-0}"
 OUT="${CI_AGENT_LOG_DIR:-$PWD/playtest-results/local-ci-agent}"
-[[ "$MAX_ROUNDS" =~ ^[1-9][0-9]*$ ]] || {
-    echo "CI_AGENT_ERROR: CI_AGENT_MAX_ROUNDS must be positive" >&2; exit 2;
+[[ "$MAX_ROUNDS" =~ ^(0|[1-9][0-9]*)$ ]] || {
+    echo "CI_AGENT_ERROR: CI_AGENT_MAX_ROUNDS must be 0 (unlimited) or positive" >&2; exit 2;
 }
 [[ -x "$PYTHON" ]] || { echo "CI_AGENT_ERROR: .venv Python missing at $PYTHON" >&2; exit 2; }
 command -v "$CODEX" >/dev/null 2>&1 || {
@@ -142,7 +143,7 @@ if [[ -f "$counter" ]]; then
     }
 fi
 attempts=0
-while ((attempts < MAX_ROUNDS)); do
+while ((MAX_ROUNDS == 0 || attempts < MAX_ROUNDS)); do
     attempts=$((attempts + 1))
     round=$((round + 1))
     printf '%s\n' "$round" > "$counter"
@@ -196,5 +197,5 @@ while ((attempts < MAX_ROUNDS)); do
     run_agent "$round" "$task" "$before"
 done
 
-echo "CI_AGENT_STOP: exhausted CI_AGENT_MAX_ROUNDS=$MAX_ROUNDS for this invocation; logs in $OUT" >&2
+echo "CI_AGENT_STOP: exhausted CI_AGENT_MAX_ROUNDS=$MAX_ROUNDS; logs in $OUT" >&2
 exit 4
