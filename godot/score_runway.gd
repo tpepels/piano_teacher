@@ -9,6 +9,9 @@ const StepTimeline := preload("res://score_step_timeline.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
 const MAX_PRELOAD_FAILURES := 3
+# Retain the old conservative floor when the outgoing renderer is unavailable.
+# The rest of the fallback is the SAME offscreen admission horizon as repeats.
+const MIN_FALLBACK_STAGE_LEAD_BEATS := 5.0
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
 
@@ -401,9 +404,11 @@ func present_frame(_state: Dictionary, global_beat: float) -> void:
         var short: Dictionary = _short_handoff()
         var request: Dictionary = {"stage_key":_bundle["stage_key"],
             "revision":_bundle["revision"],
-            "presentation_lead_beats":float(short.get("lead",maxf(5.0,
-                _future._stream_right_beats()+
-                _future._stream_header_beats(0.0)+1.5)))}
+            "presentation_lead_beats":float(short.get("lead",maxf(
+                MIN_FALLBACK_STAGE_LEAD_BEATS,
+                StreamAdmission.automatic_horizon(0.0,
+                    _future._stream_right_beats(),
+                    _future._stream_header_beats(0.0)))))}
         if short.has("clear"):
             request["presentation_clear_beats"] = float(short["clear"])
         # The incoming stage's own short-rest geometry (its density/header)
