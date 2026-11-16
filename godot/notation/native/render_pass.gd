@@ -3,7 +3,8 @@ extends RefCounted
 ## per source revision. Scrolling, repetition and the graded source deadline
 ## cannot alter these geometry or notehead commands.
 const Design := preload("res://practice_theme.gd")
-const PLAYHEAD_FRACTION := .33
+const Spacing := preload("res://notation/shared/spacing_policy.gd")
+const PLAYHEAD_FRACTION := Spacing.PLAYHEAD_FRACTION
 var clock: float
 var playhead_x: float
 var gap: float
