@@ -330,15 +330,17 @@ static func project(item: Dictionary, world: float, playhead_x: float,
     # Godot draws a Control at whole pixels (its canvas transform is rounded
     # when rendered), so a window at a fractional visible_left carried its
     # source up to half a pixel off the world axis, differently per strip.
-    # Put the window on a whole pixel ourselves and give the remainder to
+    # Put the window on whole pixels ourselves and give the remainder to
     # the source: its ink is then exactly at left-bounds.x in every strip,
     # which is also where its noteheads are projected.
-    var window_x: float = roundf(visible_left)
+    # The window opens OUTWARD (floor left, ceil right). Rounding to nearest
+    # could close up to half a pixel over this strip's own first or last
+    # ink column, e.g. the thin stroke of an accidental right after a cut.
+    # A strip paints only inside its own cut, so the shared pixel column of
+    # two adjoining windows is never painted twice with different ink.
+    var window_x: float = floorf(visible_left)
     clip.position = Vector2(window_x,0.0)
-    # Both edges on whole pixels: adjoining strips share the fractional cut
-    # (this right == next left), so the same rounding leaves no blank or
-    # doubled pixel column at a seam.
-    clip.size = Vector2(maxf(1.0,roundf(right)-window_x),viewport.y)
+    clip.size = Vector2(maxf(1.0,ceilf(right)-window_x),viewport.y)
     segment.position = Vector2(left-bounds.x-window_x,0.0)
     segment.visible = true
     clip.visible = true

@@ -158,3 +158,22 @@ Native ink matches the Verovio reference by eye. Separate causes found:
 ### Remaining
 Full gate on one clean commit, then smoke, Godot syntax, hybrid focused and
 corpus (not yet run), and an empty quarantine.
+
+## 2026-11-16 — session 3
+
+- Strip windows open outward (floor left / ceil right); nearest rounding
+  could cover half a pixel of the strip's own ink. Regression in
+  `stream_retained_lifecycle.gd` fails with nearest rounding.
+- The "clipped natural" in the Chopin capture is NOT a seam. Raw pixels are
+  binary (245/39): glyph textures are rasterized at `RASTER_SCALE` 1.75 with
+  250 units per staff space and minified about 40x at an 11 px staff gap
+  with no mipmaps, i.e. point sampled. A stroke thinner than a pixel
+  disappears at some sub-pixel phases (present at clocks 7.25 and 7.50,
+  absent at 7.35) and 64th flags alias into hatching.
+- Experiment (reverted, not committed): mipmaps + `LINEAR_WITH_MIPMAPS` on the
+  native view restores the stroke and smooths flags, but softens all ink and
+  raises the Chopin verifier errors from 131 to 165 (34 accidental contours
+  no longer match). This changes how every glyph looks and what every pixel
+  oracle measures. **Owner decision needed**: keep crisp point-sampled ink,
+  rasterize glyphs at display scale, or adopt mipmaps and retune the oracles.
+  The Chopin quarantine entry cannot be cleared honestly before that.

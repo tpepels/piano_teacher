@@ -123,6 +123,13 @@ func _exercise() -> void:
                     fractional_world,ink_origin,axis])
             check(absf(window.position.x-roundf(window.position.x)) < 0.0001,
                 "the clip window sits on a whole pixel at %.3f" % fractional_world)
+            var bounds: Vector2 = Lifecycle.screen_bounds(pass_item,90.0,20.0,4.0)
+            var visible_left: float = maxf(axis+bounds.x,Lifecycle.LEFT_GUTTER_PX)
+            check(window.position.x <= visible_left and
+                window.position.x > visible_left-1.0 and
+                window.position.x+window.size.x >= axis+bounds.y and
+                window.position.x+window.size.x < axis+bounds.y+1.0,
+                "the window opens outward by less than a pixel and never covers its own ink at %.3f" % fractional_world)
             if absf(pass_item["segment"].position.x-
                     roundf(pass_item["segment"].position.x)) > 0.05:
                 snapped_windows += 1
