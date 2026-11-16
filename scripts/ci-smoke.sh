@@ -6,6 +6,8 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-python}"
 "$PYTHON" -m compileall -q piano_teacher tests scripts
+# New or retired test modules must be reviewed before CI reports green.
+"$PYTHON" scripts/ci-scope.py --check
 "$PYTHON" scripts/audit-transport-forwarding.py
 "$PYTHON" scripts/audit-musical-scheduler.py
 "$PYTHON" scripts/generate_state_contract.py --check
