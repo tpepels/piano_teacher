@@ -11,8 +11,8 @@ Usage: bash scripts/local-ci-agent.sh [--audit-only]
 
 Requires a logged-in Codex CLI, Godot 4.7 and the project .venv.
 Works on main only. Starts with a complete current-test scope audit,
-then runs the four-part full CI on a clean commit, fixing one failure at a
-time. Final gates also run smoke, Godot syntax, focused+corpus hybrid
+then runs the four-part full CI on a clean commit, stopping on its first
+failing test for one repair at a time. Final gates also run smoke, Godot syntax, focused+corpus hybrid
 verification and require an empty quarantine. On each actual code change
 the full suite is tested again on the new revision.
 
@@ -164,9 +164,10 @@ while ((attempts < MAX_ROUNDS)); do
     echo "CI_AGENT_PHASE_B: fix first remaining current-CI failure, round $round"
     failure_gate=''
     failure_log=''
-    # ci-full.sh runs 4 deterministic disjoint shards sequentially, stops at
-    # the first failed shard, and records PASS only on the same clean revision.
-    if ! gate full bash scripts/ci-full.sh --all; then
+    # ci-full.sh runs four deterministic disjoint shards sequentially. -x
+    # stops at the FIRST failed test, while a passing shard still runs every
+    # selected case and records PASS only on the same clean revision.
+    if ! gate full bash scripts/ci-full.sh --all --fail-fast; then
         :
     elif ! gate no-quarantine "$PYTHON" scripts/ci-scope.py --check-unquarantined; then
         :
