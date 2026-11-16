@@ -141,7 +141,7 @@ def _hollow_fill_mask(instance, report, origin, shape):
     return _grow(inside & (alpha[iy, ix] > .03), 1)
 
 
-def _source_head_alpha(instance, report, origin, shape):
+def _source_head_alpha(instance, report, origin, shape, scale=1.0):
     """Reproject the exact engraved texture alpha in its *original* rectangle.
 
     The whole-note template differs from the font glyph. More importantly,
@@ -154,12 +154,19 @@ def _source_head_alpha(instance, report, origin, shape):
     source = report["_source_head_masks"][key]
     alpha = source["alpha"]
     box = source["bounds"]
-    scale = float(instance["gap"]) / 250.0
+    scale_px = float(instance["gap"]) / 250.0
     anchor = instance["position"] if source["centered"] else instance["anchor"]
     left = anchor[0] + (-(float(box[2]) * .5) if source["centered"]
-                         else float(box[0])) * scale
-    top = anchor[1] + float(box[1]) * scale
-    width, height = float(box[2]) * scale, float(box[3]) * scale
+                         else float(box[0])) * scale_px
+    top = anchor[1] + float(box[1]) * scale_px
+    width, height = float(box[2]) * scale_px, float(box[3]) * scale_px
+    # Godot grows the actual source texture about the engraved head centre,
+    # without moving the source/template anchor or changing any note spacing.
+    cx, cy = instance["position"]
+    left = cx + (left - cx) * scale
+    top = cy + (top - cy) * scale
+    width *= scale
+    height *= scale
     y0, x0 = origin
     ys, xs = np.mgrid[y0:y0 + shape[0], x0:x0 + shape[1]]
     # Center-sampled texture coordinates, using bilinear filtering like the
@@ -187,6 +194,23 @@ def _recolored_pixel_prediction(baseline, source_alpha, source_ink, tint):
     # Subtract the exact original notehead ink and add the tint with the same
     # coverage. Never subtract the underlying staff rule from the framebuffer.
     return np.clip(baseline + (tint - source_ink) * source_alpha[..., None], 0, 255)
+
+
+def _two_pass_glow_prediction(base, tint, outer_alpha, inner_alpha):
+    """Godot MIX compositor: two low-opacity source-alpha glow layers."""
+    after_outer = base + (tint - base) * outer_alpha[..., None]
+    return after_outer + (tint - after_outer) * inner_alpha[..., None]
+
+
+def test_glow_prediction_uses_both_source_alpha_layers():
+    """Opaque status contours remain tint colored; nearby pixels glow softly."""
+    baseline = np.array([[[11., 39., 34.], [238., 245., 241.]]])
+    tint = np.array([241., 121., 120.])
+    outer = np.array([[.045, .045]])
+    inner = np.array([[.105, .105]])
+    after = _two_pass_glow_prediction(baseline, tint, outer, inner)
+    assert np.all(after[0, 0] > baseline[0, 0])
+    assert np.all(np.abs(after[0, 1] - tint) < np.abs(baseline[0, 1] - tint))
 
 
 def test_source_alpha_model_preserves_staff_ink_and_rejects_ghosts():
@@ -223,6 +247,16 @@ def _edge_error(instance, frame, report, base, graded):
     b, g = base[y0:y1, x0:x1], graded[y0:y1, x0:x1]
     a = _source_head_alpha(instance, report, (y0, x0), b.shape[:2])
     predicted = _recolored_pixel_prediction(b, a, ink, tint)
+    # Production paints TWO small, authentic source-alpha MIX layers after
+    # the subtract/add recolor. The contour assertion compares against that
+    # actual final intent, rather than treating deliberate glow as stray ink.
+    # No contour pixels are removed and the 6.0/32.0 error limits are unchanged.
+    glow = report["glow"]
+    outer = _source_head_alpha(instance, report, (y0, x0), b.shape[:2],
+                               scale=float(glow["outer_scale"])) * float(glow["outer_alpha"])
+    inner = _source_head_alpha(instance, report, (y0, x0), b.shape[:2],
+                               scale=float(glow["inner_scale"])) * float(glow["inner_alpha"])
+    predicted = _two_pass_glow_prediction(predicted, tint, outer, inner)
     error = np.abs(g - predicted).max(axis=2)
     keep = np.ones(a.shape, bool)
     staff = _rgb(report["background"]) * .52 + ink * .48
