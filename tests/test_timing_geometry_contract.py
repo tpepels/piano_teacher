@@ -133,11 +133,12 @@ def test_next_stage_fallback_uses_the_shared_offscreen_horizon():
 
 def test_old_rhythm_density_estimator_has_no_live_godot_callers():
     """There must be one active source readability owner, InkSpacing."""
-    for path in (ROOT / "godot").rglob("*.gd"):
-        if "addons" in path.parts:
-            continue
-        source = path.read_text()
-        assert "Geometry.required_" + "density(" not in source, path
+    for source_root in (ROOT / "godot", ROOT / "tests/godot"):
+        for path in source_root.rglob("*.gd"):
+            if "addons" in path.parts:
+                continue
+            source = path.read_text()
+            assert "Geometry.required_" + "density(" not in source, path
     geometry = (ROOT / "godot/notation/native/geometry.gd").read_text()
     assert "static func required_" + "density(" not in geometry
     spacing = (ROOT / "godot/notation/native/ink_spacing.gd").read_text()
