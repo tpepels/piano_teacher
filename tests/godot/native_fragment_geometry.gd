@@ -142,8 +142,11 @@ func run() -> void:
     tiny["notes"] = [{"id":"midi-t0-e2015","onset_beats":3.99375,
         "duration_beats":1.00625,"midi_pitch":59,"hand":"right"}]
     var Geometry = load("res://notation/native/geometry.gd")
-    check(Geometry.required_density(tiny["notation_events"],96.0,480.0) < 0.0,
-        "Caller-specified 480 density limit still rejects an over-dense source")
+    var InkSpacing = load("res://notation/native/ink_spacing.gd")
+    check(not InkSpacing.source_attack_intervals_fit(tiny["notation_events"],480.0),
+        "The source's 0.00625-beat attacks cannot fit within the user 480 px/beat limit")
+    check(InkSpacing.source_attack_intervals_fit(tiny["notation_events"],8192.0),
+        "The same authored 64th-tuplet clocks fit the full authentic source limit")
     check(renderer.load_score(tiny) and renderer.native_ready,
         "Actual Peace Piece ten-to-one 64th stays native at one larger global scale")
     if renderer.native_ready:
