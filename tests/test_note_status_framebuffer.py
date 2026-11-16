@@ -321,6 +321,20 @@ def test_status_core_is_the_opaque_exact_tint(capture):
         assert full > 0 and tinted == full, (item["status"], item["head"], full, tinted)
 
 
+def test_projected_standalone_heads_keep_their_exact_engraving_anchor(capture):
+    """Screen-space metadata must use the same translation as retained ink."""
+    _, frames, _ = capture
+    observed = 0
+    for frame in frames.values():
+        for item in frame["instances"]:
+            if item["source"] != "note":
+                continue
+            np.testing.assert_allclose(item["anchor"], item["position"], atol=1e-5,
+                                       err_msg=item["event_id"])
+            observed += 1
+    assert observed >= 4
+
+
 def test_recolor_replaces_the_white_head_without_a_doubled_contour(capture):
     report, frames, images = capture
     measured = 0
