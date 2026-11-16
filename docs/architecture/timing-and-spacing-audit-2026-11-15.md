@@ -206,3 +206,40 @@ identical behavior can be encoded using unrelated names and expressions.
 The source audit does not automatically detect every semantic alias,
 multi-line formula, third-party implementation or runtime synchronization
 fault. Those cannot be certified away by declaring the search exhaustive.
+
+
+### Late-discovered dead spacing estimator
+
+The final source-to-engraving comparison uncovered a second native
+note-spacing heuristic:
+
+- `Geometry.required_density()` inferred a rhythm-only candidate from
+  consecutive note durations, but the renderer discarded that candidate
+  except when it exceeded the absolute score-density ceiling. This was a
+  stale readability policy that could disagree with actual glyph fitting.
+- `InkSpacing.readable_density()`, followed by
+  `InkGeometry.minimum_density()`, actually selects the single retained
+  per-score density from authored attacks and rendered glyph rectangles.
+
+The unused rhythm-only estimator has been **removed**, rather than
+forwarded or preserved as a duplicate facade. The only needed rejection
+from it survives in `InkSpacing.source_attack_intervals_fit()`: a pair of
+distinct attacks in the same staff/voice that are physically closer than
+`MIN_SOURCE_ATTACK_SPACING_PX` even at the absolute maximum score-wide
+density fails closed. This source constraint does not impose an additional
+readability curve on otherwise representable material. `InkSpacing` now
+also names the existing minimum repeated quick-attack interval count,
+interval band, target spacing and quick-attack maximum density instead of
+burying their numbers in the density chooser.
+
+The Phase C Godot regression now tests normal eighths, sixteenths,
+64ths, coincident chord attacks, different voices, unrenderably close
+same-voice attacks and nonfinite clocks. The renderer-level assertion is
+updated to check the **actual** `InkSpacing.readable_density` floor and
+global maximum, not a computed value the renderer never consumed.
+
+This last case is why a mechanical scan of equal constants is
+insufficient: the two policies had *different numbers and names* but
+overlapped in their claimed responsibility. Correctness still depends on
+the local Godot acceptance suite and on real-score image/physical
+tests, not merely on removing duplicate code.
