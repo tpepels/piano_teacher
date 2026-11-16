@@ -103,3 +103,28 @@ def test_future_engraving_queue_and_lookahead_have_one_capacity():
 
     assert MAX_QUEUED == MAX_LOOKAHEAD
     assert MAX_LOOKAHEAD > 0
+
+
+def test_unloaded_transport_defaults_follow_one_fallback_meter():
+    from piano_teacher.notation.practice_timeline import (
+        UNLOADED_GAP_BEATS, UNLOADED_METER,
+    )
+    from piano_teacher.visual_transport import VisualTransport
+    from piano_teacher.state_projection import TimingSnapshot
+
+    assert UNLOADED_GAP_BEATS == UNLOADED_METER[0] * 4 / UNLOADED_METER[1]
+    assert VisualTransport().visual_gap_beats == UNLOADED_GAP_BEATS
+    snapshot = TimingSnapshot()
+    assert snapshot.visual_gap_beats == snapshot.count_in_bar_beats == UNLOADED_GAP_BEATS
+    assert snapshot.count_in_meter == UNLOADED_METER
+
+
+def test_next_stage_fallback_uses_the_shared_offscreen_horizon():
+    """Stage promotion cannot invent an independent 1.5-beat lead budget."""
+    runway = (ROOT / "godot/score_runway.gd").read_text()
+    assert "StreamAdmission.automatic_horizon(0.0," in runway
+    assert "MIN_FALLBACK_STAGE_LEAD_BEATS := 5.0" in runway
+    assert "_future._stream_header_beats(0.0)+1.5" not in runway
+    empty_staff = (ROOT / "godot/moving_meter_grid.gd").read_text()
+    assert "fallback_beats: float = EMPTY_STAFF_METER_BEATS" in empty_staff
+    assert 'last.get("end_beat",fallback_beats)' in empty_staff
