@@ -297,9 +297,11 @@ static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
 static func engraved_clip_bounds(floor: float, ceiling: float,
         pixels_per_beat: float, staff_gap: float,
         source_end: float = INF) -> Vector2:
-    var leading := staff_gap*(UNKNOWN_FIRST_HEADER_SPACES if
-        floor <= .0001 else INTERNAL_HEADER_SPACES)
-    var trailing := (staff_gap*SOURCE_TRAILING_SPACES
-        if ceiling >= source_end-.0001 else 0.0)
+    var leading: float = staff_gap * INTERNAL_HEADER_SPACES
+    if floor <= .0001:
+        leading = staff_gap * UNKNOWN_FIRST_HEADER_SPACES
+    var trailing: float = 0.0
+    if ceiling >= source_end-.0001:
+        trailing = staff_gap * SOURCE_TRAILING_SPACES
     return Vector2(floor*pixels_per_beat-leading,
         ceiling*pixels_per_beat+trailing)
