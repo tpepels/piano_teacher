@@ -145,3 +145,11 @@ def test_old_rhythm_density_estimator_has_no_live_godot_callers():
     assert "static func source_attack_intervals_fit" in spacing
     assert "static func readable_density" in spacing
     assert "static func minimum_density" in spacing
+
+
+def test_lesson_markers_and_score_ink_use_the_same_projection_function():
+    timeline = (ROOT / "godot/notation/shared/timeline.gd").read_text()
+    markers = (ROOT / "godot/score_step_timeline.gd").read_text()
+    assert "static func project_world_beat(" in timeline
+    assert "return project_world_beat(event_beat," in timeline
+    assert "return Timeline.project_world_beat(at,visual_beat," in markers
