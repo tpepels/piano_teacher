@@ -15,13 +15,11 @@ const MIN_REPEATED_QUICK_INTERVALS := 2
 
 
 static func source_attack_intervals_fit(events: Array, max_density: float) -> bool:
-    """Reject unrepresentable distinct attacks, not prescribe a second scale.
-
-    Extremely close source clocks in ONE staff/voice cannot be separated
-    on a fixed linear axis even at MAX_SCORE_PIXELS_PER_BEAT. Different
-    voices/registers and simultaneous chord members do not falsely collide.
-    Actual spacing and staff-scale fitting belong to minimum_density().
-    """
+    # Reject unrepresentable distinct attacks, not prescribe a second scale.
+    # Extremely close source clocks in ONE staff/voice cannot be separated
+    # on a fixed linear axis even at MAX_SCORE_PIXELS_PER_BEAT. Different
+    # voices/registers and simultaneous chord members do not falsely collide.
+    # Actual spacing and staff-scale fitting belong to minimum_density().
     if not is_finite(max_density) or max_density <= 0.0:
         return false
     var lanes: Dictionary = {}
