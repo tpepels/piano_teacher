@@ -8,17 +8,20 @@ SHARDS=4
 mode=all
 shard=""
 force=0
+fail_fast=0
 pytest_args=()
 
 usage() {
     cat <<'HELP'
-Usage: bash scripts/ci-full.sh [--shard 1|2|3|4 | --all | --plan | --status] [--force] [-- pytest-options]
+Usage: bash scripts/ci-full.sh [--shard 1|2|3|4 | --all | --plan | --status] [--force] [--fail-fast] [-- pytest-options]
 
   --shard N  Start at part N. Automatically run the next part only after a PASS.
              Stop at the first failing part; retain its log and exit status.
   --all      Start at part 1 (default), stopping at the first failed part.
              Skip parts that already passed on this clean Git revision.
   --force    Rerun previously passing parts when used with --all.
+  --fail-fast  Stop pytest on the first failed case in the first failing shard.
+             A clean PASS still executes all cases and counts as a full gate.
   --plan     Print the deterministic partition before running tests.
   --status   Print the four recorded statuses for the current commit.
   --        Pass extra pytest arguments for diagnosis only (not release-gate results).
@@ -39,6 +42,7 @@ while (($#)); do
         --plan) mode=plan; shift ;;
         --status) mode=status; shift ;;
         --force) force=1; shift ;;
+        --fail-fast) fail_fast=1; shift ;;
         -h|--help) usage; exit 0 ;;
         --) shift; pytest_args+=("$@"); break ;;
         *) echo "Unknown option: $1 (pytest options must follow --)" >&2; usage >&2; exit 2 ;;
@@ -218,7 +222,9 @@ run_part() {
     # tmp_path until the shard exits, exhausting a modest /tmp user quota.
     # "failed" deletes each PASS directory as soon as its test ends, while
     # preserving failure evidence and any session-scoped fixture artifacts.
-    if TMPDIR="$CI_FULL_TMP" "$PYTHON" -m pytest -q -m 'slow or not slow' -p scripts.ci_full_shards "--full-ci-shard=$number" -o tmp_path_retention_policy=failed --basetemp "$CI_FULL_TMP/pytest" tests "${pytest_args[@]}" 2>&1 | tee "$output"; then
+    local fail_fast_args=()
+    if [[ "$fail_fast" -eq 1 ]]; then fail_fast_args=(-x); fi
+    if TMPDIR="$CI_FULL_TMP" "$PYTHON" -m pytest -q -m 'slow or not slow' -p scripts.ci_full_shards "--full-ci-shard=$number" -o tmp_path_retention_policy=failed --basetemp "$CI_FULL_TMP/pytest" "${fail_fast_args[@]}" tests "${pytest_args[@]}" 2>&1 | tee "$output"; then
         result=0
     else
         result=$?
