@@ -243,3 +243,23 @@ insufficient: the two policies had *different numbers and names* but
 overlapped in their claimed responsibility. Correctness still depends on
 the local Godot acceptance suite and on real-score image/physical
 tests, not merely on removing duplicate code.
+
+
+### READY-reservation scale lock
+
+A further ownership mismatch was in `NativeView.set_density()`:
+the shared base renderer freezes density only after transport becomes active,
+but the native renderer can reserve a hidden READY source/rest strip **while
+still idle**. Calling `set_density` in that interval previously rebuilt
+the source's retained ink at a new pixels-per-beat value while the FIFO still
+held its earlier immutable position and admission metadata. The resulting
+note motion/clearance was no longer guaranteed to agree with the reserved
+physical source.
+
+The native renderer now refuses a density change while its online FIFO has
+**any** reserved strip, even before Play. An unchanged density is a no-op,
+so it does not recompile already-committed ink; after all strips are removed
+a new preference may be installed. A Godot regression checks the hidden
+READY, unchanged-density and empty-owner cases. This extends the original
+transport-only density lock to the queue-immutability boundary; it does
+not introduce a new policy owner.
