@@ -13,6 +13,8 @@ const MeterGrid := preload("res://moving_meter_grid.gd")
 const Flow := preload("res://continuous_score_flow.gd")
 const Tempo := preload("res://tempo_timeline.gd")
 const NativeView := preload("res://notation/native/view.gd")
+const RenderPass := preload("res://notation/native/render_pass.gd")
+const ScoreView := preload("res://notation/shared/view_base.gd")
 
 var failures := 0
 
@@ -52,6 +54,9 @@ func _run_contract() -> void:
     check(timeline.load_model(original), "mixed source meter and notes load")
     check(near(Timeline.DEFAULT_PIXELS_PER_BEAT,Spacing.DEFAULT_PIXELS_PER_BEAT),
         "semantic timeline reads central default density")
+    check(near(RenderPass.PLAYHEAD_FRACTION,Spacing.PLAYHEAD_FRACTION) and
+        near(ScoreView.PLAYHEAD_FRACTION,Spacing.PLAYHEAD_FRACTION),
+        "retained notes and score projection share one playhead fraction")
     check(near(ViewportFit.MAX_STAFF_GAP,Spacing.MAX_STAFF_GAP) and
         near(InkGeometry.MAX_STAFF_GAP,Spacing.MAX_STAFF_GAP),
         "viewport fitting and ink clearance use the same staff-size limit")
