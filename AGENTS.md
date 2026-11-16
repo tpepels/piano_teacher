@@ -62,7 +62,8 @@ passing run.
   turn, but do not rerun a full suite in a second concurrent process.
 - Verify the current branch is main and preserve unrelated user changes.
   Make small, reviewable commits directly on main after a real change.
-  Do not force push, reset hard, discard untracked user files or edit history.
+  Do not push or force push, reset hard, discard untracked user files or
+  edit history. Commits remain on the local main until the owner publishes them.
 - Do not weaken the CI gate, reduce coverage, introduce unjustified xfails,
   or silently change the interpretation of a research/engraving contract.
 - A failing relevant test stays until fixed. A suspected legacy test requires
