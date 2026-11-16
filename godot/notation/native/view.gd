@@ -6,6 +6,7 @@ extends "res://notation/shared/view_base.gd"
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation is rejected; production reports a preparation error.
 const Geometry := preload("res://notation/native/geometry.gd")
+const InkSpacing := preload("res://notation/native/ink_spacing.gd")
 const EngravingReadiness := preload("res://notation/native/engraving_readiness.gd")
 const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const Design := preload("res://practice_theme.gd")
@@ -317,19 +318,16 @@ func load_score(candidate: Dictionary) -> bool:
             _stream_queue.last_error
         notice = failure_reason
         return false
-    # The older rhythm-only heuristic reserved >=25 px for *every* short
-    # source interval, even if those notes are in different registers or
-    # independent voices and their actual Verovio glyphs cannot collide.
-    # This made one .0625-beat attack impose 400+ px/beat on an entire 4/4
-    # measure. Start at the selected density and let the full authentic
-    # ink rectangles below determine the minimum safe whole-score scale.
-    # Onset positions remain perfectly linear; no note is shifted in time.
-    # Retain the original hard rejection for pathological near-coincident
-    # distinct attacks (<~.003 beats): no compositor may pretend that an
-    # unrenderable source has enough clearance simply because registers differ.
-    if Geometry.required_density(
-            timeline.model.get("notation_events", []), configured_density,
-            timeline.MAX_SCORE_PIXELS_PER_BEAT) < 0.0:
+    # The actual native glyph solver below is the only authority for
+    # readable note spacing. A separate rhythm-only estimate used to be
+    # computed and then discarded, while its extreme-density failure gate
+    # remained in effect. Keep only the meaningful source safety check:
+    # distinct attacks in the SAME voice closer than the minimum physical
+    # separation even at maximum density cannot be represented without
+    # distorting authored time. Readability is chosen by InkSpacing itself.
+    if not InkSpacing.source_attack_intervals_fit(
+            timeline.model.get("notation_events", []),
+            timeline.MAX_SCORE_PIXELS_PER_BEAT):
         failure_reason = "Rhythm too dense for one fixed native horizontal scale"
         notice = failure_reason
         return false
