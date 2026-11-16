@@ -55,6 +55,8 @@ var attempt := 100
 # clock is that axis relative to this origin.
 var take_origin := 0.0
 var clock_matched := true
+var max_clock_sample_error_beats := 0.0
+var clock_mismatches: Array = []
 
 func _initialize() -> void:
     call_deferred("run")
@@ -63,8 +65,24 @@ func draw_frame() -> void:
     if bool(app.last_state.get("running", false)) and not bool(app.last_state.get("paused", false)):
         app.last_state.phase = "count_in" if app._transport_beat_now() < 0.0 else "playing"
     app._process(0.0)
-    clock_matched = clock_matched and app.visual_transport_clock.matches(app.last_state) \
-        and absf(app.practice_view.stage.renderer.clock_beat - app._transport_beat_now()) < .01
+    # Main sampled one monotonic tick at the start of this frame. Comparing
+    # the renderer's beat with _transport_beat_now() here re-samples time
+    # AFTER the whole frame has been processed. At fixture BPM=240 a mere
+    # 3 ms rendering pass changes the clock by 0.012 beats, producing a
+    # machine-load-dependent false failure. Assert both consumers used
+    # Main.frame_ms, the same timestamp from the actual production frame.
+    var consistent: bool = app.visual_transport_clock.matches(app.last_state)
+    var expected: float = app._transport_beat_at(app.frame_ms)
+    var observed: float = app.practice_view.stage.renderer.clock_beat
+    var error: float = absf(observed - expected)
+    max_clock_sample_error_beats = maxf(max_clock_sample_error_beats,error)
+    if not consistent or error > .00001:
+        clock_mismatches.append({"phase":str(app.last_state.get("phase","")),
+            "transport_id":int(app.last_state.get("transport_id",-1)),
+            "at_ms":app.frame_ms,"expected_beat":expected,
+            "renderer_beat":observed,"error_beats":error,
+            "transport_matched":consistent})
+        clock_matched = false
     await process_frame
     await process_frame
 
@@ -288,7 +306,10 @@ func run() -> void:
         "lead_samples":lead_samples, "playing_samples":playing_samples,
         "pause_axis_continues":pause_axis_continues,
         "resume_advanced":float(advanced.clock) > float(resumed.clock),
-        "clock_matched":clock_matched, "clipped":app.practice_view.stage.score_frame.clip_contents,
+        "clock_matched":clock_matched,
+        "max_clock_sample_error_beats":max_clock_sample_error_beats,
+        "clock_mismatches":clock_mismatches,
+        "clipped":app.practice_view.stage.score_frame.clip_contents,
         "same_timeline":view.timeline == timeline,
         "same_index":is_same(view.layout.ordered_events, events),
         "same_atlas":view.glyphs.textures == textures,
