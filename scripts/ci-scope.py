@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
 REGISTRY = TESTS / "ci-scope.json"
 PATTERNS = ("test_*.py", "*_test.py")
+WORKFLOW_PATTERNS = ("*.yml", "*.yaml")
 FLAGS = re.compile(
     r"\b(legacy|deprecated|removed|old[_ -]?server|compatibility|"
     r"localhost|\bhttp\b|\budp\b|\bqt\b|old[_ -]?transport)\b",
@@ -31,8 +32,23 @@ ALLOWED_TOP_LEVEL_OWNERS = {"pyproject.toml", "ROADMAP.md", "README.md"}
 
 
 def modules() -> list[Path]:
+    # All sources of executable CI behavior: pytest modules, native Godot
+    # scripts (including shared harnesses), and workflow definitions.
     found = {p for pattern in PATTERNS for p in TESTS.rglob(pattern) if p.is_file()}
+    found.update(p for p in (TESTS / "godot").rglob("*.gd") if p.is_file())
+    workflow_root = ROOT / ".github" / "workflows"
+    if workflow_root.is_dir():
+        found.update(p for pattern in WORKFLOW_PATTERNS
+                     for p in workflow_root.glob(pattern) if p.is_file())
     return sorted(found, key=lambda path: path.relative_to(ROOT).as_posix())
+
+
+def artifact_kind(path: Path) -> str:
+    if path.suffix == ".gd":
+        return "godot"
+    if path.suffix in {".yml", ".yaml"}:
+        return "workflow"
+    return "pytest"
 
 
 def rel(path: Path) -> str:
@@ -57,10 +73,11 @@ def inventory() -> int:
     definitions = 0
     suspicious = 0
     problems = 0
-    print("CI_SCOPE_INVENTORY: %d test modules" % len(files))
-    print("MODULE\tTEST_DEFINITIONS\tREVIEW_FLAGS")
+    print("CI_SCOPE_INVENTORY: %d pytest/native/workflow artifacts" % len(files))
+    print("ARTIFACT\tKIND\tTEST_DEFINITIONS\tREVIEW_FLAGS")
     for path in files:
-        count, error = test_definitions(path)
+        kind = artifact_kind(path)
+        count, error = test_definitions(path) if kind == "pytest" else (0, None)
         definitions += count
         source = path.read_text(encoding="utf-8", errors="replace")
         flags = sorted(set(m.group(0).lower() for m in FLAGS.finditer(source)))
@@ -69,7 +86,7 @@ def inventory() -> int:
         if error:
             problems += 1
         label = ",".join(flags) if flags else "-"
-        print(f"{rel(path)}\t{count}\t{label}")
+        print(f"{rel(path)}\t{kind}\t{count}\t{label}")
         if error:
             print(f"  PARSE_ERROR: {error}")
     print(f"CI_SCOPE_INVENTORY_TOTAL: {definitions} test definitions; "
@@ -115,11 +132,12 @@ def verify(require_no_quarantine: bool = False) -> int:
             problems.append(f"{name}: owner does not exist: {owner}")
         if not isinstance(contract, str) or len(contract.strip()) < 12:
             problems.append(f"{name}: missing concrete current behavior contract")
-        count, error = test_definitions(paths[name])
-        if error is not None:
-            problems.append(f"{name}: cannot parse test module: {error}")
-        elif count == 0:
-            problems.append(f"{name}: contains no test definitions")
+        if artifact_kind(paths[name]) == "pytest":
+            count, error = test_definitions(paths[name])
+            if error is not None:
+                problems.append(f"{name}: cannot parse test module: {error}")
+            elif count == 0:
+                problems.append(f"{name}: contains no test definitions")
     if require_no_quarantine:
         quarantine = TESTS / "quarantine.txt"
         if quarantine.exists():
@@ -132,7 +150,7 @@ def verify(require_no_quarantine: bool = False) -> int:
         for problem in problems:
             print("CI_SCOPE_INCOMPLETE: " + problem, file=sys.stderr)
         return 1
-    print(f"CI_SCOPE_COMPLETE: {len(paths)} current test modules reviewed, "
+    print(f"CI_SCOPE_COMPLETE: {len(paths)} current test/CI artifacts reviewed, "
           f"no missing or obsolete registry entries; "
           f"quarantine={'empty' if require_no_quarantine else 'checked separately'}")
     return 0
@@ -142,9 +160,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--inventory", action="store_true",
-                        help="list all test modules, definitions, and possible legacy clues")
+                        help="list pytest modules, native Godot harnesses, workflows and legacy clues")
     action.add_argument("--check", action="store_true",
-                        help="require complete registry of current test modules")
+                        help="require complete registry of all current test and CI artifacts")
     action.add_argument("--check-unquarantined", action="store_true",
                         help="require the registry and zero quarantined tests")
     args = parser.parse_args()
