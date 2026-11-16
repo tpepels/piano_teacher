@@ -14,6 +14,7 @@ const Flow := preload("res://continuous_score_flow.gd")
 const Tempo := preload("res://tempo_timeline.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const RenderPass := preload("res://notation/native/render_pass.gd")
+const RetainedProjection := preload("res://notation/native/retained_note_projection.gd")
 const ScoreView := preload("res://notation/shared/view_base.gd")
 
 var failures := 0
@@ -132,6 +133,25 @@ func _run_contract() -> void:
 
     check(JSON.stringify(original) == source_before,
         "changing density does not mutate source notes or measure boundaries")
+
+    # Source-local artwork anchors must follow their head through the one
+    # canonical camera projection. The painter keeps its original anchors
+    # immutable; exported framebuffer/hit instances use screen coordinates.
+    # Chord heads can have an anchor different from the head centre.
+    var local_note := {"event_id":"source", "position":Vector2(30.0,120.0),
+        "anchor":Vector2(24.0,121.0), "head":"head_whole"}
+    var projected: Array = []
+    var nearest: Dictionary = {}
+    check(RetainedProjection.append_visible([local_note],240.0,1000.0,
+        200.0,1,projected,nearest) == 1,
+        "retained notehead projects into the visible viewport")
+    if not projected.is_empty():
+        check(projected[0]["position"] == Vector2(270.0,120.0) and
+            projected[0]["anchor"] == Vector2(264.0,121.0),
+            "retained template anchor and head use the same screen transform")
+        check(local_note["position"] == Vector2(30.0,120.0) and
+            local_note["anchor"] == Vector2(24.0,121.0),
+            "projecting a take cannot mutate its local engraved geometry")
 
     # Hidden READY scores are already committed physical ink, even while
     # playback reports idle. Neither current source nor its queued rest may
