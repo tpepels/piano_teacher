@@ -404,9 +404,13 @@ def test_glow_is_extremely_subtle_and_follows_the_notehead_mask(capture):
         for _ in range(3):  # within 3 px of the authentic head ink
             near = near | np.roll(near, 1, 0) | np.roll(near, -1, 0) | \
                 np.roll(near, 1, 1) | np.roll(near, -1, 1)
-        # C5: a hollow head's enclosed interior belongs to its own mask region.
-        interior = _grow(_hole(coverage, .5), 1) if item["head"] != "head_black" else \
-            np.zeros(coverage.shape, bool)
+        # The production C5 fill is made from the original glyph's enclosed
+        # alpha, not a hole inferred from a source template. A stem or a staff
+        # rule can open/split the apparent hole in the baseline; use the exact
+        # exported fill pixels and keep every other changed pixel accountable.
+        interior = (_hollow_fill_mask(item, report, (y0, x0), coverage.shape)
+                    if item["head"] != "head_black" else
+                    np.zeros(coverage.shape, bool))
         near = near | interior
         changed = np.abs(g - b).max(axis=2) > 0
         assert not (changed & ~near).any(), "glow detached from the head mask"
