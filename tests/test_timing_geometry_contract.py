@@ -80,6 +80,7 @@ def test_first_party_godot_cannot_reimplement_bpm_second_arithmetic():
     assert scan("var beat = elapsed * bpm / 60000.0") == [1]
     assert scan("var seconds = pulse*60.0/plan_bpm") == [1]
     assert scan("var ticks = milliseconds * next_bpm / 60000") == [1]
+    assert scan("var seconds = pulse * 60.0 / \\\n    maxf(1.0, plan_bpm)") == [1]
     assert scan('var bpm = float(state.get("bpm",60.0))') == []
     assert scan("const PEER_MARGIN_PX := 60.0") == []
     for path in (ROOT / "godot").rglob("*.gd"):
