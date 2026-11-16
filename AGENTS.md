@@ -14,17 +14,21 @@ assignment; do not spawn another copy of that launcher from inside Codex.
 
 The two mandatory phases are sequential:
 
-A. Audit ALL collected tests against the current executable application.
+A. Audit ALL collected pytest tests, Godot test harnesses and the workflow
+   definitions against the current executable application.
    Remove or rewrite obsolete tests for retired HTTP/UDP/Qt servers, duplicate
    transports, discontinued UI, removed generator strategies, and old
    compatibility behavior only after tracing their tested behavior to actual
    production code. Do not remove a failing test merely because it fails.
    Keep relevant regression, migration, security, performance and original
    research-parity tests where the current product still owns their behavior.
-   A mixed module must have its individual cases reviewed. Track each removed
-   test, the retired contract, and any replacement in
-   docs/verification/ci-current-scope-audit.md. Classify every remaining test
-   module in tests/ci-scope.json with an actual current source owner and a
+   A mixed module must have its individual cases reviewed. Every native test
+   script and every workflow must be traced to a current owner, or deleted
+   with the reason recorded. Track each removed test, the retired contract,
+   and any replacement in
+   docs/verification/ci-current-scope-audit.md. Classify every remaining pytest
+   module, native Godot harness and workflow in tests/ci-scope.json with an
+   actual current source owner and a
    concrete tested contract, then pass scripts/ci-scope.py --check. Ensure
    pytest collection, the four-shard plan, smoke selection, and strict xfail
    paths still point to existing and appropriate tests. No blanket renaming,
