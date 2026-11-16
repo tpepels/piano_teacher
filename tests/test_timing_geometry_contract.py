@@ -47,7 +47,7 @@ def test_no_independent_numeric_copies_of_shared_spacing_limits():
 
     godot = ROOT / "godot"
     shared = godot / "notation/shared/spacing_policy.gd"
-    names = ("DEFAULT_PIXELS_PER_BEAT", "MAX_STAFF_GAP",
+    names = ("DEFAULT_PIXELS_PER_BEAT", "PLAYHEAD_FRACTION", "MAX_STAFF_GAP",
              "MIN_READABLE_STAFF_GAP", "MIN_LOOKAHEAD_BEATS",
              "MIN_READING_BEATS")
     numeric_definition = re.compile(
