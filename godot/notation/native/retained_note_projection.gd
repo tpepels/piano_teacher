@@ -41,6 +41,14 @@ static func append_visible(notes: Array, shift_x: float, viewport_width: float,
         placed[placement_id] = true
         var copy: Dictionary = original.duplicate(false)
         copy["position"] = screen
+        # All paint geometry exposed by a projected instance must share one
+        # coordinate space. The retained strip and its status layer paint in
+        # source-local coordinates, while framebuffer audits and hit metadata
+        # consume these screen-space copies. Leaving the original template
+        # anchor unshifted made the projected whole-note alpha land offscreen.
+        if original.get("anchor") is Vector2:
+            var local_anchor: Vector2 = original["anchor"]
+            copy["anchor"] = local_anchor + Vector2(shift_x,0.0)
         copy["pass_index"] = pass_index
         copy["instance_id"] = placement_id
         # Identity and clipping travel WITH the projected instance: the
