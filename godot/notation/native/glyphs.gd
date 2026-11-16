@@ -985,6 +985,14 @@ func paint_head(canvas: CanvasItem, instance: Dictionary, color: Color,
     if source == "glyph" or scale != 1.0:
         return paint(canvas,head,point.x,point.y,gap*scale,color,true)
     var key: String = str(instance.get("template",""))
+    # An isolated whole-note template contains only the authentic head; it
+    # has no stem or flag. Erase/recolor its EXACT original texture rather
+    # than extracting a separately reconstructed glyph-shaped cutout:
+    # otherwise anti-aliased template edge texels can survive in white.
+    # Half/quarter/eighth notes retain the isolated head cutout because
+    # their complete templates also include stems and/or flags.
+    if source == "note" and head == "head_whole" and key == "whole":
+        return paint_note(canvas,"whole",true,point.x,point.y,gap,color)
     var texture: Texture2D = head_cutout(source,key,int(instance.get("head_index",0)),head)
     var box: Array = _template_box(source,key)
     if texture == null or box.size() != 4:
