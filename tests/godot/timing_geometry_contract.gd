@@ -12,6 +12,7 @@ const Markers := preload("res://score_step_timeline.gd")
 const MeterGrid := preload("res://moving_meter_grid.gd")
 const Flow := preload("res://continuous_score_flow.gd")
 const Tempo := preload("res://tempo_timeline.gd")
+const NativeView := preload("res://notation/native/view.gd")
 
 var failures := 0
 
@@ -126,6 +127,27 @@ func _run_contract() -> void:
 
     check(JSON.stringify(original) == source_before,
         "changing density does not mutate source notes or measure boundaries")
+
+    # Hidden READY scores are already committed physical ink, even while
+    # playback reports idle. Neither current source nor its queued rest may
+    # shift in response to a new spacing preference. Unchanged requests are
+    # harmless, and a newly empty score owner may accept a new density.
+    var reserved_view := NativeView.new()
+    var initially_selected: float = reserved_view.timeline.pixels_per_beat
+    reserved_view._stream_queue.online.append({
+        "kind":"source","world_origin":12.0,"source_floor":0.0,
+        "source_ceiling":4.0,"admitted_density":initially_selected})
+    check(not reserved_view.set_density(144.0) and
+        near(reserved_view.timeline.pixels_per_beat,initially_selected),
+        "hidden READY source locks the horizontal scale before transport starts")
+    check(reserved_view.set_density(initially_selected) and
+        reserved_view._stream_queue.online.size() == 1,
+        "unchanged density keeps existing source reservation intact")
+    reserved_view._stream_queue.online.clear()
+    check(reserved_view.set_density(144.0) and
+        near(reserved_view.timeline.pixels_per_beat,144.0),
+        "clearing all reservations permits tuning the next score")
+    reserved_view.free()
 
     # Speedups and slowdowns change the derivative of an endless world axis.
     # A delayed retrospective slowdown may pay timing debt gradually, but
