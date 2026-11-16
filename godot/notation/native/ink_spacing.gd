@@ -26,10 +26,13 @@ static func source_attack_intervals_fit(events: Array, max_density: float) -> bo
     for event in events:
         if not event is Dictionary or str(event.get("kind","")) != "note":
             continue
+        var clock: float = float(event.get("beat",NAN))
+        if not is_finite(clock) or clock < 0.0:
+            return false
         var lane: String = str(event.get("staff",""))+"|"+str(event.get("voice","1"))
         if not lanes.has(lane):
             lanes[lane] = []
-        lanes[lane].append(float(event.get("beat",0.0)))
+        lanes[lane].append(clock)
     for lane in lanes:
         var beats: Array = lanes[lane]
         beats.sort()
