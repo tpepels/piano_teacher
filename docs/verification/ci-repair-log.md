@@ -201,3 +201,20 @@ The "repair 1" production change (`f0da11e8`, refined in `ee368bca` and
   0.24 against the unchanged 6.0 / 32.0 limits.
 - Lesson recorded for the next agent: run the placement-sensitive modules
   above before changing strip geometry.
+
+## 2026-11-16 — gate evidence at `48bf36e2`
+
+- `ci-full.sh --all --fail-fast`: PASS 4/4 — 1296 passed / 4 skipped,
+  1204 / 1 skipped, 1324, 1365 / 1 xfailed (5,189 passed in total).
+  Skips: no system SF2 for `test_sampled_piano`, and parametrized cases
+  that do not apply in `test_fingering_obstacle_geometry`.
+- `ci-smoke.sh` 865 passed; `check-godot-syntax.sh` OK;
+  `verify-hybrid-workflow.sh --focused` and `--corpus` finished 0;
+  `ci-scope.py --check` complete (618 artifacts).
+- **Not met:** `ci-scope.py --check-unquarantined` — one strict xfail left,
+  the Chopin Nocturne Op. 9 No. 2 bars 13-16 symbol proof (131 errors).
+  Blocked on the glyph minification decision described above. After that
+  decision the remaining verifier items are: stem disambiguation next to a
+  natural sign (prototype 5 -> 8 of 10 beams), hook boundary tolerance at
+  beat 7.5, and head registration of the periodic figure at beat 12.
+- Physical USB/Bluetooth MIDI acceptance: not run, cannot be run headless.

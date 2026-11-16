@@ -48,6 +48,8 @@ enforces that every artifact has an existing source owner and a contract.
 | `scripts/check_native_notation.py`, `tests/test_native_smoke_consumers.py` (`test_compatibility_checker_exposes_canonical_options_without_selector`, `test_compatibility_checker_preserves_canonical_parser_failure`, `test_compatibility_main_accepts_explicit_argv_and_restores_process_args`) | Self-described "compatibility entry point" forwarding to `check_native_verovio_overlay.py`; no script, workflow or current document called it, and `test_phase4_workflows` already lists it as retired. | `tests/test_native_verovio_overlay.py`, `tests/test_verification_runner_failures.py` exercise the canonical CLI |
 | `piano_teacher/application/assessment_evidence.py`, `tests/test_assessment_evidence.py` (`test_valid_graded_take_uses_original_stage_identity_and_bpm`, `test_no_fingerprint_or_ungraded_records_do_not_persist`) | `observe_assessed_take` lost its last caller when settlement moved into the teaching decision; production builds `AssessmentEvidence` in `teaching_decisions.py`. The tests exercised an uncalled helper with monkeypatched collaborators. | `tests/test_teaching_decisions.py`, `tests/test_assessment_commit.py`, `tests/test_assessment_tempo_evidence.py`; `test_coordination_boundaries::test_completed_take_owns_only_transport_and_session_persistence` now asserts the helper is gone |
 
+| Pinned-history capture in `tests/test_fingering_real_placement.py` and `tests/godot/native_fingering_real_placement.gd` (`before_script`, `before.png`) | Extracted `view.gd` from commit `04da92b` (2026-10-25, a compositor that "predates the stream queue") and ran it against current modules for an image no assertion read. After `72ee35e3` removed `Geometry.required_density` it no longer parsed and the harness never quit. | The nine current-view cases of the module are unchanged and pass |
+
 ## Rewritten (behaviour exists, test was outdated)
 
 - `tests/godot/retry_camera_clock.gd`: had no runner and fed the clock a
@@ -114,8 +116,8 @@ not apply to a given source). No test is skipped to hide a failure.
 
 ## Open after this audit (Phase B, not scope)
 
-- `tests/test_note_status_framebuffer.py`: two failing cases (missed half
-  note recolour error 6.03 > 6.0; glow detached from the head mask).
+- `tests/test_note_status_framebuffer.py`: resolved in Phase B (both were
+  test-model defects; see `ci-repair-log.md`).
 - `tests/quarantine.txt`: one strict xfail (Chopin Nocturne Op. 9 No. 2
   bars 13-16 beam verifier).
 - Physical USB/Bluetooth MIDI acceptance cannot run headless and stays open.
