@@ -261,6 +261,18 @@ def test_recolor_replaces_the_white_head_without_a_doubled_contour(capture):
     assert measured >= 10
 
 
+def test_standalone_whole_note_recolor_uses_original_engraved_artwork(capture):
+    """A head-only Verovio template must not be replaced by a cutout guess."""
+    report, frames, _ = capture
+    whole = [item for item in _colored(frames["graded"])
+             if item["head"] == "head_whole"]
+    assert whole and any(item["status"] == "early_onset" for item in whole)
+    assert all(item["source"] == "note" for item in whole)
+    glyphs = (ROOT / "godot/notation/native/glyphs.gd").read_text()
+    assert 'source == "note" and head == "head_whole" and key == "whole"' in glyphs
+    assert 'return paint_note(canvas,"whole",true,point.x,point.y,gap,color)' in glyphs
+
+
 def test_original_white_whole_note_contour_would_still_fail_recolor_check(capture):
     """Masking the intentional interior must not mask doubled source edges."""
     report, frames, images = capture
