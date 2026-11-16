@@ -90,6 +90,35 @@ progress. Reset Lesson preserves history. Exports omit source paths and device
 names; exported copies remain outside the app's deletion control. See the
 [learning evidence contract](docs/learning-measurement.md).
 
+## Autonomous local CI scope audit and repair
+
+The local agent follows [AGENTS.md](AGENTS.md) and works on main in two
+strictly ordered phases: (A) audit/remove obsolete tests and CI workflows
+against the current embedded desktop application; (B) repair each remaining
+failure, one full-suite shard at a time, until all gates pass on one clean
+revision. Scope is enforced by scripts/ci-scope.py; newly added test modules,
+Godot harnesses and GitHub workflows require explicit ownership entries in
+tests/ci-scope.json. The scope gate initially fails until the local audit
+creates the reviewed registry.
+
+With a signed-in Codex CLI, Godot 4.7 and project .venv installed locally:
+
+```bash
+git pull --ff-only
+bash scripts/local-ci-agent.sh
+```
+
+Use --audit-only to stop after phase A. The launcher invokes Codex in a
+workspace-write sandbox with automatic approval review when supported,
+and runs the actual four-shard CI outside the Codex sandbox. Each code
+change must be committed before the next shard run. It will not make
+branches, force-push, overwrite unrelated changes, or ignore a failure.
+Full acceptance also requires smoke, Godot syntax and hybrid workflow
+gates plus an empty strict-xfail quarantine. Local agent logs and
+per-revision shard statuses are under playtest-results/. Progress resumes
+from committed changes on restart. The launcher does not push local
+commits to a remote; publish them explicitly when appropriate.
+
 ## Packaging
 
 `scripts/package-inprocess.sh` assembles the distributable desktop
