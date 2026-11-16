@@ -693,10 +693,6 @@
    "owner": "piano_teacher/application/attempt_settlement.py",
    "contract": "Settlement consumes chosen progress with original assessment evidence."
   },
-  "tests/test_assessment_evidence.py": {
-   "owner": "piano_teacher/application/assessment_evidence.py",
-   "contract": "Only actual graded note evidence reaches the adaptive history writer."
-  },
   "tests/test_assessment_service.py": {
    "owner": "piano_teacher/assessment_service.py",
    "contract": "Assessment calculations are independent of PracticeEngine and its clocks."
@@ -1664,10 +1660,6 @@
   "tests/test_native_singleton_tuplets.py": {
    "owner": "godot/notation/native/view.gd",
    "contract": "Visible one-event tuplets are required source ink, including rest anchors."
-  },
-  "tests/test_native_smoke_consumers.py": {
-   "owner": "scripts/check_native_notation.py",
-   "contract": "Focused CLI contracts; never launch Godot or bind the application port."
   },
   "tests/test_native_snapshot.py": {
    "owner": "godot/main.gd",

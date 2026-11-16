@@ -1,4 +1,4 @@
-"""End-to-end mutations in the actual Godot framebuffer, run explicitly in CI."""
+"""End-to-end rest mutations in the actual Godot framebuffer (full CI, every run)."""
 from copy import deepcopy
 import json
 import os
@@ -12,8 +12,6 @@ from piano_teacher.notation.phase3_pixels import verify_all_rest_pixels
 from scripts.check_native_verovio_overlay import AuditCase, ROOT, fixture
 
 
-pytestmark=pytest.mark.skipif(os.environ.get("PIANO_REAL_PIXEL_TESTS")!="1",
-                            reason="explicit real framebuffer job uses xvfb/software OpenGL")
 
 
 @pytest.fixture(scope="module")

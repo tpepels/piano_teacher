@@ -4,7 +4,10 @@
 # Broader scenarios belong to explicit-only scripts/ci-extended.sh.
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
-PYTHON="${PYTHON:-python}"
+# Same interpreter as ci-full.sh locally; hosted CI has no .venv.
+if [[ -z "${PYTHON:-}" ]]; then
+    if [[ -x "$PWD/.venv/bin/python" ]]; then PYTHON="$PWD/.venv/bin/python"; else PYTHON=python; fi
+fi
 "$PYTHON" -m compileall -q piano_teacher tests scripts
 # New or retired test modules must be reviewed before CI reports green.
 "$PYTHON" scripts/ci-scope.py --check
@@ -54,7 +57,6 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_feedback_route.py \
   tests/test_guided_fragment.py \
   tests/test_assessment_settlement.py \
-  tests/test_assessment_evidence.py \
   tests/test_assessment_commit.py \
   tests/test_assessment_atomicity.py \
   tests/test_assessment_tempo_evidence.py \

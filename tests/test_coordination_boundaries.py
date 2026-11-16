@@ -196,12 +196,15 @@ def test_pure_frontend_policy_with_headless_godot(script, success):
 def test_completed_take_owns_only_transport_and_session_persistence():
     server = (ROOT/"piano_teacher/server.py").read_text()
     assessment = (ROOT/"piano_teacher/application/assessment_settlement.py").read_text()
-    evidence = (ROOT/"piano_teacher/application/assessment_evidence.py").read_text()
+    decisions = (ROOT/"piano_teacher/teaching_decisions.py").read_text()
     commit = (ROOT/"piano_teacher/application/attempt_settlement.py").read_text()
     assert "assess_completed_take(" in server
     assert "self.attempt_settlement.settle(" in server
     assert "def assess_completed_take(" in assessment
-    assert "def observe_assessed_take(" in evidence
+    # Graded evidence is built once, by the selected teacher's decision; the
+    # former standalone observation helper had no caller and is gone.
+    assert "AssessmentEvidence.from_result(c.key, result, route.performed_bpm)" in decisions
+    assert not (ROOT/"piano_teacher/application/assessment_evidence.py").exists()
     assert "def settle(" in commit
     assert "plan.apply_result(" not in commit
     # Ignore the earlier separately transactional failed-streak checkpoint.
@@ -209,7 +212,7 @@ def test_completed_take_owns_only_transport_and_session_persistence():
     assert settle.index("self.capture.persist()") < settle.index("plan.apply_teaching_progress(")
     # Check executable dependencies, not prose in module docstrings.
     import ast
-    for source in (assessment, evidence, commit):
+    for source in (assessment, commit):
         parsed = ast.parse(source)
         assert not any(
             isinstance(node, (ast.Attribute, ast.Name)) and (

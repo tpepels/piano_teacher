@@ -1,8 +1,8 @@
 # CI scope audit and repair log (durable hand-over record)
 
 Read this first in every agent turn; append, never rewrite history.
-Phase A is **not complete**: `docs/verification/ci-current-scope-audit.md`
-does not exist yet and `scripts/ci-scope.py --check` still fails.
+Current status is the last section. Scope decisions and their evidence are
+in `docs/verification/ci-current-scope-audit.md`.
 
 ## 2026-11-16 — session 1 (Claude Code, interrupted by usage limit)
 
@@ -65,3 +65,33 @@ does not exist yet and `scripts/ci-scope.py --check` still fails.
    entry is still quarantined).
 
 Physical USB/Bluetooth MIDI acceptance is not executable here and stays open.
+
+## 2026-11-16 — session 2: Phase A complete
+
+- Baseline without fail-fast at `893be609` (shards 3/4 ran after an
+  intermediate commit moved modules between shards, so it is diagnostic
+  only): shard 1 1356 passed; shard 2 1 failed / 1262 passed; shard 3
+  3 failed / 1281 passed; shard 4 1303 passed.
+- Stale tests repaired: `test_retained_score_pipeline` playhead owner,
+  `test_ci_full_runner` (scope + Godot preflights; `ci-full.sh` accepts
+  `GODOT_BIN`).
+- Removed with evidence: nine orphan Godot harnesses, `check_desktop_ui.py`,
+  `check_native_notation.py` + `test_native_smoke_consumers.py`,
+  `application/assessment_evidence.py` + `test_assessment_evidence.py`.
+- `retry_camera_clock.gd` rewritten to the scheduled-epoch contract and added
+  to `check-godot-syntax.sh`. `test_phase3_real_rest_protocol.py` no longer
+  hides behind an env switch nothing set (4 cases, passing).
+- `ci-smoke.sh` uses `.venv/bin/python` when present (the system Python has
+  no pytest; hosted CI is unchanged).
+- Verified at the Phase A commit: `ci-scope.py --check` (618 artifacts),
+  `ci-smoke.sh` (865 passed), `check-godot-syntax.sh`, 5,193 cases collected,
+  shard plan 112/113/113/113 modules.
+
+### Phase B queue
+1. `tests/test_note_status_framebuffer.py::test_recolor_replaces_the_white_head_without_a_doubled_contour`
+   — missed `head_half`, mean error 6.03 > 6.0.
+2. `tests/test_note_status_framebuffer.py::test_glow_is_extremely_subtle_and_follows_the_notehead_mask`
+   — glow detached from the head mask (missed `head_black` in a chord).
+3. Quarantine entry: Chopin Nocturne Op. 9 No. 2 bars 13-16 beam verifier.
+4. Then the full gate, smoke, Godot syntax, hybrid focused and corpus on one
+   clean commit.
