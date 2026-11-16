@@ -121,7 +121,7 @@ def test_pause_keeps_the_visual_axis_moving_and_resume_uses_real_clock(native_ca
     # Pause holds the engine clock; the visual axis is monotonic and goes on.
     assert report["pause_axis_continues"]
     assert report["resume_advanced"]
-    assert report["clock_matched"]
+    assert report["clock_matched"], report["clock_mismatches"]
 
 
 def test_frame_budget_is_retained():
