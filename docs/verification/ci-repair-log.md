@@ -218,3 +218,27 @@ The "repair 1" production change (`f0da11e8`, refined in `ee368bca` and
   natural sign (prototype 5 -> 8 of 10 beams), hook boundary tolerance at
   beat 7.5, and head registration of the periodic figure at beat 12.
 - Physical USB/Bluetooth MIDI acceptance: not run, cannot be run headless.
+
+## 2026-11-16 — option 2 experiment (display-scale glyph artwork), not committed
+
+Owner asked to try rasterizing at display scale. Prototype: every texture
+draw in `glyphs.gd`, `symbol_painter.gd` and the brace in `view.gd` goes
+through a helper that resamples the texture once (premultiplied Lanczos) to
+the size it is shown at and draws that copy 1:1.
+
+- Look: the natural sign keeps both strokes at every clock, 64th flags are
+  clean, and the ink is crisper than with mipmaps.
+- Full suite without fail-fast: 5,181 passed, 8 failed (all four shards run).
+  `test_note_status_framebuffer` x3, `test_extra_symbol_pixels` x1,
+  `test_native_paint_components[symbols]`, `test_native_boundary_clearance`
+  x1, `test_native_singleton_tuplets[False]`, and
+  `test_full_notation_difficult_cases[hanon-37]` (2 stem errors).
+- Quarantined Chopin case: 131 -> 226 errors (stems 52, beams 43,
+  accidentals 34): the verifiers expect hard-edged ink.
+- Known prototype defects, not just thresholds: the cache is keyed by
+  texture RID, which can be reused after a texture is freed ("suppressing
+  artwork changed unrelated score ink"); status erase/core/fill passes draw
+  differently sized copies, so the exact-tint core no longer holds; thin
+  stem sprites lose brightness when resampled.
+- Outcome: feasible but not a drop-in. Tree restored to `b99e6cbe`; nothing
+  from the experiment is committed.
