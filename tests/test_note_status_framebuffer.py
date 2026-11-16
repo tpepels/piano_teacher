@@ -51,6 +51,17 @@ def capture(tmp_path_factory):
         }
         for head, filename in report["hollow_interior_files"].items()
     }
+    # Exact alpha of the production head paint (the whole-note source template
+    # or the extracted authentic head-only pixels for composite artwork).
+    # Staff-rule color in the baseline is not usable as a head alpha mask.
+    report["_source_head_masks"] = {
+        key: {
+            "alpha": np.asarray(Image.open(folder / entry["file"]).convert("RGBA"))[:, :, 3] / 255.0,
+            "bounds": tuple(entry["bounds"]),
+            "centered": bool(entry["centered"]),
+        }
+        for key, entry in report["source_head_masks"].items()
+    }
     return report, frames, images
 
 
@@ -150,13 +161,57 @@ def _hollow_fill_mask(instance, report, origin, shape):
     return _grow(inside & (alpha[iy, ix] > .03), 1)
 
 
-def _edge_error(instance, frame, report, base, graded):
-    """Deviation from a perfect in-place recolor b(1-a)+tint*a of the head.
+def _source_head_alpha(instance, report, origin, shape):
+    """Reproject the exact engraved texture alpha in its *original* rectangle.
 
-    Coverage a comes from the untouched baseline. A white contour left under
-    or around the colored head, a doubled paint, or a mask offset all raise
-    this error; the faint glow alone stays small. Staff-line rows, stems and
-    pixels nearer to another head are not modelled and are excluded.
+    The whole-note template differs from the font glyph. More importantly,
+    staff rules beneath a hollow head are part of the baseline framebuffer
+    but NOT part of its recolored source mask.
+    """
+    key = "{}|{}|{}|{}".format(
+        instance["source"], instance.get("template", ""),
+        instance.get("head_index", 0), instance["head"])
+    source = report["_source_head_masks"][key]
+    alpha = source["alpha"]
+    box = source["bounds"]
+    scale = float(instance["gap"]) / 250.0
+    anchor = instance["position"] if source["centered"] else instance["anchor"]
+    left = anchor[0] + (-(float(box[2]) * .5) if source["centered"]
+                         else float(box[0])) * scale
+    top = anchor[1] + float(box[1]) * scale
+    width, height = float(box[2]) * scale, float(box[3]) * scale
+    y0, x0 = origin
+    ys, xs = np.mgrid[y0:y0 + shape[0], x0:x0 + shape[1]]
+    # Center-sampled texture coordinates, using bilinear filtering like the
+    # native draw_texture_rect call. Pixels outside the destination rect have
+    # no source coverage, even where sampler addressing clamps to an edge.
+    u = (xs + .5 - left) * alpha.shape[1] / width
+    v = (ys + .5 - top) * alpha.shape[0] / height
+    inside = (u >= 0) & (v >= 0) & (u < alpha.shape[1]) & (v < alpha.shape[0])
+    u, v = u - .5, v - .5
+    ix0, iy0 = np.floor(u).astype(int), np.floor(v).astype(int)
+    fx, fy = u - ix0, v - iy0
+    ix1, iy1 = ix0 + 1, iy0 + 1
+    ix0, ix1 = np.clip(ix0, 0, alpha.shape[1] - 1), np.clip(ix1, 0, alpha.shape[1] - 1)
+    iy0, iy1 = np.clip(iy0, 0, alpha.shape[0] - 1), np.clip(iy1, 0, alpha.shape[0] - 1)
+    sampled = (
+        alpha[iy0, ix0] * (1 - fx) * (1 - fy) +
+        alpha[iy0, ix1] * fx * (1 - fy) +
+        alpha[iy1, ix0] * (1 - fx) * fy +
+        alpha[iy1, ix1] * fx * fy
+    )
+    return np.where(inside, sampled, 0.0)
+
+
+def _edge_error(instance, frame, report, base, graded):
+    """Deviation from the true in-place recolor of authentic notehead ink.
+
+    Source alpha a comes from the exact Godot texture and destination rectangle.
+    The background can include a staff rule, so estimate predicted graded
+    pixels from the baseline b: b + (tint - source_ink) * a. Inferring a from
+    b - the flat stage background incorrectly labels underlying staff rules
+    as unmodified white notehead contours, especially for hollow whole notes.
+    This still fails on any surviving original outline or doubled tint.
     """
     bg, ink = _rgb(report["background"]), _rgb(report["ink"])
     tint = _rgb(report["tints"][instance["status"]])
@@ -164,9 +219,8 @@ def _edge_error(instance, frame, report, base, graded):
     cx, cy = instance["position"]
     x0, y0, x1, y1 = _box(instance, 3, base.shape[1])
     b, g = base[y0:y1, x0:x1], graded[y0:y1, x0:x1]
-    axis = ink - bg
-    a = np.clip(((b - bg) * axis).sum(axis=2) / (axis * axis).sum(), 0, 1)
-    predicted = bg * (1 - a[..., None]) + tint * a[..., None]
+    a = _source_head_alpha(instance, report, (y0, x0), b.shape[:2])
+    predicted = np.clip(b + (tint - ink) * a[..., None], 0, 255)
     error = np.abs(g - predicted).max(axis=2)
     keep = np.ones(a.shape, bool)
     staff = _rgb(report["background"]) * .52 + ink * .48
