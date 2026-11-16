@@ -982,25 +982,32 @@ func paint_head(canvas: CanvasItem, instance: Dictionary, color: Color,
     var head: String = str(instance["head"])
     var point: Vector2 = instance["position"]
     var source: String = str(instance.get("source","glyph"))
-    if source == "glyph" or scale != 1.0:
+    if source == "glyph":
         return paint(canvas,head,point.x,point.y,gap*scale,color,true)
     var key: String = str(instance.get("template",""))
-    # An isolated whole-note template contains only the authentic head; it
-    # has no stem or flag. Erase/recolor its EXACT original texture rather
-    # than extracting a separately reconstructed glyph-shaped cutout:
-    # otherwise anti-aliased template edge texels can survive in white.
-    # Half/quarter/eighth notes retain the isolated head cutout because
-    # their complete templates also include stems and/or flags.
-    if source == "note" and head == "head_whole" and key == "whole":
-        return paint_note(canvas,"whole",true,point.x,point.y,gap,color)
-    var texture: Texture2D = head_cutout(source,key,int(instance.get("head_index",0)),head)
+    # Erase, core and glow must sample the SAME original Verovio texture.
+    # Using the generic head glyph for scale != 1.0 gave composite half/whole
+    # notes an unrelated outline and a detached glow. The first two passes
+    # remain at exactly their source rectangle; only the glow expands around
+    # the actual engraved head centre without shifting its source anchor.
+    var texture: Texture2D = null
     var box: Array = _template_box(source,key)
+    if source == "note" and head == "head_whole" and key == "whole":
+        if scale == 1.0:
+            return paint_note(canvas,"whole",true,point.x,point.y,gap,color)
+        texture = note_textures.get("whole")
+    else:
+        texture = head_cutout(source,key,int(instance.get("head_index",0)),head)
     if texture == null or box.size() != 4:
-        return paint(canvas,head,point.x,point.y,gap,color,true)
+        return paint(canvas,head,point.x,point.y,gap*scale,color,true)
     var anchor: Vector2 = instance["anchor"]
     var unit: float = gap/250.0
-    canvas.draw_texture_rect(texture,Rect2(anchor.x+float(box[0])*unit,
-        anchor.y+float(box[1])*unit,float(box[2])*unit,float(box[3])*unit),false,color)
+    var top_left: Vector2 = anchor + Vector2(
+        float(box[0])*unit,float(box[1])*unit)
+    var original_size: Vector2 = Vector2(
+        float(box[2])*unit,float(box[3])*unit)
+    canvas.draw_texture_rect(texture,Rect2(
+        point + (top_left-point)*scale,original_size*scale),false,color)
     return true
 
 
