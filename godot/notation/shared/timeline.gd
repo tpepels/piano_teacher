@@ -102,12 +102,19 @@ func musical_beat(clock_beat: float, play_from_beat: float = 0.0) -> float:
 func camera_x(clock_beat: float, play_from_beat: float = 0.0) -> float:
     return x_at_beat(musical_beat(clock_beat, play_from_beat))
 
+# One canonical, linear beat-to-screen projection for score ink and stage
+# markers. The camera and onsets use the same quarter-beat coordinates; tempo
+# is only the derivative of world_beat, not a position distortion.
+static func project_world_beat(beat: float, world_beat: float,
+        playhead_x: float, density: float) -> float:
+    return playhead_x + (beat-world_beat)*density
+
 # playhead_x is fixed in pixels relative to the score viewport; no per-note
 # camera corrections or special zero-beat tween are ever allowed.
 func screen_x(event_beat: float, clock_beat: float, playhead_x: float,
         play_from_beat: float = 0.0) -> float:
-    return playhead_x + x_at_beat(event_beat) - camera_x(
-        clock_beat, play_from_beat)
+    return project_world_beat(event_beat,
+        musical_beat(clock_beat,play_from_beat),playhead_x,pixels_per_beat)
 
 func pixels_per_second(bpm: float) -> float:
     return pixels_per_beat * TempoTimeline.beats_from_seconds(1.0,bpm)
