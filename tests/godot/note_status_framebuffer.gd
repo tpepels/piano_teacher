@@ -34,13 +34,59 @@ func _instances() -> Array:
         var p: Vector2 = item["position"]
         var clip: Vector2 = item.get("clip_x",Vector2(-INF,INF))
         var ink: Color = item["ink"]
+        var anchor: Vector2 = item.get("anchor",p)
         result.append({"event_id":item["event_id"],"take_key":item["take_key"],
             "instance_id":item["instance_id"],"head":item["head"],
             "position":[p.x,p.y],"clip_x":[clip.x,clip.y],
             "ink":[ink.r,ink.g,ink.b,ink.a],"gap":float(item["gap"]),
-            "source":str(item.get("source","")),
+            "source":str(item.get("source","glyph")),
+            "template":str(item.get("template","")),
+            "head_index":int(item.get("head_index",0)),
+            "anchor":[anchor.x,anchor.y],
             "status":feedback.status_for(str(item["take_key"]),str(item["event_id"]))})
     return result
+
+# Export the source *head* alpha actually used by each recoloring pass.
+# A framebuffer cannot infer this alpha from its color: staff rules underneath
+# a hollow whole note are intentionally left white after recoloring.
+func _source_head_masks() -> Dictionary:
+    var result: Dictionary = {}
+    for item in renderer.drawn_note_instances:
+        var source: String = str(item.get("source","glyph"))
+        var key: String = str(item.get("template",""))
+        var index: int = int(item.get("head_index",0))
+        var head: String = str(item["head"])
+        var identity: String = "%s|%s|%d|%s" % [source,key,index,head]
+        if result.has(identity):
+            continue
+        var texture: Texture2D = null
+        var box: Array = []
+        var centered := false
+        match source:
+            "note":
+                box = renderer.glyphs.note_bounds.get(key,[])
+                if head == "head_whole" and key == "whole":
+                    texture = renderer.glyphs.note_textures.get("whole")
+                else:
+                    texture = renderer.glyphs.head_cutout(source,key,index,head)
+            "chord":
+                box = renderer.glyphs.chord_metadata.get(key,{}).get("bounds",[])
+                texture = renderer.glyphs.head_cutout(source,key,index,head)
+            "chord_heads":
+                box = renderer.glyphs.chord_heads_bounds.get(key,[])
+                texture = renderer.glyphs.head_cutout(source,key,index,head)
+        if texture == null or box.size() != 4:
+            # This is the paint_head() fallback for a standalone head glyph.
+            texture = renderer.glyphs.textures.get(head)
+            box = renderer.glyphs.bounds.get(head,[])
+            centered = true
+        assert(texture != null and box.size() == 4,
+            "Missing authentic notehead source alpha: "+identity)
+        var filename: String = "head-mask-%d.png" % result.size()
+        assert(texture.get_image().save_png(folder.path_join(filename)) == OK)
+        result[identity] = {"file":filename,"bounds":box,"centered":centered}
+    return result
+
 
 func _layer_paints() -> int:
     var total := 0
@@ -176,6 +222,7 @@ func _run() -> void:
         "background":[bg.r,bg.g,bg.b],"ink":[ink.r,ink.g,ink.b,ink.a],
         "tints":tints,"ids":ids,"take_a":key_a,"take_b":key_b,"repeat_origin":repeat_origin,
         "hollow_interior_files":interior_files,
+        "source_head_masks":_source_head_masks(),
         "outcomes":outcomes,"paints":{"before":paints_before,
             "graded":paints_graded,"moved":paints_moved},
         "glow":{"inner_scale":Ink.INNER_SCALE,"outer_scale":Ink.OUTER_SCALE,
