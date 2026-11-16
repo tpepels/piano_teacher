@@ -5,6 +5,9 @@ extends RefCounted
 ##
 ## Change DEFAULT_PIXELS_PER_BEAT to widen/narrow ordinary measures on the
 ## NEXT loaded score. A running score's selected density is immutable.
+# The fixed playhead position is shared by score projection, text markers,
+# retained head selection and source admission.
+const PLAYHEAD_FRACTION := 0.33
 const DEFAULT_PIXELS_PER_BEAT := 96.0
 const MAX_STAFF_GAP := 22.0
 const MIN_READABLE_STAFF_GAP := 14.0
