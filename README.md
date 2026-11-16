@@ -101,17 +101,23 @@ Godot harnesses and GitHub workflows require explicit ownership entries in
 tests/ci-scope.json. The scope gate initially fails until the local audit
 creates the reviewed registry.
 
-With a signed-in Codex CLI, Godot 4.7 and project .venv installed locally:
+With a signed-in Claude Code CLI (default) or Codex CLI
+(`CI_AGENT_CLI=codex`), Godot 4.7 and project .venv installed locally:
 
 ```bash
 git pull --ff-only
 bash scripts/local-ci-agent.sh
 ```
 
-Use --audit-only to stop after phase A. The launcher invokes Codex in a
-workspace-write sandbox with automatic approval review when supported,
-and runs the actual four-shard CI outside the Codex sandbox. Each code
-change must be committed before the next shard run. It will not make
+Use --audit-only to stop after phase A. Each turn is one non-interactive
+agent session: Claude Code runs as `claude -p` with `--permission-mode auto`
+(override with `CI_AGENT_CLAUDE_PERMISSION_MODE` / `CI_AGENT_CLAUDE_ARGS`),
+Codex in a workspace-write sandbox with automatic approval review when
+supported. The launcher itself runs the four-shard CI, outside the agent
+session. Each code change must be committed before the next shard run. A
+turn that commits nothing is followed by one blocker-investigation turn; a
+second one stops the launcher. `docs/verification/ci-repair-log.md` is the
+committed hand-over record every turn reads and extends. It will not make
 branches, force-push, overwrite unrelated changes, or ignore a failure.
 Full acceptance also requires smoke, Godot syntax and hybrid workflow
 gates plus an empty strict-xfail quarantine. Local agent logs and

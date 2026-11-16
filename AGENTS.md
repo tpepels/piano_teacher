@@ -10,7 +10,11 @@ docs/README.md, and the affected source before modifying tests.
 
 Work directly on the checked-out main branch. Do not create worktrees or
 feature branches. The local launcher scripts/local-ci-agent.sh drives this
-assignment; do not spawn another copy of that launcher from inside Codex.
+assignment (Claude Code by default, Codex optionally); do not spawn another
+copy of that launcher from inside an agent turn. Read
+docs/verification/ci-repair-log.md first: it is the durable hand-over record
+of completed work, current failures, commits and remaining tasks. Append to
+it in every turn.
 
 The two mandatory phases are sequential:
 
