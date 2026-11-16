@@ -4,6 +4,44 @@ extends RefCounted
 # A single returned density applies to the ENTIRE loaded exercise.
 
 
+# Single owner of horizontal attack-readability policy. The authentic
+# glyph collision solver below may demand more space than these preferences.
+const MIN_SOURCE_ATTACK_SPACING_PX := 25.0
+const QUICK_ATTACK_MIN_INTERVAL_BEATS := 0.12
+const QUICK_ATTACK_MAX_INTERVAL_BEATS := 0.5
+const QUICK_ATTACK_TARGET_PIXELS := 52.0
+const MAX_QUICK_READABILITY_DENSITY := 420.0
+const MIN_REPEATED_QUICK_INTERVALS := 2
+
+
+static func source_attack_intervals_fit(events: Array, max_density: float) -> bool:
+    """Reject unrepresentable distinct attacks, not prescribe a second scale.
+
+    Extremely close source clocks in ONE staff/voice cannot be separated
+    on a fixed linear axis even at MAX_SCORE_PIXELS_PER_BEAT. Different
+    voices/registers and simultaneous chord members do not falsely collide.
+    Actual spacing and staff-scale fitting belong to minimum_density().
+    """
+    if not is_finite(max_density) or max_density <= 0.0:
+        return false
+    var lanes: Dictionary = {}
+    for event in events:
+        if not event is Dictionary or str(event.get("kind","")) != "note":
+            continue
+        var lane: String = str(event.get("staff",""))+"|"+str(event.get("voice","1"))
+        if not lanes.has(lane):
+            lanes[lane] = []
+        lanes[lane].append(float(event.get("beat",0.0)))
+    for lane in lanes:
+        var beats: Array = lanes[lane]
+        beats.sort()
+        for index in range(1,beats.size()):
+            var distance: float = float(beats[index])-float(beats[index-1])
+            if distance > .00001 and distance*max_density < MIN_SOURCE_ATTACK_SPACING_PX:
+                return false
+    return true
+
+
 # Readability floor beyond exact ink collision prevention. A sequence of 16th
 # note attacks needs more than 24px at the former 96px/beat, even when glyph
 # contours technically do not overlap. Avoid treating a single rolled/grace
@@ -22,13 +60,14 @@ static func readable_density(notes: Array, preferred: float) -> float:
     var quick: Array = []
     for i in range(1, onsets.size()):
         var distance: float = float(onsets[i])-float(onsets[i-1])
-        if distance >= 0.12 and distance < 0.5 - 0.000001:
+        if distance >= QUICK_ATTACK_MIN_INTERVAL_BEATS and \
+                distance < QUICK_ATTACK_MAX_INTERVAL_BEATS - 0.000001:
             quick.append(distance)
-    if quick.size() < 2:
+    if quick.size() < MIN_REPEATED_QUICK_INTERVALS:
         return preferred
     quick.sort()
     var interval: float = float(quick[maxi(1, quick.size()/4)])
-    return maxf(preferred, minf(420.0, 52.0/interval))
+    return maxf(preferred, minf(MAX_QUICK_READABILITY_DENSITY,QUICK_ATTACK_TARGET_PIXELS/interval))
 
 static func minimum_density(items: Array, preferred: float, gap: float,
         boundaries: Array = []) -> Dictionary:
