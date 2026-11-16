@@ -124,6 +124,7 @@ def _hollow_fill_mask(instance, report, origin, shape):
     alpha = asset["alpha"]
     bounds = asset["bounds"]
     cx, cy = instance["position"]
+    cx += _window_snap(instance)
     scale = float(instance["gap"]) / 250.0
     left = cx - float(bounds[2]) * scale * .5
     top = cy + float(bounds[1]) * scale
@@ -141,13 +142,32 @@ def _hollow_fill_mask(instance, report, origin, shape):
     return _grow(inside & (alpha[iy, ix] > .03), 1)
 
 
-def _source_head_alpha(instance, report, origin, shape, scale=1.0):
+def _window_snap(instance):
+    """Sub-pixel distance between a head's reported position and its ink.
+
+    Reported positions lie on the exact world axis. The strip that owns the
+    head is clipped by a Control window at ``clip_x[0]``, and Godot draws a
+    Control at whole pixels: its canvas transform is rounded when rendered
+    (``(origin + 0.025).round()``), carrying the strip's ink and its status
+    ink with it. A window at the integer staff gutter does not move; a later
+    strip's window at e.g. 467.57 is drawn at 468, +0.43 px.
+    """
+    left = float(instance["clip_x"][0])
+    return float(np.floor(left + 0.025 + 0.5)) - left
+
+
+def _source_head_alpha(instance, report, origin, shape, scale=1.0, snapped=True):
     """Reproject the exact engraved texture alpha in its *original* rectangle.
 
     The whole-note template differs from the font glyph. More importantly,
     staff rules beneath a hollow head are part of the baseline framebuffer
     but NOT part of its recolored source mask.
     """
+    if snapped:
+        shift = _window_snap(instance)
+        instance = dict(instance,
+                        position=[instance["position"][0] + shift, instance["position"][1]],
+                        anchor=[instance["anchor"][0] + shift, instance["anchor"][1]])
     key = "{}|{}|{}|{}".format(
         instance["source"], instance.get("template", ""),
         instance.get("head_index", 0), instance["head"])
@@ -376,6 +396,41 @@ def test_recolor_replaces_the_white_head_without_a_doubled_contour(capture):
             item["status"], item["head"], np.percentile(sample, 95))
         measured += 1
     assert measured >= 10
+
+
+def test_ink_follows_its_pixel_snapped_strip_window_not_the_exact_axis(capture):
+    """The recolor model is only valid with the strip window's pixel snap.
+
+    Measured on the baseline alone (no status ink involved): the authentic
+    head alpha placed at the snapped window explains the photographed head
+    better than the same alpha at the unsnapped reported position, for every
+    solid head whose window is drawn at least 0.3 px away from its axis.
+    """
+    report, frames, images = capture
+    base = images["baseline"].astype(float)
+    bg, ink = _rgb(report["background"]), _rgb(report["ink"])
+    moved = 0
+    for item in _colored(frames["graded"]):
+        if item["head"] != "head_black" or item["source"] == "chord" \
+                or not _on_screen(item, base.shape[1]):
+            continue
+        shift = _window_snap(item)
+        assert abs(shift) <= 0.5 + 1e-6
+        if abs(shift) < 0.3:
+            continue
+        x0, y0, x1, y1 = _box(item, 3, base.shape[1])
+        crop = base[y0:y1, x0:x1]
+        photographed = ((crop - bg) / (ink - bg)).mean(axis=2)
+        errors = {}
+        for snapped in (True, False):
+            alpha = _source_head_alpha(item, report, (y0, x0), crop.shape[:2],
+                                       snapped=snapped)
+            considered = (alpha > .02) | (photographed > .02)
+            errors[snapped] = float(np.abs(alpha - photographed)[considered].mean())
+        assert errors[True] < errors[False], (item["event_id"], shift, errors)
+        moved += 1
+    assert moved >= 2, "the probe has heads in strips whose window is snapped"
+
 
 
 def test_standalone_whole_note_recolor_uses_original_engraved_artwork(capture):

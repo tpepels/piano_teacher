@@ -177,3 +177,27 @@ corpus (not yet run), and an empty quarantine.
   oracle measures. **Owner decision needed**: keep crisp point-sampled ink,
   rasterize glyphs at display scale, or adopt mipmaps and retune the oracles.
   The Chopin quarantine entry cannot be cleared honestly before that.
+
+## 2026-11-16 — correction: strip placement was not a production defect
+
+The "repair 1" production change (`f0da11e8`, refined in `ee368bca` and
+`89874c84`) is **withdrawn**; `stream_lifecycle.gd` and
+`stream_retained_lifecycle.gd` are back at their `3af263e2` content.
+
+- Sub-pixel ink (exact axis) changed the sampling phase of the point-sampled
+  glyph textures and broke `test_full_notation_difficult_cases[hanon-37]`
+  (gate at `89874c84`: shard 3, 1 failed).
+- Snapping the reported head positions instead broke the exact-projection
+  and constant-travel contracts (`test_recovery_motion`, `test_phase1_camera`,
+  `test_preparation_ink`, `test_fingering_real_placement`, 19 failures).
+- So the existing behaviour is the contract: reported positions are on the
+  exact world axis; Godot draws a strip's Control window, and the ink and
+  status ink inside it, at whole pixels (at most 0.5 px away).
+- The real defect was the note-status test model, which placed the authentic
+  head alpha at the unsnapped position. It now applies the window's pixel
+  snap (`_window_snap`, from the reported `clip_x`), and a new control proves
+  on the baseline frame alone that the snapped placement explains the
+  photographed head better than the unsnapped one. Error per head is at most
+  0.24 against the unchanged 6.0 / 32.0 limits.
+- Lesson recorded for the next agent: run the placement-sensitive modules
+  above before changing strip geometry.
