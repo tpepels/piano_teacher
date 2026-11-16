@@ -203,6 +203,28 @@ def _source_head_alpha(instance, report, origin, shape):
     return np.where(inside, sampled, 0.0)
 
 
+def _recolored_pixel_prediction(baseline, source_alpha, source_ink, tint):
+    # Subtract the exact original notehead ink and add the tint with the same
+    # coverage. Never subtract the underlying staff rule from the framebuffer.
+    return np.clip(baseline + (tint - source_ink) * source_alpha[..., None], 0, 255)
+
+
+def test_source_alpha_model_preserves_staff_ink_and_rejects_ghosts():
+    """A whole note over a staff line must keep the rule, not count it as ghost ink."""
+    bg = np.array([11.0, 39.0, 34.0])
+    ink = np.array([238.0, 245.0, 241.0])
+    tint = np.array([240.0, 143.0, 203.0])
+    rule = np.array([[0.0, .48, .48], [.48, .48, 0.0]])
+    alpha = np.array([[.0, .0, .7], [1.0, .2, .0]])
+    underlying = bg * (1 - rule[..., None]) + ink * rule[..., None]
+    baseline = underlying * (1 - alpha[..., None]) + ink * alpha[..., None]
+    correct = underlying * (1 - alpha[..., None]) + tint * alpha[..., None]
+    prediction = _recolored_pixel_prediction(baseline, alpha, ink, tint)
+    np.testing.assert_allclose(prediction, correct, atol=1e-10)
+    assert np.abs(baseline[0, 1] - prediction[0, 1]).max() == 0
+    assert np.abs(baseline[1, 0] - prediction[1, 0]).max() > 6
+
+
 def _edge_error(instance, frame, report, base, graded):
     """Deviation from the true in-place recolor of authentic notehead ink.
 
@@ -220,7 +242,7 @@ def _edge_error(instance, frame, report, base, graded):
     x0, y0, x1, y1 = _box(instance, 3, base.shape[1])
     b, g = base[y0:y1, x0:x1], graded[y0:y1, x0:x1]
     a = _source_head_alpha(instance, report, (y0, x0), b.shape[:2])
-    predicted = np.clip(b + (tint - ink) * a[..., None], 0, 255)
+    predicted = _recolored_pixel_prediction(b, a, ink, tint)
     error = np.abs(g - predicted).max(axis=2)
     keep = np.ones(a.shape, bool)
     staff = _rgb(report["background"]) * .52 + ink * .48
