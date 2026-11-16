@@ -155,6 +155,11 @@ if [[ "$mode" == plan ]]; then
     exit $?
 fi
 
+# The full release gate cannot claim success while its test inventory still
+# includes unreviewed/removed modules. Audit current product scope BEFORE
+# spending minutes loading Godot or the four long pytest partitions.
+"$PYTHON" scripts/ci-scope.py --check
+
 # Parse essential native entry points before the expensive four-shard suite.
 # A GDScript preload syntax failure otherwise causes numerous unrelated
 # framebuffer/score tests to fail or wait for their full timeout.
