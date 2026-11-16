@@ -335,7 +335,10 @@ static func project(item: Dictionary, world: float, playhead_x: float,
     # which is also where its noteheads are projected.
     var window_x: float = roundf(visible_left)
     clip.position = Vector2(window_x,0.0)
-    clip.size = Vector2(maxf(1.0,right-window_x),viewport.y)
+    # Both edges on whole pixels: adjoining strips share the fractional cut
+    # (this right == next left), so the same rounding leaves no blank or
+    # doubled pixel column at a seam.
+    clip.size = Vector2(maxf(1.0,roundf(right)-window_x),viewport.y)
     segment.position = Vector2(left-bounds.x-window_x,0.0)
     segment.visible = true
     clip.visible = true

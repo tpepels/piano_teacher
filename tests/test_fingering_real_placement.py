@@ -53,13 +53,6 @@ def real_capture(request,originals,tmp_path_factory):
                       'source_id':e['source_id'],'beat':e['beat']}
               for e in data['model']['notation_events'] if 'fingering' in e}
     folder=tmp_path_factory.mktemp(label)
-    # Pin before evidence to the previous completed production commit.
-    # A shallow CI checkout need not contain this optional historical evidence.
-    before=folder/'before-view.gd'
-    historical=subprocess.run(['git','show','04da92b:godot/notation/native/view.gd'],cwd=ROOT,capture_output=True)
-    if historical.returncode==0:
-        before.write_bytes(historical.stdout)
-        data['before_script']=str(before)
     payload=folder/'fixture.json';payload.write_text(json.dumps(data))
     (folder/'score.musicxml').write_text(data['xml'])
     command=[*_godot(),'--path',str(ROOT/'godot'),'--rendering-method','gl_compatibility',

@@ -120,3 +120,41 @@ Physical USB/Bluetooth MIDI acceptance is not executable here and stays open.
 - Run: note-status and palette framebuffer modules (22 passed), Godot syntax
   gate, seven stream harnesses, 14 placement-sensitive framebuffer modules
   (60 passed).
+
+## 2026-11-16 — Phase B repair 2 and open items (session stopped by usage limit)
+
+- Gate at `f0da11e8`: shard 1 1189 passed, shard 2 1323 passed, shard 3
+  halted on `test_fingering_real_placement.py[hanon-low]` (Godot timeout);
+  shard 4 not run.
+- Cause: the test extracted `view.gd` from commit `04da92b` (2026-10-25) and
+  ran it against current modules for a `before.png` no assertion reads.
+  `72ee35e3` removed `Geometry.required_density`, so that script no longer
+  parses and the harness never quits. The pinned-history capture is removed
+  from the test and from `native_fingering_real_placement.gd` (9 passed).
+  This is a retired-compositor dependency; add it to the scope audit table.
+- Strip windows now have BOTH edges on whole pixels (seam safety). **Not yet
+  verified on a framebuffer.** Suspicion to check first next session: in
+  the Chopin capture `native-7.35000.png` the natural sign at x≈344 lacks its
+  left stroke while the same sign is complete in `native-6.00000.png`; a
+  one-pixel seam gap from the `f0da11e8` rounding is the likely cause.
+  Re-capture and add a seam regression (adjoining windows: right == left).
+- The first baseline missed modules (shard plan changed mid-run); only a
+  full `ci-full.sh` run is evidence.
+
+### Quarantined Chopin Nocturne bars 13-16 (131 errors, was 234)
+Native ink matches the Verovio reference by eye. Separate causes found:
+1. `connector_pixels._stem`: a natural sign's long stroke beside a down-stem
+   is a second stem candidate, so "ambiguous or too broad". Prototype (not
+   committed): judge breadth on the contiguous column cluster holding the
+   longest candidate and reject a disjoint rival >= 0.9 of its length.
+   Result 5 -> 8 of 10 beams verified. Needs mutation controls.
+2. Beat 7.5 beam: the 32nd hook starts 3 px later than the linearly mapped
+   reference (x 1099 vs 1096); needs a small level-boundary tolerance.
+3. Beat 12.0 beam: every witness is either under the playhead or has
+   "Ambiguous image translation" (periodic figure); head registration.
+4. Still unexamined: 64th flags (12), stems m13 (7), flag absence (7),
+   tuplet bracket at 11.0, opening key/meter, m16 barline, ownership.
+
+### Remaining
+Full gate on one clean commit, then smoke, Godot syntax, hybrid focused and
+corpus (not yet run), and an empty quarantine.

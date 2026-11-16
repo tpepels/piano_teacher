@@ -26,23 +26,6 @@ func _run() -> void:
     renderer.set_fingering_annotations_enabled(false)
     await _capture(viewport,renderer,"after-canonical.png")
     renderer.set_fingering_annotations_enabled(true)
-    # Before evidence uses the committed compositor against the SAME real
-    # model, source glyph assets, camera and viewport. It is not a mock view.
-    if fixture.has("before_script"):
-        renderer.queue_free()
-        await process_frame
-        var previous = load(fixture["before_script"]).new()
-        previous.size = Vector2(2048,620)
-        viewport.add_child(previous)
-        assert(previous.set_verovio_glyphs(assets["native_glyphs"],assets["native_note_templates"],
-            assets["native_tie_templates"],assets["native_chord_templates"],assets["native_beam_fragments"],
-            assets["native_tuplet_fragments"],assets["native_slur_fragments"],assets["native_required_slur_pairs"],
-            assets["native_slurs_complete"],assets["native_required_beam_groups"],assets["native_beams_complete"]))
-        previous.load_score(fixture["model"])
-        # The pinned historical view predates the stream queue: it draws
-        # directly from present().
-        previous.present({"running":true,"paused":true,"hand":"both"},.125)
-        await _capture(viewport,previous,"before.png")
     # The reference font and hand colours are public APIs, independent of
     # renderer placement. A temporary node supplies only the same hand ink.
     var reference_renderer = load("res://notation/native/view.gd").new()
