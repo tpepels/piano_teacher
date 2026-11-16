@@ -129,3 +129,18 @@ def test_next_stage_fallback_uses_the_shared_offscreen_horizon():
     empty_staff = (ROOT / "godot/moving_meter_grid.gd").read_text()
     assert "fallback_beats: float = EMPTY_STAFF_METER_BEATS" in empty_staff
     assert 'last.get("end_beat",fallback_beats)' in empty_staff
+
+
+def test_old_rhythm_density_estimator_has_no_live_godot_callers():
+    """There must be one active source readability owner, InkSpacing."""
+    for path in (ROOT / "godot").rglob("*.gd"):
+        if "addons" in path.parts:
+            continue
+        source = path.read_text()
+        assert "Geometry.required_" + "density(" not in source, path
+    geometry = (ROOT / "godot/notation/native/geometry.gd").read_text()
+    assert "static func required_" + "density(" not in geometry
+    spacing = (ROOT / "godot/notation/native/ink_spacing.gd").read_text()
+    assert "static func source_attack_intervals_fit" in spacing
+    assert "static func readable_density" in spacing
+    assert "static func minimum_density" in spacing
