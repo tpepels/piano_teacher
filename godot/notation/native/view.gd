@@ -228,6 +228,17 @@ func clear_score() -> void:
     layout.clear()
 
 func set_density(value: float) -> bool:
+    # A pre-engraved READY strip can be admitted while transport is idle.
+    # The base view's transport-only density lock does not cover that state.
+    # Reflowing an already admitted source would silently mutate its printed
+    # coordinates and invalidate the queue's density/clearance assertions.
+    # A new density may take effect only before ANY strip is committed,
+    # including a still-hidden READY source or a written rest.
+    if not _stream_queue.online.is_empty():
+        if not is_finite(value) or absf(value-timeline.pixels_per_beat) > .000001:
+            notice = "The horizontal scale is fixed while score ink is reserved"
+            return false
+        return true
     if not super.set_density(value):
         return false
     configured_density = value
