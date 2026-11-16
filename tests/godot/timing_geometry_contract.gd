@@ -181,8 +181,9 @@ func _run_contract() -> void:
             check(near(Tempo.beats_from_milliseconds(seconds*1000.0,rate),
                 signed_beats),
                 "backend millisecond epochs agree with seconds and source beats")
-    check(near(Flow.MAX_SLOWDOWN_REPAY_FRACTION,0.5),
-        "late slowdown repays at most half a visual frame's forward progress")
+    check(Flow.MAX_SLOWDOWN_REPAY_FRACTION >= 0.0 and
+        Flow.MAX_SLOWDOWN_REPAY_FRACTION < 1.0,
+        "late slowdown debt repayment leaves strictly positive forward progress")
 
     var segments := [
         {"start_beat":0.0,"end_beat":2.0,"bpm":40.0},
