@@ -53,7 +53,6 @@ static func valid_modification(event: Dictionary) -> bool:
     return absf(expected-float(event.get("duration_beats", -1.0))) < .0003
 
 const HEAD_HALF_WIDTH := 9.2
-const MIN_ATTACK_SEPARATION := 25.0
 const ACCIDENTAL_GLYPHS := {"sharp":"acc_sharp","flat":"acc_flat",
     "natural":"acc_natural","double-sharp":"acc_double_sharp",
     "double-flat":"acc_double_flat","flat-flat":"acc_double_flat"}
@@ -159,49 +158,6 @@ static func supported(model: Dictionary) -> String:
             if abs(int(measure.get("keys", {}).get(hand, 0))) > 7:
                 return "Invalid key signature"
     return ""
-
-static func required_density(events: Array, preferred: float,
-        limit: float = 480.0) -> float:
-    # Establish ONE density for the entire exercise before animation.
-    # Adjacent source onsets on the same staff must have room for heads
-    # and accidental ink. Never change the density per note or mid-scroll.
-    var voices: Dictionary = {}
-    for event in events:
-        if not event is Dictionary:
-            continue
-        if str(event.get("kind", "")) != "note":
-            continue
-        var key: String = str(event.get("staff", "")) + "|" + \
-            str(event.get("voice", "1"))
-        if not voices.has(key):
-            voices[key] = []
-        voices[key].append(float(event.get("beat", 0.0)))
-    var minimum_gap := INF
-    for key in voices:
-        var onsets: Array = voices[key]
-        onsets.sort()
-        for index in range(1, onsets.size()):
-            var distance: float = float(onsets[index])-float(onsets[index-1])
-            if distance > .00001:
-                minimum_gap = minf(minimum_gap, distance)
-    var needed := preferred
-    # A fixed 25 px spacing is sufficient for tiny 64ths but far too
-    # cramped for ordinary quarter/eighth reading on a large grand staff.
-    # Choose one score-wide density from each successive source onset:
-    # source beat positions and camera speed remain perfectly linear.
-    for key in voices:
-        var onsets: Array = voices[key]
-        onsets.sort()
-        for index in range(1, onsets.size()):
-            var distance: float = float(onsets[index])-float(onsets[index-1])
-            if distance <= .00001:
-                continue  # Simultaneous chord notes share one musical attack.
-            var readable: float = (MIN_ATTACK_SEPARATION if
-                distance <= .0625001 else
-                minf(96.0, maxf(MIN_ATTACK_SEPARATION,
-                    78.0*sqrt(distance/.5))))
-            needed = maxf(needed, readable/distance)
-    return needed if needed <= limit else -1.0
 
 static func event_positions(model: Dictionary, density: float) -> Dictionary:
     # Used for regression audits and for notehead feedback in Phase D.
