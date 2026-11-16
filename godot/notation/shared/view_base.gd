@@ -3,13 +3,14 @@ extends Control
 # The native production view and standalone timeline diagnostic share this
 # time axis; their drawing implementations remain separate.
 const Timeline := preload("res://notation/shared/timeline.gd")
+const Spacing := preload("res://notation/shared/spacing_policy.gd")
 const BACKGROUND := Color("#192F30")
 const GRID := Color("#668982")
 const FOREGROUND := Color("#E5F2EA")
 const HIGHLIGHT := Color("#84EDD3")
 const MUTED := Color("#819F9A")
 const LEFT_TONE := Color("#9FB4DC")
-const PLAYHEAD_FRACTION := .33
+const PLAYHEAD_FRACTION := Spacing.PLAYHEAD_FRACTION
 # The practice stage draws its progress rail this far above the bottom edge
 # of the score frame, which the score view fills. Notation ink, including
 # the lowest ledger notes and their fingerings, stays above the clearance.
