@@ -55,7 +55,8 @@ static func first_playable_beat(model: Dictionary, hand: String = "both") -> flo
 # Project a marker with the SAME pixels/beat as its owner renderer.
 static func marker_x(at: float, visual_beat: float,
         density: float, width: float) -> float:
-    return width*ScoreView.PLAYHEAD_FRACTION + (at-visual_beat)*density
+    return Timeline.project_world_beat(at,visual_beat,
+        width*ScoreView.PLAYHEAD_FRACTION,density)
 
 func present(state: Dictionary, visual_beat: float,
         current_origin: float, next_origin: float = INF,
