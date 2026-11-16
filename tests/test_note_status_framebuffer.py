@@ -104,26 +104,6 @@ def _interior(instance, report, base, graded):
     return int(full.sum()), int(tinted.sum())
 
 
-def _hole(coverage, threshold=.5):
-    """Enclosed low-coverage pixels of a head box: a hollow head's interior."""
-    from collections import deque
-    h, w = coverage.shape
-    low = coverage < threshold
-    outside = np.zeros_like(low)
-    queue = deque((y, x) for y in range(h) for x in range(w)
-                  if (y in (0, h - 1) or x in (0, w - 1)) and low[y, x])
-    for y, x in queue:
-        outside[y, x] = True
-    while queue:
-        y, x = queue.popleft()
-        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            ny, nx = y + dy, x + dx
-            if 0 <= ny < h and 0 <= nx < w and low[ny, nx] and not outside[ny, nx]:
-                outside[ny, nx] = True
-                queue.append((ny, nx))
-    return low & ~outside
-
-
 def _grow(mask, steps):
     for _ in range(steps):
         mask = mask | np.roll(mask, 1, 0) | np.roll(mask, -1, 0) | \
@@ -413,7 +393,12 @@ def test_glow_is_extremely_subtle_and_follows_the_notehead_mask(capture):
                     np.zeros(coverage.shape, bool))
         near = near | interior
         changed = np.abs(g - b).max(axis=2) > 0
-        assert not (changed & ~near).any(), "glow detached from the head mask"
+        detached = changed & ~near
+        assert not detached.any(), (
+            "glow detached from authentic notehead/fill mask",
+            item["event_id"], item["status"], item["head"],
+            item["source"], item.get("template", ""),
+            int(detached.sum()))
         background = (np.abs(b - bg).max(axis=2) <= 12) & ~interior
         lift = np.abs(g - b).max(axis=2)[background & changed]
         if lift.size:
