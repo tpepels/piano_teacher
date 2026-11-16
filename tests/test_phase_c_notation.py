@@ -71,5 +71,9 @@ def test_native_view_uses_authentic_source_assets_and_indexed_notation():
     assert 'paint_beams(' in painters and 'func paint_beam(' in (ROOT / 'godot/notation/native/glyphs.gd').read_text()
     assert 'preload("res://notation/legacy/strip.gd")' not in renderers
     assert 'preload("res://notation/legacy/motion_curve.gd")' not in renderers
-    assert 'MIN_ATTACK_SEPARATION' in geometry
+    ink_spacing = (ROOT / "godot/notation/native/ink_spacing.gd").read_text()
+    assert "MIN_SOURCE_ATTACK_SPACING_PX" in ink_spacing
+    assert "source_attack_intervals_fit" in ink_spacing
+    assert "InkSpacing.source_attack_intervals_fit(" in native
+    assert "required_density(" not in geometry
     assert 'supported(model: Dictionary)' in geometry
