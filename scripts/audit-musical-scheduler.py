@@ -52,12 +52,21 @@ def _gd_direct_bpm_conversions(source: str) -> list[int]:
     belong inside res://tempo_timeline.gd only.
     """
     errors = []
-    for number, text in enumerate(source.splitlines(), 1):
-        code = text.split("#",1)[0]
-        if (_GDSCRIPT_BEAT_UNIT.search(code) and
-                _GDSCRIPT_BPM_NAME.search(code) and
-                ("*" in code or "/" in code)):
-            errors.append(number)
+    code_lines = [text.split("#", 1)[0] for text in source.splitlines()]
+    for index, code in enumerate(code_lines):
+        if not _GDSCRIPT_BEAT_UNIT.search(code):
+            continue
+        expression = code
+        # In GDScript the /, * or explicit backslash may continue a tempo
+        # expression onto the following line; an identical unit conversion
+        # must not evade the ownership audit solely by being line-wrapped.
+        if index + 1 < len(code_lines) and code.rstrip().endswith(("/", "*", "\\")):
+            expression += " " + code_lines[index + 1]
+        if index > 0 and code_lines[index - 1].rstrip().endswith(("/", "*", "\\")):
+            expression = code_lines[index - 1] + " " + expression
+        if _GDSCRIPT_BPM_NAME.search(expression) and (
+                "*" in expression or "/" in expression):
+            errors.append(index + 1)
     return errors
 
 
