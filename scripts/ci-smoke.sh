@@ -18,6 +18,7 @@ timeout 65s "$PYTHON" -m pytest -q \
   tests/test_phase4_workflows.py::test_container_provenance_uses_an_explicit_exact_workspace_trust_step \
   tests/test_full_suite_fixture_owner_contract.py \
   tests/test_ci_full_shards.py \
+  tests/test_ci_scope_registry.py \
   tests/test_ci_full_script_parse.py \
   tests/test_ci_full_temp_retention.py \
   tests/test_phase6_rss_measurement.py \
