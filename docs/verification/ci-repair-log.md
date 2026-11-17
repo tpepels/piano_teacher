@@ -277,3 +277,26 @@ Verifier and test changes, each with its measured reason:
 Evidence on the working tree before commit: all four shards without
 fail-fast — 1245 passed / 1 xfailed, 1267 / 4 skipped, 1323 / 1 skipped,
 1354. The Chopin case stays quarantined (re-measure after this commit).
+
+## 2026-11-17 — gate evidence at `4f70c2c2` (option 2 + beam measurement)
+
+- `ci-full.sh --all --fail-fast`: PASS 4/4 — 1245 passed / 1 xfailed,
+  1267 / 4 skipped, 1323 / 1 skipped, 1354 (5,189 passed).
+- `ci-smoke.sh` 865 passed; `check-godot-syntax.sh` OK; hybrid focused and
+  corpus exit 0. Quarantine: still the one Chopin entry.
+- Beam verifier (`4f70c2c2`): thickness from ink coverage; columns within
+  .3 space of a reference level transition are recorded but not compared.
+  Chopin beam groups 4 -> 9 of 10 verified; case errors 153 -> 92.
+
+### Chopin 13-16 remaining (92 errors), captured at an 11 px staff gap
+The audit fits bars 13-16 into 1536 px, half the app's practice size
+(Hanon renders at 21.9 px). Remaining groups:
+- flags 14 + flag absence 7 + dependent rhythm 7: down flags score
+  .60-.70 Dice (needs .72); two of them separate 1 from 2 flags by only
+  .02-.03. At this size the 16th flags are two very thin strokes. Lowering
+  the threshold here would hide a genuine legibility question.
+- beam group beat 12 (12 per-note + 1): every witness is under the playhead
+  or has an ambiguous image translation (periodic figure).
+- rests 8 + 4 + 4 + 4 + 4 ownership rows: rest body contour/ownership.
+- structure: meter 2, key 1, measure 2, barline 2; tuplet 3; accidental 2;
+  stem 2; tracking/ownership 2. Not yet examined.
