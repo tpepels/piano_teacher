@@ -2,12 +2,16 @@
 import json
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 import pytest
 from piano_teacher.notation.pixel_proof import playhead_x
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/hanon_boundary_clearance"
+# Stage background and score ink of the native view (practice_theme.gd).
+STAGE = np.array([11.0, 39.0, 34.0])
+INK = np.array([238.0, 245.0, 241.0])
 
 # Production shows score ink only for takes admitted to the immutable score
 # queue; FramebufferTake admits one offscreen and presents it as production
@@ -128,8 +132,15 @@ def test_written_outgoing_heads_and_photographed_flags_are_preserved(boundary_fr
         x,y,gap = head["x"],head["y"],head["gap"]
         # To the right of the shaft, above the head: the two eighth-flag
         # lobes of each final written sixteenth, never its head or ledger.
-        return int(bright(picture)[round(y-3.8*gap):round(y-.6*gap),
-                                  round(x+.8*gap):round(x+2.1*gap)].sum())
+        # Display-scale ink is antialiased, so measure the amount of ink
+        # (pixel coverage between stage background and score ink), not the
+        # count of fully bright pixels; the archived capture was point
+        # sampled. Only pixels at least as bright as a staff rule count, so
+        # the rules crossing the window add nothing.
+        rgb = np.asarray(picture.convert("RGB"), dtype=float)[
+            round(y-3.8*gap):round(y-.6*gap), round(x+.8*gap):round(x+2.1*gap)]
+        coverage = ((rgb - STAGE) / (INK - STAGE)).mean(axis=2).clip(0, 1)
+        return float(coverage[coverage > .55].sum())
 
     compared = []
     for frame in frames:
@@ -147,11 +158,15 @@ def test_written_outgoing_heads_and_photographed_flags_are_preserved(boundary_fr
                 assert old_head
                 retained = flag_pixels(before,old_head)
                 assert retained > 150
+                assert int(bright(before)[round(old_head["y"]-3.8*old_head["gap"]):round(old_head["y"]-.6*old_head["gap"]),
+                    round(old_head["x"]+.8*old_head["gap"]):round(old_head["x"]+2.1*old_head["gap"])].sum()) > 150
                 # The retained capture is a same-scale ink reference only:
                 # since 1c3da0b8 each viewport width has its own density and
                 # staff gap, and flag ink area does not scale exactly.
                 if abs(head["gap"]-old_head["gap"]) < .01:
                     compared.append(frame["width"])
-                    assert flag_pixels(picture,head) >= .85*retained
+                    # A clipped flag loses a whole lobe (about half its
+                    # ink); antialiasing costs only a soft rim (~15%).
+                    assert flag_pixels(picture,head) >= .75*retained
     # At least one viewport must reproduce the archived scale.
     assert compared, "No capture at the archived staff gap"

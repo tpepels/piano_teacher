@@ -273,11 +273,15 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
             columns=attached if columns is None else columns & attached
         diagnostics[direction] = {"intersecting_attachment_columns":len(columns),
             "max_connected_extension_spaces":0.0}
+        # The shaft must reach every head. Antialiased display-scale ink
+        # can leave the row through a head's centre at the head's own soft
+        # rim; accept a run that ends within .15 space of that centre.
+        reach = .15*gap
         for x in sorted(columns):
             if not 0 <= x < pixels.shape[1]:
                 continue
             for top, bottom in pixel_runs(pixels[:, x]):
-                if all(top <= h['y'] <= bottom for h in hs):
+                if all(top-reach <= h['y'] <= bottom+reach for h in hs):
                     measured = ((low-top)/gap if direction == 'up'
                                 else (bottom-high)/gap)
                     if measured > 0 and measured < 8.0:
@@ -289,7 +293,7 @@ def _stem(pixels, group, heads, marks, *, written=None, source_reference=None):
                 else:
                     valid = (min(low-gap,head_top-1) <= top <= low+gap
                              and high+minimum <= bottom <= high+8*gap)
-                if valid and all(top <= h['y'] <= bottom for h in hs):
+                if valid and all(top-reach <= h['y'] <= bottom+reach for h in hs):
                     candidates.append((direction, x, top, bottom))
     if not candidates:
         return feature_result('unverified', 'No continuous stem attached to every registered head with reference-supported extension',

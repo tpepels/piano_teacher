@@ -242,3 +242,38 @@ the size it is shown at and draws that copy 1:1.
   stem sprites lose brightness when resampled.
 - Outcome: feasible but not a drop-in. Tree restored to `b99e6cbe`; nothing
   from the experiment is committed.
+
+## 2026-11-16 — option 2 adopted (owner: "notation correct, not identical pixels")
+
+Production: `_display_texture` / `_draw_fit` / `_draw_fit_region` in
+`glyphs.gd`; every texture draw in `glyphs.gd`, `symbol_painter.gd` and the
+brace in `view.gd` uses them. Area-average (mipmap-based) premultiplied
+filter, cache keyed by texture instance id with a weak reference.
+
+Verifier and test changes, each with its measured reason:
+- `pixel_ink.rasterize_outline`: 4x supersampled coverage at a sub-pixel
+  phase, binarized at `INK_COVERAGE` .63 (the cut `bright()` applies);
+  `raster_matching` and the scalar oracle `symbol_pixel_proof._match_glyph`
+  take the best of 8 phases. Chopin accidentals 17 -> 1 unverified.
+- Unexpected-symbol scanner (`extra_symbol_pixels._template`) keeps the
+  original generous cut (`SCAN_COVERAGE` 96/255).
+- `stem_pixels._stem`: a shaft may end within .15 staff space of a head
+  centre (antialiased head rim); Hanon 37-40 back to 0 errors.
+- `procedural_rest_ownership`: same-rest axis tolerance 3 -> 5 px (3.25 px
+  observed drift; a different rest is a bar away).
+- `test_native_singleton_tuplets`: only a 2 px antialias contact rim of the
+  removed artwork may change (max 48/255).
+- `test_native_boundary_clearance`: flag ink measured as coverage, ratio
+  .85 -> .75 (a clipped flag loses about half).
+- `test_note_status_framebuffer`: exact tint within 16/255 (was 8; one rim
+  pixel at 11).
+- `test_native_tie_attachments`: tie tips measured through connected pixels
+  of >= 25% coverage (tapered tips were real ink below the bright cut; the
+  tie starts 4 px from the head, as Verovio places it).
+- `test_native_symbol_pixel_proof`: whole and half rests have identical
+  bounds; their margin is required against every other rest family, while
+  their identity comes from rails (`test_phase3_rest_orientation`).
+
+Evidence on the working tree before commit: all four shards without
+fail-fast — 1245 passed / 1 xfailed, 1267 / 4 skipped, 1323 / 1 skipped,
+1354. The Chopin case stays quarantined (re-measure after this commit).

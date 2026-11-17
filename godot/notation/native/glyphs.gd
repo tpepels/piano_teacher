@@ -316,7 +316,7 @@ func paint_tie(canvas: CanvasItem, x0: float, x1: float, y: float,
         y+float(box[1])*gap/250.0,
         float(box[2])*gap/250.0*factor,
         float(box[3])*gap/250.0)
-    canvas.draw_texture_rect(texture,dest,false,ink)
+    _draw_fit(canvas,texture,dest,false,ink)
     return true
 
 
@@ -442,7 +442,7 @@ func paint_chord(canvas: CanvasItem, key: String,
     if texture == null:
         return false
     var box: Array = chord_metadata[key]["bounds"]
-    canvas.draw_texture_rect(texture,
+    _draw_fit(canvas,texture,
         Rect2(x+float(box[0])*gap/250.0,
             y+float(box[1])*gap/250.0,
             float(box[2])*gap/250.0,
@@ -460,7 +460,7 @@ func paint_chord_heads(canvas: CanvasItem,key: String,
     if sprite == null:
         return false
     var b: Array = chord_heads_bounds[key]
-    canvas.draw_texture_rect(sprite,
+    _draw_fit(canvas,sprite,
         Rect2(x+float(b[0])*gap/250.0,y+float(b[1])*gap/250.0,
               float(b[2])*gap/250.0,float(b[3])*gap/250.0),false,ink)
     return true
@@ -479,7 +479,7 @@ func paint_chord_stem(canvas: CanvasItem,key: String,
     var unit: float = gap/250.0
     # Keep Verovio's ORIGINAL stem width/caps/shape; change ONLY its
     # longitudinal distance to the endpoint measured on the source beam.
-    canvas.draw_texture_rect(source,Rect2(
+    _draw_fit(canvas,source,Rect2(
         x+float(bounds[0])*unit,minf(anchor_y,tip_y),
         float(bounds[2])*unit,absf(anchor_y-tip_y)),false,ink)
     return true
@@ -575,21 +575,21 @@ func paint_beam(canvas: CanvasItem, name: String,
         var t1: float = (src_b-original_a)/(original_b-original_a)
         var dst_a: float = lerpf(float(heads[i]),float(heads[i+1]),t0)
         var dst_b: float = lerpf(float(heads[i]),float(heads[i+1]),t1)
-        canvas.draw_texture_rect_region(texture,
+        _draw_fit_region(canvas,texture,
             Rect2(dst_a,base_y,dst_b-dst_a,ink_height),
             Rect2(src_a,0.0,src_b-src_a,texture_height),ink)
     # End caps are fixed-size Verovio artwork, not stretched with tempo.
     var left_width: float = clampf(float(anchors_px[0]),0.0,texture_width)
     if left_width > .01:
         var left_dst: float = left_width*gap*width/(250.0*texture_width)
-        canvas.draw_texture_rect_region(texture,
+        _draw_fit_region(canvas,texture,
             Rect2(float(heads[0])-left_dst,base_y,left_dst,ink_height),
             Rect2(0.0,0.0,left_width,texture_height),ink)
     var last_px: float = clampf(float(anchors_px[-1]),0.0,texture_width)
     if last_px < texture_width-.01:
         var last_dst: float = (texture_width-last_px)*gap*width/ \
             (250.0*texture_width)
-        canvas.draw_texture_rect_region(texture,
+        _draw_fit_region(canvas,texture,
             Rect2(float(heads[-1]),base_y,last_dst,ink_height),
             Rect2(last_px,0.0,texture_width-last_px,texture_height),ink)
     return true
@@ -651,14 +651,14 @@ func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
         for kind in ["number","bracket"]:
             if textures.has(kind):
                 var box: Array = info[kind]["bounds"]
-                canvas.draw_texture_rect(textures[kind],Rect2(
+                _draw_fit(canvas,textures[kind],Rect2(
                     x0+float(box[0])*unit,y0+float(box[1])*unit,
                     float(box[2])*unit,float(box[3])*unit),false,ink)
         return true
     if x1 <= x0:
         return false
     var center: float = (x0+x1)*.5
-    canvas.draw_texture_rect(textures["number"],
+    _draw_fit(canvas,textures["number"],
         Rect2(center-float(nb[2])*unit*.5, y0+float(nb[1])*unit,
             float(nb[2])*unit,float(nb[3])*unit),false,ink)
     if textures.has("bracket"):
@@ -683,10 +683,10 @@ func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
             var top_y: float = y0+float(box[1])*unit
             var height: float = float(box[3])*unit
             if center > left_x and right_x > center:
-                canvas.draw_texture_rect_region(source,
+                _draw_fit_region(canvas,source,
                     Rect2(left_x,top_y,center-left_x,height),
                     Rect2(0.0,0.0,left_pixel,img_height),ink)
-                canvas.draw_texture_rect_region(source,
+                _draw_fit_region(canvas,source,
                     Rect2(center,top_y,right_x-center,height),
                     Rect2(left_pixel,0.0,img_width-left_pixel,img_height),ink)
     return true
@@ -770,7 +770,7 @@ func paint_note_stem(canvas: CanvasItem, kind: String, up: bool,
     var unit: float = gap/250.0
     # Verovio supplies stroke thickness, engraving caps and the X anchor.
     # Only the longitudinal distance changes to meet the real source beam.
-    canvas.draw_texture_rect(sprite,Rect2(
+    _draw_fit(canvas,sprite,Rect2(
         x+float(box[0])*unit,minf(head_y,tip_y),
         float(box[2])*unit,absf(head_y-tip_y)),false,ink)
     return true
@@ -787,7 +787,7 @@ func paint_note(canvas: CanvasItem, kind: String, up: bool,
     if texture == null:
         return false
     var box: Array = note_bounds[name]
-    canvas.draw_texture_rect(texture,
+    _draw_fit(canvas,texture,
         Rect2(x+float(box[0])*gap/250.0,
             y+float(box[1])*gap/250.0,
             float(box[2])*gap/250.0,
@@ -812,7 +812,7 @@ func paint(canvas: CanvasItem, name: String, x: float, y: float,
         y + float(box[1]) * unit,
         float(box[2]) * unit, float(box[3]) * unit
     )
-    canvas.draw_texture_rect(glyph, rect, false, color)
+    _draw_fit(canvas,glyph, rect, false, color)
     return true
 
 
@@ -966,7 +966,7 @@ func paint_head_interior(canvas: CanvasItem, instance: Dictionary,
     var box: Array = bounds[head]
     var point: Vector2 = instance["position"]
     var unit: float = float(instance["gap"])/250.0
-    canvas.draw_texture_rect(texture,Rect2(
+    _draw_fit(canvas,texture,Rect2(
         point.x+(float(box[0])-(float(box[0])+float(box[2])*.5))*unit,
         point.y+float(box[1])*unit,float(box[2])*unit,float(box[3])*unit),false,color)
     return true
@@ -1006,7 +1006,7 @@ func paint_head(canvas: CanvasItem, instance: Dictionary, color: Color,
         float(box[0])*unit,float(box[1])*unit)
     var original_size: Vector2 = Vector2(
         float(box[2])*unit,float(box[3])*unit)
-    canvas.draw_texture_rect(texture,Rect2(
+    _draw_fit(canvas,texture,Rect2(
         point + (top_left-point)*scale,original_size*scale),false,color)
     return true
 
@@ -1016,3 +1016,69 @@ func _forget_template_images(prefix: String) -> void:
         if str(key).begins_with(prefix):
             template_images.erase(key)
     _head_cutouts.clear()
+
+
+## ---- Display-scale artwork -------------------------------------------------
+## Source artwork is rasterized far above display size (font symbols at
+## RASTER_SCALE, templates by the engraver). Drawing it directly minifies it
+## about 20-40x with one texel sampled per pixel: strokes thinner than a pixel
+## drop out at some sub-pixel phases and dense flags alias. Each texture is
+## therefore resampled ONCE to the size it is shown at, and that copy is drawn
+## 1:1, so the screen shows what an engraver rendering at that size shows.
+##
+## The filter is an area average of premultiplied coverage (mipmap based, no
+## negative lobes). That is linear: a head cut out of a template (same image
+## size, see head_cutout) resamples to exactly the head's share of the
+## resampled template, so status ERASE/CORE passes still replace the head
+## ink exactly. Larger-than-source draws keep the original texture.
+static var _display_cache: Dictionary = {}
+
+static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
+    var source := Vector2i(texture.get_width(),texture.get_height())
+    var width: int = clampi(roundi(wanted.x),1,source.x)
+    var height: int = clampi(roundi(wanted.y),1,source.y)
+    if width >= source.x and height >= source.y:
+        return texture
+    # Instance ids are never reused while the object lives; the weak
+    # reference rejects an entry whose source texture has been freed.
+    var key: String = "%d|%d|%d" % [texture.get_instance_id(),width,height]
+    var cached: Array = _display_cache.get(key,[])
+    if cached.size() == 2 and (cached[0] as WeakRef).get_ref() == texture:
+        return cached[1]
+    var image: Image = texture.get_image()
+    if image == null or image.is_empty():
+        return texture
+    image = image.duplicate()
+    if image.is_compressed():
+        image.decompress()
+    image.convert(Image.FORMAT_RGBA8)
+    image.premultiply_alpha()
+    image.resize(width,height,Image.INTERPOLATE_TRILINEAR)
+    var data: PackedByteArray = image.get_data()
+    for index in range(0,data.size(),4):
+        var alpha: int = data[index+3]
+        if alpha > 0 and alpha < 255:
+            data[index] = mini(255,roundi(data[index]*255.0/alpha))
+            data[index+1] = mini(255,roundi(data[index+1]*255.0/alpha))
+            data[index+2] = mini(255,roundi(data[index+2]*255.0/alpha))
+    var sized := ImageTexture.create_from_image(
+        Image.create_from_data(width,height,false,Image.FORMAT_RGBA8,data))
+    _display_cache[key] = [weakref(texture),sized]
+    return sized
+
+static func _draw_fit(canvas, texture: Texture2D, rect: Rect2,
+        tile: bool, modulate: Color = Color.WHITE) -> void:
+    canvas.draw_texture_rect(_display_texture(texture,rect.size.abs()),
+        rect,tile,modulate)
+
+static func _draw_fit_region(canvas, texture: Texture2D, rect: Rect2,
+        source: Rect2, modulate: Color = Color.WHITE) -> void:
+    if source.size.x <= 0.0 or source.size.y <= 0.0:
+        canvas.draw_texture_rect_region(texture,rect,source,modulate)
+        return
+    var full := Vector2(texture.get_width(),texture.get_height())
+    var sized: Texture2D = _display_texture(texture,
+        full*(rect.size.abs()/source.size))
+    var ratio := Vector2(sized.get_width(),sized.get_height())/full
+    canvas.draw_texture_rect_region(sized,rect,
+        Rect2(source.position*ratio,source.size*ratio),modulate)

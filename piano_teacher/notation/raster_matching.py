@@ -3,7 +3,7 @@ import math
 from collections import defaultdict, deque
 import numpy as np
 
-from .pixel_ink import rasterize_outline
+from .pixel_ink import rasterize_outline, PHASES
 
 
 def photographed_playhead_columns(image):
@@ -61,7 +61,6 @@ def match_glyph(pixels, glyph, gap, origin_x, origin_y, *, centered, dxs, dys,
     bounds=glyph["bounds"]
     width=max(1,round(bounds[2]*gap/250))
     height=max(1,round(bounds[3]*gap/250))
-    template=rasterize_outline(glyph["svg"],width,height)
     left=origin_x-(bounds[2]*gap/250/2 if centered else -bounds[0]*gap/250)
     top=origin_y+bounds[1]*gap/250
     xs=sorted({round(left+dx) for dx in dxs
@@ -73,9 +72,17 @@ def match_glyph(pixels, glyph, gap, origin_x, origin_y, *, centered, dxs, dys,
     region=pixels[ys[0]:ys[-1]+height,xs[0]:xs[-1]+width]
     windows=np.lib.stride_tricks.sliding_window_view(region,(height,width))
     blocks=windows[np.array(ys)[:,None]-ys[0],np.array(xs)[None,:]-xs[0]]
-    matches,expected,observed=_comparison(blocks,template,xs,ys,background_rows,occlusion_columns)
-    intersection=np.count_nonzero(matches,axis=(-2,-1))
-    return float(np.max(2*intersection/(expected+observed+1e-9)))
+    best=0.
+    # Screen ink sits at an arbitrary sub-pixel origin; compare it with the
+    # authentic outline at the sub-pixel phase that origin actually has.
+    for phase in PHASES:
+        template=rasterize_outline(glyph["svg"],width,height,phase)
+        if not template.any():
+            continue
+        matches,expected,observed=_comparison(blocks,template,xs,ys,background_rows,occlusion_columns)
+        intersection=np.count_nonzero(matches,axis=(-2,-1))
+        best=max(best,float(np.max(2*intersection/(expected+observed+1e-9))))
+    return best
 
 
 def glyph_search_components(requests, *, dys):
@@ -111,7 +118,6 @@ def _joint_candidates(pixels, request, origin_x, dys, minimum):
     b=glyph["bounds"]
     width=max(1,round(b[2]*gap/250))
     height=max(1,round(b[3]*gap/250))
-    template=rasterize_outline(glyph["svg"],width,height)
     left=origin_x-b[2]*gap/250/2
     top=request["origin_y"]+b[1]*gap/250
     xs=sorted({round(left+dx) for dx in request["dxs"]
@@ -123,10 +129,29 @@ def _joint_candidates(pixels, request, origin_x, dys, minimum):
     region=pixels[ys[0]:ys[-1]+height,xs[0]:xs[-1]+width]
     windows=np.lib.stride_tricks.sliding_window_view(region,(height,width))
     blocks=windows[np.array(ys)[:,None]-ys[0],np.array(xs)[None,:]-xs[0]]
-    intersections,expected,observed=_comparison(blocks,template,xs,ys,request.get("background_rows",()),request.get('occlusion_columns',()))
-    denominators=expected+observed+1e-9
-    visible_expected=np.broadcast_to(expected,observed.shape)
-    scores=2*np.count_nonzero(intersections,axis=(-2,-1))/denominators
+    # Best sub-pixel phase of the authentic outline at every registration.
+    scores=None
+    for phase in PHASES:
+        candidate=rasterize_outline(glyph["svg"],width,height,phase)
+        if not candidate.any():
+            continue
+        found=_comparison(blocks,candidate,xs,ys,request.get("background_rows",()),request.get('occlusion_columns',()))
+        denominators_p=found[1]+found[2]+1e-9
+        scores_p=2*np.count_nonzero(found[0],axis=(-2,-1))/denominators_p
+        if scores is None:
+            scores,intersections,expected,observed,denominators=scores_p,found[0],np.broadcast_to(found[1],scores_p.shape).copy(),found[2],denominators_p
+            template_sum=np.full(scores_p.shape,int(candidate.sum()))
+            continue
+        better=scores_p>scores
+        scores=np.where(better,scores_p,scores)
+        intersections=np.where(better[...,None,None],found[0],intersections)
+        expected=np.where(better,np.broadcast_to(found[1],scores_p.shape),expected)
+        observed=np.where(better,found[2],observed)
+        denominators=np.where(better,denominators_p,denominators)
+        template_sum=np.where(better,int(candidate.sum()),template_sum)
+    if scores is None:
+        return []
+    visible_expected=expected
     candidates=[]
     for iy,ix in np.argwhere(scores>=minimum):
         rivals=[]
@@ -144,7 +169,7 @@ def _joint_candidates(pixels, request, origin_x, dys, minimum):
         candidates.append(dict(x=xs[ix],y=ys[iy],score=float(scores[iy,ix]),
             denominator=float(denominators[iy,ix]),support=support,
             visible_reference_pixels=int(visible_expected[iy,ix]),
-            reference_pixels=int(template.sum()),
+            reference_pixels=int(template_sum[iy,ix]),
             family_runner_up=runner[0],family_margin=float(scores[iy,ix])-runner[0]))
     return sorted(candidates,key=lambda row:-row["score"])
 

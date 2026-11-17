@@ -34,7 +34,7 @@ from .pixel_proof import PLAYHEAD_FRACTION, RasterStaff, detect_staff_lines
 from .photographed_staff_rails import PhotographedStaffRails
 from .proof import read_written_score
 from .procedural_rest_ownership import confirmed_gap_tracks, verified_procedural_pair
-from .pixel_ink import rasterize_outline, bright
+from .pixel_ink import rasterize_outline, bright, SCAN_COVERAGE
 
 STRIPE_HALF_WIDTH = 64
 MAX_CLOCK_STEP = .15
@@ -60,7 +60,7 @@ def _template(name, gap):
     glyph = feature_glyphs()[name]
     bounds = glyph['bounds']
     return rasterize_outline(glyph['svg'], max(1, round(bounds[2]*gap/250)),
-                    max(1, round(bounds[3]*gap/250)))
+                    max(1, round(bounds[3]*gap/250)), coverage=SCAN_COVERAGE)
 
 
 def _spectrum(name, gap, shape):

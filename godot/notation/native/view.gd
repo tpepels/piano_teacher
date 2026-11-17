@@ -697,7 +697,7 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     # No backing panel: strips clip themselves at the gutter
     # (StreamLifecycle.LEFT_GUTTER_PX), so the brace sits on the backdrop.
     if glyphs.textures.has("brace"):
-        canvas.draw_texture_rect(glyphs.textures["brace"],
+        VerovioGlyphs._draw_fit(canvas,glyphs.textures["brace"],
             Rect2(6,staff_top-2,18,staff_bottom-staff_top+4),false,NOTE_INK)
     canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
         Color(NOTE_INK,.50),1.2,true)

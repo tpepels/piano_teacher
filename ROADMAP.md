@@ -2309,3 +2309,22 @@ shards must still run together on the same final SHA.
   Fast CI and zero-reference audit passed.
 - **Not yet release-accepted:** complete four-shard suite and local
   physical Godot/ALSA 2.25-bar rest acceptance against final main revision.
+
+### 2026-11-16 — display-scale glyph ink (owner decision)
+
+Owner decision: notation ink is drawn the way Verovio itself would render it
+at the size shown, and pixel verification checks that the notation is
+correct, not that individual pixels are identical.
+
+- `godot/notation/native/glyphs.gd` resamples every glyph, template, beam,
+  tie and tuplet texture once to its display size (area average of
+  premultiplied coverage) and draws that copy 1:1. Thin strokes (natural
+  signs, 64th flags) no longer drop out at some scroll positions. The filter
+  is linear, so status recolouring still replaces head ink exactly.
+- Pixel oracles compare the observed ink with the authentic outline's
+  coverage at the same size, binarized at the same ink cut as the screen
+  (`pixel_ink.INK_COVERAGE`), at the best of eight sub-pixel phases. The
+  unexpected-symbol scanner keeps its generous original cut.
+- Tolerances that only measured point sampling were adjusted with recorded
+  reasons; negative controls (missing, wrong or stray symbols) are kept.
+  Details and evidence: `docs/verification/ci-repair-log.md`.

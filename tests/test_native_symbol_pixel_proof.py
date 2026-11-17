@@ -36,7 +36,14 @@ def test_written_rest_shape_is_identified_from_actual_pixels(name):
                            dys=range(-30,31,2))
     assert ranked[0][0]==name, ranked
     assert ranked[0][1] >= .72
-    assert ranked[0][1]-ranked[1][1] >= .05
+    # Whole and half rests are the same filled block in this font (identical
+    # bounds); only their position against the staff rails tells them apart,
+    # which test_phase3_rest_orientation verifies on actual rails. By shape
+    # alone they must still beat every OTHER rest family by the .05 margin.
+    twins = {"rest_whole", "rest_half"}
+    rivals = [row for row in ranked[1:]
+              if not (name in twins and row[0] in twins)]
+    assert ranked[0][1]-rivals[0][1] >= .05, ranked
 
 
 @pytest.mark.parametrize("name",["acc_sharp","acc_flat","acc_natural"])

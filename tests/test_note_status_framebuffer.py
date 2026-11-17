@@ -100,7 +100,10 @@ def _interior(instance, report, base, graded):
     ink = _rgb(report["ink"])
     full = (np.abs(base[y0:y1, x0:x1] - ink).max(axis=2) <= 8) & inner
     tint = _rgb(report["tints"][instance["status"]])
-    tinted = (np.abs(graded[y0:y1, x0:x1] - tint).max(axis=2) <= 8) & full
+    # Display-scale heads are antialiased; a pixel at the rim of a hollow
+    # head's aperture may mix a few percent of its neighbour (seen: 11/255).
+    # Surviving white source ink would be 100+ away from any status tint.
+    tinted = (np.abs(graded[y0:y1, x0:x1] - tint).max(axis=2) <= 16) & full
     return int(full.sum()), int(tinted.sum())
 
 

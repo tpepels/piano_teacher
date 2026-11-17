@@ -132,7 +132,26 @@ def test_native_tie_clearance_does_not_stretch_with_beat_distance(
     assert len(components) == 1, "The isolated source pair needs one connected curve"
     xy = np.asarray(components[0])
     xs, ys = xy[:, 1], xy[:, 0]
-    curve = [x0+xs.min(), y0+ys.min(), x0+xs.max()+1, y0+ys.max()+1]
+    # Display-scale ink is antialiased: a tie's tapered tips are real ink
+    # with partial coverage, below bright()'s cut. Extend the bright curve
+    # through connected pixels of at least 25% ink coverage, never through
+    # staff-rule rows (uniform rule coverage across the window).
+    rgb = np.asarray(picture, dtype=float)[y0:y1, x0:x1]
+    coverage = ((rgb-[11., 39., 34.])/np.array([227., 206., 207.])).min(axis=2)
+    rules = np.median(coverage, axis=1) > .15
+    faint = (coverage >= .25) & ~rules[:, None]
+    grown = np.zeros(faint.shape, bool)
+    grown[ys, xs] = True
+    while True:
+        wider = grown.copy()
+        wider[1:] |= grown[:-1]; wider[:-1] |= grown[1:]
+        wider[:, 1:] |= grown[:, :-1]; wider[:, :-1] |= grown[:, 1:]
+        wider &= faint | grown
+        if (wider == grown).all():
+            break
+        grown = wider
+    tips = np.nonzero(grown)
+    curve = [x0+tips[1].min(), y0+ys.min(), x0+tips[1].max()+1, y0+ys.max()+1]
     centers = [np.median(ys[xs == x]) for x in range(xs.min(), xs.max()+1)]
     sag = np.max(np.abs(centers-np.linspace(centers[0], centers[-1], len(centers))))
     assert sag/left["gap"] > .16, "A straight stroke cannot stand in for a tie"

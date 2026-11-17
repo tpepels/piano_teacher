@@ -33,11 +33,41 @@ def translating_ink(image: Image.Image) -> np.ndarray:
     return bright(image) & ~overlay
 
 
-@lru_cache(maxsize=256)
-def rasterize_outline(svg: str, width: int, height: int) -> np.ndarray:
+SUPERSAMPLE = 4
+# Template sub-pixel phases, in 1/SUPERSAMPLE pixel steps along x and y.
+PHASES = tuple((fx, fy) for fy in range(0, SUPERSAMPLE, 2)
+               for fx in range(SUPERSAMPLE))
+# The native view draws each glyph at display scale with antialiased edges
+# (glyphs.gd _display_texture), so screen ink is the glyph's pixel COVERAGE.
+# A template is the same outline's coverage at the same size and sub-pixel
+# phase, binarized at the coverage bright() needs to call a pixel ink.
+INK_COVERAGE = .63
+
+
+@lru_cache(maxsize=1024)
+def _outline_coverage(svg: str, width: int, height: int) -> np.ndarray:
+    n = SUPERSAMPLE
     png = cairosvg.svg2png(bytestring=svg.encode(),
-                          output_width=width, output_height=height)
-    return np.asarray(Image.open(BytesIO(png)).convert("RGBA"))[:,:,3] > 96
+                          output_width=width*n, output_height=height*n)
+    alpha = np.asarray(Image.open(BytesIO(png)).convert("RGBA"))[:,:,3]/255.0
+    return np.pad(alpha, ((0, n), (0, n)))
+
+
+# The unexpected-symbol scanner deliberately claims any symbol-like ink,
+# including faint antialiased rims; it keeps the generous original cut.
+SCAN_COVERAGE = 96/255
+
+
+@lru_cache(maxsize=1024)
+def rasterize_outline(svg: str, width: int, height: int,
+                      phase: tuple[int, int] = (0, 0),
+                      coverage: float = INK_COVERAGE) -> np.ndarray:
+    """Outline coverage at display size, moved right/down by phase/SUPERSAMPLE px."""
+    n = SUPERSAMPLE
+    fx, fy = phase
+    alpha = np.roll(_outline_coverage(svg, width, height), (fy, fx), axis=(0, 1))
+    covered = alpha[:height*n, :width*n].reshape(height, n, width, n).mean(axis=(1, 3))
+    return covered > coverage if coverage < INK_COVERAGE else covered >= coverage
 
 
 def pixel_runs(values):

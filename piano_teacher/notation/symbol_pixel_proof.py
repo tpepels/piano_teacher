@@ -20,7 +20,7 @@ from .proof import read_written_score
 from .pixel_context import clef_at, ledger_context_rows
 from .measure_pixels import GUTTER
 from .pixel_proof import detect_staff_lines, expected_y, playhead_x
-from .pixel_ink import bright, rasterize_outline, translating_ink
+from .pixel_ink import bright, rasterize_outline, translating_ink, PHASES
 
 REST_TYPES = ("whole","half","quarter","eighth","16th","32nd","64th","128th")
 ACCIDENTAL_TYPES = ("flat","natural","sharp","double-flat","double-sharp")
@@ -34,26 +34,30 @@ def _match_glyph(pixels: np.ndarray, glyph: dict, gap: float,
     bounds = glyph["bounds"]
     width = max(1,round(bounds[2]*gap/250))
     height = max(1,round(bounds[3]*gap/250))
-    template = rasterize_outline(glyph["svg"], width, height)
     # Godot's font atlas uses source MusicXML font-space glyph bounds.
-    # Its actual placement is unknown; search nearby for the best PNG fit.
+    # Its actual placement is unknown; search nearby for the best PNG fit,
+    # with the authentic outline at each sub-pixel phase (pixel_ink.PHASES).
     left = origin_x - (bounds[2]*gap/250/2 if centered else -bounds[0]*gap/250)
     top = origin_y + bounds[1]*gap/250
-    expected_count = int(template.sum())
     best = 0.0
-    for dx in dxs:
-        x = round(left + dx)
-        if x < 0 or x+width >= pixels.shape[1]:
+    for phase in PHASES:
+        template = rasterize_outline(glyph["svg"], width, height, phase)
+        expected_count = int(template.sum())
+        if not expected_count:
             continue
-        for dy in dys:
-            y = round(top+dy)
-            if y < 0 or y+height >= pixels.shape[0]:
+        for dx in dxs:
+            x = round(left + dx)
+            if x < 0 or x+width >= pixels.shape[1]:
                 continue
-            block = pixels[y:y+height,x:x+width]
-            observed_count = int(block.sum())
-            intersection = int(np.count_nonzero(template & block))
-            dice = 2*intersection/(expected_count+observed_count+1e-9)
-            best = max(best,dice)
+            for dy in dys:
+                y = round(top+dy)
+                if y < 0 or y+height >= pixels.shape[0]:
+                    continue
+                block = pixels[y:y+height,x:x+width]
+                observed_count = int(block.sum())
+                intersection = int(np.count_nonzero(template & block))
+                dice = 2*intersection/(expected_count+observed_count+1e-9)
+                best = max(best,dice)
     return best
 
 

@@ -104,6 +104,13 @@ def _pair_at(snapshot, *, source_end: float, gap_beats: float,
     return tuple(matches)
 
 
+# Registered contours of ONE physical rest stay within this many pixels of
+# their median on the source axis. Antialiased display-scale ink registers a
+# little less sharply than point-sampled ink (3.25 px drift observed over a
+# 2.6-beat gap at 95 px/beat); a different rest is a whole bar away.
+AXIS_TOLERANCE_PX = 5.0
+
+
 def confirmed_gap_tracks(written, snapshots) -> dict:
     """Require repeated stable genuine two-staff rests, never a single ghost."""
     duration = _source_gap_duration(written)
@@ -131,7 +138,7 @@ def confirmed_gap_tracks(written, snapshots) -> dict:
     axis = tuple(median(row[2][hand] for row in anchors) for hand in (0,1))
     # Track IDs are local contour registrations, not musical identities.
     # Strong fragments must all describe the SAME physical rest pair.
-    if any(abs(row[2][hand]-axis[hand]) > 3.0
+    if any(abs(row[2][hand]-axis[hand]) > AXIS_TOLERANCE_PX
            for row in anchors for hand in (0,1)):
         return {}
     accepted = set(stable)
@@ -143,7 +150,7 @@ def confirmed_gap_tracks(written, snapshots) -> dict:
         # a changing single track or new trajectory has no ownership.
         if (all(first < row[0] < last for row in rows)
                 and all(set(pair).isdisjoint(anchor) for anchor in stable)
-                and all(abs(row[2][hand]-axis[hand]) <= 3.0
+                and all(abs(row[2][hand]-axis[hand]) <= AXIS_TOLERANCE_PX
                         for row in rows for hand in (0,1))):
             accepted.add(pair)
     return dict(tracks=frozenset(track for pair in accepted for track in pair),
@@ -163,6 +170,6 @@ def verified_procedural_pair(snapshot, confirmed):
     for hand, obj in enumerate(pair):
         center = (obj["bbox"][0]+obj["bbox"][2])*.5-snapshot["camera"]+(
             snapshot["clock"]*confirmed["density"])
-        if abs(center-confirmed["axis"][hand]) > 3.0:
+        if abs(center-confirmed["axis"][hand]) > AXIS_TOLERANCE_PX:
             return ()
     return pair
