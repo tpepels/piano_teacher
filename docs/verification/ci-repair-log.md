@@ -337,3 +337,20 @@ one unexpected-symbol contour, ownership 2.
 
 Full suite on the working tree before commit: shards 1-3 green, shard 4
 one failure (job identity hash, fixed above).
+
+## 2026-11-17 — gate evidence at `594e1ead`
+
+- `ci-full.sh --all --fail-fast`: PASS 4/4 — 1245 passed / 1 xfailed,
+  1267 / 4 skipped, 1323 / 1 skipped, 1354. Smoke 865 passed, Godot
+  syntax OK, hybrid focused and corpus exit 0.
+- Observed once, not reproduced: in the first shard-2 run at this commit
+  `test_verification_runner_failures.py::test_outer_exit_packaging_defers_signals_and_keeps_the_first_status[2-False-False]`
+  failed. The trace shows `verify-notation.sh` finished packaging and exited
+  with the audit status 23 because its SIGINT trap never counted the signal
+  (`first_signal_status` 0). That test case sends SIGINT to the bash pid only
+  (not the process group) while bash waits for a foreground child. Neither
+  the script nor the test changed in this work. It passed in the preceding
+  full run, 48 of 48 isolated runs, and the shard-2 rerun on the same
+  commit. Next agent: if it recurs, investigate bash's deferred SIGINT
+  handling for a foreground child (wait-and-cooperative-exit) in
+  `scripts/verify-notation.sh`; do not quarantine it.
