@@ -2328,3 +2328,16 @@ correct, not that individual pixels are identical.
 - Tolerances that only measured point sampling were adjusted with recorded
   reasons; negative controls (missing, wrong or stray symbols) are kept.
   Details and evidence: `docs/verification/ci-repair-log.md`.
+
+### 2026-11-17 — practice flow redesign (owner decisions, not implemented)
+
+Owner testing at the piano showed the practice states do not match how a
+pianist learns (transformed exercises shown as the piece, one-bar
+passages, many stages per bar, long waits, guided mode with an empty
+staff). The owner specified the flow for one piece in
+[docs/practice-flow.md](docs/practice-flow.md): play the piece first;
+musical phrases; right, left, together; Listen -> Free -> Tempo on the real
+notes; tempo from 50% in 10% steps; done after 2 clean attempts at the
+original tempo; linking 1+2, 2+3; final whole-piece test; Coda/Fukuda only
+as an announced aid. The on-screen behaviour per state is specified next.
+This flow takes priority over further notation-oracle work.

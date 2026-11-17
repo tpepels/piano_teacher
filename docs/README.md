@@ -13,6 +13,7 @@
 | Notation/transcription specification | [MIDI transcription rules](midi-transcription-rules.md) |
 | Fingering data and inference | [Piano fingering](piano-fingering.md) |
 | Teaching behavior and mastery criteria | [Teaching methodology](teaching-methodology.md) |
+| Practice flow for one piece (owner decisions 2026-11-17, to implement) | [Practice flow](practice-flow.md) |
 | Fixed retry contracts, adaptive proposal and evaluation | [Mistake-response policies](mistake-response-policies.md) |
 | Learning variables and evidence gaps | [Learning-measurement implementation audit (2026-11-04)](archive/reports/learning-measurement-audit-2026-11-04.md) |
 | Durable measurement and proposed read-only analytics | [Local learning evidence contract](learning-measurement.md) |
