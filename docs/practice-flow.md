@@ -101,6 +101,75 @@ returns to the real notes.
 | Linking | 1+2, 2+3, ... per hand and together | 1+2, 3+4, 1-4 (doubling), both hands only |
 | Final test | Whole piece, 50% -> target, 2 clean | Whole piece at the end (present) |
 | Resume | Same phrase, from Free | Same stage and tempo |
+| Free display | Target waits on the playhead | Fixed in 7289fa80; previously an empty staff |
+| Feedback colours | Green/red, plus a ghost note for a wrong key | Five status colours (hit, missed, late, early release, early onset) |
+| Timing errors | Only clearly off counts | Timing deviations can fail an attempt |
+| Count-in | Clicks and large numbers | Spoken count-in voice |
+| Keyboard | Only as a hint after a wrong note in Free | Shown in guided mode and on hints |
+| Quick-note spacing | At least ~3.3 staff spaces per 16th | 52 px per quick attack (about 2.4 spaces) |
 
-Open: what appears on screen in each state (notation, graphics, timing) is
-being specified next and will be added here.
+## On screen
+
+### Always
+
+- **Staff:** scrolls from right to left past a fixed playhead, in every
+  state including Listen and Tempo.
+- **Phrase context:** the current phrase is shown with the bar before and
+  the bar after it dimmed, for context.
+- **Hands:** the hand that is not being practised stays visible but dimmed.
+- **Fingering:** numbers are shown wherever they are available.
+- **Spacing:** quick notes (16ths, 8ths) are spaced generously, at least
+  about 3.3 staff spaces per 16th (owner: they were too close together).
+- **Status:** minimal. A small label says where you are; the music is the
+  focus.
+- **Keyboard:** no piano keyboard, except as a hint after a wrong note in
+  Free.
+- **Controls:** Pause and Listen again. Everything else advances by itself.
+
+### Listen
+
+The notes scroll past the playhead and light up as they sound. Nothing is
+graded.
+
+### Free
+
+- The target note waits on the playhead.
+- After each correct note the staff moves on to the next one; the axis
+  never moves while the learner thinks.
+- A played note turns green.
+- On a wrong note: the intended note turns red, the keyboard appears and
+  shows the key to play, and the app waits for that note.
+
+### Tempo
+
+**Count-in**
+- One bar of metronome clicks with large numbers 1-2-3-4.
+- It ends just before the first note; a leading rest is not sat out.
+
+**Metronome**
+- Can be switched on the screen; on by default.
+
+**Feedback while playing**
+- Every note is coloured the moment it is played or missed.
+- Two colours only: **green** for correct, **red** for wrong or missed.
+- A wrong key also shows a red "ghost" note at the pitch that was played.
+
+**Timing**
+- A note that is a little early or late is accepted (still green).
+- Only a note that is clearly off counts as an error.
+- Proposed threshold, to confirm when building: more than a sixteenth note
+  at the current tempo, and at least 150 ms.
+
+**Next attempt**
+- It follows directly: the staff keeps scrolling and the repeat comes in
+  from the right after one count-in bar. It never jumps back.
+
+### Transitions
+
+- **Step change** (Listen -> Free -> Tempo): a short message for 1-2 s
+  ("Now in tempo - 50%"), then the next step starts by itself.
+- **Tempo change:** a short message ("Faster: 72 BPM", "Slower: 58 BPM").
+- **Hand, phrase or link done:** a short compliment, then the next one
+  starts automatically.
+- **Simplified exercise:** starts automatically when a phrase keeps
+  failing, with a clear message of what was simplified.
