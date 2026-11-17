@@ -354,3 +354,29 @@ one failure (job identity hash, fixed above).
   commit. Next agent: if it recurs, investigate bash's deferred SIGINT
   handling for a foreground child (wait-and-cooperative-exit) in
   `scripts/verify-notation.sh`; do not quarantine it.
+
+## 2026-11-17 — owner test at the piano: untimed Learn showed an empty staff
+
+Owner report: "notes without tempo" (guided Learn) showed only the hint
+keyboard, no notes. Reproduced through the real state path in
+`tests/godot/guided_interactions.gd` (the old harness called
+`enqueue_recovery_queue` directly and bypassed the defect).
+
+Root causes:
+1. Learn plans were admitted only if the engine's deadline (4 s ahead)
+   coincided with the empty-staff count-in slot; guided Learn has no count-in
+   and that deadline lies inside the viewport, so every guided passage was
+   refused ("refused_inside_or_overlap"/count-in 0).
+2. Even if admitted, the score axis kept moving with wall-clock time, so
+   the passage would scroll away while the learner thinks.
+
+Fix: `enqueue_recovery_queue(..., untimed=true)` for Learn opens the
+passage at the first offscreen append-only slot at or after the engine's
+announcement and records the opening (`scheduled_plan_openings`).
+`continuous_score_flow.gd` gained `hold_at`/`release_hold` (never rewinds);
+`main.gd _update_guided_hold` holds the axis with the current target note on
+the playhead and moves on when the engine names the next target. Timed
+modes are unchanged.
+
+Owner decisions recorded: leave the Coda/Fukuda stages as they are; 16th
+and 8th notes are spaced too tightly (next item).

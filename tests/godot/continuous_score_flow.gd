@@ -72,5 +72,23 @@ func _initialize() -> void:
     check(tempo_change.project_authored_future(
         1900,2000,1.75,60.0,authored) >= local_now,
         "past-stamped deadlines never rewind visual world")
+    # Untimed guided Learn: the axis waits with the target on the playhead.
+    var guided := Flow.new()
+    guided.sample(1000,60.0)
+    guided.hold_at(2.5)
+    guided.sample(3000,60.0)
+    check(is_equal_approx(guided.beat,2.0),"Before the hold the axis moves at its rate")
+    guided.sample(9000,60.0)
+    check(is_equal_approx(guided.beat,2.5) and is_equal_approx(guided.project(20000),2.5),
+        "The axis waits at the hold while the learner thinks")
+    guided.hold_at(1.0)
+    guided.sample(10000,60.0)
+    check(is_equal_approx(guided.beat,2.5),"A hold behind the axis never rewinds it")
+    guided.hold_at(4.0)
+    guided.sample(12000,60.0)
+    check(is_equal_approx(guided.beat,4.0),"A later target moves the axis on to it")
+    guided.release_hold()
+    guided.sample(13000,60.0)
+    check(is_equal_approx(guided.beat,5.0),"Releasing the hold resumes normal motion")
     print("CONTINUOUS_SCORE_FLOW_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

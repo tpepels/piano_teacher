@@ -716,6 +716,9 @@ var _stream_last_admitted := -1
 # enqueue another copy after the first source has already been activated
 # or has passed off the left edge.
 var _scheduled_score_plan_ids: Dictionary = {}
+# World beat at which each admitted plan's source opening reaches the
+# playhead (it can be later than the engine deadline for untimed Learn).
+var scheduled_plan_openings: Dictionary = {}
 
 func _stream_source_windows(opening: float) -> Array[Vector2]:
     # A passage is prepared once, but admitted as immutable adjoining
@@ -1319,7 +1322,7 @@ func _restore_future_suffix(saved: Array, world: float) -> bool:
 func enqueue_recovery_queue(world: float, source_opening: float,
         graded_deadline_world: float, plan_id: String = "",
         allow_count_in: bool = false, count_in_beats: float = 0.0,
-        deadline_at_or_after: bool = false) -> bool:
+        deadline_at_or_after: bool = false, untimed: bool = false) -> bool:
     # Recovery decisions arrive from the engine with an absolute graded
     # deadline. Reuse a compatible offline-planned future if possible;
     # otherwise withdraw the maximal safe suffix, then APPEND new source
@@ -1358,7 +1361,16 @@ func enqueue_recovery_queue(world: float, source_opening: float,
         graded_deadline_world,0.0,timeline.pixels_per_beat,
         staff_gap(),timeline.duration_beats)
     var on_empty := false
-    if not is_finite(checked) and allow_count_in:
+    if untimed:
+        # Untimed guided Learn grades no deadline: the learner plays each
+        # note when ready. Open the passage at the first append-only slot
+        # that starts offscreen, never before the engine's announcement.
+        var earliest: float = StreamAdmission.position(remaining,
+            stream_world_beat,_stream_right_beats(),
+            _stream_header_beats(source_opening),NAN,0.0,
+            timeline.pixels_per_beat,staff_gap(),timeline.duration_beats)
+        checked = maxf(graded_deadline_world,earliest) if is_finite(earliest) else NAN
+    elif not is_finite(checked) and allow_count_in:
         # The initial command or an already announced backend continuation
         # may use the empty-staff slot; source/rest/peer physical clearance
         # remains mandatory. Practice plans have been announced BEFORE this
@@ -1444,6 +1456,7 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     _stream_live_serial = prior_live
     if _stream_serial > before:
         _scheduled_score_plan_ids[identity] = _stream_last_admitted
+        scheduled_plan_openings[identity] = checked
         _diagnose_plan(identity,"admitted",checked,
             {"owner":_stream_last_admitted,"on_empty_strip":on_empty})
         return true

@@ -88,41 +88,65 @@ func run() -> void:
     await process_frame
     await process_frame
     RenderingServer.force_draw()
-    # Guided Learn is presented through the perpetual score stream: the engine
-    # publishes the guided source as its next-score decision (score_queue_next),
-    # which the application forwards to enqueue_recovery_queue with the exact
-    # first-note deadline on the empty staff. Drive that same renderer entry point.
+    # Guided Learn is presented through the score stream: the engine publishes
+    # the guided source as its next-score decision (score_queue_next) and the
+    # application admits it at that deadline, exactly as for timed takes.
+    # Untimed Learn then WAITS: the axis stops with the current target note on
+    # the playhead and moves on only when the engine names the next target.
     var stream_view = app.practice_view.stage.renderer
-    var StreamAdmission = load("res://score_stream_admission.gd")
-    var world_now: float = app.score_flow.project(Time.get_ticks_msec())
-    stream_view.stream_world_beat = maxf(stream_view.stream_world_beat,world_now)
-    var first_note_world: float = StreamAdmission.empty_strip_start([],
-        stream_view.stream_world_beat,4.0,stream_view._stream_header_beats(0.0),
-        stream_view._stream_queue.minimum_peer_opening(stream_view.timeline.pixels_per_beat,
-            stream_view.size.x,stream_view.size.x*stream_view.PLAYHEAD_FRACTION),
-        stream_view.timeline.pixels_per_beat,stream_view.staff_gap(),
-        stream_view.timeline.duration_beats)
-    check(stream_view.enqueue_recovery_queue(world_now,0.0,first_note_world,
-        "guided-target-plan",true,4.0),"Guided source is admitted to the score stream")
-    for settle_frame in range(8):
+    var notes: Array = stream_view.timeline.notes
+    var second: Dictionary = {}
+    for note in notes:
+        if float(note.onset_beats) > float(target.onset_beats)+.2:
+            second = note
+            break
+    check(not second.is_empty(),"Fixture has a later guided target")
+    # Same backend time base the fixture app already calibrated against.
+    var backend_now: float = float(Time.get_ticks_msec()) - app.visual_transport_clock.backend_offset_ms
+    var guided := state("guided_wait")
+    guided["clock_sampled_at_ms"] = backend_now
+    guided["score_queue_next"] = {"plan_id":"guided-target-plan",
+        "deadline_at_ms":backend_now+4000.0,"source_from_beat":0.0,
+        "count_in_beats":0.0}
+    app._on_state(0,JSON.stringify(guided).to_utf8_buffer())
+    var playhead: float = stream_view.size.x*stream_view.PLAYHEAD_FRACTION
+    var id: String = str(app.practice_view.stage.feedback.note_for_source(app.revision, str(target.id)))
+    var drawn_x := func(identifier: String) -> float:
+        var heads: Dictionary = stream_view.drawn_noteheads
+        return float(heads[identifier].x) if heads.has(identifier) else NAN
+    # Let the passage arrive (the engine plans it 4 s ahead) and settle.
+    var deadline: int = Time.get_ticks_msec()+6500
+    while Time.get_ticks_msec() < deadline:
         app._process(0.0)
         await process_frame
     RenderingServer.force_draw()
-    var id: String = str(app.practice_view.stage.feedback.note_for_source(app.revision, str(target.id)))
-    check(app.practice_view.stage.renderer.drawn_noteheads.has(id), "Guided source target is actually painted")
-    var painted: Dictionary = app.practice_view.stage.renderer.drawn_noteheads.duplicate()
-    # Since 0a1862b5 every screen shares one perpetual forward score axis, so
-    # the guided source ink moves left with wall-clock time like all other ink
-    # (127c94ee: no separate untimed guided camera). It must keep one identity.
-    await create_timer(.4).timeout
-    app._process(0.0)
-    app.practice_view.stage.renderer.queue_redraw()
-    await process_frame
-    await process_frame
+    check(stream_view.drawn_noteheads.has(id), "Guided source target is actually painted")
+    var settled: float = drawn_x.call(id)
+    check(absf(settled-playhead) <= 3.0,
+        "Untimed Learn waits with the target note on the playhead (x=%.1f, playhead=%.1f)" % [settled,playhead])
+    await create_timer(1.0).timeout
+    for frame in range(4):
+        app._process(0.0)
+        await process_frame
     RenderingServer.force_draw()
-    var moved: Dictionary = app.practice_view.stage.renderer.drawn_noteheads
-    check(moved.has(id) and float(moved[id].x) < float(painted[id].x),
-        "Guided source ink follows the shared perpetual score axis")
+    check(absf(drawn_x.call(id)-settled) < .5,
+        "The waiting target does not scroll away while the learner thinks")
+    # The learner plays the target: the engine names the next one.
+    var advanced := state("guided_wait")
+    advanced["teaching"]["target_index"] = 1
+    advanced["teaching"]["expected_notes"] = [{"id":str(second.id),
+        "pitch":int(second.midi_pitch),"label":"Source note","beat":float(second.onset_beats)}]
+    app._on_state(0,JSON.stringify(advanced).to_utf8_buffer())
+    var next_id: String = str(app.practice_view.stage.feedback.note_for_source(app.revision, str(second.id)))
+    deadline = Time.get_ticks_msec()+4000
+    while Time.get_ticks_msec() < deadline:
+        app._process(0.0)
+        await process_frame
+    RenderingServer.force_draw()
+    check(drawn_x.call(id) < settled-2.0,
+        "Playing the target moves the passage on along the one forward axis")
+    check(absf(drawn_x.call(next_id)-playhead) <= 3.0,
+        "The next target waits on the playhead (x=%.1f)" % drawn_x.call(next_id))
     check(app.practice_view.stage.renderer.note_status_source == app.practice_view.stage.feedback,
         "Guided notation paints status ink only from the one note-status ledger")
     check(app.practice_view.stage.feedback.score == app.practice_view.stage.renderer, "Guided feedback binds the actual production view")

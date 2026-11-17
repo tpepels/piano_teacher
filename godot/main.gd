@@ -127,6 +127,11 @@ var frame_ms := 0
 var reported_contract_problems: Dictionary = {}
 var visual_transport_clock = VisualTransportClock.new()
 var score_flow = ContinuousScoreFlow.new()
+# Untimed guided learning: world position at which the guided passage's
+# opening (source_from_beat) reaches the playhead, from its admitted plan.
+var _guided_world := NAN
+var _guided_from_beat := 0.0
+var _guided_plan_id := ""
 var metronome_frame
 # The native compositor is the sole production score view.
 var timeline_model_request
@@ -982,6 +987,7 @@ func _process(_delta: float) -> void:
     frame_ms = Time.get_ticks_msec()
     var ticks: int = frame_ms
     var beat: float = _transport_beat_at(ticks)
+    _update_guided_hold(last_state)
     score_flow.sample(ticks,_flow_bpm(last_state,beat,ticks))
     _read_feedback_events()
     _update_count_in(beat,ticks)
@@ -995,6 +1001,31 @@ func _process(_delta: float) -> void:
         # Old score clips continue exiting even during a revision load or
         # a source-picker transition with no currently loaded piece.
         score_runway.present_frame(last_state,_unrolled_score_beat_at(beat,ticks))
+
+## Untimed guided learning waits for the learner: hold the score axis where
+## the current target note sits on the playhead (continuous_score_flow.gd).
+func _update_guided_hold(state: Dictionary) -> void:
+    var guided: bool = str(state.get("mode","")) == "learn" and \
+        str(state.get("phase","")).begins_with("guided") and \
+        is_finite(_guided_world)
+    if not guided:
+        if str(state.get("mode","")) != "learn":
+            _guided_world = NAN
+            _guided_plan_id = ""
+        score_flow.release_hold()
+        return
+    var teaching: Variant = state.get("teaching")
+    var expected: Array = teaching.get("expected_notes",[]) \
+        if teaching is Dictionary else []
+    if expected.is_empty():
+        # Completed: keep the last hold so the played passage stays readable.
+        return
+    var target: float = INF
+    for note in expected:
+        if note is Dictionary and note.has("beat"):
+            target = minf(target,float(note["beat"]))
+    if is_finite(target):
+        score_flow.hold_at(_guided_world+maxf(0.0,target-_guided_from_beat))
 
 func _flow_bpm(state: Dictionary, beat: float, at_ms: int = -1) -> float:
     # The presentation axis moves at the take's authored tempo while it
@@ -1084,6 +1115,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         _applied_tempo_epoch = epoch
         score_flow.switch_rate_at(epoch+visual_transport_clock.backend_offset_ms,
             _flow_bpm(parsed,flow_beat))
+    _update_guided_hold(parsed)
     score_flow.sample(received_ms,_flow_bpm(parsed,flow_beat,received_ms))
     var promoted_this_snapshot := false
     if score_runway != null:
@@ -1155,7 +1187,16 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
                 playback_mode in ["listen","perform","learn","practice"],
                 float(next_plan.get("count_in_beats",
                     parsed.get("next_count_in_beats",0.0))),
-                playback_mode == "practice")
+                playback_mode == "practice",
+                # Untimed Learn has no graded deadline: its passage opens at
+                # the first clear offscreen slot at or after the engine's.
+                playback_mode == "learn")
+            if playback_mode == "learn":
+                var plan_key: String = str(next_plan["plan_id"])
+                if renderer.scheduled_plan_openings.has(plan_key):
+                    _guided_world = float(renderer.scheduled_plan_openings[plan_key])
+                    _guided_from_beat = float(next_plan["source_from_beat"])
+                    _guided_plan_id = plan_key
         # Atomically bind an acknowledged transport ID to the already armed
         # source BEFORE publishing the new backend state. Otherwise the UI
         # may observe a running Retry while its note copy still has the

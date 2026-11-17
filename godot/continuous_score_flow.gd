@@ -15,6 +15,11 @@ var _slow_debt := 0.0
 # A late slowdown repays at most this fraction of each future step, so the
 # visual axis strictly advances even while it reconciles an earlier epoch.
 const MAX_SLOWDOWN_REPAY_FRACTION := 0.5
+# Untimed guided learning (mode "learn") has no tempo: the learner plays
+# the next note whenever ready. The axis may then advance only until the
+# current target note reaches the playhead; it waits there and moves on when
+# the target changes. It still never moves backwards. INF = no hold.
+var hold_world := INF
 
 func sample(at_ms: int, selected_bpm: float = NAN) -> float:
     if not initialized:
@@ -25,7 +30,7 @@ func sample(at_ms: int, selected_bpm: float = NAN) -> float:
         # Repay at most half of each step: the axis slows, never stops.
         var paid: float = minf(_slow_debt,step*MAX_SLOWDOWN_REPAY_FRACTION)
         _slow_debt -= paid
-        beat += step-paid
+        beat = _held(beat,beat+step-paid)
         last_ms = at_ms
     # Apply a tempo change only AFTER integrating the elapsed time. Never
     # re-anchor the score when its target BPM changes or the backend pauses.
@@ -53,7 +58,20 @@ func project(at_ms: int) -> float:
     if not initialized:
         return 0.0
     var step: float = TempoTimeline.beats_from_milliseconds(float(maxi(0,at_ms-last_ms)),bpm)
-    return beat + step - minf(_slow_debt,step*MAX_SLOWDOWN_REPAY_FRACTION)
+    return _held(beat,beat + step - minf(_slow_debt,step*MAX_SLOWDOWN_REPAY_FRACTION))
+
+## Wait with the target at the playhead (see hold_world). A hold behind the
+## current position never rewinds: the axis then simply stays where it is.
+func hold_at(world: float) -> void:
+    hold_world = world if is_finite(world) else INF
+
+func release_hold() -> void:
+    hold_world = INF
+
+func _held(current: float, advanced: float) -> float:
+    if not is_finite(hold_world):
+        return advanced
+    return maxf(current,minf(advanced,hold_world))
 
 func project_authored_future(at_ms: int, sampled_ms: int,
         source_beat: float, nominal_bpm: float,
@@ -91,3 +109,4 @@ func reset() -> void:
     _slow_debt = 0.0
     beat = 0.0
     last_ms = -1
+    hold_world = INF
