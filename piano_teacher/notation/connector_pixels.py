@@ -399,6 +399,24 @@ def _connected_source_beam_runs(frame, observed, *, x, tip, stems, gap):
             if seen[max(a, top)-top:min(b, bottom)-top, x-left].any()]
 
 
+REFERENCE_GAP = 24  # reference connector art is rasterized at 24 px per staff space
+
+
+def _stroke_thickness(frame, x, top, bottom):
+    """Ink thickness of one photographed run, including its partial rims."""
+    coverage = frame.get('coverage')
+    if coverage is None:
+        return float(bottom-top)
+    low, high = max(0, top-1), min(coverage.shape[0], bottom+1)
+    column = coverage[low:high, x].copy()
+    # Rim pixels only count where they are not another stroke's full ink.
+    if top-1 >= 0 and frame['pixels'][top-1, x]:
+        column[0] = 0.
+    if bottom < coverage.shape[0] and frame['pixels'][min(bottom, coverage.shape[0]-1), x] and high > bottom:
+        column[-1] = 0.
+    return float(column.sum())
+
+
 def _reference_column(art, x):
     column = round(x)-art['bbox'][0]
     return _runs(art['mask'][:, column]) if 0 <= column < art['mask'].shape[1] else []
@@ -539,6 +557,15 @@ def _beam(row, frames, target):
             runs = _reference_column(art, sx)
             if not runs:
                 raise ValueError('Reference beam interval has no primary contour')
+            # Stems are measured on the photograph and the reference is
+            # mapped linearly between them, so a secondary beam or hook that
+            # starts between two stems lands a few pixels apart in the two
+            # images. Compare level structure only where the reference keeps
+            # the same level count for .3 staff space on both sides; the
+            # primary beam's continuity is still checked in every column.
+            reach = round(.3*REFERENCE_GAP)
+            transition = any(len(_reference_column(art, sx+offset)) != len(runs)
+                             for offset in (-reach, reach))
             tip_a = stems[i]['top'] if up else stems[i]['bottom']-1
             tip_b = stems[i+1]['top'] if up else stems[i+1]['bottom']-1
             tip = tip_a+(tip_b-tip_a)*fraction
@@ -549,9 +576,19 @@ def _beam(row, frames, target):
                     frame, observed, x=x, tip=tip, stems=stems, gap=gap)
             expected_thickness = [(b-a)*gap/24 for a, b in runs]
             expected_separation = [(a-runs[0][0])*gap/24 for a, _ in runs]
+            if transition and observed:
+                # Recorded, not compared: see the level-transition note above.
+                beam_box[1] = min(beam_box[1], observed[0][0])
+                beam_box[3] = max(beam_box[3], observed[-1][1])
+                samples.append(dict(x=x, levels=len(observed), transition=True,
+                    thickness_spaces=[round(_stroke_thickness(frame, x, a, b)/gap, 3) for a, b in observed]))
+                continue
             fit = len(observed) == len(runs)
             if fit:
-                fit = all(abs((b-a)-thickness) <= max(1.5, .10*gap)
+                # Thickness is the amount of ink across the stroke (its
+                # antialiased rim pixels count partially), not the count of
+                # pixels above the bright-ink cut.
+                fit = all(abs(_stroke_thickness(frame, x, a, b)-thickness) <= max(1.5, .10*gap)
                           for (a, b), thickness in zip(observed, expected_thickness))
                 fit &= all(abs((a-observed[0][0])-separation) <= max(1.5, .10*gap)
                            for (a, _), separation in zip(observed, expected_separation))
@@ -560,7 +597,7 @@ def _beam(row, frames, target):
                     samples=samples, failed_sample=dict(x=x, expected_levels=len(runs), observed=observed))
             beam_box[1] = min(beam_box[1], observed[0][0])
             beam_box[3] = max(beam_box[3], observed[-1][1])
-            samples.append(dict(x=x, levels=len(runs), thickness_spaces=[round((b-a)/gap, 3) for a, b in observed]))
+            samples.append(dict(x=x, levels=len(runs), thickness_spaces=[round(_stroke_thickness(frame, x, a, b)/gap, 3) for a, b in observed]))
     # Every column must carry the primary beam; three probes alone could
     # miss an erasure between them. Restrict to the independently found tips.
     continuity = []

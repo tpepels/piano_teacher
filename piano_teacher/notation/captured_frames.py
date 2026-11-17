@@ -135,7 +135,11 @@ class CapturedFrames:
             ledger_ink = ((rgb[:, :, 0] >= 29) & (rgb[:, :, 0] < 155) &
                           (rgb[:, :, 1] >= 55) & (rgb[:, :, 2] >= 49) &
                           neutral & ~cyan)
-            self.frames[beat] = dict(name=name, pixels=bright(image),
+            # Display-scale ink is antialiased: keep each pixel's score-ink
+            # coverage (0 = stage, 1 = full ink) for physical measurements
+            # such as stroke thickness. Notation identity still uses bright().
+            coverage = ((rgb - (11, 39, 34)) / np.array((227., 206., 207.))).min(axis=2).clip(0, 1)
+            self.frames[beat] = dict(name=name, pixels=bright(image), coverage=coverage,
                                      ledger_ink=ledger_ink,
                                      # The circular mint beat marker can mask
                                      # ledger wings without touching the tall
