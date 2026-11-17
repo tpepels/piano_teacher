@@ -1066,10 +1066,24 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     _display_cache[key] = [weakref(texture),sized]
     return sized
 
+## Screen pixels per canvas unit. The interface is scaled once by the
+## window (main.gd _configure_ui_scaling, e.g. 1.35 on 1920x1080), so the
+## artwork must be resampled to the PHYSICAL size it occupies, not to its
+## logical rect, or the window would enlarge an already reduced copy.
+static func _screen_scale(canvas) -> Vector2:
+    if not (canvas is CanvasItem) or not canvas.is_inside_tree():
+        return Vector2.ONE
+    var local: Vector2 = canvas.get_global_transform_with_canvas().get_scale().abs()
+    var window: Vector2 = canvas.get_viewport().get_final_transform().get_scale().abs()
+    var scale := local*window
+    if scale.x <= 0.0 or scale.y <= 0.0 or not scale.is_finite():
+        return Vector2.ONE
+    return scale
+
 static func _draw_fit(canvas, texture: Texture2D, rect: Rect2,
         tile: bool, modulate: Color = Color.WHITE) -> void:
-    canvas.draw_texture_rect(_display_texture(texture,rect.size.abs()),
-        rect,tile,modulate)
+    canvas.draw_texture_rect(_display_texture(texture,
+        rect.size.abs()*_screen_scale(canvas)),rect,tile,modulate)
 
 static func _draw_fit_region(canvas, texture: Texture2D, rect: Rect2,
         source: Rect2, modulate: Color = Color.WHITE) -> void:
@@ -1078,7 +1092,7 @@ static func _draw_fit_region(canvas, texture: Texture2D, rect: Rect2,
         return
     var full := Vector2(texture.get_width(),texture.get_height())
     var sized: Texture2D = _display_texture(texture,
-        full*(rect.size.abs()/source.size))
+        full*(rect.size.abs()*_screen_scale(canvas)/source.size))
     var ratio := Vector2(sized.get_width(),sized.get_height())/full
     canvas.draw_texture_rect_region(sized,rect,
         Rect2(source.position*ratio,source.size*ratio),modulate)

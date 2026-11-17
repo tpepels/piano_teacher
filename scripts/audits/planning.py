@@ -9,6 +9,7 @@ from piano_teacher.music import Phrase
 from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
 from piano_teacher.notation.model import build_score_model
 from . import case_catalog
+from .case_types import case_fields
 from .capture_store import ROOT
 
 
@@ -52,7 +53,7 @@ def case_jobs(plans, phase, *, out, inputs_hash, runtime, godot, reuse_captures)
         source_index, path = plan.source_index, plan.path
         for case, source_phrase, variant in getattr(plan, phase):
             directory = out / f"{source_index:02d}-{path.stem}" / case.name
-            identity = dict(inputs_sha256=inputs_hash, runtime=runtime, case=asdict(case),
+            identity = dict(inputs_sha256=inputs_hash, runtime=runtime, case=case_fields(case),
                 source_phrase=asdict(source_phrase) if source_phrase is not None else None,
                 variant=asdict(variant) if variant is not None else None, focused=phase == 'focused')
             key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()

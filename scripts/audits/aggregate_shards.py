@@ -18,8 +18,15 @@ def case_identity(source: str, phase: str, case: object) -> str:
         raise ValueError("Unrecognized source audit phase")
     if not source or source.startswith("/") or "\\" in source or ".." in source.split("/"):
         raise ValueError("Case identity requires a repository-relative source")
+    fields = asdict(case)
+    # Display fields (case_types.DEFAULT_DISPLAY) only count when not default,
+    # so identities recorded before they existed are unchanged.
+    if tuple(fields.get("viewport", (1536, 520))) == (1536, 520):
+        fields.pop("viewport", None)
+    if fields.get("ui_scale", 1.0) == 1.0:
+        fields.pop("ui_scale", None)
     payload = {"source": source, "phase": phase,
-               "case": {**asdict(case), "filename": source}}
+               "case": {**fields, "filename": source}}
     digest = sha256(json.dumps(payload, sort_keys=True,
                     separators=(",", ":")).encode()).hexdigest()
     return ("s:" if phase == "semantics" else "g:") + digest

@@ -300,3 +300,40 @@ The audit fits bars 13-16 into 1536 px, half the app's practice size
 - rests 8 + 4 + 4 + 4 + 4 ownership rows: rest body contour/ownership.
 - structure: meter 2, key 1, measure 2, barline 2; tuplet 3; accidental 2;
   stem 2; tracking/ownership 2. Not yet examined.
+
+## 2026-11-17 — Chopin audit at the app's real display (owner chose option 1)
+
+Correction of an earlier note in this log: the 11 px Chopin capture was not
+an audit artefact. The production view chooses the staff gap from the
+passage density and the available width (candidates 22/17/14/11/8.5 px).
+The app also scales its whole interface (main.gd `_configure_ui_scaling`):
+
+| Screen | Logical score area | UI scale | Staff gap on screen |
+|---|---|---|---|
+| 1220x780 window | 1156x591 | 1.00 | 11 px |
+| 1536x960 | 1216x610 | 1.20 | 13.2 px |
+| 1920x1080 | 1358x611 | 1.35 | 14.85 px |
+| 2560x1440 | 1358x611 | 1.80 | 19.8 px |
+
+Changes:
+- Production: `glyphs.gd _screen_scale` resamples artwork to PHYSICAL pixels
+  (canvas transform x window final transform). Before, art was reduced to
+  its logical size and the window then enlarged it again (soft ink on every
+  scaled screen).
+- Audit: `AuditCase.viewport` / `ui_scale`; the harness draws the logical
+  score at that scale into a physical framebuffer and reports every
+  coordinate in framebuffer pixels. Identities of default cases are
+  unchanged (`case_types.case_fields`, `aggregate_shards.case_identity`).
+- The Chopin case now runs as on 1920x1080: (1358, 611) at 1.35.
+- Visible-note obligation: a head counts only when it lies wholly right of
+  the 29 px gutter (it was required while still half clipped).
+
+Chopin 13-16 at the app display: 128 errors (92 at 1536x520). Flags are
+plainly two flags on screen but still score .59-.69 Dice; one eighth flag
+separates 1 from 2 flags by .003, so the flag measurement itself is the
+next item, not legibility. Also open: one beam group, ledgers 4, stem
+attachment 4, meter/key/barline/measure 7, tuplets 3, motion transition 1,
+one unexpected-symbol contour, ownership 2.
+
+Full suite on the working tree before commit: shards 1-3 green, shard 4
+one failure (job identity hash, fixed above).

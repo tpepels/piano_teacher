@@ -108,7 +108,10 @@ def fixture(case: AuditCase = CASES[0], *, piece=None,
     # the application. The removed native_notes switch never reaches runtime.
     atlas = assemble_layout(engraving, native_model=model,
                             notation_xml=score.musicxml, cache=cache, cache_key=key)
+    display = ({"viewport_size": list(case.viewport), "ui_scale": case.ui_scale}
+               if (tuple(case.viewport), case.ui_scale) != ((1536, 520), 1.0) else {})
     return {
+        **display,
         "capture_config": dict(CANONICAL_CAPTURE_CONFIG),
         "model": model,
         "assets": {key: atlas[key] for key in (

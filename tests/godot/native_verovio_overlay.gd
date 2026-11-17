@@ -91,12 +91,19 @@ func _audit() -> void:
     DirAccess.make_dir_recursive_absolute(folder)
     var view := SubViewport.new()
     var dimensions: Array = fixture.get("viewport_size",[1536,520])
-    view.size = Vector2i(int(dimensions[0]),int(dimensions[1]))
+    # The application scales its whole interface once (main.gd
+    # _configure_ui_scaling). Reproduce that: the score keeps its LOGICAL
+    # size and is drawn ui_scale times larger into a physical framebuffer.
+    # Every reported coordinate below is converted to framebuffer pixels.
+    var ui_scale: float = float(fixture.get("ui_scale",1.0))
+    view.size = Vector2i(roundi(float(dimensions[0])*ui_scale),
+        roundi(float(dimensions[1])*ui_scale))
     view.transparent_bg = false
     view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
     root.add_child(view)
     var renderer = load("res://notation/native/view.gd").new()
-    renderer.size = Vector2(view.size)
+    renderer.size = Vector2(float(dimensions[0]),float(dimensions[1]))
+    renderer.scale = Vector2(ui_scale,ui_scale)
     view.add_child(renderer)
     renderer.set_fingering_annotations_enabled(false)
     renderer.set_transport_overlay_enabled(true)
@@ -132,14 +139,15 @@ func _audit() -> void:
     renderer._stream_add_take(0.0,0.0,0.0,"framebuffer-audit")
     var result := {
         "capture_config": config.duplicate(true),
-        "density": renderer.timeline.pixels_per_beat,
+        "density": renderer.timeline.pixels_per_beat*ui_scale,
+        "ui_scale": ui_scale,
         "density_witness": renderer.selected_density_witness.duplicate(true),
-        "staff_gap": renderer.staff_gap(),
-        "width": renderer.size.x,
-        "height": renderer.size.y,
+        "staff_gap": renderer.staff_gap()*ui_scale,
+        "width": float(view.size.x),
+        "height": float(view.size.y),
         "staff_centers": {
-            "right": renderer.layout.staff_center("right"),
-            "left": renderer.layout.staff_center("left")
+            "right": renderer.layout.staff_center("right")*ui_scale,
+            "left": renderer.layout.staff_center("left")*ui_scale
         },
         "unavoidable_rest_overlaps": renderer.layout.unavoidable_rest_overlaps,
         "frames": [],
@@ -284,7 +292,7 @@ func _audit() -> void:
         var heads: Dictionary = {}
         for identifier in renderer.drawn_noteheads:
             var xy: Vector2 = renderer.drawn_noteheads[identifier]
-            heads[str(identifier)] = [xy.x, xy.y]
+            heads[str(identifier)] = [xy.x*ui_scale, xy.y*ui_scale]
         var rests: Array = []
         var camera_x: float = renderer.size.x*.33
         var expected_heads: Dictionary = {}
@@ -297,9 +305,12 @@ func _audit() -> void:
             # Note centers within it are intentionally clipped, never
             # "omitted visible notes". Keep every center beyond the gutter
             # as a strict positive rendering obligation.
-            if expected_x > StreamLifecycle.LEFT_GUTTER_PX+1.0 and \
+            # A head whose own width still reaches into the gutter is
+            # partly cut by the clip, so only a head lying wholly right of it
+            # (whole-note half width .92 space) is a visibility obligation.
+            if expected_x > StreamLifecycle.LEFT_GUTTER_PX+.92*renderer.staff_gap() and \
                     expected_x < renderer.size.x-20.0:
-                expected_heads[str(event.get("id", ""))] = expected_x
+                expected_heads[str(event.get("id", ""))] = expected_x*ui_scale
         for event in renderer.layout.ordered_events:
             if str(event.get("kind","")) != "rest":
                 continue
@@ -307,8 +318,8 @@ func _audit() -> void:
             if x < 0.0 or x > renderer.size.x:
                 continue
             rests.append({
-                "id": event["id"], "x": x,
-                "y": renderer.layout.rest_y(event,renderer.staff_gap()),
+                "id": event["id"], "x": x*ui_scale,
+                "y": renderer.layout.rest_y(event,renderer.staff_gap())*ui_scale,
                 "type": event["note_type"], "dots": event["dots"],
                 "hand": event["staff"],
             })
