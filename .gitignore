@@ -9,8 +9,6 @@ __pycache__/
 htmlcov/
 
 # Personal sessions, diagnostics and generated distributables.
-playtest-results/
-notation-check-results/
 dist/
 build/
 
