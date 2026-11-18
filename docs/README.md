@@ -1,39 +1,30 @@
 # Documentation index
 
-**Only [ROADMAP.md](../ROADMAP.md) defines the current development phases, open blockers, priorities, and exit gates.** Update that file when work changes. Do not create another active plan or handoff document.
+[ROADMAP.md](../ROADMAP.md) records development phases and decisions. The
+learner-facing behaviour is specified in [Practice flow](practice-flow.md);
+where another document disagrees, the practice flow wins.
 
 ## Current technical contracts (reference, not roadmaps)
 
 | Area | Canonical document |
 | --- | --- |
+| Practice flow for one piece (owner decisions) | [Practice flow](practice-flow.md) |
 | Application and ownership | [Architecture](architecture/system.md) |
 | Typed embedded protocol, startup and packaging | [Native runtime](inprocess-runtime.md) |
 | Generator interface, Coda/Fukuda adaptive composition | [Composed MIDI generators](architecture/composed-midi-generators.md) |
-| Real keyboard acceptance procedure | [Physical MIDI checklist](verification/coda-fukuda-physical-midi-checklist.md) |
-| Notation/transcription specification | [MIDI transcription rules](midi-transcription-rules.md) |
 | Fingering data and inference | [Piano fingering](piano-fingering.md) |
 | Teaching behavior and mastery criteria | [Teaching methodology](teaching-methodology.md) |
-| Practice flow for one piece (owner decisions 2026-11-17, to implement) | [Practice flow](practice-flow.md) |
 | Fixed retry contracts, adaptive proposal and evaluation | [Mistake-response policies](mistake-response-policies.md) |
-| Learning variables and evidence gaps | [Learning-measurement implementation audit (2026-11-04)](archive/reports/learning-measurement-audit-2026-11-04.md) |
-| Durable measurement and proposed read-only analytics | [Local learning evidence contract](learning-measurement.md) |
+| Durable measurement and read-only analytics | [Local learning evidence contract](learning-measurement.md) |
 
-## Verified historical or research evidence (not development instructions)
-
-- [Phase 3 Coda MIDI-domain completion](archive/reports/coda-midi-phase3-completion-2026-11-02.md).
-- [Phase 4 Fukuda MIDI-domain implementation](archive/reports/fukuda-midi-phase4-2026-11-02.md).
-- [2026-11-04 architecture/retry development audit](verification/development-audit-2026-11-04.md) records reproduced defects, local checks and open acceptance limits.
-- [2026-11-04 learning measurement verification](verification/learning-measurement-2026-11-04.md) records P0 capture, migration, privacy controls and remaining gates.
-- `archive/reports/` holds dated research, Coda, notation, teaching-phase and verification reports. They are experiments, comparisons or implementation evidence; their time-relative claims must not override ROADMAP or the contracts above.
-- `docs/evidence/` contains captured images, logs, corpus ledgers and provenance.
-- [Archived plans and superseded architecture](archive/development/README.md) preserve old material without an active implementation track.
-- Godot MCP under godot/addons/godot_mcp_toolkit/ is optional editor tooling, excluded from the production runtime and standalone package.
+Older reports, audits, screenshots and plans were removed on 2026-11-18;
+they remain in git history.
 
 ## Rules
 
 1. User input stays MIDI-only. Generated MusicXML is internal notation output.
 2. There is one production runtime: Godot + embedded CPython + typed native IPC.
-3. No old file-import facades, parallel Qt UI, HTTP service, external server, second transport clock, or compatibility backend may be reintroduced.
-4. Every phase status needs its stated test evidence. The latest code is not certified by an earlier green test run.
-5. New findings change `ROADMAP.md` and, when necessary, the matching technical contract; do not add a competing `phase-plan.md`.
-
+3. No old file-import facades, parallel Qt UI, HTTP service, external server,
+   second transport clock, or compatibility backend may be reintroduced.
+4. Godot MCP under godot/addons/godot_mcp_toolkit/ is optional editor tooling,
+   excluded from the production runtime and standalone package.

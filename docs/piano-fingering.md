@@ -105,13 +105,6 @@ Hanon application test finishes at about 181 MB of Godot-managed static memory.
 Frame tests enforce a 512 MiB static-memory budget and a 1,536 MiB RSS watchdog.
 Whole-piece actions have a longer HTTP timeout than quick transport controls.
 
-Final local gate: **240 passed in 121.08 seconds**, followed by Godot script
-validation. Another focused run passed 51 existing learning, import-cache,
-Listen, grading and tempo lifecycle tests. No 24-shard audit was started.
-The [Hanon correction](evidence/piano-fingering-2026-10-25/hanon-corrected.png)
-and [Chopin prediction](evidence/piano-fingering-2026-10-25/chopin-predicted.png)
-screenshots show the real application with model-generated assignments.
-
 Godot MCP was verified against this checkout's `godot/` project, including
 script checks, launching a live game, reading its native score/fingering state,
 and a runtime screenshot. The MCP server must use `<checkout>/godot` as `cwd`
@@ -119,10 +112,3 @@ and `GODOT_MCP_PROJECT_PATH`; using the repository root permits editor commands
 but breaks runtime registry lookup. Keep a graphical editor running for
 playtests; a headless editor supports script checks but cannot launch a game.
 
-Run the focused regressions and fast CI gate locally:
-
-```bash
-LIBGL_ALWAYS_SOFTWARE=1 OPENBLAS_NUM_THREADS=1 xvfb-run -a -s '-screen 0 1600x1000x24' ./scripts/verify-notation.sh --ci
-```
-
-This command never starts the 24-shard corpus audit.

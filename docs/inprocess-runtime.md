@@ -48,8 +48,7 @@ runtime, HTTP service, UDP listener or port binding.
   `ScoreArtifacts` serializes itself (engraving lock, then model lock) and is
   called outside the engine lock; the snapshot needs only the model lock, and
   the tick reads the published layout without locking. Measured on the real
-  bridge: about 170 state reads answered during a 2.4 s cold engraving
-  (`tests/test_native_asset_worker.py`).
+  bridge: about 170 state reads answered during a 2.4 s cold engraving.
 - The Python GIL is held only while invoking Python; the C++ queues
   use condition variables rather than polling threads.
 
@@ -72,7 +71,6 @@ method, URL, socket, network adapter or compatibility route exists.
 - `practice_control_policy.gd` chooses Play/Pause/Retry/Listen commands without view access, while `metronome_frame_coordinator.gd` retains audio-click counters and presents count-in/calibration/retry phases using the same visual transport clock. `main.gd` only invokes these owners with sampled state and callback ports.
 - `command_failure_presenter.gd` publishes failed command messages to injected views. `command_success_policy.gd` classifies accepted replies and `command_success_presenter.gd` publishes view effects. `navigation_policy.gd` decides pause-on-leave and Settings return behavior from explicit screen/transport facts. `command_request_state.gd` owns in-flight command metadata, queued Pause/Stop, deferred library selections, JSON serialization, bounded dispatch timeouts and immediate send-error resets. It accepts an injected request adapter per send, retaining no scene or application reference. `command_success_effects.gd` applies accepted-response effects in their original order via narrowly injected callbacks, without an application-root reference. `main.gd` retains response classification, state acceptance, actual screen navigation and request error presentation.
 - `live_midi_feedback.gd` builds one note-ID lookup at layout publication. It consumes live MIDI events without deep-copying the score layout or scanning every note. Grading stays with the backend.
-- Focused tests: `tests/test_attempt_progression.py`, `tests/test_snapshot_capture_ports.py`, `tests/test_feedback_route.py`, `tests/test_guided_fragment.py`, and `tests/test_coordination_boundaries.py`. The headless Godot tests cover the injected presenters and navigation policy, but none of these establish physical MIDI latency or GPU timing.
 
 ## Hot-path optimization
 
@@ -136,20 +134,5 @@ a portable release or physical Bluetooth latency.
 
 ## Tests and performance
 
-Run `bash scripts/test.sh` and
-`bash scripts/check-godot-syntax.sh`; both are short. The targeted
-native smoke runs on the developer machine at build/start and in the
-bounded GitHub native workflow.
-
-Use the typed in-process `performance.diagnostics` operation for MIDI
-callback and state-projection processing times. The bounded local checks
-`tests/test_inprocess_scheduler.py` and
-`tests/test_prepared_sprite_plans.py` cover poll-independent loop progression
-and immutable authored-ink geometry.
-`tests/test_retained_score_pipeline.py` checks the retained frame contract
-and exercises transform-only movement under headless Godot. Actual visual
-parity, full-score GPU performance, and physical MIDI synchronization still
-require a local runtime run. Compiling Python
-bytecode or adding multiprocessing is not useful without measured
-CPU-bound bottlenecks. The primary optimization is the eliminated
-network/service boundary and the pre-indexed active passage.
+Run `bash scripts/test.sh` (core tests and Godot check). The native
+bridge smoke runs with `bash scripts/verify-native-bridge.sh`.

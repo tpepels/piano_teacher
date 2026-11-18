@@ -146,29 +146,3 @@ hollow (outline and interior are both tinted). There is no ring, badge, circle, 
 particle or second score renderer, and unplayed notes are not touched.
 Projected `drawn_note_instances` carry their `take_key` and strip `clip_x`;
 the rendering path never copies the online queue.
-
-## Regression gates
-
-- `tests/test_note_status_framebuffer.py` renders the production NativeView
-  with real Verovio assets and two copies of the same source admitted
-  through the view's queue, then measures the PNGs: unplayed notation
-  pixel-identical; no changed pixel outside colored heads; exact opaque tint;
-  in-place recolor without a doubled contour (edge-model error); glow ≤ 40/255
-  within 3 px of the head; hollow heads tinted softly inside their own mask; independent colors per copy;
-  exact translation with the strip and no repaint while scrolling; ink only
-  inside its own strip clip, including a head split across two strips;
-  preview shows the original notation.
-- `tests/test_status_palette_framebuffer.py`: all six statuses on real filled
-  and hollow heads (`tests/fixtures/status_palette.musicxml`); set
-  `STATUS_PALETTE_SAMPLE=<png>` to keep the sheet.
-- `tests/godot/native_score_feedback.gd` (CI): precedence, provisional versus
-  settled, release events, transport-transition events, revision buffering,
-  tail retention and pruning, inbox acknowledgement, gaps and overflow.
-- `tests/test_note_reactions.py`: a real engine take's event log consumed by
-  the production app with a stale previous-transport snapshot, exactly once.
-- `tests/test_continuous_note_feedback.py`: continuous publication without
-  UI polling, immediate source-bound release, combined onset/release errors,
-  published grades equal the final assessment, one sequence space.
-- `tests/test_live_input_view.py`, `tests/test_midi_visual_fast_path.py`,
-  `tests/test_feedback.py`: release verdicts use the grader's tolerance,
-  acknowledged retention, and per-dimension projection.

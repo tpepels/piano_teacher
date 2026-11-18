@@ -11,9 +11,7 @@ reported renderer geometry never counts as independent pixel proof.
 ## Subsystem map and public boundaries
 
 The following inventory was checked against the source on 2026-11-04. It maps
-subsystems, not every implementation helper. Test evidence and remaining
-acceptance limits belong to the dated audit in
-[verification](../verification/development-audit-2026-11-04.md).
+subsystems, not every implementation helper.
 
 ```mermaid
 flowchart LR
@@ -61,7 +59,7 @@ flowchart LR
 | Listen/audio | `application/listen_session.py`, `demo.py`, `sample_piano.py`, `godot/demo_player.gd`, metronome coordinators | Source/revision/token capture, render outside engine lock, typed audio bytes and both score/audio readiness gates. | Same active tempo map; stale render/audio acknowledgement cannot start another stage. |
 | Fingering | `fingering/`, `piano-fingering.md`, native fingering components | Offline whole-source prediction, source-keyed corrections and projection; unavailable provider is explicit. | Never changes pitches, source hand, timing, grading or mastery. |
 | UI/navigation | `main.gd`, owned screen/session/coordinator/presenter components, `state_contract.py` / generated `state_contract.gd` | Detached, versioned snapshots in (every key and its JSON kinds declared; static values only in command replies), explicit value intents out; request owner handles busy/cancel/error state. | Screens do not retain/call private Main; stale commands and old-piece rows cannot navigate current music; a snapshot key change fails the contract test and debug validation. |
-| Verification/release | `notation/*pixels*`, `scripts/audits/`, native/corpus drivers, build/package scripts | Independent source obligations and real frames; provenance/resource bounds; native binary/manifest/ABI preflight. | Renderer reports are not pixel proof; bounded software checks are not physical acceptance or clean-machine installation. |
+| Build/release | build/package scripts, `scripts/verify-phase5-architecture.py` | Native binary/manifest/ABI preflight; packaged runtime audit. | Bounded software checks are not physical acceptance or clean-machine installation. |
 
 ### Workflow and time ownership
 
@@ -237,5 +235,4 @@ captures remain independently reusable when only proof code changes.
 
 `bash scripts/test.sh` runs the small core test suite and the Godot parse/UI
 check (see README, Tests). The parse gate checks emitted diagnostics as well as Godot's exit code, with a
-25-second bound; an emitted parse error cannot pass by exiting zero. Dated architecture inventories and superseded refactor plans are preserved
-under `docs/archive/development/`; they are not active plans.
+25-second bound; an emitted parse error cannot pass by exiting zero.

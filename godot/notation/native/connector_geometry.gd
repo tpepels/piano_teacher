@@ -146,7 +146,7 @@ func tie_bow_down(first: Dictionary, last: Dictionary, gap: float) -> bool:
     # Verovio splits a chord's ties by note index, bottom to top in template
     # note order: the lower half bows below, the upper half above, and the
     # middle note of an odd chord opposite its stem (a whole chord's virtual
-    # stem). Checked against Verovio's own ties (test_chord_tie_sides.py).
+    # stem). Matches Verovio's own tie sides.
     var members: Array = score.ordered_chord_members(str(leader.get("id","")))
     var index: int = -1
     for i in range(members.size()):

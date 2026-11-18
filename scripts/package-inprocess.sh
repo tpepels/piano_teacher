@@ -73,10 +73,9 @@ p.write_text(s)
 PY
 # Development smoke fixtures are source-only. The standalone package has
 # one entry scene; test scripts and their imported .uid files are excluded.
-rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot" \
-  "$STAGE/godot/tests"
+rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot"
 rm -f "$STAGE/godot/.mcp.json"
-for fixture in native_bridge_smoke production_ui_smoke production_session_journey ui_layout_smoke; do
+for fixture in native_bridge_smoke production_ui_smoke production_session_journey; do
   rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
 done
 python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package

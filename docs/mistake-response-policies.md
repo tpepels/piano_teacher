@@ -246,8 +246,8 @@ follow-ups; a pilot estimates feasibility/variance, not superiority.
 
 Report both intention-to-treat assignment and descriptive actual exposure,
 dropouts, technical failures, assistance use and practice-time differences.
-USB/Bluetooth timing, GPU cadence and usability require the
-[physical acceptance checklist](verification/coda-fukuda-physical-midi-checklist.md).
+USB/Bluetooth timing, GPU cadence and usability require testing with a
+physical keyboard.
 
 ## Acceptance and extension contract
 A new response must have a stable ID and explanation, valid tempo/focus

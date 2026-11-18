@@ -195,30 +195,3 @@ All source/rest admission is
 through `ScoreStreamQueue.enqueue`; visual CanvasItems are owned by
 `StreamLifecycle` only. Score changes retain still-visible old renderer
 layers and retire those layers chronologically, from the front.
-
-## Verification gates
-
-- `tests/godot/transport_reservation_integration.gd`: native command
-  preflight without side effects, Play/Pause/Resume and future-only binding
-- `tests/godot/countin_cue_timeline.gd`: one audio cue per authored beat
-  across changed phase epochs and delayed snapshots
-- `tests/godot/countin_voice_assets.gd`: actual four Oggs, persistent root
-  audio service, playback and frame-coordinator-to-speaker scheduling
-- `tests/godot/stream_score_queue.gd`: real CanvasItems, offscreen placement,
-  unique owner, safe tail withdrawal, head-only expiry, durable offline replay,
-  source isolation, reload and score teardown
-- `tests/godot/stream_retained_lifecycle.gd`: immutable source/rest projection
-  and compilation, no direct element insertion or source widening
-- `tests/godot/stream_rendered_note_overlap.gd`: READY, Play, Pause, Resume,
-  Retry, cancellation and notehead non-overlap on one moving world axis
-- `tests/godot/seamless_score_runway.gd`: pre-engraved step promotion and
-  oldest-first exit across overlapping renderer layers
-- `tests/test_retained_score_pipeline.py`: structural rejection of
-  superseded methods and duplicate ownership
-- `tests/test_continuous_practice_loop.py`: backend-selected plan ID and
-  absolute graded deadline survive preview and recovery transitions
-- Embedded production UI/real-MIDI scenario and three-score framebuffer CI:
-  verify the real Godot 4.7.2 and Python bridge execution path
-
-These tests must be updated to preserve the architecture, not weakened to
-permit direct insertion, coordinate mutation or separate legacy rendering.

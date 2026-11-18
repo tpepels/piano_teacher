@@ -22,5 +22,4 @@ remains a fallback only when speech is disabled or an asset cannot be loaded.
 
 For maintainers only: `python3 scripts/fetch_countin_voices.py --verify`
 checks the shipped assets; running without `--verify` reacquires missing
-originals from Wikimedia with HTTP 429 backoff. Releasing without all four
-assets is rejected by `tests/godot/countin_voice_assets.gd`.
+originals from Wikimedia with HTTP 429 backoff.

@@ -3,14 +3,10 @@
 **Status: approved P0 implementation contract (2026-11-04).** This document
 defines the complete P0 measurement phase and subsequent read-only analytics.
 Implementation and verification status are tracked in ROADMAP. Only
-[ROADMAP](../ROADMAP.md) defines development phases. The
-[source audit](archive/reports/learning-measurement-audit-2026-11-04.md) records today's gaps.
+[ROADMAP](../ROADMAP.md) defines development phases.
 
-P0 uses `application/learning_capture.py` and `learning_ledger.py`;
-[verification and remaining gates](verification/learning-measurement-2026-11-04.md)
-record actual coverage. The bounded P1 query/report and Settings view are
-implemented; the [2026-11-13 Task 5 receipt](learning-statistics-p1-2026-11-13.md)
-records software evidence and the remaining physical/release/human gates.
+P0 uses `application/learning_capture.py` and `learning_ledger.py`. The
+bounded P1 query/report and Settings view are implemented.
 
 ## Decisions and scope
 

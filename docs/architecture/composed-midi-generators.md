@@ -55,8 +55,3 @@ Passing generation contracts does not prove that the live Godot score is
 visible at READY, that real audio/MIDI timing is aligned, or that combining
 the algorithms teaches better. See [the only active roadmap](../../ROADMAP.md)
 for the required native/physical/learner-study gates.
-
-Historical implementation and differential evidence:
-[original Coda Phase 3](../archive/reports/coda-midi-phase3-completion-2026-11-02.md),
-[Fukuda MIDI Phase 4](../archive/reports/fukuda-midi-phase4-2026-11-02.md), and
-[physical MIDI verification](../verification/coda-fukuda-physical-midi-checklist.md).

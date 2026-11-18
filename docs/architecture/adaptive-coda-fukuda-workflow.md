@@ -49,17 +49,6 @@ stage performances, and retains a full original-piece performance finale.
 The `coda-fukuda-midi` product route selects measured source-note reductions
 and error-specific Coda transformations from its immutable research catalog.
 
-## Verification
-
-Bounded CI: [complete combined lesson verification](https://github.com/tpepels/piano_teacher/actions/workflows/composed-midi-lessons.yml)
-runs the adaptive journey, the established Coda/Fukuda integration
-contracts and all 17 real full MIDI pieces. Source-identity coverage,
-repertoire, timing stages, error-specific selection, score rendering,
-Listen/grading and durable feedback are asserted separately.
-
-Native Godot 4.7.2 Settings/lesson smoke checks:
-[Godot startup workflow](https://github.com/tpepels/piano_teacher/actions/workflows/godot-startup-check.yml).
-
 ## Acceptance limits
 
 Software tests and headless GUI checks cannot certify real physical
@@ -72,14 +61,6 @@ implements the MIDI-domain score-reduction adaptation.
 Pedagogical superiority of adaptive Coda+Fukuda over other lesson plans
 requires controlled learner evaluation. No synthetic tests count as
 evidence of improved teaching outcomes.
-
-## Physical acceptance script
-
-Use the [real MIDI keyboard checklist](../verification/coda-fukuda-physical-midi-checklist.md)
-to record a complete on-device run, including repeated mistakes, clean
-corrections, stage/BPM restoration, grading and full-score mastery.
-Software CI alone cannot provide this evidence.
-
 
 ## Progressive consolidation and accepted-result handoff (2026-11-02)
 
@@ -108,7 +89,6 @@ an unnecessary engraving handoff.
 The local suite verifies software contracts. The existing physical MIDI
 checklist remains required for actual keyboard timing, GUI transitions
 and count-in/retry experience.
-
 
 ## Source-local Fukuda assignment
 
@@ -143,14 +123,6 @@ from the effective playback BPM (e.g., selected 20, Coda x2 → 10).
 The native READY camera may preview the first distant attack of a sparse
 stage while stopped. The preview is a retained-ink translation only; starting
 Play uses the original clock, source note ID and grading timeline.
-
-The short local suite includes `tests/test_midi_stage_wiring.py` and the
-headless `tests/godot/idle_note_preview.gd` projection. To compare an actual
-MIDI import against the legacy and both Coda policies, run:
-
-```bash
-.venv/bin/python scripts/inspect-lesson-wiring.py "/path/to/piece.midi"
-```
 
 No retrospective claim of pedagogical superiority is implied. Passing
 software tests do not certify physical MIDI latency or graphical fidelity

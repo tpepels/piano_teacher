@@ -29,4 +29,3 @@ should emit authentic Verovio-derived fragments for dynamics, pedals and
 articulations in native mode and expand the source-identity mapping for
 continuations.
 
-Regression suite: `tests/test_source_expression_projection.py`.

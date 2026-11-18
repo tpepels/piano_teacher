@@ -114,33 +114,3 @@ there is no legacy camera fallback.
 11. **Every cue on its beat** (R1 M4): a count-in cue first observed more
     than `CountInCueTimeline.LATE_CUE_BEATS` after its beat (Resume landing
     mid-beat) is consumed silently instead of spoken late.
-
-## Required regression gates
-
-- `tests/godot/transport_reservation_integration.gd`: actual native queue
-  and rendering path, preflight purity, Play, Pause, Resume, first visible
-  measure conservation, future deadline and invalid request.
-- `tests/godot/stream_rendered_note_overlap.gd`: no overlap, exact source
-  windows, rollback, long exercise tail withdrawal and stale READY handling.
-- `tests/godot/score_stream_admission.gd`: offscreen edge and entry latency.
-- `tests/godot/countin_cue_timeline.gd`: unique epoch/tick emission,
-  duplicate/stale snapshots, Pause/Resume and independent automatic retries.
-- `tests/godot/countin_voice_assets.gd`: original bundled Oggs, direct
-  decoding, root-owned service surviving countdown UI replacement, and
-  actual frame-coordinator-to-voice event path.
-- `tests/test_phase1_transport.py`: backend-sampled monotonic timing and
-  source meter, without coupling to names of removed UI tick counters.
-- `tests/test_note_reactions.py`: feedback events of a new transport reach
-  the production ledger exactly once while the UI snapshot still names the
-  previous transport.
-- `godot/production_ui_smoke.gd`: actual Godot scene and embedded Python
-  Play/Pause/Resume with immutable notation and audible cue scheduling.
-- `tests/test_continuation_deadline.py` and `tests/godot/continuation_plan.gd`:
-  one announced deadline per continuation, identity binding, count-in bar.
-- `tests/test_readiness_continuations.py`: the real app through
-  `tests/readiness/run_sweep.sh` (repeat, Retry, tempo-step repeats); every
-  graded take has its bound strip at the graded beat and one count-in.
-
-All new presentation or transport changes must pass these gates on Godot
-4.7.2 before being considered integrated. No heuristic rewind, silent
-failure, optional download, or compatibility path may bypass them.

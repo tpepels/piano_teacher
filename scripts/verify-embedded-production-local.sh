@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local equivalent of inprocess-native-smoke.yml, including its package audit.
+# Local build, native bridge smoke and package audit of the embedded runtime.
 # Run from any directory. All lesson settings and imported MIDI fixtures are
 # isolated under a temporary HOME; real learner progress is never modified.
 set -Eeuo pipefail

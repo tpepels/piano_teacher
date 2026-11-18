@@ -1,9 +1,8 @@
-"""Atomic preference publication; the one strategy never swaps the course.
-
-Only the default adaptive Coda + Fukuda strategy is selectable, so a
-rejected strategy or a failed settings write must leave everything intact.
-"""
+"""Atomic preference publication: a rejected strategy or a failed settings
+write leaves the course and the saved settings intact."""
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
@@ -109,12 +108,12 @@ def test_failed_settings_write_keeps_active_session(tmp_path, monkeypatch):
 
 
 def test_reselecting_the_default_strategy_keeps_the_running_course(tmp_path):
-    """The picker's one option never rebuilds or interrupts the course."""
-    from scripts.smoke_phase0 import make_fixture
+    """Choosing the strategy that is already active never rebuilds or
+    interrupts the course."""
     from piano_teacher.music import load_midi
 
-    source = tmp_path / "actual.mid"
-    make_fixture(source)
+    source = (Path(__file__).resolve().parents[1] / "midi"
+              / "J_S_Bach_-_Invention_No_1_(BWV_772).midi")
     engine = PracticeEngine(tmp_path / "app", enable_midi=False)
     try:
         engine.plan = LearningPlan(
