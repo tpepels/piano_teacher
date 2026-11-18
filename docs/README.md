@@ -9,6 +9,7 @@ where another document disagrees, the practice flow wins.
 | Area | Canonical document |
 | --- | --- |
 | Practice flow for one piece (owner decisions) | [Practice flow](practice-flow.md) |
+| Practice state machine and timeline (plan, steps 1-3) | [Practice state machine](architecture/practice-state-machine.md) |
 | Application and ownership | [Architecture](architecture/system.md) |
 | Typed embedded protocol, startup and packaging | [Native runtime](inprocess-runtime.md) |
 | Generator interface, Coda/Fukuda adaptive composition | [Composed MIDI generators](architecture/composed-midi-generators.md) |

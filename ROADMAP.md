@@ -52,15 +52,19 @@ failing.
 
 ## Open work
 
-1. Owner test of the practice flow at the piano; fix what deviates.
-2. Remaining practice-flow items (see docs/practice-flow.md, "Not built
+1. Practice state machine and timeline, steps 1-3
+   ([plan](docs/architecture/practice-state-machine.md)): one explicit
+   lesson and take state, timeline segments published by the engine, Godot
+   draws only those segments.
+2. Owner test of the practice flow at the piano; fix what deviates.
+3. Remaining practice-flow items (see docs/practice-flow.md, "Not built
    yet"): the Coda/Fukuda aid, skipping a short pickup rest inside the first
    bar, a red ghost note for a wrong key, notes lighting up during Listen,
    the other hand dimmed instead of hidden, dimmed neighbour bars.
-3. Regression tests for the practice-flow behaviour the owner confirms.
-4. Physical checks that software cannot certify: MIDI latency over USB and
+4. Regression tests for the practice-flow behaviour the owner confirms.
+5. Physical checks that software cannot certify: MIDI latency over USB and
    Bluetooth, reconnect, audio/visual drift under load.
-5. Clean-machine release package.
+6. Clean-machine release package.
 
 ## Commands
 
