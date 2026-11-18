@@ -3261,11 +3261,17 @@ class PracticeEngine:
                 duration = max(0.25,
                     self.display_phrase().end-self.display_phrase().start)
                 count_in = self._next_count_in_beats()
-                self._guided_stream_deadline = SCHEDULER.guided(
-                    now=now,previous_deadline=self._guided_stream_deadline,
-                    duration_beats=duration,count_in_beats=count_in,
-                    horizon_beats=self._continuous_horizon_beats,
-                    bpm=self.plan.bpm)
+                # While the learner is asked for a note (guided_wait) the
+                # staff holds the target on the playhead, so the passage never
+                # "passes": keep its one admitted copy instead of
+                # republishing it and scrolling it away.
+                if not (str(state.get("phase", "")) == "guided_wait"
+                        and self._guided_stream_deadline is not None):
+                    self._guided_stream_deadline = SCHEDULER.guided(
+                        now=now,previous_deadline=self._guided_stream_deadline,
+                        duration_beats=duration,count_in_beats=count_in,
+                        horizon_beats=self._continuous_horizon_beats,
+                        bpm=self.plan.bpm)
                 next_floor = 0.0
                 next_deadline = self._guided_stream_deadline*1000.0
                 next_transport = self.transport_id
