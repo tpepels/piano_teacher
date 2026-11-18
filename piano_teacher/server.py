@@ -182,6 +182,9 @@ class PracticeEngine:
         self._automatic_remedial_review = False
         self.review_session_complete = False
         self.course_guided = False
+        # Practice flow (docs/practice-flow.md): the stage whose Listen step
+        # has been played, so Free follows it instead of repeating it.
+        self._flow_listened: str | None = None
         self._guided_prepared = False
         self.transport_id = 0
         self.mode = "practice"
@@ -859,6 +862,8 @@ class PracticeEngine:
                     self._pending_assessed_bpm = None
                     self.feedback_marks = []
                     self.feedback_unmapped = 0
+                    if self._flow_active():
+                        self._flow_open()
             if diagnostics:
                 print("SCORE_LOAD_STAGE: ready", round((time.perf_counter()-began)*1000, 1),
                       "ms total", source.name, flush=True)
@@ -1064,6 +1069,40 @@ class PracticeEngine:
         else:
             self._prepare_practice(exposure=selected)
 
+    # -- practice flow (docs/practice-flow.md) ---------------------------------
+    def _flow_active(self) -> bool:
+        return (self.plan is not None and not self.is_builtin_warmup
+                and self.plan.lesson_definition.generator_name == "practice-flow")
+
+    def _flow_start_bpm(self) -> int:
+        return max(SETTINGS.minimum_bpm, round(self.plan.target_bpm * .5))
+
+    def _flow_set_bpm(self, bpm: int) -> None:
+        bpm = int(max(SETTINGS.minimum_bpm, min(self.plan.target_bpm, bpm)))
+        if self.plan.bpm != bpm:
+            self.plan.set_bpm(bpm)
+
+    def _flow_open(self) -> None:
+        """Open: the current phrase/hand starts by itself (1, 5)."""
+        self.course_guided = True
+        self.auto = True
+        first = self.plan.lesson_steps[0].key == self.plan.identity
+        # A fresh piece starts with Listen; a resumed one warms up in Free.
+        self._flow_listened = None if first else self.plan.identity
+        if self.plan.exercise.kind == "perform":
+            self._flow_set_bpm(self._flow_start_bpm())
+            self._prepare_perform()
+        else:
+            self._begin_learn(from_beat=0.0)
+
+    def _flow_listen(self) -> None:
+        """2a: play the passage once at the target tempo, then Free."""
+        self._flow_listened = self.plan.identity
+        self._flow_set_bpm(self.plan.target_bpm)
+        self._prepare_listen()
+        self.feedback = "Listen"
+        self.next_action = "Listen to the passage and follow the notes."
+
     def _begin_course_stage(self, *, bump_revision: bool = True, explicit_learn: bool = False):
         effect = self._manual_effect("learn" if explicit_learn else "course_stage")
         selected = self._install_command(effect)
@@ -1157,6 +1196,11 @@ class PracticeEngine:
                      remediation: RemedialAssignment | None = None, exposure=None):
         if self.plan is None:
             raise ValueError("Open a piece first")
+        if (self._flow_active() and not recovery and remediation is None
+                and self._flow_listened != self.plan.identity):
+            # Every new phrase/link and hand starts with Listen (2a).
+            self._flow_listen()
+            return
         selected = exposure or self._install_command(self._manual_effect("learn",from_beat=from_beat))
         start,end = selected.from_beat,selected.end_beat
         if end is None:
@@ -1211,6 +1255,15 @@ class PracticeEngine:
             raise ValueError("Open a piece first")
         effect = None if exposure is not None else self._manual_effect("practice")
         selected = exposure or self._install_command(effect)
+        if self._flow_active():
+            # The settled guided decision selected this timed exposure; the
+            # score acknowledgement starts what is prepared, not Free again.
+            self.session_commands.prepared = selected
+        if self._flow_active() and self.mode == "learn" and self.plan.exercise.kind != "perform":
+            # 2b -> 2c: Tempo starts at half the target tempo.
+            self._flow_set_bpm(self._flow_start_bpm())
+            return_context = None
+            self._guided_return = None
         return_context = self._guided_return
         retry_range = self.retry_range
         self._stop(reason="reintegration", preserve_episode=return_context is not None)
@@ -2819,6 +2872,13 @@ class PracticeEngine:
                 self.feedback = "Example complete"
                 self.next_action = (
                     "Choose Learn to find the notes, or Practice to play the rhythm.")
+                if self._flow_active():
+                    # 2a -> 2b: Free starts by itself after Listen.
+                    self._flow_listened = self.plan.identity
+                    self.course_guided = True
+                    self._begin_learn(from_beat=0.0)
+                    self.feedback = "Now without tempo"
+                    self.next_action = "Play the notes in order, at your own pace."
         elif decision.action == "preview_due":
             deadline = self.visual_transport.next_at
             self.visual_transport.visual_offset_beats += self._source_model()[

@@ -118,9 +118,29 @@ class PracticeFlowLessonGenerator:
     name: str = "practice-flow"
 
     def decide_teaching(self, event, state):
-        from .teaching_decisions import decide_standard_teaching
-        return decide_standard_teaching(event, state, generator=self,
-                                        allow_heuristic_remediation=False)
+        from dataclasses import replace
+        from .teaching_decisions import TeachingExposure, decide_standard_teaching
+        decision = decide_standard_teaching(event, state, generator=self,
+                                            allow_heuristic_remediation=False)
+        course = state.course
+        if event.kind == "guided_completed" and event.completed:
+            # 2b -> 2c: every note found in order, Tempo starts by itself.
+            exposure = TeachingExposure(
+                course.key, course.hand, 0.0, None, decision.progress_after.bpm,
+                "practice", False, True, False, "count_in")
+            return replace(decision, next_exposure=exposure, continuation="continue")
+        exposure = decision.next_exposure
+        if (exposure is not None and exposure.mode != "learn"
+                and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
+                and ":flow:final:" not in exposure.stage_key):
+            # A new hand, phrase or link starts at Listen -> Free, never
+            # directly in tempo. The engine plays Listen before Free.
+            exposure = replace(exposure, from_beat=0.0, end_beat=None,
+                               mode="learn", assisted=True, automatic=True,
+                               require_full_verification=True,
+                               preparation="count_in")
+            return replace(decision, next_exposure=exposure, continuation="guided")
+        return decision
 
     def generate(self, piece: Piece):
         from .lesson_generators import LessonPlanDefinition

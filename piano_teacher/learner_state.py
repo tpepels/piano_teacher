@@ -17,6 +17,9 @@ from .sqlite_transaction import sqlite_atomic
 from .measure_grid import phrase_grid, two_bar_chunks
 
 
+WHOLE_GUIDED_UNIT_BARS = 8
+
+
 def guided_units(variant: ExerciseVariant, boundaries: tuple[float, ...] = ()) -> tuple[dict, ...]:
     """Source-grid ideas with attacks; timed Practice retains all silent bars."""
     phrase = variant.phrase
@@ -24,7 +27,11 @@ def guided_units(variant: ExerciseVariant, boundaries: tuple[float, ...] = ()) -
     if len(variant.notes) != len(variant.source_indices):
         raise ValueError("Each active note needs its source index")
     units = []
-    for start, end in two_bar_chunks(grid):
+    # Practice flow (docs/practice-flow.md): Free covers the whole phrase or
+    # link, not 2-bar pieces of it. Only very long passages are still split.
+    chunks = ([(grid[0], grid[-1])] if len(grid)-1 <= WHOLE_GUIDED_UNIT_BARS
+              else two_bar_chunks(grid))
+    for start, end in chunks:
         indices = [index for note, index in zip(variant.notes, variant.source_indices)
                    if start-1e-7 <= note.start-phrase.start < end-1e-7]
         if not indices:
