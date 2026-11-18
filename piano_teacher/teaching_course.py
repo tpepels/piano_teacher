@@ -223,10 +223,57 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
         stage_tempos=tuple(sorted(tempos.items())), transferable_tempos=tuple(sorted(transferable)))
 
 
+FLOW_BACK_TO_FREE = "Back to Free"
+
+
+def flow_tempo_bounds(course):
+    """Practice flow: 50% of the target tempo, steps of 10% of the target."""
+    target = course.progress.target_bpm
+    floor = max(SETTINGS.minimum_bpm, round(target * .5))
+    return floor, max(1, round(target * .1))
+
+
+def flow_assessed_progress(course, *, accepted):
+    """docs/practice-flow.md 2c: +10% when clean, -10% after 2 failures in a
+    row (floor 50%), back to Free after 2 failures at 50%, done after 2 clean
+    takes in a row at the target tempo."""
+    p = course.progress
+    floor, step = flow_tempo_bounds(course)
+    if not accepted:
+        failures = p.failures + 1
+        if failures < 2:
+            return course.with_progress(streak=0, failures=failures), "Again at the same tempo"
+        if p.bpm > floor:
+            bpm = max(floor, p.bpm - step)
+            return course.with_progress(bpm=bpm, streak=0, failures=0), f"Slower: {bpm} BPM"
+        return course.with_progress(streak=0, failures=0), FLOW_BACK_TO_FREE
+    if p.bpm < p.target_bpm:
+        bpm = min(p.target_bpm, p.bpm + step)
+        return course.with_progress(bpm=bpm, streak=0, failures=0), f"Faster: {bpm} BPM"
+    course = course.with_progress(failures=0, streak=p.streak + 1)
+    if course.progress.streak < 2:
+        return course, "Clean at full tempo 1/2"
+    previous = course.key
+    mastered = dict(p.mastered)
+    mastered[previous] = p.target_bpm
+    course = course.with_progress(streak=0, mastered=tuple(sorted(mastered.items())))
+    i, h, _ = p.cursor
+    if h + 1 < len(course.hands):
+        course = course.with_progress(cursor=(i, h + 1, 0))
+    elif i + 1 < len(course.definition.exercises):
+        course = select_cursor(course, (i + 1, 0, 0))
+    else:
+        return course, "Piece mastered"
+    return course.with_progress(bpm=floor, failures=0, streak=0), "Well done"
+
+
 def assessed_progress(course, *, correct, total, extras=0, accepted=None, selected_bpm=None):
     p = course.progress
     if total <= 0:
         return course, "No notes to assess"
+    if course.definition.generator_name == "practice-flow":
+        accepted = correct == total and extras == 0 if accepted is None else accepted
+        return flow_assessed_progress(course, accepted=accepted)
     accepted = correct == total and extras == 0 if accepted is None else accepted
     if not accepted:
         return course.with_progress(streak=0, failures=p.failures+1), f"Repeat - {correct}/{total} correct, {extras} extra"

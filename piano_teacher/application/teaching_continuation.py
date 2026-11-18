@@ -59,6 +59,10 @@ class TeachingContinuation:
         exposure = decision.next_exposure
         if exposure is None or exposure.stage_key == pending.state.binding.stage_key:
             return None
+        if pending.state.definition.generator_name == "practice-flow":
+            # Practice flow: a new step opens with its own Listen/Free or a
+            # fresh count-in and engraves its own score; nothing to prebuild.
+            return None
         course = replace(pending.state.course,definition=decision.definition_after,progress=decision.progress_after)
         number = next(i+1 for i, step in enumerate(steps(course)) if step[3] == course.key)
         return ScoreSelection(piece=course.piece,phrase=course.stage.variant.phrase,hand=course.hand,

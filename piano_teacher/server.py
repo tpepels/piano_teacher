@@ -1080,7 +1080,7 @@ class PracticeEngine:
     def _flow_set_bpm(self, bpm: int) -> None:
         bpm = int(max(SETTINGS.minimum_bpm, min(self.plan.target_bpm, bpm)))
         if self.plan.bpm != bpm:
-            self.plan.set_bpm(bpm)
+            self.plan.set_practice_bpm(bpm)
 
     def _flow_open(self) -> None:
         """Open: the current phrase/hand starts by itself (1, 5)."""
@@ -1090,8 +1090,9 @@ class PracticeEngine:
         # A fresh piece starts with Listen; a resumed one warms up in Free.
         self._flow_listened = None if first else self.plan.identity
         if self.plan.exercise.kind == "perform":
+            # Final test: directly in tempo from 50% (4).
             self._flow_set_bpm(self._flow_start_bpm())
-            self._prepare_perform()
+            self._prepare_practice()
         else:
             self._begin_learn(from_beat=0.0)
 
@@ -1234,7 +1235,8 @@ class PracticeEngine:
             recovery=recovery)
         self.measurement.begin(self._learning_context(scope="guided", start=start, end=end))
         self.awaiting_score_revision = self.score_revision
-        self.feedback = "Preparing a short idea to learn"
+        self.feedback = ("Now without tempo" if self._flow_active()
+                         else "Preparing a short idea to learn")
         self.next_action = (f"Learn the selected {remediation.focus} notes, then retry the original."
                             if remediation is not None else
                             f"Learn bars {fragment.phrase.first_bar}-{fragment.phrase.last_bar} "
@@ -2833,8 +2835,9 @@ class PracticeEngine:
             self.feedback = "Could not save the recording checkpoint"
             self.next_action = "Check storage, then Resume to retry this boundary."
             raise
-        if not resolve_mistake_policy(
+        if self._flow_active() or not resolve_mistake_policy(
                 self.library.settings["mistake_response_strategy"]).interrupt_rolling:
+            # Practice flow: a take always plays to its end (no mid-take rewind).
             return None
         tempo_map = self._active_tempo_map()
         return self.assessment_policies.select(tempo_map).recover(

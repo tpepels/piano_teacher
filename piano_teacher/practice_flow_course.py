@@ -116,6 +116,8 @@ def original_stage(exercise: Exercise, hand: str) -> ExerciseStage:
 class PracticeFlowLessonGenerator:
     """Real notes only, in the owner's phrase / hand / link order."""
     name: str = "practice-flow"
+    # Tempo/timing rules of docs/practice-flow.md (teaching_decisions).
+    flow_rules: bool = True
 
     def decide_teaching(self, event, state):
         from dataclasses import replace
@@ -130,6 +132,19 @@ class PracticeFlowLessonGenerator:
                 "practice", False, True, False, "count_in")
             return replace(decision, next_exposure=exposure, continuation="continue")
         exposure = decision.next_exposure
+        if exposure is not None and exposure.mode == "perform":
+            # 4: the final test follows the same Tempo rules (50% -> target,
+            # 2 clean), so it runs as timed practice, not as a review.
+            exposure = replace(exposure, mode="practice")
+            decision = replace(decision, next_exposure=exposure)
+        from .teaching_course import FLOW_BACK_TO_FREE
+        if decision.message == FLOW_BACK_TO_FREE and exposure is not None:
+            # 2c: still failing at 50% -> play it without tempo again (2b).
+            exposure = replace(exposure, from_beat=0.0, end_beat=None,
+                               mode="learn", assisted=True, automatic=True,
+                               require_full_verification=True,
+                               preparation="count_in")
+            return replace(decision, next_exposure=exposure, continuation="guided")
         if (exposure is not None and exposure.mode != "learn"
                 and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
                 and ":flow:final:" not in exposure.stage_key):

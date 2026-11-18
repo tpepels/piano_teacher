@@ -176,7 +176,9 @@ def decide_standard_teaching(event, state, *, generator=None,
     eligible = (event.kind == "full_result" and route.mode == "practice"
         and not route.preview_only and not route.assistance_used and route.from_beat == 0
         and route.review_end_beat is None and bool(result and result.notes))
-    invalidate = eligible and not result.passed
+    flow = bool(getattr(generator, "flow_rules", False))
+    passed = bool(result and (result.flow_passed if flow else result.passed))
+    invalidate = eligible and not passed
     phrase = c.stage.variant.phrase
     grid = tuple(phrase_grid(phrase, c.piece.bar_boundaries))
     manual_exposure = None
@@ -198,7 +200,7 @@ def decide_standard_teaching(event, state, *, generator=None,
             continuation = "guided" if response.guided else "pause" if response.action == "pause" else "repair"
     elif event.kind in ("full_result", "focused_result"):
         full_retry = (event.kind == "full_result" and route.automatic and not result.passed
-                      and not route.warmup)
+                      and not route.warmup and not flow)
         focused_retry = (event.kind == "focused_result" and route.automatic
             and route.scope in ("section_review", "partial_recovery")
             and state.policy.whole_handler is not None and route.parent_decision_id is not None)
@@ -210,7 +212,7 @@ def decide_standard_teaching(event, state, *, generator=None,
                 response = source_safe_response(response, phrase=phrase, hand=c.hand, grid=grid)
         if eligible:
             chosen, message = assessed_progress(c, correct=result.correct, total=len(result.notes),
-                                                extras=result.extra_notes, accepted=result.passed)
+                                                extras=result.extra_notes, accepted=passed)
         if response is not None:
             chosen = chosen.with_progress(bpm=response.bpm)
         if (eligible and not result.passed and route.automatic and not route.warmup
@@ -343,19 +345,24 @@ def validate_teaching_decision(decision, *, event, state):
     if preserve_mastered(state.course, decision.definition_after) != decision.definition_after:
         raise ValueError("Teaching decision changed a mastered definition")
     earned = set(dict(p.mastered)) - set(dict(state.progress.mastered))
+    # Practice flow (docs/practice-flow.md): timing fails only when clearly
+    # off, and two clean takes in a row at the target tempo finish a step.
+    flow = state.definition.generator_name == "practice-flow"
+    passed = event.assessment is not None and (
+        event.assessment.flow_passed if flow else event.assessment.passed)
     eligible = (event.kind == "full_result" and state.route.mode == "practice"
         and not state.route.preview_only and not state.route.assistance_used
         and state.route.from_beat == 0 and state.route.review_end_beat is None
-        and event.assessment is not None and bool(event.assessment.notes) and event.assessment.passed
+        and event.assessment is not None and bool(event.assessment.notes) and passed
         and state.route.performed_bpm >= state.progress.target_bpm
-        and state.progress.streak+1 >= SETTINGS.clean_runs_to_master)
+        and state.progress.streak+1 >= (2 if flow else SETTINGS.clean_runs_to_master))
     if earned and (not eligible or earned != {state.course.key}):
         raise ValueError("Unearned teaching mastery")
     full_target = (event.kind == "full_result" and state.route.mode == "practice"
         and not state.route.preview_only and not state.route.assistance_used
         and state.route.from_beat == 0 and state.route.review_end_beat is None
         and event.assessment is not None and bool(event.assessment.notes))
-    if decision.invalidate_failed_streak != bool(full_target and not event.assessment.passed):
+    if decision.invalidate_failed_streak != bool(full_target and not passed):
         raise ValueError("Invalid failed-streak checkpoint")
     if not full_target and (p.streak > state.progress.streak or earned or decision.invalidate_failed_streak):
         raise ValueError("Partial teaching event cannot earn full-target credit")

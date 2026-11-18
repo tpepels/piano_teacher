@@ -119,6 +119,23 @@ class Assessment:
         return self.yellow_attacks * 2 < self.total_attacks
 
     @property
+    def flow_passed(self) -> bool:
+        """Practice flow: wrong, missed and extra notes fail; timing only
+        fails when clearly off (more than a 16th and at least 150 ms)."""
+        if not self.notes or self.extra_notes:
+            return False
+        for entry in self.notes:
+            if entry.status in ("missed", "wrong"):
+                return False
+            observation = entry.observation
+            if observation is None or observation.onset_residual is None:
+                continue
+            allowed = max(.25 * observation.local_seconds_per_beat, .15)
+            if abs(observation.onset_residual) > allowed:
+                return False
+        return True
+
+    @property
     def summary(self) -> str:
         if self.clean:
             return f"Clean · {self.correct}/{len(self.notes)} notes"

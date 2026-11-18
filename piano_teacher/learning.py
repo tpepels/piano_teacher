@@ -372,6 +372,11 @@ class LearningPlan:
     def set_hand(self, hand: str) -> None:
         self._install_course(course_policy.manual_progress(self.course_state(), "hand", hand=hand))
 
+    def set_practice_bpm(self, bpm: int) -> None:
+        """Practice flow: change the practice tempo, keep the target tempo."""
+        course = self.course_state()
+        self._install_course(course.with_progress(bpm=bpm, streak=0, failures=0))
+
     def set_bpm(self, bpm: int) -> None:
         self._install_course(course_policy.manual_progress(self.course_state(), "tempo", bpm=bpm))
 
