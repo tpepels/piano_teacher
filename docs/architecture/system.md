@@ -235,10 +235,7 @@ captures remain independently reusable when only proof code changes.
 
 ## Validation policy
 
-`scripts/ci-smoke.sh` is the bounded automatic architecture/parse gate. The
-explicit `scripts/verify-notation.sh --ci` runs broader real-frame, corruption,
-progression and interruption regressions. The full 24-shard audit is a separate
-operation; a refactor's green smoke gate does not certify the entire corpus.
-The parse gate checks emitted diagnostics as well as Godot's exit code, with a
+`bash scripts/test.sh` runs the small core test suite and the Godot parse/UI
+check (see README, Tests). The parse gate checks emitted diagnostics as well as Godot's exit code, with a
 25-second bound; an emitted parse error cannot pass by exiting zero. Dated architecture inventories and superseded refactor plans are preserved
 under `docs/archive/development/`; they are not active plans.

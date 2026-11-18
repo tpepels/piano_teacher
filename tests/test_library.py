@@ -114,13 +114,13 @@ def test_obsolete_musicxml_recent_is_not_restored(tmp_path):
         'Bach.mid', 'Etudes/Chopin.midi']
 
 
-def test_only_the_default_coda_fukuda_strategy_is_offered(tmp_path):
+def test_practice_flow_is_the_default_strategy(tmp_path):
     library = ScoreLibrary(config_dir=tmp_path / "fresh")
-    assert library.settings["exercise_strategy"] == "coda-fukuda-midi"
+    assert library.settings["exercise_strategy"] == "practice-flow"
     public = library.public_settings()
-    assert public["exercise_strategy"] == "coda-fukuda-midi"
+    assert public["exercise_strategy"] == "practice-flow"
     assert [x["id"] for x in public["available_exercise_strategies"]] == [
-        "coda-fukuda-midi"]
+        "practice-flow", "coda-fukuda-midi"]
     assert "available_timing_strategies" not in public
     assert "available_tempo_strategies" not in public
     assert "timing_strategy" not in public and "tempo_strategy" not in public
@@ -134,7 +134,7 @@ def test_only_the_default_coda_fukuda_strategy_is_offered(tmp_path):
     with pytest.raises(ValueError, match="Unknown preference"):
         library.update(tempo_strategy="two-phase-tempo")
     assert ScoreLibrary(config_dir=tmp_path / "fresh").settings[
-        "exercise_strategy"] == "coda-fukuda-midi"
+        "exercise_strategy"] == "practice-flow"
 
 
 @pytest.mark.parametrize("saved", (
@@ -149,12 +149,12 @@ def test_saved_removed_strategy_and_retired_axes_migrate_on_disk(tmp_path, saved
     config.mkdir(parents=True)
     library.settings_path.write_text(json.dumps(stored))
     restored = ScoreLibrary(config_dir=config)
-    assert restored.settings["exercise_strategy"] == "coda-fukuda-midi"
+    assert restored.settings["exercise_strategy"] == "practice-flow"
     assert "timing_strategy" not in restored.settings
     assert "tempo_strategy" not in restored.settings
     # The migration is data, persisted once; unrelated values survive.
     on_disk = json.loads(library.settings_path.read_text())
-    assert on_disk["exercise_strategy"] == "coda-fukuda-midi"
+    assert on_disk["exercise_strategy"] == "practice-flow"
     assert "timing_strategy" not in on_disk and "tempo_strategy" not in on_disk
     assert on_disk["music_dir"] == stored["music_dir"]
 
@@ -176,5 +176,5 @@ def test_removed_strategy_is_not_selectable_and_saved_value_migrates(tmp_path):
     stored = dict(library.settings, exercise_strategy="legacy")
     library.settings_path.write_text(json.dumps(stored))
     restored = ScoreLibrary(config_dir=tmp_path)
-    assert restored.settings["exercise_strategy"] == "coda-fukuda-midi"
+    assert restored.settings["exercise_strategy"] == "practice-flow"
     assert "legacy" not in {x["id"] for x in restored.public_settings()["available_exercise_strategies"]}

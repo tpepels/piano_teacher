@@ -101,15 +101,9 @@ Changing the future adaptive catalog without changing the currently
 rendered stage no longer invalidates the active score revision, avoiding
 an unnecessary engraving handoff.
 
-### Local, bounded verification
+### Local verification
 
-```bash
-cd ~/Projects/piano_teacher
-git pull --ff-only
-bash scripts/verify-hybrid-workflow.sh --focused
-# Optional full 17-score corpus without waiting for GitHub Actions:
-bash scripts/verify-hybrid-workflow.sh --corpus
-```
+`bash scripts/test.sh` includes a Coda + Fukuda smoke test on a real piece.
 
 The local suite verifies software contracts. The existing physical MIDI
 checklist remains required for actual keyboard timing, GUI transitions

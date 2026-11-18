@@ -35,6 +35,7 @@ const SCHEMA := {
     "feedback_unmapped": ["number"],
     "fingering": ["dict", "null"],
     "first_bar": ["number"],
+    "flow": ["dict"],
     "guided_recovery": ["bool"],
     "hand": ["string"],
     "hand_stages": ["list"],

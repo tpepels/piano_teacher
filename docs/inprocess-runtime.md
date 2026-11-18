@@ -136,7 +136,7 @@ a portable release or physical Bluetooth latency.
 
 ## Tests and performance
 
-Run `bash scripts/ci-smoke.sh` and
+Run `bash scripts/test.sh` and
 `bash scripts/check-godot-syntax.sh`; both are short. The targeted
 native smoke runs on the developer machine at build/start and in the
 bounded GitHub native workflow.

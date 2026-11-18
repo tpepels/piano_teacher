@@ -2341,3 +2341,18 @@ notes; tempo from 50% in 10% steps; done after 2 clean attempts at the
 original tempo; linking 1+2, 2+3; final whole-piece test; Coda/Fukuda only
 as an announced aid. The on-screen behaviour per state is specified next.
 This flow takes priority over further notation-oracle work.
+
+### 2026-11-18 — test suite and CI reduced to a small core (owner decision)
+
+The owner asked to remove frivolous and abstract tests that slow development
+and cost tokens. Kept: 34 pytest modules on player-visible behaviour (MIDI
+import, grading, course building, Listen audio, MIDI devices/calibration,
+progress/settings storage, engine bridge and state contract) plus one
+Coda+Fukuda smoke test; the Godot parse check with the score-axis, Practice,
+Settings, Lesson-path and score-session scenarios. Removed: all notation
+pixel/verifier tests, phase/audit/research/parity tests, tests of the old
+lesson flow, the four-shard runner, quarantine, ci-scope registry, the local
+CI repair agent and its records, and 32 GitHub workflows (replaced by
+`.github/workflows/ci.yml` running `scripts/test.sh`). History is in git.
+Regression tests for docs/practice-flow.md are added only after the owner
+confirms behaviour at the piano.

@@ -30,7 +30,7 @@ def test_proposed_library_settings_are_validated_without_side_effects(tmp_path):
     disk = library.settings_path.read_bytes()
     candidate = library.propose_update(metronome=False)
     assert candidate["metronome"] is False
-    assert candidate["exercise_strategy"] == "coda-fukuda-midi"
+    assert candidate["exercise_strategy"] == "practice-flow"
     assert library.settings == before
     assert library.settings_path.read_bytes() == disk
     for rejected in ("deleted-legacy", "coda-midi", "source-progression"):

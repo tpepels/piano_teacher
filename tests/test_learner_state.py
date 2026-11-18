@@ -10,6 +10,13 @@ from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 
 
+@pytest.fixture(autouse=True)
+def _split_guided_units(monkeypatch):
+    """These fixtures are short; exercise the split path that passages longer
+    than WHOLE_GUIDED_UNIT_BARS still use (resume, credits, trouble)."""
+    monkeypatch.setattr(learner_state, "WHOLE_GUIDED_UNIT_BARS", 0)
+
+
 def imported_variant():
     # A source excerpt beginning at bar3 crosses from3/4 to4/4, then has
     # an entirely silent final2-bar idea which belongs in timed Practice.

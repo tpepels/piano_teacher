@@ -58,11 +58,9 @@ for script in \
     exit 1
   fi
 done
-# Pure SceneTree fixtures execute in-process, without MIDI, score loading or UI.
-for fixture in continuous_score_flow command_success_effects command_request_state inprocess_request_lifecycle command_success_presenter practice_control_policy practice_frame_coordinator metronome_frame_coordinator calibration_beat_pulse coda_piece_strategy score_asset_lifecycle seamless_score_runway native_score_feedback retry_camera_clock; do
-  echo "Checking Godot behavior: $fixture"
-  GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/$fixture.gd"
-done
+# The scrolling score axis (including the held target in Free).
+echo "Checking Godot behavior: continuous_score_flow"
+GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/continuous_score_flow.gd"
 # Run the real Practice UI in the headless Godot harness after parsing.
 for scenario in captions signals score_gate intro_markers source_picker resume_choice midi_guard layout; do
   echo "Checking Practice UI: $scenario"

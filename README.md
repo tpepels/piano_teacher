@@ -64,24 +64,19 @@ engraving interchange format; features not recoverable from MIDI
 ## Tests
 
 ```bash
-bash scripts/ci-smoke.sh
-bash scripts/check-godot-syntax.sh
-bash scripts/verify-native-bridge.sh
-godot --headless --path godot --script "$PWD/tests/godot/visual_transport_clock.gd"
+bash scripts/test.sh            # core Python tests, then the Godot check
+bash scripts/test.sh --python-only
 ```
 
-`scripts/ci-smoke.sh` is the push gate (fast, cheap contracts).
-`scripts/ci-full.sh` is the release gate: the whole Python suite (25-45
-minutes, run it before a release; run it on an otherwise idle machine, wall-clock budget tests are `flaky:` entries otherwise; pass `--durations=60 --junitxml=...` through to pytest). Known-red tests are listed with a reason
-in `tests/quarantine.txt` and run as strict xfails: a quarantined test that
-starts passing fails the gate until its line is removed, and a line naming a
-test that no longer exists aborts the run.
-
-The fast checks include a calibration-to-grading MIDI callback regression
-and a tracked-file hygiene audit. They do not substitute for physical MIDI,
-rendering or audio verification. Run exhaustive notation diagnostics locally using
-`bash scripts/verify-notation.sh` when explicitly needed; they are not
-part of short CI.
+The suite is deliberately small (2026-11-18, owner decision): it guards
+behaviour a player notices — MIDI import, grading, lesson/course building,
+Listen audio, MIDI devices and calibration, progress and settings storage,
+the engine command bridge and state contract — plus a Godot parse check
+and a few headless UI scenarios. It runs in well under a minute. There are
+no notation pixel tests; notation is judged on screen. A new test is added
+only for behaviour the owner has confirmed at the piano. GitHub runs the
+same script (`.github/workflows/ci.yml`). Tests never replace physical
+MIDI, rendering or audio checks.
 
 Local learning history is stored with progress in SQLite. Settings provides
 detail retention (365 days / 256 MiB by default), local JSON export with optional
@@ -89,41 +84,6 @@ note detail, and confirmed deletion of piece or learner history and learning
 progress. Reset Lesson preserves history. Exports omit source paths and device
 names; exported copies remain outside the app's deletion control. See the
 [learning evidence contract](docs/learning-measurement.md).
-
-## Autonomous local CI scope audit and repair
-
-The local agent follows [AGENTS.md](AGENTS.md) and works on main in two
-strictly ordered phases: (A) audit/remove obsolete tests and CI workflows
-against the current embedded desktop application; (B) repair each remaining
-failure, one full-suite shard at a time, until all gates pass on one clean
-revision. Scope is enforced by scripts/ci-scope.py; newly added test modules,
-Godot harnesses and GitHub workflows require explicit ownership entries in
-tests/ci-scope.json. The scope gate initially fails until the local audit
-creates the reviewed registry.
-
-With a signed-in Claude Code CLI (default) or Codex CLI
-(`CI_AGENT_CLI=codex`), Godot 4.7 and project .venv installed locally:
-
-```bash
-git pull --ff-only
-bash scripts/local-ci-agent.sh
-```
-
-Use --audit-only to stop after phase A. Each turn is one non-interactive
-agent session: Claude Code runs as `claude -p` with `--permission-mode auto`
-(override with `CI_AGENT_CLAUDE_PERMISSION_MODE` / `CI_AGENT_CLAUDE_ARGS`),
-Codex in a workspace-write sandbox with automatic approval review when
-supported. The launcher itself runs the four-shard CI, outside the agent
-session. Each code change must be committed before the next shard run. A
-turn that commits nothing is followed by one blocker-investigation turn; a
-second one stops the launcher. `docs/verification/ci-repair-log.md` is the
-committed hand-over record every turn reads and extends. It will not make
-branches, force-push, overwrite unrelated changes, or ignore a failure.
-Full acceptance also requires smoke, Godot syntax and hybrid workflow
-gates plus an empty strict-xfail quarantine. Local agent logs and
-per-revision shard statuses are under playtest-results/. Progress resumes
-from committed changes on restart. The launcher does not push local
-commits to a remote; publish them explicitly when appropriate.
 
 ## Packaging
 

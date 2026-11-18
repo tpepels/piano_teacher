@@ -1,5 +1,0 @@
-# Known-red tests: "<test id or file> | <reason>". Each becomes a strict xfail.
-# Reason names the concrete cause and its class: stale test / product defect not yet fixed /
-# product decision needed / environment. Remove a line when its test is fixed (a strict xfail
-# fails on pass). "flaky:" entries are non-strict and need a proven external nondeterminism.
-tests/test_full_notation_difficult_cases.py::test_every_native_symbol_on_difficult_real_source[chopin-13-Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi-13-16-right] | product defect: native beam verifier reports 234 mismatches "Actual beam level/thickness/spacing differs from original source graphic" on Chopin Nocturne Op 9 No 2 bars 13-16; not diagnosed (beam ink vs verifier), needs the beam owner
