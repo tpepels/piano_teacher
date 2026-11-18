@@ -1948,9 +1948,13 @@ class PracticeEngine:
                 # A take starting on a freshly (re-)engraved score: open it on
                 # the empty strip one count-in bar ahead, with the snapshot
                 # latency allowed, and publish that run_at as its plan.
+                # The practice flow starts its first Tempo take by itself
+                # (after Free), so it must publish that take like a repeat:
+                # one count-in bar ahead, with an exact queue deadline.
+                announce = self._short_rest is not None or self._flow_active()
                 lead = (SCHEDULER.beats_seconds(
                     self._next_count_in_beats(),self.plan.bpm)
-                    + SNAPSHOT_LATENCY_SECONDS) if self._short_rest is not None else 0.0
+                    + SNAPSHOT_LATENCY_SECONDS) if announce else 0.0
                 # A re-engraved continuation still opens after the written
                 # rest bar of the take it follows.
                 after_rest = SCHEDULER.measured_rest(
@@ -1963,7 +1967,7 @@ class PracticeEngine:
                                else self.open_from_beat),
                     mode="perform" if self.mode == "perform" else "practice",
                     presentation_lead_seconds=lead, decided=True)
-                if self._short_rest is not None:
+                if announce:
                     self._queue_scheduled_start = (
                         self.transport_id, self.visual_transport.play_from_beat,
                         self.visual_transport.run_at, self.plan.identity,
