@@ -13,4 +13,6 @@ const MAX_STAFF_GAP := 22.0
 const MIN_READABLE_STAFF_GAP := 14.0
 # Reserve the same minimum visible reading horizon during viewport fitting
 # and new-source admission. These must not silently diverge.
-const MIN_LOOKAHEAD_BEATS := 3.0
+# 2.5 beats (was 3) leaves room for the wider quick-note spacing without
+# shrinking the staff on a standard window; it is also the reading lead.
+const MIN_LOOKAHEAD_BEATS := 2.5

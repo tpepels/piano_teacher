@@ -16,9 +16,9 @@ app has said, in words, that an exercise is simplified.
 
 ### 1. Open a piece
 
-- The whole piece is played back once at the target tempo while the notes
-  move over the staff, so the learner hears what it should sound like.
-- Then the first phrase starts (state 2).
+Opening a piece goes straight to the first phrase (state 2), which starts
+with its own Listen step. The whole piece is **not** played back first
+(owner, 2026-11-18: too long for long pieces).
 
 ### 2. Learn a phrase
 
@@ -88,7 +88,7 @@ returns to the real notes.
 
 | Moment | This flow | Application today |
 |---|---|---|
-| Open | Whole piece played back | No playback; first exercise starts |
+| Open | Phrase 1 starts with Listen | No playback; first exercise starts |
 | Division | Musical phrases of 2-4 bars | One bar per exercise (Beethoven Op. 13 II: 136 exercises) |
 | Steps per hand | Listen -> Free -> Tempo on the real notes | 3-4 stages: Coda/Fukuda transformations first, then x2/x4 slowdowns, then the original |
 | Coda/Fukuda | Announced aid only | Always the first stage, not clearly announced |

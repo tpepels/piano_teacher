@@ -93,7 +93,11 @@ def _pcm_chunks(voices: tuple[_Voice, ...], frames: int, sample_rate: int,
                             for at, change in ((voice.first, 1), (voice.last, -1))):
         concurrency += change
         peak = max(peak, concurrency)
-    gain = .72 / max(1, peak)
+    # Scale by the square root of the densest chord, not the chord size:
+    # dividing by the full note count made every busy passage quiet even
+    # where one note sounds alone (owner: Listen "really soft"). Samples are
+    # clamped below, so a rare full-voice peak cannot wrap around.
+    gain = .72 / max(1.0, math.sqrt(peak))
     active = []
     next_voice = 0
     for first in range(0, frames, chunk_frames):
@@ -213,7 +217,8 @@ class DemoAudioCache:
         if soundfont is not None and not available():
             raise RuntimeError("The sampled piano is installed, but libfluidsynth is missing. Install fluidsynth.")
         content = {
-            "synth": 2 if soundfont is not None else 1,
+            # Bumped when the rendered level changes (3/4: normalised loudness).
+            "synth": 3 if soundfont is not None else 4,
             "bank": soundfont.identity if soundfont else None,
             "sample_rate": self.sample_rate, "bpm": float(bpm),
             "level": variant.level, "range": [phrase.start, phrase.end],

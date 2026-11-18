@@ -9,7 +9,9 @@ extends RefCounted
 const MIN_SOURCE_ATTACK_SPACING_PX := 25.0
 const QUICK_ATTACK_MIN_INTERVAL_BEATS := 0.12
 const QUICK_ATTACK_MAX_INTERVAL_BEATS := 0.5
-const QUICK_ATTACK_TARGET_PIXELS := 52.0
+# Owner (2026-11-17): 16th and 8th notes were too close together. A quick
+# attack gets about 3.3 staff spaces at the standard 22 px staff (was 52 px).
+const QUICK_ATTACK_TARGET_PIXELS := 72.0
 const MAX_QUICK_READABILITY_DENSITY := 420.0
 const MIN_REPEATED_QUICK_INTERVALS := 2
 

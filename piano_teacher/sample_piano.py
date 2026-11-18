@@ -161,3 +161,50 @@ def render_wav(path: Path, variant, *, bpm: float, frames: int,
                 at += count
     finally:
         synth.close()
+    normalize_wav(path, chunk_frames=chunk_frames)
+
+
+# Listen must sound about as loud as a real piano. The Salamander samples are
+# recorded with large headroom, so FluidSynth output peaked at -18..-33 dBFS
+# (owner: "really soft"). Raise every render to this peak; never above it.
+TARGET_PEAK = round(32767 * 10 ** (-1 / 20))  # -1 dBFS
+MAX_MAKEUP_GAIN = 64.0  # +36 dB; a near-silent render is not amplified noise
+
+
+def normalize_wav(path: Path, *, chunk_frames: int = 4096) -> None:
+    """Rescale a 16-bit PCM WAV in place to TARGET_PEAK, in bounded chunks."""
+    from array import array
+    import sys
+    peak = 0
+    with wave.open(str(path), "rb") as wav:
+        params = wav.getparams()
+        if params.sampwidth != 2:
+            return
+        while True:
+            data = wav.readframes(chunk_frames)
+            if not data:
+                break
+            samples = array("h", data)
+            if sys.byteorder != "little":
+                samples.byteswap()
+            peak = max(peak, max(samples, default=0), -min(samples, default=0))
+    if peak <= 0:
+        return
+    gain = min(MAX_MAKEUP_GAIN, TARGET_PEAK / peak)
+    if abs(gain - 1.0) < .01:
+        return
+    scaled = path.with_suffix(path.suffix + ".scaled")
+    with wave.open(str(path), "rb") as source, wave.open(str(scaled), "wb") as target:
+        target.setparams(source.getparams())
+        while True:
+            data = source.readframes(chunk_frames)
+            if not data:
+                break
+            samples = array("h", data)
+            if sys.byteorder != "little":
+                samples.byteswap()
+            out = array("h", (max(-32768, min(32767, round(v * gain))) for v in samples))
+            if sys.byteorder != "little":
+                out.byteswap()
+            target.writeframesraw(out.tobytes())
+    scaled.replace(path)
