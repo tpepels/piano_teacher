@@ -19,6 +19,7 @@ signal command_requested(command: Dictionary)
 signal play_requested
 signal retry_requested
 signal listen_requested
+signal metronome_toggled(enabled: bool)
 signal score_retry_requested
 var stage: ScoreStage
 var practice_layout_box: VBoxContainer
@@ -52,6 +53,10 @@ var practice_controls: HFlowContainer
 var practice_retry_button: Button
 var start_button: Button
 var listen_button: Button
+# Practice flow (docs/practice-flow.md): one small status line under the title.
+var flow_status_label: Label
+# On-screen metronome switch (default on), the same "metronome" preference.
+var metronome_switch: CheckButton
 var practice_music_button: Button
 var practice_settings_button: Button
 var open_picker: Control
@@ -108,6 +113,12 @@ func _ready() -> void:
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(title_label)
+    flow_status_label = UI.label("", 14, MUTED)
+    flow_status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    flow_status_label.clip_text = true
+    flow_status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    flow_status_label.visible = false
+    heading.add_child(flow_status_label)
     var context := HBoxContainer.new()
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(context)
@@ -319,6 +330,14 @@ func _ready() -> void:
     listen_button.tooltip_text = "Hear this passage, or return to practice · L"
     controls.add_child(listen_button)
     controls.add_child(practice_details_button)
+    metronome_switch = CheckButton.new()
+    metronome_switch.text = "Metronome"
+    metronome_switch.button_pressed = true
+    metronome_switch.focus_mode = Control.FOCUS_NONE
+    metronome_switch.tooltip_text = "Metronome clicks while you play in tempo"
+    metronome_switch.add_theme_font_size_override("font_size", 15)
+    metronome_switch.toggled.connect(func(enabled: bool): metronome_toggled.emit(enabled))
+    controls.add_child(metronome_switch)
     var modal_layer := CanvasLayer.new()
     modal_layer.layer = 1
     add_child(modal_layer)
@@ -345,6 +364,33 @@ func _ready() -> void:
     review_sheet.retry_requested.connect(func(first_bar: int, last_bar: int):
         command_requested.emit({"action":"review_retry","first_bar":first_bar,"last_bar":last_bar}))
 
+
+func present_metronome(enabled: bool) -> void:
+    if metronome_switch != null and metronome_switch.button_pressed != enabled:
+        metronome_switch.set_pressed_no_signal(enabled)
+
+func _present_flow(parsed: Dictionary) -> void:
+    # Practice flow: everything advances by itself; only Pause/Play and
+    # "Listen again" stay (docs/practice-flow.md, On screen > Controls).
+    var flow: Dictionary = parsed.get("flow", {}) if parsed.get("flow") is Dictionary else {}
+    var active := not flow.is_empty()
+    flow_status_label.visible = active
+    if active:
+        var status := str(flow.get("status", ""))
+        if flow_status_label.text != status:
+            flow_status_label.text = status
+    practice_retry_button.visible = not active
+    speed_label.visible = not active
+    practice_details_button.visible = not active
+    if active:
+        practice_previous_button.visible = false
+        practice_skip_button.visible = false
+        if listen_button.text != "Listen again":
+            listen_button.text = "Listen again"
+            listen_button.call("configure", "listen")
+            _game_button(listen_button)
+        listen_button.tooltip_text = "Hear this passage again at the target tempo · L"
+        listen_button.disabled = str(parsed.get("mode", "")) == "listen"
 
 func present(parsed: Dictionary, ready: bool, busy := false, audio_error := false) -> void:
     _previous_state = _state
@@ -472,6 +518,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         _game_button(listen_button)
     practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
         or not _score_ready)
+    _present_flow(parsed)
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
     performance_review.present(summary)
     var selected_retry: Variant = parsed.get("review_range")

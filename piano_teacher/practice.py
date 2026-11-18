@@ -120,18 +120,14 @@ class Assessment:
 
     @property
     def flow_passed(self) -> bool:
-        """Practice flow: wrong, missed and extra notes fail; timing only
-        fails when clearly off (more than a 16th and at least 150 ms)."""
+        """Practice flow: wrong, missed and extra notes fail; timing fails
+        only when an attack is clearly off, i.e. outside the onset tolerance
+        (130-300 ms by tempo) that the screen also shows in red. Key-release
+        timing never fails a take."""
         if not self.notes or self.extra_notes:
             return False
         for entry in self.notes:
-            if entry.status in ("missed", "wrong"):
-                return False
-            observation = entry.observation
-            if observation is None or observation.onset_residual is None:
-                continue
-            allowed = max(.25 * observation.local_seconds_per_beat, .15)
-            if abs(observation.onset_residual) > allowed:
+            if entry.status in ("missed", "wrong", "early", "late"):
                 return False
         return True
 

@@ -1,9 +1,19 @@
 # Practice flow for one piece (owner specification)
 
-**Status: owner decisions of 2026-11-17, not yet implemented.** This is the
-contract the practice state machine must follow. Where the current
-application differs, the gap table at the end applies until the flow is
-rebuilt. It supersedes the stage order in
+**Status: owner decisions of 2026-11-17; built in part on 2026-11-18, to be
+checked by the owner at the piano.** This is the contract the practice state
+machine must follow. The `practice-flow` course (the default strategy) now
+runs states 1-5 by itself: phrases, hands, links, final test, Listen -> Free
+-> Tempo, the tempo and error rules, two feedback colours, count-in clicks
+with large numbers, an on-screen metronome switch, a minimal status line and
+short messages, and only Pause and Listen again as controls.
+
+Not built yet: the simplified Coda/Fukuda aid; skipping a short pickup rest
+inside the first bar (empty bars are already skipped); the red ghost note
+for a wrong key; lighting notes during Listen; the other hand dimmed
+instead of hidden; dimmed neighbour bars. "Clearly off" timing currently
+uses the existing onset tolerance (130-300 ms depending on tempo), the same
+boundary that colours a note red. It supersedes the stage order in
 [teaching methodology](teaching-methodology.md) for the desktop flow; the
 Coda and Fukuda generators themselves stay unchanged and become an
 announced aid (see "Simplified exercises").

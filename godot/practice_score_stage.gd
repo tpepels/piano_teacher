@@ -212,7 +212,7 @@ func _ready() -> void:
     count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
     # Four large beat pulses sit above the staff, without a modal overlay.
     count_in.position = Vector2(164, 24)
-    count_in.size = Vector2(270, 72)
+    count_in.size = Vector2(360, 84)
     count_in.visible = false
     score_frame.add_child(count_in)
     # A visible retry notice must not consume vertical space or force the
@@ -305,9 +305,36 @@ func present(state: Dictionary, busy: bool) -> void:
         keyboard.update_state(state.get("teaching",{}) if state.get("teaching") is Dictionary else {})
     else:
         keyboard.update_live(state.get("midi_next_pitches",[]),state.get("midi_held_pitches",[]),state.get("midi_recent_keys",[]),
-            not str(state.get("device","")).is_empty() and str(state.get("mode","")) in ["practice","perform"])
+            not str(state.get("device","")).is_empty() and str(state.get("mode","")) in ["practice","perform"]
+            # Practice flow: the keyboard only appears as a hint in Free.
+            and not state.has("flow"))
+
+var _flow_message_id := -1
+
+func _present_flow_message(flow: Dictionary) -> void:
+    # One short message per step/tempo change (practice flow), shown once.
+    var id := int(flow.get("message_id", 0))
+    var text := str(flow.get("message", ""))
+    if id == _flow_message_id:
+        return
+    _flow_message_id = id
+    if text.is_empty():
+        return
+    hand_cue_label.text = text
+    if _hand_cue_tween != null and _hand_cue_tween.is_running():
+        _hand_cue_tween.kill()
+    hand_cue_panel.visible = true
+    hand_cue_panel.modulate.a = 0.0
+    _hand_cue_tween = create_tween()
+    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",1.0,.18)
+    _hand_cue_tween.tween_interval(1.8)
+    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",0.0,.42)
+    _hand_cue_tween.tween_callback(func(): hand_cue_panel.visible = false)
 
 func _present_hand_cue(state: Dictionary) -> void:
+    if state.get("flow") is Dictionary and bool(state.get("loaded",false)):
+        _present_flow_message(state["flow"])
+        return
     if not bool(state.get("loaded",false)):
         _hand_cue_identity = ""
         _hand_cue_previous_phase = ""

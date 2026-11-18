@@ -5,7 +5,8 @@ extends Node
 const VOICE_NAMES := ["ichi", "ni", "san", "shi"]
 const SETTINGS_PATH := "user://countin_voice.cfg"
 const SEEK_SECONDS := 0.21
-var spoken_enabled := true
+# Practice flow (2026-11-18): clicks and numbers only; the voice is opt-in.
+var spoken_enabled := false
 var _voice_player: AudioStreamPlayer
 var _streams: Array[AudioStream] = []
 var _missing: Array[String] = []
@@ -15,7 +16,7 @@ var spoken_cues_total := 0
 func _init() -> void:
     var saved := ConfigFile.new()
     if saved.load(SETTINGS_PATH) == OK:
-        spoken_enabled = bool(saved.get_value("audio","spoken",true))
+        spoken_enabled = bool(saved.get_value("audio","spoken_opt_in",false))
 
 func _ready() -> void:
     _voice_player = AudioStreamPlayer.new()
@@ -64,7 +65,7 @@ func set_spoken_enabled(enabled: bool) -> void:
     if not enabled and _voice_player != null:
         _voice_player.stop()
     var config := ConfigFile.new()
-    config.set_value("audio","spoken",enabled)
+    config.set_value("audio","spoken_opt_in",enabled)
     if config.save(SETTINGS_PATH) != OK:
         push_warning("Count-in audio setting could not be saved")
 

@@ -57,43 +57,30 @@ func present(beat: float, beats_per_bar: int, running: bool, paused: bool,
 func _draw() -> void:
     if not visible or size.x < 110.0 or size.y < 45.0:
         return
+    # Practice flow: large numbers 1-2-3-4 with the click, no syllables.
     var n: int = mini(count,12)
-    var gap: float = minf(50.0,(size.x-28.0)/float(maxi(1,n)))
+    var radius: float = clampf(size.y*.40,19.0,34.0) if n <= 6 else 15.0
+    var gap: float = minf(radius*2.6,(size.x-28.0)/float(maxi(1,n)))
     var first_x: float = size.x*.5 - gap*float(n-1)*.5
-    var center_y: float = size.y*.38
-    var radius: float = 19.0 if n <= 6 else 13.5
+    var center_y: float = size.y*.5
     var pulse: float = pow(1.0-beat_fraction,3.0)
     var font: Font = ThemeDB.fallback_font
-    var font_size: int = 17 if n <= 6 else 13
-    var caption_size: int = 11
-    var syllables: Array[String] = ["Ichi", "Ni", "San", "Shi"]
+    var font_size: int = int(radius*1.15) if n <= 6 else 15
     for i in range(n):
         var center := Vector2(first_x+gap*float(i),center_y)
         var active: bool = i == current
         var old: bool = i < current
         if active:
-            draw_circle(center,radius+6.0+4.0*pulse,
+            draw_circle(center,radius+6.0+5.0*pulse,
                 Color("#55F5C3",.09+.18*pulse))
         draw_circle(center,radius,
-            Color("#53E9B6",.88) if active else
+            Color("#53E9B6",.92) if active else
             Color("#23433E",.94) if old else Color("#15332F",.85))
-        draw_arc(center,radius,-PI*.5,
-            -PI*.5+TAU*(beat_fraction if active else 1.0 if old else 0.0),
-            40,Color("#B9FFE4",.92) if active else
-            Color("#467D6C",.65),2.1,true)
         var numeral: String = str(i+1)
-        var ink: Color = Color("#052F28") if active else Color("#D0E9DD")
+        var ink: Color = Color("#052F28") if active else Color("#D0E9DD",.8)
         var text_width: float = font.get_string_size(
             numeral,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
         var baseline: float = center.y+(
             font.get_ascent(font_size)-font.get_descent(font_size))*.5
         draw_string(font,Vector2(center.x-text_width*.5,baseline),
             numeral,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
-        if n <= 6:
-            var caption: String = syllables[i] if i < 4 else str(i+1)
-            var caption_width: float = font.get_string_size(
-                caption,HORIZONTAL_ALIGNMENT_LEFT,-1,caption_size).x
-            draw_string(font,Vector2(center.x-caption_width*.5,
-                center.y+radius+16.0),caption,
-                HORIZONTAL_ALIGNMENT_LEFT,-1,caption_size,
-                Color("#B3D8C9",.92) if active else Color("#6F988D",.78))

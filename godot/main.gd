@@ -628,6 +628,9 @@ func _build_practice_screen() -> void:
     practice_view.play_requested.connect(_toggle_playing)
     practice_view.retry_requested.connect(_restart_practice)
     practice_view.listen_requested.connect(_listen_or_return_to_practice)
+    practice_view.metronome_toggled.connect(func(enabled: bool):
+        preferences["metronome"] = enabled
+        _send_command("settings.update", {"metronome": enabled}))
     practice_view.score_retry_requested.connect(_retry_score)
     practice_view.stage.renderer.fingering_change_requested.connect(_on_fingering_change_requested)
     _build_lesson_screen()
@@ -870,6 +873,7 @@ func _on_settings(code: int, body: PackedByteArray) -> void:
         return
     preferences = parsed
     settings_view.present_preferences(preferences)
+    practice_view.present_metronome(bool(preferences.get("metronome", true)))
     _request_learning_status()
     _apply_window_mode(bool(preferences.get("fullscreen", true)))
     var saved_device := str(preferences.get("midi_device", ""))

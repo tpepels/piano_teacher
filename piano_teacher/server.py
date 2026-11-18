@@ -185,6 +185,8 @@ class PracticeEngine:
         # Practice flow (docs/practice-flow.md): the stage whose Listen step
         # has been played, so Free follows it instead of repeating it.
         self._flow_listened: str | None = None
+        # One short on-screen message at a time: (serial, text, engine time).
+        self._flow_message: tuple[int, str, float] = (0, "", 0.0)
         self._guided_prepared = False
         self.transport_id = 0
         self.mode = "practice"
@@ -1096,11 +1098,59 @@ class PracticeEngine:
         else:
             self._begin_learn(from_beat=0.0)
 
+    def _flow_say(self, text: str) -> None:
+        """Publish a short message; one said just before is kept in front."""
+        if not text:
+            return
+        serial, previous, at = self._flow_message
+        now = self.now()
+        if previous and now - at < .5 and text not in previous:
+            text = f"{previous} · {text}"
+        self._flow_message = (serial + 1, text, now)
+
+    @staticmethod
+    def _flow_text(message: str) -> str:
+        if message.startswith(("Faster", "Slower", "Well done", "Piece mastered")):
+            return message
+        if message.startswith("Back to Free"):
+            return "Once more without tempo"
+        if message.startswith("Clean at full tempo"):
+            return "Clean! Once more"
+        return ""
+
+    def _flow_hand_text(self) -> str:
+        return {"right": "Right hand", "left": "Left hand"}.get(self.plan.hand, "Both hands")
+
+    def _flow_state(self) -> dict:
+        """Minimal status and messages for the practice flow screen."""
+        exercises = self.plan.exercises
+        index = self.plan.index
+        exercise = exercises[index]
+        phrases = [e for e in exercises if e.kind == "learn"]
+        number = sum(1 for e in exercises[:index + 1] if e.kind == "learn")
+        if exercise.kind == "learn":
+            where = f"Phrase {number} of {len(phrases)}"
+        elif exercise.kind == "connect":
+            where = f"Link phrases {number - 1} + {number}"
+        else:
+            where = "Whole piece"
+        step = ("listen" if self.mode == "listen" else
+                "free" if self.mode == "learn" else "tempo")
+        percent = round(100 * self.plan.bpm / self.plan.target_bpm) if self.plan.target_bpm else 100
+        label = {"listen": "Listen", "free": "Without tempo",
+                 "tempo": f"Tempo {percent}%"}[step]
+        serial, text, _ = self._flow_message
+        return {"step": step, "where": where, "hand": self.plan.hand,
+                "tempo_percent": percent,
+                "status": f"{where} · {self._flow_hand_text()} · {label}",
+                "message_id": serial, "message": text}
+
     def _flow_listen(self) -> None:
         """2a: play the passage once at the target tempo, then Free."""
         self._flow_listened = self.plan.identity
         self._flow_set_bpm(self.plan.target_bpm)
         self._prepare_listen()
+        self._flow_say(f"Listen · {self._flow_hand_text()}")
         self.feedback = "Listen"
         self.next_action = "Listen to the passage and follow the notes."
 
@@ -1264,6 +1314,7 @@ class PracticeEngine:
         if self._flow_active() and self.mode == "learn" and self.plan.exercise.kind != "perform":
             # 2b -> 2c: Tempo starts at half the target tempo.
             self._flow_set_bpm(self._flow_start_bpm())
+            self._flow_say(f"Now in tempo · {round(100 * self.plan.bpm / self.plan.target_bpm)}%")
             return_context = None
             self._guided_return = None
         return_context = self._guided_return
@@ -2399,6 +2450,8 @@ class PracticeEngine:
             assignment = self._remediation_pending
             self._remediation_pending = None
             selected = self.attempt_settlement.pending.decision
+            if self._flow_active() and selected.message:
+                self._flow_say(self._flow_text(selected.message))
             effect = self.teaching_continuation.after_settlement(selected,
                 score_changed=self.score_revision != previous_revision,
                 prepared=self._prepared_stage_published and self._future_stage_ready == (self.plan.identity,self.score_revision))
@@ -2880,6 +2933,7 @@ class PracticeEngine:
                     self._flow_listened = self.plan.identity
                     self.course_guided = True
                     self._begin_learn(from_beat=0.0)
+                    self._flow_say("Now without tempo")
                     self.feedback = "Now without tempo"
                     self.next_action = "Play the notes in order, at your own pace."
         elif decision.action == "preview_due":
@@ -3248,6 +3302,8 @@ class PracticeEngine:
                     "count_in_meter": list(plan_meter),
                 }
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
+            if self._flow_active():
+                state["flow"] = self._flow_state()
             if self._tempo_epoch is not None and self.plan is not None and \
                     self._tempo_key == (self.plan.identity, float(self._presentation_bpm)):
                 state["tempo_epoch_ms"] = self._tempo_epoch * 1000.0

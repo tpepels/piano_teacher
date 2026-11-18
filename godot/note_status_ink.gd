@@ -19,12 +19,12 @@ const EARLY_ONSET := Color("#F08FCB")
 const COLORS := {
     "hit": Color("#53E7B7"),
     "missed": Color("#F17978"),
-    "late": Color("#F0B661"),
-    "early_release": Color("#BCA4F1"),
-    # C6: a soft orchid pink, clearly apart from mint (hue 160), coral (0),
-    # amber (36) and lavender (258) at practice distance, and still 7:1 on the
-    # stage. One constant: change it here (and nowhere else).
-    "early_onset": EARLY_ONSET,
+    # Practice flow (docs/practice-flow.md): two colours only. An attack
+    # clearly too early or late is an error (red); key-release timing is
+    # not graded on screen (green).
+    "late": Color("#F17978"),
+    "early_release": Color("#53E7B7"),
+    "early_onset": Color("#F17978"),
 }
 const PASSES := ["erase", "core", "fill", "glow"]
 ## C5: hollow (half, whole) heads also get their enclosed interior softly
