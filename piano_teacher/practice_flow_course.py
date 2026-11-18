@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .adaptive_hybrid_curriculum import _SourceAttackIndex
+from .adaptive_hybrid_curriculum import _SourceAttackIndex, _segments
 from .exercise_generator import generate_variants
 from .exercise_pipeline import ExerciseStage
 from .lesson_settings import SETTINGS
-from .lesson_source_planner import Exercise, _focus_phrases
+from .lesson_source_planner import Exercise
 from .music import Phrase, Piece
 
 MIN_PHRASE_BARS = 2
@@ -39,9 +39,9 @@ def _natural_cut(piece: Piece, at: float) -> bool:
 def phrases(piece: Piece) -> tuple[Phrase, ...]:
     """Musical phrases of 2-4 bars built from safe 2-bar source units."""
     source = _SourceAttackIndex(piece)
-    # Short source units (normally 2 bars; silent bars excluded). A note held
-    # over a barline belongs to the phrase in which it is struck.
-    units = _focus_phrases(piece)
+    # Short source units (normally 2 bars; silent bars excluded). A unit is
+    # extended when a note is held over its barline, so no phrase cuts a note.
+    units = _segments(piece, source=source)
     grid = piece.bar_boundaries
     merged: list[tuple[int, int]] = []
     for unit in units:
@@ -61,8 +61,8 @@ def phrases(piece: Piece) -> tuple[Phrase, ...]:
         selected = source.notes_in(start - 1e-7, end - 1e-7)
         if not selected:
             continue
-        end = max(end, max(n.end for n in selected))
-        out.append(Phrase(len(out) + 1, first, last, start, end, selected))
+        out.append(Phrase(len(out) + 1, first, last, start,
+                          max(end, max(n.end for n in selected)), selected))
     return tuple(out)
 
 
