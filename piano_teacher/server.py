@@ -3279,6 +3279,16 @@ class PracticeEngine:
                 next_floor = 0.0
                 next_deadline = self._guided_stream_deadline*1000.0
                 next_transport = self.transport_id
+            if (next_floor is None and self.plan is not None and self.running
+                    and not self.visual_transport.paused
+                    and self.mode in ("practice", "perform", "listen")):
+                # Invariant: every running take publishes its own source and
+                # graded deadline, however it was started (Play, automatic
+                # continuation, practice flow). The renderer binds only a
+                # published plan; a take is never left without notes.
+                next_floor = float(self.visual_transport.play_from_beat)
+                next_deadline = float(self.visual_transport.run_at)*1000.0
+                next_transport = self.transport_id
             if (self.plan is not None and next_floor is not None
                     and next_deadline is not None):
                 _, bar_beats, plan_meter = self.attempt_progression.count_in_bar(

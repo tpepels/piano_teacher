@@ -1430,6 +1430,7 @@ var _debug_key := ""
 var _debug_target := ""
 var _debug_beat_ms := 0
 var _debug_inputs := -1
+var _debug_unscored := ""
 
 func _debug_log(state: Dictionary, now_ms: int) -> void:
     if not _debug_checked:
@@ -1453,6 +1454,9 @@ func _debug_log(state: Dictionary, now_ms: int) -> void:
         _debug_key = key
         _debug_file.store_line("%s STATE %s | %s | msg=%s | feedback=%s" % [stamp, key,
             flow.get("status", ""), flow.get("message", ""), state.get("feedback", "")])
+    if renderer != null and str(renderer._unscored_take) != _debug_unscored:
+        _debug_unscored = str(renderer._unscored_take)
+        _debug_file.store_line("%s DEFECT TAKE_WITHOUT_SCORE %s" % [stamp, _debug_unscored])
     var inputs := int(state.get("midi_input_count", 0))
     if inputs != _debug_inputs:
         _debug_inputs = inputs

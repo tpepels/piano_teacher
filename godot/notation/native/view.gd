@@ -155,6 +155,8 @@ var _stream_was_paused := false
 var _stream_paused_source := 0.0
 var _stream_paused_owner := -1
 var _stream_live_serial := -1
+# The last playing take reported without a bound source (reported once).
+var _unscored_take := ""
 var _stream_armed_serial := -1
 var _stream_arm_rollback: Dictionary = {}
 var _stream_arm_acknowledged := false
@@ -1668,6 +1670,16 @@ func present_flow(world_beat: float, state: Dictionary,
         _stream_paused_owner = -1
     elif not paused_now:
         _stream_live_serial = -1
+    # Invariant: a graded or audible take that is playing has its own source
+    # bound on the staff. A take without one is a defect, never a state to
+    # show silently as an empty staff (practice flow, 2026-11-18).
+    if running_now and phase == "playing" and mode in ["practice","perform","listen"] \
+            and _stream_live_serial < 0 and _stream_last_take != key:
+        if _unscored_take != key:
+            _unscored_take = key
+            push_error("TAKE_WITHOUT_SCORE: %s (queue=%s)" % [key,
+                str(state.get("score_queue_next",{}).get("plan_id","none")
+                    if state.get("score_queue_next") is Dictionary else "none")])
     # Retained compilation may have finished since the previous frame.
     # Clip attachment happens here, before CanvasItem._draw() projects
     # positions. No scene-tree modification is permitted in _draw().
