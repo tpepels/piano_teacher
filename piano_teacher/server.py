@@ -22,6 +22,7 @@ from .teaching_manual import ManualFacts
 from .teaching_decisions import (TeachingBinding, TeachingState, TeachingRouteFacts, TeachingEvent,
     source_safe_response)
 from .diagnosis_policies import LearnerSnapshot
+from .application import practice_flow
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
@@ -182,9 +183,9 @@ class PracticeEngine:
         self._automatic_remedial_review = False
         self.review_session_complete = False
         self.course_guided = False
-        # Practice flow (docs/practice-flow.md): the stage whose Listen step
-        # has been played, so Free follows it instead of repeating it.
-        self._flow_listened: str | None = None
+        # Practice flow lesson state: changed only through the transitions
+        # of application/practice_flow.py (see _flow_execute).
+        self.flow: practice_flow.FlowState | None = None
         # One short on-screen message at a time: (serial, text, engine time).
         self._flow_message: tuple[int, str, float] = (0, "", 0.0)
         self._guided_prepared = False
@@ -1076,27 +1077,44 @@ class PracticeEngine:
         return (self.plan is not None and not self.is_builtin_warmup
                 and self.plan.lesson_definition.generator_name == "practice-flow")
 
-    def _flow_start_bpm(self) -> int:
-        return max(SETTINGS.minimum_bpm, round(self.plan.target_bpm * .5))
-
     def _flow_set_bpm(self, bpm: int) -> None:
         bpm = int(max(SETTINGS.minimum_bpm, min(self.plan.target_bpm, bpm)))
         if self.plan.bpm != bpm:
             self.plan.set_practice_bpm(bpm)
 
+    def _flow_stage_entry(self, *, resumed: bool = False) -> practice_flow.Transition:
+        return practice_flow.enter_stage(
+            self.plan.identity, final=self.plan.exercise.kind == "perform",
+            target_bpm=int(self.plan.target_bpm), resumed=resumed,
+            hand_text=self._flow_hand_text())
+
+    def _flow_execute(self, transition: practice_flow.Transition) -> None:
+        """Run the step the lesson state machine selected. The only place
+        that turns a lesson state into Listen, Free or a Tempo take."""
+        state = transition.state
+        self.flow = state
+        self._flow_say(transition.message)
+        # Tempo changes are applied after the step's command is installed:
+        # an in-flight control has already bound the current progress.
+        if state.step is practice_flow.Step.LISTEN:
+            self._prepare_listen(bpm=state.bpm)
+            self.feedback = "Listen"
+            self.next_action = "Listen to the passage and follow the notes."
+        elif state.step is practice_flow.Step.FREE:
+            self.course_guided = True
+            self._begin_learn(from_beat=0.0)
+            self.feedback = "Now without tempo"
+            self.next_action = "Play the notes in order, at your own pace."
+        elif state.step is practice_flow.Step.TEMPO:
+            self._prepare_practice()
+            self._flow_set_bpm(state.bpm)
+
     def _flow_open(self) -> None:
-        """Open: the current phrase/hand starts by itself (1, 5)."""
+        """Open: a fresh piece starts with Listen, a resumed one in Free."""
         self.course_guided = True
         self.auto = True
         first = self.plan.lesson_steps[0].key == self.plan.identity
-        # A fresh piece starts with Listen; a resumed one warms up in Free.
-        self._flow_listened = None if first else self.plan.identity
-        if self.plan.exercise.kind == "perform":
-            # Final test: directly in tempo from 50% (4).
-            self._flow_set_bpm(self._flow_start_bpm())
-            self._prepare_practice()
-        else:
-            self._begin_learn(from_beat=0.0)
+        self._flow_execute(self._flow_stage_entry(resumed=not first))
 
     def _flow_say(self, text: str) -> None:
         """Publish a short message; one said just before is kept in front."""
@@ -1107,16 +1125,6 @@ class PracticeEngine:
         if previous and now - at < .5 and text not in previous:
             text = f"{previous} · {text}"
         self._flow_message = (serial + 1, text, now)
-
-    @staticmethod
-    def _flow_text(message: str) -> str:
-        if message.startswith(("Faster", "Slower", "Well done", "Piece mastered")):
-            return message
-        if message.startswith("Back to Free"):
-            return "Once more without tempo"
-        if message.startswith("Clean at full tempo"):
-            return "Clean! Once more"
-        return ""
 
     def _flow_hand_text(self) -> str:
         return {"right": "Right hand", "left": "Left hand"}.get(self.plan.hand, "Both hands")
@@ -1134,8 +1142,12 @@ class PracticeEngine:
             where = f"Link phrases {number - 1} + {number}"
         else:
             where = "Whole piece"
-        step = ("listen" if self.mode == "listen" else
+        step = (self.flow.step.value if self.flow is not None
+                and self.flow.stage_key == self.plan.identity else
+                "listen" if self.mode == "listen" else
                 "free" if self.mode == "learn" else "tempo")
+        if step == "done":
+            step = "tempo"
         percent = round(100 * self.plan.bpm / self.plan.target_bpm) if self.plan.target_bpm else 100
         label = {"listen": "Listen", "free": "Without tempo",
                  "tempo": f"Tempo {percent}%"}[step]
@@ -1144,15 +1156,6 @@ class PracticeEngine:
                 "tempo_percent": percent,
                 "status": f"{where} · {self._flow_hand_text()} · {label}",
                 "message_id": serial, "message": text}
-
-    def _flow_listen(self) -> None:
-        """2a: play the passage once at the target tempo, then Free."""
-        self._flow_listened = self.plan.identity
-        self._flow_set_bpm(self.plan.target_bpm)
-        self._prepare_listen()
-        self._flow_say(f"Listen · {self._flow_hand_text()}")
-        self.feedback = "Listen"
-        self.next_action = "Listen to the passage and follow the notes."
 
     def _begin_course_stage(self, *, bump_revision: bool = True, explicit_learn: bool = False):
         effect = self._manual_effect("learn" if explicit_learn else "course_stage")
@@ -1248,9 +1251,9 @@ class PracticeEngine:
         if self.plan is None:
             raise ValueError("Open a piece first")
         if (self._flow_active() and not recovery and remediation is None
-                and self._flow_listened != self.plan.identity):
-            # Every new phrase/link and hand starts with Listen (2a).
-            self._flow_listen()
+                and (self.flow is None or self.flow.stage_key != self.plan.identity)):
+            # A new phrase/link/hand: the state machine decides its first step.
+            self._flow_execute(self._flow_stage_entry())
             return
         selected = exposure or self._install_command(self._manual_effect("learn",from_beat=from_beat))
         start,end = selected.from_beat,selected.end_beat
@@ -1311,11 +1314,14 @@ class PracticeEngine:
             # The settled guided decision selected this timed exposure; the
             # score acknowledgement starts what is prepared, not Free again.
             self.session_commands.prepared = selected
-        if self._flow_active() and self.mode == "learn" and self.plan.exercise.kind != "perform":
-            # 2b -> 2c: Tempo starts at half the target tempo.
-            self._flow_set_bpm(self._flow_start_bpm())
-            self._flow_say(f"Now in tempo · {round(100 * self.plan.bpm / self.plan.target_bpm)}%")
-            return_context = None
+        if (self._flow_active() and self.flow is not None
+                and self.flow.stage_key == self.plan.identity
+                and self.flow.step is practice_flow.Step.FREE):
+            # Free complete -> Tempo (the state machine sets 50%).
+            transition = practice_flow.free_completed(self.flow)
+            self.flow = transition.state
+            self._flow_set_bpm(transition.state.bpm)
+            self._flow_say(transition.message)
             self._guided_return = None
         return_context = self._guided_return
         retry_range = self.retry_range
@@ -1347,10 +1353,13 @@ class PracticeEngine:
             self.feedback = failure
             self.next_action = failure
 
-    def _prepare_listen(self):
+    def _prepare_listen(self, *, bpm: int | None = None):
         if self.plan is None:
             raise ValueError("Open a piece first")
         selected = self._install_command(self._manual_effect("listen"))
+        if bpm is not None:
+            # Practice flow: Listen plays at the target tempo.
+            self._flow_set_bpm(bpm)
         self._stop()
         self.visual_transport.play_from_beat = 0.0
         self.mode = "listen"
@@ -1978,7 +1987,13 @@ class PracticeEngine:
 
     def _control_listening(self, action: str, kwargs: dict) -> None:
         if action == "listen":
-            self._prepare_listen()
+            if (self._flow_active() and self.flow is not None
+                    and self.flow.stage_key == self.plan.identity
+                    and self.mode != "listen"):
+                # Listen again: the state machine plays it, then Free.
+                self._flow_execute(practice_flow.listen_again(self.flow))
+            else:
+                self._prepare_listen()
         elif action == "perform":
             self._prepare_perform(scope=str(kwargs.get("scope", "current")))
         elif action == "practice_weak":
@@ -2454,8 +2469,22 @@ class PracticeEngine:
             assignment = self._remediation_pending
             self._remediation_pending = None
             selected = self.attempt_settlement.pending.decision
-            if self._flow_active() and selected.message:
-                self._flow_say(self._flow_text(selected.message))
+            outcome = (practice_flow.outcome_of(selected.message)
+                       if self._flow_active() and selected.message else None)
+            if outcome is not None:
+                progress = self.plan.teaching_progress()
+                done = outcome in (practice_flow.Outcome.STAGE_DONE,
+                                   practice_flow.Outcome.PIECE_DONE)
+                # A finished stage keeps its own key: the course has already
+                # moved on, and the next stage must start with its own entry.
+                self.flow = practice_flow.settle(
+                    self.flow, outcome,
+                    stage_key=(self.flow.stage_key if done and self.flow is not None
+                               else self.plan.identity),
+                    final=self.plan.exercise.kind == "perform",
+                    bpm=int(self.plan.bpm), target_bpm=int(self.plan.target_bpm),
+                    failures=progress.failures, clean=progress.streak)
+                self._flow_say(selected.message)
             effect = self.teaching_continuation.after_settlement(selected,
                 score_changed=self.score_revision != previous_revision,
                 prepared=self._prepared_stage_published and self._future_stage_ready == (self.plan.identity,self.score_revision))
@@ -2932,14 +2961,9 @@ class PracticeEngine:
                 self.feedback = "Example complete"
                 self.next_action = (
                     "Choose Learn to find the notes, or Practice to play the rhythm.")
-                if self._flow_active():
-                    # 2a -> 2b: Free starts by itself after Listen.
-                    self._flow_listened = self.plan.identity
-                    self.course_guided = True
-                    self._begin_learn(from_beat=0.0)
-                    self._flow_say("Now without tempo")
-                    self.feedback = "Now without tempo"
-                    self.next_action = "Play the notes in order, at your own pace."
+                if (self._flow_active() and self.flow is not None
+                        and self.flow.step is practice_flow.Step.LISTEN):
+                    self._flow_execute(practice_flow.listen_finished(self.flow))
         elif decision.action == "preview_due":
             deadline = self.visual_transport.next_at
             self.visual_transport.visual_offset_beats += self._source_model()[

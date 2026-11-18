@@ -43,6 +43,7 @@ Transitions (the only functions that change it):
 | take failed, first in a row | `TEMPO` | `TEMPO` same tempo | "Again" |
 | take failed, second, above 50% | `TEMPO` | `TEMPO` −10% | "Slower: N BPM" |
 | take failed, second, at 50% | `TEMPO` | `FREE`, `free_returns`+1 | "Once more without tempo" |
+| take failed, second, at 50%, final test | `TEMPO` | `TEMPO` at 50% (no Free in the final test) | "Again at the same tempo" |
 
 ### 2. Take state (where in the current exposure)
 
@@ -80,7 +81,7 @@ published segments, binds by `segment_id`, and decides nothing itself.
 
 ## Steps (each step leaves the app playable)
 
-1. **Lesson state machine.** New module with the transitions above; the
+1. **Lesson state machine** — *done 2026-11-18.* New module with the transitions above; the
    engine and the course decisions call it instead of the scattered flow
    hooks (`_flow_*` in server.py, `flow_assessed_progress`, the rewrites in
    `PracticeFlowLessonGenerator.decide_teaching`). Status line and messages
