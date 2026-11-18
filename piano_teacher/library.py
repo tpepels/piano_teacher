@@ -51,12 +51,16 @@ class ScoreLibrary:
                          'diagnosis_strategy': 'error-family',
                          'learner_strategy': 'repeated-error',
                          'mistake_response_strategy': 'adaptive',
+                         # Fresh settings start on the practice flow already.
+                         'practice_flow_migrated': True,
                          **{key: bounds[0] for key, bounds in EVIDENCE_PREFERENCES.items()}}
         if self.settings_path.exists():
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
                 if isinstance(stored, dict):
                     migrated = bool(RETIRED_PREFERENCES & stored.keys())
+                    # Settings saved before 2026-11-18 have no marker.
+                    self.settings['practice_flow_migrated'] = False
                     for key in self.settings:
                         if key in stored and isinstance(stored[key], type(self.settings[key])):
                             self.settings[key] = stored[key]
@@ -66,6 +70,14 @@ class ScoreLibrary:
         if config_dir is None and not self.settings_path.exists():
             # First run: create a predictable folder that the user can fill.
             default_music_dir().mkdir(parents=True, exist_ok=True)
+        if not self.settings['practice_flow_migrated']:
+            # 2026-11-18: Coda + Fukuda was the only strategy, never a choice.
+            # Move existing installations once to the owner's practice flow;
+            # a later explicit choice of Coda + Fukuda is kept.
+            if self.settings['exercise_strategy'] == 'coda-fukuda-midi':
+                self.settings['exercise_strategy'] = DEFAULT_STRATEGY
+            self.settings['practice_flow_migrated'] = True
+            migrated = True
         if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
             # Saved choices of removed strategies (coda-midi, fukuda-midi,
             # source-progression, fukuda, ...) migrate to the default.

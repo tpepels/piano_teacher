@@ -599,7 +599,7 @@ func present_preferences(values: Dictionary) -> void:
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
     _present_strategy_picker(strategy_picker,
         values.get("available_exercise_strategies", []),
-        str(values.get("exercise_strategy", "coda-fukuda-midi")))
+        str(values.get("exercise_strategy", "practice-flow")))
     _present_strategy_picker(diagnosis_strategy_picker,
         values.get("available_diagnosis_strategies", []),
         str(values.get("diagnosis_strategy", "error-family")))

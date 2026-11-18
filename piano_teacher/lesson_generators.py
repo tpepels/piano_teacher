@@ -664,3 +664,12 @@ register_lesson_generator(LessonGeneratorRegistration(
         mistakes=options["mistakes"],
         error_status=tuple(sorted((options.get("feedback") or {}).items()))),
     course_version=3, midi_only=True))
+# Owner practice flow (docs/practice-flow.md): phrases, hands, links, real
+# notes only. The desktop default since 2026-11-18.
+def _practice_flow(**options):
+    from .practice_flow_course import PracticeFlowLessonGenerator
+    return PracticeFlowLessonGenerator()
+
+
+register_lesson_generator(LessonGeneratorRegistration(
+    "practice-flow", _practice_flow, course_version=1, midi_only=True))
