@@ -22,6 +22,7 @@ class FakeLayer:
 class IncomingLayer:
     extends FakeLayer
     var native_ready := true
+    var bpm := 16.0
     var stream_world_beat := 0.0
     var practice_timeline := {"gap":{"duration_beats":2.0}}
     func retained_ready() -> bool:
