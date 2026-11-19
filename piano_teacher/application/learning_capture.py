@@ -146,19 +146,29 @@ class LearningCapture:
                 self.flush_intervals(self._clock(), keep_phase=True)
 
     def seal(self, played, *, state: str, reason: str, result=None,
-             eligible: bool = False, extra: dict | None = None) -> None:
+             eligible: bool = False, extra: dict | None = None,
+             verdict=None) -> None:
         if self.attempt_id is None or self.sealed is not None:
             return
         assessment = None
         observations = []
         if result is not None and result.notes:
+            if verdict is not None and (verdict.source_note_count != len(result.notes)
+                    or verdict.extra_notes != result.extra_notes):
+                raise ValueError("Sealed assessment disagrees with the teaching verdict")
             assessment = {
                 "grader_version": "nearest-onset-v1", "rule_version": "accepted-full-target-v1",
                 "bpm": self.context["performed_bpm"],
                 "statuses": [n.status for n in result.notes],
                 "extra_notes": result.extra_notes, "note_count": len(result.notes),
                 "onset_count": result.total_attacks, "warning_onsets": result.yellow_attacks,
-                "clean": result.clean, "passed": result.passed,
+                # The consumer-visible pass result must use the exact same
+                # policy as progression and durable settlement. Retain the
+                # raw grader outcome as explicitly diagnostic evidence.
+                "clean": verdict.clean if verdict is not None else result.clean,
+                "passed": verdict.accepted if verdict is not None else result.passed,
+                "acceptance_policy": verdict.policy if verdict is not None else "standard",
+                "raw_grader_passed": result.passed,
                 "mastery_eligible": eligible,
                 "eligibility_reason": "full_timed_practice" if eligible else reason,
                 "unmatched_played": [asdict(n) for n in result.unmatched_played]}
