@@ -100,11 +100,23 @@ class PlaybackCoordinator:
         self.active_deadline_ms = 0.0
         self.failure = reason
 
+    def cancel_pending(self, reason: str) -> None:
+        """Cancel only the unpresented successor, preserving an older take."""
+        if self.intent is None:
+            return
+        self.generation += 1
+        self.intent = None
+        self.receipt = None
+        self.failure = reason
+        self.state = (PlaybackState.PAUSED if self.active_take_id
+                      else PlaybackState.IDLE)
+
     def _valid_source(self, engine, intent: PlaybackIntent) -> bool:
         return (engine.plan is not None
                 and engine.fingerprint == intent.fingerprint
                 and engine.plan.identity == intent.stage_key
                 and engine.score_revision == intent.revision
+                and abs(float(engine.plan.bpm)-intent.bpm) < 1e-7
                 and intent.generation == self.generation)
 
     def request(self, engine, *, action: str, mode: str,
