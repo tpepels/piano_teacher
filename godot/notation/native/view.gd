@@ -79,6 +79,7 @@ const MovingMeterGrid := preload("res://moving_meter_grid.gd")
 const ScoreStreamWindowCuts := preload("res://score_stream_window_cuts.gd")
 const NotationClipPlanner := preload("res://notation/native/notation_clip_planner.gd")
 const TransportReservation := preload("res://score_transport_reservation.gd")
+const StreamAdmissionExecutor := preload("res://notation/native/stream_admission_executor.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
@@ -848,64 +849,8 @@ func _transport_admission_receipt(planned: Dictionary,
 
 func reserve_transport_action(action: String, world: float,
         opening: float, count_in_beats: float) -> Dictionary:
-    # The ONLY user-command route. First compute both the future slot and
-    # safe suffix on immutable previews; failed preflight cannot withdraw
-    # any source or start the backend transport. count_in_beats is the
-    # engine's next_count_in_beats (one count-in bar).
-    var planned: Dictionary = TransportReservation.plan(
+    return StreamAdmissionExecutor.reserve_action(
         self,action,world,opening,count_in_beats)
-    if not bool(planned.get("ok",false)):
-        push_error("SCORE_TRANSPORT_PREFLIGHT: %s action=%s opening=%.3f" % [
-            str(planned.get("reason","unknown")),action,opening])
-        return {}
-    stream_world_beat = maxf(stream_world_beat,world)
-    var mode: String = str(planned["mode"])
-    var before: Array = _stream_queue.online.duplicate(true)
-    if mode == "reuse":
-        if action == "resume":
-            # The SAME preflight that chose this source identifies the
-            # protected owner. Never run a second, independent selection
-            # procedure against a partially modified queue.
-            trim_future_queue("resume_reuse",int(planned["protected_take"]))
-        var existing: Dictionary = arm_stream_take(
-            world,opening,NAN,action == "resume",false)
-        var removed: Array = before.slice(_stream_queue.online.size())
-        if existing.is_empty():
-            push_error("SCORE_TRANSPORT_COMMIT: preflight reusable owner vanished")
-            if not removed.is_empty():
-                _restore_future_suffix(removed,stream_world_beat)
-            return {}
-        _stream_arm_rollback["withdrawn_suffix"] = removed
-        return _transport_admission_receipt(planned,existing,world,opening)
-    # The preflight and actual withdrawal share Queue.preview_tail_withdrawal
-    # and the SAME world coordinate. Do not recalculate a different
-    # placement after removing the unseen suffix.
-    var intended: float = float(planned["start_world"])
-    trim_future_queue("user_"+action+"_replace_unseen")
-    var removed: Array = before.slice(_stream_queue.online.size())
-    if _stream_queue.online.size() != int(planned["remaining_count"]):
-        push_error("SCORE_TRANSPORT_COMMIT: online queue changed during preflight")
-        if not removed.is_empty():
-            _restore_future_suffix(removed,stream_world_beat)
-        return {}
-    _retry_placement = action == "restart"
-    var admitted: Dictionary = arm_stream_take(
-        world,opening,intended,false,false,
-        count_in_beats if bool(planned.get("empty_strip",false)) else 0.0)
-    _retry_placement = false
-    if admitted.is_empty():
-        push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")
-        if not removed.is_empty():
-            _restore_future_suffix(removed,stream_world_beat)
-        return {}
-    if absf(float(admitted.get("start_world",NAN))-intended) > .0001:
-        push_error("SCORE_TRANSPORT_COMMIT: grading and score deadlines diverged")
-        cancel_stream_arm()
-        if not removed.is_empty():
-            _restore_future_suffix(removed,stream_world_beat)
-        return {}
-    _stream_arm_rollback["withdrawn_suffix"] = removed
-    return _transport_admission_receipt(planned,admitted,world,opening)
 
 
 func earliest_continuation_world(world: float, opening: float,
