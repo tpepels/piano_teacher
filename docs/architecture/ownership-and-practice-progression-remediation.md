@@ -15,13 +15,13 @@
 | Typed course outcomes / O02 | IMPLEMENTED IN PRODUCTION PATH | `TeachingDecision.flow_outcome` now carries `Outcome` directly through course/engine; string parser remains only as a read-only legacy diagnostic for existing tests, without production callers |
 | Unified assessment verdict / O03 | INTEGRATED ACROSS TEACHING, EVIDENCE AND SNAPSHOTS; LIVE CHECK OPEN | The selected verdict now drives course progression, recorded acceptance, UI summary and durable trouble clearing; raw grader acceptance is retained under a separate diagnostic field; non-graded legacy adapters remain distinct |
 | Unified playback transitions / O01, O04 | GRAPHICAL COUNT-IN SINGLE-TAKE PATH INTEGRATED; LEGACY AND PHYSICAL ACCEPTANCE OPEN | Immutable PlaybackTransition and CountInPlan are accepted once; metronome uses take-keyed authorized segments through Pause/Resume, rejects mismatched deadlines and does not invent unadmitted graphical countdowns; headless compatibility and hardware acceptance remain |
-| Asset admission / O05, O08 | QUEUE AND RENDERER-STAGE OWNER EXTRACTED; FULL PORT MIGRATION OPEN | ScoreStreamController now stores the mutable FIFO, reservation serials and rollback state; ScoreSceneController owns active renderer replacement and asset adoption; ScoreRunway uses public predecessor registration; view still exposes transitional property adapters and some private-state reads remain |
+| Asset admission / O05, O08 | LIVE-QUEUE PREFLIGHT ACCESS REMOVED; COMPATIBILITY FACADES REMAIN | ScoreStreamController owns the mutable FIFO, revision/serial and rollback; physical preflight consumes a frozen transport_preflight_facts snapshot, Stage replacement goes through ScoreSceneController; renderer still contains internal queue operations and compatibility properties |
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
 | Architecture docs / O07 | ACTIVE CONTRACT UPDATED; REFERENCE SWEEP OPEN | ADR-0001 and playback coordinator document current authority; old ownership docs marked historical, stale 17 November Practice Flow comparison archived, live spec revised to moving windows; remaining references require checking |
-| Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher handles score projection, MidiIngress owns semantic input suppression and rollover, AttemptSettlement owns atomic persistence and policy-bound verdicts; PracticeEngine remains a large command/assessment façade with direct lifecycle state |
+| Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
 | Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController now own clipping, physical preflight execution and mutable queue/serial/rollback state respectively; NativeView still contains ledger operations and painter lifecycle, with compatibility forwarding properties |
 | Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger, NavigationSession and ApplicationEventRouter now own their corresponding domains; Main still builds screen trees and routes command/in-process callbacks |
-| Existing CI/native integration | CI PASSED THROUGH `069b24e`; LATEST SPEC CLEANUP PENDING | Existing GitHub Actions Python and Godot checks passed at `069b24e` (run 44617308164); later cleanup commits await verification. The production_session_journey and production_ui_smoke scripts are syntax-checked by standard CI, not executed as full native journeys. No test files added/modified; physical MIDI/audio unverified |
+| Existing CI/native integration | CI PASSED THROUGH `550fd05`; NEW COMMIT CHECKS RUNNING | Existing GitHub Actions passed at `550fd05` (run 44618612691); a later frozen-snapshot refactor exposed a missing field in the *existing* test fixture (run 44619706664), corrected at `ae5ea91`; latest CI pending. The production_session_journey and production_ui_smoke scripts are syntax-checked by normal CI but not run. No tests added or changed; physical MIDI/audio unverified |
 
 **Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
 
@@ -75,6 +75,37 @@
 - `df0052c`, `b648154`: Archived the stale November 17 application comparison and revised the living Practice Flow specification for authored moving windows.
 
 **Current limits:** The three large classes have fewer responsibilities but are **not yet thin facades**. A few old fallback branches and compatibility accessors still exist; no full physical MIDI/audio acceptance has occurred. Standard CI parses but does not execute the existing production Godot journey script. Avoid conflating syntax/isolated checks with actual application acceptance.
+
+### Implementation checkpoint E — snapshot-based physical preflight and flow-state owner
+
+- `550fd05`: Fixed a real startup-order regression: the scene no longer requests navigation before NavigationSession has all stage/screen dependencies. [Existing CI passed](https://github.com/tpepels/piano_teacher/actions/runs/44618612691).
+- `46e2088`: Updated the active playback contract with ScoreStreamController, ScoreSceneController and current production/native acceptance limitations.
+- `21c3653`, `fd74559`, `6dbad68`: Physical admission's transaction executor now reads the queue via controlled snapshot/count and uses explicit rollback/receipt methods, not direct private FIFO mutation.
+- `4abaca0`, `2044151`, `ae5ea91`: ScoreTransportReservation consumes one frozen native renderer preflight model, containing peer clearance, authenticated source windows and paused identity. The separate isolated Godot fixture path preserves its minimal, read-only preflight interface without requiring nonexistent paused metadata. An existing CI run exposed this omission; the subsequent fix is committed.
+- `dd31edf`, `29c1d0c`: Moved the Practice Flow step/messaging/status owner from PracticeEngine into PracticeFlowCourseSession. The engine now applies already-typed transitions rather than writing a second flow-state field itself.
+
+#### Phase 6 acceptance matrix
+
+| Required acceptance | Current evidence | Status |
+| --- | --- | --- |
+| Python, Godot parse and existing isolated checks | CI on main, full run for latest commit required | **Automated verification pending latest commit** |
+| Actual embedded Python/Godot native boot + authentic score | Existing `scripts/verify-embedded-production-local.sh --without-package` provides an end-to-end runner; not executed in this environment | **Not verified** |
+| Pathétique Listen → Free → Tempo near 52%, notes visible and admitted before grading | Source transactions wired; exact user reproduction needs live runtime | **Not verified** |
+| Bars 1; 2,1–2; 3,2–3,1–3; 4,3–4,2–4,1–4; sliding at max width 4 | Authoritative generator and progress identity updated; no physical MIDI observation | **Source implemented; live acceptance pending** |
+| Cross-bar holds, sparse bars, changing meter, very slow BPM, long score | Source-safe windows and count-in map implemented; full native journey not executed | **Not verified** |
+| Pause, Resume and Retry including counted syllables and lowest/highest physical-key shortcuts | Shared route and count-in session integrated; actual Kawai timing not measured | **Not verified** |
+| Auto retry/recovery, preloaded lesson, interruption/close/reopen, saved progress | Source-bound admission + durable settlement implemented; physical and crash/restart cases outstanding | **Not verified** |
+| Self-contained packaged release | Existing script's `full` mode audits package; no packaged candidate run here | **Not verified** |
+
+**Existing acceptance commands** (do not add new tests):
+
+```bash
+bash scripts/test.sh
+bash scripts/verify-embedded-production-local.sh --without-package
+bash scripts/verify-embedded-production-local.sh
+```
+
+The native runner requires Godot 4.7.2, Python 3.14 dependencies and a compiled matching GDExtension. Running the existing native scripts on a configured Linux machine and physically testing the Kawai are still required. All incomplete items stay open; CI success by itself must not close them.
 
 ## Executive findings
 
