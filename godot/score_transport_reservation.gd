@@ -21,7 +21,15 @@ static func plan(renderer, action: String, world: float,
     var duration: float = float(renderer.timeline.duration_beats)
     if duration <= 0.0 or source_opening < 0.0 or             source_opening >= duration:
         return _refuse("invalid_source_interval")
-    if not renderer.has_source_windows_at(source_opening):
+    # Real native scores expose a public immutable geometry port.
+    # The existing isolated reservation fixtures still implement the
+    # older pure source-windows read method; keep that read-only shape
+    # without reintroducing a second admission or mutation path.
+    var source_exists: bool = (
+        renderer.has_source_windows_at(source_opening)
+        if renderer.has_method("has_source_windows_at")
+        else not renderer._stream_source_windows(source_opening).is_empty())
+    if not source_exists:
         return _refuse("no_source_measures")
     var density: float = float(renderer.timeline.pixels_per_beat)
     var staff_gap: float = float(renderer.staff_gap())
