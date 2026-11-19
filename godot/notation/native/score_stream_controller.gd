@@ -364,3 +364,180 @@ func append_take(view, windows: Array[Vector2], source_beat: float,
     live_serial = first_serial
     last_admitted = first_serial
 
+
+## Single transport reservation authority for Play, Resume, Retry, and
+## pre-ACK paused source reuse. A view exposes only source geometry.
+func reserve_ready(view, world: float, opening: float,
+        right: float, header: float) -> int:
+    if not view.native_ready or not view.retained_ready() or \
+            opening >= view.timeline.duration_beats:
+        return -1
+    var index: int = Admission.select(
+        queue.online,"ready",opening,world,right,header)
+    if index >= 0:
+        return int(queue.online[index]["serial"])
+    # READY never edits an existing placement. If its hidden source has
+    # approached the display, withdraw the still-unexposed tail into the
+    # offline queue, then append a fresh immutable future reservation.
+    var stale: int = Admission.select(
+        queue.online,"idle",opening,world)
+    if stale >= 0:
+        var stale_serial: int = int(queue.online[stale]["serial"])
+        var removed: Array[int] = queue.withdraw_tail(
+            view,world,view.timeline.pixels_per_beat,view.staff_gap(),
+            view.timeline.duration_beats,view.size.x,view.size.x*view.PLAYHEAD_FRACTION,
+            "idle_expired")
+        if not removed.has(stale_serial):
+            # The old reservation has crossed its immutable exposure
+            # boundary. Retain it and append beyond its printed end.
+            # Returning -1 here strands Pause -> Resume at low BPM.
+            pass
+    var onset: float = Admission.position(queue.online,world,right,
+        header,NAN,Admission.READY_TRAVEL_BEATS,
+        view.timeline.pixels_per_beat,view.staff_gap(),view.timeline.duration_beats)
+    # A new stage may be ready while prior lesson ink is still moving.
+    # Choose a later offscreen origin instead of repeatedly rejecting Play.
+    var peer_floor: float = queue.minimum_peer_opening(
+        view.timeline.pixels_per_beat,view.size.x,view.size.x*view.PLAYHEAD_FRACTION)
+    if is_finite(peer_floor):
+        onset = maxf(onset,peer_floor+header+
+            Admission.REST_GAP_BEATS)
+    if not is_finite(onset):
+        return -1
+    var old_serial := serial
+    view.append_source_take(opening,onset,opening,"prepared")
+    if serial == old_serial:
+        return -1
+    live_serial = -1
+    return last_admitted
+
+
+func claim_pending_auto(world: float, opening: float,
+        right: float, header: float) -> int:
+    var index: int = Admission.select(queue.online,"automatic",
+        opening,world,right,header)
+    return int(queue.online[index].get("take_owner",
+        queue.online[index]["serial"])) if index >= 0 else -1
+
+
+func reject_candidate(view, owner_serial: int, before_serial: int,
+        old_live_serial: int, snapshot: Dictionary) -> void:
+    # A failed pre-commit reservation must not leave a speculative future
+    # source/rest pair occupying the musical axis.
+    if owner_serial > before_serial:
+        queue.withdraw_take_tail(view,owner_serial,view.stream_world_beat,
+            view.timeline.pixels_per_beat,view.staff_gap(),view.timeline.duration_beats,
+            view.size.x,view.size.x*view.PLAYHEAD_FRACTION,"rejected_admission")
+    elif not snapshot.is_empty():
+        StreamLifecycle.restore_owner(queue.online,owner_serial,snapshot)
+    live_serial = old_live_serial
+
+
+
+func arm_take(view, world: float, opening: float, right: float,
+        header: float, planned_start_world: float = NAN,
+        resuming_paused: bool = false, retrying: bool = false,
+        empty_strip_count_in: float = 0.0) -> Dictionary:
+    # The common future-only admission route owns a rollback snapshot until
+    # the backend confirms the newly armed transport. Failure returns all
+    # source/rest clip roles to their exact original state.
+    if not view.native_ready or not view.retained_ready():
+        return {}
+    view.stream_world_beat = maxf(view.stream_world_beat,world)
+    var old_live: int = live_serial
+    var serial_before: int = serial
+    var serial := -1
+    var reused := false
+    var reused_auto := false
+    var reused_unplayed := false
+    if resuming_paused and was_paused and \
+            absf(opening-paused_source) < .0001:
+        var paused_index: int = Admission.select(queue.online,"paused",
+            opening,view.stream_world_beat,0.0,0.0,last_take)
+        if paused_index < 0 and paused_owner >= 0:
+            # Pause can precede the preceding Play's transport ACK. In that
+            # race the armed owner's key is provisional, but its immutable
+            # source and future location are already authoritative.
+            for index in range(queue.online.size()):
+                var candidate: Dictionary = queue.online[index]
+                if str(candidate.get("kind","")) != "source" or \
+                        int(candidate.get("take_owner",-1)) != paused_owner:
+                    continue
+                if str(candidate.get("take_key","")).begins_with("armed:") and \
+                        absf(float(candidate.get("source_floor",-1))-opening) < .00001 and \
+                        float(candidate["world_origin"])+opening >= \
+                            view.stream_world_beat+Admission.PAUSED_REUSE_EPSILON_BEATS:
+                    paused_index = index
+                    break
+        if paused_index >= 0:
+            serial = int(queue.online[paused_index].get("take_owner",
+                queue.online[paused_index]["serial"]))
+            reused = true
+            reused_unplayed = true
+    if serial < 0 and (resuming_paused or retrying):
+        serial = claim_pending_auto(view.stream_world_beat,opening,right,header)
+        reused_auto = serial >= 0
+        reused = reused_auto
+    if serial < 0 and is_finite(planned_start_world):
+        var checked: float = Admission.position(queue.online,
+            view.stream_world_beat,right,
+            header,planned_start_world,0.0,
+            view.timeline.pixels_per_beat,view.staff_gap(),view.timeline.duration_beats)
+        var onto_empty_strip := false
+        if not is_finite(checked) and retry_placement:
+            # A Retry is placed by Admission.retry_start (right edge at
+            # once, after exposed ink, no REST_GAP/READY travel): the commit
+            # accepts exactly that slot (the preflight's own rule).
+            var retry_floor: float = Admission.retry_start(
+                queue.online,view.stream_world_beat,right,
+                header,float(view.practice_timeline.get(
+                    "gap",{}).get("duration_beats",0.0)),
+                view.timeline.pixels_per_beat,view.staff_gap(),view.timeline.duration_beats)
+            if planned_start_world >= retry_floor-.0001:
+                checked = planned_start_world
+        if not is_finite(checked) and empty_strip_count_in > 0.0:
+            # The preflight chose the empty-strip count-in bar slot; the
+            # live queue must still permit exactly that deadline.
+            var earliest: float = view.empty_strip_onset(
+                queue.online,view.stream_world_beat,empty_strip_count_in,
+                header)
+            onto_empty_strip = is_finite(earliest) and \
+                planned_start_world >= earliest-.0001
+            checked = planned_start_world if onto_empty_strip else NAN
+        if not is_finite(checked):
+            return {}
+        var previous_serial := serial
+        view.append_source_take(opening,checked,opening,"prepared",onto_empty_strip)
+        if serial == previous_serial:
+            return {}
+        serial = last_admitted
+    elif serial < 0:
+        serial = reserve_ready(view,view.stream_world_beat,opening,right,header)
+    if serial < 0:
+        return {}
+    var snapshot: Dictionary = StreamLifecycle.snapshot_owner(
+        queue.online,serial)
+    if snapshot.is_empty():
+        reject_candidate(view,serial,serial_before,old_live,{})
+        return {}
+    # Every unacknowledged control has a unique owner-scoped identity.
+    if not StreamLifecycle.activate(
+            queue.online,serial,"armed:%d" % serial,true):
+        reject_candidate(view,serial,serial_before,old_live,snapshot)
+        return {}
+    armed_serial = serial
+    armed_segment_id = ""
+    arm_acknowledged = false
+    arm_rollback = {
+        "owner_serial":serial,"source_snapshot":snapshot,
+        "newly_allocated":serial > serial_before,
+        "old_live_serial":old_live}
+    for item in queue.online:
+        if int(item.get("serial",-1)) == serial:
+            return {"start_world":float(item["world_origin"])+opening,
+                "opening":opening,"reused":reused,
+                "reused_unplayed_count_in":reused_unplayed}
+    cancel_arm(view,view.stream_world_beat)
+    return {}
+
+

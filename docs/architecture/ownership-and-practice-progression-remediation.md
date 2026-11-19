@@ -190,6 +190,12 @@
 - Separated `native` and `core` workflow concurrency groups so source refactoring no longer aborts a long native compile/embedded/package verification. An explicitly tagged `[native]` push starts the full existing production audit.
 - This changes only the runner scheduling and runs no new tests. CI and physical acceptance remain separate.
 
+### Implementation checkpoint T — unified source reservation and arming
+
+- Transferred READY reservation selection, automatic/paused take reuse, failed pre-commit candidate compensation and complete Play/Resume/Retry arm ownership to `ScoreStreamController`. The score view now exposes one bounded `arm_stream_take` port and source-geometry preparation.
+- The controller is the only writer of armed/live serials, rollback snapshots and the selected owner for these routes; it uses the one source/rest queue and the same immutable preflight placement.
+- Native recovery-batch orchestration, retained-painter lifetime and transitional forwarding properties still require extraction. No new tests.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
