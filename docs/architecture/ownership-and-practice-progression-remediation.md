@@ -226,6 +226,12 @@
 - Centered the practice header context/navigation/BPM/Settings controls on one vertical row. Kept the existing assertion but included exact geometry in its failure diagnostic. Updated the existing native bridge smoke to explicitly enter Practice after the correctly pending Listen stage before testing its low-level start/pause/resume protocol; the normal Listen/Free/Tempo path remains reserved for production-scene acceptance.
 - No new tests. Repeat native UI and package audit are still required for latest source.
 
+### Implementation checkpoint Z — evidence queries and history status out of PracticeEngine
+
+- Moved `learning_history_status` formatting and the independent SQLite/WAL read-only learning-statistics query/retention verification into `LearningEvidenceSession`. The engine now exposes only its locked current-fingerprint status port and a non-blocking statistics call.
+- This preserves snapshot transaction boundaries, quantile computation outside the read transaction, learner identity and deletion-race validation. Evidence capture and querying share one domain owner; no new tests.
+- PracticeEngine still contains transport commands and complex automatic continuation/assessment lifecycle and therefore Phase 5 is **not closed**.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

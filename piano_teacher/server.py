@@ -397,45 +397,12 @@ class PracticeEngine:
 
     def learning_history_status(self) -> dict:
         with self.lock:
-            status = self.progress.ledger.status()
-            return {**status, "attempt_count": status["attempts"],
-                    "detail_attempt_count": status["attempts"]-status["coverage"]["pruned_detail_attempts"]-status["coverage"]["legacy_bounded_attempts"],
-                    "pruned_attempt_count": status["coverage"]["pruned_detail_attempts"],
-                    "current_fingerprint": self.fingerprint,
-                    "default_path": str(self._data_dir / "exports" / "learning-history.json"),
-                    "evidence_retention_days": self.library.settings["evidence_retention_days"],
-                    "evidence_budget_mib": self.library.settings["evidence_budget_mib"],
-                    "summary": (f"{status['attempts']} recorded takes. "
-                                "History stays on this computer. Reset Lesson preserves history.")}
+            return self.learning_evidence.history_status(
+                fingerprint=self.fingerprint,data_dir=self._data_dir)
 
     def learning_statistics(self, fingerprint: str | None = None, *, query=None) -> dict:
-        """Read measured learning outcomes without advancing the musical clock."""
-        from .learning_statistics import learning_statistics
-        from .learning_statistics_query import capture_statistics, validate_query
-        from contextlib import closing
-        import sqlite3
-        q = validate_query(query, fingerprint)
-        # An independent read-only connection never waits for the engine lock.
-        # Close the bounded snapshot before formatting, releasing SQLite's read
-        # lock before any expensive dictionary/quantile projection.
-        path = self.progress.db_path.as_uri() + "?mode=ro"
-        with closing(sqlite3.connect(path, uri=True, timeout=.05)) as db:
-            db.execute("PRAGMA query_only=ON")
-            db.execute("BEGIN")
-            learner = db.execute("SELECT learner_id FROM learning_current_learner WHERE singleton=1").fetchone()[0]
-            snapshot = capture_statistics(db, learner, q)
-            db.rollback()
-            report = learning_statistics(None, query=q, snapshot=snapshot)
-            # Deletion may commit while formatting. Never publish erased data
-            # or a former learner's snapshot after that boundary.
-            current = db.execute("SELECT learner_id FROM learning_current_learner WHERE singleton=1").fetchone()
-            ids = snapshot["query"]["attempt_ids"]
-            slots = ",".join("?" for _ in ids) or "NULL"
-            retained = db.execute(f"SELECT count(*) FROM learning_attempts WHERE attempt_id IN ({slots})", ids).fetchone()[0]
-            if current != (learner,) or retained != len(ids):
-                raise ValueError("Learning history changed during the report; refresh statistics")
-            report["learner_id"] = learner
-            return report
+        # A separate read-only WAL connection; never hold the musical lock.
+        return self.learning_evidence.statistics(fingerprint,query=query)
 
     def _retry_context(self, result, *, end_beat=None):
         return self.learning_evidence.adaptive_context(
