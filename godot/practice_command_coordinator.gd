@@ -66,12 +66,19 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
     last_state = presentation_facts
     var requested: String = str(command.get("action", ""))
     var previous_action: String = state.control_action
+    # score_ready is an automatic Play after a newly compiled Tempo stage.
+    # It must reserve its source against the outgoing Free/Listen notation
+    # BEFORE acknowledging playback, exactly like a manual Start.
+    var automatic_score_start: bool = requested == "score_ready" and \
+        str(last_state.get("phase","")) == "loading" and \
+        str(last_state.get("mode","")) in ["practice","perform"] and \
+        int(command.get("revision",-1)) == int(last_state.get("revision",-2))
     if not state.action_requested(requested):
         # Busy operations still show their current action; Pause/Stop queues.
         practice_view.begin_action(requested, previous_action)
         return
     practice_view.begin_action(requested)
-    if not requested in ["start","restart","resume"]:
+    if not requested in ["start","restart","resume"] and not automatic_score_start:
         metronome_frame.cancel_reserved_count_in()
     var rest_phase: bool = not bool(last_state.get("running",false)) and \
         str(last_state.get("pause_context",last_state.get("phase",""))) in [
@@ -130,9 +137,19 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
             practice_view.stage.renderer._stream_header_beats(0.0))
         request_command("practice.command", command)
         return
-    if requested in ["start","restart","resume"] and \
+    if (requested in ["start","restart","resume"] or automatic_score_start) and \
             str(last_state.get("mode","practice")) in ["practice","perform"] and \
             practice_view.stage.renderer != null:
+        # Automatic score publication uses the identical provisional source
+        # reservation/ACK transaction as a user Play. Without it, the engine
+        # can start its Tempo count-in while the previous Free rest still
+        # blocks the later SCORE_PLAN_QUEUE attempt (TAKE_WITHOUT_SCORE).
+        if automatic_score_start and not visual_transport_clock.has_backend_offset:
+            state.abort_action()
+            practice_view.finish_action()
+            practice_view.present_message("Waiting for the score clock")
+            return
+        var reservation_action: String = "start" if automatic_score_start else requested
         # The user's action reserves the next musical deadline beyond all
         # notes still moving on the visual bar. The engine, not the GUI,
         # applies this lead to MIDI grading and count-in.
@@ -140,7 +157,7 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         var visual_now: float = score_flow.project(reserved_at_ms)
         var renderer = practice_view.stage.renderer
         var opening: float = maxf(0.0,float(last_state.get("play_from_beat",0.0)))
-        if requested == "resume":
+        if reservation_action == "resume":
             opening = maxf(opening,opening+_transport_beat_at(Time.get_ticks_msec()))
         # One preflighted transaction plans the maximal retractable suffix,
         # verifies a future admission, then commits it with one graded deadline.
@@ -152,12 +169,12 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         # this frame's reservation work, and the count-in bar itself still
         # ends exactly at the take's first beat.
         var count_in_slot: float = float(last_state.get("next_count_in_beats",0.0))
-        if requested in ["start","resume"] and count_in_slot > 0.0:
+        if reservation_action in ["start","resume"] and count_in_slot > 0.0:
             count_in_slot += TempoTimeline.beats_from_seconds(
                 float(last_state.get("short_rest_latency_seconds",0.0)),
                 float(last_state.get("bpm",score_flow.bpm)))
         var reserved: Dictionary = renderer.reserve_transport_action(
-            requested,visual_now,opening,count_in_slot)
+            reservation_action,visual_now,opening,count_in_slot)
         if reserved.is_empty():
             state.abort_action()
             practice_view.finish_action()
@@ -170,7 +187,7 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         # command: Play's count-in and Retry's rest run at the selected BPM
         # (a tempo-mapped take, e.g. a slowdown stage, ran at its own rate
         # until now); a mid-take Resume continues inside the take's map.
-        var lead_bpm: float = StreamAdmission.command_lead_bpm(requested,
+        var lead_bpm: float = StreamAdmission.command_lead_bpm(reservation_action,
             score_flow.bpm,float(last_state.get("bpm",score_flow.bpm)))
         command["presentation_lead_seconds"] = StreamAdmission.lead_seconds(
             float(reserved["start_world"]),visual_now,lead_bpm)
@@ -180,7 +197,7 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
             command["presentation_deadline_ms"] = float(reserved_at_ms) + \
                 float(command["presentation_lead_seconds"])*1000.0 - \
                 visual_transport_clock.backend_offset_ms
-        if requested == "resume":
+        if reservation_action == "resume":
             command["reuse_pending_score"] = bool(
                 reserved.get("reused_unplayed_count_in",false))
         # Godot knows this deadline now: speak its count-in from it, on
