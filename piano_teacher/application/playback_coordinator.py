@@ -43,6 +43,7 @@ class PlaybackIntent:
     bpm: float
     count_in_beats: float
     count_in_meter: tuple[int, int]
+    resume_remaining_beats: float
     earliest_deadline_ms: float
     requested_at: float
 
@@ -149,6 +150,14 @@ class PlaybackCoordinator:
             raise ValueError("Invalid count-in duration")
         now = engine.now()
         bpm = float(engine.plan.bpm)
+        resume_remaining = 0.0
+        if (action == "resume" and engine.pause_context == "count_in"
+                and engine.running and engine.visual_transport.paused
+                and engine.visual_transport.run_at >
+                    engine.visual_transport.paused_at):
+            resume_remaining = min(count_in, SCHEDULER.seconds_beats(
+                engine.visual_transport.run_at -
+                engine.visual_transport.paused_at, bpm))
         # Admission must complete before the ENTIRE last bar begins. A
         # longer preceding silent runway is allowed, never an extra bar.
         earliest = max(
@@ -169,6 +178,7 @@ class PlaybackCoordinator:
             from_beat=float(from_beat), bpm=bpm,
             count_in_beats=count_in,
             count_in_meter=(int(meter[0]), int(meter[1])),
+            resume_remaining_beats=resume_remaining,
             earliest_deadline_ms=earliest * 1000.0,
             requested_at=now)
         self.receipt = None
@@ -203,9 +213,18 @@ class PlaybackCoordinator:
                 or stage_key != intent.stage_key or revision != intent.revision):
             raise ValueError("Score reservation has the wrong musical source")
         if (not math.isfinite(float(deadline_ms))
-                or not math.isfinite(float(world_origin))
-                or deadline_ms < intent.earliest_deadline_ms - .01):
-            raise ValueError("Score reservation violates the earliest musical deadline")
+                or not math.isfinite(float(world_origin))):
+            raise ValueError("Score reservation has invalid physical coordinates")
+        if reused_count_in and not (
+                intent.action == "resume" and intent.resume_remaining_beats > 0):
+            raise ValueError("Only a paused count-in can reuse its spoken beats")
+        earliest = intent.earliest_deadline_ms
+        if reused_count_in:
+            earliest = (intent.requested_at + SNAPSHOT_LATENCY_SECONDS
+                        + SCHEDULER.beats_seconds(
+                            intent.resume_remaining_beats,intent.bpm)) * 1000.0
+        if deadline_ms < earliest - .01:
+            raise ValueError("Score reservation violates the musical count-in deadline")
         if self.receipt is not None:
             receipt = self.receipt
             if (receipt.intent_id == intent_id and receipt.attempt == attempt
@@ -241,9 +260,10 @@ class PlaybackCoordinator:
                 or receipt.intent_id != intent_id or receipt.attempt != attempt):
             raise ValueError("No matching score reservation to present")
         now = engine.now()
-        full_count_in = SCHEDULER.beats_seconds(
-            intent.count_in_beats, intent.bpm)
-        if receipt.deadline_ms / 1000.0 < now + full_count_in - 1e-4:
+        remaining = (intent.resume_remaining_beats if receipt.reused_count_in
+                     else intent.count_in_beats)
+        count_in_seconds = SCHEDULER.beats_seconds(remaining, intent.bpm)
+        if receipt.deadline_ms / 1000.0 < now + count_in_seconds - 1e-4:
             self._expire(message="Score admission expired before its count-in")
             raise ValueError("Score reservation expired; admit the new attempt")
         # No graded/audio transport mutation happened in either prior step.
@@ -343,6 +363,7 @@ class PlaybackCoordinator:
             "from_beat": intent.from_beat, "bpm": intent.bpm,
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
+            "resume_remaining_beats":intent.resume_remaining_beats,
             "earliest_deadline_ms": intent.earliest_deadline_ms,
             "status": self.state.value,
         }
