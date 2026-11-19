@@ -129,7 +129,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var required_slot: float = maxf(count_in, floor_world-world)
     var action: String = str(intent.get("action", "start"))
     var reservation_action: String = (
-        "resume" if action in ["resume","auto"] else
+        "resume" if action == "resume" else
         "restart" if action == "restart" else "start")
     var planned: Dictionary = view.reserve_transport_action(
         reservation_action, world,
