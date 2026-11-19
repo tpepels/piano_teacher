@@ -31,6 +31,16 @@ var last_activated_intent := ""
 var last_activated_attempt := -1
 var missing_score_frames := 0
 var reported_failure_segment := ""
+var _last_problem := ""
+var _last_problem_ms := -100000
+
+func _report_problem(message: String) -> void:
+    var now_ms: int = Time.get_ticks_msec()
+    if message != _last_problem or now_ms-_last_problem_ms > 5000:
+        _last_problem = message
+        _last_problem_ms = now_ms
+        admission_problem.emit(message)
+
 
 func configure(host: Node, bridge: Node, practice_stage,
         score_assets, score_runway, score_flow, clock, count_in) -> void:
@@ -118,7 +128,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     # closed rather than silently admitting a take at the wrong time.
     if state.has("clock_sampled_at_ms") and \
             absf(backend_now-float(state["clock_sampled_at_ms"])) > 1800.0:
-        admission_problem.emit("Playback clocks disagree; refusing score admission")
+        _report_problem("Playback clocks disagree; refusing score admission")
         return
     var world: float = flow.project(frame_ms)
     var backend_floor: float = float(intent.get("earliest_deadline_ms", NAN))
@@ -172,7 +182,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         planned = view.reserve_transport_action(
             reservation_action,world,opening,required_slot)
     if planned.is_empty():
-        admission_problem.emit("Cannot reserve source notation for this playback")
+        _report_problem("Cannot reserve source notation for this playback")
         return
     renderer = view
     var start_world: float = float(planned.get("start_world", NAN))
@@ -185,7 +195,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var deadline: float = backend_now+lead_ms
     if deadline < admitted_floor-.01:
         _cancel_provisional()
-        admission_problem.emit("Reserved notation precedes its musical deadline")
+        _report_problem("Reserved notation precedes its musical deadline")
         return
     admission_state = state.duplicate(true)
     current = intent.duplicate(true)
@@ -270,7 +280,7 @@ func _reserved(code: int, body: PackedByteArray) -> void:
     if code != 0 or not data is Dictionary or \
             not bool(data.get("reserved",false)):
         _cancel_provisional()
-        admission_problem.emit("Backend rejected notation reservation: "+str(
+        _report_problem("Backend rejected notation reservation: "+str(
             data.get("error","invalid receipt") if data is Dictionary else code))
         return
     receipt = data
@@ -348,7 +358,7 @@ func _confirm_authorized(data: Dictionary) -> void:
                     "take_id":str(receipt.get("take_id","")),
                     "segment_id":expected,
                     "reason":"prepared_stage_promotion_failed"})
-            admission_problem.emit("Authorized stage could not be presented")
+            _report_problem("Authorized stage could not be presented")
             current.clear()
             receipt.clear()
             admission_state.clear()
@@ -396,4 +406,4 @@ func _withdrawn(_code: int, _body: PackedByteArray) -> void:
 
 func _failure_reported(code: int, body: PackedByteArray) -> void:
     if code != 0:
-        admission_problem.emit("Could not halt playback after notation loss: "+body.get_string_from_utf8())
+        _report_problem("Could not halt playback after notation loss: "+body.get_string_from_utf8())
