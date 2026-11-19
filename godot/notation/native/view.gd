@@ -1560,8 +1560,10 @@ func present_flow(world_beat: float, state: Dictionary,
             # result determines whether it was ever authorized. On the
             # first paused frame AFTER ACK, retract the maximal unseen
             # suffix (even from the active take), leaving exposed ink.
-            if not (_stream_armed_serial >= 0 and
-                    not _stream_arm_acknowledged):
+            if _stream_armed_serial < 0:
+                # The score remains provisional until the coordinator's
+                # presentation acknowledgement. Pause may not withdraw
+                # the source between reserve and backend authorization.
                 trim_future_queue("pause")
         _stream_was_paused = true
         _stream_live_serial = -1
