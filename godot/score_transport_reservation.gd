@@ -79,6 +79,9 @@ static func plan(renderer, action: String, world: float,
         if reusable < 0:
             reusable = Admission.select(queue.online,"automatic",
                 source_opening,preview_world,right,header)
+    if reusable >= 0 and float(queue.online[reusable]["world_origin"]) + \
+            source_opening < preview_world+count_in_beats-.0001:
+        reusable = -1
     if reusable >= 0:
         return {"ok":true,"mode":"reuse","action":action,
             "opening":source_opening,
@@ -105,8 +108,7 @@ static func plan(renderer, action: String, world: float,
                 "duration_beats",0.0)),density,staff_gap,duration)
     if is_finite(peer_floor):
         onset = maxf(onset,peer_floor+header+Admission.REST_GAP_BEATS)
-    if action in ["start","resume"] and is_finite(count_in_beats) and \
-            count_in_beats > 0.0:
+    if is_finite(count_in_beats) and count_in_beats > 0.0:
         # The engine counts one whole bar before grading starts. The slot
         # must be at least that far ahead, or grading (count-in bar) and
         # ink (shorter offscreen slot) would be two deadlines. With no
