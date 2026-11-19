@@ -1761,10 +1761,18 @@ class PracticeEngine:
                     reuse_pending_score=receipt.reused_count_in,
                     scheduled_deadline=deadline)
             elif intent.action in ("auto", "score_ready"):
-                self.start(from_beat=intent.from_beat, mode=intent.mode,
-                    loop_continuation=intent.action == "auto",
-                    decided=intent.action == "score_ready",
-                    scheduled_deadline=deadline)
+                # The immutable coordinator intent, not the last manual
+                # command or a cached prepared source, chooses the exact
+                # graded passage. Automatic teaching selection was already
+                # settled before this reservation.
+                previous_effect = self.session_commands.active
+                self.session_commands.active = None
+                try:
+                    self.start(from_beat=intent.from_beat, mode=intent.mode,
+                        loop_continuation=intent.action == "auto",
+                        decided=False, scheduled_deadline=deadline)
+                finally:
+                    self.session_commands.active = previous_effect
                 self._queue_scheduled_start = (
                     self.transport_id, self.visual_transport.play_from_beat,
                     self.visual_transport.run_at, self.plan.identity,
