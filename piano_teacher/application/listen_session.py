@@ -148,7 +148,7 @@ class ListenSession:
             self._info["ready"] = True
             return True
 
-    def begin_playback(self, revision: int) -> ListenStart | None:
+    def begin_playback(self, revision: int, *, commit: bool = True) -> ListenStart | None:
         with self._lock:
             selected = self._selection
             if (selected is None or self._info is None or self._audio is None or self._started
@@ -164,7 +164,8 @@ class ListenSession:
             if meter is not None:
                 bar_beats = meter[0]*4/meter[1]
             count_beats = SCHEDULER.count_in_beats(bar_beats,selected.bpm)
-            self._started = True
+            if commit:
+                self._started = True
             return ListenStart(bar_beats,count_meter,count_beats,
                 SCHEDULER.beats_seconds(count_beats,selected.bpm))
 
