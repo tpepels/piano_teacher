@@ -143,7 +143,11 @@ class PlaybackCoordinator:
                     and existing.action == action and existing.mode == mode
                     and abs(existing.from_beat - from_beat) < 1e-7):
                 return existing
-            self.invalidate("superseded")
+            # A replacement intent may be prepared while the preceding
+            # graded take is still settling. Superseding only withdraws
+            # its provisional successor; it must not erase the authoritative
+            # identity of the currently playing take.
+            self.cancel_pending("superseded")
         bar, meter = engine.attempt_progression.count_in_bar(
             phrase=engine.plan.active_phrase,
             boundaries=engine.plan.piece.bar_boundaries,
