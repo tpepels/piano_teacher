@@ -2907,7 +2907,12 @@ class PracticeEngine:
                     bpm=self._presentation_bpm), self.plan.bpm)
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn progress."
-            if now >= self.visual_transport.next_at:
+            if self.playback.presentation_required:
+                # The next preview must be admitted during the rest, not at
+                # the previous retry deadline after its count-in is over.
+                self._continue_at(self.visual_transport.next_at,
+                    from_beat=0.0)
+            elif now >= self.visual_transport.next_at:
                 self._update()
             return
         tempo_map = self._active_tempo_map()
@@ -3056,6 +3061,13 @@ class PracticeEngine:
             self.auto = False
             self.visual_transport.cancel_preparation()
             self.visual_transport.next_at = 0
+        if (rewind and self.playback.presentation_required and self.auto
+                and self.visual_transport.next_at):
+            # The failure decision and recorded result are already fixed.
+            # Persist/settle now and request the retry's score during the
+            # rest, not when the old count-in deadline elapses.
+            self._advance_pending_feedback(now, force_early=True)
+            return
         if result.passed:
             label = "Clean" if result.clean else "Accepted"
             self.next_action = (f"{label} passage — restore tempo to {decision.progress_after.bpm} BPM toward {self.plan.target_bpm} BPM."
