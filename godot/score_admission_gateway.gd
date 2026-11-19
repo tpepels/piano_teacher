@@ -249,9 +249,15 @@ func observe(state: Dictionary, frame_ms: int) -> void:
                     "reason": "running_take_without_admitted_source"})
         else:
             missing_score_frames = 0
-    if not intent is Dictionary or bool(state.get("paused",false)):
+    if not intent is Dictionary or (bool(state.get("paused",false)) and \
+            str(intent.get("action","")) != "resume"):
         if not current.is_empty() and not pending_reconciliation:
             _cancel_provisional()
+        elif pending_reconciliation and not receipt.is_empty() and \
+                status_request._pending_id < 0 and \
+                Time.get_ticks_msec()-started_ms > 800:
+            started_ms = Time.get_ticks_msec()
+            _query_status()
         return
     var identifier: String = str(intent.get("intent_id",""))
     var attempt: int = int(intent.get("attempt",-1))
