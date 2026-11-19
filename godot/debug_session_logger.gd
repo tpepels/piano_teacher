@@ -1,4 +1,5 @@
 extends RefCounted
+const StateContract := preload("res://state_contract.gd")
 ## Sole read-only ownership of session debugging, diagnostics file lifecycle
 ## and bounded per-state logging. Does not access Main or alter playback.
 var _debug_file: FileAccess = null
@@ -8,6 +9,18 @@ var _debug_target := ""
 var _debug_beat_ms := 0
 var _debug_inputs := -1
 var _debug_unscored := ""
+var _reported_contract_problems: Dictionary = {}
+
+## Log each published contract violation exactly once.  Main is only a
+## lifecycle/composition root and has no schema diagnostic state.
+func check_contract(state: Dictionary) -> void:
+    if not OS.is_debug_build() or not state.has("schema_version"):
+        return
+    for problem in StateContract.problems(state):
+        if not _reported_contract_problems.has(problem):
+            _reported_contract_problems[problem] = true
+            push_error("STATE_CONTRACT: " + problem)
+
 
 func record(state: Dictionary, now_ms: int, renderer,
         keyboard_visible: bool, guided_world: float, hold_world: float) -> void:
@@ -31,7 +44,7 @@ func record(state: Dictionary, now_ms: int, renderer,
         _debug_file.store_line("%s STATE %s | %s | msg=%s | feedback=%s" % [stamp, key,
             flow.get("status", ""), flow.get("message", ""), state.get("feedback", "")])
     if renderer != null and str(renderer.unscored_take_status()) != _debug_unscored:
-        _debug_unscored = str(renderer._unscored_take)
+        _debug_unscored = str(renderer.unscored_take_status())
         _debug_file.store_line("%s DEFECT TAKE_WITHOUT_SCORE %s" % [stamp, _debug_unscored])
     var inputs := int(state.get("midi_input_count", 0))
     if inputs != _debug_inputs:

@@ -20,7 +20,7 @@
 | Architecture docs / O07 | ACTIVE CONTRACT UPDATED; REFERENCE SWEEP OPEN | ADR-0001 and playback coordinator document current authority; old ownership docs marked historical, stale 17 November Practice Flow comparison archived, live spec revised to moving windows; remaining references require checking |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
 | Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController own clipping, preflight execution, queue/serial/rollback, peer clearance, transport observation and binding, suffix retirement, and diagnostic state. NativeView still contains physical append/rollback algorithms and painter lifecycle, with transitional forwarding properties |
-| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger, NavigationSession, ApplicationEventRouter and StatusHeadPreloader now own their respective domains. Main no longer manages glyph cache/pre-play GPU warmup; it still builds screen trees and routes command/in-process callbacks |
+| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger (including snapshot contract diagnostics), NavigationSession, ApplicationEventRouter and StatusHeadPreloader own their respective domains. Main still builds screen trees and routes command/in-process callbacks |
 | Existing CI/native integration | EXISTING CI GREEN AT `a30c366`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44620738644](https://github.com/tpepels/piano_teacher/actions/runs/44620738644) passed on current implementation+tracker code; old preflight fixture regression was repaired at `ae5ea91`. CI parses but does not run full production native UI journeys. No tests added or changed; physical MIDI/audio unverified |
 
 ### Phase completion status
@@ -117,6 +117,13 @@
 - Introduced `StatusHeadPreloader`, which owns cross-stage Verovio head-interior texture reuse and the temporary GPU warmup layers for the first note-status paint. The existing cache key, retained render passes, early-teardown lifetime and timing diagnostics are preserved.
 - Removed `Main._status_head_interiors` and the full `_warm_status_heads` implementation. The score-published callback now requests warmup through the dedicated owner, without carrying rendering caches in the scene composition root.
 - No new tests. **Remaining L03 work:** extract state-event routing and command/result ownership from the scene root while preserving UI lifecycle and all wired controls. Native/physical acceptance stays open.
+
+
+### Implementation checkpoint I — one debugging and schema-diagnostics owner
+
+- Moved the debug-only state-schema validation and one-error-per-contract-problem tracking from `Main` into the existing `DebugSessionLogger`, consolidating diagnostics without another parallel log/cache.
+- Removed `DebugSessionLogger`'s access to `renderer._unscored_take`; it now reads the existing public `unscored_take_status()` capability consistently.
+- No new tests or test changes. This reduces the Main scene's policy/diagnostic state but does not yet finish event/scene decomposition.
 
 #### Phase 6 acceptance matrix
 
