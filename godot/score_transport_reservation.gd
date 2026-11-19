@@ -21,14 +21,17 @@ static func plan(renderer, action: String, world: float,
     var duration: float = float(renderer.timeline.duration_beats)
     if duration <= 0.0 or source_opening < 0.0 or             source_opening >= duration:
         return _refuse("invalid_source_interval")
-    # Real native scores expose a public immutable geometry port.
-    # The existing isolated reservation fixtures still implement the
-    # older pure source-windows read method; keep that read-only shape
-    # without reintroducing a second admission or mutation path.
-    var source_exists: bool = (
-        renderer.has_source_windows_at(source_opening)
-        if renderer.has_method("has_source_windows_at")
-        else not renderer._stream_source_windows(source_opening).is_empty())
+    # A real native renderer publishes a frozen physical read model.
+    # Legacy isolated preflight fixtures can supply their own in-memory
+    # queue model without mutating production renderer state.
+    var native: bool = renderer.has_method("transport_preflight_facts")
+    var facts: Dictionary = (renderer.transport_preflight_facts(
+        world,source_opening) if native else {})
+    var source_exists: bool = (bool(facts.get("source_exists",false))
+        if native else (
+            renderer.has_source_windows_at(source_opening)
+            if renderer.has_method("has_source_windows_at") else
+            not renderer._stream_source_windows(source_opening).is_empty()))
     if not source_exists:
         return _refuse("no_source_measures")
     var density: float = float(renderer.timeline.pixels_per_beat)
@@ -36,18 +39,23 @@ static func plan(renderer, action: String, world: float,
     var width: float = float(renderer.size.x)
     if density <= 0.0 or staff_gap <= 0.0 or width < 100.0:
         return _refuse("score_viewport_not_ready")
-    var queue = renderer._stream_queue
-    var right: float = renderer._stream_right_beats()
-    var header: float = renderer._stream_header_beats(source_opening)
-    var preview_world: float = maxf(world,float(renderer.stream_world_beat))
-    # All possible mutations are previewed on a local ARRAY copy only.
-    # Visible and already-exposed strips remain fixed forever.
-    var withdrawn: Dictionary = queue.preview_tail_withdrawal(
-        preview_world,density,staff_gap,duration,width,
-        width*renderer.PLAYHEAD_FRACTION)
+    var queue = null if native else renderer._stream_queue
+    var online: Array = facts["online"] if native else queue.online
+    var right: float = float(facts["right"]) if native else renderer._stream_right_beats()
+    var header: float = float(facts["header"]) if native else renderer._stream_header_beats(source_opening)
+    var preview_world: float = (float(facts["preview_world"])
+        if native else maxf(world,float(renderer.stream_world_beat)))
+    var withdrawn: Dictionary = (facts["withdrawn"] if native else
+        queue.preview_tail_withdrawal(preview_world,density,staff_gap,
+            duration,width,width*renderer.PLAYHEAD_FRACTION))
     var survivors: Array = withdrawn["remaining"]
-    var peer_floor: float = queue.minimum_peer_opening(
-        density,width,width*renderer.PLAYHEAD_FRACTION)
+    var peer_floor: float = (float(facts["peer_floor"]) if native else
+        queue.minimum_peer_opening(
+            density,width,width*renderer.PLAYHEAD_FRACTION))
+    var was_paused: bool = bool(facts.get("was_paused",false)) if native else bool(renderer._stream_was_paused)
+    var paused_source: float = float(facts.get("paused_source",0.0)) if native else float(renderer._stream_paused_source)
+    var paused_owner: int = int(facts.get("paused_owner",-1)) if native else int(renderer._stream_paused_owner)
+    var last_take: String = str(facts.get("last_take","")) if native else str(renderer._stream_last_take)
     # Owner decision 2026-11-08: Play or Resume on an empty strip opens one
     # count-in bar ahead of the playhead. A hidden READY take was never
     # seen, so it is withdrawn rather than reused from beyond the right edge.
@@ -59,22 +67,22 @@ static func plan(renderer, action: String, world: float,
     # while other ink is still moving ahead of the playhead.
     var reusable := -1
     if action == "start" and not is_finite(near_onset):
-        reusable = Admission.select(queue.online,"ready",
+        reusable = Admission.select(online,"ready",
             source_opening,preview_world,right,header)
     elif action == "resume":
-        if bool(renderer._stream_was_paused) and                 absf(source_opening-float(renderer._stream_paused_source)) < .0001:
-            reusable = Admission.select(queue.online,"paused",
+        if was_paused and absf(source_opening-paused_source) < .0001:
+            reusable = Admission.select(online,"paused",
                 source_opening,preview_world,0.0,0.0,
-                str(renderer._stream_last_take))
-            if reusable < 0 and int(renderer._stream_paused_owner) >= 0:
+                last_take)
+            if reusable < 0 and paused_owner >= 0:
                 # A Pause snapshot can arrive before Play's ACK binds the
                 # backend transport key. The provisional ARMED source is
                 # still authoritative, and must not be retracted.
-                for index in range(queue.online.size()):
-                    var item: Dictionary = queue.online[index]
+                for index in range(online.size()):
+                    var item: Dictionary = online[index]
                     if str(item.get("kind","")) != "source" or \
                             int(item.get("take_owner",-1)) != \
-                                int(renderer._stream_paused_owner):
+                                paused_owner:
                         continue
                     var key: String = str(item.get("take_key",""))
                     var onset: float = float(item["world_origin"]) + source_opening
@@ -85,17 +93,17 @@ static func plan(renderer, action: String, world: float,
                         reusable = index
                         break
         if reusable < 0:
-            reusable = Admission.select(queue.online,"automatic",
+            reusable = Admission.select(online,"automatic",
                 source_opening,preview_world,right,header)
-    if reusable >= 0 and float(queue.online[reusable]["world_origin"]) + \
+    if reusable >= 0 and float(online[reusable]["world_origin"]) + \
             source_opening < preview_world+count_in_beats-.0001:
         reusable = -1
     if reusable >= 0:
         return {"ok":true,"mode":"reuse","action":action,
             "opening":source_opening,
-            "protected_take":int(queue.online[reusable].get("take_owner",
-                queue.online[reusable]["serial"])),
-            "start_world":float(queue.online[reusable]["world_origin"]) +
+            "protected_take":int(online[reusable].get("take_owner",
+                online[reusable]["serial"])),
+            "start_world":float(online[reusable]["world_origin"]) +
                 source_opening,"reason":"existing_future_owner"}
     if is_finite(near_onset):
         return {"ok":true,"mode":"append","action":action,
