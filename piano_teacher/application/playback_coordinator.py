@@ -132,6 +132,8 @@ class PlaybackCoordinator:
         if action not in {"start", "restart", "resume", "auto", "score_ready",
                           "listen"}:
             raise ValueError("Unsupported playback intent")
+        if mode not in {"practice", "perform", "listen"}:
+            raise ValueError("Untimed lessons do not authorize graded playback")
         if self.intent is not None:
             existing = self.intent
             if (self._valid_source(engine, existing)
