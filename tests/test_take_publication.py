@@ -54,6 +54,7 @@ def test_every_running_take_in_the_practice_flow_has_a_published_source(tmp_path
         seen = set()
         acked_audio = None
         tempo_takes = set()
+        reserved_tempo_takes = 0
         played = set()
         for _ in range(4000):
             engine.advance_clock()
@@ -71,8 +72,35 @@ def test_every_running_take_in_the_practice_flow_has_a_published_source(tmp_path
                 if mode == "practice":
                     tempo_takes.add(snap["transport_id"])
             if phase == "loading" and engine.awaiting_score_revision is not None:
-                ask("practice.command", {"action": "score_ready",
-                                         "revision": engine.awaiting_score_revision})
+                command = {"action": "score_ready",
+                           "revision": engine.awaiting_score_revision}
+                if mode == "practice":
+                    # The UI has pre-admitted the first Tempo copy beyond a
+                    # preceding Free rest. It sends the same absolute deadline
+                    # used for source geometry, count-in and MIDI grading.
+                    # A longer physical clearance must not be recalculated
+                    # or ignored by the backend.
+                    bar = snap["next_count_in_beats"]
+                    bpm = snap["bpm"]
+                    reserved_at = engine.now() + (bar + 1.25) * 60.0 / bpm + 0.4
+                    command["presentation_deadline_ms"] = reserved_at * 1000.0
+                    # A stale/impossible score reservation is rejected
+                    # without starting an unscored take.
+                    stale = {**command, "presentation_deadline_ms":
+                             (engine.now() + 0.1) * 1000.0}
+                    status, _ = commands.request(
+                        "practice.command", json.dumps(stale))
+                    assert status != 0
+                    assert engine.awaiting_score_revision == command["revision"]
+                ask("practice.command", command)
+                if mode == "practice":
+                    assert engine.visual_transport.run_at == pytest.approx(
+                        reserved_at, abs=1e-5)
+                    published = ask("state.snapshot")["score_queue_next"]
+                    assert published["deadline_at_ms"] == pytest.approx(
+                        reserved_at * 1000.0, abs=1e-3)
+                    assert published["transport_id"] == engine.transport_id
+                    reserved_tempo_takes += 1
             demo = engine.listen.snapshot() if mode == "listen" else None
             if demo and demo.get("audio_available") and acked_audio != demo["token"]:
                 acked_audio = demo["token"]
@@ -94,6 +122,7 @@ def test_every_running_take_in_the_practice_flow_has_a_published_source(tmp_path
                 break
             clock[0] += 0.05
         assert seen == {"listen", "practice"}
+        assert reserved_tempo_takes >= 1, "the flow did not reserve its first Tempo take"
         assert len(tempo_takes) >= 3, "the flow did not reach repeated Tempo takes"
     finally:
         engine.listen.cancel()
