@@ -6,7 +6,6 @@ LearningPlan navigation, or the engine; mode/session owners execute its effects.
 from dataclasses import dataclass, replace
 from ..teaching_course import steps
 from .score_artifacts import ScoreSelection
-from .musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,11 +21,7 @@ class ContinuationReadiness:
     acknowledged: tuple | None
     revision: int
     fingerprint: str
-    visual_beat: float
-    outgoing_bpm: float
     reported_failure: tuple | None = None
-    prepared_on_time: bool = False
-    short_rest_geometry_ready: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +42,6 @@ class TeachingContinuation:
         self.transport = transport
         self.acknowledged = None
         self.reservation = None
-        self.handoff_world = None
         self.schedule = None
         self.generation = 0
 
@@ -138,31 +132,10 @@ class TeachingContinuation:
                 self.transport.pause(at=now)
                 self.transport.next_at = 0.
                 return ContinuationEffect("fault",failure)
-            self.handoff_world = None
-            self.transport.next_at = now+.10
+                self.transport.next_at = now+.10
             return ContinuationEffect("await","Preparing the next lesson while scrolling")
         self.reservation = (selection.identity,prebuilt)
-        if (self.handoff_world is None and not readiness.prepared_on_time
-                and not readiness.short_rest_geometry_ready):
-            # No exact measured clearance: reserve the conservative
-            # offscreen slot before settlement. Once the renderer supplied
-            # complete short-rest geometry, the handoff deadline itself
-            # includes all clearance and the extra two beats are redundant.
-            self.handoff_world = readiness.visual_beat+2.
-            self.transport.next_at = SCHEDULER.late_ready(
-                now=now,outgoing_bpm=readiness.outgoing_bpm)
-            return ContinuationEffect("await")
         return ContinuationEffect("settle")
-
-    @staticmethod
-    def handoff(*, now, deadline, lead_beats, clear_beats, count_in_beats, bpm, rest_take_end, latency):
-        plan = SCHEDULER.handoff(
-            now=now,previous_deadline=deadline,lead_beats=lead_beats,
-            clear_beats=clear_beats,count_in_beats=count_in_beats,
-            bpm=bpm,rest_take_end=rest_take_end,latency=latency)
-        count_in = (count_in_beats if clear_beats is not None
-                    else min(lead_beats,count_in_beats))
-        return ContinuationEffect("start",deadline=plan.run_at,count_in=count_in)
 
     @staticmethod
     def after_settlement(decision, *, score_changed, prepared):
@@ -180,10 +153,10 @@ class TeachingContinuation:
         return ContinuationEffect("await_score" if score_changed else "continue")
 
     def capture_state(self):
-        return (self.acknowledged,self.reservation,self.handoff_world,self.schedule,self.generation)
+        return (self.acknowledged,self.reservation,self.schedule,self.generation)
 
     def restore_state(self, snapshot):
-        self.acknowledged,self.reservation,self.handoff_world,self.schedule,self.generation = snapshot
+        self.acknowledged,self.reservation,self.schedule,self.generation = snapshot
 
     def validate_reservation(self, pending):
         if self.reservation is None:
@@ -197,5 +170,5 @@ class TeachingContinuation:
             raise UnpreparedNextStage("The next lesson score changed during settlement")
 
     def cancel(self, *, generation=None):
-        self.reservation = self.handoff_world = self.schedule = None
+        self.reservation = self.schedule = None
         self.generation = self.generation+1 if generation is None else generation
