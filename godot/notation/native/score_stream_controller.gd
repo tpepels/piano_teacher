@@ -5,6 +5,7 @@ extends RefCounted
 ## Physical admission operates on this ledger; a repaint never resets it.
 const StreamQueue := preload("res://score_stream_queue.gd")
 const Admission := preload("res://score_stream_admission.gd")
+const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 
 var queue = StreamQueue.new()
 var last_take := ""
@@ -116,3 +117,112 @@ func diagnose_plan(identity: String, outcome: String, deadline_world: float,
         "deadline_world":deadline_world,"world":world}
     row.merge(extra,true)
     print("SCORE_PLAN_QUEUE:",JSON.stringify(row))
+
+## The admission ledger resolves the active musical owner from public take
+## identities and existing stream strips.  The view must not interpret this
+## ordering independently when Pause arrives ahead of a Play ACK.
+func transport_owner(opening: float, world: float,
+        may_be_provisional: bool) -> int:
+    for candidate in [paused_owner,live_serial,armed_serial]:
+        var owner_serial: int = int(candidate)
+        if owner_serial >= 0 and queue.has_take(owner_serial):
+            return owner_serial
+    if not last_take.is_empty():
+        var bound_index: int = Admission.select(
+            queue.online,"bound",opening,world,0.0,0.0,last_take)
+        if bound_index >= 0:
+            return int(queue.online[bound_index].get("take_owner",
+                queue.online[bound_index]["serial"]))
+    if may_be_provisional:
+        # In-flight Play/Resume can leave only a prepared or armed source.
+        # The oldest one is the current take, never the speculative suffix.
+        for item in queue.online:
+            if str(item.get("kind","source")) != "source":
+                continue
+            var key: String = str(item.get("take_key",""))
+            if key == "prepared" or key.begins_with("armed:"):
+                return int(item.get("take_owner",item["serial"]))
+    return -1
+
+func bind_segment(segment_id: String) -> bool:
+    if segment_id.is_empty() or armed_serial < 0 or arm_rollback.is_empty():
+        return false
+    armed_segment_id = segment_id
+    return true
+
+func acknowledge_arm() -> bool:
+    if armed_serial < 0 or arm_rollback.is_empty():
+        return false
+    arm_acknowledged = true
+    return true
+
+## The queue is the only owner of suffix retraction.  Its associated
+## take identities are reconciled in this same transaction.
+func trim_future(owner: Control, reason: String, world: float,
+        density: float, gap: float, duration: float, width: float,
+        playhead_x: float, protected_take: int = -1) -> Array[int]:
+    var removed: Array[int] = queue.withdraw_tail(
+        owner,world,density,gap,duration,width,playhead_x,
+        reason,false,protected_take)
+    if not removed.is_empty():
+        if live_serial >= 0 and not queue.has_take(live_serial):
+            live_serial = -1
+        if armed_serial >= 0 and not queue.has_take(armed_serial):
+            armed_serial = -1
+            armed_segment_id = ""
+            arm_acknowledged = false
+            arm_rollback.clear()
+        if paused_owner >= 0 and not queue.has_take(paused_owner):
+            paused_owner = -1
+    return removed
+
+## One lifecycle reducer for Pause, immutable backend-ACK binding, recovery
+## cancellation and normal playing/feedback snapshots. NativeScoreView only
+## samples the snapshot and paints the result.
+func observe_transport(owner: Control, world: float, opening: float,
+        graded_beat: float, key: String, phase: String,
+        paused_now: bool, running_now: bool, running_reported: bool,
+        expected_segment: String, allow_admission: bool) -> void:
+    if paused_now:
+        if not was_paused:
+            paused_source = maxf(opening,opening+graded_beat)
+            paused_owner = transport_owner(opening,world,running_reported)
+        if allow_admission and armed_serial < 0:
+            # A provisional owner must survive until its Play ACK.
+            owner.trim_future_queue("pause")
+        was_paused = true
+        live_serial = -1
+    elif allow_admission and not running_now and phase in [
+            "feedback","recovering","preview_gap","review"]:
+        # Only the playback coordinator may authorize a successor.
+        owner.trim_future_queue("changed_practice_decision")
+    elif allow_admission and running_now and phase in [
+            "count_in","playing","guided_wait"]:
+        if key != last_take or was_paused:
+            live_serial = -1
+            if armed_serial >= 0:
+                # An old state poll must never claim an unacknowledged
+                # Play/Resume/Retry or one from another segment.
+                if arm_acknowledged and not expected_segment.is_empty() and \
+                        armed_segment_id == expected_segment:
+                    if StreamLifecycle.activate(
+                            queue.online,armed_serial,key,false):
+                        live_serial = armed_serial
+                        live_segment_id = expected_segment
+                        last_take = key
+                        arm_rollback.clear()
+                        arm_acknowledged = false
+                        armed_serial = -1
+                        armed_segment_id = ""
+                    else:
+                        owner.cancel_stream_arm()
+            elif key == last_take and not was_paused:
+                var owned: int = Admission.select(
+                    queue.online,"bound",opening,world,0.0,0.0,key)
+                if owned >= 0:
+                    live_serial = int(queue.online[owned].get(
+                        "take_owner",queue.online[owned]["serial"]))
+        was_paused = false
+        paused_owner = -1
+    elif not paused_now:
+        live_serial = -1

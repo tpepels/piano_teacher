@@ -19,7 +19,7 @@
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
 | Architecture docs / O07 | ACTIVE CONTRACT UPDATED; REFERENCE SWEEP OPEN | ADR-0001 and playback coordinator document current authority; old ownership docs marked historical, stale 17 November Practice Flow comparison archived, live spec revised to moving windows; remaining references require checking |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
-| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController now own clipping, physical preflight execution, mutable queue/serial/rollback, retirement and diagnostic state; peer clearance uses a public immutable port; NativeView still contains live admission algorithms and painter lifecycle, with compatibility forwarding properties |
+| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController own clipping, preflight execution, queue/serial/rollback, peer clearance, transport observation and binding, suffix retirement, and diagnostic state. NativeView still contains physical append/rollback algorithms and painter lifecycle, with transitional forwarding properties |
 | Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger, NavigationSession and ApplicationEventRouter now own their corresponding domains; Main still builds screen trees and routes command/in-process callbacks |
 | Existing CI/native integration | EXISTING CI GREEN AT `a30c366`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44620738644](https://github.com/tpepels/piano_teacher/actions/runs/44620738644) passed on current implementation+tracker code; old preflight fixture regression was repaired at `ae5ea91`. CI parses but does not run full production native UI journeys. No tests added or changed; physical MIDI/audio unverified |
 
@@ -103,6 +103,13 @@
 - Moved expired source/rest retirement's active/armed-identity cleanup and one-per-plan diagnostic deduplication to `ScoreStreamController`; `NativeScoreView` now delegates without keeping duplicate ledger state. No new tests.
 - Existing `tests/godot/tempo_score_reservation.gd` fixture now implements the same public peer-clearance facts port as the native view. Its existing Pathétique deadline assertions are unchanged. CI at `9fa2237c` failed because its isolated fake only exposed the retired private queue accessor; fixing the fixture preserves the production boundary. **No new tests were introduced**. Verification of the corrected commit remains pending.
 - **Not complete:** The current renderer still performs the live admission/binding and retained painting algorithms and exposes internal forwarding properties. Phase 5 remains open. Existing CI and physical/native acceptance must be checked against this commit; do not mark them green merely because the code is committed.
+
+
+### Implementation checkpoint G — one stream transport-state reducer
+
+- Moved paused-owner resolution, live/armed take binding, Play/Resume acknowledgement, safe future suffix retirement, and frame-state reconciliation from `NativeScoreView` into `ScoreStreamController`. The renderer samples transport and supplies a redraw/physical-rollback port; the stream controller now applies the identity state transition once.
+- The new `observe_transport` method consumes the published backend segment ID and never binds an unacknowledged or mismatched graded take. The existing source/rest FIFO, append geometry, right-tail withdrawal rules, and no-backward-ink contract remain unchanged. No new tests were introduced.
+- **Remaining L02 work:** move physical append/reuse and rollback orchestration out of the view without adding another FIFO; remove transitional private-property forwarding and any foreign mutation, then validate the actual native session. Phase 5 is not complete.
 
 #### Phase 6 acceptance matrix
 

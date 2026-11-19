@@ -1145,23 +1145,11 @@ func has_armed_reservation() -> bool:
 
 
 func bind_stream_segment(segment_id: String) -> bool:
-    # The native source owner must be tied to the coordinator's immutable
-    # segment before it may claim any backend transport identity.
-    if segment_id.is_empty() or _stream_armed_serial < 0 or \
-            _stream_arm_rollback.is_empty():
-        return false
-    _stream_armed_segment_id = segment_id
-    return true
+    return _stream_controller.bind_segment(segment_id)
 
 
 func acknowledge_stream_arm() -> bool:
-    # An asynchronous /state poll may still contain the OLD transport.
-    # Only a successful control response or acknowledged stage promotion
-    # can authorize binding its unique owner to a graded backend identity.
-    if _stream_armed_serial < 0 or _stream_arm_rollback.is_empty():
-        return false
-    _stream_arm_acknowledged = true
-    return true
+    return _stream_controller.acknowledge_arm()
 
 
 func cancel_stream_arm() -> bool:
@@ -1195,59 +1183,13 @@ func cancel_stream_arm() -> bool:
     return restored
 
 
-func _stream_transport_owner(opening: float,
-        may_be_provisional: bool) -> int:
-    # A backend Pause can arrive before its Play acknowledgement has been
-    # projected into a running frame. The current musical take must therefore
-    # be resolved from ALL transport identities, not just _stream_live_serial.
-    # Losing that one transient field must never delete its unplayed music.
-    for candidate in [
-            _stream_paused_owner,_stream_live_serial,_stream_armed_serial]:
-        var owner_serial: int = int(candidate)
-        if owner_serial >= 0 and _stream_queue.has_take(owner_serial):
-            return owner_serial
-    if not _stream_last_take.is_empty():
-        var bound_index: int = StreamAdmission.select(
-            _stream_queue.online,"bound",opening,stream_world_beat,
-            0.0,0.0,_stream_last_take)
-        if bound_index >= 0:
-            return int(_stream_queue.online[bound_index].get("take_owner",
-                _stream_queue.online[bound_index]["serial"]))
-    if may_be_provisional:
-        # In-flight Play/Resume can leave only a prepared or armed source.
-        # Prefer the oldest source take; autopending is a speculative
-        # successor and must never impersonate the active attempt.
-        for item in _stream_queue.online:
-            if str(item.get("kind","source")) != "source":
-                continue
-            var key: String = str(item.get("take_key",""))
-            if key == "prepared" or key.begins_with("armed:"):
-                return int(item.get("take_owner",item["serial"]))
-    return -1
-
-
 func trim_future_queue(reason: String,
         protected_take: int = -1) -> Array[int]:
-    # The moving staff has one exit policy. This is the ONLY retractable
-    # operation: remove the maximum never-exposed pending suffix, newest
-    # first, while preserving the irreversible older prefix.
-    var removed: Array[int] = _stream_queue.withdraw_tail(
-        self,stream_world_beat,timeline.pixels_per_beat,
+    var removed: Array[int] = _stream_controller.trim_future(
+        self,reason,stream_world_beat,timeline.pixels_per_beat,
         staff_gap(),timeline.duration_beats,size.x,
-        size.x*PLAYHEAD_FRACTION,reason,false,protected_take)
+        size.x*PLAYHEAD_FRACTION,protected_take)
     if not removed.is_empty():
-        if _stream_live_serial >= 0 and \
-                not _stream_queue.has_take(_stream_live_serial):
-            _stream_live_serial = -1
-        if _stream_armed_serial >= 0 and \
-                not _stream_queue.has_take(_stream_armed_serial):
-            _stream_armed_serial = -1
-            _stream_armed_segment_id = ""
-            _stream_arm_acknowledged = false
-            _stream_arm_rollback.clear()
-        if _stream_paused_owner >= 0 and \
-                not _stream_queue.has_take(_stream_paused_owner):
-            _stream_paused_owner = -1
         queue_redraw()
     return removed
 
@@ -1473,72 +1415,10 @@ func present_flow(world_beat: float, state: Dictionary,
         int(state.get("transport_id",-1)),mode]
     var paused_now: bool = bool(state.get("paused",false))
     var running_now: bool = bool(state.get("running",false)) and not paused_now
-    if paused_now:
-        if not _stream_was_paused:
-            _stream_paused_source = maxf(opening,opening+graded_beat)
-            _stream_paused_owner = _stream_transport_owner(
-                opening,bool(state.get("running",false)))
-        if allow_admission:
-            # An in-flight Play/Resume may not have received its ACK yet.
-            # Do not discard that provisional owner BEFORE the command
-            # result determines whether it was ever authorized. On the
-            # first paused frame AFTER ACK, retract the maximal unseen
-            # suffix (even from the active take), leaving exposed ink.
-            if _stream_armed_serial < 0:
-                # The score remains provisional until the coordinator's
-                # presentation acknowledgement. Pause may not withdraw
-                # the source between reserve and backend authorization.
-                trim_future_queue("pause")
-        _stream_was_paused = true
-        _stream_live_serial = -1
-    elif allow_admission and not running_now and phase in [
-            "feedback","recovering","preview_gap","review"]:
-        # Stop speculative admission on feedback. Preserve an already
-        # scheduled automatic retry ONLY if its unmodified source opening
-        # matches the engine's declared next passage.
-        # The coordinator is the only owner allowed to announce/arm the
-        # successor. No speculative autopending source is admitted from
-        # feedback state or an inferred scheduler deadline.
-        var keep_auto := false
-        if not keep_auto:
-            trim_future_queue("changed_practice_decision")
-    elif allow_admission and running_now and phase in [
-            "count_in","playing","guided_wait"]:
-        if key != _stream_last_take or _stream_was_paused:
-            _stream_live_serial = -1
-            if _stream_armed_serial >= 0:
-                # A stale polling snapshot must not claim an unacknowledged
-                # Play/Resume/Retry. The source is already offscreen but its
-                # transport identity remains provisional until control ACK.
-                if _stream_arm_acknowledged and \
-                        not expected_segment.is_empty() and \
-                        _stream_armed_segment_id == expected_segment:
-                    if StreamLifecycle.activate(
-                            _stream_queue.online,_stream_armed_serial,key,false):
-                        _stream_live_serial = _stream_armed_serial
-                        _stream_live_segment_id = expected_segment
-                        _stream_last_take = key
-                        _stream_arm_rollback.clear()
-                        _stream_arm_acknowledged = false
-                        _stream_armed_serial = -1
-                        _stream_armed_segment_id = ""
-                    else:
-                        cancel_stream_arm()
-            elif key == _stream_last_take and not _stream_was_paused:
-                var owned: int = StreamAdmission.select(_stream_queue.online,
-                    "bound",opening,stream_world_beat,0.0,0.0,key)
-                if owned >= 0:
-                    _stream_live_serial = int(_stream_queue.online[owned].get(
-                        "take_owner",_stream_queue.online[owned]["serial"]))
-        # Future music is enqueued only from an explicit Python practice
-        # preparation with its authoritative graded deadline. The renderer
-        # must never infer mastery, tempo or repeat policy from HUD state.
-        # An unreserved start CANNOT create note ink in the current frame.
-        # This fails closed rather than silently taking the old camera path.
-        _stream_was_paused = false
-        _stream_paused_owner = -1
-    elif not paused_now:
-        _stream_live_serial = -1
+    _stream_controller.observe_transport(
+        self,stream_world_beat,opening,graded_beat,key,phase,
+        paused_now,running_now,bool(state.get("running",false)),
+        expected_segment,allow_admission)
     # Invariant: a graded or audible take that is playing has its own source
     # bound on the staff. A take without one is a defect, never a state to
     # show silently as an empty staff (practice flow, 2026-11-18).
