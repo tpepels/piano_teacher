@@ -7,7 +7,7 @@
 
 ## Implementation progress
 
-**Implementation branch:** `main`. **Tests:** No new tests were introduced. The existing isolated Godot peer-reservation fixture was updated to implement the new public renderer interface; its assertions are unchanged. Existing checks have been run. Source-level and CI completion must not be conflated with real native/physical acceptance.
+**Implementation branch:** `main`. **Tests:** No new tests were introduced. The existing isolated Godot peer-reservation fixture was adapted to the same public peer-clearance/preflight interfaces as production; its assertions are unchanged. Existing CI is green at `27f7f580` ([run 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191)). This is not full native or physical acceptance. Source-level and CI completion must not be conflated with real native/physical acceptance.
 
 | Workstream | Status | Notes |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
 | Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController own clipping, preflight execution, queue/serial/rollback, peer clearance, transport observation, arm cancellation/suffix restoration, retirement and diagnostics. NativeView still contains append/recovery admission and painter lifecycle, plus transitional forwarding properties |
 | Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger (including snapshot contract diagnostics), NavigationSession, ApplicationEventRouter and StatusHeadPreloader own their respective domains. Main still builds screen trees and routes command/in-process callbacks |
-| Existing CI/native integration | EXISTING CI GREEN AT `a30c366`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44620738644](https://github.com/tpepels/piano_teacher/actions/runs/44620738644) passed on current implementation+tracker code; old preflight fixture regression was repaired at `ae5ea91`. CI parses but does not run full production native UI journeys. No tests added or changed; physical MIDI/audio unverified |
+| Existing CI/native integration | EXISTING CI GREEN AT `27f7f580`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed for the current implementation and reconciled roadmap. No new tests; the existing isolated peer-reservation fixture was updated to consume the public preflight port without changing its assertions. Core CI does not execute the full embedded/native UI journey or physical MIDI/audio acceptance |
 
 ### Phase completion status
 
@@ -146,11 +146,19 @@
 - Corrected `docs/README.md` so it links to the *active* playback and single-authority contracts; the superseded November 4 system inventory is labelled as historical rather than presented as current architecture.
 - Updated the roadmap with the current Phase 5 completion gates and linked the detailed tracker. **No new tests**. No physical/native acceptance is claimed.
 
+
+### Implementation checkpoint M — verified core CI and historical status cleanup
+
+- Existing `bash scripts/test.sh` GitHub workflow passed at `27f7f580` ([run 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191)), after source checkpoints F–K and the current roadmap/index correction. The configured Python and Godot checks are green; the embedded native journey and physical MIDI/audio checks remain unverified.
+- Removed contradictory “current ownership contract” sentences from the 4 November system inventory and the now-superseded transport/voice contract, retaining their historical technical rationale.
+- **Phase 5 is still incomplete:** current first-party largest files include `server.py` (~3,745 lines), `godot/notation/native/view.gd` (~1,715 lines), and `godot/main.gd` (~1,175 lines). Remaining private-field adapters, view admission/recovery orchestration and application event/assessment lifecycle ownership must be moved and integrated before marking the phase done.
+- **Phase 6 is still incomplete:** real embedded Godot/native bridge runs, packaged release and Kawai/USB/Bluetooth acceptance matrix have not been executed here. No new tests were introduced.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
 | --- | --- | --- |
-| Python, Godot parse and existing isolated checks | CI on main, full run for latest commit required | **Automated verification pending latest commit** |
+| Python, Godot parse and existing isolated checks | [GitHub Actions 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed at `27f7f580`; existing core checks only | **Verified for tested source revision; native/full physical journeys open** |
 | Actual embedded Python/Godot native boot + authentic score | Existing `scripts/verify-embedded-production-local.sh --without-package` provides an end-to-end runner; not executed in this environment | **Not verified** |
 | Pathétique Listen → Free → Tempo near 52%, notes visible and admitted before grading | Source transactions wired; exact user reproduction needs live runtime | **Not verified** |
 | Bars 1; 2,1–2; 3,2–3,1–3; 4,3–4,2–4,1–4; sliding at max width 4 | Authoritative generator and progress identity updated; no physical MIDI observation | **Source implemented; live acceptance pending** |

@@ -10,9 +10,9 @@
 > Refer to [Ownership remediation](ownership-and-practice-progression-remediation.md)
 > for outstanding implementation and acceptance work.
 
-This document records the production ownership boundaries. Future fixes must
-change the owning component and extend its acceptance test, not add another
-playback path or special-case timer.
+The table below records the superseded ownership boundaries and their
+historical rationale. Future changes must follow the current playback
+coordinator contract and must not revive an alternate reservation or timer.
 
 ## Why repeated bugs happened
 

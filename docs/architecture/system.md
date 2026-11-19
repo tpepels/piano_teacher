@@ -10,7 +10,9 @@
 > Do not reintroduce the former `score_queue_next`, Main-owned reservation,
 > or geometry-derived preloader handoff paths from this archived map.
 
-This is a technical contract. The sole active phase plan is [ROADMAP.md](../../ROADMAP.md).
+This is a historical subsystem inventory, not an active ownership contract.
+The current phase summary is [ROADMAP.md](../../ROADMAP.md), with implementation
+completion and acceptance gates in the [remediation tracker](ownership-and-practice-progression-remediation.md).
 
 The application is one Godot process with an embedded Python practice engine,
 connected through a native in-memory command queue. Source notes,
