@@ -257,6 +257,11 @@
 - Removed only that obsolete assertion from the existing `test_practice_flow_machine.py`; all typed state-transition assertions remain. No new test was introduced.
 - This completes the residual O02 compatibility-path removal. Additional session-lifecycle/physical acceptance remains open.
 
+### Implementation checkpoint AE — correct the remaining existing assertion indent
+
+- Core run [44638697127](https://github.com/tpepels/piano_teacher/actions/runs/44638697127) found an `IndentationError` in `test_practice_flow_machine.py` after deleting its obsolete message-parser assertion. Corrected the indentation of the existing tempo-bound assertion; no assertion semantics were changed and no tests added.
+- Prior compiled production changes were not the cause of this collection error. Latest existing core CI is required for this correction.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
