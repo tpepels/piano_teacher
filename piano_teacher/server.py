@@ -2255,7 +2255,9 @@ class PracticeEngine:
                 route = self.session_commands.start_route(effect, source_changed=(
                     self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)
                     if self.mode not in ("listen", "learn") else False))
-                if route in ("listen", "prepare_practice", "reload_score"):
+                if (route in ("listen", "prepare_practice", "reload_score")
+                        or (effect.decision.next_exposure is not None
+                            and effect.decision.next_exposure.mode == "learn")):
                     self._start_or_restart(action)
                 else:
                     selected = effect.decision.next_exposure
