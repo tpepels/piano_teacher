@@ -1,112 +1,66 @@
 extends RefCounted
-const TempoTimeline := preload("res://tempo_timeline.gd")
-## One endless, forward-only presentation axis for the Practice canvas.
-##
-## Backend transport, MIDI assessment and Listen scheduling do not read this.
-## Audio and notation retain source identities; this axis only places already
-## engraved copies on an infinite moving staff. All screens and transitions
-## share it: Ready, Play, Pause, Retry and lesson handoff cannot rewind it.
+## One forward-only score world, projected from the canonical versioned
+## PresentationTimeline. This is the presentation API, not a second clock.
+## Native score clipping and score admissions consume the same projection.
+const PresentationTimeline := preload("res://presentation_timeline.gd")
+var timeline = PresentationTimeline.new()
 var beat := 0.0
 var last_ms := -1
 var bpm := 40.0
 var initialized := false
-# Beats still owed after a retroactive switch to a slower rate.
-var _slow_debt := 0.0
-# A late slowdown repays at most this fraction of each future step, so the
-# visual axis strictly advances even while it reconciles an earlier epoch.
-const MAX_SLOWDOWN_REPAY_FRACTION := 0.5
-# Untimed guided learning (mode "learn") has no tempo: the learner plays
-# the next note whenever ready. The axis may then advance only until the
-# current target note reaches the playhead; it waits there and moves on when
-# the target changes. It still never moves backwards. INF = no hold.
 var hold_world := INF
 
 func sample(at_ms: int, selected_bpm: float = NAN) -> float:
     if not initialized:
-        initialized = true
-        last_ms = at_ms
-    elif at_ms > last_ms:
-        var step: float = TempoTimeline.beats_from_milliseconds(float(at_ms-last_ms), bpm)
-        # Repay at most half of each step: the axis slows, never stops.
-        var paid: float = minf(_slow_debt,step*MAX_SLOWDOWN_REPAY_FRACTION)
-        _slow_debt -= paid
-        beat = _held(beat,beat+step-paid)
-        last_ms = at_ms
-    # Apply a tempo change only AFTER integrating the elapsed time. Never
-    # re-anchor the score when its target BPM changes or the backend pauses.
-    if is_finite(selected_bpm) and selected_bpm > 0.0:
-        bpm = clampf(selected_bpm,1.0,400.0)
+        timeline.initialize(at_ms,selected_bpm if is_finite(selected_bpm) else bpm)
+    elif is_finite(selected_bpm) and selected_bpm > 0.0:
+        timeline.set_rate(at_ms,selected_bpm)
+    beat = timeline.sample(at_ms)
+    last_ms = timeline.last_ms
+    bpm = timeline.current_rate()
+    initialized = timeline.initialized()
+    hold_world = timeline.hold_world
     return beat
 
 func switch_rate_at(at_ms: float, next_bpm: float) -> void:
-    # The engine changed tempo exactly at at_ms (a new take's graded run_at,
-    # e.g. the automatic tempo step settled at a repeat's deadline), but this
-    # frame clock only sees it with the next snapshot. Account the elapsed
-    # time since at_ms at the new rate so the world keeps matching the graded
-    # transport. Never seek back: a slower rate is paid by moving slower.
-    if not initialized or not is_finite(at_ms) or not is_finite(next_bpm) or \
-            next_bpm <= 0.0 or at_ms >= float(last_ms):
+    # Compatibility for the presentation adapter. A late clock correction
+    # can change FUTURE velocity only; it never rewrites exposed positions.
+    if not is_finite(at_ms) or not is_finite(next_bpm):
         return
-    var correction: float = TempoTimeline.beats_from_milliseconds(float(last_ms)-at_ms,next_bpm-bpm)
-    if correction >= 0.0:
-        beat += correction
-    else:
-        _slow_debt += -correction
-    bpm = clampf(next_bpm,1.0,400.0)
+    timeline.set_rate(roundi(maxf(at_ms,float(timeline.last_ms))),next_bpm)
+    bpm = timeline.current_rate()
+
+func authorize_source_epoch(deadline_ms: float, opening: float,
+        nominal_bpm: float, authored_segments: Array,
+        segment_id: String) -> void:
+    timeline.authorize_source_epoch(
+        deadline_ms,opening,nominal_bpm,authored_segments,segment_id)
 
 func project(at_ms: int) -> float:
-    if not initialized:
-        return 0.0
-    var step: float = TempoTimeline.beats_from_milliseconds(float(maxi(0,at_ms-last_ms)),bpm)
-    return _held(beat,beat + step - minf(_slow_debt,step*MAX_SLOWDOWN_REPAY_FRACTION))
+    return timeline.project(at_ms)
 
-## Wait with the target at the playhead (see hold_world). A hold behind the
-## current position never rewinds: the axis then simply stays where it is.
 func hold_at(world: float) -> void:
-    hold_world = world if is_finite(world) else INF
+    timeline.set_hold(world,maxi(0,timeline.last_ms))
+    beat = timeline.last_world
+    hold_world = timeline.hold_world
 
 func release_hold() -> void:
-    hold_world = INF
+    if is_finite(timeline.hold_world):
+        timeline.set_hold(INF,maxi(0,timeline.last_ms))
+    hold_world = timeline.hold_world
 
-func _held(current: float, advanced: float) -> float:
-    if not is_finite(hold_world):
-        return advanced
-    return maxf(current,minf(advanced,hold_world))
-
-func project_authored_future(at_ms: int, sampled_ms: int,
-        source_beat: float, nominal_bpm: float,
-        authored_segments: Array) -> float:
-    # At the future engine-authored deadline, predict this SAME forward
-    # world axis through original source tempo changes. A constant-BPM
-    # projection incorrectly places copies whenever a tempo-map boundary
-    # lies between the sampled state and the retry deadline.
-    # Only snapshots from a currently playing source supply tempo segments.
-    # Feedback/paused preparation continues at the selected rest BPM.
-    var local_world: float = project(sampled_ms)
-    var delta_seconds: float = maxf(0.0,float(at_ms-sampled_ms)/1000.0)
-    # Slow-down debt still owed after sampled_ms is repaid on the way to the
-    # deadline (at most half of each step): the axis reaches the deadline
-    # that much later, so the projection must subtract it too.
-    var owed: float = maxf(0.0,_slow_debt-minf(_slow_debt,
-        TempoTimeline.beats_from_milliseconds(float(maxi(0,sampled_ms-last_ms)),bpm)*MAX_SLOWDOWN_REPAY_FRACTION))
-    if delta_seconds <= 0.0 or authored_segments.is_empty() or \
-            not is_finite(source_beat) or not is_finite(nominal_bpm) or \
-            nominal_bpm <= 0.0:
-        var advance: float = TempoTimeline.beats_from_seconds(delta_seconds,bpm)
-        return local_world + advance - minf(owed,advance*MAX_SLOWDOWN_REPAY_FRACTION)
-    var before: float = TempoTimeline.seconds_at_beat(
-        source_beat,nominal_bpm,authored_segments)
-    var after: float = TempoTimeline.beat_at_seconds(
-        before+delta_seconds,nominal_bpm,authored_segments)
-    var mapped: float = maxf(0.0,after-source_beat)
-    return local_world+mapped-minf(owed,mapped*MAX_SLOWDOWN_REPAY_FRACTION)
-
+func project_authored_future(at_ms: int, _sampled_ms: int,
+        _source_beat: float, _nominal_bpm: float,
+        _authored_segments: Array) -> float:
+    # The same immutable source-rate epoch map that paints the current
+    # frame is inverted for physical score admission. No second nominal
+    # tempo integrator can place a future note differently.
+    return project(at_ms)
 
 func reset() -> void:
-    # Called only when the application closes or an explicit test sets up a
-    # new process, never by lesson changes or Play/Pause/Retry actions.
-    initialized = false
-    _slow_debt = 0.0
+    timeline.reset()
     beat = 0.0
     last_ms = -1
+    bpm = 40.0
+    initialized = false
     hold_world = INF
