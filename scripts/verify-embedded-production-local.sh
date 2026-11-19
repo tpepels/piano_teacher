@@ -189,12 +189,35 @@ audit_package() {
     export PIANO_BUNDLED_PYTHON_HOME="$bundled"
     export PIANO_BUNDLED_NODE="$(command -v node)"
     export PIANO_GODOT_BINARY="$GODOT_BIN"
-    export PIANO_PACKAGE_AUDIT_ONLY=1
     export PYTHONPATH=""
-    timeout 180s bash scripts/package-inprocess.sh
-    test -s dist/piano-teacher-linux-x86_64/godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
-    test -x dist/piano-teacher-linux-x86_64/PianoTeacher
+    # Build the actual distributable, then test only its relocated bytes.
+    timeout 240s bash scripts/package-inprocess.sh
+    test -s dist/piano-teacher-linux-x86_64.tar.gz
   )
+  local destination="$WORK/clean-package"
+  local clean_home="$WORK/clean-home"
+  mkdir -p "$destination" "$clean_home"
+  tar -xzf "$workspace/dist/piano-teacher-linux-x86_64.tar.gz" -C "$destination"
+  local launcher="$destination/piano-teacher-linux-x86_64/PianoTeacher"
+  test -x "$launcher"
+  test -s "$destination/piano-teacher-linux-x86_64/godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so"
+  # This child inherits neither the builder's venv nor any PYTHONPATH,
+  # PIANO_TEACHER_PYTHON_HOME or compiled project import cache.
+  local package_log="$WORK/clean-package-boot.log"
+  timeout 45s env -i \
+    HOME="$clean_home" USER="${USER:-runner}" PATH="/usr/bin:/bin" \
+    PIANO_TEACHER_HEADLESS_SMOKE=1 \
+    "$launcher" > "$package_log" 2>&1 || {
+      tail -n 100 "$package_log" >&2
+      return 1
+    }
+  if ! grep -Fq "PIANO_PACKAGE_NATIVE_READY" "$package_log" || \
+       grep -Eq 'Embedded Piano Teacher stopped|SCRIPT ERROR|ERROR:.*(extension|python|libpiano)' "$package_log"; then
+    echo "Relocated package did not boot its embedded Python/Godot runtime" >&2
+    tail -n 100 "$package_log" >&2
+    return 1
+  fi
+  echo "Relocated standalone package boot passed"
 }
 
 printf 'Revision: %s\n' "$(git rev-parse --short HEAD)"

@@ -245,6 +245,12 @@
 - The existing production UI smoke now measures the perpetual READY clock and the first **coordinator-authorized** source's immutable admission facts, with future-only/offscreen (or explicit empty-strip) placement. Existing retained-ink, pause/restart, audio cue and Resume checks remain in place. No new test was introduced; old assertions contradictory to the active playback contract were replaced by stronger source-authorization checks.
 - Native/packaging acceptance remains open pending the next full run.
 
+### Implementation checkpoint AC — verify the relocated standalone package runtime
+
+- Extended the existing full production acceptance script to build the distributable `.tar.gz` (rather than stopping at an assembled-directory audit), extract it into a clean temporary location and launch its own `PianoTeacher` binary under an empty environment and isolated HOME.
+- The bundled Godot/CPython bridge must publish `PIANO_PACKAGE_NATIVE_READY` from the real startup path; Python/extension load errors and absent success are treated as package failures. The archive's actual native shared library and launcher are checked after extraction. No separate test suite or simulated service was introduced.
+- This completes the **verification procedure**, not the package's acceptance result: the full native run must reach and pass this gate before the checklist can be marked verified. The Kawai speaker, MIDI/USB and Bluetooth observations remain physical-only.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

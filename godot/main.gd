@@ -919,6 +919,8 @@ func _process(_delta: float) -> void:
             return
     if not native_started and inprocess_bus != null and inprocess_bus.is_ready():
         native_started = true
+        if OS.get_environment("PIANO_TEACHER_HEADLESS_SMOKE") == "1":
+            print("PIANO_PACKAGE_NATIVE_READY")
         _poll()
         _request_devices()
         _request_settings()
