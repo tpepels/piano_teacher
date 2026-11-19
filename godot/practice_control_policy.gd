@@ -3,7 +3,7 @@ extends RefCounted
 ## Main sends the command and presents messages; backend remains authoritative.
 const ACTIVE_PHASES := [
     "count_in", "playing", "paused", "feedback", "recovering",
-    "loading", "preview_gap"]
+    "loading", "preview_gap", "admitting"]
 const NOTATION_WAIT := "Preparing sheet music - wait for the notes before starting"
 
 static func active_transport(state: Dictionary) -> bool:
