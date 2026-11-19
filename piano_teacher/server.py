@@ -24,6 +24,7 @@ from .teaching_decisions import (TeachingBinding, TeachingState, TeachingRouteFa
 from .diagnosis_policies import LearnerSnapshot
 from .application import practice_flow
 from .application.playback_coordinator import PlaybackCoordinator
+from .application.score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
@@ -230,7 +231,7 @@ class PracticeEngine:
         self._continuous_horizon_beats = 0.0
         # The untimed guided engine owns repeat presentation epochs; no
         # Godot-side guess about missed notes or lesson progression.
-        self._guided_stream_deadline: float | None = None
+        self.score_state_publisher = ScoreStatePublisher()
         # Explicit backend-selected next take. Renderer may only enqueue this
         # source identity at this exact monotonic graded deadline.
         self._queue_scheduled_start = None
@@ -1274,7 +1275,7 @@ class PracticeEngine:
         fragment = materialize_fragment(self.plan.active_variant,self.plan.piece.bar_boundaries,start=start,end=end)
         retry_range = self.retry_range if recovery else None
         self._stop(reason="guided_recovery" if recovery else "learn", preserve_episode=recovery)
-        self._guided_stream_deadline = None
+        self.score_state_publisher.reset_guided()
         self._remediation_active = remediation
         if recovery:
             self.retry_range = retry_range
@@ -3475,156 +3476,48 @@ class PracticeEngine:
             self._update()
             state = project_session_state(self._capture_session_snapshot())
             self.playback.advance(self)
-            if self.playback.presentation_required:
-                state["playback_intent"], state["playback_timeline"] = (
-                    self.playback.snapshot())
-                # There is no promise of a drawable score until it has been
-                # reserved AND presented. No legacy score_queue_next fallback.
-                if self.playback.intent is not None:
-                    state["phase"] = "admitting"
+            pending, timeline = self.playback.snapshot()
+            announced = self.visual_transport.announced_continuation
+            plan = self.plan
+            now = self.now()
+            facts = ScoreProjectionFacts(
+                fingerprint=self.fingerprint,
+                stage_key=plan.identity if plan is not None else "",
+                revision=self.score_revision,
+                transport_id=self.transport_id,
+                mode=self.mode,
+                running=self.running,
+                paused=self.visual_transport.paused,
+                awaiting_score=self.awaiting_score_revision is not None,
+                bpm=float(plan.bpm) if plan is not None else 0.0,
+                presentation_bpm=float(self._presentation_bpm),
+                run_at=self.visual_transport.run_at,
+                play_from_beat=self.visual_transport.play_from_beat,
+                announced=announced,
+                announced_deadline=(self.visual_transport.announced_deadline(
+                    announced[0]) if announced is not None else None),
+                announcement_serial=self.visual_transport.announce_serial,
+                scheduled_start=self._queue_scheduled_start,
+                timeline=({"intent":pending,"current":timeline}
+                          if self.playback.presentation_required else {}),
+                next_count_in_beats=self._next_count_in_beats(),
+                next_count_in_meter=tuple(self._next_count_in_meter()),
+                continuous_horizon_beats=self._continuous_horizon_beats,
+                duration_beats=(self.display_phrase().end-self.display_phrase().start
+                                if plan is not None else 0.0),
+                has_source=plan is not None,
+            )
+            def count_in_source_at(from_beat, rate):
+                _, bars, meter = self.attempt_progression.count_in_bar(
+                    phrase=plan.active_phrase,
+                    boundaries=plan.piece.bar_boundaries,
+                    time_signatures=plan.piece.time_signatures,
+                    position=from_beat)
+                return bars,meter,self._start_rate_bpm(from_beat,rate)
+            self.score_state_publisher.publish(
+                state,facts,now=now,measure_at=count_in_source_at)
             if self.pending_result is not None:
                 state["bpm"] = self._presentation_bpm
-            if self.playback.presentation_required:
-                # Graphical playback has no speculative score_queue_next.
-                # Untimed Free is a distinct held target segment that never
-                # authorizes MIDI grading or a countdown.
-                if (self.mode == "learn" and self.plan is not None
-                        and not self.visual_transport.paused
-                        and self.awaiting_score_revision is None
-                        and str(state.get("phase", "")) in
-                            ("guided_wait", "introducing", "disconnected")):
-                    now = self.now()
-                    duration = max(0.25,
-                        self.display_phrase().end-self.display_phrase().start)
-                    if not (str(state.get("phase", "")) == "guided_wait"
-                            and self._guided_stream_deadline is not None):
-                        self._guided_stream_deadline = SCHEDULER.guided(
-                            now=now, previous_deadline=self._guided_stream_deadline,
-                            duration_beats=duration,
-                            count_in_beats=self._next_count_in_beats(),
-                            horizon_beats=self._continuous_horizon_beats,
-                            bpm=self.plan.bpm)
-                    key = (f"guided:{self.fingerprint}:{self.plan.identity}:"
-                           f"{self.score_revision}:{self.transport_id}:"
-                           f"{self._guided_stream_deadline:.6f}")
-                    state["playback_timeline"]["guided"] = {
-                        "segment_id": key, "plan_id": key,
-                        "source_from_beat": 0.0,
-                        "deadline_at_ms": self._guided_stream_deadline*1000.0,
-                        "transport_id": self.transport_id,
-                        "count_in_beats": self._next_count_in_beats(),
-                        "count_in_meter": self._next_count_in_meter(),
-                        "bpm": float(self.plan.bpm),
-                    }
-            else:
-                # A single authoritative next-score intent covers automatic
-                # Coda/Fukuda continuation, repair and disconnected-MIDI preview.
-                # The frontend must not infer a repeat from streak, BPM, or phase.
-                next_floor = None
-                next_deadline = None
-                next_transport = self.transport_id + 1
-                next_bpm = float(self.plan.bpm) if self.plan is not None else 0.0
-                plan_serial = None
-                announced = self.visual_transport.announced_continuation
-                if (self.mode == "practice" and not self.visual_transport.paused
-                        and not self.running and announced is not None
-                        and self.visual_transport.announced_deadline(
-                            announced[0]) is not None):
-                    # Every automatic continuation (failed-take preparation,
-                    # manual Retry preparation, clean repeat, disconnected
-                    # preview) is announced with the run_at it WILL start with.
-                    next_floor = float(announced[0])
-                    next_deadline = float(announced[1]) * 1000.0
-                    next_bpm = float(announced[2])
-                    plan_serial = self.visual_transport.announce_serial
-                elif (self.mode == "practice" and self.running and
-                        self._queue_scheduled_start is not None):
-                    transport, floor, run_at, stage_key, revision, serial = (
-                        self._queue_scheduled_start)
-                    if (transport == self.transport_id and
-                            stage_key == self.plan.identity and
-                            revision == self.score_revision):
-                        next_floor = float(floor)
-                        next_deadline = float(run_at) * 1000.0
-                        next_transport = self.transport_id
-                        plan_serial = serial
-                elif (self.mode in ("listen", "perform") and self.running
-                        and not self.visual_transport.paused and self.plan is not None):
-                    # Listen and graded whole-piece performance must publish
-                    # the same absolute source deadline as timed practice.
-                    # Otherwise their audio/assessment can start while the
-                    # continuous native staff has no admitted source copy.
-                    next_floor = float(self.visual_transport.play_from_beat)
-                    next_deadline = float(self.visual_transport.run_at)*1000.0
-                    next_transport = self.transport_id
-                elif (self.mode == "learn" and self.plan is not None
-                        and not self.visual_transport.paused
-                        and self.awaiting_score_revision is None
-                        and str(state.get("phase", "")) in
-                            ("guided_wait", "introducing", "disconnected")):
-                    # The guided lesson is untimed: the *backend* republishes
-                    # the same current idea after it has passed, with authentic
-                    # full-meter silence. Completion/revision invalidates it.
-                    now = self.now()
-                    duration = max(0.25,
-                        self.display_phrase().end-self.display_phrase().start)
-                    count_in = self._next_count_in_beats()
-                    # While the learner is asked for a note (guided_wait) the
-                    # staff holds the target on the playhead, so the passage never
-                    # "passes": keep its one admitted copy instead of
-                    # republishing it and scrolling it away.
-                    if not (str(state.get("phase", "")) == "guided_wait"
-                            and self._guided_stream_deadline is not None):
-                        self._guided_stream_deadline = SCHEDULER.guided(
-                            now=now,previous_deadline=self._guided_stream_deadline,
-                            duration_beats=duration,count_in_beats=count_in,
-                            horizon_beats=self._continuous_horizon_beats,
-                            bpm=self.plan.bpm)
-                    next_floor = 0.0
-                    next_deadline = self._guided_stream_deadline*1000.0
-                    next_transport = self.transport_id
-                if (next_floor is None and self.plan is not None and self.running
-                        and not self.visual_transport.paused
-                        and self.mode in ("practice", "perform", "listen")):
-                    # Invariant: every running take publishes its own source and
-                    # graded deadline, however it was started (Play, automatic
-                    # continuation, practice flow). The renderer binds only a
-                    # published plan; a take is never left without notes.
-                    next_floor = float(self.visual_transport.play_from_beat)
-                    next_deadline = float(self.visual_transport.run_at)*1000.0
-                    next_transport = self.transport_id
-                if (self.plan is not None and next_floor is not None
-                        and next_deadline is not None):
-                    _, bar_beats, plan_meter = self.attempt_progression.count_in_bar(
-                        phrase=self.plan.active_phrase,
-                        boundaries=self.plan.piece.bar_boundaries,
-                        time_signatures=self.plan.piece.time_signatures,
-                        position=next_floor)
-                    state["score_queue_next"] = {
-                        # An announced continuation keeps one identity while its
-                        # deadline is re-timed to its admitted ink (rest Resume).
-                        "plan_id": f"{self.fingerprint}:{self.plan.identity}:"
-                                   f"{self.score_revision}:{next_transport}:"
-                                   f"{next_floor:.6f}:" + (
-                                       f"a{plan_serial}" if plan_serial is not None
-                                       else f"{next_deadline:.3f}"),
-                        "source_from_beat": next_floor,
-                        "deadline_at_ms": next_deadline,
-                        # The take this source is graded as, and the one
-                        # count-in bar spoken immediately before its deadline.
-                        "transport_id": next_transport,
-                        "count_in_beats": (SCHEDULER.count_in_beats(bar_beats,next_bpm)
-                                           if bar_beats > 0 and next_bpm > 0
-                                           else 0.0),
-                        # That take's start tempo: its count-in is at this BPM.
-                        "bpm": next_bpm,
-                        # The rate the take's own (possibly mapped) tempo starts
-                        # at: Godot's presentation axis switches to it exactly at
-                        # the deadline instead of a late snapshot later.
-                        "start_rate_bpm": self._start_rate_bpm(next_floor, next_bpm),
-                        # The meter its count-in pulses in (compound: M3).
-                        "count_in_meter": list(plan_meter),
-                    }
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self._flow_active():
                 state["flow"] = self._flow_state()
