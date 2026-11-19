@@ -1,6 +1,6 @@
 # Ownership, lesson-window and large-file architectural audit
 
-**Status:** Implementation underway on `main`. This file tracks actual code commits; unfinished items remain explicitly marked.  
+**Status:** Implementation underway on `main`. This file tracks actual code commits; unfinished items remain explicitly marked. The detailed audit below is historical baseline evidence; it is not a description of current source paths or unresolved behavior.  
 **Source baseline:** [main at 9a01a9b7](https://github.com/tpepels/piano_teacher/tree/9a01a9b7d9434ae6a3ef7bc72fd6844222d718ef), 19 November 2026.  
 **Scope:** Practice Flow, learning/assessment, playback and score admission, presentation timing, and the three largest first-party production source files.  
 **Goal:** One authoritative owner for each domain decision; explicit typed boundaries; no independent recomputation of a decision downstream; preserve the continuous native score and all existing capabilities.
@@ -13,15 +13,15 @@
 | --- | --- | --- |
 | Moving-window curriculum / P01 | INTEGRATED; PHYSICAL ACCEPTANCE OUTSTANDING | `practice_windows.py` selects n, n−1..n, n−2..n, n−3..n (max 4) and emits real source-bounded course exercises; independently identified windows, versioned saved progress and separate final exam; existing CI passed on `f1d3385` |
 | Typed course outcomes / O02 | IMPLEMENTED IN PRODUCTION PATH | `TeachingDecision.flow_outcome` now carries `Outcome` directly through course/engine; string parser remains only as a read-only legacy diagnostic for existing tests, without production callers |
-| Unified assessment verdict / O03 | INTEGRATED IN TEACHING/SETTLEMENT; READER AUDIT OPEN | `AssessmentVerdict` binds policy acceptance to teaching progression and primary trouble-resolution writes; other generic `.passed` readers have not all been converted |
-| Unified playback transitions / O01, O04 | GRAPHICAL PATH INTEGRATED; LEGACY AND DEVICE ACCEPTANCE OPEN | `PlaybackTransition` retains selected effect through admission; CountInPlan is authored once and sent to metronome with authorized segment ID; exact deadline mismatch now fails closed; some legacy/headless branch behavior remains |
-| Asset admission / O05, O08 | PRELOADER TIMING REMOVED; PRIVATE-STATE AUDIT STILL OPEN | ScoreRunway acknowledges only compiled asset identity; gateway uses public readiness/capability ports; native queue transaction extracted, but native view and runway still share private queue internals |
+| Unified assessment verdict / O03 | INTEGRATED ACROSS TEACHING, EVIDENCE AND SNAPSHOTS; LIVE CHECK OPEN | The selected verdict now drives course progression, recorded acceptance, UI summary and durable trouble clearing; raw grader acceptance is retained under a separate diagnostic field; non-graded legacy adapters remain distinct |
+| Unified playback transitions / O01, O04 | GRAPHICAL COUNT-IN SINGLE-TAKE PATH INTEGRATED; LEGACY AND PHYSICAL ACCEPTANCE OPEN | Immutable PlaybackTransition and CountInPlan are accepted once; metronome uses take-keyed authorized segments through Pause/Resume, rejects mismatched deadlines and does not invent unadmitted graphical countdowns; headless compatibility and hardware acceptance remain |
+| Asset admission / O05, O08 | QUEUE AND RENDERER-STAGE OWNER EXTRACTED; FULL PORT MIGRATION OPEN | ScoreStreamController now stores the mutable FIFO, reservation serials and rollback state; ScoreSceneController owns active renderer replacement and asset adoption; ScoreRunway uses public predecessor registration; view still exposes transitional property adapters and some private-state reads remain |
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
-| Architecture docs / O07 | ACTIVE CONTRACT DOCUMENTED | Previous system/transport ownership docs marked historical; ADR-0001 records the current authority and links to live implementation tracker |
-| Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher owns graphical/headless/Free score projection with captured immutable facts; 216,648 B → 207,631 B; many command/assessment/persistence operations remain in PracticeEngine |
-| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | Pure NotationClipPlanner and StreamAdmissionExecutor extracted; 97,601 B → 89,664 B; queue state, rollback and painting still intermingled |
-| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger own their domain operations; 68,677 B → 58,465 B; UI/navigation/input composition still extensive |
-| Existing CI/native integration | CI PASSED THROUGH `f1d3385`; LATEST COMMITS PENDING | GitHub Actions reported 319 Python passed, 17 skipped and Godot checks green at `f1d3385`; later extraction commits require fresh CI and live MIDI/audio. No test files created or changed |
+| Architecture docs / O07 | ACTIVE CONTRACT UPDATED; REFERENCE SWEEP OPEN | ADR-0001 and playback coordinator document current authority; old ownership docs marked historical, stale 17 November Practice Flow comparison archived, live spec revised to moving windows; remaining references require checking |
+| Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher handles score projection, MidiIngress owns semantic input suppression and rollover, AttemptSettlement owns atomic persistence and policy-bound verdicts; PracticeEngine remains a large command/assessment façade with direct lifecycle state |
+| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController now own clipping, physical preflight execution and mutable queue/serial/rollback state respectively; NativeView still contains ledger operations and painter lifecycle, with compatibility forwarding properties |
+| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger, NavigationSession and ApplicationEventRouter now own their corresponding domains; Main still builds screen trees and routes command/in-process callbacks |
+| Existing CI/native integration | CI PASSED THROUGH `069b24e`; LATEST SPEC CLEANUP PENDING | Existing GitHub Actions Python and Godot checks passed at `069b24e` (run 44617308164); later cleanup commits await verification. The production_session_journey and production_ui_smoke scripts are syntax-checked by standard CI, not executed as full native journeys. No test files added/modified; physical MIDI/audio unverified |
 
 **Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
 
@@ -61,6 +61,20 @@
 - `f1d3385`: Kept the existing headless reservation fixture on its read-only geometry interface while production uses the new public geometry port. Existing CI green.
 
 **Explicitly not complete:** Full decomposition of `server.py`, `view.gd` and `main.gd`; eliminating every remaining private cross-component mutation and legacy/adaptor decision branch; full-reader policy verdict audit; in-process/native-device/physical acceptance. Do not report the whole remediation as finished.
+
+### Implementation checkpoint D — assessment readers and runtime ownership (19 November 2026)
+
+- `a9a7bbb`, `5fe2414`, `ac722de`, `805f315`: Unified persisted acceptance, pending take projection, feedback, and clearing of trouble against the exact `AssessmentVerdict`. Stored `raw_grader_passed` remains diagnostic and is not an alternative mastery decision. Full passage selects its decision before sealing; an existing pending decision is reused during settlement.
+- `d9795a0`, `4497ef8`, `85bebf9`: Introduced a single ScoreStreamController for the mutable queue, admitted serial, paused/live/armed segment identities and rollback state; moved storage from NativeView and registered retained predecessor layers through a port.
+- `3108588`, `981e929`, `835d25a`: Added ScoreSceneController as the one writer of `stage.renderer` and coordinated asset revision adoption for normal and preloaded stage promotion.
+- `d3ed624`, `3124a0e`: Moved MIDI successor suppression and immutable-timestamp rollover deferral from PracticeEngine into MidiIngress, preserving the existing semantic command path for configured piano-key shortcuts.
+- `ea86083`, `daf2012`: Extracted navigation screen state, settings/back routes and pause/navigation effects from Main into NavigationSession.
+- `8ed13d9`, `ea53d71`, `31d7dc5`, `104fa98`: Unified graphical count-in cues under an authorized take identity; removed the second graphical countdown fallback and corrected agreement checking against `playback_timeline.current`.
+- `65c889c`, `069b24e`: Moved keyboard shortcut interpretation and input-capture policy from Main into ApplicationEventRouter. [GitHub Actions passed at `069b24e`](https://github.com/tpepels/piano_teacher/actions/runs/44617308164).
+- `7fd4e4d`: Removed the unused old phrase/link generator so Practice Flow has one production source-window selector.
+- `df0052c`, `b648154`: Archived the stale November 17 application comparison and revised the living Practice Flow specification for authored moving windows.
+
+**Current limits:** The three large classes have fewer responsibilities but are **not yet thin facades**. A few old fallback branches and compatibility accessors still exist; no full physical MIDI/audio acceptance has occurred. Standard CI parses but does not execute the existing production Godot journey script. Avoid conflating syntax/isolated checks with actual application acceptance.
 
 ## Executive findings
 
