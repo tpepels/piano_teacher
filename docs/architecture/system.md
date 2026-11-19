@@ -1,4 +1,14 @@
-# Piano Teacher architecture
+# Piano Teacher architecture — historical inventory
+
+> **Superseded as an ownership contract on 2026-11-19.** This document
+> preserves the 2026-11-04 subsystem inventory for background only; its
+> per-component timing, renderer and countdown ownership statements describe
+> earlier implementations. The current runtime contract is
+> [Playback Coordinator](playback-coordinator.md), the ongoing changes are
+> tracked in [Ownership remediation](ownership-and-practice-progression-remediation.md),
+> and the active teaching sequence is [Practice Flow](../practice-flow.md).
+> Do not reintroduce the former `score_queue_next`, Main-owned reservation,
+> or geometry-derived preloader handoff paths from this archived map.
 
 This is a technical contract. The sole active phase plan is [ROADMAP.md](../../ROADMAP.md).
 
