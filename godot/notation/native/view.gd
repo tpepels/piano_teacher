@@ -1514,31 +1514,6 @@ func _diagnose_plan(identity: String, outcome: String, deadline_world: float,
     print("SCORE_PLAN_QUEUE:",JSON.stringify(row))
 
 
-func _planned_owner(state: Dictionary, opening: float) -> int:
-    # The take a running snapshot names is bound to the source admitted for
-    # the backend plan of THAT take: same plan identity, hence the same
-    # graded deadline. No second estimate of the onset is compared against
-    # a tolerance (R1 C1: a repeat whose onset missed the old 0.025-beat
-    # window stayed "autopending" and never received feedback colour).
-    var plan: Variant = state.get("score_queue_next")
-    if not plan is Dictionary or \
-            int(plan.get("transport_id",-1)) != int(state.get("transport_id",-2)):
-        return -1
-    var owner_serial: int = int(_scheduled_score_plan_ids.get(
-        str(plan.get("plan_id","")),-1))
-    if owner_serial < 0:
-        return -1
-    for item in _stream_queue.online:
-        if str(item.get("kind","")) != "source" or \
-                int(item.get("take_owner",-1)) != owner_serial:
-            continue
-        if str(item.get("take_key","")) != "autopending" or \
-                absf(float(item.get("source_floor",-INF))-opening) > .00001:
-            return -1
-        return owner_serial
-    return -1
-
-
 func _stream_prune_expired() -> void:
     # All retirement, invalid-record cleanup and CanvasItem reuse take the
     # same path. The renderer itself never reparents or frees a stream clip.
@@ -1574,21 +1549,6 @@ func present_flow(world_beat: float, state: Dictionary,
         int(state.get("transport_id",-1)),mode]
     var paused_now: bool = bool(state.get("paused",false))
     var running_now: bool = bool(state.get("running",false)) and not paused_now
-    if allow_admission and phase == "ready" and not running_now and \
-            not paused_now and mode in ["practice","perform"]:
-        # Prepare outside the visible viewport, long before the Play button.
-        # READY frames can arrive after Play was armed but before the
-        # backend confirms it. Only presentation frames skip admission;
-        # explicit Retry still needs to reserve its own future score.
-        if _stream_armed_serial < 0 and StreamAdmission.select(
-                _stream_queue.online,"idle",opening,stream_world_beat) < 0:
-            # Precompile one hidden immutable READY take. Once it moves too
-            # close to the viewport, DO NOT re-enqueue it every few frames.
-            # It stays unseen; Play alone refreshes its offscreen placement.
-            # If its first source strip has fully expired, discard only the
-            # safe hidden remainder before preparing a new one.
-            trim_future_queue("ready_source_expired")
-            _stream_reserve_ready(stream_world_beat,opening)
     if paused_now:
         if not _stream_was_paused:
             _stream_paused_source = maxf(opening,opening+graded_beat)
@@ -1610,33 +1570,10 @@ func present_flow(world_beat: float, state: Dictionary,
         # Stop speculative admission on feedback. Preserve an already
         # scheduled automatic retry ONLY if its unmodified source opening
         # matches the engine's declared next passage.
-        var prep: Variant = state.get("practice_preparation")
-        var next_plan: Variant = state.get("score_queue_next")
-        # The announced plan names the next opening. A completed
-        # preparation from an earlier retry is history, not a decision.
-        if next_plan is Dictionary:
-            prep = {"source_from_beat":float(next_plan.get("source_from_beat",0.0))}
-        elif prep is Dictionary and str(prep.get("phase","")) == "complete":
-            prep = null
-        var next_opening: float = (
-            float(prep.get("source_from_beat",0.0))
-            if prep is Dictionary else 0.0)
-        var keep_auto: bool = bool(state.get("auto",false)) or \
-            bool(state.get("preview_only",false)) or prep is Dictionary
-        if keep_auto and prep is Dictionary:
-            # Compare each speculative take's OPENING (its first strip), not
-            # every measure strip: a multi-measure repeat's later strips
-            # start later by construction and are not a changed decision.
-            var openings: Dictionary = {}
-            for item in _stream_queue.online:
-                if str(item.get("take_key","")) == "autopending":
-                    var take_owner: int = int(item.get("take_owner",-1))
-                    openings[take_owner] = minf(float(openings.get(
-                        take_owner,INF)),float(item.get("source_floor",-1.0)))
-            for take_opening in openings.values():
-                if absf(float(take_opening)-next_opening) > .00001:
-                    keep_auto = false
-                    break
+        # The coordinator is the only owner allowed to announce/arm the
+        # successor. No speculative autopending source is admitted from
+        # feedback state or an inferred scheduler deadline.
+        var keep_auto := false
         if not keep_auto:
             trim_future_queue("changed_practice_decision")
     elif allow_admission and running_now and phase in [
@@ -1661,25 +1598,6 @@ func present_flow(world_beat: float, state: Dictionary,
                         _stream_armed_segment_id = ""
                     else:
                         cancel_stream_arm()
-            elif key != _stream_last_take and mode in [
-                    "practice","perform","listen"]:
-                # Polling binds only the owner admitted for this take's own
-                # backend plan (score_queue_next names the take it grades).
-                var claimed: int = _planned_owner(state,opening)
-                if claimed >= 0 and StreamLifecycle.activate(
-                        _stream_queue.online,claimed,key,false):
-                    _stream_live_serial = claimed
-                    _stream_last_take = key
-                    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
-                        var onset := NAN
-                        for item in _stream_queue.online:
-                            if int(item.get("take_owner",-1)) == claimed:
-                                onset = float(item["world_origin"])+opening
-                                break
-                        print("SCORE_PLAN_BIND:",JSON.stringify({"take":key,
-                            "owner":claimed,"onset_world":onset,
-                            "graded_world":stream_world_beat-graded_beat,
-                            "offset_beats":onset-(stream_world_beat-graded_beat)}))
             elif key == _stream_last_take and not _stream_was_paused:
                 var owned: int = StreamAdmission.select(_stream_queue.online,
                     "bound",opening,stream_world_beat,0.0,0.0,key)
