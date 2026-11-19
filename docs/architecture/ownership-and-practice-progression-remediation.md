@@ -281,6 +281,12 @@
 - Removed the feedback event inbox, reaction instance and read/ingest/dispatch algorithms from `Main`; it now forwards score revision publications and samples the session once per visual frame. The backend's take identity, timestamp adjustment and sequence-gap reporting are unchanged.
 - No new tests. The existing core and native production checks remain the verification gates.
 
+### Implementation checkpoint AI — protect live source strips on Pause
+
+- Full native UI run [44639590153](https://github.com/tpepels/piano_teacher/actions/runs/44639590153) verified compiled GDExtension, embedded Python, authentic two-hand MIDI, source geometry, authorized count-in, Play and Pause. It exposed a **real stream-ownership defect**: Pause removed the unexpired source of the current take before Resume.
+- `ScoreStreamController.observe_transport` now supplies its authenticated `paused_owner` to the queue's existing protected-tail withdrawal policy. That current musical owner remains immutable and visible until natural expiry; separate safe speculative successors can still retract. If the paused owner cannot be identified, withdrawal fails closed rather than deleting unknown current music. No renderer-local workaround, second queue or new test was introduced.
+- Continue to require full Pause/Resume native acceptance and the relocated package audit on this corrected source before closing either gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

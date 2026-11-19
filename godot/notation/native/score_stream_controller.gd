@@ -197,9 +197,13 @@ func observe_transport(owner: Control, world: float, opening: float,
         if not was_paused:
             paused_source = maxf(opening,opening+graded_beat)
             paused_owner = transport_owner(opening,world,running_reported)
-        if allow_admission and armed_serial < 0:
-            # A provisional owner must survive until its Play ACK.
-            owner.trim_future_queue("pause")
+        # Never withdraw the paused musical take's own unexpired source
+        # strips. Its authenticated owner is protected even when the
+        # future notehead has not yet crossed the right viewport edge.
+        # A completely unknown owner fails closed (no suffix withdrawal);
+        # only a separately identified speculative successor may retract.
+        if allow_admission and armed_serial < 0 and paused_owner >= 0:
+            owner.trim_future_queue("pause",paused_owner)
         was_paused = true
         live_serial = -1
     elif allow_admission and not running_now and phase in [
