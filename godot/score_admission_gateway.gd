@@ -19,6 +19,7 @@ var reserve_request: Node
 var present_request: Node
 var withdraw_request: Node
 var failure_request: Node
+var status_request: Node
 var current: Dictionary = {}
 var renderer
 var receipt: Dictionary = {}
@@ -44,6 +45,7 @@ func configure(host: Node, bridge: Node, practice_stage,
     present_request = _request(host, Callable(self, "_presented"))
     withdraw_request = _request(host, Callable(self, "_withdrawn"))
     failure_request = _request(host, Callable(self, "_failure_reported"))
+    status_request = _request(host, Callable(self, "_status_received"))
 
 func _request(host: Node, callback: Callable) -> Node:
     var call := Request.new()
@@ -250,10 +252,11 @@ func observe(state: Dictionary, frame_ms: int) -> void:
         if str(current.get("intent_id","")) == identifier and \
                 int(current.get("attempt",-2)) == attempt:
             if pending_reconciliation and present_request._pending_id < 0 and \
+                    status_request._pending_id < 0 and \
                     Time.get_ticks_msec()-started_ms > 800 and \
                     not receipt.is_empty():
                 started_ms = Time.get_ticks_msec()
-                _send_presentation()
+                _query_status()
             return
         _cancel_provisional()
     if reserve_request._pending_id >= 0 or present_request._pending_id >= 0:
@@ -298,10 +301,38 @@ func _presented(code: int, body: PackedByteArray) -> void:
         pending_reconciliation = false
         _confirm_authorized(data)
     else:
-        # An in-process timeout can lose only the reply, not the command.
-        # Reconcile against authoritative state before rolling back ink.
+        # In-process timeouts can lose a response after the backend already
+        # committed the transport. Query its transaction ledger first.
         pending_reconciliation = true
-        admission_problem.emit("Checking playback authorization after an incomplete response")
+        _query_status()
+
+func _query_status() -> void:
+    if status_request._pending_id < 0 and not receipt.is_empty():
+        status_request.request("playback.status")
+
+func _status_received(code: int, body: PackedByteArray) -> void:
+    if not pending_reconciliation or receipt.is_empty():
+        return
+    if code != 0:
+        # No rollback on an uncertain response: the old notation may
+        # already be grading. The next state poll retries reconciliation.
+        return
+    var status: Variant = JSON.parse_string(body.get_string_from_utf8())
+    if not status is Dictionary:
+        return
+    var expected: String = str(receipt.get("segment_id",""))
+    if str(status.get("active_segment_id","")) == expected:
+        _confirm_authorized(receipt)
+        return
+    if str(status.get("reserved_segment_id","")) == expected and \
+            str(status.get("intent_id","")) == str(receipt.get("intent_id","")) and \
+            int(status.get("attempt",-2)) == int(receipt.get("attempt",-1)):
+        pending_reconciliation = false
+        _send_presentation()
+        return
+    # Definitively absent from both active and reserved state. The
+    # reservation expired or was superseded; its unseen ink can be removed.
+    _cancel_provisional()
 
 func _confirm_authorized(data: Dictionary) -> void:
     if receipt.is_empty():
