@@ -45,6 +45,7 @@ const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd
 const CountInVoicePlayer := preload("res://countin_voice_player.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationSession := preload("res://navigation_session.gd")
+const ApplicationEventRouter := preload("res://application_event_router.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 const FeedbackEventInbox := preload("res://feedback_event_inbox.gd")
 const StateContract := preload("res://state_contract.gd")
@@ -1187,81 +1188,52 @@ func _choose_device(name: String) -> void:
 
 
 func _input(event: InputEvent) -> void:
+    # The source picker gets first refusal; it owns its local edit keys.
     if practice_view.handle_source_input(event):
         return
-    if not event is InputEventKey:
-        return
-    # Search without hunting for a small field in the Music drawer.
-    # Once focused, / remains normal text input.
-    if event.pressed and not event.echo and current_screen == "library" \
-            and ((event.ctrl_pressed and event.keycode == KEY_F) or
-            (event.keycode == KEY_SLASH and not library_view.is_search_focused())):
+    var key: InputEventKey = event if event is InputEventKey else null
+    var capture: String = ApplicationEventRouter.capture_action(
+        event,current_screen,
+        practice_view.retains_modal_navigation(key.keycode) if key != null else false,
+        get_viewport().gui_get_focus_owner() is LineEdit,
+        library_view.is_search_focused())
+    if capture == "focus_library_search":
         library_view.focus_search(true)
         get_viewport().set_input_as_handled()
-        return
-    if practice_view.retains_modal_navigation(event.keycode):
-        return
-    if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE] and not (event.ctrl_pressed and event.keycode == KEY_Q):
-        return
-    var practice_shortcut: bool = current_screen == "practice" and event.keycode in [
-        KEY_ESCAPE, KEY_SPACE, KEY_P, KEY_R, KEY_S, KEY_L, KEY_LEFT, KEY_RIGHT]
-    if event.keycode == KEY_ESCAPE and current_screen in ["library", "settings", "lesson"]:
+    elif capture == "keyboard":
+        # Consume both press and release so a focused UI button never
+        # receives an extra accept on keyboard release.
         _unhandled_key_input(event)
         get_viewport().set_input_as_handled()
-        return
-    if event.keycode == KEY_F11 or (event.ctrl_pressed and event.keycode == KEY_Q) or practice_shortcut:
-        # Consume press and release before focused buttons see ui_accept.
-        # Handling only the press can also activate Next/Stop on release.
-        _unhandled_key_input(event)
-        get_viewport().set_input_as_handled()
+
 
 func _unhandled_key_input(event: InputEvent) -> void:
-    if practice_view.is_source_picker_open():
+    var key: InputEventKey = event if event is InputEventKey else null
+    var effect: Dictionary = ApplicationEventRouter.command(
+        event,current_screen,practice_view.is_source_picker_open(),
+        practice_view.retains_modal_navigation(key.keycode) if key != null else false,
+        get_viewport().gui_get_focus_owner() is LineEdit)
+    if effect.is_empty():
         return
-    if event is InputEventKey and event.pressed and not event.echo:
-        if practice_view.retains_modal_navigation(event.keycode):
-            return
-        if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE] and not (event.ctrl_pressed and event.keycode == KEY_Q):
-            return
-        if event.ctrl_pressed and event.keycode == KEY_Q:
+    match str(effect.get("kind","")):
+        "exit":
             _exit_app()
-            get_viewport().set_input_as_handled()
-            return
-        if event.keycode == KEY_F11:
+        "fullscreen":
             _toggle_fullscreen()
-            get_viewport().set_input_as_handled()
-            return
-        if event.keycode == KEY_ESCAPE:
-            _navigate("library" if current_screen == "practice" else "practice")
-            get_viewport().set_input_as_handled()
-            return
-        if current_screen != "practice":
-            return
-        if event.keycode == KEY_P and event.shift_pressed:
+        "navigate":
+            _navigate(str(effect["target"]))
+        "advanced_pause":
             practice_view.open_advanced_pause()
-            get_viewport().set_input_as_handled()
+        "primary":
+            _toggle_playing()
+        "pause":
+            _toggle_pause()
+        "retry":
+            _restart_practice()
+        "listen":
+            _listen_or_return_to_practice()
+        "command":
+            _send_action({"action":str(effect["action"])})
+        _:
             return
-        match event.keycode:
-            KEY_SPACE:
-                _toggle_playing()
-                get_viewport().set_input_as_handled()
-            KEY_P:
-                _toggle_pause()
-                get_viewport().set_input_as_handled()
-            KEY_R:
-                _restart_practice()
-                get_viewport().set_input_as_handled()
-            KEY_L:
-                _listen_or_return_to_practice()
-                get_viewport().set_input_as_handled()
-            KEY_S:
-                _send_action({"action": "stop"})
-                get_viewport().set_input_as_handled()
-            KEY_LEFT:
-                _send_action({"action": "previous"})
-                get_viewport().set_input_as_handled()
-            KEY_RIGHT:
-                _send_action({"action": "next"})
-                get_viewport().set_input_as_handled()
-
-
+    get_viewport().set_input_as_handled()
