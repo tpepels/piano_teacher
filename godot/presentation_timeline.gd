@@ -1,4 +1,5 @@
 extends RefCounted
+const TempoTimeline := preload("res://tempo_timeline.gd")
 ## Canonical, versioned world-position timeline. Every rate change is an
 ## immutable monotonic epoch. Projection is a pure function of this ledger
 ## and a timestamp: it never repays historical tempo errors or moves ink.
@@ -26,7 +27,7 @@ func initialized() -> bool:
 func current_rate() -> float:
     if epochs.is_empty():
         return 40.0
-    return float(epochs[-1]["bpm"])
+    return _rate_at(float(last_ms))
 
 func initialize(at_ms: int, bpm: float = 40.0) -> void:
     if not epochs.is_empty():
@@ -70,6 +71,8 @@ func _rebase_future() -> void:
     for i in range(1,epochs.size()):
         var before: Dictionary = epochs[i-1]
         var after: Dictionary = epochs[i]
+        if bool(after.get("locked_origin",false)):
+            continue
         after["world"] = float(before["world"]) + \
             (float(after["at_ms"])-float(before["at_ms"])) * \
             float(before["bpm"])/60000.0
@@ -162,4 +165,5 @@ func set_hold(world: float, at_ms: int) -> void:
     # position at this instant, without catching up via a sudden jump.
     _install(float(at_ms),_rate_at(float(at_ms)),"guided")
     epochs[-1]["world"] = observed
+    epochs[-1]["locked_origin"] = true
     version += 1
