@@ -1003,7 +1003,7 @@ func _process(_delta: float) -> void:
     var ticks: int = frame_ms
     var beat: float = _transport_beat_at(ticks)
     _update_guided_hold(last_state)
-    score_flow.sample(ticks,_flow_bpm(last_state,beat,ticks))
+    score_flow.sample(ticks)
     _read_feedback_events()
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
@@ -1111,21 +1111,19 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         if sample_started_ms < 0 else sample_started_ms)
     last_state_tick = int((started_ms+received_ms)/2.0)
     visual_transport_clock.accept(parsed,last_state_tick,received_ms)
-    _switch_flow_rate_at_take_start(parsed)
-    # Adopt this snapshot's rate BEFORE anything is placed on the axis. When
-    # the engine reports the instant its tempo changed (settlement, slower
-    # retry, stage handoff), switch the forward-only axis retroactively at
-    # that instant; otherwise from here. Deadlines computed at the new tempo
-    # then stay on the ink.
+    # Native admission publishes future source tempo epochs before the
+    # downbeat. A late snapshot cannot invent or repay historical rates.
+    # Free/idle still use the selected authored practice tempo when no
+    # graded segment is active.
+    var published_playback: Variant = parsed.get("playback_timeline")
+    var authorized: Variant = (published_playback.get("current")
+        if published_playback is Dictionary else null)
     var flow_beat: float = _transport_beat_at(received_ms)
-    var epoch: float = float(parsed.get("tempo_epoch_ms",NAN))
-    if is_finite(epoch) and visual_transport_clock.has_backend_offset and \
-            epoch != _applied_tempo_epoch:
-        _applied_tempo_epoch = epoch
-        score_flow.switch_rate_at(epoch+visual_transport_clock.backend_offset_ms,
-            _flow_bpm(parsed,flow_beat))
     _update_guided_hold(parsed)
-    score_flow.sample(received_ms,_flow_bpm(parsed,flow_beat,received_ms))
+    if authorized is Dictionary:
+        score_flow.sample(received_ms)
+    else:
+        score_flow.sample(received_ms,_flow_bpm(parsed,flow_beat,received_ms))
     var prepared_stage_waiting: bool = score_runway != null and \
         score_runway.has_prepared_destination(parsed)
     if score_runway != null and not prepared_stage_waiting:
@@ -1197,30 +1195,6 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     _refresh_score_status()
     _debug_log(parsed, received_ms)
 
-
-var _flow_rate_transport := ""
-var _applied_tempo_epoch := NAN
-
-func _switch_flow_rate_at_take_start(parsed: Dictionary) -> void:
-    # A repeat's tempo step is settled at its graded run_at, but this client
-    # sees the new BPM one snapshot later. Switch the presentation rate at
-    # that exact run_at so the admitted ink and the graded beat stay
-    # together (R1 F1: tempo-step repeats drifted by latency x delta BPM).
-    if not bool(parsed.get("running",false)) or bool(parsed.get("paused",false)) or \
-            not visual_transport_clock.has_backend_offset or \
-            not parsed.has("visual_run_at_ms"):
-        return
-    var take: String = "%s|%d|%d" % [str(parsed.get("piece_fingerprint","")),
-        int(parsed.get("revision",-1)),int(parsed.get("transport_id",-1))]
-    if take == _flow_rate_transport:
-        return
-    _flow_rate_transport = take
-    # The tempo map is phrase-local: a take opens at its play_from_beat.
-    var start_bpm: float = TempoTimeline.bpm_at_beat(
-        float(parsed.get("play_from_beat",0.0)),
-        float(parsed.get("bpm",40.0)),parsed.get("tempo_segments",[]))
-    score_flow.switch_rate_at(float(parsed["visual_run_at_ms"]) +
-        visual_transport_clock.backend_offset_ms,start_bpm)
 
 
 func _request_layout() -> void:
