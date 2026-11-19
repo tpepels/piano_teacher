@@ -1153,34 +1153,7 @@ func acknowledge_stream_arm() -> bool:
 
 
 func cancel_stream_arm() -> bool:
-    # Only an unacknowledged reservation may be rolled back. Once published,
-    # the world coordinates are immutable and its notes must exit normally.
-    if _stream_arm_rollback.is_empty():
-        return false
-    var owner_serial: int = int(_stream_arm_rollback["owner_serial"])
-    var withdrawn_suffix: Array = _stream_arm_rollback.get("withdrawn_suffix",[])
-    if _stream_armed_serial != owner_serial:
-        _stream_arm_rollback.clear()
-        return false
-    var restored: bool = false
-    if bool(_stream_arm_rollback.get("newly_allocated",false)):
-        _stream_queue.withdraw_take_tail(
-            self,owner_serial,stream_world_beat,timeline.pixels_per_beat,
-            staff_gap(),timeline.duration_beats,size.x,
-            size.x*PLAYHEAD_FRACTION,"failed_command")
-        restored = not _stream_queue.has_take(owner_serial)
-    else:
-        restored = StreamLifecycle.restore_owner(_stream_queue.online,
-            owner_serial,_stream_arm_rollback["source_snapshot"])
-    _stream_live_serial = int(_stream_arm_rollback["old_live_serial"])
-    _stream_armed_serial = -1
-    _stream_armed_segment_id = ""
-    _stream_arm_acknowledged = false
-    _stream_arm_rollback.clear()
-    if not withdrawn_suffix.is_empty():
-        restored = _restore_future_suffix(withdrawn_suffix,stream_world_beat) and restored
-    queue_redraw()
-    return restored
+    return _stream_controller.cancel_arm(self,stream_world_beat)
 
 
 func trim_future_queue(reason: String,
@@ -1195,38 +1168,7 @@ func trim_future_queue(reason: String,
 
 
 func _restore_future_suffix(saved: Array, world: float) -> bool:
-    # Compensation for a failed append after a validated preflight.
-    # Re-enqueue the exact previously withdrawn source/rest batches in
-    # chronological order; do not create any new world time or note content.
-    var cursor := 0
-    var restored := true
-    while cursor < saved.size():
-        var old: Dictionary = saved[cursor]
-        var serial: int = int(old.get("owner_serial",-1))
-        var batch: Array = []
-        while cursor < saved.size() and \
-                int(saved[cursor].get("owner_serial",-1)) == serial:
-            var item: Dictionary = saved[cursor]
-            var spec: Dictionary = _stream_queue._record(item)
-            spec["pending"] = bool(item.get("pending",false))
-            spec["hidden_until_armed"] = bool(item.get("hidden_until_armed",false))
-            batch.append(spec)
-            cursor += 1
-        if not _stream_queue.enqueue(self,batch,
-                retained_repeat_segments,retained_rest_segments,
-                retained_first_once,world,size.x,size.x*PLAYHEAD_FRACTION,
-                timeline.pixels_per_beat,staff_gap(),timeline.duration_beats):
-            push_error("RECOVERY_TRANSACTION: rollback admission failed for "+str(serial))
-            restored = false
-            break
-        for item in _stream_queue.online:
-            if int(item.get("owner_serial",-1)) == serial:
-                for original in saved:
-                    if int(original.get("serial",0)) == int(item.get("serial",0)):
-                        item["armed"] = bool(original.get("armed",false))
-                        item["ever_visible"] = bool(original.get("ever_visible",false))
-                        break
-    return restored
+    return _stream_controller.restore_future_suffix(self,saved,world)
 
 
 func enqueue_recovery_queue(world: float, source_opening: float,

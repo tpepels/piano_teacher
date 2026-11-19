@@ -226,3 +226,74 @@ func observe_transport(owner: Control, world: float, opening: float,
         paused_owner = -1
     elif not paused_now:
         live_serial = -1
+
+## The stream ledger is also the sole owner of failed-arm compensation.
+## Unexposed geometry is restored exactly, while visible strips remain
+## immutable.  The view provides retained assets and schedules redraw only.
+func cancel_arm(view, world: float) -> bool:
+    # Only an unacknowledged reservation may be rolled back. Once published,
+    # the world coordinates are immutable and its notes must exit normally.
+    if arm_rollback.is_empty():
+        return false
+    var owner_serial: int = int(arm_rollback["owner_serial"])
+    var withdrawn_suffix: Array = arm_rollback.get("withdrawn_suffix",[])
+    if armed_serial != owner_serial:
+        arm_rollback.clear()
+        return false
+    var restored: bool = false
+    if bool(arm_rollback.get("newly_allocated",false)):
+        queue.withdraw_take_tail(
+            view,owner_serial,world,view.timeline.pixels_per_beat,
+            view.staff_gap(),view.timeline.duration_beats,view.size.x,
+            view.size.x*view.PLAYHEAD_FRACTION,"failed_command")
+        restored = not queue.has_take(owner_serial)
+    else:
+        restored = StreamLifecycle.restore_owner(queue.online,
+            owner_serial,arm_rollback["source_snapshot"])
+    live_serial = int(arm_rollback["old_live_serial"])
+    armed_serial = -1
+    armed_segment_id = ""
+    arm_acknowledged = false
+    arm_rollback.clear()
+    if not withdrawn_suffix.is_empty():
+        restored = restore_future_suffix(view,withdrawn_suffix,world) and restored
+    view.queue_redraw()
+    return restored
+
+
+
+func restore_future_suffix(view, saved: Array, world: float) -> bool:
+    # Compensation for a failed append after a validated preflight.
+    # Re-enqueue the exact previously withdrawn source/rest batches in
+    # chronological order; do not create any new world time or note content.
+    var cursor := 0
+    var restored := true
+    while cursor < saved.size():
+        var old: Dictionary = saved[cursor]
+        var serial: int = int(old.get("owner_serial",-1))
+        var batch: Array = []
+        while cursor < saved.size() and \
+                int(saved[cursor].get("owner_serial",-1)) == serial:
+            var item: Dictionary = saved[cursor]
+            var spec: Dictionary = queue._record(item)
+            spec["pending"] = bool(item.get("pending",false))
+            spec["hidden_until_armed"] = bool(item.get("hidden_until_armed",false))
+            batch.append(spec)
+            cursor += 1
+        if not queue.enqueue(view,batch,
+                view.retained_repeat_segments,view.retained_rest_segments,
+                view.retained_first_once,world,view.size.x,view.size.x*view.PLAYHEAD_FRACTION,
+                view.timeline.pixels_per_beat,view.staff_gap(),view.timeline.duration_beats):
+            push_error("RECOVERY_TRANSACTION: rollback admission failed for "+str(serial))
+            restored = false
+            break
+        for item in queue.online:
+            if int(item.get("owner_serial",-1)) == serial:
+                for original in saved:
+                    if int(original.get("serial",0)) == int(item.get("serial",0)):
+                        item["armed"] = bool(original.get("armed",false))
+                        item["ever_visible"] = bool(original.get("ever_visible",false))
+                        break
+    return restored
+
+

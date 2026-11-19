@@ -19,7 +19,7 @@
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
 | Architecture docs / O07 | ACTIVE CONTRACT UPDATED; REFERENCE SWEEP OPEN | ADR-0001 and playback coordinator document current authority; old ownership docs marked historical, stale 17 November Practice Flow comparison archived, live spec revised to moving windows; remaining references require checking |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
-| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController own clipping, preflight execution, queue/serial/rollback, peer clearance, transport observation and binding, suffix retirement, and diagnostic state. NativeView still contains physical append/rollback algorithms and painter lifecycle, with transitional forwarding properties |
+| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController own clipping, preflight execution, queue/serial/rollback, peer clearance, transport observation, arm cancellation/suffix restoration, retirement and diagnostics. NativeView still contains append/recovery admission and painter lifecycle, plus transitional forwarding properties |
 | Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger (including snapshot contract diagnostics), NavigationSession, ApplicationEventRouter and StatusHeadPreloader own their respective domains. Main still builds screen trees and routes command/in-process callbacks |
 | Existing CI/native integration | EXISTING CI GREEN AT `a30c366`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44620738644](https://github.com/tpepels/piano_teacher/actions/runs/44620738644) passed on current implementation+tracker code; old preflight fixture regression was repaired at `ae5ea91`. CI parses but does not run full production native UI journeys. No tests added or changed; physical MIDI/audio unverified |
 
@@ -131,6 +131,13 @@
 - Removed `ScoreTransportReservation.plan`'s alternate path that selected source windows, the live queue, reading header, right margin and future withdrawal by directly accessing private `NativeScoreView` properties. The planner now **requires** `transport_preflight_facts()` and fails closed when the public snapshot is absent or incomplete.
 - Updated the existing `tempo_score_reservation.gd` fixture to publish the exact same frozen preflight data as the real renderer; all previously existing Pathétique clearance/placement assertions stay in place. **No new tests or assertions**.
 - This closes the external private-field inspection branch for the physical planner. Remaining work is extracting internal view append/rollback code and removing transitional property forwarding; full physical acceptance remains outstanding.
+
+
+### Implementation checkpoint K — arm rollback belongs to the stream ledger
+
+- Moved `cancel_stream_arm` state restoration into `ScoreStreamController.cancel_arm` and the exact archived source/rest suffix re-enqueue into `ScoreStreamController.restore_future_suffix`. The renderer retains only public delegation and provides the retained segment pools and redraw capability; the queue remains the single mutable FIFO.
+- Preserve the old transactional order: withdraw only newly allocated unexposed arm strips, otherwise restore owner snapshot; recover the withdrawn suffix; restore previous live identity; reject mismatched armed owners.
+- This closes another mutable decision path in `NativeScoreView`. **No new tests or test changes.** Live MIDI/audio, immutable display and native packaging acceptance are not established by a successful headless run.
 
 #### Phase 6 acceptance matrix
 
