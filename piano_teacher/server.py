@@ -3435,8 +3435,6 @@ class PracticeEngine:
                     self.playback.snapshot())
                 # There is no promise of a drawable score until it has been
                 # reserved AND presented. No legacy score_queue_next fallback.
-                if self.mode != "learn":
-                    state.pop("score_queue_next", None)
                 if self.playback.intent is not None:
                     state["phase"] = "admitting"
             if self.pending_result is not None:
@@ -3549,6 +3547,12 @@ class PracticeEngine:
                     # The meter its count-in pulses in (compound: M3).
                     "count_in_meter": list(plan_meter),
                 }
+            if self.playback.presentation_required:
+                # Retire the old speculative score contract. Untimed Free
+                # keeps a source-bound target inside the unified timeline.
+                guided = state.pop("score_queue_next", None)
+                if self.mode == "learn" and isinstance(guided, dict):
+                    state["playback_timeline"]["guided"] = guided
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self._flow_active():
                 state["flow"] = self._flow_state()
