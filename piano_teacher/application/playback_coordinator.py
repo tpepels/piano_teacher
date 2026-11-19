@@ -210,13 +210,14 @@ class PlaybackCoordinator:
 
     def reserve(self, engine, *, intent_id: str, attempt: int,
                 take_id: str, fingerprint: str, stage_key: str,
-                revision: int, hand: str, deadline_ms: float,
-                world_origin: float, queue_generation: int,
+                revision: int, hand: str, source_from_beat: float,
+                deadline_ms: float, world_origin: float, queue_generation: int,
                 renderer_generation: int, reused_count_in: bool = False) -> dict:
         intent = self._require_intent(engine, intent_id, attempt)
         if (take_id != intent.take_id or fingerprint != intent.fingerprint
                 or stage_key != intent.stage_key or revision != intent.revision
-                or hand != intent.hand):
+                or hand != intent.hand
+                or abs(float(source_from_beat)-intent.from_beat) > 1e-7):
             raise ValueError("Score reservation has the wrong musical source")
         if (not math.isfinite(float(deadline_ms))
                 or not math.isfinite(float(world_origin))):
