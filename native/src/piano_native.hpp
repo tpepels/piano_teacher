@@ -61,6 +61,7 @@ public:
     ~PianoNative();
 
     bool is_ready() const { return ready_.load(); }
+    int64_t monotonic_milliseconds() const;
     String failure_message();
     int64_t submit(const String &operation, const String &body);
     Array take_responses();
