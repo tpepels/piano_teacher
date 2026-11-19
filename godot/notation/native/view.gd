@@ -115,6 +115,32 @@ func stream_preflight_snapshot() -> Array:
 func online_stream_count() -> int:
     return _stream_controller.online_size()
 
+func transport_preflight_facts(world: float, opening: float) -> Dictionary:
+    # The transport policy receives an immutable score-geometry/read
+    # snapshot. The live queue, peer registry and paused take identity
+    # remain owned by this renderer revision; no policy may mutate them.
+    var density: float = timeline.pixels_per_beat
+    var width: float = size.x
+    var gap: float = staff_gap()
+    var at_world: float = maxf(world,stream_world_beat)
+    var preview: Dictionary = _stream_queue.preview_tail_withdrawal(
+        at_world,density,gap,timeline.duration_beats,
+        width,width*PLAYHEAD_FRACTION)
+    return {
+        "source_exists": has_source_windows_at(opening),
+        "online": _stream_controller.online_snapshot(),
+        "withdrawn": preview.duplicate(true),
+        "peer_floor": _stream_queue.minimum_peer_opening(
+            density,width,width*PLAYHEAD_FRACTION),
+        "right": _stream_right_beats(),
+        "header": _stream_header_beats(opening),
+        "preview_world": at_world,
+        "was_paused": _stream_controller.was_paused,
+        "paused_source": _stream_controller.paused_source,
+        "paused_owner": _stream_controller.paused_owner,
+        "last_take": _stream_controller.last_take
+    }
+
 func record_withdrawn_stream_suffix(previous: Array) -> void:
     _stream_controller.remember_withdrawn_suffix(previous)
 
