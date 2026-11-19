@@ -328,6 +328,25 @@ func _request_if_needed(state: Dictionary, now_ms: int) -> void:
     if _fetch.request("score.next_stage") != OK:
         _next_poll_ms = now_ms + 1000
 
+func prepared_renderer(intent: Dictionary):
+    # Public provider port: exact prepared identity, and all live peers
+    # registered before the admission gateway performs geometry preflight.
+    if _future == null or not is_instance_valid(_future) or \
+            not _acknowledged or not _future.retained_ready():
+        return null
+    if (int(_bundle.get("revision",-1)) != int(intent.get("revision",-2))
+            or str(_bundle.get("fingerprint","")) != str(intent.get("fingerprint",""))
+            or str(_bundle.get("stage_key","")) != str(intent.get("stage_key",""))
+            or str(_bundle.get("hand","")) != str(intent.get("hand",""))):
+        return null
+    _link_existing_layers(_future)
+    return _future
+
+func owns_prepared_renderer(candidate) -> bool:
+    return _future != null and is_instance_valid(_future) and \
+        _future == candidate and _acknowledged
+
+
 func has_prepared_destination(state: Dictionary) -> bool:
     return _future != null and is_instance_valid(_future) and \
         _acknowledged and _future.retained_ready() and \
@@ -418,8 +437,7 @@ func promote_reserved(state: Dictionary) -> bool:
     if not has_prepared_destination(state):
         return false
     var new_renderer = _future
-    if new_renderer._stream_armed_serial < 0 or \
-            not new_renderer._stream_arm_acknowledged:
+    if not new_renderer.has_armed_reservation():
         return false
     var old = stage.renderer
     _link_existing_layers(new_renderer)
