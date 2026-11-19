@@ -984,6 +984,12 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         score_flow.hold_world)
 
 
+## Read-only published state port for native acceptance and diagnostics.
+## Neither tests nor other scenes may assign or retime a backend snapshot.
+func current_state() -> Dictionary:
+    return state_inbox.current.duplicate(true)
+
+
 func _request_layout() -> void:
     if score_session != null:
         score_session.request_layout()

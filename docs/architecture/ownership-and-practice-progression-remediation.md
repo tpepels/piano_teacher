@@ -201,6 +201,13 @@
 - Corrected a shadowed local variable introduced during extraction of `arm_take`: `candidate_serial` is the selected source take; `self.serial` is the stream's monotonically allocated immutable generation. This preserves the original new-append detection and rollback validity across retries.
 - No new tests. The inherited Godot syntax/behavior checks remain the acceptance gate for this refactor.
 
+### Implementation checkpoint V — restore real embedded acceptance fixture
+
+- Full native run [44634101804](https://github.com/tpepels/piano_teacher/actions/runs/44634101804) successfully **compiled and linked the real Godot GDExtension** on CPython 3.14. Its next step exposed a removed import in the existing fixture generator (`scripts.smoke_phase0` no longer exists).
+- Repaired the existing `verify-embedded-production-local.sh` to generate the required eight-measure, two-hand MIDI fixture directly with `mido`; no additional test script or independent fake engine was introduced.
+- Added `Main.current_state()` as an immutable-snapshot public port and migrated both existing native production journeys from their old direct `app.last_state` field dependency to that read-only port. Main's accepted state continues to have only one owner (`ApplicationStateInbox`).
+- Full native/package replay is still pending after these source corrections; physical piano acceptance remains open.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

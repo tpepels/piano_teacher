@@ -69,7 +69,7 @@ func _process(_delta: float) -> bool:
         return false
     if Time.get_ticks_msec() - begun_ms > MAX_MS:
         _fail("Production UI timed out phase=%s error=%s pending=%s" % [
-            str(app.last_state.get("phase","missing")),
+            str(app.current_state().get("phase","missing")),
             str(app.score_error),str(app.command_coordinator.state.pending)])
         return true
     if not app.native_started:
@@ -87,7 +87,7 @@ func _process(_delta: float) -> bool:
         if not app.score_session.is_ready():
             return false
         if not expected_fingerprint.is_empty() and \
-                str(app.last_state.get("piece_fingerprint","")) != expected_fingerprint:
+                str(app.current_state().get("piece_fingerprint","")) != expected_fingerprint:
             _fail("Loaded a different MIDI from the requested real score")
             return true
         var chrome = app.practice_view
@@ -119,11 +119,11 @@ func _process(_delta: float) -> bool:
         if app.practice_view.stage.score_status_panel.visible:
             _fail("Ready score remains obscured by a preparation overlay")
             return true
-        if int(app.score_session.rendered_revision) != int(app.last_state.get("revision",-1)):
+        if int(app.score_session.rendered_revision) != int(app.current_state().get("revision",-1)):
             _fail("Rendered score and backend source revisions differ")
             return true
         if str(app.current_screen) != "practice" or \
-                not bool(app.last_state.get("loaded",false)):
+                not bool(app.current_state().get("loaded",false)):
             _fail("Startup did not navigate to the loaded practice screen")
             return true
         # READY must preposition authentic source notes OFFSCREEN before Play,
@@ -209,20 +209,20 @@ func _process(_delta: float) -> bool:
         return false
     if not transport_seen:
         var renderer = app.practice_view.stage.renderer
-        if not bool(app.last_state.get("running",false)):
-            var awaiting: Variant = app.last_state.get("awaiting_score_revision",null)
+        if not bool(app.current_state().get("running",false)):
+            var awaiting: Variant = app.current_state().get("awaiting_score_revision",null)
             if not start_requested and not app.command_coordinator.state.pending and \
-                    awaiting == null and bool(app.last_state.get("loaded",false)):
+                    awaiting == null and bool(app.current_state().get("loaded",false)):
                 start_requested = true
                 app._send_action({"action":"start"})
             return false
-        if not str(app.last_state.get("phase","")) in ["count_in","playing"]:
+        if not str(app.current_state().get("phase","")) in ["count_in","playing"]:
             return false
         # This is the actual embedded Python transport, not a mocked
         # countdown: the same negative musical beat must reach the root
         # audio player before we accept the Play transition.
         var voice = app.get_node_or_null("CountInVoicePlayer")
-        if str(app.last_state.get("phase","")) == "count_in" and \
+        if str(app.current_state().get("phase","")) == "count_in" and \
                 app._transport_beat_now() < -0.01:
             if int(voice.spoken_cues_total) <= 0:
                 if countin_audio_first_ms < 0:
@@ -231,7 +231,7 @@ func _process(_delta: float) -> bool:
                     return false
                 _fail("Production countdown displayed without a spoken audio cue")
                 return true
-        initial_transport = int(app.last_state.get("transport_id",-1))
+        initial_transport = int(app.current_state().get("transport_id",-1))
         var original_survived := false
         var new_ink_offscreen := true
         # Owner decision 2026-11-08: Play on an empty strip replaces the
@@ -291,7 +291,7 @@ func _process(_delta: float) -> bool:
                 "ready_take_owner":ready_take_owner,
                 "ready_origin":ready_world_origin,
                 "world_beat":renderer.stream_world_beat,
-                "state_phase":app.last_state.get("phase"),
+                "state_phase":app.current_state().get("phase"),
                 "original_survived":original_survived,
                 "successors_offscreen":new_ink_offscreen,
                 "passes":diagnostic
@@ -308,7 +308,7 @@ func _process(_delta: float) -> bool:
         app._send_action({"action":"pause"})
         return false
     if not pause_seen:
-        if not bool(app.last_state.get("paused",false)):
+        if not bool(app.current_state().get("paused",false)):
             return false
         pause_seen = true
         print("PHASE6_PRODUCTION_PAUSE_OK")
@@ -343,10 +343,10 @@ func _process(_delta: float) -> bool:
         resume_requested = true
         app._send_action({"action":"resume"})
         return false
-    if bool(app.last_state.get("paused",false)) or \
-            not bool(app.last_state.get("running",false)):
+    if bool(app.current_state().get("paused",false)) or \
+            not bool(app.current_state().get("running",false)):
         return false
-    if int(app.last_state.get("transport_id",-1)) != initial_transport:
+    if int(app.current_state().get("transport_id",-1)) != initial_transport:
         _fail("Resume unexpectedly restarted the graded transport")
         return true
     if resumed_sample_ms < 0:
@@ -370,9 +370,9 @@ func _process(_delta: float) -> bool:
     var future_only_at_enqueue := true
     var has_transport_binding := false
     var active_key: String = "%s|%d|%d|%s" % [
-        str(app.last_state.get("piece_fingerprint","")),
-        int(app.last_state.get("revision",-1)),
-        initial_transport,str(app.last_state.get("mode","practice"))]
+        str(app.current_state().get("piece_fingerprint","")),
+        int(app.current_state().get("revision",-1)),
+        initial_transport,str(app.current_state().get("mode","practice"))]
     var diagnostics: Array = []
     for item in renderer.stream_passes:
         if str(item.get("kind","source")) != "source":
@@ -460,7 +460,7 @@ func _process(_delta: float) -> bool:
         " admitted_before=",paused_pass_serial,
         " admitted_after=",renderer._stream_serial,
         " new_source_strips=",copies,
-        " selected_bpm=",app.last_state.get("bpm"))
+        " selected_bpm=",app.current_state().get("bpm"))
     print("PHASE6_PRODUCTION_UI_WORKFLOW_OK")
     quit(0)
     return true

@@ -49,7 +49,7 @@ func _advance(next: String) -> void:
     print("PHASE6_REAL_SCORE_STEP:",phase)
 
 func _fail(message: String) -> void:
-    var state: Dictionary = app.last_state if app != null else {}
+    var state: Dictionary = app.current_state() if app != null else {}
     var prep: Variant = state.get("practice_preparation")
     var witness := {"phase":state.get("phase"),
         "running":state.get("running"),"revision":state.get("revision"),
@@ -90,7 +90,7 @@ func _ready_score() -> bool:
     var view = app.practice_view.stage.renderer
     if not view.native_ready or not view.visible or not view.retained_ready():
         return false
-    if int(app.last_state.get("revision",-1)) != app.score_session.rendered_revision:
+    if int(app.current_state().get("revision",-1)) != app.score_session.rendered_revision:
         return false
     # There is no alternate legacy/native renderer selector. Practice,
     # Listen and the preloaded stage use the same retained world-time view.
@@ -118,7 +118,7 @@ func _process(_delta: float) -> bool:
     if not app.score_error.is_empty():
         _fail("Native score failed to render: "+app.score_error)
         return true
-    var state: Dictionary = app.last_state
+    var state: Dictionary = app.current_state()
     var view = app.practice_view.stage.renderer
     match phase:
         "startup":
