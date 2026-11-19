@@ -377,6 +377,7 @@ class PlaybackCoordinator:
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
             "count_in_plan": intent.count_in.snapshot(),
+            "reused_count_in": receipt.reused_count_in,
             "tempo_segments":[{"start_beat":start,"end_beat":end,"bpm":rate}
                 for start,end,rate in intent.tempo_segments],
             "deadline_ms": receipt.deadline_ms,
