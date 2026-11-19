@@ -1,7 +1,7 @@
 # Practice flow for one piece (owner specification)
 
-**Status: owner decisions of 2026-11-17; built in part on 2026-11-18, to be
-checked by the owner at the piano.** This is the contract the practice state
+**Status: Revised source-window progression implemented 2026-11-19;
+physical piano acceptance remains outstanding.** This is the contract the practice state
 machine must follow. The `practice-flow` course (the default strategy) now
 runs states 1-5 by itself: phrases, hands, links, final test, Listen -> Free
 -> Tempo, the tempo and error rules, two feedback colours, count-in clicks
@@ -30,16 +30,28 @@ Opening a piece goes straight to the first phrase (state 2), which starts
 with its own Listen step. The whole piece is **not** played back first
 (owner, 2026-11-18: too long for long pieces).
 
-### 2. Learn a phrase
+### 2. Learn moving measure windows
 
-The piece is split into **musical phrases** (usually 2-4 bars), the way a
-piano teacher would divide it.
+The curriculum begins with each new authored measure **alone**, then
+repeats it with successively more preceding measures, never exceeding
+four measures in a routine practice window.
 
-Each phrase is learned with the **right hand**, then the **left hand**, then
-**both hands together**. A hand with no notes in the phrase is skipped.
-Every hand runs the same three steps:
+For example: **1; 2, 1–2; 3, 2–3, 1–3; 4, 3–4, 2–4, 1–4;
+5, 4–5, 3–5, 2–5**, then continue sliding forward. Each window
+gets its own independent progress/tempo/mastery identity, and a window
+is completed before advancing to the next one.
 
-**2a. Listen.** The phrase is played back once at the target tempo; the
+Each window is learned with the **right hand**, then **left hand**,
+then **both together** when those hands have notes to play. Empty hands
+are skipped. The same three learning steps apply to each window.
+
+Source measure boundaries are authored MIDI bars. A source note already
+attacked within the window retains its entire release, even if held
+beyond its last barline; a silent bar never creates a fictitious MIDI
+attack. Different windows may overlap in music, but never share mastery
+as an implied completion.
+
+**2a. Listen.** The selected window is played back once at the target tempo; the
 notes move over the staff. No input is graded. Then Free.
 
 **2b. Free (no tempo).** The learner plays the notes in order at any pace.
@@ -69,11 +81,11 @@ The target tempo is the **original tempo** of the MIDI file.
 
 ### 3. Link phrases
 
-After each new phrase (from the second one on), the previous and the new
-phrase are played together: 1+2, then 2+3, 3+4, and so on. Linking runs for
-the right hand, the left hand and both hands, each with the full
-Listen -> Free -> Tempo steps and the same Tempo rules. Then the next
-phrase (state 2).
+Linking is integrated into the moving-window sequence above:
+each new measure begins alone, then grows backwards one measure
+at a time, capped at four. The next new measure starts alone again.
+There is no independent phrase-link generator that can silently select
+longer or different material.
 
 ### 4. Final test
 
@@ -83,7 +95,7 @@ row at the target tempo. Then the piece is learned.
 
 ### 5. Resume
 
-Reopening a piece continues at the **same phrase**, starting again at
+Reopening a piece continues at the **same moving window**, starting again at
 **Free** as a warm-up (not at the saved tempo).
 
 ## Simplified exercises (Coda / Fukuda)
