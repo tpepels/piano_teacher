@@ -241,11 +241,9 @@ func _reserved(code: int, body: PackedByteArray) -> void:
             not renderer.acknowledge_stream_arm():
         _cancel_provisional()
         return
-    if runway != null and runway._future == renderer and \
-            not runway.promote_reserved(admission_state):
-        _cancel_provisional()
-        admission_problem.emit("Prepared next lesson could not be promoted")
-        return
+    # Keep the preloaded renderer provisional until the backend confirms
+    # authorization. A failed/expired receipt must not replace the visible
+    # outgoing stage; promotion is the final local presentation commit.
     _send_presentation()
 
 func _send_presentation() -> void:
@@ -276,6 +274,20 @@ func _confirm_authorized(data: Dictionary) -> void:
     var expected: String = str(receipt.get("segment_id",""))
     if str(data.get("segment_id","")) != expected:
         return
+    if runway != null and renderer != null and \
+            is_instance_valid(renderer) and runway._future == renderer:
+        if not runway.promote_reserved(admission_state):
+            if failure_request._pending_id < 0:
+                failure_request.request("playback.failure",{
+                    "take_id":str(receipt.get("take_id","")),
+                    "segment_id":expected,
+                    "reason":"prepared_stage_promotion_failed"})
+            admission_problem.emit("Authorized stage could not be presented")
+            current.clear()
+            receipt.clear()
+            admission_state.clear()
+            renderer = null
+            return
     last_activated_segment = expected
     last_activated_intent = str(receipt.get("intent_id",""))
     last_activated_attempt = int(receipt.get("attempt",-1))
