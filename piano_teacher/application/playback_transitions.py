@@ -69,7 +69,7 @@ class PlaybackTransition:
         elif exposure.mode == "learn":
             route = "learn"
         elif exposure.preparation == "rewind":
-            route = "restart"
+            route = "rewind"
         else:
             route = "start"
         # An active graphical retry always appends an immutable source
