@@ -120,6 +120,12 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     if (str(state.get("piece_fingerprint","")) != str(intent.get("fingerprint",""))
             or int(state.get("revision",-1)) != int(intent.get("revision",-2))):
         return
+    if absf(float(intent.get("end_beat",-1.0)) -
+            float(state.get("phrase_duration_beats",-2.0))) > 0.0001:
+        # The prepared assets must cover the full selected PracticeWindow,
+        # including a cross-bar key release. Never admit another window's
+        # notes merely because its initial source beat matches.
+        return
     var backend_now: float = _backend_ms()
     if not is_finite(backend_now):
         return
@@ -217,6 +223,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         "revision": int(intent["revision"]),
         "hand": str(intent["hand"]),
         "source_from_beat": opening,
+        "source_end_beat": float(intent["end_beat"]),
         "deadline_ms": deadline,
         "world_origin": start_world,
         "queue_generation": int(view._stream_serial),
