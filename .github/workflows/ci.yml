@@ -48,6 +48,11 @@ jobs:
           python-version: '3.14'
       - name: Prepare exact CPython runtime, compiler, and Godot
         run: |
+          # Python 3.14 compiles python-rtmidi from source until a matching
+          # wheel exists. The ALSA and JACK headers are build prerequisites,
+          # not packaged/runtime dependencies.
+          sudo apt-get update -qq
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev pkg-config
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install -e '.[godot,test]' numpy scons

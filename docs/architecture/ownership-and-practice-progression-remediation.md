@@ -173,6 +173,11 @@
 - Moved transition diagnostic deduplication from `Main._on_state` into the existing `DebugSessionLogger`, so render callbacks do not own diagnostic state.
 - This is an actual state-ownership transfer rather than another shadow cache. No tests added.
 
+### Implementation checkpoint Q — native build environment repair
+
+- Full native acceptance run [44633040983](https://github.com/tpepels/piano_teacher/actions/runs/44633040983) reached the `native-production` setup job but failed while building `python-rtmidi` for Python 3.14: runner was missing the ALSA pkg-config/development headers. The original core checks passed.
+- Installed ALSA/JACK development headers in the opt-in native verification environment; production sources and application tests are unchanged. **This is infrastructure validation, not hardware acceptance.** A subsequent full native run must still finish before marking the embedded and packaging gates verified.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
