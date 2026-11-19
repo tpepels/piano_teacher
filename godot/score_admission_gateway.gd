@@ -63,6 +63,7 @@ func _backend_ms() -> float:
 func _matching_renderer(intent: Dictionary):
     var revision: int = int(intent.get("revision", -1))
     if score_session != null and score_session.is_ready() and \
+            str(score_session._fingerprint) == str(intent.get("fingerprint","")) and \
             int(score_session.revision) == revision and \
             int(score_session.rendered_revision) == revision:
         return stage.renderer
@@ -70,6 +71,7 @@ func _matching_renderer(intent: Dictionary):
             is_instance_valid(runway._future) and runway._acknowledged and \
             runway._future.retained_ready() and \
             int(runway._bundle.get("revision", -2)) == revision and \
+            str(runway._bundle.get("fingerprint","")) == str(intent.get("fingerprint","")) and \
             str(runway._bundle.get("stage_key", "")) == str(intent.get("stage_key", "")):
         # Link ALL outgoing source/rest layers BEFORE computing clearance.
         runway._link_existing_layers(runway._future)
@@ -101,6 +103,9 @@ func _deadline_at_world(target_world: float, local_ms: int, beat: float,
 func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var view = _matching_renderer(intent)
     if view == null or not is_instance_valid(view):
+        return
+    if (str(state.get("piece_fingerprint","")) != str(intent.get("fingerprint",""))
+            or int(state.get("revision",-1)) != int(intent.get("revision",-2))):
         return
     var backend_now: float = _backend_ms()
     if not is_finite(backend_now):
