@@ -7,7 +7,7 @@
 
 ## Implementation progress
 
-**Implementation branch:** `main`. **Tests:** No new tests will be written for this change. Existing checks may be run.
+**Implementation branch:** `main`. **Tests:** No tests have been added or modified; existing checks have been run. Source-level and CI completion must not be conflated with real native/physical acceptance.
 
 | Workstream | Status | Notes |
 | --- | --- | --- |
@@ -21,7 +21,19 @@
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
 | Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController now own clipping, physical preflight execution and mutable queue/serial/rollback state respectively; NativeView still contains ledger operations and painter lifecycle, with compatibility forwarding properties |
 | Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger, NavigationSession and ApplicationEventRouter now own their corresponding domains; Main still builds screen trees and routes command/in-process callbacks |
-| Existing CI/native integration | CI PASSED THROUGH `550fd05`; NEW COMMIT CHECKS RUNNING | Existing GitHub Actions passed at `550fd05` (run 44618612691); a later frozen-snapshot refactor exposed a missing field in the *existing* test fixture (run 44619706664), corrected at `ae5ea91`; latest CI pending. The production_session_journey and production_ui_smoke scripts are syntax-checked by normal CI but not run. No tests added or changed; physical MIDI/audio unverified |
+| Existing CI/native integration | EXISTING CI GREEN AT `a30c366`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44620738644](https://github.com/tpepels/piano_teacher/actions/runs/44620738644) passed on current implementation+tracker code; old preflight fixture regression was repaired at `ae5ea91`. CI parses but does not run full production native UI journeys. No tests added or changed; physical MIDI/audio unverified |
+
+### Phase completion status
+
+| Phase | State | Outstanding completion gate |
+| --- | --- | --- |
+| 0 — Domain and acceptance contracts | **Documented; integration audit open** | Full producer/consumer migration, versioned presentation and physical acceptance assertions |
+| 1 — Teaching/assessment authority | **Substantial source integration; not complete** | Collapse remaining overlapping course/flow decision state and verify assisted/interrupted/recovery paths in native product |
+| 2 — Moving-window pedagogy | **Source implementation complete; native acceptance pending** | Physically observe every window/hand, sparse and cross-bar sustained notes, saved reopen; no new tests requested |
+| 3 — Playback/count-in authority | **Integrated graphical gate; exceptions still to audit** | Confirm all manual, MIDI shortcut, automatic, recovery and preloaded pathways with real score+audio |
+| 4 — Presentation and admission | **Canonical projector and read-only preflight implemented; native acceptance pending** | Validate immutable ink/cross-layer clearance under changing tempo and real runtime |
+| 5 — Three large-class decomposition | **Incomplete** | Remove remaining policy/ledger logic and transitional property adapters from PracticeEngine, NativeView and Main |
+| 6 — Retire docs and accept product | **Historical docs reconciled; product acceptance incomplete** | Run existing embedded production and packaging scripts; physical Kawai CA49 exercises and manual scenarios in acceptance matrix |
 
 **Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
 
@@ -306,7 +318,7 @@ Retain actual reusable screen components/coordinators; transfer responsibility, 
 
 Use dependency inversion at Python/Godot boundaries; explicit immutable value objects instead of stringly typed option dictionaries, magic action names, writable foreign underscore fields or implicit acknowledgement ordering. A design pattern is useful only when it *removes* authority from the wrong place.
 
-## Dependency-ordered implementation plan (future work; not authorized by this document)
+## Dependency-ordered implementation plan (authorized by subsequent user instruction; tracked above)
 
 **Phase 0 — Freeze domain and acceptance contracts.** Define the exact typed PracticeWindow, TeachingOutcome/Effect, AssessmentVerdict, PlaybackTransition, CountInPlan, PresentationTimeline and score admission receipt contracts. Map their current producers/consumers, migration strategy for progress, and event order. Resolve how cross-bar holds behave and which later bars may be dim context. This phase is complete only when every reader/writer and obsolete route is accounted for.
 
@@ -324,7 +336,7 @@ Use dependency inversion at Python/Godot boundaries; explicit immutable value ob
 
 No phase is complete while an old second authority, old shortcut or duplicate projection is still active. Refactoring must preserve full behavior, not just pass isolated unit tests.
 
-## Evidence versus assumptions
+## Baseline evidence versus assumptions (archived; source baseline 9a01a9b7)
 
 - **Confirmed in source:** phrase generation is 2–4 bars; Free completion selects the entire phrase; the timed intent lacks an end; the three largest files and their responsibilities; outcome parsing; conflicting pass properties; duplicated countdown and preloader timing paths.
 - **Inferred product expectation:** the first Tempo exposure should be one bar with gradual prefix growth because the learner reported that seeing/receiving all four at entry is wrong. The exact later growth order above is a recommended design, not a claim about existing behavior.
