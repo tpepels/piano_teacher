@@ -457,12 +457,12 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         tempo_down_button.text = "−"
         tempo_down_button.tooltip_text = "Decrease by %d BPM · Keeps the song target" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_down_button.disabled = (_busy or not bool(parsed.get("can_decrease_tempo", false))
-            or str(parsed.get("phase", "")) in ["count_in", "playing", "loading"])
+            or str(parsed.get("phase", "")) in ["count_in", "playing", "loading", "admitting"])
     if tempo_up_button != null:
         tempo_up_button.text = "+"
         tempo_up_button.tooltip_text = "Increase by %d BPM · No mastery credit" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_up_button.disabled = (_busy or not bool(parsed.get("can_increase_tempo",false))
-            or str(parsed.get("phase","")) in ["count_in","playing","loading"])
+            or str(parsed.get("phase","")) in ["count_in","playing","loading","admitting"])
     var selected_bpm: float = float(parsed.get("bpm", 0))
     var effective_bpm: float = float(parsed.get("effective_bpm", selected_bpm))
     speed_label.text = TempoVocabulary.display(selected_bpm) + " ▾"
@@ -517,7 +517,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         listen_button.call("configure", listen_kind)
         _game_button(listen_button)
     practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
-        or not _score_ready)
+        or not _score_ready or phase in ["admitting","loading"])
     _present_flow(parsed)
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
     performance_review.present(summary)
@@ -535,6 +535,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         feedback_text = "Paused · press Play to resume"
     elif phase == "loading":
         feedback_text = "Preparing next passage · count-in waits for score"
+    elif phase == "admitting":
+        feedback_text = "Preparing the next passage · checking score placement"
     elif phase == "recovering":
         feedback_text = str(parsed.get("feedback", "Short break before retry"))
     elif phase == "count_in":
@@ -554,6 +556,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             else str(parsed.get("feedback", "Preparing Listen audio")))
         if bool(parsed.get("paused", false)):
             feedback_text = "Listen paused · " + instrument
+        elif phase == "admitting":
+            feedback_text = "Preparing Listen · aligning score and audio"
         if bool(demo_info.get("audio_available", false)) and not bool(demo_info.get("sampled", false)):
             instruction_text = "Basic piano sound · install the Salamander samples for acoustic Listen (see README)."
         elif bool(demo_info.get("sampled", false)):
@@ -726,7 +730,7 @@ func _toggle_tempo_popup() -> void:
 
 func present_busy(busy: bool) -> void:
     _busy = busy
-    var blocked: bool = busy or not bool(_state.get("loaded",false)) or str(_state.get("phase","")) in ["count_in","playing","loading"]
+    var blocked: bool = busy or not bool(_state.get("loaded",false)) or str(_state.get("phase","")) in ["count_in","playing","loading","admitting"]
     tempo_down_button.disabled = blocked or not bool(_state.get("can_decrease_tempo",false))
     tempo_up_button.disabled = blocked or not bool(_state.get("can_increase_tempo",false))
     practice_skip_button.disabled = busy or not bool(_state.get("skip_available",false))
