@@ -64,11 +64,17 @@ static func engine_count_in_deadline_ms(state: Dictionary, action: String,
     # Restart, automatic continuation and Resume. Never infer it from a
     # speculative score plan or a UI-local timer.
     var timeline: Variant = state.get("playback_timeline")
-    if timeline is Dictionary and bool(state.get("running",false)) and \
-            not bool(state.get("paused",false)):
-        var agreed: float = float(timeline.get("deadline_ms",NAN))
-        if is_finite(agreed) and agreed > 0.0:
-            return agreed+offset_ms
+    if timeline is Dictionary:
+        if not bool(state.get("running",false)) or bool(state.get("paused",false)):
+            return NAN
+        var active: Variant = timeline.get("current")
+        if active is Dictionary:
+            var agreed: float = float(active.get("deadline_ms",NAN))
+            if is_finite(agreed) and agreed > 0.0:
+                return agreed+offset_ms
+        # A graphical take without a matching authorized current segment
+        # has no valid audible musical epoch.
+        return NAN
     if not bool(state.get("running",false)) or bool(state.get("paused",false)):
         return NAN
     var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
