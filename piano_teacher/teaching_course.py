@@ -223,7 +223,7 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
         stage_tempos=tuple(sorted(tempos.items())), transferable_tempos=tuple(sorted(transferable)))
 
 
-def flow_assessed_progress(course, *, accepted):
+def flow_assessed_progress(course, *, accepted, include_outcome: bool = False):
     """One graded Tempo take, decided by the practice flow state machine
     (application/practice_flow.py); this only maps it onto course progress."""
     from .application import practice_flow as flow
@@ -232,34 +232,38 @@ def flow_assessed_progress(course, *, accepted):
                            flow.Step.TEMPO, int(p.bpm), int(p.target_bpm),
                            failures=p.failures, clean_at_target=p.streak)
     t = flow.take_graded(state, passed=accepted)
+    def selected(c, message):
+        return (c, message, t.outcome) if include_outcome else (c, message)
     if t.outcome not in (flow.Outcome.STAGE_DONE, flow.Outcome.PIECE_DONE):
         bpm = p.bpm if t.outcome is flow.Outcome.BACK_TO_FREE else t.state.bpm
-        return course.with_progress(bpm=bpm, failures=t.state.failures,
-                                    streak=t.state.clean_at_target), t.message
+        return selected(course.with_progress(bpm=bpm, failures=t.state.failures,
+                                    streak=t.state.clean_at_target), t.message)
     mastered = dict(p.mastered)
     mastered[course.key] = p.target_bpm
     course = course.with_progress(streak=0, failures=0,
                                   mastered=tuple(sorted(mastered.items())))
     if t.outcome is flow.Outcome.PIECE_DONE:
-        return course, t.message
+        return selected(course, t.message)
     i, h, _ = p.cursor
     if h + 1 < len(course.hands):
         course = course.with_progress(cursor=(i, h + 1, 0))
     elif i + 1 < len(course.definition.exercises):
         course = select_cursor(course, (i + 1, 0, 0))
     else:
-        return course, "Piece mastered"
-    return course.with_progress(bpm=flow.floor_bpm(int(p.target_bpm)),
-                                failures=0, streak=0), t.message
+        return selected(course, "Piece mastered")
+    return selected(course.with_progress(bpm=flow.floor_bpm(int(p.target_bpm)),
+                                failures=0, streak=0), t.message)
 
 
-def assessed_progress(course, *, correct, total, extras=0, accepted=None, selected_bpm=None):
+def assessed_progress(course, *, correct, total, extras=0, accepted=None, selected_bpm=None,
+                      include_outcome: bool = False):
     p = course.progress
     if total <= 0:
         return course, "No notes to assess"
     if course.definition.generator_name == "practice-flow":
         accepted = correct == total and extras == 0 if accepted is None else accepted
-        return flow_assessed_progress(course, accepted=accepted)
+        return flow_assessed_progress(course, accepted=accepted,
+                                      include_outcome=include_outcome)
     accepted = correct == total and extras == 0 if accepted is None else accepted
     if not accepted:
         return course.with_progress(streak=0, failures=p.failures+1), f"Repeat - {correct}/{total} correct, {extras} extra"
