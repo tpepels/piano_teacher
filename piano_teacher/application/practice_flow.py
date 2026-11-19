@@ -142,25 +142,6 @@ def take_graded(state: FlowState, *, passed: bool) -> Transition:
     return Transition(done, "Well done", Outcome.STAGE_DONE)
 
 
-_OUTCOME_PREFIXES = (
-    ("Again at the same tempo", Outcome.AGAIN),
-    ("Faster: ", Outcome.FASTER),
-    ("Clean! Once more", Outcome.CLEAN_ONCE),
-    ("Slower: ", Outcome.SLOWER),
-    ("Once more without tempo", Outcome.BACK_TO_FREE),
-    ("Well done", Outcome.STAGE_DONE),
-    ("Piece mastered", Outcome.PIECE_DONE),
-)
-
-
-def outcome_of(message: str) -> Outcome | None:
-    """The outcome of a take decision from its message (made by take_graded)."""
-    for prefix, outcome in _OUTCOME_PREFIXES:
-        if message.startswith(prefix):
-            return outcome
-    return None
-
-
 def settle(state: FlowState | None, outcome: Outcome, *, stage_key: str,
            final: bool, bpm: int, target_bpm: int, failures: int,
            clean: int) -> FlowState:
