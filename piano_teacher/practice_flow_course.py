@@ -128,8 +128,8 @@ class PracticeFlowLessonGenerator:
             # 2 clean), so it runs as timed practice, not as a review.
             exposure = replace(exposure, mode="practice")
             decision = replace(decision, next_exposure=exposure)
-        from .application.practice_flow import Outcome, outcome_of
-        if outcome_of(decision.message) is Outcome.BACK_TO_FREE and exposure is not None:
+        from .application.practice_flow import Outcome
+        if decision.flow_outcome is Outcome.BACK_TO_FREE and exposure is not None:
             # 2c: still failing at 50% -> play it without tempo again (2b).
             exposure = replace(exposure, from_beat=0.0, end_beat=None,
                                mode="learn", assisted=True, automatic=True,
