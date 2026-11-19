@@ -115,6 +115,13 @@ func stream_preflight_snapshot() -> Array:
 func online_stream_count() -> int:
     return _stream_controller.online_size()
 
+## Read-only public peer clearance port.  Other score layers never inspect
+## the renderer's private queue or its live retained CanvasItems.
+func stream_peer_clearance_facts() -> Dictionary:
+    return _stream_controller.peer_clearance_facts(
+        maxf(1.0,float(timeline.pixels_per_beat)),float(staff_gap()),
+        float(timeline.duration_beats),size.x*PLAYHEAD_FRACTION)
+
 func transport_preflight_facts(world: float, opening: float) -> Dictionary:
     # The transport policy receives an immutable score-geometry/read
     # snapshot. The live queue, peer registry and paused take identity
@@ -1439,42 +1446,17 @@ func enqueue_recovery_queue(world: float, source_opening: float,
     return false
 
 
-var _diagnosed_plans: Dictionary = {}
-
 func _diagnose_plan(identity: String, outcome: String, deadline_world: float,
         extra: Dictionary = {}) -> void:
-    # One line per plan and outcome (SCORE_PLAN_QUEUE), not one per poll.
-    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") != "1":
-        return
-    var seen: String = identity+"|"+outcome
-    if _diagnosed_plans.has(seen):
-        return
-    _diagnosed_plans[seen] = true
-    var row: Dictionary = {"plan_id":identity,"outcome":outcome,
-        "deadline_world":deadline_world,"world":stream_world_beat}
-    row.merge(extra,true)
-    print("SCORE_PLAN_QUEUE:",JSON.stringify(row))
-
-
-func _stream_prune_expired() -> void:
-    # All retirement, invalid-record cleanup and CanvasItem reuse take the
-    # same path. The renderer itself never reparents or frees a stream clip.
-    var retired: Array[int] = _stream_queue.expire_front(
-        self,stream_world_beat,maxf(1.0,timeline.pixels_per_beat),
-        staff_gap(),timeline.duration_beats,size.x*PLAYHEAD_FRACTION)
-    if retired.has(_stream_live_serial) and \
-            not _stream_queue.has_take(_stream_live_serial):
-        _stream_live_serial = -1
-    if retired.has(_stream_armed_serial) and \
-            not _stream_queue.has_take(_stream_armed_serial):
-        _stream_armed_serial = -1
-        _stream_arm_acknowledged = false
-        _stream_arm_rollback.clear()
+    _stream_controller.diagnose_plan(
+        identity,outcome,deadline_world,stream_world_beat,extra)
 
 func present_flow(world_beat: float, state: Dictionary,
         graded_beat: float, allow_admission: bool = true) -> void:
     stream_world_beat = maxf(stream_world_beat,world_beat)
-    _stream_prune_expired()
+    _stream_controller.prune_expired(self,stream_world_beat,
+        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
+        timeline.duration_beats,size.x*PLAYHEAD_FRACTION)
     if not native_ready or not retained_ready():
         queue_redraw()
         return

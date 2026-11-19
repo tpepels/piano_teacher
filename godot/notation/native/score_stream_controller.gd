@@ -4,6 +4,7 @@ extends RefCounted
 ## append/withdraw. View performs drawing and passes geometry capabilities.
 ## Physical admission operates on this ledger; a repaint never resets it.
 const StreamQueue := preload("res://score_stream_queue.gd")
+const Admission := preload("res://score_stream_admission.gd")
 
 var queue = StreamQueue.new()
 var last_take := ""
@@ -68,3 +69,50 @@ func bound_segment() -> String:
 
 func has_armed_reservation() -> bool:
     return armed_serial >= 0 and arm_acknowledged
+
+## A peer can inspect immutable physical clearance facts, not this queue's
+## live nodes, serials or rollback state.  This value is recomputed at
+## preflight rather than retained across engraving/density changes.
+func peer_clearance_facts(density: float, gap: float,
+        duration: float, playhead_x: float) -> Dictionary:
+    var ends: Array[Dictionary] = []
+    for item in queue.online:
+        var bounds: Vector2 = Admission.clip_bounds(
+            item,density,gap,duration)
+        ends.append({
+            "rest":str(item.get("kind","source")) == "rest",
+            "end_world":float(item["world_origin"])+bounds.y/density
+        })
+    return {"queue_id":queue.get_instance_id(),"density":density,
+        "playhead_x":playhead_x,"ends":ends}
+
+## The queue retires the earliest expired source/rest strips.  The same
+## ledger owns the resulting live and armed take identities; the drawing
+## view must not repair those identities from retired serials.
+func prune_expired(owner: Control, world: float, density: float,
+        gap: float, duration: float, playhead_x: float) -> void:
+    var retired: Array[int] = queue.expire_front(
+        owner,world,density,gap,duration,playhead_x)
+    if retired.has(live_serial) and not queue.has_take(live_serial):
+        live_serial = -1
+    if retired.has(armed_serial) and not queue.has_take(armed_serial):
+        armed_serial = -1
+        arm_acknowledged = false
+        arm_rollback.clear()
+
+var _diagnosed_plans: Dictionary = {}
+
+## Diagnostic deduplication belongs to the same plan ledger that records
+## admissions, not to NativeScoreView's paint/repaint lifecycle.
+func diagnose_plan(identity: String, outcome: String, deadline_world: float,
+        world: float, extra: Dictionary = {}) -> void:
+    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") != "1":
+        return
+    var seen: String = identity+"|"+outcome
+    if _diagnosed_plans.has(seen):
+        return
+    _diagnosed_plans[seen] = true
+    var row: Dictionary = {"plan_id":identity,"outcome":outcome,
+        "deadline_world":deadline_world,"world":world}
+    row.merge(extra,true)
+    print("SCORE_PLAN_QUEUE:",JSON.stringify(row))

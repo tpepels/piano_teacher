@@ -44,27 +44,23 @@ func minimum_peer_opening(density: float,
     var earliest := -INF
     for ref in _peer_views:
         var view = ref.get_ref()
-        if view == null or not is_instance_valid(view):
+        if view == null or not is_instance_valid(view) or \
+                not view.has_method("stream_peer_clearance_facts"):
             continue
-        var peer_queue = view.get("_stream_queue")
-        if peer_queue == null or peer_queue == self:
+        # Peer data contains primitive, immutable physical geometry only.
+        # Reading another renderer's _stream_queue is forbidden.
+        var facts: Dictionary = view.stream_peer_clearance_facts()
+        if facts.is_empty() or int(facts.get("queue_id",-1)) == get_instance_id():
             continue
-        var peer_density: float = maxf(1.0,
-            float(view.timeline.pixels_per_beat))
-        var peer_gap: float = float(view.staff_gap())
-        var peer_duration: float = float(view.timeline.duration_beats)
-        # The peer view's own fixed playhead (NativeView.PLAYHEAD_FRACTION).
-        var peer_playhead: float = view.size.x*float(view.PLAYHEAD_FRACTION)
-        for item in peer_queue.online:
+        var peer_density: float = maxf(1.0,float(facts["density"]))
+        var peer_playhead: float = float(facts["playhead_x"])
+        for item in facts["ends"]:
             # kinds: "all", "source" (ink that blocks an empty-strip
             # opening) or "rest" (a written rest an opening may follow).
-            var is_rest: bool = str(item.get("kind","source")) == "rest"
+            var is_rest: bool = bool(item["rest"])
             if (kinds == "source" and is_rest) or (kinds == "rest" and not is_rest):
                 continue
-            var peer_bounds: Vector2 = Admission.clip_bounds(
-                item,peer_density,peer_gap,peer_duration)
-            var peer_end: float = float(item["world_origin"]) + \
-                peer_bounds.y/peer_density
+            var peer_end: float = float(item["end_world"])
             earliest = maxf(earliest,
                 peer_popin_after(peer_end,peer_density,playhead_x,density,
                     PEER_REST_MARGIN_PX if is_rest else PEER_MARGIN_PX)
