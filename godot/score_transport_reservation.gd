@@ -52,10 +52,10 @@ static func plan(renderer, action: String, world: float,
     var peer_floor: float = (float(facts["peer_floor"]) if native else
         queue.minimum_peer_opening(
             density,width,width*renderer.PLAYHEAD_FRACTION))
-    var was_paused: bool = bool(facts.get("was_paused",false)) if native else bool(renderer._stream_was_paused)
-    var paused_source: float = float(facts.get("paused_source",0.0)) if native else float(renderer._stream_paused_source)
-    var paused_owner: int = int(facts.get("paused_owner",-1)) if native else int(renderer._stream_paused_owner)
-    var last_take: String = str(facts.get("last_take","")) if native else str(renderer._stream_last_take)
+    var was_paused: bool = bool(facts.get("was_paused",false))
+    var paused_source: float = float(facts.get("paused_source",0.0))
+    var paused_owner: int = int(facts.get("paused_owner",-1))
+    var last_take: String = str(facts.get("last_take",""))
     # Owner decision 2026-11-08: Play or Resume on an empty strip opens one
     # count-in bar ahead of the playhead. A hidden READY take was never
     # seen, so it is withdrawn rather than reused from beyond the right edge.
