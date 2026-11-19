@@ -19,7 +19,7 @@ static func reserve_action(view, action: String, world: float,
         return {}
     view.stream_world_beat = maxf(view.stream_world_beat,world)
     var mode: String = str(planned["mode"])
-    var before: Array = view._stream_queue.online.duplicate(true)
+    var before: Array = view.stream_preflight_snapshot()
     if mode == "reuse":
         if action == "resume":
             # The SAME preflight that chose this source identifies the
@@ -28,40 +28,40 @@ static func reserve_action(view, action: String, world: float,
             view.trim_future_queue("resume_reuse",int(planned["protected_take"]))
         var existing: Dictionary = view.arm_stream_take(
             world,opening,NAN,action == "resume",false)
-        var removed: Array = before.slice(view._stream_queue.online.size())
+        var removed: Array = before.slice(view.online_stream_count())
         if existing.is_empty():
             push_error("SCORE_TRANSPORT_COMMIT: preflight reusable owner vanished")
             if not removed.is_empty():
-                view._restore_future_suffix(removed,view.stream_world_beat)
+                view.restore_withdrawn_stream_suffix(removed,view.stream_world_beat)
             return {}
-        view._stream_arm_rollback["withdrawn_suffix"] = removed
-        return view._transport_admission_receipt(planned,existing,world,opening)
+        view.record_withdrawn_stream_suffix(removed)
+        return view.build_admission_receipt(planned,existing,world,opening)
     # The preflight and actual withdrawal share Queue.preview_tail_withdrawal
     # and the SAME world coordinate. Do not recalculate a different
     # placement after removing the unseen suffix.
     var intended: float = float(planned["start_world"])
     view.trim_future_queue("user_"+action+"_replace_unseen")
-    var removed: Array = before.slice(view._stream_queue.online.size())
-    if view._stream_queue.online.size() != int(planned["remaining_count"]):
+    var removed: Array = before.slice(view.online_stream_count())
+    if view.online_stream_count() != int(planned["remaining_count"]):
         push_error("SCORE_TRANSPORT_COMMIT: online queue changed during preflight")
         if not removed.is_empty():
-            view._restore_future_suffix(removed,view.stream_world_beat)
+            view.restore_withdrawn_stream_suffix(removed,view.stream_world_beat)
         return {}
-    view._retry_placement = action == "restart"
+    view.enable_retry_placement(action == "restart")
     var admitted: Dictionary = view.arm_stream_take(
         world,opening,intended,false,false,
         count_in_beats if bool(planned.get("empty_strip",false)) else 0.0)
-    view._retry_placement = false
+    view.enable_retry_placement(false)
     if admitted.is_empty():
         push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")
         if not removed.is_empty():
-            view._restore_future_suffix(removed,view.stream_world_beat)
+            view.restore_withdrawn_stream_suffix(removed,view.stream_world_beat)
         return {}
     if absf(float(admitted.get("start_world",NAN))-intended) > .0001:
         push_error("SCORE_TRANSPORT_COMMIT: grading and score deadlines diverged")
         view.cancel_stream_arm()
         if not removed.is_empty():
-            view._restore_future_suffix(removed,view.stream_world_beat)
+            view.restore_withdrawn_stream_suffix(removed,view.stream_world_beat)
         return {}
-    view._stream_arm_rollback["withdrawn_suffix"] = removed
-    return view._transport_admission_receipt(planned,admitted,world,opening)
+    view.record_withdrawn_stream_suffix(removed)
+    return view.build_admission_receipt(planned,admitted,world,opening)
