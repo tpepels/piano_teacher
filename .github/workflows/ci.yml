@@ -34,3 +34,31 @@ jobs:
         env:
           PYTHON: python
         run: bash scripts/test.sh
+
+  native-production:
+    # Opt-in full integration gate; uses the already-existing production
+    # acceptance script. Ordinary core-CI pushes remain fast.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[native]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Prepare exact CPython runtime, compiler, and Godot
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e '.[godot,test]' numpy scons
+          curl --fail --location --silent --show-error --retry 2 --max-time 90 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o "$RUNNER_TEMP/godot.zip"
+          mkdir -p "$RUNNER_TEMP/godot-bin"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
+          sudo install -m 755 "$RUNNER_TEMP/godot-bin/Godot_v4.7.2-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Verify embedded runtime and assembled standalone package
+        env:
+          PIANO_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          GODOT_BIN: /usr/local/bin/godot
+        run: bash scripts/verify-embedded-production-local.sh

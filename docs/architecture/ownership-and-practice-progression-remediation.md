@@ -160,6 +160,12 @@
 - The renderer now supplies authentic precomputed source windows, Verovio header clearance and the authored rest gap. The stage renderer does not choose queue serials or alter the source window. No new tests were added.
 - **Phase 5 remains open** pending ready/reuse/resume/recovery admission extraction, elimination of transitional state accessors and PracticeEngine/Main decomposition.
 
+### Implementation checkpoint O — execute existing Phase 6 verification in CI
+
+- Added an opt-in `native-production` GitHub Actions job alongside the unchanged core checks. It provisions CPython 3.14 and Godot 4.7.2, compiles the real GDExtension, and runs the repository's existing `scripts/verify-embedded-production-local.sh` in **full** mode (embedded runtime, native score/Play/Resume, Moonlight, Peace Piece, Chopin, packaged runtime audit).
+- Triggered by `[native]` in the commit message or a manual workflow dispatch; ordinary source pushes retain fast CI. **No tests added**; the job only runs already existing acceptance scripts.
+- Native acceptance is **pending result**. This does not simulate a real Kawai MIDI device, USB/Bluetooth input latency or audible speaker/visual synchronization.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
