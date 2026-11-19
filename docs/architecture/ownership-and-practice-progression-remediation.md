@@ -268,6 +268,13 @@
 - The preloader continues sharing equivalent masks across stage revisions without duplicating the expensive first-attack fill calculation; the glyph atlas owns all internal writes. No new tests.
 - Further application/renderer decomposition is open until the remaining production cross-owner reads are eliminated and native journeys pass.
 
+### Implementation checkpoint AG — one click-audio owner and accurate native smoke
+
+- Extracted locally generated high/low metronome WAVs and the persistent `AudioStreamPlayer` from Main into `CountInAudioSession`, with a count of successfully started cues. The existing count-in coordinator still decides cue timing; no second countdown clock was added.
+- Corrected existing native UI acceptance to require either a real scheduled **click** or a spoken cue. The default Practice Flow uses click + large number; Japanese voice playback is explicitly opt-in, so the old unconditional voice-count assertion was invalid. This continues to enforce audio scheduling, without claiming that a dummy headless driver proves audible speakers.
+- Corrected isolated `native_bridge_smoke.gd` to validate catalog, real MIDI, Verovio geometry and exact Listen score revision ACK only. It cannot start the instrument without physical score admission; the embedded production-scene acceptance is the sole transport owner. `verify-native-bridge.sh` now requires `PIANO_NATIVE_REAL_SCORE_PREPARATION_OK` and rejects every explicit failure marker.
+- Full UI and clean relocated package acceptance remain pending next native run. No new tests.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

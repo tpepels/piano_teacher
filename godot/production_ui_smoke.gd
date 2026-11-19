@@ -221,12 +221,18 @@ func _process(_delta: float) -> bool:
         var voice = app.get_node_or_null("CountInVoicePlayer")
         if str(app.current_state().get("phase","")) == "count_in" and \
                 app._transport_beat_now() < -0.01:
-            if int(voice.spoken_cues_total) <= 0:
+            # Speech is opt-in; default Practice Flow uses a click and
+            # visible number. A valid count-in must schedule at least one
+            # real bundled voice or generated click from its single audio
+            # owner. Dummy audio output cannot certify physical speakers.
+            var audible_cues: int = int(voice.spoken_cues_total) + \
+                int(app.countin_audio.click_cues_total)
+            if audible_cues <= 0:
                 if countin_audio_first_ms < 0:
                     countin_audio_first_ms = Time.get_ticks_msec()
                 if Time.get_ticks_msec()-countin_audio_first_ms < 900:
                     return false
-                _fail("Production countdown displayed without a spoken audio cue")
+                _fail("Production countdown had no voice or click cue")
                 return true
         initial_transport = int(app.current_state().get("transport_id",-1))
         var original_survived := false

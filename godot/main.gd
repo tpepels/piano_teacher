@@ -42,6 +42,7 @@ const StatusHeadPreloader := preload("res://status_head_preloader.gd")
 const CountInCueTimeline := preload("res://countin_cue_timeline.gd")
 const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
 const CountInVoicePlayer := preload("res://countin_voice_player.gd")
+const CountInAudioSession := preload("res://countin_audio_session.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationSession := preload("res://navigation_session.gd")
 const ApplicationEventRouter := preload("res://application_event_router.gd")
@@ -99,9 +100,7 @@ var device_menu_requested: bool:
     set(value):
         midi_devices.picker_requested = value
 var score_effects = ScoreEffects.new()
-var click_player: AudioStreamPlayer
-var click_high: AudioStreamWAV
-var click_low: AudioStreamWAV
+var countin_audio = CountInAudioSession.new()
 var device_names: Array:
     get:
         return midi_devices.names
@@ -232,11 +231,7 @@ func _ready() -> void:
     demo_player.prepared.connect(func(token: String, ready_revision: int):
         _send_action({"action": "demo_ready", "token": token, "revision": ready_revision}))
     demo_player.failed.connect(func(message: String): practice_view.present_message(message))
-    click_high = _make_count_click(1160.0)
-    click_low = _make_count_click(770.0)
-    click_player = AudioStreamPlayer.new()
-    click_player.volume_db = -5.0
-    add_child(click_player)
+    countin_audio.install(self)
     resized.connect(_update_responsive_layout)
     if not get_window().size_changed.is_connected(_update_responsive_layout):
         get_window().size_changed.connect(_update_responsive_layout)
@@ -340,35 +335,14 @@ func _ready() -> void:
     command_coordinator.score_error_cleared.connect(func(): score_error = "")
     set_process(true)
 
-func _make_count_click(frequency: float) -> AudioStreamWAV:
-    # Locally generated sound: no MIDI output device or soundfont required.
-    const RATE := 44100
-    const FRAMES := 4200
-    var samples := PackedByteArray()
-    samples.resize(FRAMES * 2)
-    for i in range(FRAMES):
-        var t: float = float(i) / float(RATE)
-        var envelope: float = pow(1.0 - float(i) / float(FRAMES), 4.0)
-        var wave: float = sin(TAU * frequency * t) * envelope * 0.46
-        samples.encode_s16(i * 2, int(wave * 32767.0))
-    var audio := AudioStreamWAV.new()
-    audio.format = AudioStreamWAV.FORMAT_16_BITS
-    audio.mix_rate = RATE
-    audio.stereo = false
-    audio.data = samples
-    return audio
-
 func _count_tick(accent: bool, sampled_beat: float = NAN) -> void:
-    if click_player == null:
+    if not bool(preferences.get("metronome",true)) and \
+            (sampled_beat if is_finite(sampled_beat)
+                else _transport_beat_now()) >= 0.0:
         return
-    if not bool(preferences.get("metronome", true)) and \
-            (sampled_beat if is_finite(sampled_beat) else _transport_beat_now()) >= 0.0:
-        return
-    click_player.stream = click_high if accent else click_low
-    click_player.play()
-    # The smoke confirms clock scheduling; it cannot test physical speakers.
-    if phase0_smoke_mode:
-        print("PHASE0_CLICK:", str(state_inbox.current.get("phase", "")))
+    if countin_audio.click(accent) and phase0_smoke_mode:
+        print("PHASE0_CLICK:",str(state_inbox.current.get("phase","")))
+
 
 func _transport_beat_now() -> float:
     return _transport_beat_at(Time.get_ticks_msec())
@@ -396,13 +370,9 @@ func _unrolled_score_beat_at(transport_clock: float, at_ms: int) -> float:
 
 
 func _raw_click(accent: bool) -> void:
-    # Calibration and retry preparation are audible even if practice
-    # metronome is disabled. No MIDI clock is changed. Fixture apps built
-    # without the audio nodes still run every count-in path silently.
-    if click_player == null:
-        return
-    click_player.stream = click_high if accent else click_low
-    click_player.play()
+    # All preparation and calibration clicks use the same audio owner,
+    # even when the practice metronome is disabled.
+    countin_audio.click(accent)
 
 func _update_count_in(sampled_beat: float = NAN, now_ms: int = -1) -> void:
     if now_ms < 0:

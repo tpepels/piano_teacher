@@ -1,7 +1,8 @@
 extends SceneTree
 ## Real embedded-CPython/GDExtension smoke. Default checks the native catalog.
-## CI's opt-in real-score path exercises engraving, semantic score, ack and
-## practice transport with a generated two-hand MIDI rather than an empty shelf.
+## CI's opt-in real-score path exercises engraving, semantic score and
+## source revision ACK with a generated two-hand MIDI rather than an empty shelf.
+## Only the production Godot scene can physically authorize timed transport.
 const LIBRARY := "res://native/piano_bridge.gdextension"
 const FIXTURE := "phase6_native_fixture.mid"
 const MAX_STARTUP_MS := 12000
@@ -113,84 +114,17 @@ func _process(_delta: float) -> bool:
                 _submit("practice.command",{"action":"score_ready","revision":revision})
                 operation = "practice.ack"
             "practice.ack":
-                if not bool(values.get("loaded",false)):
-                    _fail("Score-ready acknowledgement lost the loaded MIDI")
-                    return true
-                if str(values.get("mode","")) == "listen":
-                    # A fresh practice-flow piece starts in Listen. The
-                    # score ACK cannot start its audio until demo preparation
-                    # also completes. This bridge's transport check switches
-                    # explicitly to practice; the actual UI journey verifies
-                    # the normal Listen -> Free -> Tempo transition.
-                    _submit("practice.command",{"action":"practice"})
-                    operation = "practice.prepare"
-                else:
-                    if str(values.get("phase","")) == "loading":
-                        _fail("Score-ready acknowledgement did not release loading")
-                        return true
-                    _submit("practice.command",{"action":"start"})
-                    operation = "practice.start"
-            "practice.prepare":
+                # A fresh Practice Flow piece starts with Listen and may
+                # still be preparing audio. Transport remains in 'admitting'
+                # until the *Godot scene* commits physical score geometry.
+                # This isolated bridge has no renderer and must never fake a
+                # playback.present or claim a running take.
                 if not bool(values.get("loaded",false)) or \
-                        str(values.get("mode","")) != "practice":
-                    _fail("Explicit practice request did not select real MIDI")
+                        int(values.get("revision",-1)) != revision or \
+                        str(values.get("mode","")) != "listen":
+                    _fail("Score-ready acknowledgement changed the selected Listen source")
                     return true
-                # Switching from Listen selected a different score revision.
-                # The native smoke must ACK that exact score before judging
-                # transport timing; Start alone must not bypass score-ready.
-                var awaiting: Variant = values.get("awaiting_score_revision")
-                if awaiting != null:
-                    revision = int(awaiting)
-                    _submit("score.native_layout")
-                    operation = "practice.layout"
-                else:
-                    _submit("practice.command",{"action":"start"})
-                    operation = "practice.start"
-            "practice.layout":
-                if int(values.get("revision",-1)) != revision or \
-                        not values.get("anchors") is Array or \
-                        (values["anchors"] as Array).is_empty():
-                    _fail("Practice score revision was not re-engraved")
-                    return true
-                _submit("practice.command",{"action":"score_ready","revision":revision})
-                operation = "practice.ready"
-            "practice.ready":
-                if not bool(values.get("running",false)) or \
-                        str(values.get("phase","")) != "count_in":
-                    _fail("Practice score acknowledgement did not authorize count-in: " +
-                        JSON.stringify({"mode":values.get("mode"),
-                            "phase":values.get("phase"),
-                            "running":values.get("running"),
-                            "awaiting":values.get("awaiting_score_revision")}))
-                    return true
-                started_transport = int(values.get("transport_id",-1))
-                _submit("practice.command",{"action":"pause"})
-                operation = "practice.pause"
-            "practice.start":
-                if not bool(values.get("running",false)) or \
-                        str(values.get("phase","")) != "count_in":
-                    _fail("Real MIDI lesson did not enter count-in: " +
-                        JSON.stringify({"mode":values.get("mode"),
-                            "phase":values.get("phase"),
-                            "running":values.get("running"),
-                            "awaiting":values.get("awaiting_score_revision")}))
-                    return true
-                started_transport = int(values.get("transport_id",-1))
-                _submit("practice.command",{"action":"pause"})
-                operation = "practice.pause"
-            "practice.pause":
-                if not bool(values.get("paused",false)):
-                    _fail("Native practice pause did not stop transport")
-                    return true
-                _submit("practice.command",{"action":"resume"})
-                operation = "practice.resume"
-            "practice.resume":
-                if not bool(values.get("running",false)) or \
-                        bool(values.get("paused",false)) or \
-                        int(values.get("transport_id",-1)) != started_transport:
-                    _fail("Resume must retain the real MIDI attempt")
-                    return true
-                print("PIANO_NATIVE_REAL_SCORE_WORKFLOW_OK revision=",revision)
+                print("PIANO_NATIVE_REAL_SCORE_PREPARATION_OK revision=",revision)
                 quit(0)
                 return true
             _:

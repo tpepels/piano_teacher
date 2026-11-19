@@ -41,8 +41,8 @@ if grep -Fq "PIANO_NATIVE_STARTUP_FAILED:" "$bridge_log"; then
   exit 1
 fi
 if [[ "${PIANO_NATIVE_REAL_SCORE_SMOKE:-0}" == "1" ]]; then
-  grep -Fq "PIANO_NATIVE_REAL_SCORE_WORKFLOW_OK" "$bridge_log" || {
-    echo "Native real-score transport did not complete" >&2; exit 1;
+  grep -Fq "PIANO_NATIVE_REAL_SCORE_PREPARATION_OK" "$bridge_log" || {
+    echo "Native real-score source preparation did not complete" >&2; exit 1;
   }
 else
   grep -Fq "PIANO_NATIVE_LIBRARY_OK" "$bridge_log" || {
