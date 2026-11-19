@@ -5,6 +5,7 @@ extends Node
 const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
+const ScoreSceneController := preload("res://score_scene_controller.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
 const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
@@ -12,6 +13,7 @@ signal preload_problem(message: String)
 
 var stage
 var score_session
+var _scene_owner
 var _fetch: Node
 var _ack: Node
 var _report: Node
@@ -41,6 +43,9 @@ var _future_intro_offset := 0.0
 func configure(host: Node, practice_stage, session, bus: Node) -> void:
     stage = practice_stage
     score_session = session
+    _scene_owner = ScoreSceneController.new(stage,score_session)
+    _scene_owner.renderer_promoted.connect(
+        func(view): renderer_promoted.emit(view))
     _fetch = Request.new()
     _fetch.timeout = 90.0
     host.add_child(_fetch)
@@ -367,7 +372,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     var next_revision: int = int(state.get("revision",-1))
     var next_fingerprint: String = str(state.get("piece_fingerprint",""))
     if next_revision == score_session.revision and \
-            next_fingerprint == score_session._fingerprint:
+            next_fingerprint == score_session.source_fingerprint():
         return false
     var outgoing = stage.renderer
     var incoming = NativeView.new()
@@ -381,9 +386,9 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     stage.score_frame.move_child(incoming,outgoing.get_index()+1)
     incoming.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     incoming.visible = false
-    stage.renderer = incoming
-    score_session.replace_renderer(incoming)
-    renderer_promoted.emit(incoming)
+    if not _scene_owner.activate_unprepared(outgoing,incoming,state):
+        incoming.queue_free()
+        return false
     if outgoing.stream_pass_count() == 0:
         outgoing.queue_free()
     else:
@@ -441,6 +446,8 @@ func promote_reserved(state: Dictionary) -> bool:
         return false
     var old = stage.renderer
     _link_existing_layers(new_renderer)
+    if not _scene_owner.promote_admitted(old,new_renderer,state,_layout):
+        return false
     _future = null
     new_renderer.modulate.a = 1.0
     new_renderer.runway_overlay = false
@@ -455,9 +462,6 @@ func promote_reserved(state: Dictionary) -> bool:
     if old != null and is_instance_valid(old) and \
             old.get_parent() == stage.score_frame:
         stage.score_frame.move_child(new_renderer,old.get_index()+1)
-    stage.renderer = new_renderer
-    score_session.adopt_prepared(state,new_renderer,_layout)
-    renderer_promoted.emit(new_renderer)
     if old != null and is_instance_valid(old):
         _retain_tail(old)
     _bundle.clear()
