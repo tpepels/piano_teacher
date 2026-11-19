@@ -1176,12 +1176,18 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
                 _guided_world = float(renderer.scheduled_plan_openings[guided_key])
                 _guided_from_beat = float(guided_plan["source_from_beat"])
                 _guided_plan_id = guided_key
-        # Atomically bind an acknowledged transport ID to the already armed
-        # source BEFORE publishing the new backend state. Otherwise the UI
-        # may observe a running Retry while its note copy still has the
-        # prepared key until the next animation frame.
+        # Reconcile the authoritative admission before binding this frame's
+        # active renderer. A preloaded stage may promote while this state
+        # is being presented, so never bind the outgoing renderer to the
+        # new segment or leave the promoted renderer one frame behind.
+        if score_admission != null:
+            score_admission.observe(parsed,received_ms)
+        if practice_view.stage.renderer != renderer:
+            var authorized_renderer = practice_view.stage.renderer
+            authorized_renderer.present(
+                parsed,beat,world-float(authorized_renderer.runway_origin_beat))
         practice_view.stage.renderer.present_flow(world,parsed,beat)
-    if score_admission != null:
+    elif score_admission != null:
         score_admission.observe(parsed,received_ms)
     state_presenter.present(
         parsed,current_screen,command_coordinator.state.pending,_native_score_ready(),
