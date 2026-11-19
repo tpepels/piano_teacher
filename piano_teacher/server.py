@@ -1731,9 +1731,18 @@ class PracticeEngine:
         self._playback_authorizing = True
         try:
             if intent.action in ("start", "restart"):
-                # All timed starts, including a physical-key Restart, begin
-                # directly from already admitted future ink. The previous
-                # attempt's source/rest strips keep moving independently.
+                # An explicit restart supersedes unfinished grading and any
+                # old automatic teaching settlement. Never carry that result
+                # into the next admitted transport.
+                if self.pending_result is not None:
+                    self.attempt_settlement.cancel(
+                        reason="restart", now=self.now())
+                    self.pending_result = None
+                    self.teaching_continuation.cancel()
+                    self.visual_transport.next_at = 0.0
+                    self.visual_transport.announced_continuation = None
+                # The prior ink is immutable and continues scrolling; the
+                # new recorder starts only at this authorized deadline.
                 effect = self._manual_effect(intent.action)
                 selected = self._install_command(effect)
                 if (selected is None or selected.stage_key != intent.stage_key
