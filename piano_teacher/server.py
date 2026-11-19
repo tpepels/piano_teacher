@@ -3606,6 +3606,11 @@ class PracticeEngine:
             paused=self.visual_transport.paused,
             paused_at=self.visual_transport.paused_at,
             pending_result=self.pending_result,
+            assessment_verdict=(
+                self.attempt_settlement.pending.decision.verdict
+                if self.attempt_settlement.pending is not None
+                and self.attempt_settlement.pending.assessment is self.pending_result
+                else None),
             pending_rewind=self.visual_transport.pending_rewind,
             performance_summary=self.performance_summary,
             persistent_hints=self.persistent_hints,
