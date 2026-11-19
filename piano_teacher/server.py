@@ -524,7 +524,10 @@ class PracticeEngine:
                 self.progress.ledger.delete_learner()
             self.measurement.discard_deleted()
             self._stop(reason="delete_learner_history", persist_evidence=False)
-            self.measurement = LearningCapture(self.progress.ledger, clock=self.now)
+            # The capture is shared with MIDI ingress, assessment settlement
+            # and evidence preparation. A new object would leave those
+            # collaborators writing into the deleted learner's old session.
+            self.measurement.begin_fresh_learner_session()
             self.plan = replacement
             self._reset_trouble()
             self.open_from_beat = 0.0

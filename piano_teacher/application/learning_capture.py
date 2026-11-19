@@ -311,6 +311,27 @@ class LearningCapture:
         self.intervals = []
         self.phase, self.phase_at = "idle", self._clock()
 
+    def begin_fresh_learner_session(self) -> None:
+        """Start a fresh durable learner session without replacing this owner.
+
+        MIDI ingress, attempt settlement and evidence preparation all retain
+        the same LearningCapture. Called only after deletion of the old
+        learner's history and after the engine has stopped the old take.
+        """
+        if self.attempt_id is not None:
+            raise RuntimeError("Finish the old learner's attempt before reset")
+        self.discard_deleted()
+        self.run_id = identifier()
+        self.session_id = identifier()
+        self.origin = self._clock()
+        self.phase = "idle"
+        self.phase_at = self.origin
+        self.closed = False
+        self.assistance_used = False
+        self.guidance_state = None
+        self.ledger.start_session(self.session_id, self.run_id, utc_now(),
+                                  str(datetime.now().astimezone().tzinfo))
+
     def flush_intervals(self, now: float, *, keep_phase: bool = False) -> None:
         previous_phase = self.phase
         self.phase_changed("idle", now)

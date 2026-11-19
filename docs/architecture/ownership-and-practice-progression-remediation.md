@@ -214,6 +214,12 @@
 - `NativeScoreView.enqueue_recovery_queue` now only supplies authenticated source geometry through the public admission boundary. The queue's peer-layer clearance is a public operation. No parallel queue, independent musical decision or additional test was created.
 - Remaining L02: remove transitional forwarding state accessors and separate retained painting/resource lifecycle from physical admission.
 
+### Implementation checkpoint X — learner deletion keeps one evidence-capture owner
+
+- Fixed a real shared-reference defect in `PracticeEngine.delete_learner_history`: the old code replaced `self.measurement` while `MidiIngress`, `AttemptSettlement` and the newly extracted `LearningEvidenceSession` still referenced the discarded capture.
+- Added `LearningCapture.begin_fresh_learner_session` to establish a new run/session ID and durable session entry **in the existing owner object**, after deletion and stop. Every reader/writer retains the same authoritative capture. No second ledger or new tests.
+- Resume, manual MIDI and interrupted-attempt physical acceptance remains open.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
