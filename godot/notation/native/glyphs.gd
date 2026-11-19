@@ -912,6 +912,15 @@ func head_cutout(source: String, key: String, index: int, head: String) -> Textu
 ## antialiasing (alpha 1-a). It lives in the head glyph's own rectangle, so it
 ## is positioned exactly like the head and can never leave its mask region.
 ## null for solid heads (no enclosed region).
+## A score revision may reuse a verified identical interior mask, but
+## only the VerovioGlyphs owner may install its private texture cache.
+func install_head_interior(head: String, texture: Texture2D) -> bool:
+    if texture == null or not head_images.has(head):
+        return false
+    _head_interiors[head] = texture
+    return true
+
+
 func head_interior(head: String) -> Texture2D:
     if _head_interiors.has(head):
         return _head_interiors[head]

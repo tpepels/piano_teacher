@@ -262,6 +262,12 @@
 - Core run [44638697127](https://github.com/tpepels/piano_teacher/actions/runs/44638697127) found an `IndentationError` in `test_practice_flow_machine.py` after deleting its obsolete message-parser assertion. Corrected the indentation of the existing tempo-bound assertion; no assertion semantics were changed and no tests added.
 - Prior compiled production changes were not the cause of this collection error. Latest existing core CI is required for this correction.
 
+### Implementation checkpoint AF — eliminate direct glyph-cache mutation
+
+- Removed `StatusHeadPreloader`'s direct write to `VerovioGlyphs._head_interiors`. A validated public `VerovioGlyphs.install_head_interior` accepts an identity-matched previously rendered Texture2D and owns its private cache.
+- The preloader continues sharing equivalent masks across stage revisions without duplicating the expensive first-attack fill calculation; the glyph atlas owns all internal writes. No new tests.
+- Further application/renderer decomposition is open until the remaining production cross-owner reads are eliminated and native journeys pass.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

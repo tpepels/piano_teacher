@@ -26,8 +26,8 @@ func warm(renderer) -> void:
         var image: Image = glyphs.head_images[head]
         var key: String = "%s|%s|%d" % [str(head),str(image.get_size()),
             hash(image.get_data())]
-        if _head_interiors.has(key) and "_head_interiors" in glyphs:
-            glyphs._head_interiors[str(head)] = _head_interiors[key]
+        if _head_interiors.has(key) and glyphs.has_method("install_head_interior") \
+                and glyphs.install_head_interior(str(head),_head_interiors[key]):
             reused += 1
         else:
             _head_interiors[key] = glyphs.head_interior(str(head))
