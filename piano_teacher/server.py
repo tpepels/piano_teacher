@@ -25,6 +25,7 @@ from .diagnosis_policies import LearnerSnapshot
 from .application import practice_flow
 from .application.playback_coordinator import PlaybackCoordinator
 from .application.flow_course_session import PracticeFlowCourseSession
+from .application.learning_evidence_session import LearningEvidenceSession
 from .application.score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
@@ -49,7 +50,7 @@ from .library import ScoreLibrary
 from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
-from .application.mistake_responses import resolve_mistake_policy, mistake_policy_facts
+from .application.mistake_responses import resolve_mistake_policy
 from .music import Phrase
 from .measure_grid import phrase_grid
 from .course_navigation import choose_source_opening
@@ -83,7 +84,6 @@ from .learner_state import guided_units
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
-from .teaching import TeachingConfig
 from .application.learning_capture import LearningCapture, identifier
 
 from .practice_history import PracticePolicyService
@@ -271,6 +271,9 @@ class PracticeEngine:
         self.session_commands = SessionCommands()
         self.attempt_settlement = AttemptSettlement(self.progress, self.measurement,
             self.fukuda_mistakes, self.learner_progress)
+        self.learning_evidence = LearningEvidenceSession(
+            self.progress, self.library, self.measurement, self.midi,
+            self.midi_calibration)
 
     @property
     def _future_stage_ready(self):
@@ -383,48 +386,14 @@ class PracticeEngine:
 
     def _learning_context(self, *, scope: str, start: float, end: float,
                           run_at: float | None = None) -> dict:
-        p = self.plan
-        phrase = p.active_phrase
-        tempo = self._active_tempo_map()
-        segments = (list(tempo.as_segments()) if tempo is not None else
-                    [{"start_beat": 0.0, "end_beat": phrase.end-phrase.start,
-                      "bpm": p.bpm}])
-        rule = {"schema_version": 1, "grader": "nearest-onset-v1",
-                "mastery": "accepted-full-target-v1", "lesson_settings": asdict(SETTINGS),
-                "onset_formula": "max(grading_onset_tolerance_seconds,min(0.30,0.20*local_spb))",
-                "hold_formula": "max(grading_duration_floor_seconds,duration*max(grading_duration_tolerance_fraction,min(0.75,grading_duration_tolerance_fraction+0.28*max(0,local_spb-0.5))))",
-                "importer": "midi-source-v1", "generator": p.lesson_generator.name,
-                "generator_version": p.route_version,
-                "retry_version": resolve_mistake_policy(self.library.settings["mistake_response_strategy"]).version,
-                "guided_config": {**asdict(self.teaching.config if self.teaching else TeachingConfig()),
-                                  "persistent_hints": self.persistent_hints},
-                "retry": mistake_policy_facts(resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))}
-        rule_id = self.progress.ledger.store_rules(rule)
-        return {"fingerprint": self.fingerprint, "source_sha256": self.fingerprint,
-                "stage_key": p.identity, "hand": p.hand, "scope": scope,
-                "variant": p.active_variant.level, "generator": p.lesson_generator.name,
-                "generator_version": p.route_version, "rule_id": rule_id,
-                "source_note_ids": [n.source_id for n in phrase.notes],
-                "variant_source_indices": list(p.active_variant.source_indices),
-                "expected_notes": [asdict(n) for n in phrase.notes],
-                "bar_boundaries": list(p.piece.bar_boundaries),
-                "time_signatures": [list(signature) for signature in p.piece.time_signatures],
-                "phrase_start": phrase.start, "phrase_end": phrase.end,
-                "from_beat": start, "end_beat": end, "target_bpm": p.target_bpm,
-                "source_bpm": p.piece.bpm,
-                "performed_bpm": p.bpm, "tempo_map": segments,
-                "tempo_map_hash": hashlib.sha256(json.dumps(segments, sort_keys=True).encode()).hexdigest(),
-                "transport_id": self.transport_id, "score_revision": self.score_revision,
-                "scheduled_origin": None if run_at is None else run_at-self.measurement.origin,
-                "count_in_beats": self.count_in_beats,
-                "count_in_meter": list(self.count_in_meter),
-                "midi_available": self.midi.connected,
-                "device_name": self.midi.device,
-                "calibration_ms": self.library.settings["midi_offset_ms"],
-                "calibration_result": self.midi_calibration.result,
-                "calibration_applied_ms": (0 if scope in ("guided", "preview") else
-                                            self.library.settings["midi_offset_ms"]),
-                "assistance": self.persistent_hints or scope == "guided"}
+        return self.learning_evidence.context(
+            self.plan, fingerprint=self.fingerprint, scope=scope,
+            start=start, end=end, run_at=run_at,
+            tempo_map=self._active_tempo_map(), transport_id=self.transport_id,
+            score_revision=self.score_revision, count_in_beats=self.count_in_beats,
+            count_in_meter=self.count_in_meter,
+            guided_config=self.teaching.config if self.teaching is not None else None,
+            persistent_hints=self.persistent_hints)
 
     def learning_history_status(self) -> dict:
         with self.lock:
@@ -469,73 +438,10 @@ class PracticeEngine:
             return report
 
     def _retry_context(self, result, *, end_beat=None):
-        """Use compatible, retained original grading evidence at retry boundaries."""
-        from .application.mistake_responses import (
-            AdaptiveAttempt, AdaptiveContext, adaptive_attempt_from_assessment)
-        context = self.measurement.context or {}
-        phrase = self.plan.active_phrase
-        attempts = []
-        rows = self.db.execute("""SELECT t.context_json,d.detail_json FROM learning_attempts t
-            JOIN learning_attempt_details d USING(attempt_id)
-            WHERE t.fingerprint=? AND t.stage_key=? AND t.state IN ('completed','interrupted')
-            ORDER BY t.rowid DESC LIMIT 16""", (self.fingerprint, self.plan.identity)).fetchall()
-        for encoded, detail_json in reversed(rows):
-            if not encoded:
-                continue
-            previous, detail = json.loads(encoded), json.loads(detail_json)
-            if any(previous.get(key) != context.get(key) for key in
-                   ("hand", "rule_id", "target_bpm", "calibration_applied_ms")):
-                continue
-            assessment = detail.get("assessment")
-            observations = detail.get("observations", [])
-            if not assessment or not observations or previous.get("scope") in ("perform", "preview", "guided"):
-                continue
-            if any(item.get("missingness") for item in observations):
-                continue
-            selected = {}
-            if previous.get("parent_decision_id"):
-                row = self.db.execute("SELECT data_json FROM learning_decisions WHERE decision_id=?",
-                                      (previous["parent_decision_id"],)).fetchone()
-                if row and row[0]:
-                    selected = json.loads(row[0]).get("selected", {})
-            attempts.append(AdaptiveAttempt(
-                identity=self.plan.identity, start_beat=previous["from_beat"],
-                end_beat=detail.get("assessed_end_beat", previous["end_beat"]),
-                bpm=previous["performed_bpm"],
-                wrong_beats=tuple(n["source_beat"]-phrase.start for n in observations if n["status"] == "wrong"),
-                missed_beats=tuple(n["source_beat"]-phrase.start for n in observations if n["status"] == "missed"),
-                timing_errors=sum(bool(n.get("timing_error")) for n in observations),
-                hold_errors=sum(bool(n.get("hold_error")) for n in observations),
-                accepted=assessment["passed"], assisted=bool(detail.get("assistance_used")),
-                action=selected.get("action", "repeat"), extra_errors=assessment.get("extra_notes", 0)))
-        action = "repeat"
-        parent = context.get("parent_decision_id")
-        if parent:
-            row = self.db.execute("SELECT data_json FROM learning_decisions WHERE decision_id=?", (parent,)).fetchone()
-            if row and row[0]:
-                action = json.loads(row[0]).get("selected", {}).get("action", "repeat")
-        attempts.append(adaptive_attempt_from_assessment(result, identity=self.plan.identity,
-            start_beat=self.visual_transport.play_from_beat,
-            end_beat=end_beat if end_beat is not None else context.get("end_beat", phrase.end-phrase.start),
-            bpm=context.get("performed_bpm", self.plan.bpm), phrase_start=phrase.start,
-            assisted=self.measurement.assistance_used, action=action))
-        episode = self.measurement.episode
-        count, reference = 0, context.get("performed_bpm", self.plan.bpm)
-        if episode:
-            count = self.db.execute("SELECT count(*) FROM learning_decisions WHERE json_extract(summary_json,'$.episode_id')=?",
-                                    (episode["id"],)).fetchone()[0]
-            row = self.db.execute("""SELECT t.summary_json FROM learning_decisions d
-                JOIN learning_attempts t ON t.attempt_id=d.attempt_id WHERE d.decision_id=?""",
-                (episode["first_decision"],)).fetchone()
-            if row:
-                reference = json.loads(row[0]).get("performed_bpm", reference)
-        onsets = {n.start for n in phrase.notes if self.plan.hand == "both" or n.hand == self.plan.hand}
-        return AdaptiveContext(self.plan.identity, tuple(attempts), episode_action_count=count,
-            original_start_beat=0., original_end_beat=phrase.end-phrase.start,
-            source_attacks=len(onsets), attacks_per_beat=len(onsets)/(phrase.end-phrase.start),
-            reference_bpm=reference)
-
-
+        return self.learning_evidence.adaptive_context(
+            result, plan=self.plan, fingerprint=self.fingerprint,
+            from_beat=self.visual_transport.play_from_beat,
+            end_beat=end_beat)
 
     def _apply_policy_response(self, response, *, now: float, deadline: float | None = None,
                                visual_from: float | None = None):
