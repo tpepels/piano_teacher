@@ -237,6 +237,7 @@ func _reserved(code: int, body: PackedByteArray) -> void:
         return
     receipt = data
     if renderer == null or not is_instance_valid(renderer) or \
+            not renderer.bind_stream_segment(str(data.get("segment_id",""))) or \
             not renderer.acknowledge_stream_arm():
         _cancel_provisional()
         return
