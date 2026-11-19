@@ -1,6 +1,6 @@
 # Ownership, lesson-window and large-file architectural audit
 
-**Status:** Design and remediation plan only. Nothing in this document has been implemented by this audit.  
+**Status:** Implementation underway on `main`. This file tracks actual code commits; unfinished items remain explicitly marked.  
 **Source baseline:** [main at 9a01a9b7](https://github.com/tpepels/piano_teacher/tree/9a01a9b7d9434ae6a3ef7bc72fd6844222d718ef), 19 November 2026.  
 **Scope:** Practice Flow, learning/assessment, playback and score admission, presentation timing, and the three largest first-party production source files.  
 **Goal:** One authoritative owner for each domain decision; explicit typed boundaries; no independent recomputation of a decision downstream; preserve the continuous native score and all existing capabilities.
@@ -11,9 +11,9 @@
 
 | Workstream | Status | Notes |
 | --- | --- | --- |
-| Moving-window curriculum / P01 | IN PROGRESS | Per new instruction, each bar alone, then successively longer backwards-looking windows, at most four bars; separate final test preserved |
-| Typed course outcomes / O02 | NOT STARTED | Remove display-string decisions |
-| Unified assessment verdict / O03 | NOT STARTED | One result policy for teaching and persistence |
+| Moving-window curriculum / P01 | IMPLEMENTED IN SOURCE, UNVERIFIED AT PIANO | `practice_windows.py` is the single window policy; `practice_flow_course.py` generates n, n−1..n, n−2..n, n−3..n up to 4; per-window course/stage identities; final exam retained; CI and physical acceptance pending |
+| Typed course outcomes / O02 | IMPLEMENTED IN PRODUCTION PATH | `TeachingDecision.flow_outcome` now carries `Outcome` directly through course/engine; string parser remains only as a read-only legacy diagnostic for existing tests, without production callers |
+| Unified assessment verdict / O03 | IMPLEMENTED IN PRODUCTION PATH, CI PENDING | `AssessmentVerdict` is produced by teaching policy; progression and attempt settlement use the same policy-selected acceptance/trouble-resolution flags |
 | Unified playback transitions / O01, O04 | NOT STARTED | No alternate restart, countdown or time owner |
 | Asset admission / O05, O08 | NOT STARTED | Preload identity only, gateway owns geometry |
 | Deterministic presentation timeline / O06 | NOT STARTED | Single rate/position authority |
@@ -21,9 +21,21 @@
 | Decompose server.py / L01 | NOT STARTED | Thin facade, authoritative domain owners |
 | Decompose native/view.gd / L02 | NOT STARTED | Renderer must not own score-stream policy |
 | Decompose main.gd / L03 | NOT STARTED | Composition root, typed event coordinators |
-| Existing CI/native integration | NOT RUN | Report exact verified checks, not guessed completion |
+| Existing CI/native integration | IN PROGRESS | Earlier CI failed because existing tests import the retired diagnostic `outcome_of`; read-only compatibility restored, latest CI not yet verified. No tests added or edited |
 
 **Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
+
+### Implementation checkpoint A — source changes
+
+- `2779dc0`: Added immutable authored source windows in [practice_windows.py](../../piano_teacher/practice_windows.py).
+- `e01a289`: Changed Practice Flow exercises to the moving-window order, without adding notes or changing their source IDs.
+- `24ffc13` and `62c4c2c`: Added source end to graphical playback intents and reservation receipt validation. The active course phrase already equals the PracticeWindow, so the existing notation and grading source selection use exactly that interval.
+- `f5a6607`: Learner status now identifies `Measure n` or `Measures a–b`.
+- `6260d29` and `9cdfdb6`: Bumped Practice Flow course version and migrated old phrase-position saves to first-bar source locations without awarding unearned mastery.
+- `242a1c3`, `67451c3`, `c6f4621`, `c0d4fd6`, `b35ca0f`, `247504a`: Established a typed course outcome and an immutable policy-bound verdict, then wired those into teaching and durable trouble-resolution.
+- `147811e`: Retained the old message-decoder API for existing diagnostic tests only; production flow no longer depends on it.
+
+**Still incomplete:** Playback transition consolidation, count-in ownership, score preloader deadline removal, unified visual-time projection, public renderer/asset ports, decomposition of the three largest source files, documentation retirement, native/hardware verification.
 
 ## Executive findings
 
