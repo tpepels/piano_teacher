@@ -1,71 +1,21 @@
-"""Owner practice flow course (docs/practice-flow.md): phrases, hands, links.
+"""Moving-window Practice Flow course on authentic authored MIDI notes.
 
-One piece is learned phrase by phrase. Every phrase and every link of two
-neighbouring phrases is practised with the right hand, the left hand and both
-hands together, always on the original notes. The piece ends with a final
-whole-piece test. Simplified Coda/Fukuda exercises are not part of this
-sequence; they are offered separately as an announced aid.
+Every new authored measure is introduced alone, then practised with up to
+three preceding measures. Source IDs, long releases and their original
+timing remain intact. Each window has its own hand sequence and mastery.
+The whole-piece examination remains separate. Simplified Coda/Fukuda
+material is an explicitly announced aid, never a hidden course stage.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .adaptive_hybrid_curriculum import _SourceAttackIndex, _segments
 from .exercise_generator import generate_variants
 from .exercise_pipeline import ExerciseStage
 from .lesson_settings import SETTINGS
 from .lesson_source_planner import Exercise
 from .music import Phrase, Piece
 from .practice_windows import moving_windows, MAX_PRACTICE_BARS
-
-MIN_PHRASE_BARS = 2
-MAX_PHRASE_BARS = 4
-# A cut after a rest of at least this many beats, or after a note held at
-# least this long into the barline, is a natural phrase ending.
-REST_CUT_BEATS = 0.5
-HELD_CUT_BEATS = 1.0
-
-
-def _natural_cut(piece: Piece, at: float) -> bool:
-    """True when the music breathes at this barline: a rest, or a held note."""
-    before = [n for n in piece.notes if n.start < at - 1e-7]
-    if not before:
-        return True
-    if at - max(n.end for n in before) >= REST_CUT_BEATS - 1e-7:
-        return True
-    last_onset = max(n.start for n in before)
-    return at - last_onset >= HELD_CUT_BEATS - 1e-7
-
-
-def phrases(piece: Piece) -> tuple[Phrase, ...]:
-    """Musical phrases of 2-4 bars built from safe 2-bar source units."""
-    source = _SourceAttackIndex(piece)
-    # Short source units (normally 2 bars; silent bars excluded). A unit is
-    # extended when a note is held over its barline, so no phrase cuts a note.
-    units = _segments(piece, source=source)
-    grid = piece.bar_boundaries
-    merged: list[tuple[int, int]] = []
-    for unit in units:
-        if merged:
-            first, last = merged[-1]
-            contiguous = last + 1 == unit.first_bar
-            size = unit.last_bar - first + 1
-            short = last - first + 1 < MIN_PHRASE_BARS
-            if contiguous and size <= MAX_PHRASE_BARS and (
-                    short or not _natural_cut(piece, grid[last])):
-                merged[-1] = (first, unit.last_bar)
-                continue
-        merged.append((unit.first_bar, unit.last_bar))
-    out = []
-    for first, last in merged:
-        start, end = grid[first - 1], grid[last]
-        selected = source.notes_in(start - 1e-7, end - 1e-7)
-        if not selected:
-            continue
-        out.append(Phrase(len(out) + 1, first, last, start,
-                          max(end, max(n.end for n in selected)), selected))
-    return tuple(out)
-
 
 def _hands(notes) -> tuple[str, ...]:
     present = {n.hand for n in notes}
@@ -139,7 +89,7 @@ class PracticeFlowLessonGenerator:
         if (exposure is not None and exposure.mode != "learn"
                 and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
                 and ":flow:final:" not in exposure.stage_key):
-            # A new hand, phrase or link starts at Listen -> Free, never
+            # A new hand or window starts at Listen -> Free, never
             # directly in tempo. The engine plays Listen before Free.
             exposure = replace(exposure, from_beat=0.0, end_beat=None,
                                mode="learn", assisted=True, automatic=True,
