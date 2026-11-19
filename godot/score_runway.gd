@@ -94,7 +94,7 @@ func _link_existing_layers(incoming) -> void:
     for previous in predecessors:
         if previous != incoming and previous is NativeView and \
                 is_instance_valid(previous):
-            incoming._stream_queue.register_peer(previous)
+            incoming.register_stream_predecessor(previous)
 
 
 func _retain_tail(old, keep_staff: bool = false) -> void:
