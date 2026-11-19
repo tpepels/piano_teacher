@@ -2375,7 +2375,10 @@ class PracticeEngine:
             self._prepare_listen()
             return
         if route == "prepare_practice":
-            self._prepare_practice()
+            self._prepare_practice(exposure=selected)
+            return
+        if route == "learn":
+            self._begin_learn(exposure=selected)
             return
         if route == "reload_score":
             self._stop()
