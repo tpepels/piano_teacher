@@ -1636,7 +1636,8 @@ class PracticeEngine:
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
               loop_continuation: bool = False, scheduled_deadline: float | None = None,
-              presentation_lead_seconds: float = 0.0, decided: bool = False):
+              presentation_lead_seconds: float = 0.0, decided: bool = False,
+              count_in_plan=None):
         with self.lock:
             if self.playback.presentation_required and not self._playback_authorizing:
                 raise ValueError("Timed playback requires an admitted score receipt")
@@ -1691,7 +1692,8 @@ class PracticeEngine:
                 time_signatures=self.plan.piece.time_signatures,
                 bpm=self.plan.bpm, position=position,
                 loop_continuation=loop_continuation,
-                preview=self.preview_only, now=self.now())
+                preview=self.preview_only, now=self.now(),
+                count_in_plan=count_in_plan)
             self.visual_transport.play_from_beat = scheduled.from_beat
             self.count_in_bar_beats = scheduled.count_in_bar_beats
             self.count_in_meter = list(scheduled.count_in_meter)
@@ -1754,7 +1756,8 @@ class PracticeEngine:
                 self.session_commands.active = effect
                 try:
                     self.start(mode=selected.mode, from_beat=selected.from_beat,
-                        scheduled_deadline=deadline)
+                        scheduled_deadline=deadline,
+                        count_in_plan=intent.count_in)
                 finally:
                     self.session_commands.active = previous_effect
             elif intent.action == "resume":
@@ -1772,7 +1775,8 @@ class PracticeEngine:
                 try:
                     self.start(from_beat=intent.from_beat, mode=intent.mode,
                         loop_continuation=intent.action == "auto",
-                        decided=False, scheduled_deadline=deadline)
+                        decided=False, scheduled_deadline=deadline,
+                        count_in_plan=intent.count_in)
                 finally:
                     self.session_commands.active = previous_effect
                 self._queue_scheduled_start = (
@@ -1786,9 +1790,13 @@ class PracticeEngine:
                 self.awaiting_score_revision = None
                 self._open_take()
                 self.running = True
-                self.count_in_bar_beats = start.count_in_bar_beats
-                self.count_in_meter = list(start.count_in_meter)
-                self.count_in_beats = start.count_in_beats
+                if (abs(start.count_in_bar_beats-intent.count_in.bar_beats)>1e-5
+                        or tuple(start.count_in_meter)!=intent.count_in.meter
+                        or abs(start.count_in_beats-intent.count_in.beats)>1e-5):
+                    raise ValueError("Listen audio disagrees with authorized count-in plan")
+                self.count_in_bar_beats = intent.count_in.bar_beats
+                self.count_in_meter = list(intent.count_in.meter)
+                self.count_in_beats = intent.count_in.beats
                 self.visual_transport.run_at = deadline
                 self.feedback = "Count in, then listen"
             else:
