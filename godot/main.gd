@@ -29,6 +29,7 @@ const ScoreAssetSession := preload("res://score_asset_session.gd")
 const ScoreAssetQueue := preload("res://score_asset_queue.gd")
 const InProcessBus := preload("res://inprocess_bus.gd")
 const ScoreRunway := preload("res://score_runway.gd")
+const ScoreAdmissionGateway := preload("res://score_admission_gateway.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
@@ -175,6 +176,7 @@ var live_midi_feedback = LiveMidiFeedback.new()
 var state_poll_timer: Timer
 var inprocess_bus: Node
 var score_runway
+var score_admission
 var native_started := false
 
 func _ready() -> void:
@@ -301,6 +303,14 @@ func _ready() -> void:
         Callable(self,"_raw_click"))
     command_coordinator.configure(practice_view,settings_view,metronome_frame,score_flow,
         visual_transport_clock,action_request,command_failure_presenter)
+    score_admission = ScoreAdmissionGateway.new()
+    add_child(score_admission)
+    score_admission.configure(self,inprocess_bus,practice_view.stage,
+        score_session,score_runway,score_flow,visual_transport_clock,
+        metronome_frame)
+    score_admission.admission_problem.connect(func(message: String):
+        if frame_diagnostics:
+            print("SCORE_ADMISSION:",message))
     command_coordinator.succeeded.connect(command_success_effects.apply)
     command_coordinator.learning_accepted.connect(_learning_command_accepted)
     command_coordinator.library_requested.connect(func(piece: String, resume_saved: bool):
@@ -1147,65 +1157,40 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         var renderer = practice_view.stage.renderer
         renderer.present(
             parsed,beat,world-float(renderer.runway_origin_beat))
-        # The backend supplies one immutable next-score decision: source,
-        # exact MIDI-graded monotonic deadline, and plan identity. This
-        # includes failure recovery and disconnected-MIDI preview loops.
-        # No streak, mastery or repeat policy may run in the renderer.
-        var next_plan: Variant = parsed.get("score_queue_next")
-        var transport_key: String = "%s|%d|%d|%s" % [
-            str(parsed.get("piece_fingerprint","")),
-            int(parsed.get("revision",-1)),
-            int(parsed.get("transport_id",-1)),
-            str(parsed.get("mode","practice"))]
-        if next_plan is Dictionary and \
+        # Untimed Free uses explicit hold-at-target notation. Timed music
+        # comes exclusively from PlaybackCoordinator -> ScoreAdmissionGateway,
+        # never from a retrospective running-state score plan.
+        var guided_plan: Variant = parsed.get("score_queue_next")
+        if str(parsed.get("mode","")) == "learn" and \
+                guided_plan is Dictionary and \
                 visual_transport_clock.has_backend_offset and \
-                str(parsed.get("mode","")) in [
-                    "practice","perform","listen","learn"] and \
                 not bool(parsed.get("paused",false)) and \
-                not promoted_this_snapshot and \
-                renderer._stream_armed_serial < 0 and \
-                (renderer._stream_last_take != transport_key or \
-                    str(parsed.get("phase","")) in [
-                        "feedback","recovering","preview_gap"]) and \
-                next_plan.has("deadline_at_ms") and \
-                next_plan.has("source_from_beat") and \
-                next_plan.has("plan_id"):
-            var deadline_ms: int = roundi(
-                float(next_plan["deadline_at_ms"]) +
+                guided_plan.has("deadline_at_ms") and \
+                guided_plan.has("source_from_beat") and \
+                guided_plan.has("plan_id"):
+            var guided_deadline: int = roundi(
+                float(guided_plan["deadline_at_ms"]) +
                 visual_transport_clock.backend_offset_ms)
-            var future_segments: Array = (
-                parsed.get("tempo_segments",[])
-                if bool(parsed.get("running",false)) and
-                    not bool(parsed.get("paused",false)) and
-                    str(parsed.get("phase","")) == "playing"
-                else [])
-            var authored_world: float = score_flow.project_authored_future(
-                deadline_ms,received_ms,beat,float(parsed.get("bpm",40.0)),
-                future_segments)
-            var playback_mode: String = str(parsed.get("mode","practice"))
-            # Practice continuations open on the empty strip at their engine
-            # deadline (P5); Listen/Perform/Learn keep the exact slot.
+            var guided_world: float = score_flow.project_authored_future(
+                guided_deadline,received_ms,beat,
+                float(parsed.get("bpm",40.0)),[])
             renderer.enqueue_recovery_queue(world,
-                float(next_plan["source_from_beat"]),
-                authored_world,str(next_plan["plan_id"]),
-                playback_mode in ["listen","perform","learn","practice"],
-                float(next_plan.get("count_in_beats",
-                    parsed.get("next_count_in_beats",0.0))),
-                playback_mode == "practice",
-                # Untimed Learn has no graded deadline: its passage opens at
-                # the first clear offscreen slot at or after the engine's.
-                playback_mode == "learn")
-            if playback_mode == "learn":
-                var plan_key: String = str(next_plan["plan_id"])
-                if renderer.scheduled_plan_openings.has(plan_key):
-                    _guided_world = float(renderer.scheduled_plan_openings[plan_key])
-                    _guided_from_beat = float(next_plan["source_from_beat"])
-                    _guided_plan_id = plan_key
+                float(guided_plan["source_from_beat"]),
+                guided_world,str(guided_plan["plan_id"]),
+                true,float(guided_plan.get("count_in_beats",0.0)),
+                false,true)
+            var guided_key: String = str(guided_plan["plan_id"])
+            if renderer.scheduled_plan_openings.has(guided_key):
+                _guided_world = float(renderer.scheduled_plan_openings[guided_key])
+                _guided_from_beat = float(guided_plan["source_from_beat"])
+                _guided_plan_id = guided_key
         # Atomically bind an acknowledged transport ID to the already armed
         # source BEFORE publishing the new backend state. Otherwise the UI
         # may observe a running Retry while its note copy still has the
         # prepared key until the next animation frame.
         practice_view.stage.renderer.present_flow(world,parsed,beat)
+    if score_admission != null:
+        score_admission.observe(parsed,received_ms)
     state_presenter.present(
         parsed,current_screen,command_coordinator.state.pending,_native_score_ready(),
         fingering_save_error,
