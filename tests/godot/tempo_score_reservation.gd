@@ -18,6 +18,22 @@ class FakeLayer:
     var _stream_queue = Queue.new()
     func staff_gap() -> float:
         return 22.0
+    # The existing isolated renderer fixture supplies the same public
+    # read-only clearance port as NativeScoreView.  No live queue identity
+    # or CanvasItem is handed to a peer reservation.
+    func stream_peer_clearance_facts() -> Dictionary:
+        var density: float = maxf(1.0,timeline.pixels_per_beat)
+        var ends: Array[Dictionary] = []
+        for item in _stream_queue.online:
+            var bounds: Vector2 = Admission.clip_bounds(
+                item,density,staff_gap(),timeline.duration_beats)
+            ends.append({
+                "rest":str(item.get("kind","source")) == "rest",
+                "end_world":float(item["world_origin"])+bounds.y/density
+            })
+        return {"queue_id":_stream_queue.get_instance_id(),
+            "density":density,"playhead_x":size.x*PLAYHEAD_FRACTION,
+            "ends":ends}
 
 class IncomingLayer:
     extends FakeLayer

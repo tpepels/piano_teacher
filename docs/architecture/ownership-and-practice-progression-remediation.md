@@ -7,7 +7,7 @@
 
 ## Implementation progress
 
-**Implementation branch:** `main`. **Tests:** No tests have been added or modified; existing checks have been run. Source-level and CI completion must not be conflated with real native/physical acceptance.
+**Implementation branch:** `main`. **Tests:** No new tests were introduced. The existing isolated Godot peer-reservation fixture was updated to implement the new public renderer interface; its assertions are unchanged. Existing checks have been run. Source-level and CI completion must not be conflated with real native/physical acceptance.
 
 | Workstream | Status | Notes |
 | --- | --- | --- |
@@ -100,7 +100,8 @@
 ### Implementation checkpoint F — remove cross-renderer queue introspection
 
 - Changed the physical peer-clearance calculation to request `NativeScoreView.stream_peer_clearance_facts()`, an identity-bearing snapshot of only source/rest end coordinates, ink density and playhead offset. `ScoreStreamQueue` no longer calls `view.get("_stream_queue")` or inspects another renderer's mutable FIFO/retained nodes. The same clipping formula and peer pop-in rules are preserved.
-- Moved expired source/rest retirement's active/armed-identity cleanup and one-per-plan diagnostic deduplication to `ScoreStreamController`; `NativeScoreView` now delegates without keeping duplicate ledger state. No new tests or test modifications.
+- Moved expired source/rest retirement's active/armed-identity cleanup and one-per-plan diagnostic deduplication to `ScoreStreamController`; `NativeScoreView` now delegates without keeping duplicate ledger state. No new tests.
+- Existing `tests/godot/tempo_score_reservation.gd` fixture now implements the same public peer-clearance facts port as the native view. Its existing Pathétique deadline assertions are unchanged. CI at `9fa2237c` failed because its isolated fake only exposed the retired private queue accessor; fixing the fixture preserves the production boundary. **No new tests were introduced**. Verification of the corrected commit remains pending.
 - **Not complete:** The current renderer still performs the live admission/binding and retained painting algorithms and exposes internal forwarding properties. Phase 5 remains open. Existing CI and physical/native acceptance must be checked against this commit; do not mark them green merely because the code is committed.
 
 #### Phase 6 acceptance matrix
