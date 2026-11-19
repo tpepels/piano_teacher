@@ -2590,12 +2590,15 @@ class PracticeEngine:
         return self.teaching_continuation.selection(self.attempt_settlement.pending,
             revision=self.score_revision,fingerprint=self.fingerprint)
 
-    def _advance_pending_feedback(self, now: float, *, prepared_on_time: bool = False):
-        """Commit finished feedback and schedule exactly one next transition."""
+    def _advance_pending_feedback(self, now: float, *,
+                                  prepared_on_time: bool = False,
+                                  force_early: bool = False):
+        """Settle before presenting the next count-in, never after it starts."""
         if self.pending_result is not None and (self.attempt_settlement.pending is None
                 or self.attempt_settlement.pending.assessment is not self.pending_result):
             self._prepare_teaching("full_result", self.pending_result)
-        if self.auto and self.visual_transport.next_at and now >= self.visual_transport.next_at:
+        if self.auto and self.visual_transport.next_at and (
+                force_early or now >= self.visual_transport.next_at):
             readiness = ContinuationReadiness(self._future_stage_ready,self.score_revision,
                 self.fingerprint,self._visual_motion(now)[0],self.plan.bpm,
                 self._native_preload_failure,prepared_on_time,
@@ -3080,7 +3083,14 @@ class PracticeEngine:
             else:
                 self.visual_transport.announced_continuation = None
                 self.visual_transport.next_at = now if self._short_rest is not None else deadline
-            if now >= self.visual_transport.next_at:
+            if (self.playback.presentation_required and self.auto
+                    and not self.visual_transport._retry_previous_pass
+                    and self.visual_transport.next_at):
+                # The selected successor is known at completion. Settle
+                # immediately and negotiate its physical admission during
+                # the outgoing rest, not when the old deadline has elapsed.
+                self._advance_pending_feedback(now,force_early=True)
+            elif now >= self.visual_transport.next_at:
                 self._update()
 
     def _assess_rolling_boundary(self, boundary: float,
