@@ -142,25 +142,6 @@ def take_graded(state: FlowState, *, passed: bool) -> Transition:
     return Transition(done, "Well done", Outcome.STAGE_DONE)
 
 
-def outcome_of(message: str) -> Outcome | None:
-    """Legacy diagnostic adapter only, retained for existing verification.
-
-    Production teaching decisions and settlement NEVER call this function:
-    their control-flow values are the typed Transition.outcome itself.
-    """
-    legacy = (
-        ("Again at the same tempo", Outcome.AGAIN),
-        ("Faster: ", Outcome.FASTER),
-        ("Clean! Once more", Outcome.CLEAN_ONCE),
-        ("Slower: ", Outcome.SLOWER),
-        ("Once more without tempo", Outcome.BACK_TO_FREE),
-        ("Well done", Outcome.STAGE_DONE),
-        ("Piece mastered", Outcome.PIECE_DONE),
-    )
-    return next((outcome for prefix, outcome in legacy
-                 if message.startswith(prefix)), None)
-
-
 def settle(state: FlowState | None, outcome: Outcome, *, stage_key: str,
            final: bool, bpm: int, target_bpm: int, failures: int,
            clean: int) -> FlowState:

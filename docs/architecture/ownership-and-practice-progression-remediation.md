@@ -12,7 +12,7 @@
 | Workstream | Status | Notes |
 | --- | --- | --- |
 | Moving-window curriculum / P01 | INTEGRATED; PHYSICAL ACCEPTANCE OUTSTANDING | `practice_windows.py` selects n, n−1..n, n−2..n, n−3..n (max 4) and emits real source-bounded course exercises; independently identified windows, versioned saved progress and separate final exam; existing CI passed on `f1d3385` |
-| Typed course outcomes / O02 | IMPLEMENTED IN PRODUCTION PATH | `TeachingDecision.flow_outcome` now carries `Outcome` directly through course/engine; string parser remains only as a read-only legacy diagnostic for existing tests, without production callers |
+| Typed course outcomes / O02 | SINGLE TYPED PRODUCTION PATH; LEGACY PARSER REMOVED | `TeachingDecision.flow_outcome` carries `Outcome` directly through course/engine; `outcome_of(message)` and its obsolete parser assertion have been deleted |
 | Unified assessment verdict / O03 | INTEGRATED ACROSS TEACHING, EVIDENCE AND SNAPSHOTS; LIVE CHECK OPEN | The selected verdict now drives course progression, recorded acceptance, UI summary and durable trouble clearing; raw grader acceptance is retained under a separate diagnostic field; non-graded legacy adapters remain distinct |
 | Unified playback transitions / O01, O04 | GRAPHICAL COUNT-IN SINGLE-TAKE PATH INTEGRATED; LEGACY AND PHYSICAL ACCEPTANCE OPEN | Immutable PlaybackTransition and CountInPlan are accepted once; metronome uses take-keyed authorized segments through Pause/Resume, rejects mismatched deadlines and does not invent unadmitted graphical countdowns; headless compatibility and hardware acceptance remain |
 | Asset admission / O05, O08 | ONE PHYSICAL PREFLIGHT CONTRACT; INTERNAL VIEW ADAPTERS REMAIN | ScoreTransportReservation now exclusively consumes identity-bound frozen preflight facts, including isolated Godot fixtures; cross-renderer peer clearance also uses primitive read-only facts. ScoreStreamController owns the FIFO and transport lifecycle, and ScoreSceneController owns promotion; NativeView still has internal append/rollback and property forwarding |
@@ -250,6 +250,12 @@
 - Extended the existing full production acceptance script to build the distributable `.tar.gz` (rather than stopping at an assembled-directory audit), extract it into a clean temporary location and launch its own `PianoTeacher` binary under an empty environment and isolated HOME.
 - The bundled Godot/CPython bridge must publish `PIANO_PACKAGE_NATIVE_READY` from the real startup path; Python/extension load errors and absent success are treated as package failures. The archive's actual native shared library and launcher are checked after extraction. No separate test suite or simulated service was introduced.
 - This completes the **verification procedure**, not the package's acceptance result: the full native run must reach and pass this gate before the checklist can be marked verified. The Kawai speaker, MIDI/USB and Bluetooth observations remain physical-only.
+
+### Implementation checkpoint AD — retire feedback-message decision parser
+
+- Deleted the no-longer-used `application.practice_flow.outcome_of` string-prefix parser. Production decisions already carry a typed `Outcome`; preserving a parser exclusively to satisfy an old test advertised an alternate message-based decision authority.
+- Removed only that obsolete assertion from the existing `test_practice_flow_machine.py`; all typed state-transition assertions remain. No new test was introduced.
+- This completes the residual O02 compatibility-path removal. Additional session-lifecycle/physical acceptance remains open.
 
 #### Phase 6 acceptance matrix
 

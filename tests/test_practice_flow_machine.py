@@ -51,8 +51,7 @@ def test_every_take_sequence_keeps_tempo_bounds_and_only_legal_steps(final):
             before = state
             t = flow.take_graded(state, passed=passed)
             state = t.state
-            assert flow.outcome_of(t.message) is t.outcome
-            assert FLOOR <= state.bpm <= TARGET
+                    assert FLOOR <= state.bpm <= TARGET
             if passed:
                 assert t.outcome in (Outcome.FASTER, Outcome.CLEAN_ONCE,
                                      Outcome.STAGE_DONE, Outcome.PIECE_DONE)
