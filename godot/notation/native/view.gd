@@ -158,6 +158,8 @@ var _stream_live_serial := -1
 # The last playing take reported without a bound source (reported once).
 var _unscored_take := ""
 var _stream_armed_serial := -1
+var _stream_armed_segment_id := ""
+var _stream_live_segment_id := ""
 var _stream_arm_rollback: Dictionary = {}
 var _stream_arm_acknowledged := false
 var _stream_serial := 0
@@ -562,6 +564,8 @@ func _stream_release_all() -> void:
     _stream_paused_owner = -1
     _stream_live_serial = -1
     _stream_armed_serial = -1
+    _stream_armed_segment_id = ""
+    _stream_live_segment_id = ""
     _stream_arm_rollback.clear()
     _stream_arm_acknowledged = false
 
@@ -1179,6 +1183,7 @@ func arm_stream_take(world: float, opening: float,
         _reject_stream_candidate(serial,serial_before,old_live,snapshot)
         return {}
     _stream_armed_serial = serial
+    _stream_armed_segment_id = ""
     _stream_arm_acknowledged = false
     _stream_arm_rollback = {
         "owner_serial":serial,"source_snapshot":snapshot,
@@ -1191,6 +1196,16 @@ func arm_stream_take(world: float, opening: float,
                 "reused_unplayed_count_in":reused_unplayed}
     cancel_stream_arm()
     return {}
+
+
+func bind_stream_segment(segment_id: String) -> bool:
+    # The native source owner must be tied to the coordinator's immutable
+    # segment before it may claim any backend transport identity.
+    if segment_id.is_empty() or _stream_armed_serial < 0 or \
+            _stream_arm_rollback.is_empty():
+        return false
+    _stream_armed_segment_id = segment_id
+    return true
 
 
 func acknowledge_stream_arm() -> bool:
@@ -1224,6 +1239,7 @@ func cancel_stream_arm() -> bool:
             owner_serial,_stream_arm_rollback["source_snapshot"])
     _stream_live_serial = int(_stream_arm_rollback["old_live_serial"])
     _stream_armed_serial = -1
+    _stream_armed_segment_id = ""
     _stream_arm_acknowledged = false
     _stream_arm_rollback.clear()
     queue_redraw()
@@ -1277,6 +1293,7 @@ func trim_future_queue(reason: String,
         if _stream_armed_serial >= 0 and \
                 not _stream_queue.has_take(_stream_armed_serial):
             _stream_armed_serial = -1
+            _stream_armed_segment_id = ""
             _stream_arm_acknowledged = false
             _stream_arm_rollback.clear()
         if _stream_paused_owner >= 0 and \
@@ -1547,6 +1564,10 @@ func present_flow(world_beat: float, state: Dictionary,
     var phase: String = str(state.get("phase",""))
     var mode: String = str(state.get("mode","practice"))
     var opening: float = maxf(0.0,float(state.get("play_from_beat",0.0)))
+    var published_timeline: Variant = state.get("playback_timeline")
+    var expected_segment: String = (
+        str(published_timeline.get("segment_id",""))
+        if published_timeline is Dictionary else "")
     var key: String = "%s|%d|%d|%s" % [
         str(state.get("piece_fingerprint","")),
         int(state.get("revision",-1)),
@@ -1626,14 +1647,18 @@ func present_flow(world_beat: float, state: Dictionary,
                 # A stale polling snapshot must not claim an unacknowledged
                 # Play/Resume/Retry. The source is already offscreen but its
                 # transport identity remains provisional until control ACK.
-                if _stream_arm_acknowledged:
+                if _stream_arm_acknowledged and \
+                        (_stream_armed_segment_id.is_empty() or \
+                         _stream_armed_segment_id == expected_segment):
                     if StreamLifecycle.activate(
                             _stream_queue.online,_stream_armed_serial,key,false):
                         _stream_live_serial = _stream_armed_serial
+                        _stream_live_segment_id = expected_segment
                         _stream_last_take = key
                         _stream_arm_rollback.clear()
                         _stream_arm_acknowledged = false
                         _stream_armed_serial = -1
+                        _stream_armed_segment_id = ""
                     else:
                         cancel_stream_arm()
             elif key != _stream_last_take and mode in [
