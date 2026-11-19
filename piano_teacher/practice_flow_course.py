@@ -16,6 +16,7 @@ from .exercise_pipeline import ExerciseStage
 from .lesson_settings import SETTINGS
 from .lesson_source_planner import Exercise
 from .music import Phrase, Piece
+from .practice_windows import moving_windows, MAX_PRACTICE_BARS
 
 MIN_PHRASE_BARS = 2
 MAX_PHRASE_BARS = 4
@@ -73,31 +74,21 @@ def _hands(notes) -> tuple[str, ...]:
 
 
 def course_exercises(piece: Piece) -> tuple[Exercise, ...]:
-    """learn P1, then (learn Pn, link P(n-1)+Pn) ..., then the final test."""
-    source = _SourceAttackIndex(piece)
-    passages = phrases(piece)
-    if not passages:
-        raise ValueError("The piece has no playable phrase")
+    """Every bar alone, then 2/3/4-bar backwards-looking windows.
+
+    Example: 1; 2, 1-2; 3, 2-3, 1-3; 4, 3-4, 2-4, 1-4;
+    5, 4-5, 3-5, 2-5. The source retains its original timing and note
+    IDs, including full holds beyond the final selected barline.
+    """
+    windows = moving_windows(piece, maximum_bars=MAX_PRACTICE_BARS)
     out: list[Exercise] = []
-    for index, phrase in enumerate(passages):
-        out.append(Exercise("learn", phrase,
-                            f"flow:learn:{phrase.first_bar}-{phrase.last_bar}",
+    for index, window in enumerate(windows, 1):
+        phrase = window.phrase(index)
+        out.append(Exercise("learn" if window.is_new_measure else "connect",
+                            phrase, window.window_key,
                             hands=_hands(phrase.notes)))
-        if index == 0:
-            continue
-        previous = passages[index - 1]
-        start, end = previous.start, phrase.end
-        # Both phrases' own notes, in source order (a held note may end
-        # after the second phrase's last barline).
-        joined = tuple(n for n in source.notes_in(start - 1e-7, end)
-                       if n in set(previous.notes) | set(phrase.notes))
-        if not joined:
-            continue
-        link = Phrase(0, previous.first_bar, phrase.last_bar, start,
-                      max(end, max(n.end for n in joined)), joined)
-        out.append(Exercise("connect", link,
-                            f"flow:link:{previous.first_bar}-{phrase.last_bar}",
-                            hands=_hands(joined)))
+    # Whole-piece verification is a separate final examination. It is
+    # deliberately not a fifth-bar routine practice window.
     last = len(piece.bar_boundaries) - 1
     complete = Phrase(0, 1, last, piece.bar_boundaries[0],
                       max(piece.bar_boundaries[-1], max(n.end for n in piece.notes)),
