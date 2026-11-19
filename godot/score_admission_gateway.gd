@@ -212,6 +212,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         "stage_key": str(intent["stage_key"]),
         "revision": int(intent["revision"]),
         "hand": str(intent["hand"]),
+        "source_from_beat": opening,
         "deadline_ms": deadline,
         "world_origin": start_world,
         "queue_generation": int(view._stream_serial),
