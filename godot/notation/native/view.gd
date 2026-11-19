@@ -1055,6 +1055,9 @@ func arm_stream_take(world: float, opening: float,
 func admission_queue_generation() -> int:
     return _stream_serial
 
+func unscored_take_status() -> String:
+    return _unscored_take
+
 func bound_segment_id() -> String:
     return _stream_live_segment_id
 
