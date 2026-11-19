@@ -61,6 +61,10 @@ done
 # The scrolling score axis (including the held target in Free).
 echo "Checking Godot behavior: continuous_score_flow"
 GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/continuous_score_flow.gd"
+# An automatic Free-to-Tempo promotion must reserve its score while the
+# previous guided layer's written rest is still moving.
+echo "Checking Godot behavior: tempo_score_reservation"
+GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/tempo_score_reservation.gd"
 # Run the real Practice UI in the headless Godot harness after parsing.
 for scenario in captions signals score_gate intro_markers source_picker resume_choice midi_guard layout; do
   echo "Checking Practice UI: $scenario"
