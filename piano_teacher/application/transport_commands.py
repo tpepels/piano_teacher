@@ -7,7 +7,7 @@ from __future__ import annotations
 
 PAUSABLE_PHASES = frozenset((
     "playing", "count_in", "feedback", "recovering",
-    "loading", "guided_wait", "preview_gap"))
+    "loading", "guided_wait", "preview_gap", "admitting"))
 
 
 def require_pausable(*, paused: bool, phase: str) -> None:
