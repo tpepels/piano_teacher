@@ -45,6 +45,7 @@ failing.
 |---|---|
 | Foundation: MIDI import, library, native start, one process | Done |
 | Practice flow, backend (phrases, hands, links, Listen/Free/Tempo, tempo and error rules, final test, resume) | Built 2026-11-18; owner testing at the piano |
+| Playback coordination (all timed routes, physical score admission, shared deadline, cancellation/reconciliation) | Integrated 2026-11-19; existing CI passes, physical session acceptance outstanding |
 | Practice flow, screen (status line, messages, Pause + Listen again, metronome switch, two colours, count-in numbers) | Built 2026-11-18; owner testing at the piano |
 | Notation (native Verovio ink, display-scale glyphs) | Working; judged on screen |
 | MIDI calibration | Built; USB/Bluetooth accuracy not measured on hardware |
@@ -52,10 +53,11 @@ failing.
 
 ## Open work
 
-1. Practice state machine and timeline, steps 1-3
-   ([plan](docs/architecture/practice-state-machine.md)): one explicit
-   lesson and take state, timeline segments published by the engine, Godot
-   draws only those segments.
+1. Owner verification of the integrated playback coordinator
+   ([contract](docs/architecture/playback-coordinator.md)): real
+   Listen → Free → Tempo, automatic repeats, Pause/Resume, physical-key
+   restart and preloaded handoff. The implementation is integrated; the
+   existing core CI cannot certify physical playback.
 2. Owner test of the practice flow at the piano; fix what deviates.
 3. Remaining practice-flow items (see docs/practice-flow.md, "Not built
    yet"): the Coda/Fukuda aid, skipping a short pickup rest inside the first
