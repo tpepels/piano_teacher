@@ -64,7 +64,12 @@ def test_static_values_leave_the_per_frame_poll(tmp_path):
         engine.load(str(ROOT / "midi" / "Moonlight_Sonata_I.midi"))
         full, polled = engine.state(), engine.poll_state()
         assert full["import_warnings"], "fixture imports with repairs"
-        assert len(json.dumps(polled)) < len(json.dumps(full)) / 1.5
+        # Only fields declared static belong exclusively to command replies.
+        # A historical 1.5x JSON-size threshold fails when genuinely live
+        # session data grows; it does not establish the polling contract.
+        assert all(key in full and key not in polled
+                   for key in state_contract.STATIC_KEYS)
+        assert len(json.dumps(polled)) < len(json.dumps(full))
     finally:
         engine.db.close()
 
