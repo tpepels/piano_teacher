@@ -13,6 +13,7 @@ from enum import Enum
 import math
 
 from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
+from .playback_transitions import CountInPlan, PlaybackTransition
 
 
 class PlaybackState(str, Enum):
@@ -43,11 +44,19 @@ class PlaybackIntent:
     from_beat: float
     end_beat: float
     bpm: float
-    count_in_beats: float
-    count_in_meter: tuple[int, int]
+    count_in: CountInPlan
     resume_remaining_beats: float
     earliest_deadline_ms: float
     requested_at: float
+    transition: PlaybackTransition | None = None
+
+    @property
+    def count_in_beats(self) -> float:
+        return self.count_in.beats
+
+    @property
+    def count_in_meter(self) -> tuple[int, int]:
+        return self.count_in.meter
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +140,8 @@ class PlaybackCoordinator:
 
     def request(self, engine, *, action: str, mode: str,
                 from_beat: float, earliest_deadline: float | None = None,
-                count_in_beats: float | None = None) -> PlaybackIntent:
+                count_in_beats: float | None = None,
+                transition: PlaybackTransition | None = None) -> PlaybackIntent:
         if not self.presentation_required:
             raise RuntimeError("A graphical admission request requires presentation mode")
         if engine.plan is None:
@@ -141,6 +151,13 @@ class PlaybackCoordinator:
             raise ValueError("Unsupported playback intent")
         if mode not in {"practice", "perform", "listen"}:
             raise ValueError("Untimed lessons do not authorize graded playback")
+        if transition is not None and (
+                transition.action != action
+                or transition.exposure.mode != mode
+                or abs(transition.exposure.from_beat-from_beat) > 1e-7
+                or transition.exposure.stage_key != engine.plan.identity
+                or transition.exposure.hand != engine.plan.hand):
+            raise ValueError("Playback transition disagrees with its selected exposure")
         if self.intent is not None:
             existing = self.intent
             if (self._valid_source(engine, existing)
@@ -163,6 +180,8 @@ class PlaybackCoordinator:
             raise ValueError("Invalid count-in duration")
         now = engine.now()
         bpm = float(engine.plan.bpm)
+        count_plan = CountInPlan.create(
+            bar_beats=bar,meter=tuple(meter),bpm=bpm,beats=count_in)
         resume_remaining = 0.0
         if (action == "resume" and engine.pause_context == "count_in"
                 and engine.running and engine.visual_transport.paused
@@ -190,11 +209,11 @@ class PlaybackCoordinator:
             revision=engine.score_revision,hand=engine.plan.hand,mode=mode,
             from_beat=float(from_beat),
             end_beat=float(engine.plan.active_phrase.end-engine.plan.active_phrase.start), bpm=bpm,
-            count_in_beats=count_in,
-            count_in_meter=(int(meter[0]), int(meter[1])),
+            count_in=count_plan,
             resume_remaining_beats=resume_remaining,
             earliest_deadline_ms=earliest * 1000.0,
-            requested_at=now)
+            requested_at=now,
+            transition=transition)
         self.receipt = None
         self.state = PlaybackState.AWAITING_ADMISSION
         self.failure = ""
@@ -351,6 +370,7 @@ class PlaybackCoordinator:
             "bpm": intent.bpm,
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
+            "count_in_plan": intent.count_in.snapshot(),
             "deadline_ms": receipt.deadline_ms,
             "world_origin": receipt.world_origin,
             "transport_id": engine.transport_id,
@@ -442,6 +462,7 @@ class PlaybackCoordinator:
             "end_beat": intent.end_beat, "bpm": intent.bpm,
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
+            "count_in_plan": intent.count_in.snapshot(),
             "resume_remaining_beats":intent.resume_remaining_beats,
             "earliest_deadline_ms": intent.earliest_deadline_ms,
             "status": self.state.value,
