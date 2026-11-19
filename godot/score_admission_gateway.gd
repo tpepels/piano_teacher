@@ -121,7 +121,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
             or int(state.get("revision",-1)) != int(intent.get("revision",-2))):
         return
     if absf(float(intent.get("end_beat",-1.0)) -
-            float(state.get("phrase_duration_beats",-2.0))) > 0.0001:
+            float(state.get("duration_beats",-2.0))) > 0.0001:
         # The prepared assets must cover the full selected PracticeWindow,
         # including a cross-bar key release. Never admit another window's
         # notes merely because its initial source beat matches.
