@@ -208,6 +208,12 @@
 - Added `Main.current_state()` as an immutable-snapshot public port and migrated both existing native production journeys from their old direct `app.last_state` field dependency to that read-only port. Main's accepted state continues to have only one owner (`ApplicationStateInbox`).
 - Full native/package replay is still pending after these source corrections; physical piano acceptance remains open.
 
+### Implementation checkpoint W — recovery queue admission owner
+
+- Moved full exact-deadline recovery preflight, reserved queue suffix withdrawal, plan identity deduplication, source/rest admission, partial failure compensation and recovery diagnostics from `NativeScoreView` into `ScoreStreamController.schedule_recovery`.
+- `NativeScoreView.enqueue_recovery_queue` now only supplies authenticated source geometry through the public admission boundary. The queue's peer-layer clearance is a public operation. No parallel queue, independent musical decision or additional test was created.
+- Remaining L02: remove transitional forwarding state accessors and separate retained painting/resource lifecycle from physical admission.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -96,7 +96,7 @@ static func peer_opening_after(peer_end: float, peer_density: float,
         (viewport_width-playhead_x)/density
 
 
-func _clears_prior_layers(opening_left: float, density: float,
+func clears_prior_layers(opening_left: float, density: float,
         viewport_width: float, playhead_x: float,
         popping_in: bool = false) -> bool:
     return opening_left >= minimum_peer_opening(
@@ -196,7 +196,7 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     var inside: bool = is_finite(opening_left) and \
         playhead_x + (opening_left-world)*density <= viewport_width
     if not is_finite(opening_left) or (inside and not onto_empty_strip) or \
-            not _clears_prior_layers(opening_left,density,
+            not clears_prior_layers(opening_left,density,
                 viewport_width,playhead_x,inside and onto_empty_strip):
         return false
     if not online.is_empty():

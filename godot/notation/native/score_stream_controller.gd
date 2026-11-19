@@ -541,3 +541,166 @@ func arm_take(view, world: float, opening: float, right: float,
     return {}
 
 
+
+## Exact-deadline recovery preparation and commit live on the same
+## immutable stream ledger as Play/Resume/Retry, with no second FIFO.
+func schedule_recovery(view, world: float, source_opening: float,
+        graded_deadline_world: float, right: float, header: float,
+        plan_id: String = "",
+        allow_count_in: bool = false, count_in_beats: float = 0.0,
+        deadline_at_or_after: bool = false, untimed: bool = false) -> bool:
+    # Recovery decisions arrive from the engine with an absolute graded
+    # deadline. Reuse a compatible offline-planned future if possible;
+    # otherwise withdraw the maximal safe suffix, then APPEND new source
+    # notation at that exact deadline. A late deadline must never cause
+    # an onscreen pop or independent renderer camera adjustment.
+    if not view.native_ready or not view.retained_ready() or \
+            not is_finite(graded_deadline_world) or \
+            source_opening < 0.0 or source_opening >= view.timeline.duration_beats:
+        return false
+    view.stream_world_beat = maxf(view.stream_world_beat,world)
+    var identity: String = plan_id if not plan_id.is_empty() else \
+        "%.6f:%.6f" % [source_opening,graded_deadline_world]
+    if planned_ids.has(identity):
+        # The plan identity names its source opening, graded take and exact
+        # backend deadline: the owner admitted for it IS that take's ink.
+        # A tail withdrawal can invalidate it; then admit it again.
+        if queue.has_take(int(planned_ids[identity])):
+            return true
+        planned_ids.erase(identity)
+    # An already elapsed plan may no longer be reinserted: it would
+    # introduce notes behind the real playhead.
+    if graded_deadline_world <= view.stream_world_beat:
+        diagnose_plan(identity,"elapsed",graded_deadline_world,view.stream_world_beat)
+        return false
+    # PREPARE: check the actual exact deadline against the queue AFTER
+    # maximal safe tail withdrawal, without mutating the live queue.
+    # Previously this check ran AFTER view.trim_future_queue(), so a late or
+    # impossible engine deadline deleted valid pending music first.
+    var preview: Dictionary = queue.preview_tail_withdrawal(
+        view.stream_world_beat,view.timeline.pixels_per_beat,view.staff_gap(),
+        view.timeline.duration_beats,view.size.x,view.size.x*view.PLAYHEAD_FRACTION)
+    var remaining: Array = preview["remaining"]
+    var checked: float = Admission.position(remaining,
+        view.stream_world_beat,right,
+        header,
+        graded_deadline_world,0.0,view.timeline.pixels_per_beat,
+        view.staff_gap(),view.timeline.duration_beats)
+    var on_empty := false
+    if untimed:
+        # Untimed guided Learn grades no deadline: the learner plays each
+        # note when ready. Open the passage at the first append-only slot
+        # that starts offscreen, never before the engine's announcement.
+        var earliest: float = Admission.position(remaining,
+            view.stream_world_beat,right,
+            header,NAN,0.0,
+            view.timeline.pixels_per_beat,view.staff_gap(),view.timeline.duration_beats)
+        checked = maxf(graded_deadline_world,earliest) if is_finite(earliest) else NAN
+    elif not is_finite(checked) and allow_count_in:
+        # The initial command or an already announced backend continuation
+        # may use the empty-staff slot; source/rest/peer physical clearance
+        # remains mandatory. Practice plans have been announced BEFORE this
+        # snapshot, so a partial count-in has already elapsed. The first
+        # note still has a guaranteed future reading lead and retains its
+        # exact original grading deadline.
+        if deadline_at_or_after:
+            var density: float = maxf(1.0,view.timeline.pixels_per_beat)
+            var playhead: float = view.size.x*view.PLAYHEAD_FRACTION
+            checked = Admission.announced_empty_strip_start(
+                remaining,view.stream_world_beat,count_in_beats,
+                header,graded_deadline_world,
+                queue.minimum_peer_opening(
+                    density,view.size.x,playhead,true,"source"),
+                density,view.staff_gap(),view.timeline.duration_beats,
+                queue.minimum_peer_opening(
+                    density,view.size.x,playhead,true,"rest"))
+            on_empty = is_finite(checked)
+        else:
+            # Listen/Perform/Learn use one initial full count-in slot, with
+            # the original tight timestamp-to-slot equality requirement.
+            var onset: float = view.empty_strip_onset(
+                remaining,view.stream_world_beat,count_in_beats,
+                header)
+            if is_finite(onset) and absf(onset-graded_deadline_world) <= \
+                    Admission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS:
+                checked = graded_deadline_world
+                on_empty = true
+    if not is_finite(checked):
+        var blocking: Array = []
+        for item in remaining:
+            var bounds: Vector2 = Admission.clip_bounds(item,
+                view.timeline.pixels_per_beat,view.staff_gap(),view.timeline.duration_beats)
+            var finish: float = float(item["world_origin"])+bounds.y/ \
+                maxf(1.0,view.timeline.pixels_per_beat)
+            if finish > view.stream_world_beat-1.0:
+                blocking.append([str(item.get("kind","source")),
+                    snappedf(finish,.001)])
+        var detail: Dictionary = {"count_in":count_in_beats,
+            "header":header,
+            "deadline_lead":graded_deadline_world-view.stream_world_beat,
+            "ink_ends":blocking}
+        var diagnostic_density: float = maxf(1.0,view.timeline.pixels_per_beat)
+        var diagnostic_playhead: float = view.size.x*view.PLAYHEAD_FRACTION
+        var peer_source: float = queue.minimum_peer_opening(
+            diagnostic_density,view.size.x,diagnostic_playhead,true,"source")
+        var peer_rest: float = queue.minimum_peer_opening(
+            diagnostic_density,view.size.x,diagnostic_playhead,true,"rest")
+        if is_finite(peer_source):
+            detail["peer_source_floor"] = peer_source
+        if is_finite(peer_rest):
+            detail["peer_rest_floor"] = peer_rest
+        diagnose_plan(identity,"refused_inside_or_overlap",
+            graded_deadline_world,view.stream_world_beat,detail)
+        return false
+    var incoming_left: float = checked - header
+    if not queue.clears_prior_layers(incoming_left,
+            view.timeline.pixels_per_beat,view.size.x,view.size.x*view.PLAYHEAD_FRACTION,on_empty):
+        diagnose_plan(identity,"refused_prior_layer",graded_deadline_world,view.stream_world_beat)
+        return false
+    # COMMIT: the exact same exposure snapshot and world coordinate must
+    # still hold. No yield/poll/other input runs between preview and commit.
+    var saved_suffix: Array = []
+    for index in range(remaining.size(),queue.online.size()):
+        saved_suffix.append(queue.online[index].duplicate())
+    var prior_live: int = live_serial
+    view.trim_future_queue("recovery_replan")
+    if queue.online.size() != remaining.size():
+        # The archive may refuse one of several suffix withdrawals after
+        # earlier owners were already removed. Restore ONLY the missing
+        # original tail; re-enqueueing the still-online survivors would
+        # duplicate their immutable notes and fail recovery altogether.
+        var still_present: int = maxi(0,
+            queue.online.size()-remaining.size())
+        push_error("RECOVERY_TRANSACTION: tail withdrawal incomplete")
+        restore_future_suffix(view,saved_suffix.slice(still_present),
+            view.stream_world_beat)
+        live_serial = prior_live
+        return false
+    var before: int = self.serial
+    view.append_source_take(source_opening,checked,source_opening,
+        "autopending",on_empty)
+    live_serial = prior_live
+    if self.serial > before:
+        planned_ids[identity] = last_admitted
+        planned_openings[identity] = checked
+        diagnose_plan(identity,"admitted",checked,
+            view.stream_world_beat,{"owner":last_admitted,"on_empty_strip":on_empty})
+        return true
+    # If a retained segment/asset failed halfway through its measure batch,
+    # eliminate that exact unexposed newly allocated owner first. Its serial
+    # was not committed by _stream_add_take; the pre-existing suffix retains
+    # the only authoritatively valid music at its original world positions.
+    var partial_owner: int = before+1
+    if queue.has_take(partial_owner):
+        queue.withdraw_take_tail(view,partial_owner,
+            view.stream_world_beat,view.timeline.pixels_per_beat,view.staff_gap(),
+            view.timeline.duration_beats,view.size.x,view.size.x*view.PLAYHEAD_FRACTION,
+            "recovery_incomplete_append")
+    if queue.has_take(partial_owner):
+        push_error("RECOVERY_TRANSACTION: incomplete take cannot be rolled back")
+        return false
+    restore_future_suffix(view,saved_suffix,view.stream_world_beat)
+    live_serial = prior_live
+    return false
+
+
