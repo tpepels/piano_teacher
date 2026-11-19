@@ -1723,9 +1723,16 @@ class PracticeEngine:
         self._playback_authorizing = True
         try:
             if intent.action in ("start", "restart"):
-                self._start_or_restart(intent.action,
-                    presentation_lead_seconds=max(0.0, deadline-self.now()),
-                    scheduled_deadline=deadline)
+                # All timed starts, including a physical-key Restart, begin
+                # directly from already admitted future ink. The previous
+                # attempt's source/rest strips keep moving independently.
+                effect = self._manual_effect(intent.action)
+                selected = self._install_command(effect)
+                if (selected is None or selected.stage_key != intent.stage_key
+                        or abs(selected.from_beat-intent.from_beat) > 1e-7):
+                    raise ValueError("Playback source decision changed before admission")
+                self.start(mode=selected.mode, from_beat=selected.from_beat,
+                    decided=True, scheduled_deadline=deadline)
             elif intent.action == "resume":
                 self._resume_current_session(
                     presentation_lead_seconds=max(0.0, deadline-self.now()),
@@ -2219,6 +2226,9 @@ class PracticeEngine:
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._update_short_rest(kwargs)
             if self.playback.presentation_required:
+                if self._settlement_failed or self._pending_rolling is not None:
+                    self._start_or_restart(action)
+                    return
                 effect = self.session_commands.active or self._manual_effect(action)
                 route = self.session_commands.start_route(effect, source_changed=(
                     self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)
