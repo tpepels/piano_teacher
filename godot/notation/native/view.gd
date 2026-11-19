@@ -965,6 +965,7 @@ func reserve_transport_action(action: String, world: float,
         return {}
     stream_world_beat = maxf(stream_world_beat,world)
     var mode: String = str(planned["mode"])
+    var before: Array = _stream_queue.online.duplicate(true)
     if mode == "reuse":
         if action == "resume":
             # The SAME preflight that chose this source identifies the
@@ -973,16 +974,24 @@ func reserve_transport_action(action: String, world: float,
             trim_future_queue("resume_reuse",int(planned["protected_take"]))
         var existing: Dictionary = arm_stream_take(
             world,opening,NAN,action == "resume",false)
+        var removed: Array = before.slice(_stream_queue.online.size())
         if existing.is_empty():
             push_error("SCORE_TRANSPORT_COMMIT: preflight reusable owner vanished")
+            if not removed.is_empty():
+                _restore_future_suffix(removed,stream_world_beat)
+            return {}
+        _stream_arm_rollback["withdrawn_suffix"] = removed
         return _transport_admission_receipt(planned,existing,world,opening)
     # The preflight and actual withdrawal share Queue.preview_tail_withdrawal
     # and the SAME world coordinate. Do not recalculate a different
     # placement after removing the unseen suffix.
     var intended: float = float(planned["start_world"])
     trim_future_queue("user_"+action+"_replace_unseen")
+    var removed: Array = before.slice(_stream_queue.online.size())
     if _stream_queue.online.size() != int(planned["remaining_count"]):
         push_error("SCORE_TRANSPORT_COMMIT: online queue changed during preflight")
+        if not removed.is_empty():
+            _restore_future_suffix(removed,stream_world_beat)
         return {}
     _retry_placement = action == "restart"
     var admitted: Dictionary = arm_stream_take(
@@ -991,11 +1000,16 @@ func reserve_transport_action(action: String, world: float,
     _retry_placement = false
     if admitted.is_empty():
         push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")
+        if not removed.is_empty():
+            _restore_future_suffix(removed,stream_world_beat)
         return {}
     if absf(float(admitted.get("start_world",NAN))-intended) > .0001:
         push_error("SCORE_TRANSPORT_COMMIT: grading and score deadlines diverged")
         cancel_stream_arm()
+        if not removed.is_empty():
+            _restore_future_suffix(removed,stream_world_beat)
         return {}
+    _stream_arm_rollback["withdrawn_suffix"] = removed
     return _transport_admission_receipt(planned,admitted,world,opening)
 
 
@@ -1224,6 +1238,7 @@ func cancel_stream_arm() -> bool:
     if _stream_arm_rollback.is_empty():
         return false
     var owner_serial: int = int(_stream_arm_rollback["owner_serial"])
+    var withdrawn_suffix: Array = _stream_arm_rollback.get("withdrawn_suffix",[])
     if _stream_armed_serial != owner_serial:
         _stream_arm_rollback.clear()
         return false
@@ -1242,6 +1257,8 @@ func cancel_stream_arm() -> bool:
     _stream_armed_segment_id = ""
     _stream_arm_acknowledged = false
     _stream_arm_rollback.clear()
+    if not withdrawn_suffix.is_empty():
+        restored = _restore_future_suffix(withdrawn_suffix,stream_world_beat) and restored
     queue_redraw()
     return restored
 
