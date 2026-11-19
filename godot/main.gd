@@ -1131,23 +1131,17 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
             _flow_bpm(parsed,flow_beat))
     _update_guided_hold(parsed)
     score_flow.sample(received_ms,_flow_bpm(parsed,flow_beat,received_ms))
-    var promoted_this_snapshot := false
-    if score_runway != null:
-        # A prepared stage opens at the engine's run_at, projected on this
-        # same axis exactly like any announced plan (one deadline).
-        var stage_world := NAN
-        if visual_transport_clock.has_backend_offset and parsed.has("visual_run_at_ms"):
-            stage_world = score_flow.project_authored_future(roundi(
-                float(parsed["visual_run_at_ms"])+visual_transport_clock.backend_offset_ms),
-                received_ms,flow_beat,float(parsed.get("bpm",40.0)),[])
-        promoted_this_snapshot = score_runway.promote_if_ready(parsed,stage_world)
-        if not promoted_this_snapshot:
-            # A manual, unprepared lesson change must replace the active
-            # renderer BEFORE asset reset, preserving its moving notes.
-            score_runway.preserve_unprepared_revision(parsed)
+    var prepared_stage_waiting: bool = score_runway != null and \
+        score_runway.has_prepared_destination(parsed)
+    if score_runway != null and not prepared_stage_waiting:
+        # A manual unprepared revision still retains the outgoing ink.
+        score_runway.preserve_unprepared_revision(parsed)
     if demo_player != null and bool(parsed.get("loaded",false)):
         demo_player.synchronize(parsed,_transport_beat_at(received_ms))
-    score_session.update_context(parsed,received_ms)
+    if not prepared_stage_waiting:
+        # Do not reset the outgoing renderer while an admitted preloaded
+        # stage is waiting for the presentation transaction.
+        score_session.update_context(parsed,received_ms)
     if score_runway != null:
         score_runway.update_state(parsed,received_ms)
     if bool(parsed.get("loaded",false)) and practice_view.stage.renderer != null:
