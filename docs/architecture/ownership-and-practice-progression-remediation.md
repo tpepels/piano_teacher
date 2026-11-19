@@ -14,14 +14,14 @@
 | Moving-window curriculum / P01 | IMPLEMENTED IN SOURCE, UNVERIFIED AT PIANO | `practice_windows.py` is the single window policy; `practice_flow_course.py` generates n, n−1..n, n−2..n, n−3..n up to 4; per-window course/stage identities; final exam retained; CI and physical acceptance pending |
 | Typed course outcomes / O02 | IMPLEMENTED IN PRODUCTION PATH | `TeachingDecision.flow_outcome` now carries `Outcome` directly through course/engine; string parser remains only as a read-only legacy diagnostic for existing tests, without production callers |
 | Unified assessment verdict / O03 | IMPLEMENTED IN PRODUCTION PATH, CI PENDING | `AssessmentVerdict` is produced by teaching policy; progression and attempt settlement use the same policy-selected acceptance/trouble-resolution flags |
-| Unified playback transitions / O01, O04 | NOT STARTED | No alternate restart, countdown or time owner |
-| Asset admission / O05, O08 | NOT STARTED | Preload identity only, gateway owns geometry |
+| Unified playback transitions / O01, O04 | IMPLEMENTED IN BACKEND, GODOT CUES PENDING | `PlaybackTransition` retains the exact manual effect through admission; `CountInPlan` is immutable and applied to every graphical timed take; Godot cue rendering still requires consolidation |
+| Asset admission / O05, O08 | PRELOADER TIMING REMOVED; PORT MIGRATION IN PROGRESS | `ScoreRunway` acknowledges only compiled asset identity; backend no longer consumes clearance estimates; public asset/gateway readiness/status ports replace several private field reads |
 | Deterministic presentation timeline / O06 | NOT STARTED | Single rate/position authority |
 | Architecture docs / O07 | NOT STARTED | Retire conflicting contracts |
 | Decompose server.py / L01 | NOT STARTED | Thin facade, authoritative domain owners |
 | Decompose native/view.gd / L02 | NOT STARTED | Renderer must not own score-stream policy |
 | Decompose main.gd / L03 | NOT STARTED | Composition root, typed event coordinators |
-| Existing CI/native integration | IN PROGRESS | Earlier CI failed because existing tests import the retired diagnostic `outcome_of`; read-only compatibility restored, latest CI not yet verified. No tests added or edited |
+| Existing CI/native integration | IN PROGRESS | Existing tests passed at `ce510621b` before removal of preloader timing; a later run caught an obsolete `handoff_world` snapshot reference, removed at `95b1880`; subsequent CI pending. No tests added or edited |
 
 **Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
 
@@ -36,6 +36,16 @@
 - `147811e`: Retained the old message-decoder API for existing diagnostic tests only; production flow no longer depends on it.
 
 **Still incomplete:** Playback transition consolidation, count-in ownership, score preloader deadline removal, unified visual-time projection, public renderer/asset ports, decomposition of the three largest source files, documentation retirement, native/hardware verification.
+
+### Implementation checkpoint B — single decisions and preloader timing
+
+- `9ea92eb`, `b1d4efa`, `4a9cbc5`: Added immutable `PlaybackTransition` and `CountInPlan` values and made `SessionCommands` use one route planner.
+- `ef38c2c`, `0131c59`, `4b0caed`: Count-in selection is now carried by the coordinator to `AttemptProgression`, including automatic repeats and Listen, with a single authored pulse layout.
+- `989629f`, `ce51062`: Manual timed authorization executes the original selected `CommandEffect` rather than selecting a second command at commit; entering Free keeps the original guided exposure.
+- `5fdd396`, `0b507ca`, `5756fd5`, `95b1880`: Removed preloader-supplied lead/clear estimates, backend handoff-world scheduling, and obsolete snapshot fields.
+- `0296063`, `96178a1`, `a12c949`, `97afb24`: Exposed identity-bound readiness and reservation status ports so ScoreAdmissionGateway no longer inspects several foreign private fields.
+
+**Still unfinished in the architecture:** The native view and presentation controller retain private mutable state; the Godot count-in consumer still has legacy timing paths; source/display timeline projections are not yet consolidated; the three largest production files have not been fully decomposed.
 
 ## Executive findings
 
