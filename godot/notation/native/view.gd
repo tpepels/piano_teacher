@@ -1587,8 +1587,8 @@ func present_flow(world_beat: float, state: Dictionary,
                 # Play/Resume/Retry. The source is already offscreen but its
                 # transport identity remains provisional until control ACK.
                 if _stream_arm_acknowledged and \
-                        (_stream_armed_segment_id.is_empty() or \
-                         _stream_armed_segment_id == expected_segment):
+                        not expected_segment.is_empty() and \
+                        _stream_armed_segment_id == expected_segment:
                     if StreamLifecycle.activate(
                             _stream_queue.online,_stream_armed_serial,key,false):
                         _stream_live_serial = _stream_armed_serial
@@ -1619,7 +1619,8 @@ func present_flow(world_beat: float, state: Dictionary,
     # bound on the staff. A take without one is a defect, never a state to
     # show silently as an empty staff (practice flow, 2026-11-18).
     if running_now and phase == "playing" and mode in ["practice","perform","listen"] \
-            and _stream_live_serial < 0 and _stream_last_take != key:
+            and (expected_segment.is_empty() or \
+                 _stream_live_segment_id != expected_segment):
         if _unscored_take != key:
             _unscored_take = key
             push_error("TAKE_WITHOUT_SCORE: %s (queue=%s)" % [key,
