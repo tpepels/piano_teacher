@@ -10,7 +10,9 @@ where another document disagrees, the practice flow wins.
 | --- | --- |
 | Practice flow for one piece (owner decisions) | [Practice flow](practice-flow.md) |
 | Practice state machine and timeline (plan, steps 1-3) | [Practice state machine](architecture/practice-state-machine.md) |
-| Application and ownership | [Architecture](architecture/system.md) |
+| Active playback authorization and ownership | [Playback coordinator](architecture/playback-coordinator.md) and [ADR-0001](architecture/decisions/ADR-0001-single-authority.md) |
+| Architectural remediation and incomplete gates | [Ownership and progression tracker](architecture/ownership-and-practice-progression-remediation.md) |
+| Historical subsystem inventory (superseded) | [System architecture, 4 November](architecture/system.md) |
 | Typed embedded protocol, startup and packaging | [Native runtime](inprocess-runtime.md) |
 | Generator interface, Coda/Fukuda adaptive composition | [Composed MIDI generators](architecture/composed-midi-generators.md) |
 | Fingering data and inference | [Piano fingering](piano-fingering.md) |
@@ -18,8 +20,10 @@ where another document disagrees, the practice flow wins.
 | Fixed retry contracts, adaptive proposal and evaluation | [Mistake-response policies](mistake-response-policies.md) |
 | Durable measurement and read-only analytics | [Local learning evidence contract](learning-measurement.md) |
 
-Older reports, audits, screenshots and plans were removed on 2026-11-18;
-they remain in git history.
+The superseded transport/voice and November 4 ownership descriptions are
+historical only. Older reports, audits, screenshots and plans remain
+available in git history. Neither historical document overrides the
+current playback/score ownership or moving-window teaching contracts.
 
 ## Rules
 

@@ -17,7 +17,7 @@
 | Unified playback transitions / O01, O04 | GRAPHICAL COUNT-IN SINGLE-TAKE PATH INTEGRATED; LEGACY AND PHYSICAL ACCEPTANCE OPEN | Immutable PlaybackTransition and CountInPlan are accepted once; metronome uses take-keyed authorized segments through Pause/Resume, rejects mismatched deadlines and does not invent unadmitted graphical countdowns; headless compatibility and hardware acceptance remain |
 | Asset admission / O05, O08 | ONE PHYSICAL PREFLIGHT CONTRACT; INTERNAL VIEW ADAPTERS REMAIN | ScoreTransportReservation now exclusively consumes identity-bound frozen preflight facts, including isolated Godot fixtures; cross-renderer peer clearance also uses primitive read-only facts. ScoreStreamController owns the FIFO and transport lifecycle, and ScoreSceneController owns promotion; NativeView still has internal append/rollback and property forwarding |
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
-| Architecture docs / O07 | ACTIVE CONTRACT UPDATED; REFERENCE SWEEP OPEN | ADR-0001 and playback coordinator document current authority; old ownership docs marked historical, stale 17 November Practice Flow comparison archived, live spec revised to moving windows; remaining references require checking |
+| Architecture docs / O07 | CURRENT ENTRYPOINTS RECONCILED; REFERENCE SWEEP OPEN | ROADMAP and documentation index now point to the actual moving-window policy and current playback/ownership contracts; ADR-0001 and playback coordinator document authority; old ownership contracts marked historical. Deeper document cross-reference sweep remains open |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
 | Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController own clipping, preflight execution, queue/serial/rollback, peer clearance, transport observation, arm cancellation/suffix restoration, retirement and diagnostics. NativeView still contains append/recovery admission and painter lifecycle, plus transitional forwarding properties |
 | Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger (including snapshot contract diagnostics), NavigationSession, ApplicationEventRouter and StatusHeadPreloader own their respective domains. Main still builds screen trees and routes command/in-process callbacks |
@@ -138,6 +138,13 @@
 - Moved `cancel_stream_arm` state restoration into `ScoreStreamController.cancel_arm` and the exact archived source/rest suffix re-enqueue into `ScoreStreamController.restore_future_suffix`. The renderer retains only public delegation and provides the retained segment pools and redraw capability; the queue remains the single mutable FIFO.
 - Preserve the old transactional order: withdraw only newly allocated unexposed arm strips, otherwise restore owner snapshot; recover the withdrawn suffix; restore previous live identity; reject mismatched armed owners.
 - This closes another mutable decision path in `NativeScoreView`. **No new tests or test changes.** Live MIDI/audio, immutable display and native packaging acceptance are not established by a successful headless run.
+
+
+### Implementation checkpoint L — current roadmap and contract index reconciled
+
+- Corrected `ROADMAP.md`'s obsolete two-to-four-measure phrase-and-link description to the exact authored measure-first, trailing moving-window sequence selected by the owner. The separate whole-piece final test, per-window mastery, hand progression and Listen/Free/Tempo stages remain explicit.
+- Corrected `docs/README.md` so it links to the *active* playback and single-authority contracts; the superseded November 4 system inventory is labelled as historical rather than presented as current architecture.
+- Updated the roadmap with the current Phase 5 completion gates and linked the detailed tracker. **No new tests**. No physical/native acceptance is claimed.
 
 #### Phase 6 acceptance matrix
 
