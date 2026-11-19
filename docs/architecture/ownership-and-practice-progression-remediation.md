@@ -184,6 +184,12 @@
 - Removed the ~150-line evidence construction and SQL retry-history logic from `server.py`; the engine only assembles an explicit call with current captured facts. Recorder, learning ledger, progress repository, MIDI grading and teaching policy retain their existing sole owners.
 - No new tests. Hardware and embedded native acceptance still pending.
 
+### Implementation checkpoint S — preserve native verification across source pushes
+
+- The initial CPython 3.14 native run exposed missing ALSA headers; those were installed. Its retry was **cancelled** by the workflow-wide `tests-main` concurrency key when subsequent Phase 5 source was committed, not by a native-test assertion.
+- Separated `native` and `core` workflow concurrency groups so source refactoring no longer aborts a long native compile/embedded/package verification. An explicitly tagged `[native]` push starts the full existing production audit.
+- This changes only the runner scheduling and runs no new tests. CI and physical acceptance remain separate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

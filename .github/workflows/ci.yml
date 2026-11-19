@@ -10,7 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.ref }}
+  # Native compilation and package audit may run for tens of minutes.
+  # Normal source pushes cancel only old core runs, not a native audit.
+  group: tests-${{ github.ref }}-${{ contains(github.event.head_commit.message, '[native]') && 'native' || 'core' }}
   cancel-in-progress: true
 
 jobs:
