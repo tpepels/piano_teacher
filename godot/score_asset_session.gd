@@ -79,6 +79,10 @@ func replace_renderer(next_renderer) -> void:
         next_renderer.connect("retained_ink_compiled",_finish_native_score)
 
 
+func source_fingerprint() -> String:
+    return _fingerprint
+
+
 func matches_ready_source(intent: Dictionary) -> bool:
     # Public, identity-bound readiness port. Consumers never inspect
     # fingerprint or revision storage directly.
