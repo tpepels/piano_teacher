@@ -297,3 +297,70 @@ func restore_future_suffix(view, saved: Array, world: float) -> bool:
     return restored
 
 
+
+## Append a complete source/rest take into the one immutable stream FIFO.
+## The renderer provides authenticated source windows and measured glyph
+## context. Nothing else can allocate source serials or publish a partial
+## admitted owner.
+func append_take(view, windows: Array[Vector2], source_beat: float,
+        start_world: float, take_key: String, empty_strip: bool,
+        first_header_spaces: float, rest_gap: float) -> void:
+    last_admitted = -1
+    var first_serial: int = serial+1
+    var original_origin: float = start_world-source_beat
+    var hidden: bool = take_key == "prepared"
+    if windows.is_empty():
+        return
+    var density: float = maxf(1.0,view.timeline.pixels_per_beat)
+    var gap_pixels: float = view.staff_gap()
+    var duration: float = view.timeline.duration_beats
+    var width: float = view.size.x
+    var added := 0
+    for index in range(windows.size()):
+        var bounds: Vector2 = windows[index]
+        var is_first: bool = index == 0
+        var is_last: bool = index == windows.size()-1
+        var strip_serial: int = first_serial+index
+        # Source cuts are authenticated musical beats, with only visual
+        # contextual margins computed by the source-geometry owner.
+        var leading_spaces: float = (
+            first_header_spaces if bounds.x <= .0001 else 1.6
+            ) if is_first else 0.0
+        var specs: Array = [{
+            "kind":"source","owner_serial":strip_serial,
+            "take_owner":first_serial,
+            "world_origin":original_origin,
+            "source_floor":bounds.x,"source_ceiling":bounds.y,
+            "clip_floor":bounds.x,"clip_ceiling":bounds.y,
+            "clip_leading_spaces":leading_spaces,
+            "clip_trailing_spaces":2.2 if is_last else 0.0,
+            "piece_duration":duration,"take_key":take_key,
+            "pending":take_key in ["prepared","autopending"],
+            "hidden_until_armed":hidden}]
+        if is_last and rest_gap > .0001:
+            specs.append({
+                "kind":"rest","owner_serial":strip_serial,
+                "take_owner":first_serial,
+                "world_origin":original_origin+duration,
+                "source_floor":0.0,"source_ceiling":rest_gap,
+                "take_key":"rest","pending":false,
+                "hidden_until_armed":hidden})
+        if not queue.enqueue(view,specs,
+                view.retained_repeat_segments,view.retained_rest_segments,
+                view.retained_first_once,view.stream_world_beat,width,
+                width*view.PLAYHEAD_FRACTION,density,gap_pixels,
+                duration,empty_strip):
+            # Do not leave a partial, ungraded take after a failed append.
+            if added > 0:
+                queue.withdraw_take_tail(view,first_serial,
+                    view.stream_world_beat,density,gap_pixels,duration,width,
+                    width*view.PLAYHEAD_FRACTION,"failed_take_batch")
+                if queue.has_take(first_serial):
+                    push_error("Cannot safely roll back incomplete streamed take")
+            push_error("Refused immutable score strip admission %d" % strip_serial)
+            return
+        added += 1
+    serial = first_serial+windows.size()-1
+    live_serial = first_serial
+    last_admitted = first_serial
+

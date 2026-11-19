@@ -722,72 +722,14 @@ func has_source_windows_at(opening: float) -> bool:
 
 func _stream_add_take(source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool = false) -> void:
-    _stream_last_admitted = -1
-    var first_serial: int = _stream_serial+1
-    var original_origin: float = start_world-source_beat
-    var hidden: bool = take_key == "prepared"
-    var windows: Array[Vector2] = NotationClipPlanner.source_windows(timeline,maxf(0.0,from_beat),_source_ink_intervals)
-    if windows.is_empty():
-        return
-    var density: float = maxf(1.0,timeline.pixels_per_beat)
-    var gap_pixels: float = staff_gap()
-    var gap: float = float(practice_timeline.get("gap",{}).get(
-        "duration_beats",0.0))
-    var added := 0
-    for index in range(windows.size()):
-        var bounds: Vector2 = windows[index]
-        var is_first: bool = index == 0
-        var is_last: bool = index == windows.size()-1
-        var serial: int = first_serial+index
-        # The cut points are musical beats. Extra contextual ink is
-        # measured in staff spaces at projection time, so resizing cannot
-        # shift a committed source boundary or crop the initial clef.
-        var clip_floor: float = bounds.x
-        var clip_ceiling: float = bounds.y
-        var leading_spaces: float = (
-            _first_source_header_spaces() if bounds.x <= .0001 else 1.6
-            ) if is_first else 0.0
-        var trailing_spaces: float = 2.2 if is_last else 0.0
-        var specs: Array = [{
-            "kind":"source","owner_serial":serial,
-            "take_owner":first_serial,
-            "world_origin":original_origin,
-            "source_floor":bounds.x,"source_ceiling":bounds.y,
-            "clip_floor":clip_floor,"clip_ceiling":clip_ceiling,
-            "clip_leading_spaces":leading_spaces,
-            "clip_trailing_spaces":trailing_spaces,
-            "piece_duration":timeline.duration_beats,"take_key":take_key,
-            "pending":take_key in ["prepared","autopending"],
-            "hidden_until_armed":hidden}]
-        if is_last and gap > .0001:
-            specs.append({
-                "kind":"rest","owner_serial":serial,
-                "take_owner":first_serial,
-                "world_origin":original_origin+timeline.duration_beats,
-                "source_floor":0.0,"source_ceiling":gap,
-                "take_key":"rest","pending":false,
-                "hidden_until_armed":hidden})
-        if not _stream_queue.enqueue(self,specs,
-                retained_repeat_segments,retained_rest_segments,
-                retained_first_once,stream_world_beat,size.x,
-                size.x*PLAYHEAD_FRACTION,timeline.pixels_per_beat,
-                gap_pixels,timeline.duration_beats,empty_strip):
-            # If admission fails partway through the immutable take,
-            # unwind ONLY the new right-hand strip suffix, preserving the
-            # old on-screen prefix and archiving every removed owner.
-            if added > 0:
-                _stream_queue.withdraw_take_tail(self,first_serial,
-                    stream_world_beat,density,gap_pixels,
-                    timeline.duration_beats,size.x,
-                    size.x*PLAYHEAD_FRACTION,"failed_take_batch")
-                if _stream_queue.has_take(first_serial):
-                    push_error("Cannot safely roll back incomplete streamed take")
-            push_error("Refused immutable score strip admission %d" % serial)
-            return
-        added += 1
-    _stream_serial = first_serial+windows.size()-1
-    _stream_live_serial = first_serial
-    _stream_last_admitted = first_serial
+    # Score preparation stays in the renderer. The authoritative queue
+    # transaction and take serial assignment belong to the stream controller.
+    var windows: Array[Vector2] = NotationClipPlanner.source_windows(
+        timeline,maxf(0.0,from_beat),_source_ink_intervals)
+    _stream_controller.append_take(self,windows,source_beat,start_world,
+        take_key,empty_strip,_first_source_header_spaces(),
+        float(practice_timeline.get("gap",{}).get("duration_beats",0.0)))
+
 
 func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)

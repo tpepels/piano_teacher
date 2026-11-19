@@ -19,7 +19,7 @@
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
 | Architecture docs / O07 | CURRENT ENTRYPOINTS RECONCILED; REFERENCE SWEEP OPEN | ROADMAP and documentation index now point to the actual moving-window policy and current playback/ownership contracts; ADR-0001 and playback coordinator document authority; old ownership contracts marked historical. Deeper document cross-reference sweep remains open |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
-| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | NotationClipPlanner, StreamAdmissionExecutor and ScoreStreamController own clipping, preflight execution, queue/serial/rollback, peer clearance, transport observation, arm cancellation/suffix restoration, retirement and diagnostics. NativeView still contains append/recovery admission and painter lifecycle, plus transitional forwarding properties |
+| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | ScoreStreamController now owns whole-take append, queue serial assignment, partial-admission compensation, and transport/rollback lifecycle. NativeView supplies source windows and measured context, but ready/recovery choice and physical arm orchestration and painter lifecycle remain |
 | Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger (including snapshot contract diagnostics), NavigationSession, ApplicationEventRouter and StatusHeadPreloader own their respective domains. Main still builds screen trees and routes command/in-process callbacks |
 | Existing CI/native integration | EXISTING CI GREEN AT `27f7f580`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed for the current implementation and reconciled roadmap. No new tests; the existing isolated peer-reservation fixture was updated to consume the public preflight port without changing its assertions. Core CI does not execute the full embedded/native UI journey or physical MIDI/audio acceptance |
 
@@ -153,6 +153,12 @@
 - Removed contradictory “current ownership contract” sentences from the 4 November system inventory and the now-superseded transport/voice contract, retaining their historical technical rationale.
 - **Phase 5 is still incomplete:** current first-party largest files include `server.py` (~3,745 lines), `godot/notation/native/view.gd` (~1,715 lines), and `godot/main.gd` (~1,175 lines). Remaining private-field adapters, view admission/recovery orchestration and application event/assessment lifecycle ownership must be moved and integrated before marking the phase done.
 - **Phase 6 is still incomplete:** real embedded Godot/native bridge runs, packaged release and Kawai/USB/Bluetooth acceptance matrix have not been executed here. No new tests were introduced.
+
+### Implementation checkpoint N — append transaction belongs to stream controller
+
+- Moved the entire immutable source/rest strip append loop from `NativeScoreView._stream_add_take` into `ScoreStreamController.append_take`. The controller allocates serials, invokes the single `ScoreStreamQueue.enqueue` owner, rolls back an incomplete append and publishes the live/admitted identity only after all selected windows commit.
+- The renderer now supplies authentic precomputed source windows, Verovio header clearance and the authored rest gap. The stage renderer does not choose queue serials or alter the source window. No new tests were added.
+- **Phase 5 remains open** pending ready/reuse/resume/recovery admission extraction, elimination of transitional state accessors and PracticeEngine/Main decomposition.
 
 #### Phase 6 acceptance matrix
 
