@@ -29,14 +29,24 @@ var _frame_now_ms := 0
 const RESERVED_AGREEMENT_MS := 40.0
 
 func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
-        meter: Variant, count_in_beats: float, action: String = "start") -> void:
+        meter: Variant, count_in_beats: float, action: String = "start",
+        authorized_plan: Dictionary = {}, segment_id: String = "") -> void:
     if not is_finite(deadline_ms) or not is_finite(bpm) or bpm <= 0.0 or \
             not is_finite(count_in_beats) or count_in_beats <= 0.0:
         _reserved = {}
         return
+    var plan: Dictionary = authorized_plan.duplicate(true)
+    if not plan.is_empty():
+        if (absf(float(plan.get("beats",-1.0))-count_in_beats) > 0.0001
+                or absf(float(plan.get("bpm",-1.0))-bpm) > 0.0001
+                or plan.get("meter",[]) != meter):
+            push_error("COUNT_IN_PLAN: renderer and coordinator disagree")
+            _reserved.clear()
+            return
     _reserved = {"deadline_ms":deadline_ms,"bpm":bpm,"bar":bar_beats,
         "meter":meter,"count_in":count_in_beats,"action":action,
-        "token":"countin:%d" % roundi(deadline_ms),"acked_ms":NAN}
+        "plan":plan,"token":"authorized:"+segment_id if not segment_id.is_empty()
+            else "countin:%d" % roundi(deadline_ms),"acked_ms":NAN}
 
 func cancel_reserved_count_in() -> void:
     _reserved = {}
@@ -91,12 +101,14 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
             return false
         var reserved: float = float(_reserved["deadline_ms"])
         if absf(engine-reserved) > RESERVED_AGREEMENT_MS:
-            print("COUNT_IN_DEADLINE_DISAGREEMENT:",JSON.stringify({
+            push_error("COUNT_IN_DEADLINE_DISAGREEMENT: "+JSON.stringify({
                 "action":_reserved["action"],"reserved_ms":reserved,
                 "engine_ms":engine}))
-            # The same countdown (same token, beats already spoken stay
-            # spoken) continues on the engine's deadline.
-            _reserved["deadline_ms"] = engine
+            # Do not create a second clock by moving an already scheduled
+            # voice cue. A mismatch is rejected for diagnostics and cannot
+            # play syllables at a non-authoritative time.
+            _reserved.clear()
+            return false
     var deadline: float = float(_reserved["deadline_ms"])
     var bpm: float = float(_reserved["bpm"])
     var beat: float = TempoTimeline.beats_from_milliseconds(float(now_ms)-deadline,bpm)
@@ -109,8 +121,10 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
         _count_in_owned_transport = int(state.get("transport_id",-1))
         _reserved = {}
         return false
+    var authored: Dictionary = _reserved.get("plan",{})
     _count_in(str(_reserved["token"]),beat,float(_reserved["bar"]),
-        _reserved["meter"],true,float(_reserved["count_in"]))
+        _reserved["meter"],true,float(_reserved["count_in"]),
+        false,false,float(authored.get("pulse_beats",NAN)))
     return true
 
 func _dispatch_cue(token: String, beat: float, bar: int,
@@ -143,11 +157,14 @@ func _dispatch_cue(token: String, beat: float, bar: int,
 
 func _count_in(token: String, beat: float, bar_beats: float, meter: Variant,
         use_raw_click: bool, count_in_beats: float = CueTimeline.WHOLE_BAR,
-        paused: bool = false, drop_late: bool = false) -> void:
+        paused: bool = false, drop_late: bool = false,
+        authored_pulse: float = NAN) -> void:
     # One place turns a count-in reading into circles and cues, in the
     # meter's main pulse (M3); simple meters are unchanged.
+    var pulse: float = (authored_pulse if is_finite(authored_pulse)
+        and authored_pulse > 0.0 else CueTimeline.pulse_beats(meter))
     var units: Array = CueTimeline.in_pulses(beat,bar_beats,count_in_beats,
-        CueTimeline.pulse_beats(meter))
+        pulse)
     practice_view.stage.count_in.present(float(units[0]),int(units[1]),true,
         paused,float(units[2]))
     if paused:
@@ -210,6 +227,27 @@ func update(state: Dictionary, state_tick_ms: int,
         settings_view.animate_calibration_beat(-1.0,false)
     if _reserved_count_in(state,state_tick_ms,now_ms):
         return
+    # An authorized graphical take carries one immutable CountInPlan.
+    # Render its timestamped events directly and never reconstruct a
+    # separate Resume/Retry countdown from sampled transport phase.
+    var playback: Variant = state.get("playback_timeline")
+    var active: Variant = playback.get("current") if playback is Dictionary else null
+    if active is Dictionary:
+        var plan: Variant = active.get("count_in_plan")
+        var segment: String = str(active.get("segment_id",""))
+        if plan is Dictionary and not segment.is_empty():
+            var deadline_ms: float = float(active.get("deadline_ms",NAN))
+            var beat_ms: float = deadline_ms+float(clock.backend_offset_ms)
+            var tempo: float = float(plan.get("bpm",60.0))
+            var before: float = TempoTimeline.beats_from_milliseconds(
+                float(now_ms)-beat_ms,tempo)
+            if before < 0.0 and not bool(state.get("paused",false)):
+                _count_in("authorized:"+segment,before,
+                    float(plan.get("bar_beats",4.0)),
+                    plan.get("meter",[4,4]),true,
+                    float(plan.get("beats",0.0)),false,false,
+                    float(plan.get("pulse_beats",1.0)))
+                return
     # All automatic and manual count-ins are published only after the
     # coordinator's admitted segment is authorized. There is no countdown
     # for an unadmitted retry or a speculative backend announcement.
