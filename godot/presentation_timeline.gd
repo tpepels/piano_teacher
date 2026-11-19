@@ -153,6 +153,39 @@ func authorize_source_epoch(deadline_ms: float, opening: float,
             _install(deadline_ms+mapped*1000.0,
                 float(entry.get("bpm",nominal_bpm)),segment_id)
 
+func forecast_authored(at_ms: int, sampled_ms: int,
+        source_beat: float, nominal_bpm: float,
+        authored_segments: Array) -> float:
+    # Physical admission may ask about a candidate BEFORE it has acquired
+    # an authorized segment. Evaluate a hypothetical immutable copy of the
+    # SAME epoch projector, without publishing rates or touching live ink.
+    # On authorization these provisional epochs are committed exactly once.
+    var origin: float = project(sampled_ms)
+    if at_ms <= sampled_ms:
+        return origin
+    if authored_segments.is_empty() or not is_finite(source_beat) or \
+            not is_finite(nominal_bpm) or nominal_bpm <= 0.0:
+        return project(at_ms)
+    var candidate = get_script().new()
+    var starting_bpm: float = TempoTimeline.bpm_at_beat(
+        source_beat,nominal_bpm,authored_segments)
+    candidate.initialize(sampled_ms,starting_bpm)
+    candidate.epochs[0]["world"] = origin
+    candidate.last_world = origin
+    var origin_seconds: float = TempoTimeline.seconds_at_beat(
+        source_beat,nominal_bpm,authored_segments)
+    for part in authored_segments:
+        var start_beat: float = float(part.get("start_beat",0.0))
+        if start_beat <= source_beat + .000001:
+            continue
+        var offset: float = TempoTimeline.seconds_at_beat(
+            start_beat,nominal_bpm,authored_segments)-origin_seconds
+        if offset > 0.0 and is_finite(offset):
+            candidate._install(float(sampled_ms)+offset*1000.0,
+                float(part.get("bpm",nominal_bpm)),"forecast")
+    return candidate.project(at_ms)
+
+
 func set_hold(world: float, at_ms: int) -> void:
     sample(at_ms)
     var next_hold: float = world if is_finite(world) else INF
