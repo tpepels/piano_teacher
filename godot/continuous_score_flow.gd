@@ -49,13 +49,16 @@ func release_hold() -> void:
         timeline.set_hold(INF,maxi(0,timeline.last_ms))
     hold_world = timeline.hold_world
 
-func project_authored_future(at_ms: int, _sampled_ms: int,
-        _source_beat: float, _nominal_bpm: float,
-        _authored_segments: Array) -> float:
-    # The same immutable source-rate epoch map that paints the current
-    # frame is inverted for physical score admission. No second nominal
-    # tempo integrator can place a future note differently.
-    return project(at_ms)
+func project_authored_future(at_ms: int, sampled_ms: int,
+        source_beat: float, nominal_bpm: float,
+        authored_segments: Array) -> float:
+    # Use the same versioned epoch projector for both actual committed
+    # music and candidate authored tempo maps. The candidate remains
+    # entirely hypothetical until ScoreAdmissionGateway authorizes it.
+    if not timeline.active_segment.is_empty():
+        return project(at_ms)
+    return timeline.forecast_authored(
+        at_ms,sampled_ms,source_beat,nominal_bpm,authored_segments)
 
 func reset() -> void:
     timeline.reset()
