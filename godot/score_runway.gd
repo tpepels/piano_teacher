@@ -333,7 +333,16 @@ func _request_if_needed(state: Dictionary, now_ms: int) -> void:
     if _fetch.request("score.next_stage") != OK:
         _next_poll_ms = now_ms + 1000
 
+func has_prepared_destination(state: Dictionary) -> bool:
+    return _future != null and is_instance_valid(_future) and \
+        _acknowledged and _future.retained_ready() and \
+        int(_bundle.get("revision",-2)) == int(state.get("revision",-1)) and \
+        str(_bundle.get("fingerprint","")) == str(state.get("piece_fingerprint",""))
+
 func preserve_unprepared_revision(state: Dictionary) -> bool:
+    if has_prepared_destination(state):
+        # Keep the old visible score until the new renderer is admitted.
+        return false
     # Manual stage navigation, score reopening and other non-preloaded
     # revisions still use the same forward-only stream. Swap the asset
     # destination BEFORE ScoreAssetSession.update_context() resets it.
@@ -369,6 +378,8 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
 
 
 func update_state(state: Dictionary, now_ms: int) -> void:
+    if has_prepared_destination(state):
+        return
     var fingerprint: String = str(state.get("piece_fingerprint",""))
     var revision: int = int(state.get("revision",-1))
     var step: int = int(state.get("lesson_step",0))
@@ -449,33 +460,21 @@ func _short_handoff() -> Dictionary:
         StreamAdmission.OFFSCREEN_MARGIN_BEATS}
 
 
-func promote_if_ready(state: Dictionary, run_at_world: float = NAN) -> bool:
-    if _future == null or not is_instance_valid(_future) or \
-            not _acknowledged or not _future.retained_ready():
+func promote_if_ready(_state: Dictionary, _run_at_world: float = NAN) -> bool:
+    # No retrospective promotion from an already-running transport.
+    # ScoreAdmissionGateway promotes only a presented reservation.
+    return false
+
+
+func promote_reserved(state: Dictionary) -> bool:
+    if not has_prepared_destination(state):
         return false
-    if str(state.get("piece_fingerprint","")) != _source_fingerprint or \
-            int(state.get("revision",-1)) != int(_bundle.get("revision",-2)) or \
-            int(state.get("lesson_step",0)) != int(_bundle.get("step_number",-1)):
-        return false
-    var old = stage.renderer
     var new_renderer = _future
-    _link_existing_layers(new_renderer)
-    # The new source can enter ONLY at the backend's already-scheduled
-    # future downbeat. Do not promote a renderer with missing/late timing,
-    # and never calculate a replacement onset in the current frame.
-    var graded: float = float(state.get("clock_beat",-INF))
-    if not is_finite(graded) or graded >= 0.0:
-        return false
-    # The engine's run_at projected on the presentation axis (main.gd, with
-    # this snapshot's tempo already applied); the frame's cached world minus
-    # the sampled clock beat is only a fallback.
-    var intended_world: float = run_at_world if is_finite(run_at_world) \
-        else _visual_beat - graded
-    # PlaybackCoordinator already authorized the exact physical source.
-    # Promotion cannot invent a second onset or begin a take by itself.
     if new_renderer._stream_armed_serial < 0 or \
             not new_renderer._stream_arm_acknowledged:
         return false
+    var old = stage.renderer
+    _link_existing_layers(new_renderer)
     _future = null
     new_renderer.modulate.a = 1.0
     new_renderer.runway_overlay = false
