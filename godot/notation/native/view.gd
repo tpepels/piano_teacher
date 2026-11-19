@@ -634,6 +634,14 @@ var _scheduled_score_plan_ids: Dictionary = {}
 var scheduled_plan_openings: Dictionary = {}
 
 
+func has_source_windows_at(opening: float) -> bool:
+    # Public immutable source-window existence query for the pure
+    # transport preflight. No external component inspects private
+    # clipping intervals or renderer-owned source-window caches.
+    return not NotationClipPlanner.source_windows(
+        timeline,opening,_source_ink_intervals).is_empty()
+
+
 func _stream_add_take(source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool = false) -> void:
     _stream_last_admitted = -1
