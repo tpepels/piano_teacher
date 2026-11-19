@@ -44,13 +44,18 @@ const CountInCueTimeline := preload("res://countin_cue_timeline.gd")
 const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
 const CountInVoicePlayer := preload("res://countin_voice_player.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
-const NavigationPolicy := preload("res://navigation_policy.gd")
+const NavigationSession := preload("res://navigation_session.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 const FeedbackEventInbox := preload("res://feedback_event_inbox.gd")
 const StateContract := preload("res://state_contract.gd")
 
-var current_screen := "practice"
-var settings_return_screen := "practice"
+var navigation_session = NavigationSession.new()
+var current_screen: String:
+    get: return navigation_session.current_screen
+    set(value): navigation_session.current_screen = value
+var settings_return_screen: String:
+    get: return navigation_session.settings_return_screen
+    set(value): navigation_session.settings_return_screen = value
 var navigation_drawer = NavigationDrawer.new()
 var settings_view: SettingsScreen
 var home_view: HomeScreen
@@ -206,6 +211,15 @@ func _ready() -> void:
     _configure_ui_scaling()
     ui_scale = _readable_ui_scale()
     _build_interface()
+    navigation_session.configure(
+        practice_backdrop,navigation_drawer,practice_view,
+        library_view,settings_view,lesson_session,screens,
+        Callable(self,"_update_visual_frame_rate"))
+    navigation_session.pause_requested.connect(
+        func(): _send_action({"action":"pause"}))
+    navigation_session.library_requested.connect(_request_library)
+    navigation_session.settings_requested.connect(_request_settings)
+    navigation_session.devices_requested.connect(_request_devices)
     # Audio has one root-owned lifetime, including score revisions, Pause,
     # source selection and renderer replacement. The visual countdown merely
     # delegates speech to this service.
@@ -524,34 +538,8 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 
 
 func _navigate(screen: String) -> void:
-    var decision: Dictionary = NavigationPolicy.plan(
-        screen,current_screen,str(last_state.get("phase","")),
-        command_coordinator.state.pending,command_coordinator.state.operation,command_coordinator.state.control_action)
-    screen = str(decision["target"])
-    var previous_screen: String = str(decision["previous"])
-    if bool(decision["remember_settings"]):
-        settings_return_screen = previous_screen
-    if bool(decision["pause"]):
-        _send_action({"action":"pause"})
-    current_screen = screen
-    if practice_backdrop != null:
-        practice_backdrop.visible = screen == "practice"
-    _update_visual_frame_rate(last_state)
-    navigation_drawer.present(screen, previous_screen)
-    if practice_view != null:
-        practice_view.set_active(screen == "practice")
-    for key in screens:
-        (screens[key] as Control).visible = (str(key) == screen
-            or str(key) == "practice" and screen != "practice")
-    if screen == "library":
-        _request_library()
-        library_view.call_deferred("focus_search")
-    elif screen == "settings":
-        settings_view.begin_editing(last_state)
-        _request_settings()
-        _request_devices()
-    elif screen == "lesson":
-        lesson_session.refresh(Time.get_ticks_msec())
+    navigation_session.navigate(
+        screen,last_state,command_coordinator.state)
 
 
 func _resize_overlay_drawer() -> void:
@@ -565,7 +553,7 @@ func _resize_overlay_drawer() -> void:
 
 
 func _go_back() -> void:
-    _navigate(settings_return_screen if current_screen == "settings" else "practice")
+    navigation_session.back(last_state,command_coordinator.state)
 
 func _build_interface() -> void:
     theme = Design.create()
