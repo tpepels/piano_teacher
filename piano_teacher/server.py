@@ -1731,8 +1731,13 @@ class PracticeEngine:
                 if (selected is None or selected.stage_key != intent.stage_key
                         or abs(selected.from_beat-intent.from_beat) > 1e-7):
                     raise ValueError("Playback source decision changed before admission")
-                self.start(mode=selected.mode, from_beat=selected.from_beat,
-                    decided=True, scheduled_deadline=deadline)
+                previous_effect = self.session_commands.active
+                self.session_commands.active = effect
+                try:
+                    self.start(mode=selected.mode, from_beat=selected.from_beat,
+                        scheduled_deadline=deadline)
+                finally:
+                    self.session_commands.active = previous_effect
             elif intent.action == "resume":
                 self._resume_current_session(
                     presentation_lead_seconds=max(0.0, deadline-self.now()),
