@@ -82,6 +82,7 @@ class PlaybackCoordinator:
         self.active_take_id = ""
         self.active_segment_id = ""
         self.active_deadline_ms = 0.0
+        self.active_segment: dict = {}
         self._completed: deque[tuple[str, dict]] = deque(maxlen=16)
         self.failure = ""
 
@@ -98,6 +99,7 @@ class PlaybackCoordinator:
         self.active_take_id = ""
         self.active_segment_id = ""
         self.active_deadline_ms = 0.0
+        self.active_segment = {}
         self.failure = reason
 
     def cancel_pending(self, reason: str) -> None:
@@ -256,6 +258,28 @@ class PlaybackCoordinator:
         self.active_take_id = receipt.take_id
         self.active_segment_id = receipt.segment_id
         self.active_deadline_ms = receipt.deadline_ms
+        self.active_segment = {
+            "segment_id": receipt.segment_id,
+            "take_id": receipt.take_id,
+            "source": {
+                "fingerprint": intent.fingerprint,
+                "stage_key": intent.stage_key,
+                "revision": intent.revision,
+                "from_beat": intent.from_beat,
+                "end_beat": engine.plan.active_phrase.end -
+                            engine.plan.active_phrase.start,
+                "hand": engine.plan.hand,
+            },
+            "mode": intent.mode,
+            "graded": intent.mode in ("practice", "perform")
+                      and not engine.preview_only,
+            "bpm": intent.bpm,
+            "count_in_beats": intent.count_in_beats,
+            "count_in_meter": list(intent.count_in_meter),
+            "deadline_ms": receipt.deadline_ms,
+            "world_origin": receipt.world_origin,
+            "transport_id": engine.transport_id,
+        }
         self.intent = None
         self.receipt = None
         self.state = (PlaybackState.COUNT_IN if engine.running
@@ -325,5 +349,6 @@ class PlaybackCoordinator:
         timeline = {"state": self.state.value, "take_id": self.active_take_id,
                     "segment_id": self.active_segment_id,
                     "deadline_ms": self.active_deadline_ms,
+                    "current": dict(self.active_segment) if self.active_segment else None,
                     "failure": self.failure}
         return request, timeline
