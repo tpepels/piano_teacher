@@ -2666,8 +2666,8 @@ class PracticeEngine:
             assignment = self._remediation_pending
             self._remediation_pending = None
             selected = self.attempt_settlement.pending.decision
-            outcome = (practice_flow.outcome_of(selected.message)
-                       if self._flow_active() and selected.message else None)
+            outcome = (selected.flow_outcome
+                       if self._flow_active() else None)
             if outcome is not None:
                 progress = self.plan.teaching_progress()
                 done = outcome in (practice_flow.Outcome.STAGE_DONE,
