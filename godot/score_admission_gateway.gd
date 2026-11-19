@@ -24,6 +24,8 @@ var receipt: Dictionary = {}
 var started_ms := -1
 var pending_reconciliation := false
 var last_activated_segment := ""
+var last_activated_intent := ""
+var last_activated_attempt := -1
 var missing_score_frames := 0
 var reported_failure_segment := ""
 
@@ -126,7 +128,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var required_slot: float = maxf(count_in, floor_world-world)
     var action: String = str(intent.get("action", "start"))
     var reservation_action: String = (
-        "resume" if action == "resume" else
+        "resume" if action in ["resume","auto"] else
         "restart" if action == "restart" else "start")
     var planned: Dictionary = view.reserve_transport_action(
         reservation_action, world,
@@ -204,11 +206,17 @@ func observe(state: Dictionary, frame_ms: int) -> void:
         return
     var identifier: String = str(intent.get("intent_id",""))
     var attempt: int = int(intent.get("attempt",-1))
+    if identifier == last_activated_intent and attempt == last_activated_attempt:
+        # Discard stale state polls that preceded presentation completion.
+        return
     if not current.is_empty():
         if str(current.get("intent_id","")) == identifier and \
                 int(current.get("attempt",-2)) == attempt:
-            return
-        if pending_reconciliation:
+            if pending_reconciliation and present_request._pending_id < 0 and \
+                    Time.get_ticks_msec()-started_ms > 800 and \
+                    not receipt.is_empty():
+                started_ms = Time.get_ticks_msec()
+                _send_presentation()
             return
         _cancel_provisional()
     if reserve_request._pending_id >= 0 or present_request._pending_id >= 0:
@@ -261,6 +269,8 @@ func _confirm_authorized(data: Dictionary) -> void:
     if str(data.get("segment_id","")) != expected:
         return
     last_activated_segment = expected
+    last_activated_intent = str(receipt.get("intent_id",""))
+    last_activated_attempt = int(receipt.get("attempt",-1))
     var now_ms: int = Time.get_ticks_msec()
     var deadline_local: float = float(receipt["deadline_ms"]) + \
         float(now_ms)-_backend_ms()
@@ -281,10 +291,10 @@ func _confirm_authorized(data: Dictionary) -> void:
 func _cancel_provisional() -> void:
     if renderer != null and is_instance_valid(renderer):
         renderer.cancel_stream_arm()
-    if not receipt.is_empty() and withdraw_request._pending_id < 0:
+    if not current.is_empty() and withdraw_request._pending_id < 0:
         withdraw_request.request("playback.withdraw",{
-            "intent_id":str(receipt["intent_id"]),
-            "attempt":int(receipt["attempt"]),
+            "intent_id":str(current["intent_id"]),
+            "attempt":int(current["attempt"]),
             "reason":"presentation_cancelled"})
     metronome.cancel_reserved_count_in()
     renderer = null
