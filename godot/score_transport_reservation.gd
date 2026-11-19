@@ -21,7 +21,7 @@ static func plan(renderer, action: String, world: float,
     var duration: float = float(renderer.timeline.duration_beats)
     if duration <= 0.0 or source_opening < 0.0 or             source_opening >= duration:
         return _refuse("invalid_source_interval")
-    if renderer._stream_source_windows(source_opening).is_empty():
+    if not renderer.has_source_windows_at(source_opening):
         return _refuse("no_source_measures")
     var density: float = float(renderer.timeline.pixels_per_beat)
     var staff_gap: float = float(renderer.staff_gap())
