@@ -109,9 +109,10 @@ class AttemptSettlement:
                     if (plan.accepts_performance_feedback and state.course.stage.variant.level == "original"
                             and not state.route.warmup and result.notes):
                         self.source_feedback.observe(state.binding.fingerprint, result)
-                    if result.passed:
-                        self.learner_progress.resolve_trouble(fingerprint=state.binding.fingerprint,
-                                                             stage_key=state.binding.stage_key)
+                    if decision.verdict is not None and decision.verdict.clears_trouble:
+                        self.learner_progress.resolve_trouble(
+                            fingerprint=state.binding.fingerprint,
+                            stage_key=state.binding.stage_key)
                 if pending.event.kind == "guided_completed" and pending.event.completed and not state.route.remediation_active:
                     from ..learner_state import guided_units
                     unit = next((unit for unit in guided_units(plan.active_variant,plan.piece.bar_boundaries)
@@ -128,9 +129,11 @@ class AttemptSettlement:
                             stage_key=state.binding.stage_key, unit=unit, assessed_notes=result.notes,
                             phrase_start=state.course.stage.variant.phrase.start)
                 if performance_summary is not None and state.binding.fingerprint:
-                    if result.clean:
-                        self.learner_progress.resolve_trouble(fingerprint=state.binding.fingerprint,
-                                                             stage_key=state.binding.stage_key)
+                    if (decision.verdict is not None
+                            and decision.verdict.clears_trouble):
+                        self.learner_progress.resolve_trouble(
+                            fingerprint=state.binding.fingerprint,
+                            stage_key=state.binding.stage_key)
                     else:
                         for unit in performance_summary["weakest_bars"]:
                             self.learner_progress.record_saved_trouble(plan,
