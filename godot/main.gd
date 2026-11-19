@@ -46,8 +46,7 @@ const CountInAudioSession := preload("res://countin_audio_session.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationSession := preload("res://navigation_session.gd")
 const ApplicationEventRouter := preload("res://application_event_router.gd")
-const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
-const FeedbackEventInbox := preload("res://feedback_event_inbox.gd")
+const PracticeFeedbackSession := preload("res://practice_feedback_session.gd")
 const ApplicationStateInbox := preload("res://application_state_inbox.gd")
 
 var navigation_session = NavigationSession.new()
@@ -172,8 +171,7 @@ var demo_player: Node
 var ui_scale := 1.0
 var practice_backdrop: ColorRect
 # One acknowledged channel delivers every note-feedback event exactly once.
-var feedback_inbox = FeedbackEventInbox.new()
-var live_midi_feedback = LiveMidiFeedback.new()
+var feedback_session = PracticeFeedbackSession.new()
 var state_poll_timer: Timer
 var inprocess_bus: Node
 var score_runway
@@ -217,6 +215,7 @@ func _ready() -> void:
     # during _build_interface silently discarded startup presentation
     # because the navigation session did not exist yet.
     _navigate("practice")
+    feedback_session.configure(inprocess_bus,practice_view.stage,visual_transport_clock)
     # Audio has one root-owned lifetime, including score revisions, Pause,
     # source selection and renderer replacement. The visual countdown merely
     # delegates speech to this service.
@@ -713,12 +712,12 @@ func _on_score_asset_failure(message: String) -> void:
     practice_view.present_message(message)
 
 func _on_score_assets_invalidated(_new_revision: int) -> void:
-    live_midi_feedback.clear()
+    feedback_session.source_invalidated()
     living_chords.clear()
 
 func _on_score_layout_published(_published_revision: int, values: Dictionary) -> void:
     living_chords = LivingScore.prepare(values)
-    live_midi_feedback.bind_layout(values, _published_revision)
+    feedback_session.layout_published(values,_published_revision)
 
 func _on_score_published(published_revision: int) -> void:
     if score_runway != null:
@@ -844,33 +843,6 @@ func _toggle_fullscreen() -> void:
     settings_view.present_window_mode(enabled)
     _on_fullscreen_toggle(enabled)
 
-func _read_feedback_events() -> void:
-    if inprocess_bus == null or not inprocess_bus.is_ready():
-        return
-    _consume_feedback_reply(inprocess_bus.take_feedback_events())
-    inprocess_bus.request_feedback_events(feedback_inbox.acknowledged)
-
-func _consume_feedback_reply(reply: Variant) -> void:
-    for event in feedback_inbox.accept(reply):
-        _dispatch_feedback_event(event)
-        # Acknowledge only after the consumers returned a final outcome.
-        feedback_inbox.acknowledge(int(event["sequence"]))
-
-func _dispatch_feedback_event(event: Dictionary) -> void:
-    # Each event names its own take; no state snapshot is consulted.
-    practice_view.stage.feedback.ingest(event)
-    if str(event.get("kind","")) == "attack":
-        # Python stamps `received_at` in backend monotonic seconds; the
-        # clock's backend offset maps it to local ticks. Without a calibrated
-        # offset the age is unknown and the reaction plays.
-        var age_ms := 0.0
-        if visual_transport_clock.has_backend_offset and event.has("received_at"):
-            age_ms = float(frame_ms) - (
-                float(event["received_at"]) * 1000.0 +
-                visual_transport_clock.backend_offset_ms)
-        live_midi_feedback.react(event, practice_view.stage,
-            layout_revision if layout_revision == revision else -1, age_ms)
-
 func _poll() -> void:
     if score_session != null and not practice_view.is_source_picker_open():
         score_session.poll(Time.get_ticks_msec())
@@ -901,7 +873,7 @@ func _process(_delta: float) -> void:
     var beat: float = _transport_beat_at(ticks)
     guided_presentation.update_hold(state_inbox.current)
     score_flow.sample(ticks)
-    _read_feedback_events()
+    feedback_session.poll(ticks,layout_revision if layout_revision == revision else -1)
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
         state_inbox.current,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,

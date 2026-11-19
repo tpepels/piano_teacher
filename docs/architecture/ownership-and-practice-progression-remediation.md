@@ -20,7 +20,7 @@
 | Architecture docs / O07 | CURRENT ENTRYPOINTS RECONCILED; REFERENCE SWEEP OPEN | ROADMAP and documentation index now point to the actual moving-window policy and current playback/ownership contracts; ADR-0001 and playback coordinator document authority; old ownership contracts marked historical. Deeper document cross-reference sweep remains open |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED (~3,621 lines) | LearningEvidenceSession now owns rule snapshots, adaptive retry history, learner history status and read-only statistics queries; deleting learner history preserves the shared LearningCapture owner. PracticeEngine still owns many command/assessment/automatic continuation lifecycle operations |
 | Decompose native/view.gd / L02 | SUBSTANTIALLY DECOMPOSED (~1,302 lines); NOT THIN | ScoreStreamController owns the complete stream admission/recovery/rollback/identity protocol. Writable NativeView transport aliases removed; read-only public owner-status ports added. Retained painting and the internal queue access still require isolation |
-| Decompose main.gd / L03 | SUBSTANTIALLY DECOMPOSED (~1,117 lines); NOT THIN | ApplicationStateInbox owns accepted snapshots and stale poll suppression; NavigationSession, PracticePresentationSession, ApplicationEventRouter, DebugSessionLogger, StatusHeadPreloader and CountInAudioSession own their domains. Main still composes scenes and routes external replies/actions |
+| Decompose main.gd / L03 | SUBSTANTIALLY DECOMPOSED; NOT THIN | ApplicationStateInbox owns accepted snapshots and stale poll suppression; NavigationSession, PracticePresentationSession, ApplicationEventRouter, DebugSessionLogger, StatusHeadPreloader and CountInAudioSession own their domains. Main still composes scenes and routes external replies/actions |
 | Existing CI/native integration | CORE GREEN THROUGH `eee14c54`; FULL NATIVE IN PROGRESS | [Core run 44637473989](https://github.com/tpepels/piano_teacher/actions/runs/44637473989) passed. Native extension compiles and embeds Python, authentic score and UI reached authorized count-in in earlier runs. Later native runs exposed old acceptance assumptions and are being corrected. Relocated package and physical hardware acceptance not yet certified |
 
 ### Phase completion status
@@ -274,6 +274,12 @@
 - Corrected existing native UI acceptance to require either a real scheduled **click** or a spoken cue. The default Practice Flow uses click + large number; Japanese voice playback is explicitly opt-in, so the old unconditional voice-count assertion was invalid. This continues to enforce audio scheduling, without claiming that a dummy headless driver proves audible speakers.
 - Corrected isolated `native_bridge_smoke.gd` to validate catalog, real MIDI, Verovio geometry and exact Listen score revision ACK only. It cannot start the instrument without physical score admission; the embedded production-scene acceptance is the sole transport owner. `verify-native-bridge.sh` now requires `PIANO_NATIVE_REAL_SCORE_PREPARATION_OK` and rejects every explicit failure marker.
 - Full UI and clean relocated package acceptance remain pending next native run. No new tests.
+
+### Implementation checkpoint AH — one feedback delivery and acknowledgement session
+
+- Created `PracticeFeedbackSession` as sole owner of the acknowledged backend `FeedbackEventInbox`, score-revision-bound `LiveMidiFeedback`, MIDI attack reaction and post-consumption acknowledgement sequencing. No UI state polling or scene composition code can independently acknowledge, drop or regrade an event.
+- Removed the feedback event inbox, reaction instance and read/ingest/dispatch algorithms from `Main`; it now forwards score revision publications and samples the session once per visual frame. The backend's take identity, timestamp adjustment and sequence-gap reporting are unchanged.
+- No new tests. The existing core and native production checks remain the verification gates.
 
 #### Phase 6 acceptance matrix
 
