@@ -53,6 +53,7 @@ class SnapshotValues:
     paused: bool
     paused_at: float
     pending_result: Any
+    assessment_verdict: Any
     pending_rewind: float | None
     performance_summary: Any
     persistent_hints: bool
@@ -204,8 +205,12 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         visual_offset_beats=state.visual_offset_beats,
         visual_gap_beats=gap_beats, visual_motion=visual_motion,
         practice_timeline=practice_timeline, practice_preparation=state.practice_preparation,
-        take_result=({"clean": bool(state.pending_result.clean),
-                      "accepted": bool(state.pending_result.passed),
+        take_result=({"clean": bool(state.assessment_verdict.clean)
+                            if state.assessment_verdict is not None else False,
+                      "accepted": bool(state.assessment_verdict.accepted)
+                            if state.assessment_verdict is not None else False,
+                      "acceptance_policy": (state.assessment_verdict.policy
+                            if state.assessment_verdict is not None else "pending"),
                       "correct": state.pending_result.correct,
                       "total": len(state.pending_result.notes)}
                      if state.mode == "practice" and state.pending_result is not None else None),
