@@ -6,6 +6,7 @@ No handler receives an engine or discovers collaborators through a root.
 """
 from collections import deque
 from dataclasses import dataclass
+from .musical_scheduler import SCHEDULER
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +26,23 @@ class MidiInputFacts:
     transport_id: int
     tempo_map: object
     can_pause: bool
+
+
+@dataclass(frozen=True, slots=True)
+class InputTransportFacts:
+    """Immutable backend facts; the ingress never inspects PracticeEngine."""
+    next_at: float
+    preview_loop_pending: bool
+    pending_teaching_result: bool
+    pending_rewind: bool
+    automatic: bool
+    preview_only: bool
+    visual_gap_beats: float
+    awaiting_score: bool
+    exercise_kind: str
+    review_end_beat: float | None
+    presentation_required: bool
+    successor_action: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +92,53 @@ class MidiIngress:
                     self.resume_ignored_pitches.remove(message.note)
                 return MidiIngressEffect(consumed=True)
         return MidiIngressEffect()
+
+    def suppress_for_successor(self, facts: MidiInputFacts,
+                               transport: InputTransportFacts) -> bool:
+        # A current take can still be running while a start/restart has
+        # already selected its successor. No key may earn credit between
+        # selection and physical admission of the new source.
+        return bool(transport.presentation_required
+            and transport.successor_action in ("start","restart")
+            and facts.running)
+
+    def defer_boundary_note(self,message,*,facts: MidiInputFacts,
+                            transport: InputTransportFacts,
+                            received_at: float, corrected_at: float,
+                            replaying: bool) -> bool:
+        """Protect the actual hardware timestamp across automatic rollover.
+
+        This is the only MIDI deferral policy. The engine transports the
+        immutable state facts but does not re-decide when a key belongs to
+        the old take versus the next one. Replay never defers again.
+        """
+        if replaying or message.type not in ("note_on","note_off") or (
+                facts.phrase is None or facts.mode not in ("practice","perform")
+                or facts.paused or transport.awaiting_score):
+            return False
+        due = (not facts.running and transport.next_at
+               and received_at >= transport.next_at
+               and (transport.preview_loop_pending or
+                    transport.pending_teaching_result and transport.automatic or
+                    transport.pending_rewind))
+        if (facts.running and facts.mode == "practice"
+                and transport.exercise_kind != "perform"
+                and transport.review_end_beat is None
+                and (transport.automatic or transport.preview_only)):
+            duration = SCHEDULER.source_seconds(
+                facts.tempo_map,
+                facts.phrase.end-facts.phrase.start,facts.bpm)
+            played = SCHEDULER.source_seconds(
+                facts.tempo_map,facts.from_beat,facts.bpm)
+            finish = facts.run_at+duration-played
+            due = received_at >= SCHEDULER.offscreen(
+                deadline=finish,lead_beats=transport.visual_gap_beats,
+                bpm=facts.bpm)
+        if due or self.deferred:
+            self.deferred.append((
+                message.copy(),received_at,corrected_at,facts.transport_id))
+            return True
+        return False
 
     def deliver(self,message,*,facts,received_at,corrected_at,musical_at,recorder,teaching,feedback_take):
         if message.type not in ("note_on","note_off"):
