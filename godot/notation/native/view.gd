@@ -77,6 +77,7 @@ const RetainedNoteProjection := preload("res://notation/native/retained_note_pro
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const MovingMeterGrid := preload("res://moving_meter_grid.gd")
 const ScoreStreamWindowCuts := preload("res://score_stream_window_cuts.gd")
+const NotationClipPlanner := preload("res://notation/native/notation_clip_planner.gd")
 const TransportReservation := preload("res://score_transport_reservation.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
@@ -456,103 +457,9 @@ func _prepare_static_geometry() -> void:
     connector_geometry.prewarm_tie_clearances(prepared_gap)
     connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
     connector_geometry.prewarm_slur_geometry(prepared_gap)
-    _source_ink_intervals = _build_ink_safe_boundaries(prepared_gap)
+    _source_ink_intervals = NotationClipPlanner.ink_safe_boundaries(
+        layout,timeline,prepared_gap)
 
-
-func _build_ink_safe_boundaries(gap: float) -> Array[Vector2]:
-    # Pixel-accurate authored note/rest envelopes and exact source-connected
-    # Verovio groups. None depends on Play/Pause/Retry or world position.
-    var intervals: Array[Vector2] = []
-    var density: float = maxf(1.0,timeline.pixels_per_beat)
-    var pad: float = 1.5/density
-    for event in layout.ordered_events:
-        var kind: String = str(event.get("kind",""))
-        if kind not in ["note","rest"]:
-            continue
-        var envelope: Rect2 = layout.event_ink_rect(
-            event,gap,layout.cached_head_offsets,
-            layout.cached_accidental_offsets)
-        var beat: float = float(event.get("beat",0.0))
-        if envelope.size.x > 0.0:
-            intervals.append(Vector2(
-                beat+envelope.position.x/density-pad,
-                beat+envelope.end.x/density+pad))
-    for group in layout.beam_groups:
-        if group.size() >= 2:
-            _source_ink_interval(intervals,float(group[0]["beat"]),
-                float(group[-1]["beat"]),pad)
-    for group in layout.notation_tuplets:
-        var events: Array = group.get("events",[])
-        if events.size() >= 2:
-            _source_ink_interval(intervals,float(events[0]["beat"]),
-                float(events[-1]["beat"]),pad)
-    for pairs in [layout.tie_pairs,layout.slur_pairs]:
-        for pair in pairs:
-            _source_ink_interval(intervals,
-                float(pair["first"]["beat"]),float(pair["last"]["beat"]),pad)
-    for hairpin in layout.prepared_hairpins:
-        _source_ink_interval(intervals,float(hairpin["begin"]),
-            float(hairpin["end"]),pad)
-    for volta in layout.prepared_voltas:
-        _source_ink_interval(intervals,float(volta["start"]),
-            float(volta["end"]),pad)
-    # A genuine expression can have a single graphic larger than one note
-    # (e.g. rehearsal marks or multi-word tempo text); keep its authored
-    # source context together when an otherwise movable seam crosses it.
-    for expression in layout.source_expressions:
-        var at: float = float(expression.get("beat",0.0))
-        _source_ink_interval(intervals,at,at,maxf(pad,gap*2.5/density))
-    # A measure's clef/key/meter is engraved BEFORE its nominal barline
-    # in source X. Two measure clips with a seam exactly at that barline
-    # would silently sever its header. The same applies to the regular
-    # barline stroke itself. Preserve connected context as indivisible ink.
-    var previous: Dictionary = {}
-    for i in range(timeline.measures.size()):
-        var measure: Dictionary = timeline.measures[i]
-        var at: float = float(measure.get("start_beat",0.0))
-        if i == 0:
-            previous = measure
-            continue
-        # Every regular barline has finite thickness around its beat;
-        # move the retractable seam a few pixels left of the stroke.
-        _source_ink_interval(intervals,at,at,maxf(pad,2.0/density))
-        var context_changed: bool = (
-            measure.get("meter",[]) != previous.get("meter",[]) or
-            measure.get("keys",{}) != previous.get("keys",{}))
-        var key_columns := 0
-        for staff in layout.visible_staves():
-            if layout.clef_for(staff,measure) != \
-                    layout.clef_for(staff,previous):
-                context_changed = true
-            var new_key: int = int(measure.get("keys",{}).get(staff,0))
-            var old_key: int = int(previous.get("keys",{}).get(staff,0))
-            if new_key != old_key:
-                # The original cancellation naturals occupy additional
-                # columns BEFORE the incoming signature.
-                key_columns = maxi(key_columns,
-                    absi(new_key)+absi(old_key))
-            else:
-                key_columns = maxi(key_columns,absi(new_key))
-        if context_changed:
-            var header_left_px: float = ContextPainter.clef_lead_pixels(
-                key_columns,gap)+gap*2.5
-            # A context change belongs semantically to its NEW measure.
-            # If its leftward header is too wide to move the clip seam
-            # before all that ink, do not move the seam slightly RIGHT and
-            # keep the entire new header attached to the old measure.
-            # Reserve beyond the allowable right-shift solely to force an
-            # indivisible two-measure visual group in that case.
-            intervals.append(Vector2(
-                at-header_left_px/density-pad,
-                at+ScoreStreamWindowCuts.MAX_SHIFT_BEATS+pad))
-        previous = measure
-    return intervals
-
-
-func _source_ink_interval(intervals: Array[Vector2],first: float,
-        last: float,margin: float) -> void:
-    if is_finite(first) and is_finite(last) and last >= first:
-        intervals.append(Vector2(first-margin,last+margin))
 
 
 func _stream_release_all() -> void:
@@ -610,8 +517,8 @@ func _resize_retained_pool() -> void:
     # WHOLE-PIECE buffer per measure. Initial admission can now attach
     # already engraved measure strips without consuming a frame to rebuild.
     # Extra reusable buffers are available for future overlapping takes.
-    var windows: Array[Vector2] = _stream_source_windows(
-        maxf(0.0,play_from_beat))
+    var windows: Array[Vector2] = NotationClipPlanner.source_windows(timeline,
+        maxf(0.0,play_from_beat),_source_ink_intervals)
     if not windows.is_empty():
         retained_first_once.set_source_window(windows[0].x,windows[0].y)
     var required: int = maxi(4,windows.size()-1)
@@ -726,26 +633,6 @@ var _scheduled_score_plan_ids: Dictionary = {}
 # playhead (it can be later than the engine deadline for untimed Learn).
 var scheduled_plan_openings: Dictionary = {}
 
-func _stream_source_windows(opening: float) -> Array[Vector2]:
-    # A passage is prepared once, but admitted as immutable adjoining
-    # measure strips. Visible strips lock; untouched future strips remain
-    # retractable without rewriting a previously rendered CanvasItem.
-    var edges: Array[float] = [opening]
-    for measure in timeline.measures:
-        var beat: float = float(measure.get("start_beat",-1.0))
-        if beat > opening+.00001 and \
-                beat < timeline.duration_beats-.00001:
-            edges.append(beat)
-    edges.append(timeline.duration_beats)
-    edges.sort()
-    # Shift retractable seams into genuine source-ink whitespace. If a
-    # slur/tie/beam spans a measure boundary, merge that visual unit rather
-    # than let Pause remove half of a source glyph. World-note deadlines and
-    # authored measure positions do not change.
-    return ScoreStreamWindowCuts.safe_windows(
-        opening,timeline.duration_beats,timeline.measures,
-        _source_ink_intervals)
-
 
 func _stream_add_take(source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool = false) -> void:
@@ -753,7 +640,7 @@ func _stream_add_take(source_beat: float, start_world: float,
     var first_serial: int = _stream_serial+1
     var original_origin: float = start_world-source_beat
     var hidden: bool = take_key == "prepared"
-    var windows: Array[Vector2] = _stream_source_windows(maxf(0.0,from_beat))
+    var windows: Array[Vector2] = NotationClipPlanner.source_windows(timeline,maxf(0.0,from_beat),_source_ink_intervals)
     if windows.is_empty():
         return
     var density: float = maxf(1.0,timeline.pixels_per_beat)
