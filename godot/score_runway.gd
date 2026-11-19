@@ -471,16 +471,11 @@ func promote_if_ready(state: Dictionary, run_at_world: float = NAN) -> bool:
     # the sampled clock beat is only a fallback.
     var intended_world: float = run_at_world if is_finite(run_at_world) \
         else _visual_beat - graded
-    # The step opens on the empty strip one count-in bar ahead (P5).
-    var armed: Dictionary = new_renderer.arm_stream_take(
-        _visual_beat,0.0,intended_world,false,false,
-        float(state.get("count_in_beats",0.0)))
-    if armed.is_empty():
+    # PlaybackCoordinator already authorized the exact physical source.
+    # Promotion cannot invent a second onset or begin a take by itself.
+    if new_renderer._stream_armed_serial < 0 or \
+            not new_renderer._stream_arm_acknowledged:
         return false
-    # The future stage has already been explicitly acknowledged by the
-    # backend (score.stage_ready), before its graded state appeared.
-    # No second HTTP/control request exists for this promotion.
-    new_renderer.acknowledge_stream_arm()
     _future = null
     new_renderer.modulate.a = 1.0
     new_renderer.runway_overlay = false
