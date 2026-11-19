@@ -22,6 +22,8 @@ from .application.stage_change import StageChange
 from .recovery import RecoveryDecision
 from .lesson_settings import SETTINGS
 from .teaching_manual import ManualFacts, choose_manual, next_guided_range
+from .application.assessment_verdict import AssessmentVerdict
+from .application.practice_flow import Outcome
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +143,8 @@ class TeachingDecision:
     mastery_eligible: bool
     reason: str
     message: str
+    flow_outcome: Outcome | None = None
+    verdict: AssessmentVerdict | None = None
 
 
 def source_safe_response(response, *, phrase, hand, grid):
@@ -177,7 +181,11 @@ def decide_standard_teaching(event, state, *, generator=None,
         and not route.preview_only and not route.assistance_used and route.from_beat == 0
         and route.review_end_beat is None and bool(result and result.notes))
     flow = bool(getattr(generator, "flow_rules", False))
-    passed = bool(result and (result.flow_passed if flow else result.passed))
+    verdict = (AssessmentVerdict.decide(result,
+        policy="practice-flow" if flow else "standard",eligible=eligible)
+        if result is not None else None)
+    passed = verdict.accepted if verdict is not None else False
+    flow_outcome = None
     invalidate = eligible and not passed
     phrase = c.stage.variant.phrase
     grid = tuple(phrase_grid(phrase, c.piece.bar_boundaries))
@@ -199,7 +207,7 @@ def decide_standard_teaching(event, state, *, generator=None,
             chosen = c.with_progress(bpm=response.bpm, streak=0, failures=c.progress.failures+1)
             continuation = "guided" if response.guided else "pause" if response.action == "pause" else "repair"
     elif event.kind in ("full_result", "focused_result"):
-        full_retry = (event.kind == "full_result" and route.automatic and not result.passed
+        full_retry = (event.kind == "full_result" and route.automatic and not passed
                       and not route.warmup and not flow)
         focused_retry = (event.kind == "focused_result" and route.automatic
             and route.scope in ("section_review", "partial_recovery")
@@ -211,11 +219,17 @@ def decide_standard_teaching(event, state, *, generator=None,
             if state.policy.whole_handler is not None:
                 response = source_safe_response(response, phrase=phrase, hand=c.hand, grid=grid)
         if eligible:
-            chosen, message = assessed_progress(c, correct=result.correct, total=len(result.notes),
-                                                extras=result.extra_notes, accepted=passed)
+            progress_result = assessed_progress(
+                c, correct=result.correct, total=len(result.notes),
+                extras=result.extra_notes, accepted=passed,
+                include_outcome=flow)
+            if flow:
+                chosen, message, flow_outcome = progress_result
+            else:
+                chosen, message = progress_result
         if response is not None:
             chosen = chosen.with_progress(bpm=response.bpm)
-        if (eligible and not result.passed and route.automatic and not route.warmup
+        if (eligible and not passed and route.automatic and not route.warmup
                 and c.exercise.kind == "learn" and state.policy.whole_handler is None
                 and allow_heuristic_remediation):
             evidence = AssessmentEvidence.from_result(c.key, result, route.performed_bpm)
@@ -235,12 +249,13 @@ def decide_standard_teaching(event, state, *, generator=None,
             before_source = chosen.key
             if updated is not generator:
                 chosen = refresh_course(chosen, updated.generate(c.piece),
-                    focus_ids=failed_ids if not result.passed else frozenset())
-            elif not result.passed:
+                    focus_ids=failed_ids if not passed else frozenset())
+            elif not passed:
                 chosen = revisit_course(chosen, failed_ids)
             if chosen.key != before_source:
                 remediation = response = None
-        if not route.automatic or message == "Piece mastered" or (route.warmup and not result.passed) or route.scope in ("perform", "section_review") and response is None:
+        if not route.automatic or flow_outcome is Outcome.PIECE_DONE or (
+                route.warmup and not passed) or route.scope in ("perform", "section_review") and response is None:
             continuation = "stop"
         elif response is not None:
             continuation = "guided" if response.guided else "pause" if response.action == "pause" else "repair"
@@ -283,7 +298,8 @@ def decide_standard_teaching(event, state, *, generator=None,
     return TeachingDecision(1, event.event_id+":teaching", event.event_id, state.binding,
         c.progress, chosen.definition, chosen.progress, tuple(sorted(feedback.items())), response,
         remediation, exposure, continuation, invalidate, eligible and route.performed_bpm >= c.progress.target_bpm,
-        response.reason if response else "course_progression", message)
+        response.reason if response else "course_progression", message,
+        flow_outcome, verdict)
 
 
 def decide_coda_fukuda_teaching(event, state, *, generator):
@@ -348,8 +364,17 @@ def validate_teaching_decision(decision, *, event, state):
     # Practice flow (docs/practice-flow.md): timing fails only when clearly
     # off, and two clean takes in a row at the target tempo finish a step.
     flow = state.definition.generator_name == "practice-flow"
-    passed = event.assessment is not None and (
-        event.assessment.flow_passed if flow else event.assessment.passed)
+    passed = bool(decision.verdict and decision.verdict.accepted)
+    if event.assessment is not None:
+        expected_verdict = AssessmentVerdict.decide(
+            event.assessment,policy="practice-flow" if flow else "standard",
+            eligible=(event.kind == "full_result" and state.route.mode == "practice"
+                and not state.route.preview_only and not state.route.assistance_used
+                and state.route.from_beat == 0
+                and state.route.review_end_beat is None
+                and bool(event.assessment.notes)))
+        if decision.verdict != expected_verdict:
+            raise ValueError("Teaching and settlement disagree on assessment policy")
     eligible = (event.kind == "full_result" and state.route.mode == "practice"
         and not state.route.preview_only and not state.route.assistance_used
         and state.route.from_beat == 0 and state.route.review_end_beat is None
