@@ -291,8 +291,35 @@ class PlaybackCoordinator:
         self.state = PlaybackState.AUTHORIZED
         try:
             engine._commit_playback_intent(intent, receipt)
+            # A successful command is not proof of a successful transaction.
+            # Verify the ACTUAL transport mutation against the previously
+            # admitted source and monotonic downbeat before publishing it.
+            if not engine.running or engine.visual_transport.paused:
+                raise RuntimeError("Playback commit did not activate a take")
+            if engine.mode != intent.mode or not self._valid_source(engine, intent):
+                raise RuntimeError("Playback commit changed the admitted source")
+            if intent.action == "resume":
+                if abs(engine.midi_ingress.resume_grading_after -
+                       receipt.deadline_ms/1000.0) > 1e-5:
+                    raise RuntimeError("Resume grading does not match admitted onset")
+            elif (abs(engine.visual_transport.play_from_beat-intent.from_beat) > 1e-5
+                  or abs(engine.visual_transport.run_at -
+                         receipt.deadline_ms/1000.0) > 1e-5):
+                raise RuntimeError("Playback origin differs from admitted score")
         except BaseException:
-            self._expire(message="Playback authorization failed")
+            # Partial start failures must never leave a graded transport
+            # running without a matching authorized visual segment.
+            try:
+                engine._stop(reason="playback_authorization_failed")
+            finally:
+                self.intent = None
+                self.receipt = None
+                self.active_take_id = ""
+                self.active_segment_id = ""
+                self.active_deadline_ms = 0.0
+                self.active_segment = {}
+                self.failure = "The admitted score did not match the musical transport"
+                self.state = PlaybackState.FAILED
             raise
         self.active_take_id = receipt.take_id
         self.active_segment_id = receipt.segment_id
