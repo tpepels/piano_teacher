@@ -15,7 +15,7 @@
 | Typed course outcomes / O02 | IMPLEMENTED IN PRODUCTION PATH | `TeachingDecision.flow_outcome` now carries `Outcome` directly through course/engine; string parser remains only as a read-only legacy diagnostic for existing tests, without production callers |
 | Unified assessment verdict / O03 | INTEGRATED ACROSS TEACHING, EVIDENCE AND SNAPSHOTS; LIVE CHECK OPEN | The selected verdict now drives course progression, recorded acceptance, UI summary and durable trouble clearing; raw grader acceptance is retained under a separate diagnostic field; non-graded legacy adapters remain distinct |
 | Unified playback transitions / O01, O04 | GRAPHICAL COUNT-IN SINGLE-TAKE PATH INTEGRATED; LEGACY AND PHYSICAL ACCEPTANCE OPEN | Immutable PlaybackTransition and CountInPlan are accepted once; metronome uses take-keyed authorized segments through Pause/Resume, rejects mismatched deadlines and does not invent unadmitted graphical countdowns; headless compatibility and hardware acceptance remain |
-| Asset admission / O05, O08 | CROSS-RENDERER PEER SNAPSHOT INTEGRATED; COMPATIBILITY FACADES REMAIN | ScoreStreamController owns the mutable FIFO, revision/serial, rollback, expiry and diagnostic deduplication; physical preflight and peer clearance now use explicit primitive/read-only facts; Stage replacement goes through ScoreSceneController; renderer still contains internal queue operations and compatibility properties |
+| Asset admission / O05, O08 | ONE PHYSICAL PREFLIGHT CONTRACT; INTERNAL VIEW ADAPTERS REMAIN | ScoreTransportReservation now exclusively consumes identity-bound frozen preflight facts, including isolated Godot fixtures; cross-renderer peer clearance also uses primitive read-only facts. ScoreStreamController owns the FIFO and transport lifecycle, and ScoreSceneController owns promotion; NativeView still has internal append/rollback and property forwarding |
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
 | Architecture docs / O07 | ACTIVE CONTRACT UPDATED; REFERENCE SWEEP OPEN | ADR-0001 and playback coordinator document current authority; old ownership docs marked historical, stale 17 November Practice Flow comparison archived, live spec revised to moving windows; remaining references require checking |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
@@ -124,6 +124,13 @@
 - Moved the debug-only state-schema validation and one-error-per-contract-problem tracking from `Main` into the existing `DebugSessionLogger`, consolidating diagnostics without another parallel log/cache.
 - Removed `DebugSessionLogger`'s access to `renderer._unscored_take`; it now reads the existing public `unscored_take_status()` capability consistently.
 - No new tests or test changes. This reduces the Main scene's policy/diagnostic state but does not yet finish event/scene decomposition.
+
+
+### Implementation checkpoint J — retire private preflight compatibility route
+
+- Removed `ScoreTransportReservation.plan`'s alternate path that selected source windows, the live queue, reading header, right margin and future withdrawal by directly accessing private `NativeScoreView` properties. The planner now **requires** `transport_preflight_facts()` and fails closed when the public snapshot is absent or incomplete.
+- Updated the existing `tempo_score_reservation.gd` fixture to publish the exact same frozen preflight data as the real renderer; all previously existing Pathétique clearance/placement assertions stay in place. **No new tests or assertions**.
+- This closes the external private-field inspection branch for the physical planner. Remaining work is extracting internal view append/rollback code and removing transitional property forwarding; full physical acceptance remains outstanding.
 
 #### Phase 6 acceptance matrix
 

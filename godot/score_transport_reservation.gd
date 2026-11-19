@@ -21,37 +21,33 @@ static func plan(renderer, action: String, world: float,
     var duration: float = float(renderer.timeline.duration_beats)
     if duration <= 0.0 or source_opening < 0.0 or             source_opening >= duration:
         return _refuse("invalid_source_interval")
-    # A real native renderer publishes a frozen physical read model.
-    # Legacy isolated preflight fixtures can supply their own in-memory
-    # queue model without mutating production renderer state.
-    var native: bool = renderer.has_method("transport_preflight_facts")
-    var facts: Dictionary = (renderer.transport_preflight_facts(
-        world,source_opening) if native else {})
-    var source_exists: bool = (bool(facts.get("source_exists",false))
-        if native else (
-            renderer.has_source_windows_at(source_opening)
-            if renderer.has_method("has_source_windows_at") else
-            not renderer._stream_source_windows(source_opening).is_empty()))
-    if not source_exists:
+    # Every caller, including isolated production fixtures, must provide
+    # the identical identity-bound frozen preflight model. No code path
+    # may read a renderer's mutable private queue or recalculate placement.
+    if not renderer.has_method("transport_preflight_facts"):
+        return _refuse("missing_physical_preflight_port")
+    var facts: Dictionary = renderer.transport_preflight_facts(
+        world,source_opening)
+    for field in ["source_exists","online","right","header",
+            "preview_world","withdrawn","peer_floor"]:
+        if not facts.has(field):
+            return _refuse("incomplete_physical_preflight_facts")
+    if not bool(facts["source_exists"]):
         return _refuse("no_source_measures")
     var density: float = float(renderer.timeline.pixels_per_beat)
     var staff_gap: float = float(renderer.staff_gap())
     var width: float = float(renderer.size.x)
     if density <= 0.0 or staff_gap <= 0.0 or width < 100.0:
         return _refuse("score_viewport_not_ready")
-    var queue = null if native else renderer._stream_queue
-    var online: Array = facts["online"] if native else queue.online
-    var right: float = float(facts["right"]) if native else renderer._stream_right_beats()
-    var header: float = float(facts["header"]) if native else renderer._stream_header_beats(source_opening)
-    var preview_world: float = (float(facts["preview_world"])
-        if native else maxf(world,float(renderer.stream_world_beat)))
-    var withdrawn: Dictionary = (facts["withdrawn"] if native else
-        queue.preview_tail_withdrawal(preview_world,density,staff_gap,
-            duration,width,width*renderer.PLAYHEAD_FRACTION))
+    var online: Array = facts["online"]
+    var right: float = float(facts["right"])
+    var header: float = float(facts["header"])
+    var preview_world: float = float(facts["preview_world"])
+    var withdrawn: Dictionary = facts["withdrawn"]
+    if not withdrawn.has("remaining") or not withdrawn.has("owners"):
+        return _refuse("incomplete_physical_preflight_facts")
     var survivors: Array = withdrawn["remaining"]
-    var peer_floor: float = (float(facts["peer_floor"]) if native else
-        queue.minimum_peer_opening(
-            density,width,width*renderer.PLAYHEAD_FRACTION))
+    var peer_floor: float = float(facts["peer_floor"])
     var was_paused: bool = bool(facts.get("was_paused",false))
     var paused_source: float = float(facts.get("paused_source",0.0))
     var paused_owner: int = int(facts.get("paused_owner",-1))

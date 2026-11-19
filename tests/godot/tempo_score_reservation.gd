@@ -49,6 +49,28 @@ class IncomingLayer:
         return 0.82415522875817
     func _stream_source_windows(_opening: float) -> Array[Vector2]:
         return [Vector2(0.0,8.0)]
+    # Preserve the original reservation scenario through the same
+    # identity-bound public preflight interface as the actual NativeView.
+    func transport_preflight_facts(world: float, opening: float) -> Dictionary:
+        var density: float = timeline.pixels_per_beat
+        var width: float = size.x
+        var at_world: float = maxf(world,stream_world_beat)
+        return {
+            "source_exists":not _stream_source_windows(opening).is_empty(),
+            "online":_stream_queue.online.duplicate(true),
+            "withdrawn":_stream_queue.preview_tail_withdrawal(
+                at_world,density,staff_gap(),timeline.duration_beats,
+                width,width*PLAYHEAD_FRACTION).duplicate(true),
+            "peer_floor":_stream_queue.minimum_peer_opening(
+                density,width,width*PLAYHEAD_FRACTION),
+            "right":_stream_right_beats(),
+            "header":_stream_header_beats(opening),
+            "preview_world":at_world,
+            "was_paused":false,
+            "paused_source":0.0,
+            "paused_owner":-1,
+            "last_take":""
+        }
 
 var failures := 0
 
