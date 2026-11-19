@@ -287,6 +287,12 @@
 - `ScoreStreamController.observe_transport` now supplies its authenticated `paused_owner` to the queue's existing protected-tail withdrawal policy. That current musical owner remains immutable and visible until natural expiry; separate safe speculative successors can still retract. If the paused owner cannot be identified, withdrawal fails closed rather than deleting unknown current music. No renderer-local workaround, second queue or new test was introduced.
 - Continue to require full Pause/Resume native acceptance and the relocated package audit on this corrected source before closing either gate.
 
+### Implementation checkpoint AJ — one frame-time native score presentation owner
+
+- Consolidated the duplicate `NativeView.present_flow` / `present_clock` callers. The accepted-state owner `PracticePresentationSession` now exclusively projects the native score once per frame with a single `PresentationTimeline` world sample; `PracticeFrameCoordinator` only handles stage effects, progress markers, diagnostics and visible-note feedback.
+- Main samples `visual_world` once per frame, then passes that same coordinate to both the presentation owner and outgoing-score runway instead of separately projecting the world twice. The graded transport remains the separate Python-owned musical clock.
+- This removes conflicting queue/arm lifecycle evaluation from the frame-effects component. No additional tests. Native Play/Pause/Resume and full package acceptance must confirm the changed frame ordering.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

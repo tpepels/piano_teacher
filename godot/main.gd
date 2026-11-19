@@ -873,10 +873,12 @@ func _process(_delta: float) -> void:
     var beat: float = _transport_beat_at(ticks)
     guided_presentation.update_hold(state_inbox.current)
     score_flow.sample(ticks)
+    var visual_world: float = _unrolled_score_beat_at(beat,ticks)
     feedback_session.poll(ticks,layout_revision if layout_revision == revision else -1)
     _update_count_in(beat,ticks)
+    presentation_session.present_frame(state_inbox.current,beat,visual_world)
     var arrivals: Array = frame_coordinator.advance(
-        state_inbox.current,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,
+        state_inbox.current,beat,visual_world,ticks,_delta,
         command_coordinator.state.pending,current_screen,_native_score_ready(),living_chords,
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
@@ -884,7 +886,7 @@ func _process(_delta: float) -> void:
     if score_runway != null:
         # Old score clips continue exiting even during a revision load or
         # a source-picker transition with no currently loaded piece.
-        score_runway.present_frame(state_inbox.current,_unrolled_score_beat_at(beat,ticks))
+        score_runway.present_frame(state_inbox.current,visual_world)
 
 ## Untimed guided learning waits for the learner: hold the score axis where
 ## the current target note sits on the playhead (continuous_score_flow.gd).

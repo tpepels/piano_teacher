@@ -38,6 +38,19 @@ func transport_beat(state: Dictionary, at_ms: int) -> float:
     return visual_clock.score_beat(at_ms) if visual_clock.matches(state) \
         else float(state.get("clock_beat",0.0))
 
+func present_frame(state: Dictionary, beat: float, world: float) -> void:
+    # Single native stream presentation owner. The frame coordinator
+    # consumes only visual effects; it must never attempt another queue
+    # lifecycle reconciliation from the same or stale backend snapshot.
+    if not bool(state.get("loaded",false)):
+        return
+    var renderer = practice_view.stage.renderer
+    if renderer == null or not is_instance_valid(renderer):
+        return
+    renderer.present_clock(beat,world-float(renderer.runway_origin_beat))
+    renderer.present_flow(world,state,beat)
+
+
 func accept(state: Dictionary, request_midpoint_ms: int,
         received_ms: int) -> void:
     visual_clock.accept(state,request_midpoint_ms,received_ms)

@@ -70,14 +70,10 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
 
     var stage = practice_view.stage
     if stage.renderer != null:
-        stage.renderer.present_clock(beat,visual_beat -
-            float(stage.renderer.runway_origin_beat))
         if stage.has_method("present_playhead_glow"):
             stage.present_playhead_glow(score_ready and screen == "practice")
-        # Musical assessment follows beat; score rendering follows one
-        # global, uninterruptible forward world coordinate. Old ink leaves
-        # the stage naturally while a new take is admitted to the right.
-        stage.renderer.present_flow(visual_beat,state,beat)
+        # Score transport/ink reconciliation happens only in
+        # PracticePresentationSession, before this visual-effects frame.
         if stage.runway_steps != null:
             # Stage labels/markers are bound to the same retained source
             # world origin, not a second progression clock. Never hide this
