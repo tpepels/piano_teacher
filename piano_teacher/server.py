@@ -3219,11 +3219,15 @@ class PracticeEngine:
             self.measurement.phase_changed("preparation" if self.awaiting_score_revision else
                 "feedback" if self.teaching is not None and self.teaching.snapshot(now=now)["completed"] else "guided", now)
         elif self.running:
-            # Split a count-in at its musical deadline even when polling is late.
-            if self.measurement.phase == "count_in" and now >= self.visual_transport.run_at:
-                self.measurement.phase_changed("active", self.visual_transport.run_at)
+            # Resume after a partial take has a NEW admitted source opening.
+            # The old take's grading epoch remains intact, but no assessment
+            # boundary can advance until that new opening reaches the playhead.
+            activation = max(self.visual_transport.run_at,
+                             self.midi_ingress.resume_grading_after)
+            if self.measurement.phase == "count_in" and now >= activation:
+                self.measurement.phase_changed("active", activation)
             else:
-                self.measurement.phase_changed("count_in" if now < self.visual_transport.run_at else
+                self.measurement.phase_changed("count_in" if now < activation else
                     "listen" if self.mode == "listen" else "preview" if self.preview_only else "active", now)
         elif self.pending_result is not None:
             self.measurement.phase_changed("feedback", now)
@@ -3232,6 +3236,13 @@ class PracticeEngine:
         else:
             self.measurement.phase_changed("feedback" if self.performance_summary is not None else "idle", now)
         if self._run_pre_assessment_transition(now):
+            return
+        if (self.running and self._pause_floor is not None
+                and now < self.midi_ingress.resume_grading_after):
+            # The canonical recorder and live-assessment clock stand at the
+            # paused source position. Do not inspect rolling checkpoints,
+            # missed attacks, completion or recovery during the admitted
+            # continuation's reading/count-in lead.
             return
         phrase = self.plan.active_phrase
         score_beat = self.visual_transport.play_from_beat + max(
