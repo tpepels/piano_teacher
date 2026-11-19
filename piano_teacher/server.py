@@ -1601,7 +1601,7 @@ class PracticeEngine:
         # Mechanical publication occurs only after the shared transaction commits.
         self._prepared_stage_published = False
         self.retry_range = None
-        if self.pending_result.passed:
+        if decision.verdict is not None and decision.verdict.clears_trouble:
             self._reset_trouble()
         self._remediation_pending = decision.remediation
         if outcome.accelerated:
@@ -2951,17 +2951,28 @@ class PracticeEngine:
         route = completion_route(self.mode, self.review_end_beat, self.visual_transport.play_from_beat)
         if self._automatic_remedial_review and route == "section_review":
             route = "partial_recovery"
+        summary = self._performance_review(phrase, result)
+        completed_visual = self._visual_motion(now)[0]
+        # Select the assessment policy ONCE before evidence is sealed.
+        # A Practice Flow take can pass its lenient, source-bound timing
+        # policy while the generic raw grader reports a different outcome.
+        # Neither storage nor the next-action presenter may re-decide it.
+        if route == "full_passage":
+            self.pending_result = result
+            self._pending_assessed_bpm = self.plan.bpm
+            pending = self._prepare_teaching("full_result", result)
+            response = None
+        else:
+            pending = self._prepare_teaching(
+                "focused_result", result, end_beat=ending)
+            response = pending.decision.response
         self.measurement.seal(self.recorder.presses if self.recorder else (),
             state="completed", reason=route, result=result,
+            verdict=pending.decision.verdict,
             eligible=(route == "full_passage" and self.mode == "practice"
                       and self.plan.bpm >= self.plan.target_bpm),
             extra={"assessed_end_beat": ending})
-        summary = self._performance_review(phrase, result)
-        completed_visual = self._visual_motion(now)[0]
-        response = None
         if route != "full_passage":
-            pending = self._prepare_teaching("focused_result", result, end_beat=ending)
-            response = pending.decision.response
             self.attempt_settlement.settle(pending, plan=self.plan,
                 binding=self._teaching_binding(), now=now,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
@@ -3042,7 +3053,9 @@ class PracticeEngine:
     def _teaching_instruction(pending):
         decision,state = pending.decision,pending.state
         if decision.progress_after.cursor == state.progress.cursor:
-            return "passage mastered" if decision.message == "Piece mastered" else "play the passage again"
+            return ("passage mastered"
+                    if decision.flow_outcome is practice_flow.Outcome.PIECE_DONE
+                    else "play the passage again")
         chosen = replace(state.course,definition=decision.definition_after,progress=decision.progress_after)
         if chosen.progress.cursor[0] != state.progress.cursor[0]:
             return "now learn the next passage"
@@ -3056,13 +3069,16 @@ class PracticeEngine:
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
         self.pending_result = result
         self._pending_assessed_bpm = self.plan.bpm
-        pending = self._prepare_teaching("full_result", result)
+        pending = self.attempt_settlement.pending
+        if pending is None or pending.assessment is not result:
+            pending = self._prepare_teaching("full_result", result)
         decision = pending.decision
         exposure = decision.next_exposure
         response = decision.response
         if self.measurement.attempt_id is not None and self.measurement.sealed is None:
             self.measurement.seal(self.recorder.presses if self.recorder else (),state="completed",
-                reason="full_passage",result=result,eligible=decision.mastery_eligible)
+                reason="full_passage",result=result,eligible=decision.mastery_eligible,
+                verdict=decision.verdict)
         self.attempt_settlement.checkpoint_failed_streak(pending, plan=self.plan, now=now)
         same_timed = (exposure is not None and exposure.stage_key == self.plan.identity
                       and exposure.mode == "practice" and decision.remediation is None)
@@ -3091,8 +3107,8 @@ class PracticeEngine:
             # rest, not when the old count-in deadline elapses.
             self._advance_pending_feedback(now, force_early=True)
             return
-        if result.passed:
-            label = "Clean" if result.clean else "Accepted"
+        if decision.verdict is not None and decision.verdict.accepted:
+            label = "Clean" if decision.verdict.clean else "Accepted"
             self.next_action = (f"{label} passage — restore tempo to {decision.progress_after.bpm} BPM toward {self.plan.target_bpm} BPM."
                 if pending.state.progress.bpm < pending.state.progress.target_bpm else
                 f"{label} pass {pending.state.progress.streak+1}/{SETTINGS.clean_runs_to_master} — {self._teaching_instruction(pending)}.")
