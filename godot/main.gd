@@ -1050,13 +1050,7 @@ func _flow_bpm(state: Dictionary, beat: float, at_ms: int = -1) -> float:
     if bool(state.get("running",false)) or bool(state.get("paused",false)):
         source_bpm = TempoTimeline.bpm_at_beat(beat,source_bpm,
             state.get("tempo_segments",[]))
-    elif at_ms >= 0 and state.get("score_queue_next") is Dictionary and \
-            visual_transport_clock.has_backend_offset:
-        var plan: Dictionary = state["score_queue_next"]
-        var start_ms: float = float(plan.get("deadline_at_ms",INF)) + \
-            visual_transport_clock.backend_offset_ms
-        if float(at_ms) >= start_ms and plan.has("start_rate_bpm"):
-            source_bpm = float(plan["start_rate_bpm"])
+
     return source_bpm
 
 func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
