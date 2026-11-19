@@ -131,7 +131,9 @@ var score_flow = ContinuousScoreFlow.new()
 # Untimed guided learning: world position at which the guided passage's
 # opening (source_from_beat) reaches the playhead, from its admitted plan.
 const GuidedPresentationSession := preload("res://guided_presentation_session.gd")
+const PracticePresentationSession := preload("res://practice_presentation_session.gd")
 var guided_presentation = GuidedPresentationSession.new(score_flow)
+var presentation_session
 var metronome_frame
 # The native compositor is the sole production score view.
 var timeline_model_request
@@ -311,6 +313,10 @@ func _ready() -> void:
         practice_view.present_message(message)
         if frame_diagnostics:
             print("SCORE_ADMISSION:",message))
+    presentation_session = PracticePresentationSession.new(
+        visual_transport_clock,score_flow,guided_presentation,
+        score_session,score_runway,score_admission,
+        practice_view,score_effects,demo_player)
     command_coordinator.succeeded.connect(command_success_effects.apply)
     command_coordinator.learning_accepted.connect(_learning_command_accepted)
     command_coordinator.library_requested.connect(func(piece: String, resume_saved: bool):
@@ -1018,18 +1024,6 @@ func _process(_delta: float) -> void:
 
 ## Untimed guided learning waits for the learner: hold the score axis where
 ## the current target note sits on the playhead (continuous_score_flow.gd).
-func _flow_bpm(state: Dictionary, beat: float, at_ms: int = -1) -> float:
-    # The presentation axis moves at the take's authored tempo while it
-    # runs, otherwise at the selected BPM (rests, count-ins, READY). From an
-    # announced take's deadline on, it moves at that take's start rate even
-    # before the engine's first snapshot of the take arrives.
-    var source_bpm: float = float(state.get("bpm",40.0))
-    if bool(state.get("running",false)) or bool(state.get("paused",false)):
-        source_bpm = TempoTimeline.bpm_at_beat(beat,source_bpm,
-            state.get("tempo_segments",[]))
-
-    return source_bpm
-
 func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
         state_pending = false
@@ -1086,60 +1080,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     var started_ms: int = (state_request_started_ms
         if sample_started_ms < 0 else sample_started_ms)
     last_state_tick = int((started_ms+received_ms)/2.0)
-    visual_transport_clock.accept(parsed,last_state_tick,received_ms)
-    # Native admission publishes future source tempo epochs before the
-    # downbeat. A late snapshot cannot invent or repay historical rates.
-    # Free/idle still use the selected authored practice tempo when no
-    # graded segment is active.
-    var published_playback: Variant = parsed.get("playback_timeline")
-    var authorized: Variant = (published_playback.get("current")
-        if published_playback is Dictionary else null)
-    var flow_beat: float = _transport_beat_at(received_ms)
-    guided_presentation.update_hold(parsed)
-    if authorized is Dictionary:
-        score_flow.sample(received_ms)
-    else:
-        score_flow.sample(received_ms,_flow_bpm(parsed,flow_beat,received_ms))
-    var prepared_stage_waiting: bool = score_runway != null and \
-        score_runway.has_prepared_destination(parsed)
-    if score_runway != null and not prepared_stage_waiting:
-        # A manual unprepared revision still retains the outgoing ink.
-        score_runway.preserve_unprepared_revision(parsed)
-    if demo_player != null and bool(parsed.get("loaded",false)):
-        demo_player.synchronize(parsed,_transport_beat_at(received_ms))
-    if not prepared_stage_waiting:
-        # Do not reset the outgoing renderer while an admitted preloaded
-        # stage is waiting for the presentation transaction.
-        score_session.update_context(parsed,received_ms)
-    if score_runway != null:
-        score_runway.update_state(parsed,received_ms)
-    if bool(parsed.get("loaded",false)) and practice_view.stage.renderer != null:
-        var beat: float = _transport_beat_at(received_ms)
-
-        var world: float = _unrolled_score_beat_at(beat,received_ms)
-        var renderer = practice_view.stage.renderer
-        renderer.present(
-            parsed,beat,world-float(renderer.runway_origin_beat))
-        # Free owns its separate held target; timed source admission
-        # remains exclusively with the PlaybackCoordinator gateway.
-        guided_presentation.publish_authorized_target(
-            parsed,renderer,world,received_ms,
-            visual_transport_clock.backend_offset_ms
-                if visual_transport_clock.has_backend_offset else NAN,
-            beat)
-        # Reconcile the authoritative admission before binding this frame's
-        # active renderer. A preloaded stage may promote while this state
-        # is being presented, so never bind the outgoing renderer to the
-        # new segment or leave the promoted renderer one frame behind.
-        if score_admission != null:
-            score_admission.observe(parsed,received_ms)
-        if practice_view.stage.renderer != renderer:
-            var authorized_renderer = practice_view.stage.renderer
-            authorized_renderer.present(
-                parsed,beat,world-float(authorized_renderer.runway_origin_beat))
-        practice_view.stage.renderer.present_flow(world,parsed,beat)
-    elif score_admission != null:
-        score_admission.observe(parsed,received_ms)
+    presentation_session.accept(parsed,last_state_tick,received_ms)
     state_presenter.present(
         parsed,current_screen,command_coordinator.state.pending,_native_score_ready(),
         fingering_save_error,
