@@ -79,6 +79,11 @@ class EngineCommands:
                 # Heavy JSON was already encoded by the background prefetch
                 # worker. The musical clock only transfers these bytes.
                 return OK, engine.next_stage_score()
+            if operation == "playback.status":
+                if values:
+                    raise ValueError("playback.status takes no input")
+                with engine.lock:
+                    return self._reply(OK, engine.playback.status())
             if operation == "playback.reserve":
                 with engine.lock:
                     return self._reply(OK, engine.playback.reserve(engine, **values))
