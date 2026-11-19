@@ -398,6 +398,14 @@ func _confirm_authorized(data: Dictionary) -> void:
     var now_ms: int = Time.get_ticks_msec()
     var deadline_local: float = float(receipt["deadline_ms"]) + \
         float(now_ms)-_backend_ms()
+    if not current.is_empty():
+        # Admission authorizes the exact source rate epochs before their
+        # scheduled downbeat. Renderer, inverse physical preflight and
+        # count-in now consume this same deterministic presentation clock.
+        flow.authorize_source_epoch(
+            deadline_local,float(current.get("from_beat",0.0)),
+            float(current.get("bpm",60.0)),
+            current.get("tempo_segments",[]),expected)
     if not current.is_empty() and float(current.get("count_in_beats",0.0)) > 0.0 and \
             not bool(current.get("reused_count_in",false)):
         metronome.reserve_count_in(
