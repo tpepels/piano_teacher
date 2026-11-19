@@ -184,7 +184,13 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     if planned.is_empty():
         _report_problem("Cannot reserve source notation for this playback")
         return
+    # From this point the gateway owns the provisional source. Any failure
+    # in coordinate inversion or deadline validation must cancel that exact
+    # arm and restore its safe withdrawn suffix.
     renderer = view
+    admission_state = state.duplicate(true)
+    current = intent.duplicate(true)
+    started_ms = frame_ms
     var start_world: float = float(planned.get("start_world", NAN))
     var lead_ms: float = _deadline_at_world(
         start_world,frame_ms,float(state.get("clock_beat",0.0)),
@@ -197,8 +203,6 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         _cancel_provisional()
         _report_problem("Reserved notation precedes its musical deadline")
         return
-    admission_state = state.duplicate(true)
-    current = intent.duplicate(true)
     current["deadline_ms"] = deadline
     current["world_origin"] = start_world
     current["reused_count_in"] = bool(
@@ -225,12 +229,18 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
 func observe(state: Dictionary, frame_ms: int) -> void:
     var intent: Variant = state.get("playback_intent")
     var timeline: Variant = state.get("playback_timeline")
+    var pending_segment: String = str(receipt.get("segment_id",""))
+    var active_segment: String = (
+        str(timeline.get("segment_id",""))
+        if timeline is Dictionary else "")
+    # A worker can authorize a take before its in-process reply is delivered.
+    # The resulting running-state poll is AUTHORITATIVE; never roll back the
+    # source just because this poll no longer contains the pending intent.
+    if not pending_segment.is_empty() and active_segment == pending_segment:
+        pending_reconciliation = false
+        _confirm_authorized(timeline)
     if timeline is Dictionary:
-        var segment: String = str(timeline.get("segment_id", ""))
-        if pending_reconciliation and not segment.is_empty() and \
-                segment == str(receipt.get("segment_id","")):
-            pending_reconciliation = false
-            _confirm_authorized(timeline)
+        var segment: String = str(timeline.get("segment_id",""))
         if bool(state.get("running", false)) and \
                 str(state.get("phase", "")) == "playing" and \
                 not segment.is_empty() and \
@@ -239,36 +249,57 @@ func observe(state: Dictionary, frame_ms: int) -> void:
             missing_score_frames += 1
             if missing_score_frames >= 4 and reported_failure_segment != segment:
                 reported_failure_segment = segment
-                failure_request.request("playback.failure",{
-                    "take_id": str(timeline.get("take_id", "")),
-                    "segment_id": segment,
-                    "reason": "running_take_without_admitted_source"})
+                if failure_request._pending_id < 0:
+                    failure_request.request("playback.failure",{
+                        "take_id": str(timeline.get("take_id", "")),
+                        "segment_id": segment,
+                        "reason": "running_take_without_admitted_source"})
         else:
             missing_score_frames = 0
-    if not intent is Dictionary or (bool(state.get("paused",false)) and \
-            str(intent.get("action","")) != "resume"):
-        if not current.is_empty() and not pending_reconciliation:
-            _cancel_provisional()
-        elif pending_reconciliation and not receipt.is_empty() and \
-                status_request._pending_id < 0 and \
-                Time.get_ticks_msec()-started_ms > 800:
-            started_ms = Time.get_ticks_msec()
-            _query_status()
+    var suspended: bool = (bool(state.get("paused",false)) and
+        (not intent is Dictionary or
+        str(intent.get("action","")) != "resume"))
+    if not intent is Dictionary or suspended:
+        if not current.is_empty():
+            # Never infer a rejected reservation from a missing intent in
+            # a possibly newer state snapshot. An outstanding reserve or
+            # present command must first finish/reconcile.
+            if reserve_request._pending_id >= 0 or \
+                    present_request._pending_id >= 0:
+                return
+            if not receipt.is_empty():
+                pending_reconciliation = true
+                if status_request._pending_id < 0 and \
+                        Time.get_ticks_msec()-started_ms >= 400:
+                    started_ms = Time.get_ticks_msec()
+                    _query_status()
+            elif not pending_reconciliation:
+                _cancel_provisional()
         return
     var identifier: String = str(intent.get("intent_id",""))
     var attempt: int = int(intent.get("attempt",-1))
     if identifier == last_activated_intent and attempt == last_activated_attempt:
-        # Discard stale state polls that preceded presentation completion.
         return
     if not current.is_empty():
         if str(current.get("intent_id","")) == identifier and \
                 int(current.get("attempt",-2)) == attempt:
             if pending_reconciliation and present_request._pending_id < 0 and \
+                    reserve_request._pending_id < 0 and \
                     status_request._pending_id < 0 and \
                     Time.get_ticks_msec()-started_ms > 800 and \
                     not receipt.is_empty():
                 started_ms = Time.get_ticks_msec()
                 _query_status()
+            return
+        # This is a NEW intent. Reconcile the former reservation before
+        # touching its ink, because its result can arrive out of order.
+        if reserve_request._pending_id >= 0 or \
+                present_request._pending_id >= 0 or \
+                status_request._pending_id >= 0:
+            return
+        if not receipt.is_empty():
+            pending_reconciliation = true
+            _query_status()
             return
         _cancel_provisional()
     if reserve_request._pending_id >= 0 or present_request._pending_id >= 0:
