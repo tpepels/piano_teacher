@@ -110,9 +110,16 @@ class ProgressRepository:
             elif row[1] is not None and row[2] is not None:
                 # After a generator version change, retain a navigable
                 # source-measure location, never old proficiency or tempo.
+                # Migrating a prior phrase/link curriculum must start
+                # at an individual authored bar. An old 1-4 phrase is NOT
+                # evidence that its four new moving-window exercises were
+                # learned. Retain source location, never carry old mastery.
+                old_first = int(row[1])
+                migrate_window = p.profile == "practice-flow"
                 p.restore_location(
-                    kind=row[5] or "learn",
-                    first_bar=int(row[1]), last_bar=int(row[2]),
+                    kind="learn" if migrate_window else row[5] or "learn",
+                    first_bar=old_first,
+                    last_bar=old_first if migrate_window else int(row[2]),
                     hand=row[3] if row[3] in ("right", "left", "both") else "both",
                     level=row[4] or "")
 
