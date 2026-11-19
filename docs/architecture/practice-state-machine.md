@@ -1,105 +1,79 @@
-# Practice state machine and timeline (plan, 2026-11-18)
+# Practice state machine and authorized playback timeline
 
-**Why.** "Where are we" is today derived from many loose flags in the engine
-(`mode`, `phase`, `running`, `paused`, `awaiting_score_revision`, the guided
-controller's phase, settlement and continuation state, flow flags) and from a
-second state in the Godot renderer (READY copy, armed Play, bound take). Each
-transition must set several of them; a route that forgets one gives the
-defects the owner met on 2026-11-18: Free notes scrolling away, a Tempo take
-with an empty staff. The fix is one explicit state machine whose state is
-the only truth, and a timeline that follows from that state.
+**Implemented in source, 2026-11-19.** The current production contract is
+[playback-coordinator.md](playback-coordinator.md). The learner-facing
+decisions remain [docs/practice-flow.md](../practice-flow.md).
 
-The learner-facing behaviour stays exactly as in
-[docs/practice-flow.md](../practice-flow.md).
+## Two independent decisions
 
-## Two layers of state
+**Lesson/teaching:** `application/practice_flow.py` and the selected registered
+lesson generator choose the next passage, hand, lesson step, tempo, adaptive
+aid and mastery decision. They never admit score ink or authorize a timed
+transport.
 
-### 1. Lesson state (where in the piece)
+**Playback:** `application/playback_coordinator.py` owns the take identity,
+score admission transaction, count-in authorization, running/paused/settling
+lifecycle, cancellation and explicit failure states. Every timed origin
+(including physical MIDI controls and automatic continuation) uses the same
+transaction. The coordinator publishes `playback_intent` and
+`playback_timeline`; Godot draws the exact authorized segment identity.
 
-`FlowState` — owned by `piano_teacher/application/practice_flow.py`:
+Untimed Free publishes a separate `guided` timeline segment that holds the
+next target at the playhead. It has no timed grading deadline.
 
-| Field | Meaning |
-|---|---|
-| `stage` | course step: phrase/link/final, hand (from the course) |
-| `step` | `LISTEN`, `FREE`, `TEMPO`, `DONE` |
-| `bpm`, `target_bpm` | practice tempo and the original tempo |
-| `failures` | failed Tempo takes in a row at this tempo |
-| `clean_at_target` | clean takes in a row at the target tempo |
-| `free_returns` | times this stage went back from 50% to Free (aid trigger) |
+## Practice-flow transitions
 
-Transitions (the only functions that change it):
+| Learner event | Flow transition |
+| --- | --- |
+| Open a new piece | First phrase, right hand, Listen |
+| Open saved progress | Saved phrase, Free warm-up |
+| Listen completes | Free |
+| Every correct Free target found | Tempo at 50% |
+| Clean graded passage below target | Next attempt, +10% of target tempo |
+| First failed graded passage | Repeat at the same tempo |
+| Second failed graded passage above 50% | Lower tempo by 10% |
+| Second failure at 50% | Return to Free (except final test) |
+| Two clean target-tempo passes | Next hand, phrase, link, or completed piece |
+| Repeated failure after Free | Explicitly announced Coda/Fukuda aid |
+| Final whole-piece test | Tempo from 50% to original; no Free |
 
-| Event | From | To | Effect |
-|---|---|---|---|
-| open (fresh piece) | — | `LISTEN` of the first stage | "Listen · hand" |
-| open (resumed) | — | `FREE` of the saved stage | "Now without tempo" |
-| final stage entered | any | `TEMPO` at 50% | "Whole piece · 50%" |
-| listen finished | `LISTEN` | `FREE` | "Now without tempo" |
-| listen again | `FREE`/`TEMPO` | `LISTEN`, then back to `FREE` | — |
-| all Free notes found | `FREE` | `TEMPO` at 50% | "Now in tempo · 50%" |
-| take clean, below target | `TEMPO` | `TEMPO` +10% of target | "Faster: N BPM" |
-| take clean at target, first | `TEMPO` | `TEMPO` | "Clean! Once more" |
-| take clean at target, second | `TEMPO` | next stage `LISTEN` (final: `DONE`) | "Well done" |
-| take failed, first in a row | `TEMPO` | `TEMPO` same tempo | "Again" |
-| take failed, second, above 50% | `TEMPO` | `TEMPO` −10% | "Slower: N BPM" |
-| take failed, second, at 50% | `TEMPO` | `FREE`, `free_returns`+1 | "Once more without tempo" |
-| take failed, second, at 50%, final test | `TEMPO` | `TEMPO` at 50% (no Free in the final test) | "Again at the same tempo" |
+Course decisions are independent of whether the physical score can be
+admitted at a particular instant. Once the decision is final,
+`PlaybackCoordinator.request` makes an immutable intent. Godot's
+`ScoreAdmissionGateway` checks all current and predecessor source/rest
+geometry, reserves a future segment, obtains a backend receipt and presents
+that exact segment. Only `PlaybackCoordinator.present` can authorize the
+musical deadline.
 
-### 2. Take state (where in the current exposure)
+The backend and renderer cannot independently publish another timed source
+from a guessed deadline. `score_queue_next` remains an explicit headless
+projection and is not part of graphical timed playback.
 
-`TakeState` — one per exposure the learner sees:
+## Non-negotiable runtime properties
 
-`PREPARING` (engraving) → `ANNOUNCED` (segment published with its deadline)
-→ `COUNT_IN` → `PLAYING` → `GRADING` → next take is `ANNOUNCED`, or the
-lesson transition decides the next step. Free has `WAITING(target)` instead
-of count-in/playing. `PAUSED` is an overlay that returns to the same take
-state.
+- No timed grading or Listen audio without a source- and revision-matched,
+  physically admitted segment.
+- Count-in and MIDI/audio use the exact authorized monotonic deadline.
+- Score layers and rest strips are immutable after exposure. Cancellation
+  touches only a safely retractable future suffix.
+- Pause never rewinds the world axis. A resumed graded partial take preserves
+  its recorder; a newly admitted future segment starts after the frozen
+  musical position. Count-in reuse is limited to an original still-safe
+  source; otherwise another full authored bar is provided.
+- Automatic progression settles the teaching result before negotiating the
+  next score. No polling result can retrospectively insert missing notes
+  into a running take.
+- A lost worker response is reconciled through `playback.status`, not
+  assumed to mean failure. A missing or mismatched bound source interrupts
+  the take rather than awarding unseen mastery.
+- Real native renderer compilation and source identity are preconditions of
+  graphical admission; no HTTP process or compatibility score renderer is
+  involved.
 
-## The timeline
+## Verification boundary
 
-Every take state that shows music produces one **segment**:
-
-| Field | Meaning |
-|---|---|
-| `segment_id` | unique and immutable; republishing never moves it |
-| `kind` | `listen`, `free`, `tempo` |
-| `source` | stage key, source from/end beat, hand |
-| `placement` | `deadline_ms` (listen/tempo) or `hold_at_target` (free) |
-| `bpm`, `count_in_beats`, `graded` | how it moves and whether it is graded |
-
-The engine publishes `timeline = {current, next}`. Godot draws exactly the
-published segments, binds by `segment_id`, and decides nothing itself.
-
-## Invariants (checked in code and by tests)
-
-1. A take in `COUNT_IN` or `PLAYING` always has its segment in the timeline.
-2. A `tempo`/`listen` segment is announced at least one count-in bar ahead.
-3. In `FREE`, the staff holds the current target note on the playhead; the
-   segment is not republished while waiting.
-4. Lesson state changes only through the transitions above.
-5. Godot has no admission path of its own.
-
-## Steps (each step leaves the app playable)
-
-1. **Lesson state machine** — *done 2026-11-18.* New module with the transitions above; the
-   engine and the course decisions call it instead of the scattered flow
-   hooks (`_flow_*` in server.py, `flow_assessed_progress`, the rewrites in
-   `PracticeFlowLessonGenerator.decide_teaching`). Status line and messages
-   come from the machine.
-2. **Take state and segments in the engine.** One owner of the take state;
-   `score_queue_next` is replaced by the published timeline segments, with
-   the invariants as runtime checks.
-3. **Godot shows segments only.** Bind by `segment_id`; remove the READY
-   staging and armed-Play path in `notation/native/view.gd` and the queue
-   inference in `main.gd`.
-
-Then the remaining practice-flow items (Coda/Fukuda aid, ghost note, Listen
-lighting, dimmed hand and neighbour bars).
-
-## Testing
-
-Invariant tests walk the machine through every transition and assert the
-invariants (owner request 2026-11-18: guarantee instead of patching).
-Behaviour details beyond the invariants get tests only after the owner has
-confirmed them at the piano. `bash scripts/debug-session.sh` logs state
-changes and `TAKE_WITHOUT_SCORE` defects during manual testing.
+The current CI runs the pre-existing Python tests and Godot checks. No new
+tests were written as part of this architectural replacement, per owner
+instruction. A passing source/CI check does not establish physical MIDI/audio
+latency, speaker output or full long-piece visual behavior. Those are
+separate release acceptance checks.
