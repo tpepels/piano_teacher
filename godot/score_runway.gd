@@ -6,12 +6,7 @@ const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
-const StreamAdmission := preload("res://score_stream_admission.gd")
-const StreamQueue := preload("res://score_stream_queue.gd")
 const MAX_PRELOAD_FAILURES := 3
-# Retain the old conservative floor when the outgoing renderer is unavailable.
-# The rest of the fallback is the SAME offscreen admission horizon as repeats.
-const MIN_FALLBACK_STAGE_LEAD_BEATS := 5.0
 signal renderer_promoted(new_renderer)
 signal preload_problem(message: String)
 
@@ -405,59 +400,12 @@ func present_frame(_state: Dictionary, global_beat: float) -> void:
     if _future.retained_ready() and not _acknowledged and not _ack_waiting and \
             not _terminal_preload_failure and \
             Time.get_ticks_msec() >= _next_poll_ms:
-        # Reserve an additional 1.5 source beats for polling/IPC jitter,
-        # beyond the entire offscreen staff and Verovio header. Neither
-        # the frontend nor the backend may recenter a late source.
-        # P5 short handoff: the engine settles the step once the outgoing
-        # take's last pixel has passed (clear, beats after that take's end)
-        # and opens the new stage on the empty strip one count-in bar ahead,
-        # never closer than the rest gap and header (lead).
-        var short: Dictionary = _short_handoff()
-        var request: Dictionary = {"stage_key":_bundle["stage_key"],
-            "revision":_bundle["revision"],
-            "presentation_lead_beats":float(short.get("lead",maxf(
-                MIN_FALLBACK_STAGE_LEAD_BEATS,
-                StreamAdmission.automatic_horizon(0.0,
-                    _future._stream_right_beats(),
-                    _future._stream_header_beats(0.0)))))}
-        if short.has("clear"):
-            request["presentation_clear_beats"] = float(short["clear"])
-        # The incoming stage's own short-rest geometry (its density/header)
-        # times that stage's repeats once the handoff commits.
-        if _future.has_method("short_rest_geometry"):
-            request.merge(_future.short_rest_geometry(),true)
-        _ack_waiting = _ack.request("score.stage_ready",request) == OK
-
-
-func _short_handoff() -> Dictionary:
-    # Geometry for opening the next stage on the empty strip (owner P5),
-    # from the SAME pop-in peer rule the queue enforces
-    # (ScoreStreamQueue.peer_popin_after): clear = beats after the outgoing
-    # take's end until its final barline margin has passed the playhead and
-    # the new density may open without ever overlapping it; lead = the rest
-    # gap plus the new opening header (the engine adds one count-in bar).
-    var old = stage.renderer if stage != null else null
-    if old == null or not is_instance_valid(old) or old == _future or \
-            old.get("timeline") == null or not old.has_method("staff_gap"):
-        return {}
-    var old_density: float = maxf(1.0,float(old.timeline.pixels_per_beat))
-    var duration: float = float(old.timeline.duration_beats)
-    var trailing: float = StreamAdmission.engraved_clip_bounds(
-        0.0,duration,old_density,float(old.staff_gap()),duration).y/old_density-duration
-    var density: float = maxf(1.0,float(_future.timeline.pixels_per_beat))
-    var playhead: float = _future.size.x*NativeView.PLAYHEAD_FRACTION
-    var rest: float = float(old.practice_timeline.get("gap",{}).get(
-        "duration_beats",0.0)) if "practice_timeline" in old else 0.0
-    # Round 4: the outgoing take keeps its written rest bar (one full
-    # measure). The step settles at once (clear 0) and the new stage opens
-    # straight after that rest bar by the pop-in rule (lead counted from
-    # the take end).
-    return {"clear":0.0,"lead":StreamQueue.peer_popin_after(
-        maxf(rest,trailing),old_density,playhead,density,
-        StreamQueue.PEER_REST_MARGIN_PX if rest >= trailing else
-        StreamQueue.PEER_MARGIN_PX)+
-        _future._stream_header_beats(0.0)+
-        StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+        # Preloading only proves compiled source availability. All physical
+        # clearance and the next absolute downbeat belong exclusively to
+        # ScoreAdmissionGateway + the backend MusicalScheduler.
+        _ack_waiting = _ack.request("score.stage_ready",{
+            "stage_key":_bundle["stage_key"],
+            "revision":_bundle["revision"]}) == OK
 
 
 func promote_if_ready(_state: Dictionary, _run_at_world: float = NAN) -> bool:
