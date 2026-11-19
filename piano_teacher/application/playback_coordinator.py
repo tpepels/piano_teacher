@@ -38,6 +38,7 @@ class PlaybackIntent:
     fingerprint: str
     stage_key: str
     revision: int
+    hand: str
     mode: str
     from_beat: float
     bpm: float
@@ -56,6 +57,7 @@ class ScoreReceipt:
     fingerprint: str
     stage_key: str
     revision: int
+    hand: str
     segment_id: str
     deadline_ms: float
     world_origin: float
@@ -119,6 +121,7 @@ class PlaybackCoordinator:
                 and engine.fingerprint == intent.fingerprint
                 and engine.plan.identity == intent.stage_key
                 and engine.score_revision == intent.revision
+                and engine.plan.hand == intent.hand
                 and abs(float(engine.plan.bpm)-intent.bpm) < 1e-7
                 and intent.generation == self.generation)
 
@@ -176,7 +179,7 @@ class PlaybackCoordinator:
             take_id=take_id, generation=self.generation,
             attempt=attempt, action=action,
             fingerprint=engine.fingerprint, stage_key=engine.plan.identity,
-            revision=engine.score_revision, mode=mode,
+            revision=engine.score_revision,hand=engine.plan.hand,mode=mode,
             from_beat=float(from_beat), bpm=bpm,
             count_in_beats=count_in,
             count_in_meter=(int(meter[0]), int(meter[1])),
@@ -207,12 +210,13 @@ class PlaybackCoordinator:
 
     def reserve(self, engine, *, intent_id: str, attempt: int,
                 take_id: str, fingerprint: str, stage_key: str,
-                revision: int, deadline_ms: float,
+                revision: int, hand: str, deadline_ms: float,
                 world_origin: float, queue_generation: int,
                 renderer_generation: int, reused_count_in: bool = False) -> dict:
         intent = self._require_intent(engine, intent_id, attempt)
         if (take_id != intent.take_id or fingerprint != intent.fingerprint
-                or stage_key != intent.stage_key or revision != intent.revision):
+                or stage_key != intent.stage_key or revision != intent.revision
+                or hand != intent.hand):
             raise ValueError("Score reservation has the wrong musical source")
         if (not math.isfinite(float(deadline_ms))
                 or not math.isfinite(float(world_origin))):
@@ -245,7 +249,7 @@ class PlaybackCoordinator:
         self.receipt = ScoreReceipt(
             intent_id=intent_id, attempt=attempt, take_id=take_id,
             fingerprint=fingerprint, stage_key=stage_key, revision=revision,
-            segment_id=f"{intent_id}:segment:{attempt}",
+            hand=hand,segment_id=f"{intent_id}:segment:{attempt}",
             deadline_ms=float(deadline_ms), world_origin=float(world_origin),
             queue_generation=int(queue_generation),
             renderer_generation=int(renderer_generation),
@@ -389,6 +393,7 @@ class PlaybackCoordinator:
             "action": intent.action, "mode": intent.mode,
             "fingerprint": intent.fingerprint,
             "stage_key": intent.stage_key, "revision": intent.revision,
+            "hand":intent.hand,
             "from_beat": intent.from_beat, "bpm": intent.bpm,
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
