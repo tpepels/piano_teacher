@@ -79,6 +79,16 @@ func replace_renderer(next_renderer) -> void:
         next_renderer.connect("retained_ink_compiled",_finish_native_score)
 
 
+func matches_ready_source(intent: Dictionary) -> bool:
+    # Public, identity-bound readiness port. Consumers never inspect
+    # fingerprint or revision storage directly.
+    return is_ready() and _loaded and \
+        _fingerprint == str(intent.get("fingerprint","")) and \
+        revision == int(intent.get("revision",-1)) and \
+        rendered_revision == revision and \
+        str(_state.get("hand","")) == str(intent.get("hand",""))
+
+
 func update_context(state: Dictionary, now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))
     var next_revision: int = int(state.get("revision",0))
