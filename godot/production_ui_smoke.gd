@@ -96,7 +96,11 @@ func _process(_delta: float) -> bool:
         if not (chrome.practice_navigation is HBoxContainer) or (
                 absf(chrome.speed_label.get_global_rect().get_center().y
                     - chrome.practice_settings_button.get_global_rect().get_center().y) > 2.0):
-            _fail("Practice BPM and Settings wrapped onto different rows")
+            _fail("Practice BPM and Settings wrapped onto different rows: bpm=%s settings=%s nav=%s header=%s" % [
+                str(chrome.speed_label.get_global_rect()),
+                str(chrome.practice_settings_button.get_global_rect()),
+                str(chrome.practice_navigation.get_global_rect()),
+                str(chrome.practice_header.get_global_rect())])
             return true
         if chrome.practice_header.size.y > 56.0 or chrome.start_button.size.y > 60.0:
             _fail("Practice chrome is too tall and crowds out the score")

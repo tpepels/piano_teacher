@@ -220,6 +220,12 @@
 - Added `LearningCapture.begin_fresh_learner_session` to establish a new run/session ID and durable session entry **in the existing owner object**, after deletion and stop. Every reader/writer retains the same authoritative capture. No second ledger or new tests.
 - Resume, manual MIDI and interrupted-attempt physical acceptance remains open.
 
+### Implementation checkpoint Y — native Listen and header acceptance corrections
+
+- Full native run [44635120261](https://github.com/tpepels/piano_teacher/actions/runs/44635120261) **passed native GDExtension compilation, isolated MIDI generation, and embedded Godot/Python + real-score registration**. It stopped on the existing production UI acceptance: BPM and Settings were not vertically aligned. The original bridge smoke also printed `PIANO_NATIVE_STARTUP_FAILED` after a score ACK, because it had assumed every new piece skipped Listen; that is no longer true for the default Practice Flow.
+- Centered the practice header context/navigation/BPM/Settings controls on one vertical row. Kept the existing assertion but included exact geometry in its failure diagnostic. Updated the existing native bridge smoke to explicitly enter Practice after the correctly pending Listen stage before testing its low-level start/pause/resume protocol; the normal Listen/Free/Tempo path remains reserved for production-scene acceptance.
+- No new tests. Repeat native UI and package audit are still required for latest source.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

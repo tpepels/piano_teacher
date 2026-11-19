@@ -121,21 +121,25 @@ func _ready() -> void:
     heading.add_child(flow_status_label)
     var context := HBoxContainer.new()
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
+    context.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     practice_header.add_child(context)
     # Only BPM and Settings belong in the header. Play/Pause lives in the
     # single large transport control beneath the music.
     practice_navigation = HBoxContainer.new()
     practice_navigation.alignment = BoxContainer.ALIGNMENT_END
+    practice_navigation.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     practice_navigation.add_theme_constant_override("separation",8)
     context.add_child(practice_navigation)
     speed_label = _button("-- BPM ▾",_toggle_tempo_popup,false,"practice_tempo")
     speed_label.custom_minimum_size = Vector2(182,40)
     speed_label.tooltip_text = "Adjust tempo"
+    speed_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     practice_navigation.add_child(speed_label)
     practice_settings_button = _button("Settings",
         func(): navigation_requested.emit("settings"),false,"settings")
     practice_settings_button.tooltip_text = "Settings"
     practice_settings_button.call("set_icon_only",true)
+    practice_settings_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     practice_navigation.add_child(practice_settings_button)
     practice_details_button = _button("More",_toggle_details,false,"utility")
     practice_details_button.tooltip_text = "More lesson options and performance"

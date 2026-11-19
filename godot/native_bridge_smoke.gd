@@ -113,9 +113,27 @@ func _process(_delta: float) -> bool:
                 _submit("practice.command",{"action":"score_ready","revision":revision})
                 operation = "practice.ack"
             "practice.ack":
+                if not bool(values.get("loaded",false)):
+                    _fail("Score-ready acknowledgement lost the loaded MIDI")
+                    return true
+                if str(values.get("mode","")) == "listen":
+                    # A fresh practice-flow piece starts in Listen. The
+                    # score ACK cannot start its audio until demo preparation
+                    # also completes. This bridge's transport check switches
+                    # explicitly to practice; the actual UI journey verifies
+                    # the normal Listen -> Free -> Tempo transition.
+                    _submit("practice.command",{"action":"practice"})
+                    operation = "practice.prepare"
+                else:
+                    if str(values.get("phase","")) == "loading":
+                        _fail("Score-ready acknowledgement did not release loading")
+                        return true
+                    _submit("practice.command",{"action":"start"})
+                    operation = "practice.start"
+            "practice.prepare":
                 if not bool(values.get("loaded",false)) or \
-                        str(values.get("phase","")) == "loading":
-                    _fail("Score-ready acknowledgement did not release loading")
+                        str(values.get("mode","")) != "practice":
+                    _fail("Explicit practice request did not select real MIDI")
                     return true
                 _submit("practice.command",{"action":"start"})
                 operation = "practice.start"
