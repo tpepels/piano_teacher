@@ -3,6 +3,7 @@ extends Node
 ## All timed routes arrive as versioned engine intents. The only commit path is
 ## preview -> arm immutable source -> backend reserve -> confirm presentation.
 const Request := preload("res://inprocess_request.gd")
+const TransportReservation := preload("res://score_transport_reservation.gd")
 const TempoTimeline := preload("res://tempo_timeline.gd")
 
 signal admission_problem(message: String)
@@ -136,9 +137,38 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var reservation_action: String = (
         "resume" if action == "resume" else
         "restart" if action == "restart" else "start")
-    var planned: Dictionary = view.reserve_transport_action(
-        reservation_action, world,
-        float(intent.get("from_beat", 0.0)),required_slot)
+    var opening: float = float(intent.get("from_beat",0.0))
+    var planned: Dictionary = {}
+    var partial: float = float(intent.get("resume_remaining_beats",0.0))
+    var admitted_floor: float = backend_floor
+    if action == "resume" and partial > 0.0:
+        # Reuse an already-spoken count-in only when the ORIGINAL unexposed
+        # source is still ahead of the playhead. The pure preflight avoids
+        # appending a short-count-in source that would restart the music.
+        var partial_floor: float = backend_now + \
+            TempoTimeline.seconds_from_beats(partial,tempo)*1000.0+420.0
+        var partial_world: float = flow.project_authored_future(
+            frame_ms+roundi(partial_floor-backend_now),frame_ms,
+            float(state.get("clock_beat",0.0)),tempo,authored)
+        var partial_slot: float = maxf(partial,partial_world-world)
+        var preview: Dictionary = TransportReservation.plan(
+            view,"resume",world,opening,partial_slot)
+        if bool(preview.get("ok",false)) and \
+                str(preview.get("mode","")) == "reuse":
+            planned = view.reserve_transport_action(
+                "resume",world,opening,partial_slot)
+            if not planned.is_empty() and \
+                    bool(planned.get("reused_unplayed_count_in",false)):
+                admitted_floor = partial_floor
+            else:
+                if not planned.is_empty():
+                    view.cancel_stream_arm()
+                planned.clear()
+    if planned.is_empty():
+        # Every newly inserted source gets its own complete bar. Reuse is
+        # the sole exception; the count-in is never silently shortened.
+        planned = view.reserve_transport_action(
+            reservation_action,world,opening,required_slot)
     if planned.is_empty():
         admission_problem.emit("Cannot reserve source notation for this playback")
         return
@@ -151,7 +181,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         _cancel_provisional()
         return
     var deadline: float = backend_now+lead_ms
-    if deadline < backend_floor-.01:
+    if deadline < admitted_floor-.01:
         _cancel_provisional()
         admission_problem.emit("Reserved notation precedes its musical deadline")
         return
