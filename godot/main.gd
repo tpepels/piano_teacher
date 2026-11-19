@@ -47,8 +47,10 @@ const NavigationSession := preload("res://navigation_session.gd")
 const ApplicationEventRouter := preload("res://application_event_router.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 const FeedbackEventInbox := preload("res://feedback_event_inbox.gd")
+const ApplicationStateInbox := preload("res://application_state_inbox.gd")
 
 var navigation_session = NavigationSession.new()
+var state_inbox = ApplicationStateInbox.new()
 var status_head_preloader = StatusHeadPreloader.new()
 var current_screen: String:
     get: return navigation_session.current_screen
@@ -111,7 +113,6 @@ var revision: int:
     set(value):
         if score_session != null:
             score_session.revision = value
-var state_pending := false
 var layout_revision: int:
     get:
         return score_session.layout_revision if score_session != null else -1
@@ -126,8 +127,6 @@ var rendered_revision: int:
     get:
         return score_session.rendered_revision if score_session != null else -1
 
-var last_state: Dictionary = {}
-var last_state_tick := 0
 # Time of the frame being processed; sampled once at the top of _process.
 var frame_ms := 0
 var visual_transport_clock = VisualTransportClock.new()
@@ -153,14 +152,10 @@ var timeline_model_retry_after_ms: int:
     get:
         return score_session.timeline_model_retry_after_ms if score_session != null else 0
 
-var state_request_started_ms := 0
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
 var frame_diagnostics := false
-var last_timing_phase := ""
-var last_timing_transport := -1
-var last_timing_revision := -1
 var frame_meter = FrameMeter.new()
 var frame_coordinator
 var state_presenter
@@ -287,7 +282,7 @@ func _ready() -> void:
         # lock contention without improving hotplug detection. Only discover
         # a new device while none is connected, in Settings, or on explicit tap.
         if current_screen == "settings" or (current_screen == "practice"
-                and str(last_state.get("device", "")).is_empty()):
+                and str(state_inbox.current.get("device", "")).is_empty()):
             _request_devices()
     )
     add_child(scan_timer)
@@ -341,7 +336,7 @@ func _ready() -> void:
     command_coordinator.refresh_requested.connect(_poll)
     command_coordinator.fingering_changed.connect(func(message: String):
         fingering_save_error = message
-        _present_fingering_status(last_state.get("fingering",{})))
+        _present_fingering_status(state_inbox.current.get("fingering",{})))
     command_coordinator.score_error_cleared.connect(func(): score_error = "")
     set_process(true)
 
@@ -373,7 +368,7 @@ func _count_tick(accent: bool, sampled_beat: float = NAN) -> void:
     click_player.play()
     # The smoke confirms clock scheduling; it cannot test physical speakers.
     if phase0_smoke_mode:
-        print("PHASE0_CLICK:", str(last_state.get("phase", "")))
+        print("PHASE0_CLICK:", str(state_inbox.current.get("phase", "")))
 
 func _transport_beat_now() -> float:
     return _transport_beat_at(Time.get_ticks_msec())
@@ -383,9 +378,9 @@ func _transport_beat_at(at_ms: int) -> float:
     # phase-locked to accepted snapshots; the Python engine stays
     # authoritative for note timing and assessment. Until a snapshot of this
     # transport is accepted, the last reported beat is held, never guessed.
-    if visual_transport_clock.matches(last_state):
+    if visual_transport_clock.matches(state_inbox.current):
         return visual_transport_clock.score_beat(at_ms)
-    return float(last_state.get("clock_beat", 0.0))
+    return float(state_inbox.current.get("clock_beat", 0.0))
 
 # Projection only: never change the backend's local MIDI grading clock.
 # Across repeats the model is drawn at consecutive positions on one infinite
@@ -412,7 +407,7 @@ func _raw_click(accent: bool) -> void:
 func _update_count_in(sampled_beat: float = NAN, now_ms: int = -1) -> void:
     if now_ms < 0:
         now_ms = Time.get_ticks_msec()
-    metronome_frame.update(last_state,last_state_tick,sampled_beat,now_ms)
+    metronome_frame.update(state_inbox.current,state_inbox.tick_ms,sampled_beat,now_ms)
 
 
 func _native_score_ready() -> bool:
@@ -540,7 +535,7 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 
 func _navigate(screen: String) -> void:
     navigation_session.navigate(
-        screen,last_state,command_coordinator.state)
+        screen,state_inbox.current,command_coordinator.state)
 
 
 func _resize_overlay_drawer() -> void:
@@ -554,7 +549,7 @@ func _resize_overlay_drawer() -> void:
 
 
 func _go_back() -> void:
-    navigation_session.back(last_state,command_coordinator.state)
+    navigation_session.back(state_inbox.current,command_coordinator.state)
 
 func _build_interface() -> void:
     theme = Design.create()
@@ -831,7 +826,7 @@ func _on_settings(code: int, body: PackedByteArray) -> void:
     _request_learning_status()
     _apply_window_mode(bool(preferences.get("fullscreen", true)))
     var saved_device := str(preferences.get("midi_device", ""))
-    if not saved_device.is_empty() and str(last_state.get("device", "")) == "" and not device_names.is_empty():
+    if not saved_device.is_empty() and str(state_inbox.current.get("device", "")) == "" and not device_names.is_empty():
         if device_names.has(saved_device) and not saved_device.to_lower().contains("midi through"):
             _choose_device(saved_device)
 
@@ -910,11 +905,10 @@ func _poll() -> void:
     if score_session != null and not practice_view.is_source_picker_open():
         score_session.poll(Time.get_ticks_msec())
 
-    if not state_pending and not command_coordinator.state.pending:
-        state_pending = true
-        state_request_started_ms = Time.get_ticks_msec()
+    if not state_inbox.pending and not command_coordinator.state.pending:
+        state_inbox.begin_request(Time.get_ticks_msec())
         if state_request.request("state.snapshot") != OK:
-            state_pending = false
+            state_inbox.pending = false
 
 func _process(_delta: float) -> void:
     if not native_started and inprocess_bus != null:
@@ -933,12 +927,12 @@ func _process(_delta: float) -> void:
     frame_ms = Time.get_ticks_msec()
     var ticks: int = frame_ms
     var beat: float = _transport_beat_at(ticks)
-    guided_presentation.update_hold(last_state)
+    guided_presentation.update_hold(state_inbox.current)
     score_flow.sample(ticks)
     _read_feedback_events()
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
-        last_state,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,
+        state_inbox.current,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,
         command_coordinator.state.pending,current_screen,_native_score_ready(),living_chords,
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
@@ -946,67 +940,38 @@ func _process(_delta: float) -> void:
     if score_runway != null:
         # Old score clips continue exiting even during a revision load or
         # a source-picker transition with no currently loaded piece.
-        score_runway.present_frame(last_state,_unrolled_score_beat_at(beat,ticks))
+        score_runway.present_frame(state_inbox.current,_unrolled_score_beat_at(beat,ticks))
 
 ## Untimed guided learning waits for the learner: hold the score axis where
 ## the current target note sits on the playhead (continuous_score_flow.gd).
 func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
-    if sample_started_ms < 0:
-        state_pending = false
-        # A pre-action snapshot can arrive after the control response. It
-        # must not put a fresh count-in or paused attempt back in its old state.
-        if (command_coordinator.state.started_ms > 0 and
-                state_request_started_ms <= command_coordinator.state.started_ms) or (
-                command_coordinator.last_published_control_started_ms >= 0 and
-                state_request_started_ms <= command_coordinator.last_published_control_started_ms):
-            # Old polls remain invalid even after command_coordinator.state.finish()
-            # clears started_ms. Never replace a newer graded transport
-            # with the earlier READY/paused snapshot.
-            return
-    if code != 0:
-        practice_view.present_message(_command_failure(code, body))
+    var accepted: Dictionary = state_inbox.accept(
+        code,body,sample_started_ms,command_coordinator.state.started_ms,
+        command_coordinator.last_published_control_started_ms)
+    if accepted.has("error_code"):
+        practice_view.present_message(_command_failure(code,body))
         return
-    var parsed = _decode_json(body)
-    if typeof(parsed) != TYPE_DICTIONARY:
+    if not accepted.has("state"):
         return
+    var parsed: Dictionary = accepted["state"]
+    var received_ms: int = int(accepted["received_ms"])
     debug_session_logger.check_contract(parsed)
-    statistics_coordinator.update_context(str(parsed.get("piece_fingerprint", "")))
-    if frame_diagnostics:
-        var phase_name: String = str(parsed.get("phase", ""))
-        var attempt: int = int(parsed.get("transport_id", -1))
-        var score_rev: int = int(parsed.get("revision", -1))
-        if phase_name != last_timing_phase or attempt != last_timing_transport \
-                or score_rev != last_timing_revision:
-            print("TRANSPORT_TRANSITION:", JSON.stringify({
-                "phase":phase_name, "transport_id":attempt,
-                "revision":score_rev,
-                "state_request_ms":Time.get_ticks_msec()-state_request_started_ms,
-                "score_ready":_native_score_ready(),
-                "layout_pending":layout_pending,
-                "model_pending":timeline_model_pending,
-                "awaiting_score_revision":parsed.get("awaiting_score_revision"),
-                "visual_scroll_beat":parsed.get("visual_scroll_beat"),
-                "visual_scroll_speed":parsed.get("visual_scroll_speed")}))
-            last_timing_phase = phase_name
-            last_timing_transport = attempt
-            last_timing_revision = score_rev
-    # A long MIDI should not engrave its default first passage while the
-    # learner is still choosing a source measure in the library. Wait for
-    # open_at to select the real passage before requesting any score pages.
+    statistics_coordinator.update_context(str(parsed.get("piece_fingerprint","")))
+    debug_session_logger.record_transition(parsed,received_ms,
+        state_inbox.request_started_ms,_native_score_ready(),
+        layout_pending,timeline_model_pending,frame_diagnostics)
     if practice_view.is_source_picker_open():
         practice_view.suppress_piano_input(parsed)
         return
-    last_state = parsed
+    # One accepted snapshot is now the authoritative UI state. The
+    # presentation session alone sequences score/admission and rendering.
+    state_inbox.publish(parsed,int(accepted["tick_ms"]))
     command_coordinator.last_state = parsed
     settings_view.present_midi_key_range(
         parsed.get("midi_key_range",{}) if parsed.get("midi_key_range") is Dictionary else {})
     _update_visual_frame_rate(parsed)
     score_effects.transition_mode(parsed,practice_view.stage)
-    var received_ms: int = Time.get_ticks_msec()
-    var started_ms: int = (state_request_started_ms
-        if sample_started_ms < 0 else sample_started_ms)
-    last_state_tick = int((started_ms+received_ms)/2.0)
-    presentation_session.accept(parsed,last_state_tick,received_ms)
+    presentation_session.accept(parsed,state_inbox.tick_ms,received_ms)
     state_presenter.present(
         parsed,current_screen,command_coordinator.state.pending,_native_score_ready(),
         fingering_save_error,
@@ -1017,7 +982,6 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         parsed,received_ms,practice_view.stage.renderer,
         practice_view.stage.keyboard.visible,guided_presentation.world,
         score_flow.hold_world)
-
 
 
 func _request_layout() -> void:
@@ -1033,7 +997,7 @@ func _on_layout(code: int, body: PackedByteArray) -> void:
         if frame_diagnostics:
             print("SCORE_ASSET_MAIN_THREAD:", JSON.stringify({
                 "kind":"layout", "elapsed_ms":Time.get_ticks_msec()-began,
-                "revision":score_session.revision, "phase":last_state.get("phase")}))
+                "revision":score_session.revision, "phase":state_inbox.current.get("phase")}))
 
 func _finish_native_score() -> void:
     if score_session != null:
@@ -1052,11 +1016,11 @@ func _on_timeline_model(code: int, body: PackedByteArray) -> void:
         if frame_diagnostics:
             print("SCORE_ASSET_MAIN_THREAD:", JSON.stringify({
                 "kind":"model", "elapsed_ms":Time.get_ticks_msec()-began,
-                "revision":score_session.revision, "phase":last_state.get("phase")}))
+                "revision":score_session.revision, "phase":state_inbox.current.get("phase")}))
 
 
 func _send_action(command: Dictionary) -> void:
-    command_coordinator.request_action(command,last_state)
+    command_coordinator.request_action(command,state_inbox.current)
 
 func _present_fingering_status(summary: Variant) -> void:
     var issues: int = practice_view.stage.renderer.annotations.fingering_placement_issues.size() if _native_score_ready() else 0
@@ -1064,10 +1028,10 @@ func _present_fingering_status(summary: Variant) -> void:
 
 func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
     if command_coordinator.state.pending or not _native_score_ready() or layout_pending or timeline_model_pending or \
-            int(last_state.get("revision",-1)) != timeline_model_revision or \
-            native_score_piece_fingerprint != str(last_state.get("piece_fingerprint","")):
+            int(state_inbox.current.get("revision",-1)) != timeline_model_revision or \
+            native_score_piece_fingerprint != str(state_inbox.current.get("piece_fingerprint","")):
         fingering_save_error = "Wait for the current score operation to finish, then try again."
-        _present_fingering_status(last_state.get("fingering",{}))
+        _present_fingering_status(state_inbox.current.get("fingering",{}))
         return
     fingering_save_error = ""
     var payload: Dictionary = {"source_id":source_id,"finger":finger}
@@ -1093,26 +1057,26 @@ func _apply_practice_control(decision: Dictionary) -> void:
         _send_action(decision)
 
 func _listen_or_return_to_practice() -> void:
-    _apply_practice_control(PracticeControlPolicy.listen_toggle(last_state))
+    _apply_practice_control(PracticeControlPolicy.listen_toggle(state_inbox.current))
 
 func _toggle_playing() -> void:
     _apply_practice_control(PracticeControlPolicy.primary(
-        last_state, _native_score_ready(), score_error))
+        state_inbox.current, _native_score_ready(), score_error))
 
 func _toggle_pause() -> void:
     _apply_practice_control(PracticeControlPolicy.pause_toggle(
-        last_state, score_error))
+        state_inbox.current, score_error))
 
 func _restart_practice() -> void:
     _apply_practice_control(PracticeControlPolicy.retry(
-        last_state, _native_score_ready()))
+        state_inbox.current, _native_score_ready()))
 
 func _request_devices() -> void:
     midi_devices.discover()
 
 func _on_devices(code: int, body: PackedByteArray) -> void:
     midi_devices.receive(code, body, current_screen,
-        str(last_state.get("device", "")),
+        str(state_inbox.current.get("device", "")),
         str(preferences.get("midi_device", "")))
 
 func _show_devices() -> void:

@@ -22,6 +22,33 @@ func check_contract(state: Dictionary) -> void:
             push_error("STATE_CONTRACT: " + problem)
 
 
+var _last_timing_phase := ""
+var _last_timing_transport := -1
+var _last_timing_revision := -1
+
+func record_transition(state: Dictionary, now_ms: int,
+        request_started_ms: int, score_ready: bool,
+        layout_pending: bool, model_pending: bool, enabled: bool) -> void:
+    if not enabled:
+        return
+    var phase_name: String = str(state.get("phase",""))
+    var attempt: int = int(state.get("transport_id",-1))
+    var revision: int = int(state.get("revision",-1))
+    if phase_name == _last_timing_phase and attempt == _last_timing_transport \
+            and revision == _last_timing_revision:
+        return
+    print("TRANSPORT_TRANSITION:",JSON.stringify({
+        "phase":phase_name, "transport_id":attempt, "revision":revision,
+        "state_request_ms":now_ms-request_started_ms,
+        "score_ready":score_ready,"layout_pending":layout_pending,
+        "model_pending":model_pending,
+        "awaiting_score_revision":state.get("awaiting_score_revision"),
+        "visual_scroll_beat":state.get("visual_scroll_beat"),
+        "visual_scroll_speed":state.get("visual_scroll_speed")}))
+    _last_timing_phase = phase_name
+    _last_timing_transport = attempt
+    _last_timing_revision = revision
+
 func record(state: Dictionary, now_ms: int, renderer,
         keyboard_visible: bool, guided_world: float, hold_world: float) -> void:
     if not _debug_checked:

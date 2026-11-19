@@ -20,7 +20,7 @@
 | Architecture docs / O07 | CURRENT ENTRYPOINTS RECONCILED; REFERENCE SWEEP OPEN | ROADMAP and documentation index now point to the actual moving-window policy and current playback/ownership contracts; ADR-0001 and playback coordinator document authority; old ownership contracts marked historical. Deeper document cross-reference sweep remains open |
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession now own projection, input, settlement and flow-step presentation; PracticeEngine still contains command/assessment orchestration and mutable lifecycle fields; the two course/flow states have not yet been eliminated |
 | Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | ScoreStreamController now owns whole-take append, queue serial assignment, partial-admission compensation, and transport/rollback lifecycle. NativeView supplies source windows and measured context, but ready/recovery choice and physical arm orchestration and painter lifecycle remain |
-| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger (including snapshot contract diagnostics), NavigationSession, ApplicationEventRouter and StatusHeadPreloader own their respective domains. Main still builds screen trees and routes command/in-process callbacks |
+| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | ApplicationStateInbox owns poll epochs, stale-command response rejection and the accepted UI snapshot; DebugSessionLogger owns contract and transition diagnostics; presentation, navigation, command, score warmup remain separate owners. Main continues screen composition and invokes acceptance effects |
 | Existing CI/native integration | EXISTING CI GREEN AT `27f7f580`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed for the current implementation and reconciled roadmap. No new tests; the existing isolated peer-reservation fixture was updated to consume the public preflight port without changing its assertions. Core CI does not execute the full embedded/native UI journey or physical MIDI/audio acceptance |
 
 ### Phase completion status
@@ -165,6 +165,13 @@
 - Added an opt-in `native-production` GitHub Actions job alongside the unchanged core checks. It provisions CPython 3.14 and Godot 4.7.2, compiles the real GDExtension, and runs the repository's existing `scripts/verify-embedded-production-local.sh` in **full** mode (embedded runtime, native score/Play/Resume, Moonlight, Peace Piece, Chopin, packaged runtime audit).
 - Triggered by `[native]` in the commit message or a manual workflow dispatch; ordinary source pushes retain fast CI. **No tests added**; the job only runs already existing acceptance scripts.
 - Native acceptance is **pending result**. This does not simulate a real Kawai MIDI device, USB/Bluetooth input latency or audible speaker/visual synchronization.
+
+### Implementation checkpoint P — one application state inbox
+
+- Introduced `ApplicationStateInbox` to own pending state-request epochs, stale-before-command rejection, JSON response validation, sampled callback midpoint and last accepted UI snapshot. `Main` no longer stores its own `last_state`, `state_pending`, `last_state_tick` or request-start timestamp; no duplicate snapshot can drive the scene.
+- Preserved the source-picker exclusion: a valid response is not published while its local source selection is open. CommandCoordinator still owns command request/ACK, PresentationSession still owns score/admission ordering; Main applies only accepted projection effects.
+- Moved transition diagnostic deduplication from `Main._on_state` into the existing `DebugSessionLogger`, so render callbacks do not own diagnostic state.
+- This is an actual state-ownership transfer rather than another shadow cache. No tests added.
 
 #### Phase 6 acceptance matrix
 
