@@ -1154,7 +1154,10 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         # Untimed Free uses explicit hold-at-target notation. Timed music
         # comes exclusively from PlaybackCoordinator -> ScoreAdmissionGateway,
         # never from a retrospective running-state score plan.
-        var guided_plan: Variant = parsed.get("score_queue_next")
+        var published_timeline: Variant = parsed.get("playback_timeline")
+        var guided_plan: Variant = (
+            published_timeline.get("guided")
+            if published_timeline is Dictionary else null)
         if str(parsed.get("mode","")) == "learn" and \
                 guided_plan is Dictionary and \
                 visual_transport_clock.has_backend_offset and \
