@@ -1,0 +1,301 @@
+extends Node
+## Sole physical admission adapter for the authoritative Python PlaybackCoordinator.
+## All timed routes arrive as versioned engine intents. The only commit path is
+## preview -> arm immutable source -> backend reserve -> confirm presentation.
+const Request := preload("res://inprocess_request.gd")
+const TempoTimeline := preload("res://tempo_timeline.gd")
+
+signal admission_problem(message: String)
+
+var bus: Node
+var stage
+var score_session
+var runway
+var flow
+var musical_clock
+var metronome
+var reserve_request: Node
+var present_request: Node
+var withdraw_request: Node
+var failure_request: Node
+var current: Dictionary = {}
+var renderer
+var receipt: Dictionary = {}
+var started_ms := -1
+var pending_reconciliation := false
+var last_activated_segment := ""
+var missing_score_frames := 0
+var reported_failure_segment := ""
+
+func configure(host: Node, bridge: Node, practice_stage,
+        score_assets, score_runway, score_flow, clock, count_in) -> void:
+    bus = bridge
+    stage = practice_stage
+    score_session = score_assets
+    runway = score_runway
+    flow = score_flow
+    musical_clock = clock
+    metronome = count_in
+    reserve_request = _request(host, Callable(self, "_reserved"))
+    present_request = _request(host, Callable(self, "_presented"))
+    withdraw_request = _request(host, Callable(self, "_withdrawn"))
+    failure_request = _request(host, Callable(self, "_failure_reported"))
+
+func _request(host: Node, callback: Callable) -> Node:
+    var call := Request.new()
+    call.timeout = 8.0
+    host.add_child(call)
+    call.configure(bus)
+    call.request_completed.connect(callback)
+    return call
+
+func _backend_ms() -> float:
+    if bus == null or bus.native == null:
+        return NAN
+    # Same std::chrono::steady_clock epoch as Python time.monotonic on
+    # supported Linux builds. No sampled UI/backend offset is used for the
+    # transaction's graded deadline.
+    return float(bus.native.call("monotonic_milliseconds"))
+
+func _matching_renderer(intent: Dictionary):
+    var revision: int = int(intent.get("revision", -1))
+    if score_session != null and score_session.is_ready() and \
+            int(score_session.revision) == revision and \
+            int(score_session.rendered_revision) == revision:
+        return stage.renderer
+    if runway != null and runway._future != null and \
+            is_instance_valid(runway._future) and runway._acknowledged and \
+            runway._future.retained_ready() and \
+            int(runway._bundle.get("revision", -2)) == revision and \
+            str(runway._bundle.get("stage_key", "")) == str(intent.get("stage_key", "")):
+        # Link ALL outgoing source/rest layers BEFORE computing clearance.
+        runway._link_existing_layers(runway._future)
+        return runway._future
+    return null
+
+func _deadline_at_world(target_world: float, local_ms: int, beat: float,
+        bpm: float, segments: Array) -> float:
+    # Invert the very same forward source/world projection the renderer
+    # uses. A fixed nominal-BPM conversion fails across tempo-map changes.
+    var low := 0.0
+    var high := 1000.0
+    for i in range(22):
+        if flow.project_authored_future(local_ms + roundi(high),
+                local_ms, beat, bpm, segments) >= target_world:
+            break
+        high *= 2.0
+    if high >= 4194304000.0:
+        return NAN
+    for i in range(38):
+        var mid: float = 0.5 * (low + high)
+        if flow.project_authored_future(local_ms + roundi(mid),
+                local_ms, beat, bpm, segments) < target_world:
+            low = mid
+        else:
+            high = mid
+    return high
+
+func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
+    var view = _matching_renderer(intent)
+    if view == null or not is_instance_valid(view):
+        return
+    var backend_now: float = _backend_ms()
+    if not is_finite(backend_now):
+        return
+    # This is a cross-language epoch consistency check, not a clock
+    # estimator. If the native and Python monotonic sources disagree, fail
+    # closed rather than silently admitting a take at the wrong time.
+    if state.has("clock_sampled_at_ms") and \
+            absf(backend_now-float(state["clock_sampled_at_ms"])) > 1800.0:
+        admission_problem.emit("Playback clocks disagree; refusing score admission")
+        return
+    var world: float = flow.project(frame_ms)
+    var backend_floor: float = float(intent.get("earliest_deadline_ms", NAN))
+    if not is_finite(world) or not is_finite(backend_floor):
+        return
+    var tempo: float = maxf(1.0, float(state.get("bpm", intent.get("bpm", 40.0))))
+    var authored: Array = (
+        state.get("tempo_segments", [])
+        if bool(state.get("running", false)) and \
+            str(state.get("phase", "")) == "playing" else [])
+    var delay_ms: float = maxf(0.0, backend_floor-backend_now)+420.0
+    var floor_world: float = flow.project_authored_future(
+        frame_ms+roundi(delay_ms),frame_ms,
+        float(state.get("clock_beat",0.0)),tempo,authored)
+    var count_in: float = float(intent.get("count_in_beats", 0.0))
+    var required_slot: float = maxf(count_in, floor_world-world)
+    var action: String = str(intent.get("action", "start"))
+    var reservation_action: String = (
+        "resume" if action == "resume" else
+        "restart" if action == "restart" else "start")
+    var planned: Dictionary = view.reserve_transport_action(
+        reservation_action, world,
+        float(intent.get("from_beat", 0.0)),required_slot)
+    if planned.is_empty():
+        admission_problem.emit("Cannot reserve source notation for this playback")
+        return
+    renderer = view
+    var start_world: float = float(planned.get("start_world", NAN))
+    var lead_ms: float = _deadline_at_world(
+        start_world,frame_ms,float(state.get("clock_beat",0.0)),
+        tempo,authored)
+    if not is_finite(lead_ms):
+        _cancel_provisional()
+        return
+    var deadline: float = backend_now+lead_ms
+    if deadline < backend_floor-.01:
+        _cancel_provisional()
+        admission_problem.emit("Reserved notation precedes its musical deadline")
+        return
+    current = intent.duplicate(true)
+    current["deadline_ms"] = deadline
+    current["world_origin"] = start_world
+    current["reused_count_in"] = bool(
+        planned.get("reused_unplayed_count_in", false))
+    started_ms = frame_ms
+    var payload: Dictionary = {
+        "intent_id": str(intent["intent_id"]),
+        "attempt": int(intent["attempt"]),
+        "take_id": str(intent["take_id"]),
+        "fingerprint": str(intent["fingerprint"]),
+        "stage_key": str(intent["stage_key"]),
+        "revision": int(intent["revision"]),
+        "deadline_ms": deadline,
+        "world_origin": start_world,
+        "queue_generation": int(view._stream_serial),
+        "renderer_generation": int(intent["revision"]),
+        "reused_count_in": bool(current["reused_count_in"]),
+    }
+    if reserve_request.request("playback.reserve",payload) != OK:
+        _cancel_provisional()
+
+func observe(state: Dictionary, frame_ms: int) -> void:
+    var intent: Variant = state.get("playback_intent")
+    var timeline: Variant = state.get("playback_timeline")
+    if timeline is Dictionary:
+        var segment: String = str(timeline.get("segment_id", ""))
+        if pending_reconciliation and not segment.is_empty() and \
+                segment == str(receipt.get("segment_id","")):
+            pending_reconciliation = false
+            _confirm_authorized(timeline)
+        if bool(state.get("running", false)) and \
+                str(state.get("phase", "")) == "playing" and \
+                not segment.is_empty() and \
+                stage.renderer != null and \
+                stage.renderer._stream_live_serial < 0 and \
+                stage.renderer._stream_last_take != (
+                    "%s|%d|%d|%s" % [
+                    str(state.get("piece_fingerprint", "")),
+                    int(state.get("revision",-1)),
+                    int(state.get("transport_id",-1)),
+                    str(state.get("mode", ""))]):
+            missing_score_frames += 1
+            if missing_score_frames >= 4 and reported_failure_segment != segment:
+                reported_failure_segment = segment
+                failure_request.request("playback.failure",{
+                    "take_id": str(timeline.get("take_id", "")),
+                    "segment_id": segment,
+                    "reason": "running_take_without_admitted_source"})
+        else:
+            missing_score_frames = 0
+    if not intent is Dictionary or bool(state.get("paused",false)):
+        if not current.is_empty() and not pending_reconciliation:
+            _cancel_provisional()
+        return
+    var identifier: String = str(intent.get("intent_id",""))
+    var attempt: int = int(intent.get("attempt",-1))
+    if not current.is_empty():
+        if str(current.get("intent_id","")) == identifier and \
+                int(current.get("attempt",-2)) == attempt:
+            return
+        if pending_reconciliation:
+            return
+        _cancel_provisional()
+    if reserve_request._pending_id >= 0 or present_request._pending_id >= 0:
+        return
+    _admit(intent,state,frame_ms)
+
+func _reserved(code: int, body: PackedByteArray) -> void:
+    if current.is_empty():
+        return
+    var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+    if code != 0 or not data is Dictionary or \
+            not bool(data.get("reserved",false)):
+        _cancel_provisional()
+        admission_problem.emit("Backend rejected notation reservation: "+str(
+            data.get("error","invalid receipt") if data is Dictionary else code))
+        return
+    receipt = data
+    if renderer == null or not is_instance_valid(renderer) or \
+            not renderer.acknowledge_stream_arm():
+        _cancel_provisional()
+        return
+    _send_presentation()
+
+func _send_presentation() -> void:
+    if receipt.is_empty():
+        return
+    var payload: Dictionary = {
+        "intent_id":str(receipt["intent_id"]),
+        "attempt":int(receipt["attempt"]),
+        "segment_id":str(receipt["segment_id"])}
+    if present_request.request("playback.present",payload) != OK:
+        pending_reconciliation = true
+
+func _presented(code: int, body: PackedByteArray) -> void:
+    var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+    if code == 0 and data is Dictionary and \
+            bool(data.get("authorized",false)):
+        pending_reconciliation = false
+        _confirm_authorized(data)
+    else:
+        # An in-process timeout can lose only the reply, not the command.
+        # Reconcile against authoritative state before rolling back ink.
+        pending_reconciliation = true
+        admission_problem.emit("Checking playback authorization after an incomplete response")
+
+func _confirm_authorized(data: Dictionary) -> void:
+    if receipt.is_empty():
+        return
+    var expected: String = str(receipt.get("segment_id",""))
+    if str(data.get("segment_id","")) != expected:
+        return
+    last_activated_segment = expected
+    var now_ms: int = Time.get_ticks_msec()
+    var deadline_local: float = float(receipt["deadline_ms"]) + \
+        float(now_ms)-_backend_ms()
+    if not current.is_empty() and float(current.get("count_in_beats",0.0)) > 0.0 and \
+            not bool(current.get("reused_count_in",false)):
+        metronome.reserve_count_in(
+            deadline_local, float(current.get("bpm",60.0)),
+            float(current.get("count_in_beats",0.0)),
+            current.get("count_in_meter",[4,4]),
+            float(current.get("count_in_beats",0.0)),
+            str(current.get("action","start")))
+        metronome.acknowledge_reserved_count_in(now_ms)
+    renderer = null
+    current.clear()
+    receipt.clear()
+    started_ms = -1
+
+func _cancel_provisional() -> void:
+    if renderer != null and is_instance_valid(renderer):
+        renderer.cancel_stream_arm()
+    if not receipt.is_empty() and withdraw_request._pending_id < 0:
+        withdraw_request.request("playback.withdraw",{
+            "intent_id":str(receipt["intent_id"]),
+            "attempt":int(receipt["attempt"]),
+            "reason":"presentation_cancelled"})
+    metronome.cancel_reserved_count_in()
+    renderer = null
+    current.clear()
+    receipt.clear()
+    pending_reconciliation = false
+    started_ms = -1
+
+func _withdrawn(_code: int, _body: PackedByteArray) -> void:
+    pass
+
+func _failure_reported(code: int, body: PackedByteArray) -> void:
+    if code != 0:
+        admission_problem.emit("Could not halt playback after notation loss: "+body.get_string_from_utf8())
