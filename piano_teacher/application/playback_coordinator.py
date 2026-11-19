@@ -352,6 +352,25 @@ class PlaybackCoordinator:
         elif self.state not in (PlaybackState.FAILED, PlaybackState.IDLE):
             self.state = PlaybackState.COMPLETE
 
+    def status(self) -> dict:
+        """Read-only transaction reconciliation, including lost responses.
+
+        The worker can complete an authorization after its Godot request
+        times out. A client must query this state before rolling back ink.
+        """
+        intent = self.intent
+        receipt = self.receipt
+        return {
+            "state": self.state.value,
+            "generation": self.generation,
+            "intent_id": intent.intent_id if intent else "",
+            "attempt": intent.attempt if intent else -1,
+            "reserved_segment_id": receipt.segment_id if receipt else "",
+            "active_segment_id": self.active_segment_id,
+            "active_take_id": self.active_take_id,
+            "active_deadline_ms": self.active_deadline_ms,
+        }
+
     def snapshot(self) -> tuple[dict | None, dict]:
         intent = self.intent
         request = None if intent is None else {
