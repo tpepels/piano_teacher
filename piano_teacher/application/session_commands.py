@@ -35,12 +35,14 @@ class SessionCommands:
         return True
 
     @staticmethod
+    def transition(effect, *, action: str, source_changed):
+        from .playback_transitions import PlaybackTransition
+        return PlaybackTransition.from_effect(
+            effect,action=action,source_changed=source_changed)
+
+    @staticmethod
     def start_route(effect, *, source_changed):
-        exposure = effect.decision.next_exposure
-        if exposure.mode == "listen":
-            return "listen"
-        if effect.state.route.mode == "learn" and exposure.mode == "practice":
-            return "prepare_practice"
-        if source_changed:
-            return "reload_score"
-        return "rewind" if exposure.preparation == "rewind" else "start"
+        # The same pure route planner serves graphical and direct/headless
+        # command adapters. There is no second decision tree here.
+        return SessionCommands.transition(
+            effect,action="start",source_changed=source_changed).route
