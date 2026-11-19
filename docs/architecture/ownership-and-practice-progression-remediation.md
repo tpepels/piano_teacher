@@ -11,17 +11,17 @@
 
 | Workstream | Status | Notes |
 | --- | --- | --- |
-| Moving-window curriculum / P01 | IMPLEMENTED IN SOURCE, UNVERIFIED AT PIANO | `practice_windows.py` is the single window policy; `practice_flow_course.py` generates n, n−1..n, n−2..n, n−3..n up to 4; per-window course/stage identities; final exam retained; CI and physical acceptance pending |
+| Moving-window curriculum / P01 | INTEGRATED; PHYSICAL ACCEPTANCE OUTSTANDING | `practice_windows.py` selects n, n−1..n, n−2..n, n−3..n (max 4) and emits real source-bounded course exercises; independently identified windows, versioned saved progress and separate final exam; existing CI passed on `f1d3385` |
 | Typed course outcomes / O02 | IMPLEMENTED IN PRODUCTION PATH | `TeachingDecision.flow_outcome` now carries `Outcome` directly through course/engine; string parser remains only as a read-only legacy diagnostic for existing tests, without production callers |
-| Unified assessment verdict / O03 | IMPLEMENTED IN PRODUCTION PATH, CI PENDING | `AssessmentVerdict` is produced by teaching policy; progression and attempt settlement use the same policy-selected acceptance/trouble-resolution flags |
-| Unified playback transitions / O01, O04 | IMPLEMENTED IN BACKEND, GODOT CUES PENDING | `PlaybackTransition` retains the exact manual effect through admission; `CountInPlan` is immutable and applied to every graphical timed take; Godot cue rendering still requires consolidation |
-| Asset admission / O05, O08 | PRELOADER TIMING REMOVED; PORT MIGRATION IN PROGRESS | `ScoreRunway` acknowledges only compiled asset identity; backend no longer consumes clearance estimates; public asset/gateway readiness/status ports replace several private field reads |
-| Deterministic presentation timeline / O06 | NOT STARTED | Single rate/position authority |
-| Architecture docs / O07 | NOT STARTED | Retire conflicting contracts |
-| Decompose server.py / L01 | NOT STARTED | Thin facade, authoritative domain owners |
-| Decompose native/view.gd / L02 | NOT STARTED | Renderer must not own score-stream policy |
-| Decompose main.gd / L03 | NOT STARTED | Composition root, typed event coordinators |
-| Existing CI/native integration | IN PROGRESS | Existing tests passed at `ce510621b` before removal of preloader timing; a later run caught an obsolete `handoff_world` snapshot reference, removed at `95b1880`; subsequent CI pending. No tests added or edited |
+| Unified assessment verdict / O03 | INTEGRATED IN TEACHING/SETTLEMENT; READER AUDIT OPEN | `AssessmentVerdict` binds policy acceptance to teaching progression and primary trouble-resolution writes; other generic `.passed` readers have not all been converted |
+| Unified playback transitions / O01, O04 | GRAPHICAL PATH INTEGRATED; LEGACY AND DEVICE ACCEPTANCE OPEN | `PlaybackTransition` retains selected effect through admission; CountInPlan is authored once and sent to metronome with authorized segment ID; exact deadline mismatch now fails closed; some legacy/headless branch behavior remains |
+| Asset admission / O05, O08 | PRELOADER TIMING REMOVED; PRIVATE-STATE AUDIT STILL OPEN | ScoreRunway acknowledges only compiled asset identity; gateway uses public readiness/capability ports; native queue transaction extracted, but native view and runway still share private queue internals |
+| Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
+| Architecture docs / O07 | ACTIVE CONTRACT DOCUMENTED | Previous system/transport ownership docs marked historical; ADR-0001 records the current authority and links to live implementation tracker |
+| Decompose server.py / L01 | PARTIALLY DECOMPOSED | ScoreStatePublisher owns graphical/headless/Free score projection with captured immutable facts; 216,648 B → 207,631 B; many command/assessment/persistence operations remain in PracticeEngine |
+| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | Pure NotationClipPlanner and StreamAdmissionExecutor extracted; 97,601 B → 89,664 B; queue state, rollback and painting still intermingled |
+| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | GuidedPresentationSession, PracticePresentationSession, DebugSessionLogger own their domain operations; 68,677 B → 58,465 B; UI/navigation/input composition still extensive |
+| Existing CI/native integration | CI PASSED THROUGH `f1d3385`; LATEST COMMITS PENDING | GitHub Actions reported 319 Python passed, 17 skipped and Godot checks green at `f1d3385`; later extraction commits require fresh CI and live MIDI/audio. No test files created or changed |
 
 **Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
 
@@ -46,6 +46,21 @@
 - `0296063`, `96178a1`, `a12c949`, `97afb24`: Exposed identity-bound readiness and reservation status ports so ScoreAdmissionGateway no longer inspects several foreign private fields.
 
 **Still unfinished in the architecture:** The native view and presentation controller retain private mutable state; the Godot count-in consumer still has legacy timing paths; source/display timeline projections are not yet consolidated; the three largest production files have not been fully decomposed.
+
+### Implementation checkpoint C — presentation, source clipping, and actual class decomposition
+
+- `9aa3861` and `7d7452e`: Godot consumes the authoritative CountInPlan with its exact segment identity. A mismatched future deadline does not silently rebase already audible syllables.
+- `5895e96` and `b47dd36`: Created pure NotationClipPlanner and removed native-view geometry/clipping calculations.
+- `01f7902`, `a269da7`, `56a9692`, `d3b63e4`, `63a34a8`, `54134aa`, `57c6360`, `83aad64`: Created PresentationTimeline with explicit rate epochs and source-map forecast; removed historical tempo-debt compensation and Main's dual rate-switch authorities. Existing flow behavior check passed at `83aad64`.
+- `da92cc7`, `9fa83e8`: Moved untimed guided Free note target, hold and presentation ownership out of Main.
+- `9a46b47`, `4624397`: Moved graphical/headless score projection and stable Free display epochs out of PracticeEngine and into ScoreStatePublisher.
+- `34b855d`, `3b39a12`: Moved renderer/asset/admission clock reconciliation and promotion ordering out of Main into PracticePresentationSession.
+- `0b78482`, `411781e`: Extracted timed physical reservation orchestration to StreamAdmissionExecutor.
+- `db0233e`, `9dabb38`, `9ac0e1b`: Removed diagnostic file ownership and renderer's private failure reads from Main.
+- `9c558cf`, `8e2a6fa`, `23d886f`: Marked historical architecture documents superseded and added [ADR-0001](decisions/ADR-0001-single-authority.md).
+- `f1d3385`: Kept the existing headless reservation fixture on its read-only geometry interface while production uses the new public geometry port. Existing CI green.
+
+**Explicitly not complete:** Full decomposition of `server.py`, `view.gd` and `main.gd`; eliminating every remaining private cross-component mutation and legacy/adaptor decision branch; full-reader policy verdict audit; in-process/native-device/physical acceptance. Do not report the whole remediation as finished.
 
 ## Executive findings
 
