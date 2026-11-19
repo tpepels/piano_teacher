@@ -248,7 +248,7 @@ func _process(_delta: float) -> bool:
                     int(item["serial"]) > ready_pass_serial:
                 empty_strip_take = int(item.get("take_owner",item["serial"]))
                 break
-        if empty_strip_take >= 0 and not renderer._stream_queue.has_take(ready_take_owner):
+        if empty_strip_take >= 0 and not renderer.stream_has_take(ready_take_owner):
             for item in renderer.stream_passes:
                 if int(item.get("take_owner",item["serial"])) == empty_strip_take:
                     ready_pass_serial = int(item["serial"])
@@ -322,14 +322,14 @@ func _process(_delta: float) -> bool:
         if paused_sample_ms < 0:
             paused_sample_ms = Time.get_ticks_msec()
             paused_world_beat = renderer.stream_world_beat
-            paused_pass_serial = renderer._stream_serial
+            paused_pass_serial = renderer.admission_queue_generation()
             return false
         if Time.get_ticks_msec()-paused_sample_ms < 400:
             return false
         if renderer.stream_world_beat <= paused_world_beat:
             _fail("Paused staff stopped scrolling")
             return true
-        if renderer._stream_serial != paused_pass_serial:
+        if renderer.admission_queue_generation() != paused_pass_serial:
             _fail("Pause spawned another exercise instead of letting previous notes leave")
             return true
         var paused_original_preserved := false
@@ -356,7 +356,7 @@ func _process(_delta: float) -> bool:
     if resumed_sample_ms < 0:
         resumed_sample_ms = Time.get_ticks_msec()
         resumed_world_beat = renderer.stream_world_beat
-        resumed_pass_serial = renderer._stream_serial
+        resumed_pass_serial = renderer.admission_queue_generation()
         return false
     if Time.get_ticks_msec()-resumed_sample_ms < 450:
         return false
@@ -462,7 +462,7 @@ func _process(_delta: float) -> bool:
         return true
     print("PHASE6_PRODUCTION_CONTINUOUS_FLOW_OK beat_delta=",beat_advance,
         " admitted_before=",paused_pass_serial,
-        " admitted_after=",renderer._stream_serial,
+        " admitted_after=",renderer.admission_queue_generation(),
         " new_source_strips=",copies,
         " selected_bpm=",app.current_state().get("bpm"))
     print("PHASE6_PRODUCTION_UI_WORKFLOW_OK")

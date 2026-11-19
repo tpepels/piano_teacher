@@ -211,41 +211,8 @@ var offline_stream_queue: Array:
 # temporarily suppress one glyph for framebuffer controls; that must not
 # change the fixed timing line or alter unrelated image pixels.
 var _cursor_engraved_events: Array = []
-var _stream_last_take: String:
-    get: return _stream_controller.last_take
-    set(value): _stream_controller.last_take = value
-var _stream_was_paused: bool:
-    get: return _stream_controller.was_paused
-    set(value): _stream_controller.was_paused = value
-var _stream_paused_source: float:
-    get: return _stream_controller.paused_source
-    set(value): _stream_controller.paused_source = value
-var _stream_paused_owner: int:
-    get: return _stream_controller.paused_owner
-    set(value): _stream_controller.paused_owner = value
-var _stream_live_serial: int:
-    get: return _stream_controller.live_serial
-    set(value): _stream_controller.live_serial = value
-# The last playing take reported without a bound source (reported once).
+# One-shot defect marker is view diagnostics, never part of stream ownership.
 var _unscored_take := ""
-var _stream_armed_serial: int:
-    get: return _stream_controller.armed_serial
-    set(value): _stream_controller.armed_serial = value
-var _stream_armed_segment_id: String:
-    get: return _stream_controller.armed_segment_id
-    set(value): _stream_controller.armed_segment_id = value
-var _stream_live_segment_id: String:
-    get: return _stream_controller.live_segment_id
-    set(value): _stream_controller.live_segment_id = value
-var _stream_arm_rollback: Dictionary:
-    get: return _stream_controller.arm_rollback
-    set(value): _stream_controller.arm_rollback = value
-var _stream_arm_acknowledged: bool:
-    get: return _stream_controller.arm_acknowledged
-    set(value): _stream_controller.arm_acknowledged = value
-var _stream_serial: int:
-    get: return _stream_controller.serial
-    set(value): _stream_controller.serial = value
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
 
@@ -691,9 +658,6 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 # clips have expired. New copies reanchor only at an authored source entry.
 var _ambient_anchor_world := 0.0
 
-var _stream_last_admitted: int:
-    get: return _stream_controller.last_admitted
-    set(value): _stream_controller.last_admitted = value
 # Owner decision (round 4, 2026-11-11): a written rest bar (the practice
 # timeline's gap, always one full measure) follows every take, and it IS
 # the count-in bar of the next take: the next source is admitted straight
@@ -702,14 +666,8 @@ var _stream_last_admitted: int:
 # Each backend decision has a stable identity. Repeated state polls cannot
 # enqueue another copy after the first source has already been activated
 # or has passed off the left edge.
-var _scheduled_score_plan_ids: Dictionary:
-    get: return _stream_controller.planned_ids
-    set(value): _stream_controller.planned_ids = value
 # World beat at which each admitted plan's source opening reaches the
 # playhead (it can be later than the engine deadline for untimed Learn).
-var scheduled_plan_openings: Dictionary:
-    get: return _stream_controller.planned_openings
-    set(value): _stream_controller.planned_openings = value
 
 
 func has_source_windows_at(opening: float) -> bool:
@@ -882,7 +840,7 @@ func announced_copy_onset(world: float) -> float:
     # admitted, still unbound copy if it is still ahead of the playhead (a
     # Resume in the rest reuses it, like a paused take); otherwise NAN.
     var newest := -1
-    for owner_serial in _scheduled_score_plan_ids.values():
+    for owner_serial in _stream_controller.planned_ids.values():
         newest = maxi(newest,int(owner_serial))
     for item in _stream_queue.online:
         if str(item.get("kind","")) == "source" and \
@@ -895,11 +853,6 @@ func announced_copy_onset(world: float) -> float:
     return NAN
 
 
-# Set only around reserve_transport_action's commit of a Retry slot.
-var _retry_placement: bool:
-    get: return _stream_controller.retry_placement
-    set(value): _stream_controller.retry_placement = value
-
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false,
@@ -907,6 +860,16 @@ func arm_stream_take(world: float, opening: float,
     return _stream_controller.arm_take(self,world,opening,
         _stream_right_beats(),_stream_header_beats(opening),
         planned_start_world,resuming_paused,retrying,empty_strip_count_in)
+
+
+func stream_owner_status() -> Dictionary:
+    # Stable diagnostic snapshot; no external component may mutate the
+    # live serial, armed state or queue through renderer properties.
+    return _stream_controller.owner_status()
+
+
+func stream_has_take(owner_serial: int) -> bool:
+    return _stream_controller.has_take(owner_serial)
 
 
 func admission_queue_generation() -> int:
@@ -990,7 +953,7 @@ func present_flow(world_beat: float, state: Dictionary,
     # show silently as an empty staff (practice flow, 2026-11-18).
     if running_now and phase == "playing" and mode in ["practice","perform","listen"] \
             and (expected_segment.is_empty() or \
-                 _stream_live_segment_id != expected_segment):
+                 _stream_controller.live_segment_id != expected_segment):
         if _unscored_take != key:
             _unscored_take = key
             push_error("TAKE_WITHOUT_SCORE: %s (queue=%s)" % [key,

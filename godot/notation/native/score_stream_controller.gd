@@ -65,6 +65,16 @@ func retry_placement_enabled(enabled: bool) -> void:
 func queue_generation() -> int:
     return serial
 
+func owner_status() -> Dictionary:
+    return {"generation":serial,"live_serial":live_serial,
+        "armed_serial":armed_serial,"last_take":last_take,
+        "bound_segment_id":live_segment_id}
+
+
+func has_take(owner_serial: int) -> bool:
+    return queue.has_take(owner_serial)
+
+
 func bound_segment() -> String:
     return live_segment_id
 

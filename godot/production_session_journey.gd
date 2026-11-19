@@ -68,9 +68,9 @@ func _fail(message: String) -> void:
                 "floor":item.get("source_floor"),
                 "pending":item.get("pending"),"armed":item.get("armed")})
         witness["stream"] = {"world":renderer.stream_world_beat,
-            "live":renderer._stream_live_serial,
-            "armed":renderer._stream_armed_serial,
-            "last_take":renderer._stream_last_take,
+            "live":renderer.stream_owner_status().get("live_serial",-1),
+            "armed":renderer.stream_owner_status().get("armed_serial",-1),
+            "last_take":renderer.stream_owner_status().get("last_take",""),
             "passes":passages}
     printerr("PHASE6_REAL_SCORE_FAILED: ", phase, ": ", message,
         " witness=", JSON.stringify(witness))
@@ -159,11 +159,11 @@ func _process(_delta: float) -> bool:
             if paused_ms == 0:
                 paused_ms = now
                 paused_clock = view.stream_world_beat
-                paused_serial = view._stream_serial
+                paused_serial = view.admission_queue_generation()
                 return false
             if now-paused_ms < 350:
                 return false
-            if view.stream_world_beat <= paused_clock or view._stream_serial != paused_serial:
+            if view.stream_world_beat <= paused_clock or view.admission_queue_generation() != paused_serial:
                 _fail("Paused score stopped moving or admitted new notes")
                 return true
             if not _press(app.practice_view.start_button,"Resume"):
@@ -240,7 +240,7 @@ func _process(_delta: float) -> bool:
                 _fail("Retry lacks a matched future-only source reservation " +
                     "ready=%s matching=%s early=%s serial=%d before=%d" % [
                     str(_ready_score()),str(reserved_match),str(wrong_side),
-                    view._stream_serial,paused_serial])
+                    view.admission_queue_generation(),paused_serial])
                 return true
             if not _press(app.practice_view.listen_button,"Listen"):
                 return false

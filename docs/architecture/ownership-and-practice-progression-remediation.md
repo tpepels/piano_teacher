@@ -232,6 +232,12 @@
 - This preserves snapshot transaction boundaries, quantile computation outside the read transaction, learner identity and deletion-race validation. Evidence capture and querying share one domain owner; no new tests.
 - PracticeEngine still contains transport commands and complex automatic continuation/assessment lifecycle and therefore Phase 5 is **not closed**.
 
+### Implementation checkpoint AA — remove native-view mutable state forwarders
+
+- Deleted the transitional writable forwarding properties for stream take key, pause owner/source, live/armed serials, rollback dictionary, acknowledgement flag, planned IDs/openings, and Retry placement. The controller is now the only owner/writer of those fields; the renderer reads only its public transport owner port where needed.
+- Added bounded, read-only `stream_owner_status()` and `stream_has_take()` capabilities for runtime diagnostics. Existing production UI and native journey fixtures now use those ports and `admission_queue_generation()` rather than writing/reading private transport fields; assertions are unchanged.
+- `NativeView` retains its internal `_stream_queue` bridge for retained rendering and one isolated test fixture. Painter/resource lifecycle and backend PracticeEngine/Main decomposition remain open. No new tests.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
