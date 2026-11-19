@@ -1961,20 +1961,37 @@ class PracticeEngine:
                 # (after Free), so it must publish that take like a repeat:
                 # one count-in bar ahead, with an exact queue deadline.
                 announce = self._short_rest is not None or self._flow_active()
-                lead = (SCHEDULER.beats_seconds(
-                    self._next_count_in_beats(),self.plan.bpm)
-                    + SNAPSHOT_LATENCY_SECONDS) if announce else 0.0
-                # A re-engraved continuation still opens after the written
-                # rest bar of the take it follows.
-                after_rest = SCHEDULER.measured_rest(
-                self._collect_rest_measurement(from_beat=self.open_from_beat),
-                now=self.now(),bpm=self._presentation_bpm) if lead > 0.0 else None
-                if after_rest is not None:
-                    lead = max(lead, after_rest - self.now())
+                # Godot commits the immutable score copy before this ACK and
+                # supplies its EXACT backend-clock deadline. The physical
+                # peer-layer/rest clearance is already included. A second
+                # backend rest/lead estimate would move grading away from
+                # the admitted notes.
+                reserved_ms = kwargs.get("presentation_deadline_ms")
+                reserved_at = None
+                lead = 0.0
+                if reserved_ms is not None:
+                    reserved_at = float(reserved_ms) / 1000.0
+                    full_count_in = SCHEDULER.beats_seconds(
+                        self._next_count_in_beats(), self.plan.bpm)
+                    if (not math.isfinite(reserved_at)
+                            or reserved_at < self.now() + full_count_in - 1e-4):
+                        raise ValueError(
+                            "Score reservation expired before the full count-in")
+                else:
+                    # Compatibility for non-reserving command clients.
+                    lead = (SCHEDULER.beats_seconds(
+                        self._next_count_in_beats(),self.plan.bpm)
+                        + SNAPSHOT_LATENCY_SECONDS) if announce else 0.0
+                    after_rest = SCHEDULER.measured_rest(
+                        self._collect_rest_measurement(from_beat=self.open_from_beat),
+                        now=self.now(),bpm=self._presentation_bpm) if lead > 0.0 else None
+                    if after_rest is not None:
+                        lead = max(lead, after_rest - self.now())
                 self.start(
                     from_beat=(self.visual_transport.pending_rewind if self.visual_transport.pending_rewind is not None
                                else self.open_from_beat),
                     mode="perform" if self.mode == "perform" else "practice",
+                    scheduled_deadline=reserved_at,
                     presentation_lead_seconds=lead, decided=True)
                 if announce:
                     self._queue_scheduled_start = (
