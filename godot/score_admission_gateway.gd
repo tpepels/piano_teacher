@@ -21,6 +21,7 @@ var failure_request: Node
 var current: Dictionary = {}
 var renderer
 var receipt: Dictionary = {}
+var admission_state: Dictionary = {}
 var started_ms := -1
 var pending_reconciliation := false
 var last_activated_segment := ""
@@ -149,6 +150,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         _cancel_provisional()
         admission_problem.emit("Reserved notation precedes its musical deadline")
         return
+    admission_state = state.duplicate(true)
     current = intent.duplicate(true)
     current["deadline_ms"] = deadline
     current["world_origin"] = start_world
@@ -238,6 +240,11 @@ func _reserved(code: int, body: PackedByteArray) -> void:
             not renderer.acknowledge_stream_arm():
         _cancel_provisional()
         return
+    if runway != null and runway._future == renderer and \
+            not runway.promote_reserved(admission_state):
+        _cancel_provisional()
+        admission_problem.emit("Prepared next lesson could not be promoted")
+        return
     _send_presentation()
 
 func _send_presentation() -> void:
@@ -286,6 +293,7 @@ func _confirm_authorized(data: Dictionary) -> void:
     renderer = null
     current.clear()
     receipt.clear()
+    admission_state.clear()
     started_ms = -1
 
 func _cancel_provisional() -> void:
@@ -300,6 +308,7 @@ func _cancel_provisional() -> void:
     renderer = null
     current.clear()
     receipt.clear()
+    admission_state.clear()
     pending_reconciliation = false
     started_ms = -1
 
