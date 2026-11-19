@@ -5,6 +5,26 @@
 **Scope:** Practice Flow, learning/assessment, playback and score admission, presentation timing, and the three largest first-party production source files.  
 **Goal:** One authoritative owner for each domain decision; explicit typed boundaries; no independent recomputation of a decision downstream; preserve the continuous native score and all existing capabilities.
 
+## Implementation progress
+
+**Implementation branch:** `main`. **Tests:** No new tests will be written for this change. Existing checks may be run.
+
+| Workstream | Status | Notes |
+| --- | --- | --- |
+| Moving-window curriculum / P01 | IN PROGRESS | Per new instruction, each bar alone, then successively longer backwards-looking windows, at most four bars; separate final test preserved |
+| Typed course outcomes / O02 | NOT STARTED | Remove display-string decisions |
+| Unified assessment verdict / O03 | NOT STARTED | One result policy for teaching and persistence |
+| Unified playback transitions / O01, O04 | NOT STARTED | No alternate restart, countdown or time owner |
+| Asset admission / O05, O08 | NOT STARTED | Preload identity only, gateway owns geometry |
+| Deterministic presentation timeline / O06 | NOT STARTED | Single rate/position authority |
+| Architecture docs / O07 | NOT STARTED | Retire conflicting contracts |
+| Decompose server.py / L01 | NOT STARTED | Thin facade, authoritative domain owners |
+| Decompose native/view.gd / L02 | NOT STARTED | Renderer must not own score-stream policy |
+| Decompose main.gd / L03 | NOT STARTED | Composition root, typed event coordinators |
+| Existing CI/native integration | NOT RUN | Report exact verified checks, not guessed completion |
+
+**Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
+
 ## Executive findings
 
 | ID | Severity | Problem | Evidence |
