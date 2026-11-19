@@ -258,6 +258,13 @@ class PlaybackCoordinator:
         self._completed.append((segment_id, dict(result)))
         return result
 
+    def withdraw(self, engine, *, intent_id: str, attempt: int,
+                 reason: str) -> dict:
+        self._require_intent(engine, intent_id, attempt)
+        self._expire(message=reason)
+        return {"withdrawn": True, "intent_id": intent_id,
+                "next_attempt": self.intent.attempt}
+
     def fail(self, engine, *, take_id: str, segment_id: str,
              reason: str) -> None:
         if self.active_take_id != take_id or self.active_segment_id != segment_id:
