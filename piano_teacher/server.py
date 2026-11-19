@@ -1747,11 +1747,16 @@ class PracticeEngine:
                     self.visual_transport.announced_continuation = None
                 # The prior ink is immutable and continues scrolling; the
                 # new recorder starts only at this authorized deadline.
-                effect = self._manual_effect(intent.action)
-                selected = self._install_command(effect)
-                if (selected is None or selected.stage_key != intent.stage_key
+                transition = intent.transition
+                if transition is None:
+                    raise ValueError("Manual playback lacks the original selected transition")
+                effect = transition.effect
+                selected = transition.exposure
+                installed = self._install_command(effect)
+                if (installed != selected or selected.stage_key != intent.stage_key
+                        or selected.hand != intent.hand
                         or abs(selected.from_beat-intent.from_beat) > 1e-7):
-                    raise ValueError("Playback source decision changed before admission")
+                    raise ValueError("Selected playback transition changed before admission")
                 previous_effect = self.session_commands.active
                 self.session_commands.active = effect
                 try:
@@ -2270,19 +2275,21 @@ class PracticeEngine:
                     self._start_or_restart(action)
                     return
                 effect = self.session_commands.active or self._manual_effect(action)
-                route = self.session_commands.start_route(effect, source_changed=(
-                    self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)
-                    if self.mode not in ("listen", "learn") else False))
-                if (route in ("listen", "prepare_practice", "reload_score")
-                        or (effect.decision.next_exposure is not None
-                            and effect.decision.next_exposure.mode == "learn")):
+                transition = self.session_commands.transition(
+                    effect,action=action,source_changed=(
+                        self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)
+                        if self.mode not in ("listen", "learn") else False))
+                if transition.route in ("listen", "prepare_practice",
+                                        "reload_score", "learn"):
+                    # These routes change assets or enter untimed teaching.
+                    # The resulting timed source, if any, is requested only
+                    # after its exact selected score revision is prepared.
                     self._start_or_restart(action)
                 else:
-                    selected = effect.decision.next_exposure
-                    if selected is None:
-                        raise ValueError("No playable exposure selected")
+                    selected = transition.exposure
                     self.playback.request(self, action=action,
-                        mode=selected.mode, from_beat=selected.from_beat)
+                        mode=selected.mode, from_beat=selected.from_beat,
+                        transition=transition)
             else:
                 self._start_or_restart(
                     action, presentation_lead_seconds=self._presentation_lead(kwargs))
