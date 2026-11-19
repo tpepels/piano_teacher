@@ -233,13 +233,7 @@ func observe(state: Dictionary, frame_ms: int) -> void:
                 str(state.get("phase", "")) == "playing" and \
                 not segment.is_empty() and \
                 stage.renderer != null and \
-                stage.renderer._stream_live_serial < 0 and \
-                stage.renderer._stream_last_take != (
-                    "%s|%d|%d|%s" % [
-                    str(state.get("piece_fingerprint", "")),
-                    int(state.get("revision",-1)),
-                    int(state.get("transport_id",-1)),
-                    str(state.get("mode", ""))]):
+                stage.renderer._stream_live_segment_id != segment:
             missing_score_frames += 1
             if missing_score_frames >= 4 and reported_failure_segment != segment:
                 reported_failure_segment = segment
