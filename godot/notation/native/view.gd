@@ -108,6 +108,26 @@ var _stream_queue:
 
 func register_stream_predecessor(previous) -> void:
     _stream_controller.register_predecessor(previous)
+
+func stream_preflight_snapshot() -> Array:
+    return _stream_controller.online_snapshot()
+
+func online_stream_count() -> int:
+    return _stream_controller.online_size()
+
+func record_withdrawn_stream_suffix(previous: Array) -> void:
+    _stream_controller.remember_withdrawn_suffix(previous)
+
+func enable_retry_placement(enabled: bool) -> void:
+    _stream_controller.retry_placement_enabled(enabled)
+
+func restore_withdrawn_stream_suffix(previous: Array, at_world: float) -> bool:
+    return _restore_future_suffix(previous,at_world)
+
+func build_admission_receipt(planned: Dictionary, admitted: Dictionary,
+        world: float, opening: float) -> Dictionary:
+    return _transport_admission_receipt(planned,admitted,world,opening)
+
 # Precomputed genuine horizontal glyph/connector ink; cut decisions are
 # source-revision geometry, never recalculated during the animation loop.
 var _source_ink_intervals: Array[Vector2] = []
