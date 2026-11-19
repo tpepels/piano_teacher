@@ -2277,6 +2277,12 @@ class PracticeEngine:
                     self.playback.request(self,action=suspended.action,
                         mode=suspended.mode,from_beat=suspended.from_beat)
                     return
+                if not self.running:
+                    # Resume inside a rest resumes the pending teaching
+                    # decision; it is not a new timed take. Its next take
+                    # will independently enter the admission transaction.
+                    self._resume_current_session()
+                    return
                 from_beat = self.visual_transport.play_from_beat
                 if self.running:
                     from_beat += max(0.0, self._elapsed_beat(
