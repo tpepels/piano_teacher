@@ -44,6 +44,22 @@ func reset(view) -> void:
 func register_predecessor(previous) -> void:
     queue.register_peer(previous)
 
+func online_snapshot() -> Array:
+    # Admission PREPARE reads a frozen copy, never the live FIFO array.
+    return queue.online.duplicate(true)
+
+func online_size() -> int:
+    return queue.online.size()
+
+func remember_withdrawn_suffix(previous: Array) -> void:
+    # Rollback is owned by the stream ledger. The native executor may
+    # attach only the exact suffix removed by its immediately preceding
+    # successful preflight.
+    arm_rollback["withdrawn_suffix"] = previous
+
+func retry_placement_enabled(enabled: bool) -> void:
+    retry_placement = enabled
+
 func queue_generation() -> int:
     return serial
 
