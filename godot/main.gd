@@ -130,9 +130,8 @@ var visual_transport_clock = VisualTransportClock.new()
 var score_flow = ContinuousScoreFlow.new()
 # Untimed guided learning: world position at which the guided passage's
 # opening (source_from_beat) reaches the playhead, from its admitted plan.
-var _guided_world := NAN
-var _guided_from_beat := 0.0
-var _guided_plan_id := ""
+const GuidedPresentationSession := preload("res://guided_presentation_session.gd")
+var guided_presentation = GuidedPresentationSession.new(score_flow)
 var metronome_frame
 # The native compositor is the sole production score view.
 var timeline_model_request
@@ -1002,7 +1001,7 @@ func _process(_delta: float) -> void:
     frame_ms = Time.get_ticks_msec()
     var ticks: int = frame_ms
     var beat: float = _transport_beat_at(ticks)
-    _update_guided_hold(last_state)
+    guided_presentation.update_hold(last_state)
     score_flow.sample(ticks)
     _read_feedback_events()
     _update_count_in(beat,ticks)
@@ -1019,29 +1018,6 @@ func _process(_delta: float) -> void:
 
 ## Untimed guided learning waits for the learner: hold the score axis where
 ## the current target note sits on the playhead (continuous_score_flow.gd).
-func _update_guided_hold(state: Dictionary) -> void:
-    var guided: bool = str(state.get("mode","")) == "learn" and \
-        str(state.get("phase","")).begins_with("guided") and \
-        is_finite(_guided_world)
-    if not guided:
-        if str(state.get("mode","")) != "learn":
-            _guided_world = NAN
-            _guided_plan_id = ""
-        score_flow.release_hold()
-        return
-    var teaching: Variant = state.get("teaching")
-    var expected: Array = teaching.get("expected_notes",[]) \
-        if teaching is Dictionary else []
-    if expected.is_empty():
-        # Completed: keep the last hold so the played passage stays readable.
-        return
-    var target: float = INF
-    for note in expected:
-        if note is Dictionary and note.has("beat"):
-            target = minf(target,float(note["beat"]))
-    if is_finite(target):
-        score_flow.hold_at(_guided_world+maxf(0.0,target-_guided_from_beat))
-
 func _flow_bpm(state: Dictionary, beat: float, at_ms: int = -1) -> float:
     # The presentation axis moves at the take's authored tempo while it
     # runs, otherwise at the selected BPM (rests, count-ins, READY). From an
@@ -1119,7 +1095,7 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
     var authorized: Variant = (published_playback.get("current")
         if published_playback is Dictionary else null)
     var flow_beat: float = _transport_beat_at(received_ms)
-    _update_guided_hold(parsed)
+    guided_presentation.update_hold(parsed)
     if authorized is Dictionary:
         score_flow.sample(received_ms)
     else:
@@ -1144,36 +1120,13 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         var renderer = practice_view.stage.renderer
         renderer.present(
             parsed,beat,world-float(renderer.runway_origin_beat))
-        # Untimed Free uses explicit hold-at-target notation. Timed music
-        # comes exclusively from PlaybackCoordinator -> ScoreAdmissionGateway,
-        # never from a retrospective running-state score plan.
-        var published_timeline: Variant = parsed.get("playback_timeline")
-        var guided_plan: Variant = (
-            published_timeline.get("guided")
-            if published_timeline is Dictionary else null)
-        if str(parsed.get("mode","")) == "learn" and \
-                guided_plan is Dictionary and \
-                visual_transport_clock.has_backend_offset and \
-                not bool(parsed.get("paused",false)) and \
-                guided_plan.has("deadline_at_ms") and \
-                guided_plan.has("source_from_beat") and \
-                guided_plan.has("plan_id"):
-            var guided_deadline: int = roundi(
-                float(guided_plan["deadline_at_ms"]) +
-                visual_transport_clock.backend_offset_ms)
-            var guided_world: float = score_flow.project_authored_future(
-                guided_deadline,received_ms,beat,
-                float(parsed.get("bpm",40.0)),[])
-            renderer.enqueue_recovery_queue(world,
-                float(guided_plan["source_from_beat"]),
-                guided_world,str(guided_plan["plan_id"]),
-                true,float(guided_plan.get("count_in_beats",0.0)),
-                false,true)
-            var guided_key: String = str(guided_plan["plan_id"])
-            if renderer.scheduled_plan_openings.has(guided_key):
-                _guided_world = float(renderer.scheduled_plan_openings[guided_key])
-                _guided_from_beat = float(guided_plan["source_from_beat"])
-                _guided_plan_id = guided_key
+        # Free owns its separate held target; timed source admission
+        # remains exclusively with the PlaybackCoordinator gateway.
+        guided_presentation.publish_authorized_target(
+            parsed,renderer,world,received_ms,
+            visual_transport_clock.backend_offset_ms
+                if visual_transport_clock.has_backend_offset else NAN,
+            beat)
         # Reconcile the authoritative admission before binding this frame's
         # active renderer. A preloaded stage may promote while this state
         # is being presented, so never bind the outgoing renderer to the
@@ -1432,7 +1385,7 @@ func _debug_log(state: Dictionary, now_ms: int) -> void:
             _debug_target = target
             _debug_file.store_line("%s FREE target=%s heard=%s heads=%d world=%.2f guided_world=%.2f held=%s keyboard=%s staff=%s" % [
                 stamp, target, str(teaching.get("heard_pitches", [])), heads, world,
-                _guided_world, str(score_flow.hold_world), str(keyboard_visible), staff])
+                guided_presentation.world, str(score_flow.hold_world), str(keyboard_visible), staff])
     if now_ms - _debug_beat_ms >= 1000:
         _debug_beat_ms = now_ms
         _debug_file.store_line("%s STAFF heads=%d world=%.2f passes=%d keyboard=%s staff=%s visible=%s" % [
