@@ -415,7 +415,7 @@ func _confirm_authorized(data: Dictionary) -> void:
             float(current.get("count_in_beats",0.0)),
             str(current.get("action","start")),
             current.get("count_in_plan",{}),
-            str(receipt.get("segment_id","")))
+            str(receipt.get("take_id","")))
         metronome.acknowledge_reserved_count_in(now_ms)
     renderer = null
     current.clear()
