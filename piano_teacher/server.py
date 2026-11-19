@@ -227,7 +227,6 @@ class PracticeEngine:
         self.score_artifacts = ScoreArtifacts(self.preprocessing)
         future_score = FutureScore(data_dir / "preprocessed", clock=self.now)
         self.teaching_continuation = TeachingContinuation(future_score,self.visual_transport)
-        self._future_stage_lead_beats = 0.0
         self._continuous_horizon_beats = 0.0
         # The untimed guided engine owns repeat presentation epochs; no
         # Godot-side guess about missed notes or lesson progression.
@@ -241,8 +240,6 @@ class PracticeEngine:
         # (seconds, bpm) of the last finished take's end: the written rest
         # bar that follows it is printed from there at that tempo.
         self._rest_take_end: tuple[float, float] | None = None
-        self._future_stage_clear_beats: float | None = None
-        self._future_stage_short_rest: tuple[float, float] | None = None
         self._tempo_key = None
         self._tempo_epoch: float | None = None
         self._prepared_stage_published = False
@@ -1621,9 +1618,8 @@ class PracticeEngine:
             if prebuilt is not None:
                 self.score_artifacts = prebuilt
                 self._prepared_stage_published = True
-                self.visual_transport.visual_offset_beats = (self.teaching_continuation.handoff_world
-                    if self.teaching_continuation.handoff_world is not None else
-                    self.visual_transport.visual_offset_beats+previous_duration+
+                self.visual_transport.visual_offset_beats += (
+                    previous_duration+
                     SCHEDULER.seconds_beats(SETTLEMENT_SECONDS,outcome.previous_bpm))
             else:
                 self.score_artifacts.invalidate()
@@ -1631,7 +1627,7 @@ class PracticeEngine:
         self.pending_result = None
         self._pending_assessed_bpm = None
         self._settlement_failed = False
-        self.teaching_continuation.handoff_world = self.teaching_continuation.reservation = None
+        self.teaching_continuation.reservation = None
         return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
@@ -2638,10 +2634,9 @@ class PracticeEngine:
             self._prepare_teaching("full_result", self.pending_result)
         if self.auto and self.visual_transport.next_at and (
                 force_early or now >= self.visual_transport.next_at):
-            readiness = ContinuationReadiness(self._future_stage_ready,self.score_revision,
-                self.fingerprint,self._visual_motion(now)[0],self.plan.bpm,
-                self._native_preload_failure,prepared_on_time,
-                self._future_stage_clear_beats is not None)
+            readiness = ContinuationReadiness(
+                self._future_stage_ready,self.score_revision,
+                self.fingerprint,self._native_preload_failure)
             effect = self.teaching_continuation.advance(self.attempt_settlement.pending,now=now,readiness=readiness)
             if effect.action == "fault":
                 self.feedback = "Cannot prepare the next lesson score"
@@ -2707,17 +2702,14 @@ class PracticeEngine:
             if route == "handoff":
                 self._future_stage_ready = None
                 self._prepared_stage_published = False
-                start = self.teaching_continuation.handoff(now=now,deadline=deadline,
-                    lead_beats=self._future_stage_lead_beats,clear_beats=self._future_stage_clear_beats,
-                    count_in_beats=self._next_count_in_beats(),bpm=self.plan.bpm,
-                    rest_take_end=self._rest_take_end,latency=SNAPSHOT_LATENCY_SECONDS)
-                self._future_stage_lead_beats = 0.
-                self._future_stage_clear_beats = None
-                if self._future_stage_short_rest is not None:
-                    self._short_rest = self._future_stage_short_rest
-                    self._future_stage_short_rest = None
-                self._continue_at(start.deadline,from_beat=selected.next_exposure.from_beat)
-                self.count_in_beats = start.count_in
+                # Assets are ready; physical placement is negotiated only
+                # by ScoreAdmissionGateway. No preloader-supplied lead/clear
+                # may independently move the new stage's musical onset.
+                earliest = max(
+                    deadline,now+SCHEDULER.beats_seconds(
+                        self._next_count_in_beats(),self.plan.bpm))
+                self._continue_at(earliest,
+                    from_beat=selected.next_exposure.from_beat)
                 return
             self._prepared_stage_published = False
             # The selected teaching exposure has precedence over a timed
@@ -3801,12 +3793,8 @@ class PracticeEngine:
             return {"accepted": True, "revision": revision, "step_number": number}
 
     def acknowledge_preloaded_stage(self, *, stage_key: str,
-                                    revision: int,
-                                    presentation_lead_beats: float = 0.0,
-                                    presentation_clear_beats: float | None = None,
-                                    continuation_clear_beats: float | None = None,
-                                    continuation_header_beats: float | None = None) -> dict:
-        """Only a fully compiled and exact source-bound future ink may advance."""
+                                    revision: int) -> dict:
+        """Acknowledge exact preloaded ASSET identity, never playback time."""
         with self.lock:
             planned = self._next_stage_selection()
             if planned is None:
@@ -3816,27 +3804,7 @@ class PracticeEngine:
                 raise ValueError("Preloaded step no longer matches the active course")
             if not self.future_score.ready(selection):
                 raise ValueError("Next lesson notation is not yet prepared")
-            if not 0.0 <= presentation_lead_beats <= 64.0 or not math.isfinite(
-                    presentation_lead_beats):
-                raise ValueError("Invalid future notation reading lead")
-            if presentation_clear_beats is not None and not (
-                    math.isfinite(presentation_clear_beats)
-                    and 0.0 <= presentation_clear_beats <= 64.0):
-                raise ValueError("Invalid outgoing notation clearance")
             self._future_stage_ready = (stage_key, revision)
-            self._future_stage_lead_beats = presentation_lead_beats
-            # Short handoff (P5): beats after the outgoing take's end until
-            # the next stage may open on the empty strip; None = offscreen.
-            self._future_stage_clear_beats = presentation_clear_beats
-            # The incoming stage's own short-rest geometry (its density and
-            # header), adopted when the handoff commits; the outgoing stage's
-            # would time the new stage's repeats wrongly.
-            self._future_stage_short_rest = None
-            if continuation_clear_beats is not None and continuation_header_beats is not None:
-                pending = (float(continuation_clear_beats), float(continuation_header_beats))
-                if not all(math.isfinite(v) and 0.0 <= v <= 16.0 for v in pending):
-                    raise ValueError("Invalid short-rest geometry")
-                self._future_stage_short_rest = pending
             # If the future ink became ready during the existing rest gap,
             # schedule its exact delayed start immediately. Waiting for the
             # old full-bar deadline would show native ink on a false origin.
