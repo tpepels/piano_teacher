@@ -223,8 +223,16 @@ class PlaybackCoordinator:
             earliest = (intent.requested_at + SNAPSHOT_LATENCY_SECONDS
                         + SCHEDULER.beats_seconds(
                             intent.resume_remaining_beats,intent.bpm)) * 1000.0
-        if deadline_ms < earliest - .01:
-            raise ValueError("Score reservation violates the musical count-in deadline")
+        chosen = SCHEDULER.resolve(
+            intent.action,now=engine.now(),bpm=intent.bpm,
+            count_in_beats=(intent.resume_remaining_beats
+                if reused_count_in else intent.count_in_beats),
+            latency=0.0,
+            physical_at=deadline_ms/1000.0,
+            earliest_at=earliest/1000.0)
+        if chosen.run_at > deadline_ms/1000.0 + 1e-5:
+            raise ValueError(
+                "Score admission is earlier than the authoritative musical schedule")
         if self.receipt is not None:
             receipt = self.receipt
             if (receipt.intent_id == intent_id and receipt.attempt == attempt
