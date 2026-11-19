@@ -30,7 +30,7 @@ const RESERVED_AGREEMENT_MS := 40.0
 
 func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
         meter: Variant, count_in_beats: float, action: String = "start",
-        authorized_plan: Dictionary = {}, segment_id: String = "") -> void:
+        authorized_plan: Dictionary = {}, take_id: String = "") -> void:
     if not is_finite(deadline_ms) or not is_finite(bpm) or bpm <= 0.0 or \
             not is_finite(count_in_beats) or count_in_beats <= 0.0:
         _reserved = {}
@@ -45,7 +45,7 @@ func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
             return
     _reserved = {"deadline_ms":deadline_ms,"bpm":bpm,"bar":bar_beats,
         "meter":meter,"count_in":count_in_beats,"action":action,
-        "plan":plan,"token":"authorized:"+segment_id if not segment_id.is_empty()
+        "plan":plan,"token":"authorized:"+take_id if not take_id.is_empty()
             else "countin:%d" % roundi(deadline_ms),"acked_ms":NAN}
 
 func cancel_reserved_count_in() -> void:
@@ -84,6 +84,20 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
         now_ms: int) -> bool:
     if _reserved.is_empty():
         return false
+    if bool(state.get("paused",false)):
+        # The existing countdown is frozen; no syllables may be spoken
+        # while physical MIDI grading is paused. Resume retains the same
+        # take identity so already-spoken syllables cannot replay.
+        var stopped: Dictionary = _reserved
+        var sample: float = TempoTimeline.beats_from_milliseconds(
+            float(now_ms)-float(stopped["deadline_ms"]),
+            float(stopped["bpm"]))
+        var token: String = str(stopped["token"])
+        var pulse: float = CueTimeline.pulse_beats(stopped["meter"])
+        _cues.hold(token,sample/pulse)
+        practice_view.stage.count_in.present(0.0,4,false,true)
+        _reserved.clear()
+        return true
     var acked: float = float(_reserved["acked_ms"])
     # Only a snapshot the engine SAMPLED after it accepted the command can
     # confirm it (a poll already in flight may show the state before it).
@@ -227,27 +241,46 @@ func update(state: Dictionary, state_tick_ms: int,
         settings_view.animate_calibration_beat(-1.0,false)
     if _reserved_count_in(state,state_tick_ms,now_ms):
         return
-    # An authorized graphical take carries one immutable CountInPlan.
-    # Render its timestamped events directly and never reconstruct a
-    # separate Resume/Retry countdown from sampled transport phase.
-    var playback: Variant = state.get("playback_timeline")
-    var active: Variant = playback.get("current") if playback is Dictionary else null
-    if active is Dictionary:
-        var plan: Variant = active.get("count_in_plan")
-        var segment: String = str(active.get("segment_id",""))
-        if plan is Dictionary and not segment.is_empty():
-            var deadline_ms: float = float(active.get("deadline_ms",NAN))
-            var beat_ms: float = deadline_ms+float(clock.backend_offset_ms)
-            var tempo: float = float(plan.get("bpm",60.0))
-            var before: float = TempoTimeline.beats_from_milliseconds(
-                float(now_ms)-beat_ms,tempo)
-            if before < 0.0 and not bool(state.get("paused",false)):
-                _count_in("authorized:"+segment,before,
-                    float(plan.get("bar_beats",4.0)),
-                    plan.get("meter",[4,4]),true,
-                    float(plan.get("beats",0.0)),false,false,
-                    float(plan.get("pulse_beats",1.0)))
-                return
+    # Graphical audio has exactly one authorized take identity. Its
+    # CountInPlan is an immutable source of spoken pulses and visible
+    # preparation. With no current receipt, nothing may count down.
+    if state.has("playback_timeline"):
+        var playback: Variant = state.get("playback_timeline")
+        var active: Variant = (playback.get("current")
+            if playback is Dictionary else null)
+        if active is Dictionary:
+            var plan: Variant = active.get("count_in_plan")
+            var take: String = str(active.get("take_id",""))
+            if plan is Dictionary and not take.is_empty():
+                var deadline_ms: float = float(active.get("deadline_ms",NAN))
+                if is_finite(deadline_ms) and clock.has_backend_offset:
+                    var tempo: float = maxf(1.0,float(plan.get("bpm",60.0)))
+                    var beat_ms: float = deadline_ms+float(clock.backend_offset_ms)
+                    var before: float = TempoTimeline.beats_from_milliseconds(
+                        float(now_ms)-beat_ms,tempo)
+                    var token: String = "authorized:"+take
+                    var paused: bool = bool(state.get("paused",false))
+                    if before < 0.0:
+                        _count_in(token,before,
+                            float(plan.get("bar_beats",4.0)),
+                            plan.get("meter",[4,4]),true,
+                            float(plan.get("beats",0.0)),paused,paused,
+                            float(plan.get("pulse_beats",1.0)))
+                        return
+                    if bool(state.get("running",false)):
+                        # Source-time metronome is still permitted AFTER
+                        # beat zero. It does not create another countdown.
+                        _count_in(token,sampled_beat,
+                            float(plan.get("bar_beats",4.0)),
+                            plan.get("meter",[4,4]),false,0.0,paused,
+                            false,float(plan.get("pulse_beats",1.0)))
+                        return
+        practice_view.stage.count_in.present(0.0,4,false,false)
+        # Preserve the heard-beat token if a paused take still owns it;
+        # otherwise discard an expired no-longer-authorized cue epoch.
+        if not bool(state.get("paused",false)):
+            _cues.reset()
+        return
     # All automatic and manual count-ins are published only after the
     # coordinator's admitted segment is authorized. There is no countdown
     # for an unadmitted retry or a speculative backend announcement.
