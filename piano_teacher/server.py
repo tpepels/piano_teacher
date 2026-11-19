@@ -3631,8 +3631,6 @@ class PracticeEngine:
             if self._tempo_epoch is not None and self.plan is not None and \
                     self._tempo_key == (self.plan.identity, float(self._presentation_bpm)):
                 state["tempo_epoch_ms"] = self._tempo_epoch * 1000.0
-            if self.teaching_continuation.handoff_world is not None:
-                state["next_stage_start_beat"] = self.teaching_continuation.handoff_world
             if self.plan is not None:
                 beat = self.plan.active_phrase.start + self.visual_transport.play_from_beat
                 if self.running and self.now() >= self.visual_transport.run_at:
