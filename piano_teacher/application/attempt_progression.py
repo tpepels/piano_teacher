@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from ..lesson_timing import preparation_meter
 from .musical_scheduler import SCHEDULER, SETTLEMENT_SECONDS
+from .playback_transitions import CountInPlan
 
 from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
 from ..music import Phrase
@@ -98,12 +99,22 @@ class AttemptProgression:
                        time_signatures: tuple,
                        bpm: float, position: float,
                        loop_continuation: bool, preview: bool,
-                       now: float) -> AttemptStart:
+                       now: float, count_in_plan: CountInPlan | None = None
+                       ) -> AttemptStart:
         from_beat, bar_beats, meter = self.count_in_bar(
             phrase=phrase, boundaries=boundaries,
             time_signatures=time_signatures, position=position)
         grid = self.grid_for(phrase, boundaries)
-        count_in = 0.0 if loop_continuation else SCHEDULER.count_in_beats(bar_beats,bpm)
+        if count_in_plan is not None:
+            if (count_in_plan.meter != tuple(meter)
+                    or abs(count_in_plan.bar_beats-bar_beats) > 1e-6
+                    or abs(count_in_plan.bpm-bpm) > 1e-6):
+                raise ValueError("Attempt and authorized count-in disagree")
+            count_in = count_in_plan.beats
+        else:
+            # Explicit no-presentation/headless adapter. Graphical takes
+            # must supply the full immutable CountInPlan from coordinator.
+            count_in = 0.0 if loop_continuation else SCHEDULER.count_in_beats(bar_beats,bpm)
         return AttemptStart(
             from_beat=from_beat, count_in_bar_beats=bar_beats,
             count_in_meter=meter, count_in_beats=count_in,
