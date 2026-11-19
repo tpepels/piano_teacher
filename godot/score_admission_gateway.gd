@@ -74,22 +74,10 @@ func _backend_ms() -> float:
     return float(bus.native.call("monotonic_milliseconds"))
 
 func _matching_renderer(intent: Dictionary):
-    var revision: int = int(intent.get("revision", -1))
-    if score_session != null and score_session.is_ready() and \
-            str(score_session._fingerprint) == str(intent.get("fingerprint","")) and \
-            int(score_session.revision) == revision and \
-            int(score_session.rendered_revision) == revision:
+    if score_session != null and score_session.matches_ready_source(intent):
         return stage.renderer
-    if runway != null and runway._future != null and \
-            is_instance_valid(runway._future) and runway._acknowledged and \
-            runway._future.retained_ready() and \
-            int(runway._bundle.get("revision", -2)) == revision and \
-            str(runway._bundle.get("fingerprint","")) == str(intent.get("fingerprint","")) and \
-            str(runway._bundle.get("stage_key", "")) == str(intent.get("stage_key", "")):
-        # Link ALL outgoing source/rest layers BEFORE computing clearance.
-        runway._link_existing_layers(runway._future)
-        return runway._future
-    return null
+    return runway.prepared_renderer(intent) if runway != null else null
+
 
 func _deadline_at_world(target_world: float, local_ms: int, beat: float,
         bpm: float, segments: Array) -> float:
@@ -226,7 +214,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         "source_end_beat": float(intent["end_beat"]),
         "deadline_ms": deadline,
         "world_origin": start_world,
-        "queue_generation": int(view._stream_serial),
+        "queue_generation": view.admission_queue_generation(),
         "renderer_generation": int(intent["revision"]),
         "reused_count_in": bool(current["reused_count_in"]),
     }
@@ -252,7 +240,7 @@ func observe(state: Dictionary, frame_ms: int) -> void:
                 str(state.get("phase", "")) == "playing" and \
                 not segment.is_empty() and \
                 stage.renderer != null and \
-                stage.renderer._stream_live_segment_id != segment:
+                stage.renderer.bound_segment_id() != segment:
             missing_score_frames += 1
             if missing_score_frames >= 4 and reported_failure_segment != segment:
                 reported_failure_segment = segment
@@ -391,7 +379,7 @@ func _confirm_authorized(data: Dictionary) -> void:
     if str(data.get("segment_id","")) != expected:
         return
     if runway != null and renderer != null and \
-            is_instance_valid(renderer) and runway._future == renderer:
+            is_instance_valid(renderer) and runway.owns_prepared_renderer(renderer):
         if not runway.promote_reserved(admission_state):
             if failure_request._pending_id < 0:
                 failure_request.request("playback.failure",{
