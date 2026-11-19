@@ -1212,6 +1212,16 @@ func arm_stream_take(world: float, opening: float,
     return {}
 
 
+func admission_queue_generation() -> int:
+    return _stream_serial
+
+func bound_segment_id() -> String:
+    return _stream_live_segment_id
+
+func has_armed_reservation() -> bool:
+    return _stream_armed_serial >= 0 and _stream_arm_acknowledged
+
+
 func bind_stream_segment(segment_id: String) -> bool:
     # The native source owner must be tied to the coordinator's immutable
     # segment before it may claim any backend transport identity.
