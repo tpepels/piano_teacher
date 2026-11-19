@@ -148,6 +148,7 @@ class PracticeEngine:
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
         self.playback = PlaybackCoordinator()
         self._playback_authorizing = False
+        self._paused_playback_intent = None
         self.tempo_map_cache = TempoMapCache()
         self.attempt_progression = AttemptProgression()
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
@@ -759,6 +760,12 @@ class PracticeEngine:
                 self.control(effect.action)
             if effect.consumed:
                 return
+            if (self.playback.presentation_required
+                    and self.playback.intent is not None and self.running
+                    and self.playback.intent.action in ("start","restart")):
+                # The old take is being replaced: no additional graded notes
+                # may be credited before the successor's score is admitted.
+                return
             corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
                             if corrected_at is None else corrected_at)
             # One graded musical clock for the Recorder and the live view.
@@ -971,6 +978,7 @@ class PracticeEngine:
     def _stop(self, *, reason: str | None = None, preserve_episode: bool = False,
               persist_evidence: bool = True):
         self.playback.invalidate(reason or self._action_reason)
+        self._paused_playback_intent = None
         reason = reason or self._action_reason
         played = (self.recorder.presses if self.recorder is not None else
                   self.measurement.guided.presses)
@@ -2250,15 +2258,25 @@ class PracticeEngine:
                 self._start_or_restart(
                     action, presentation_lead_seconds=self._presentation_lead(kwargs))
         elif action == "pause":
-            if self.playback.intent is not None:
-                self.playback.invalidate("paused_before_admission")
-            self._pause_current_session()
+            pending = self.playback.intent
+            if pending is not None:
+                self._paused_playback_intent = pending if not self.running else None
+                self.playback.cancel_pending("paused_before_admission")
+            self._pause_current_session(pending_admission=pending is not None)
         elif action == "resume":
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._update_short_rest(kwargs)
             if self.playback.presentation_required:
                 if not self.visual_transport.paused:
                     raise ValueError("Cannot resume an unpaused passage")
+                if not self.running and self._paused_playback_intent is not None:
+                    suspended = self._paused_playback_intent
+                    self._paused_playback_intent = None
+                    self.visual_transport.resume(now=self.now(),shift_run_at=False)
+                    self.pause_context = None
+                    self.playback.request(self,action=suspended.action,
+                        mode=suspended.mode,from_beat=suspended.from_beat)
+                    return
                 from_beat = self.visual_transport.play_from_beat
                 if self.running:
                     from_beat += max(0.0, self._elapsed_beat(
@@ -2398,10 +2416,11 @@ class PracticeEngine:
             return max(seconds, floor)
         return seconds
 
-    def _pause_current_session(self):
+    def _pause_current_session(self, *, pending_admission: bool = False):
         """Pause learning, playback or preparation using one sampled clock."""
         now = self.now()
-        context = self._phase(now) if not self.visual_transport.paused else ""
+        context = ("admitting" if pending_admission else self._phase(now)) \
+            if not self.visual_transport.paused else ""
         require_pausable(paused=self.visual_transport.paused, phase=context)
         self.pause_context = context
         if self.running:
