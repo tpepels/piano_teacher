@@ -22,17 +22,32 @@ protocol has authorized the same source, segment identity and downbeat.
   native renderer, consults all live queue/peer layers, commits the
   physical reservation and sends its receipt to Python. It never grades or
   decides a lesson.
-- **ScoreStreamQueue / native view:** immutable strip geometry, maximum
-  safe suffix withdrawal, journal, rendering and bound segment identity.
-  A failed reservation restores the safe withdrawn suffix if physical time
-  still permits it.
+- **ScoreStreamController / ScoreStreamQueue:** one mutable stream FIFO,
+  arm/rollback identity, archival and suffix withdrawal ledger for each
+  native renderer revision. NativeView currently exposes compatibility
+  properties while these ledger algorithms are moved out; external
+  stage controllers must use published capabilities, not the queue itself.
+  A failed reservation restores the safe withdrawn suffix if physical
+  time still permits it.
+- **NotationClipPlanner / StreamAdmissionExecutor:** pure source-safe
+  clipping and a single physical transaction executor respectively.
+- **ScoreSceneController:** the only authority that replaces the active
+  stage renderer and adopts exact-revision assets. Outgoing ink remains
+  owned by the retained ScoreRunway layers.
 - **ScoreRunway:** preloads a next-stage renderer, retains outgoing layers,
   promotes a fully authorized source and never invents a graded deadline.
 - **Native bridge:** one main-thread response fanout, one musical worker,
   one read-only asset worker and a shared `steady_clock` monotonic epoch.
 - **Metronome/Listen/feedback:** consume already-authorized transport
-  epochs and identities; no fallback timed source or independently scheduled
-  count-in.
+  epochs and identities. Each graphical countdown uses its authorized
+  CountInPlan and stable take ID across admitted Pause/Resume segments.
+  No speculative source or independently scheduled graphical count-in.
+- **InputSession / MidiIngress:** classifies configured piano-key shortcuts,
+  guards replaced takes, and preserves physical timestamps when an
+  automatic successor is due. Semantic UI and piano controls invoke the
+  same backend command and graphical admission path.
+- **NavigationSession / ApplicationEventRouter:** interpret screen and
+  keyboard semantics without choosing transport, music or score geometry.
 
 The desktop bridge calls `EngineCommands.require_presentation()` before
 accepting any score or MIDI command. Direct Python/headless use is explicitly
@@ -104,8 +119,13 @@ a timed count-in or MIDI grading.
 ## Validation and remaining acceptance limits
 
 The existing Python and Godot syntax/component checks run in the normal
-CI workflow. No new tests were added for this replacement at the user's
-request. CI passing does **not** certify production USB/Bluetooth MIDI,
-physical audio latency or full native rendered journeys: those require
-hands-on playback and device acceptance. A compiled GDExtension containing
-the new native clock method must be installed for a runtime launch.
+CI workflow. The pre-existing production UI and Moonlight Sonata session
+journey scripts are parsed but **not executed** by that CI workflow.
+No new tests were added at the user's request. CI passing cannot
+certify native startup, full-score rendering, physical MIDI timing, spoken
+count-in latency, or real-device Pause/Resume/Retry. Run the existing
+`scripts/verify-embedded-production-local.sh --without-package` on an
+appropriately configured Linux development machine (Godot 4.7.2,
+Python 3.14 and compiled GDExtension) to exercise those existing journeys;
+full mode also audits packaging. Physical Kawai acceptance remains separate
+and must be observed on the connected piano.
