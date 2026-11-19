@@ -1,4 +1,14 @@
-# Transport, score admission, and spoken count-in: production contract
+# Transport, score admission and spoken count-in — superseded contract
+
+> **Superseded 2026-11-19.** This document is retained as the historical
+> explanation of earlier design decisions. Its `Main._send_action`,
+> `score_queue_next`, speculative READY, and separate Retry countdown
+> ownership descriptions are no longer active. The current authority is
+> [Playback Coordinator](playback-coordinator.md); the canonical forward
+> timeline is `presentation_timeline.gd`, and the single per-take
+> `CountInPlan` is authored by the Python playback coordinator.
+> Refer to [Ownership remediation](ownership-and-practice-progression-remediation.md)
+> for outstanding implementation and acceptance work.
 
 This document records the production ownership boundaries. Future fixes must
 change the owning component and extend its acceptance test, not add another
