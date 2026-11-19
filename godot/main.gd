@@ -221,6 +221,10 @@ func _ready() -> void:
     navigation_session.library_requested.connect(_request_library)
     navigation_session.settings_requested.connect(_request_settings)
     navigation_session.devices_requested.connect(_request_devices)
+    # The screens and navigation ports are now connected. Navigating
+    # during _build_interface silently discarded startup presentation
+    # because the navigation session did not exist yet.
+    _navigate("practice")
     # Audio has one root-owned lifetime, including score revisions, Pause,
     # source selection and renderer replacement. The visual countdown merely
     # delegates speech to this service.
@@ -235,8 +239,6 @@ func _ready() -> void:
     demo_player.prepared.connect(func(token: String, ready_revision: int):
         _send_action({"action": "demo_ready", "token": token, "revision": ready_revision}))
     demo_player.failed.connect(func(message: String): practice_view.present_message(message))
-    if phase0_smoke_mode:
-        _navigate("practice")
     click_high = _make_count_click(1160.0)
     click_low = _make_count_click(770.0)
     click_player = AudioStreamPlayer.new()
@@ -643,7 +645,6 @@ func _build_practice_screen() -> void:
     _build_lesson_screen()
     navigation_drawer.mount(self, screens, _button, _navigate, _exit_app)
     _resize_overlay_drawer()
-    _navigate("practice")
     _refresh_score_status()
 
 func _update_responsive_layout() -> void:
