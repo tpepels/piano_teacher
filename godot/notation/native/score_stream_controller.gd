@@ -445,8 +445,8 @@ func arm_take(view, world: float, opening: float, right: float,
         return {}
     view.stream_world_beat = maxf(view.stream_world_beat,world)
     var old_live: int = live_serial
-    var serial_before: int = serial
-    var serial := -1
+    var serial_before: int = self.serial
+    var candidate_serial := -1
     var reused := false
     var reused_auto := false
     var reused_unplayed := false
@@ -470,15 +470,15 @@ func arm_take(view, world: float, opening: float, right: float,
                     paused_index = index
                     break
         if paused_index >= 0:
-            serial = int(queue.online[paused_index].get("take_owner",
+            candidate_serial = int(queue.online[paused_index].get("take_owner",
                 queue.online[paused_index]["serial"]))
             reused = true
             reused_unplayed = true
-    if serial < 0 and (resuming_paused or retrying):
-        serial = claim_pending_auto(view.stream_world_beat,opening,right,header)
-        reused_auto = serial >= 0
+    if candidate_serial < 0 and (resuming_paused or retrying):
+        candidate_serial = claim_pending_auto(view.stream_world_beat,opening,right,header)
+        reused_auto = candidate_serial >= 0
         reused = reused_auto
-    if serial < 0 and is_finite(planned_start_world):
+    if candidate_serial < 0 and is_finite(planned_start_world):
         var checked: float = Admission.position(queue.online,
             view.stream_world_beat,right,
             header,planned_start_world,0.0,
@@ -506,34 +506,34 @@ func arm_take(view, world: float, opening: float, right: float,
             checked = planned_start_world if onto_empty_strip else NAN
         if not is_finite(checked):
             return {}
-        var previous_serial := serial
+        var previous_serial := self.serial
         view.append_source_take(opening,checked,opening,"prepared",onto_empty_strip)
-        if serial == previous_serial:
+        if self.serial == previous_serial:
             return {}
-        serial = last_admitted
-    elif serial < 0:
-        serial = reserve_ready(view,view.stream_world_beat,opening,right,header)
-    if serial < 0:
+        candidate_serial = last_admitted
+    elif candidate_serial < 0:
+        candidate_serial = reserve_ready(view,view.stream_world_beat,opening,right,header)
+    if candidate_serial < 0:
         return {}
     var snapshot: Dictionary = StreamLifecycle.snapshot_owner(
-        queue.online,serial)
+        queue.online,candidate_serial)
     if snapshot.is_empty():
-        reject_candidate(view,serial,serial_before,old_live,{})
+        reject_candidate(view,candidate_serial,serial_before,old_live,{})
         return {}
     # Every unacknowledged control has a unique owner-scoped identity.
     if not StreamLifecycle.activate(
-            queue.online,serial,"armed:%d" % serial,true):
-        reject_candidate(view,serial,serial_before,old_live,snapshot)
+            queue.online,candidate_serial,"armed:%d" % candidate_serial,true):
+        reject_candidate(view,candidate_serial,serial_before,old_live,snapshot)
         return {}
-    armed_serial = serial
+    armed_serial = candidate_serial
     armed_segment_id = ""
     arm_acknowledged = false
     arm_rollback = {
-        "owner_serial":serial,"source_snapshot":snapshot,
-        "newly_allocated":serial > serial_before,
+        "owner_serial":candidate_serial,"source_snapshot":snapshot,
+        "newly_allocated":self.serial > serial_before,
         "old_live_serial":old_live}
     for item in queue.online:
-        if int(item.get("serial",-1)) == serial:
+        if int(item.get("serial",-1)) == candidate_serial:
             return {"start_world":float(item["world_origin"])+opening,
                 "opening":opening,"reused":reused,
                 "reused_unplayed_count_in":reused_unplayed}

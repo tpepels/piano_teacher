@@ -196,6 +196,11 @@
 - The controller is the only writer of armed/live serials, rollback snapshots and the selected owner for these routes; it uses the one source/rest queue and the same immutable preflight placement.
 - Native recovery-batch orchestration, retained-painter lifetime and transitional forwarding properties still require extraction. No new tests.
 
+### Implementation checkpoint U — distinguish queue serial from selected owner
+
+- Corrected a shadowed local variable introduced during extraction of `arm_take`: `candidate_serial` is the selected source take; `self.serial` is the stream's monotonically allocated immutable generation. This preserves the original new-append detection and rollback validity across retries.
+- No new tests. The inherited Godot syntax/behavior checks remain the acceptance gate for this refactor.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
