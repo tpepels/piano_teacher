@@ -38,7 +38,7 @@ from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.future_score import FutureScore
 from .application.midi_connection import MidiConnection, MidiNotice
 from .application.midi_key_shortcuts import MidiKeyShortcuts
-from .application.midi_ingress import MidiIngress, MidiInputFacts
+from .application.midi_ingress import MidiIngress, MidiInputFacts, InputTransportFacts
 from .application.listen_session import ListenSelection, ListenSession
 from .practice import Recorder
 from .importing.pieces import import_piece
@@ -758,40 +758,29 @@ class PracticeEngine:
                 self.control(effect.action)
             if effect.consumed:
                 return
-            if (self.playback.presentation_required
-                    and self.playback.intent is not None and self.running
-                    and self.playback.intent.action in ("start","restart")):
-                # The old take is being replaced: no additional graded notes
-                # may be credited before the successor's score is admitted.
+            transport = InputTransportFacts(
+                next_at=self.visual_transport.next_at,
+                preview_loop_pending=self.visual_transport._preview_loop_pending,
+                pending_teaching_result=self.pending_result is not None,
+                pending_rewind=self.visual_transport.pending_rewind is not None,
+                automatic=self.auto,preview_only=self.preview_only,
+                visual_gap_beats=self.visual_transport.visual_gap_beats,
+                awaiting_score=self.awaiting_score_revision is not None,
+                exercise_kind=(self.plan.exercise.kind if self.plan else ""),
+                review_end_beat=self.review_end_beat,
+                presentation_required=self.playback.presentation_required,
+                successor_action=(self.playback.intent.action
+                    if self.playback.intent is not None else None))
+            if self.midi_ingress.suppress_for_successor(facts,transport):
                 return
             corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
                             if corrected_at is None else corrected_at)
-            # One graded musical clock for the Recorder and the live view.
+            if self.midi_ingress.defer_boundary_note(
+                    message,facts=facts,transport=transport,
+                    received_at=now,corrected_at=corrected_at,
+                    replaying=deferred):
+                return
             musical_at = self._musical_seconds(corrected_at)
-            # A key can reach the next attempt's musical deadline before the
-            # next frame-state snapshot, even if none observed the source ending.
-            # Settle only a due handoff; retain the hardware timestamp above.
-            if (message.type in ("note_on", "note_off") and self.plan is not None
-                    and self.mode in ("practice", "perform")
-                    and not self.visual_transport.paused and self.awaiting_score_revision is None):
-                due = (not self.running and self.visual_transport.next_at and now >= self.visual_transport.next_at
-                       and (self.visual_transport._preview_loop_pending
-                            or (self.pending_result is not None and self.auto)
-                            or self.visual_transport.pending_rewind is not None))
-                if (self.running and self.mode == "practice"
-                        and self.plan.exercise.kind != "perform"
-                        and self.review_end_beat is None and (self.auto or self.preview_only)):
-                    phrase = self.plan.active_phrase
-                    source_end = self.visual_transport.run_at + (self._elapsed_seconds(phrase.end-phrase.start)
-                        - self._elapsed_seconds(self.visual_transport.play_from_beat))
-                    due = now >= SCHEDULER.offscreen(
-                        deadline=source_end,
-                        lead_beats=self.visual_transport.visual_gap_beats,
-                        bpm=self.plan.bpm)
-                if not deferred and (due or self.midi_ingress.deferred):
-                    self.midi_ingress.deferred.append((message.copy(), now, corrected_at,
-                                                self.transport_id))
-                    return
             self.midi_ingress.deliver(message,facts=facts,received_at=now,corrected_at=corrected_at,
                 musical_at=musical_at,recorder=self.recorder,teaching=self.teaching,
                 feedback_take=self._feedback_take())
