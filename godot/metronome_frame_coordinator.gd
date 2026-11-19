@@ -156,37 +156,6 @@ func _count_in(token: String, beat: float, bar_beats: float, meter: Variant,
     _dispatch_cue(token,float(units[0]),int(units[1]),use_raw_click,
         float(units[2]),drop_late)
 
-func _announced_count_in(state: Dictionary, now_ms: int) -> bool:
-    # An announcement normally arrives a whole rest early; one first heard
-    # mid-beat is a Resume in the rest continuing that countdown, so a beat
-    # observed late is consumed (R1 M4) rather than spoken off its beat.
-    # An automatic continuation starts AT its announced graded deadline,
-    # so its one count-in bar is spoken during the rest, in the bar right
-    # before that deadline (score_queue_next: deadline and bar length). The
-    # token is the deadline's, the same one the retry preparation clock
-    # uses, so the two can never both speak the same bar.
-    var plan: Variant = state.get("score_queue_next")
-    if not plan is Dictionary or bool(state.get("running",false)) or \
-            bool(state.get("paused",false)) or \
-            not str(state.get("phase","")) in ["feedback","recovering","preview_gap"] or \
-            not bool(clock.has_backend_offset):
-        return false
-    var bar_beats: float = float(plan.get("count_in_beats",0.0))
-    if bar_beats <= 0.0:
-        return false
-    var deadline_ms: float = float(plan.get("deadline_at_ms",NAN)) + \
-        float(clock.backend_offset_ms)
-    # The announced take's own start tempo (a tempo-step repeat counts in
-    # at its new BPM, not at the rest's).
-    var bpm: float = maxf(1.0,float(plan.get("bpm",state.get("bpm",60.0))))
-    var beat: float = TempoTimeline.beats_from_milliseconds(float(now_ms)-deadline_ms,bpm)
-    if not is_finite(beat) or not CueTimeline.counting(beat,1,bar_beats):
-        return false
-    _count_in("retry:%d:%s" % [int(state.get("revision",-1)),
-        str(roundi(deadline_ms))],beat,bar_beats,
-        plan.get("count_in_meter",state.get("count_in_meter")),true,bar_beats,
-        false,true)
-    return true
 
 func _init(settings, practice, visual_clock, at_beat: Callable,
         on_count: Callable, on_raw: Callable) -> void:
@@ -241,25 +210,9 @@ func update(state: Dictionary, state_tick_ms: int,
         settings_view.animate_calibration_beat(-1.0,false)
     if _reserved_count_in(state,state_tick_ms,now_ms):
         return
-    # A rest's count-in belongs to the take the engine ANNOUNCED for it
-    # (score_queue_next). An unannounced repeat counts in once it starts.
-    var preparing_retry: bool = (
-        str(state.get("phase","")) in ["feedback","recovering"] and
-        state.get("score_queue_next") is Dictionary and
-        bool(clock.retry_active) and clock.retry_preparing(now_ms) and
-        not bool(state.get("paused",false)))
-    if preparing_retry:
-        var retry_beat: float = clock.retry_count_in_beat(now_ms)
-        var deadline_value: Variant = clock.get("retry_deadline_ms")
-        var retry_key: String = str(roundi(float(deadline_value))) \
-            if deadline_value != null else str(int(state.get("transport_id",0)))
-        var plan_meter: Variant = state.get("score_queue_next",{}).get(
-            "count_in_meter",state.get("count_in_meter"))
-        _count_in("retry:%d:%s" % [int(state.get("revision",-1)),retry_key],
-            retry_beat,float(state.get("count_in_bar_beats",4)),plan_meter,true)
-        return
-    if _announced_count_in(state,now_ms):
-        return
+    # All automatic and manual count-ins are published only after the
+    # coordinator's admitted segment is authorized. There is no countdown
+    # for an unadmitted retry or a speculative backend announcement.
     # The engine's one count-in bar; a longer lead before it stays silent.
     # A hand-built snapshot without the key counts one bar of the meter.
     var count_in_beats: float = float(state.get("count_in_beats",
