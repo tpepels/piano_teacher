@@ -321,8 +321,10 @@ class PlaybackCoordinator:
         }
         self.intent = None
         self.receipt = None
+        activation = max(engine.visual_transport.run_at,
+                         engine.midi_ingress.resume_grading_after)
         self.state = (PlaybackState.COUNT_IN if engine.running
-                      and engine.now() < engine.visual_transport.run_at
+                      and engine.now() < activation
                       else PlaybackState.PLAYING if engine.running
                       else PlaybackState.AUTHORIZED)
         result = {
@@ -363,8 +365,9 @@ class PlaybackCoordinator:
         if engine.visual_transport.paused:
             self.state = PlaybackState.PAUSED
         elif engine.running:
-            self.state = (PlaybackState.COUNT_IN if engine.now() <
-                          engine.visual_transport.run_at
+            activation = max(engine.visual_transport.run_at,
+                             engine.midi_ingress.resume_grading_after)
+            self.state = (PlaybackState.COUNT_IN if engine.now() < activation
                           else PlaybackState.PLAYING)
         elif engine.pending_result is not None:
             self.state = PlaybackState.SETTLING
