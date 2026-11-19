@@ -12,7 +12,7 @@ Bump VERSION whenever a key is removed, renamed or changes meaning.
 """
 from __future__ import annotations
 
-VERSION = 2
+VERSION = 3
 
 # Values that do not change frame to frame. They travel in command replies
 # (library.open, practice.command, ...) and are omitted from state.snapshot.
@@ -95,6 +95,8 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "original_bpm": ('number',),
     "pause_context": ('null', 'string'),
     "paused": ('bool',),
+    "playback_intent": ('dict', 'null'),
+    "playback_timeline": ('dict',),
     "performance_summary": ('dict', 'null'),
     "phase": ('string',),
     "piece_fingerprint": ('string',),
