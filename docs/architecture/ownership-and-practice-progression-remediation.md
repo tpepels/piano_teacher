@@ -7,7 +7,7 @@
 
 ## Implementation progress
 
-**Implementation branch:** `main`. **Tests:** No new tests were introduced. The existing isolated Godot peer-reservation fixture was adapted to the same public peer-clearance/preflight interfaces as production; its assertions are unchanged. Existing CI is green at `27f7f580` ([run 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191)). This is not full native or physical acceptance. Source-level and CI completion must not be conflated with real native/physical acceptance.
+**Implementation branch:** `main`. **Tests:** No new tests introduced. Existing fixtures were migrated to current public admission/score ports and one legacy parser assertion was retired. Core CI passed on `eee14c54` ([run 44637473989](https://github.com/tpepels/piano_teacher/actions/runs/44637473989)); newer source CI and full native verification are tracked below, not assumed green. Physical audio/MIDI cannot be certified by headless runs.
 
 | Workstream | Status | Notes |
 | --- | --- | --- |
@@ -15,13 +15,13 @@
 | Typed course outcomes / O02 | SINGLE TYPED PRODUCTION PATH; LEGACY PARSER REMOVED | `TeachingDecision.flow_outcome` carries `Outcome` directly through course/engine; `outcome_of(message)` and its obsolete parser assertion have been deleted |
 | Unified assessment verdict / O03 | INTEGRATED ACROSS TEACHING, EVIDENCE AND SNAPSHOTS; LIVE CHECK OPEN | The selected verdict now drives course progression, recorded acceptance, UI summary and durable trouble clearing; raw grader acceptance is retained under a separate diagnostic field; non-graded legacy adapters remain distinct |
 | Unified playback transitions / O01, O04 | GRAPHICAL COUNT-IN SINGLE-TAKE PATH INTEGRATED; LEGACY AND PHYSICAL ACCEPTANCE OPEN | Immutable PlaybackTransition and CountInPlan are accepted once; metronome uses take-keyed authorized segments through Pause/Resume, rejects mismatched deadlines and does not invent unadmitted graphical countdowns; headless compatibility and hardware acceptance remain |
-| Asset admission / O05, O08 | ONE PHYSICAL PREFLIGHT CONTRACT; INTERNAL VIEW ADAPTERS REMAIN | ScoreTransportReservation now exclusively consumes identity-bound frozen preflight facts, including isolated Godot fixtures; cross-renderer peer clearance also uses primitive read-only facts. ScoreStreamController owns the FIFO and transport lifecycle, and ScoreSceneController owns promotion; NativeView still has internal append/rollback and property forwarding |
+| Asset admission / O05, O08 | ONE PHYSICAL PREFLIGHT + STREAM OWNER; PAINTER COUPLING OPEN | ScoreTransportReservation requires frozen physical facts; ScoreStreamController owns Play/Resume/Retry, recovery, immutable source/rest append, ledger/rollback/serial identities; ScoreSceneController owns renderer promotion. NativeView retains in-process drawing/queue bridge and painter lifecycle |
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
 | Architecture docs / O07 | CURRENT ENTRYPOINTS RECONCILED; REFERENCE SWEEP OPEN | ROADMAP and documentation index now point to the actual moving-window policy and current playback/ownership contracts; ADR-0001 and playback coordinator document authority; old ownership contracts marked historical. Deeper document cross-reference sweep remains open |
-| Decompose server.py / L01 | PARTIALLY DECOMPOSED | LearningEvidenceSession now owns versioned rule snapshots and historical compatible retry-evidence queries, alongside ScoreStatePublisher, MidiIngress, AttemptSettlement and PracticeFlowCourseSession. PracticeEngine still coordinates controls, assessment and mutable lifecycle fields |
-| Decompose native/view.gd / L02 | PARTIALLY DECOMPOSED | ScoreStreamController now owns whole-take append, queue serial assignment, partial-admission compensation, and transport/rollback lifecycle. NativeView supplies source windows and measured context, but ready/recovery choice and physical arm orchestration and painter lifecycle remain |
-| Decompose main.gd / L03 | PARTIALLY DECOMPOSED | ApplicationStateInbox owns poll epochs, stale-command response rejection and the accepted UI snapshot; DebugSessionLogger owns contract and transition diagnostics; presentation, navigation, command, score warmup remain separate owners. Main continues screen composition and invokes acceptance effects |
-| Existing CI/native integration | EXISTING CI GREEN AT `27f7f580`; NATIVE AND PHYSICAL RUNS OPEN | [GitHub Actions run 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed for the current implementation and reconciled roadmap. No new tests; the existing isolated peer-reservation fixture was updated to consume the public preflight port without changing its assertions. Core CI does not execute the full embedded/native UI journey or physical MIDI/audio acceptance |
+| Decompose server.py / L01 | PARTIALLY DECOMPOSED (~3,621 lines) | LearningEvidenceSession now owns rule snapshots, adaptive retry history, learner history status and read-only statistics queries; deleting learner history preserves the shared LearningCapture owner. PracticeEngine still owns many command/assessment/automatic continuation lifecycle operations |
+| Decompose native/view.gd / L02 | SUBSTANTIALLY DECOMPOSED (~1,302 lines); NOT THIN | ScoreStreamController owns the complete stream admission/recovery/rollback/identity protocol. Writable NativeView transport aliases removed; read-only public owner-status ports added. Retained painting and the internal queue access still require isolation |
+| Decompose main.gd / L03 | SUBSTANTIALLY DECOMPOSED (~1,117 lines); NOT THIN | ApplicationStateInbox owns accepted snapshots and stale poll suppression; NavigationSession, PracticePresentationSession, ApplicationEventRouter, DebugSessionLogger, StatusHeadPreloader and CountInAudioSession own their domains. Main still composes scenes and routes external replies/actions |
+| Existing CI/native integration | CORE GREEN THROUGH `eee14c54`; FULL NATIVE IN PROGRESS | [Core run 44637473989](https://github.com/tpepels/piano_teacher/actions/runs/44637473989) passed. Native extension compiles and embeds Python, authentic score and UI reached authorized count-in in earlier runs. Later native runs exposed old acceptance assumptions and are being corrected. Relocated package and physical hardware acceptance not yet certified |
 
 ### Phase completion status
 
@@ -280,13 +280,13 @@
 | Required acceptance | Current evidence | Status |
 | --- | --- | --- |
 | Python, Godot parse and existing isolated checks | [GitHub Actions 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed at `27f7f580`; existing core checks only | **Verified for tested source revision; native/full physical journeys open** |
-| Actual embedded Python/Godot native boot + authentic score | Existing `scripts/verify-embedded-production-local.sh --without-package` provides an end-to-end runner; not executed in this environment | **Not verified** |
+| Actual embedded Python/Godot native boot + authentic score | [Run 44638188623](https://github.com/tpepels/piano_teacher/actions/runs/44638188623): real compiled GDExtension, Python registration, generated two-hand MIDI and score geometry passed; UI later failed the obsolete voice-only assertion | **Verified up to score/UI count-in; complete journey pending** |
 | Pathétique Listen → Free → Tempo near 52%, notes visible and admitted before grading | Source transactions wired; exact user reproduction needs live runtime | **Not verified** |
 | Bars 1; 2,1–2; 3,2–3,1–3; 4,3–4,2–4,1–4; sliding at max width 4 | Authoritative generator and progress identity updated; no physical MIDI observation | **Source implemented; live acceptance pending** |
 | Cross-bar holds, sparse bars, changing meter, very slow BPM, long score | Source-safe windows and count-in map implemented; full native journey not executed | **Not verified** |
 | Pause, Resume and Retry including counted syllables and lowest/highest physical-key shortcuts | Shared route and count-in session integrated; actual Kawai timing not measured | **Not verified** |
 | Auto retry/recovery, preloaded lesson, interruption/close/reopen, saved progress | Source-bound admission + durable settlement implemented; physical and crash/restart cases outstanding | **Not verified** |
-| Self-contained packaged release | Existing script's `full` mode audits package; no packaged candidate run here | **Not verified** |
+| Self-contained packaged release | Clean-extract compressed archive and boot check implemented in full native script; current native runs stop earlier at UI acceptance | **Not verified** |
 
 **Existing acceptance commands** (do not add new tests):
 
@@ -297,6 +297,25 @@ bash scripts/verify-embedded-production-local.sh
 ```
 
 The native runner requires Godot 4.7.2, Python 3.14 dependencies and a compiled matching GDExtension. Running the existing native scripts on a configured Linux machine and physically testing the Kawai are still required. All incomplete items stay open; CI success by itself must not close them.
+
+#### Physical acceptance protocol — not executed in CI
+
+These are manual owner observations, not new automated tests. Record the app commit, host OS, MIDI device, connection (USB/Bluetooth), actual speaker/headphone output, source MIDI fingerprint, selected source measure/window, BPM, calibration offset and a timestamped debug ZIP for every failure. Do not mark a case passed merely because an API snapshot claims the correct state.
+
+- [ ] **USB MIDI startup and reconnect:** select the Kawai CA49, play/release and sustain real notes, unplug/reconnect mid-session, verify the correct input device and one active take without duplicate callbacks or stale grading.
+- [ ] **Bluetooth MIDI startup and timing:** perform the same notes with Bluetooth, calibrate several rounds, reject outliers and verify that timing offset improves observed attack judgements, including after reconnect.
+- [ ] **Measure-first course:** demonstrate 1; 2, 1–2; 3, 2–3, 1–3; 4, 3–4, 2–4, 1–4; 5, 4–5, 3–5, 2–5. Record the actual graded source attacks and confirm every window stays at four authored bars maximum.
+- [ ] **Hand progression:** for each window, Right → Left → Together when those hands have notes. No skipped or combined hand earns mastery without an actual clean attempt.
+- [ ] **Listen and Free:** Listen plays the selected window at source tempo with actual sound, visible moving notes and no grading; Free awaits each real key at a fixed playhead, shows a red wrong-note hint, and advances only after the correct key.
+- [ ] **Tempo and count-in:** start at 50% source BPM, increase by 10% of target after clean takes, follow two-failures slowdown/return to Free and require two consecutive clean source-tempo attempts. Check audible click and large numbers, plus optional speech when enabled; verify voice/click and playhead timing on real speakers.
+- [ ] **Monotonic score and controls:** Pause leaves the world clock moving with no new source, Resume admits notes strictly in the future, Retry preserves every exposed strip's immutable world position and ends each take with the authored rest. Check lowest/highest piano shortcuts.
+- [ ] **Cross-bar and difficult notation:** use an authored sustained/tied note across a window boundary, sparse measures, changing meters (including compound), slow BPM, beams/slurs, and a long Chopin score. Verify release and grading don't include later-window attacks.
+- [ ] **Automatic continuation and recovery:** confirm failed takes, repeated recovery, simplified Coda/Fukuda announcement when offered, preloaded stage handoff, count-in reuse and no “Score not ready” race with visible/graded music.
+- [ ] **Saved interruption and progress:** stop mid-take, close/reopen, resume the same moving window in Free, preserve achieved windows and forbid mastery from partial/interrupted takes.
+- [ ] **Audio/video witness:** capture audible acoustic or line-out clicks/notes together with the screen/playhead using an external recording; measure drift and latency under load. Headless Dummy audio-driver observations are insufficient.
+- [ ] **Packaged desktop on a clean machine:** install and launch the built archive without the development venv or system Python project dependencies, perform a real MIDI session, and confirm user data/graphics/audio persist across restart.
+
+No item above has been checked on physical hardware in this environment. The owner must record pass/fail and any corresponding corrections before Phase 6 is closed.
 
 ## Executive findings
 
