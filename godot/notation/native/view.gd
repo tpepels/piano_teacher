@@ -82,6 +82,7 @@ const TransportReservation := preload("res://score_transport_reservation.gd")
 const StreamAdmissionExecutor := preload("res://notation/native/stream_admission_executor.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
+const ScoreStreamController := preload("res://notation/native/score_stream_controller.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
 const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 var symbols = SymbolPainter.new(layout,connector_geometry)
@@ -101,7 +102,12 @@ var external_backdrop := false
 var compact_inactive_staff := false
 # One infinite front-of-house camera. Grading never reads this axis.
 var stream_world_beat := 0.0
-var _stream_queue = StreamQueue.new()
+var _stream_controller = ScoreStreamController.new()
+var _stream_queue:
+    get: return _stream_controller.queue
+
+func register_stream_predecessor(previous) -> void:
+    _stream_controller.register_predecessor(previous)
 # Precomputed genuine horizontal glyph/connector ink; cut decisions are
 # source-revision geometry, never recalculated during the animation loop.
 var _source_ink_intervals: Array[Vector2] = []
@@ -152,19 +158,41 @@ var offline_stream_queue: Array:
 # temporarily suppress one glyph for framebuffer controls; that must not
 # change the fixed timing line or alter unrelated image pixels.
 var _cursor_engraved_events: Array = []
-var _stream_last_take := ""
-var _stream_was_paused := false
-var _stream_paused_source := 0.0
-var _stream_paused_owner := -1
-var _stream_live_serial := -1
+var _stream_last_take: String:
+    get: return _stream_controller.last_take
+    set(value): _stream_controller.last_take = value
+var _stream_was_paused: bool:
+    get: return _stream_controller.was_paused
+    set(value): _stream_controller.was_paused = value
+var _stream_paused_source: float:
+    get: return _stream_controller.paused_source
+    set(value): _stream_controller.paused_source = value
+var _stream_paused_owner: int:
+    get: return _stream_controller.paused_owner
+    set(value): _stream_controller.paused_owner = value
+var _stream_live_serial: int:
+    get: return _stream_controller.live_serial
+    set(value): _stream_controller.live_serial = value
 # The last playing take reported without a bound source (reported once).
 var _unscored_take := ""
-var _stream_armed_serial := -1
-var _stream_armed_segment_id := ""
-var _stream_live_segment_id := ""
-var _stream_arm_rollback: Dictionary = {}
-var _stream_arm_acknowledged := false
-var _stream_serial := 0
+var _stream_armed_serial: int:
+    get: return _stream_controller.armed_serial
+    set(value): _stream_controller.armed_serial = value
+var _stream_armed_segment_id: String:
+    get: return _stream_controller.armed_segment_id
+    set(value): _stream_controller.armed_segment_id = value
+var _stream_live_segment_id: String:
+    get: return _stream_controller.live_segment_id
+    set(value): _stream_controller.live_segment_id = value
+var _stream_arm_rollback: Dictionary:
+    get: return _stream_controller.arm_rollback
+    set(value): _stream_controller.arm_rollback = value
+var _stream_arm_acknowledged: bool:
+    get: return _stream_controller.arm_acknowledged
+    set(value): _stream_controller.arm_acknowledged = value
+var _stream_serial: int:
+    get: return _stream_controller.serial
+    set(value): _stream_controller.serial = value
 # Pure presentation clock for empty idle/paused staves. Never fed into
 # MIDI grading, transport projection or recorded source events.
 
@@ -464,18 +492,8 @@ func _prepare_static_geometry() -> void:
 
 
 func _stream_release_all() -> void:
-    _stream_queue.reset(self)
-    _scheduled_score_plan_ids.clear()
-    _stream_last_take = ""
-    _stream_was_paused = false
-    _stream_paused_source = 0.0
-    _stream_paused_owner = -1
-    _stream_live_serial = -1
-    _stream_armed_serial = -1
-    _stream_armed_segment_id = ""
-    _stream_live_segment_id = ""
-    _stream_arm_rollback.clear()
-    _stream_arm_acknowledged = false
+    _stream_controller.reset(self)
+
 
 func _clear_retained_segments() -> void:
     _stream_release_all()
@@ -620,7 +638,9 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 # clips have expired. New copies reanchor only at an authored source entry.
 var _ambient_anchor_world := 0.0
 
-var _stream_last_admitted := -1
+var _stream_last_admitted: int:
+    get: return _stream_controller.last_admitted
+    set(value): _stream_controller.last_admitted = value
 # Owner decision (round 4, 2026-11-11): a written rest bar (the practice
 # timeline's gap, always one full measure) follows every take, and it IS
 # the count-in bar of the next take: the next source is admitted straight
@@ -629,10 +649,14 @@ var _stream_last_admitted := -1
 # Each backend decision has a stable identity. Repeated state polls cannot
 # enqueue another copy after the first source has already been activated
 # or has passed off the left edge.
-var _scheduled_score_plan_ids: Dictionary = {}
+var _scheduled_score_plan_ids: Dictionary:
+    get: return _stream_controller.planned_ids
+    set(value): _stream_controller.planned_ids = value
 # World beat at which each admitted plan's source opening reaches the
 # playhead (it can be later than the engine deadline for untimed Learn).
-var scheduled_plan_openings: Dictionary = {}
+var scheduled_plan_openings: Dictionary:
+    get: return _stream_controller.planned_openings
+    set(value): _stream_controller.planned_openings = value
 
 
 func has_source_windows_at(opening: float) -> bool:
@@ -943,7 +967,9 @@ func announced_copy_onset(world: float) -> float:
 
 
 # Set only around reserve_transport_action's commit of a Retry slot.
-var _retry_placement := false
+var _retry_placement: bool:
+    get: return _stream_controller.retry_placement
+    set(value): _stream_controller.retry_placement = value
 
 func arm_stream_take(world: float, opening: float,
         planned_start_world: float = NAN,
@@ -1053,16 +1079,16 @@ func arm_stream_take(world: float, opening: float,
 
 
 func admission_queue_generation() -> int:
-    return _stream_serial
+    return _stream_controller.queue_generation()
 
 func unscored_take_status() -> String:
     return _unscored_take
 
 func bound_segment_id() -> String:
-    return _stream_live_segment_id
+    return _stream_controller.bound_segment()
 
 func has_armed_reservation() -> bool:
-    return _stream_armed_serial >= 0 and _stream_arm_acknowledged
+    return _stream_controller.has_armed_reservation()
 
 
 func bind_stream_segment(segment_id: String) -> bool:
