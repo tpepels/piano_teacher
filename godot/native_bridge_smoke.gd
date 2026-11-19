@@ -135,12 +135,45 @@ func _process(_delta: float) -> bool:
                         str(values.get("mode","")) != "practice":
                     _fail("Explicit practice request did not select real MIDI")
                     return true
-                _submit("practice.command",{"action":"start"})
-                operation = "practice.start"
+                # Switching from Listen selected a different score revision.
+                # The native smoke must ACK that exact score before judging
+                # transport timing; Start alone must not bypass score-ready.
+                var awaiting: Variant = values.get("awaiting_score_revision")
+                if awaiting != null:
+                    revision = int(awaiting)
+                    _submit("score.native_layout")
+                    operation = "practice.layout"
+                else:
+                    _submit("practice.command",{"action":"start"})
+                    operation = "practice.start"
+            "practice.layout":
+                if int(values.get("revision",-1)) != revision or \
+                        not values.get("anchors") is Array or \
+                        (values["anchors"] as Array).is_empty():
+                    _fail("Practice score revision was not re-engraved")
+                    return true
+                _submit("practice.command",{"action":"score_ready","revision":revision})
+                operation = "practice.ready"
+            "practice.ready":
+                if not bool(values.get("running",false)) or \
+                        str(values.get("phase","")) != "count_in":
+                    _fail("Practice score acknowledgement did not authorize count-in: " +
+                        JSON.stringify({"mode":values.get("mode"),
+                            "phase":values.get("phase"),
+                            "running":values.get("running"),
+                            "awaiting":values.get("awaiting_score_revision")}))
+                    return true
+                started_transport = int(values.get("transport_id",-1))
+                _submit("practice.command",{"action":"pause"})
+                operation = "practice.pause"
             "practice.start":
                 if not bool(values.get("running",false)) or \
                         str(values.get("phase","")) != "count_in":
-                    _fail("Real MIDI lesson did not enter count-in")
+                    _fail("Real MIDI lesson did not enter count-in: " +
+                        JSON.stringify({"mode":values.get("mode"),
+                            "phase":values.get("phase"),
+                            "running":values.get("running"),
+                            "awaiting":values.get("awaiting_score_revision")}))
                     return true
                 started_transport = int(values.get("transport_id",-1))
                 _submit("practice.command",{"action":"pause"})

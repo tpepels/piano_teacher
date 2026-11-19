@@ -238,6 +238,13 @@
 - Added bounded, read-only `stream_owner_status()` and `stream_has_take()` capabilities for runtime diagnostics. Existing production UI and native journey fixtures now use those ports and `admission_queue_generation()` rather than writing/reading private transport fields; assertions are unchanged.
 - `NativeView` retains its internal `_stream_queue` bridge for retained rendering and one isolated test fixture. Painter/resource lifecycle and backend PracticeEngine/Main decomposition remain open. No new tests.
 
+### Implementation checkpoint AB — real native admission acceptance and fail-closed bridge gate
+
+- Full native run [44636775570](https://github.com/tpepels/piano_teacher/actions/runs/44636775570) passed extension compile, isolated two-hand MIDI and embedded Python/Verovio integration, but the **bridge smoke did not reach count-in** after switching to the new Practice stage and the existing UI smoke still required the retired speculative READY preloading route.
+- Native bridge smoke now acknowledges the actual newly selected Practice score revision before requesting timed transport. The existing verification shell script now explicitly rejects `PIANO_NATIVE_STARTUP_FAILED` and requires `PIANO_NATIVE_REAL_SCORE_WORKFLOW_OK`; Godot's zero exit status alone can no longer produce a false success.
+- The existing production UI smoke now measures the perpetual READY clock and the first **coordinator-authorized** source's immutable admission facts, with future-only/offscreen (or explicit empty-strip) placement. Existing retained-ink, pause/restart, audio cue and Resume checks remain in place. No new test was introduced; old assertions contradictory to the active playback contract were replaced by stronger source-authorization checks.
+- Native/packaging acceptance remains open pending the next full run.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

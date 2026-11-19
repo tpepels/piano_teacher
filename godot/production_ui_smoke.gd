@@ -130,78 +130,26 @@ func _process(_delta: float) -> bool:
                 not bool(app.current_state().get("loaded",false)):
             _fail("Startup did not navigate to the loaded practice screen")
             return true
-        # READY must preposition authentic source notes OFFSCREEN before Play,
-        # rather than using a transport callback to spawn source-local ink.
-        # An empty candidate means the renderer has not run its first frame.
-        if renderer.stream_passes.is_empty():
-            return false
-        var prepared: Dictionary = {}
-        var pending_count := 0
-        var queued_takes: Dictionary = {}
-        for item in renderer.stream_passes:
-            if str(item.get("kind","source")) == "source" and \
-                    str(item.get("take_key","")) == "prepared" and \
-                    bool(item.get("pending",false)):
-                if prepared.is_empty() or int(item["serial"]) < int(prepared["serial"]):
-                    prepared = item
-                pending_count += 1
-                queued_takes[int(item.get("take_owner",item["serial"]))] = true
-        # A single logical READY take can contain several immutable
-        # source strips. Counting individual strips as separate attempts
-        # made the old production gate reject the intended architecture.
-        if pending_count <= 0 or queued_takes.size() != 1:
-            _fail("Ready must retain exactly one offscreen logical take")
-            return true
-        for item in renderer.stream_passes:
-            if str(item.get("kind","source")) == "source" and \
-                    int(item.get("take_owner",item["serial"])) == \
-                    int(prepared.get("take_owner",prepared["serial"])) and \
-                    (str(item.get("take_key","")) != "prepared" or \
-                    not bool(item.get("hidden_until_armed",false))):
-                _fail("Ready source strip was activated before Play")
-                return true
-        var density: float = renderer.timeline.pixels_per_beat
-        # Test the ACTUAL retained source clip, not a legacy 15-space
-        # approximation. The native View now computes the authentic clef,
-        # key and barline leading extent from the Verovio glyph atlas and
-        # stores it as clip_leading_spaces on every immutable source strip.
-        # The old fixed-15 test rejected legitimately offscreen READY ink
-        # even when the real leading glyph margin was only seven spaces.
-        var leading_bounds: Vector2 = Admission.clip_bounds(
-            prepared,density,renderer.staff_gap(),renderer.timeline.duration_beats)
-        var first_ink_x: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
-            (float(prepared["world_origin"])-renderer.stream_world_beat) * \
-            density + leading_bounds.x
-        if first_ink_x <= renderer.size.x+12.0:
-            _fail("Ready source was placed within the visible staff")
-            return true
-        if not renderer.drawn_noteheads.is_empty():
-            _fail("Source noteheads appeared onscreen before offscreen travel")
-            return true
+        # One immutable admission authority now chooses ink only on a
+        # physically authorized Listen/Play. A READY screen may have no
+        # committed score strips; it must still keep moving and retain its
+        # complete native engraving while awaiting the authorized intent.
         if ready_visible_since_ms < 0:
             ready_visible_since_ms = Time.get_ticks_msec()
             ready_world_beat = renderer.stream_world_beat
-            ready_world_origin = float(prepared["world_origin"])
-            ready_pass_serial = int(prepared["serial"])
-            ready_take_owner = int(prepared.get("take_owner",prepared["serial"]))
-            var first_bounds: Vector2 = Admission.clip_bounds(
-                prepared,density,renderer.staff_gap(),renderer.timeline.duration_beats)
-            ready_first_expiry_world = ready_world_origin + \
-                first_bounds.y/density + \
-                renderer.size.x*ScoreView.PLAYHEAD_FRACTION/density
             return false
         if Time.get_ticks_msec()-ready_visible_since_ms < 250:
             return false
-        if renderer.stream_world_beat <= ready_world_beat or \
-                int(prepared["serial"]) != ready_pass_serial or \
-                float(prepared["world_origin"]) < ready_world_origin:
-            _fail("Ready stopped, duplicated a score, or moved hidden ink backwards")
+        if renderer.stream_world_beat <= ready_world_beat:
+            _fail("Ready stopped the perpetual world clock")
             return true
-        # Repositioning a still-hidden READY reservation farther right is
-        # required during long waits. The identity stays unchanged; Play
-        # must bind the most recent offscreen world origin.
-        ready_world_origin = float(prepared["world_origin"])
-        var forward_beats: float = renderer.size.x*(1.0-ScoreView.PLAYHEAD_FRACTION) / renderer.timeline.pixels_per_beat
+        for item in renderer.stream_passes:
+            if str(item.get("kind","source")) == "source" and \
+                    bool(item.get("ever_visible",false)):
+                _fail("Pre-authorization score source appeared onscreen")
+                return true
+        var forward_beats: float = renderer.size.x*(
+            1.0-ScoreView.PLAYHEAD_FRACTION)/renderer.timeline.pixels_per_beat
         if forward_beats < 2.0:
             _fail("Engraving leaves under two beats visible ahead of playhead")
             return true
@@ -215,13 +163,58 @@ func _process(_delta: float) -> bool:
         var renderer = app.practice_view.stage.renderer
         if not bool(app.current_state().get("running",false)):
             var awaiting: Variant = app.current_state().get("awaiting_score_revision",null)
-            if not start_requested and not app.command_coordinator.state.pending and \
+            # Practice Flow opens with Listen automatically. Do not issue a
+            # competing manual Start before its prepared audio/score is
+            # authorized; for non-Listen routes, use the normal Play button.
+            if str(app.current_state().get("mode","")) != "listen" and \
+                    not start_requested and not app.command_coordinator.state.pending and \
                     awaiting == null and bool(app.current_state().get("loaded",false)):
                 start_requested = true
                 app._send_action({"action":"start"})
             return false
         if not str(app.current_state().get("phase","")) in ["count_in","playing"]:
             return false
+        var active_key: String = "%s|%d|%d|%s" % [
+            str(app.current_state().get("piece_fingerprint","")),
+            int(app.current_state().get("revision",-1)),
+            int(app.current_state().get("transport_id",-1)),
+            str(app.current_state().get("mode","practice"))]
+        if ready_pass_serial < 0:
+            # The first legitimate source can be bound only after physical
+            # score admission and the backend ACK. Inspect that source's
+            # immutable admission time, not a speculative READY placeholder.
+            for item in renderer.stream_passes:
+                if str(item.get("kind","source")) != "source" or \
+                        str(item.get("take_key","")) != active_key or \
+                        bool(item.get("pending",false)):
+                    continue
+                var density: float = float(item.get("admitted_density",NAN))
+                var gap: float = float(item.get("admitted_staff_gap",NAN))
+                var admitted_world: float = float(item.get("admitted_world",NAN))
+                var playhead: float = float(item.get("admitted_playhead_x",NAN))
+                var viewport_width: float = float(item.get("admitted_viewport_width",NAN))
+                if not (is_finite(density) and density > 0.0 and \
+                        is_finite(gap) and is_finite(admitted_world) and \
+                        is_finite(playhead) and is_finite(viewport_width)):
+                    _fail("Authorized source has no immutable admission witness")
+                    return true
+                var bounds: Vector2 = Admission.clip_bounds(
+                    item,density,gap,renderer.timeline.duration_beats)
+                var first_pixel: float = playhead + \
+                    (float(item["world_origin"])-admitted_world)*density + bounds.x
+                if first_pixel <= viewport_width and \
+                        not bool(item.get("admitted_on_empty_strip",false)):
+                    _fail("Authorized source was admitted inside the viewport")
+                    return true
+                ready_pass_serial = int(item["serial"])
+                ready_take_owner = int(item.get("take_owner",ready_pass_serial))
+                ready_world_origin = float(item["world_origin"])
+                ready_first_expiry_world = ready_world_origin + \
+                    bounds.y/density + \
+                    renderer.size.x*ScoreView.PLAYHEAD_FRACTION/density
+                break
+            if ready_pass_serial < 0:
+                return false
         # This is the actual embedded Python transport, not a mocked
         # countdown: the same negative musical beat must reach the root
         # audio player before we accept the Play transition.
@@ -238,30 +231,8 @@ func _process(_delta: float) -> bool:
         initial_transport = int(app.current_state().get("transport_id",-1))
         var original_survived := false
         var new_ink_offscreen := true
-        # Owner decision 2026-11-08: Play on an empty strip replaces the
-        # never-seen hidden READY take with one opening one count-in bar
-        # ahead of the playhead. That take is then the original to track.
-        var empty_strip_take := -1
-        for item in renderer.stream_passes:
-            if str(item.get("kind","source")) == "source" and \
-                    bool(item.get("admitted_on_empty_strip",false)) and \
-                    int(item["serial"]) > ready_pass_serial:
-                empty_strip_take = int(item.get("take_owner",item["serial"]))
-                break
-        if empty_strip_take >= 0 and not renderer.stream_has_take(ready_take_owner):
-            for item in renderer.stream_passes:
-                if int(item.get("take_owner",item["serial"])) == empty_strip_take:
-                    ready_pass_serial = int(item["serial"])
-                    ready_take_owner = empty_strip_take
-                    ready_world_origin = float(item["world_origin"])
-                    var empty_bounds: Vector2 = Admission.clip_bounds(
-                        item,renderer.timeline.pixels_per_beat,
-                        renderer.staff_gap(),renderer.timeline.duration_beats)
-                    ready_first_expiry_world = ready_world_origin + \
-                        empty_bounds.y/renderer.timeline.pixels_per_beat + \
-                        renderer.size.x*ScoreView.PLAYHEAD_FRACTION / \
-                            renderer.timeline.pixels_per_beat
-                    break
+        # The authorized take owns the original immutable source position.
+        # No speculative READY copy is promoted or silently repositioned.
         for item in renderer.stream_passes:
             if int(item["serial"]) == ready_pass_serial:
                 original_survived = is_equal_approx(
