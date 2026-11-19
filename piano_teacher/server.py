@@ -1146,14 +1146,16 @@ class PracticeEngine:
         exercises = self.plan.exercises
         index = self.plan.index
         exercise = exercises[index]
-        phrases = [e for e in exercises if e.kind == "learn"]
-        number = sum(1 for e in exercises[:index + 1] if e.kind == "learn")
-        if exercise.kind == "learn":
-            where = f"Phrase {number} of {len(phrases)}"
-        elif exercise.kind == "connect":
-            where = f"Link phrases {number - 1} + {number}"
-        else:
+        # The course's immutable exercise is already a complete selected
+        # PracticeWindow. The UI displays its source bars; it does not
+        # reconstruct a second lesson numbering or select another window.
+        if exercise.kind == "perform":
             where = "Whole piece"
+        else:
+            first = exercise.phrase.first_bar
+            last = exercise.phrase.last_bar
+            where = (f"Measure {first}" if first == last
+                     else f"Measures {first}–{last}")
         step = (self.flow.step.value if self.flow is not None
                 and self.flow.stage_key == self.plan.identity else
                 "listen" if self.mode == "listen" else
