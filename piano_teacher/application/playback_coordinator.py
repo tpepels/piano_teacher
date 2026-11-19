@@ -44,6 +44,7 @@ class PlaybackIntent:
     from_beat: float
     end_beat: float
     bpm: float
+    tempo_segments: tuple[tuple[float, float, float], ...]
     count_in: CountInPlan
     resume_remaining_beats: float
     earliest_deadline_ms: float
@@ -182,6 +183,10 @@ class PlaybackCoordinator:
         bpm = float(engine.plan.bpm)
         count_plan = CountInPlan.create(
             bar_beats=bar,meter=tuple(meter),bpm=bpm,beats=count_in)
+        active_tempo = engine._active_tempo_map()
+        source_segments = tuple(
+            (float(entry["start_beat"]),float(entry["end_beat"]),float(entry["bpm"]))
+            for entry in (active_tempo.as_segments() if active_tempo is not None else []))
         resume_remaining = 0.0
         if (action == "resume" and engine.pause_context == "count_in"
                 and engine.running and engine.visual_transport.paused
@@ -209,6 +214,7 @@ class PlaybackCoordinator:
             revision=engine.score_revision,hand=engine.plan.hand,mode=mode,
             from_beat=float(from_beat),
             end_beat=float(engine.plan.active_phrase.end-engine.plan.active_phrase.start), bpm=bpm,
+            tempo_segments=source_segments,
             count_in=count_plan,
             resume_remaining_beats=resume_remaining,
             earliest_deadline_ms=earliest * 1000.0,
@@ -371,6 +377,8 @@ class PlaybackCoordinator:
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
             "count_in_plan": intent.count_in.snapshot(),
+            "tempo_segments":[{"start_beat":start,"end_beat":end,"bpm":rate}
+                for start,end,rate in intent.tempo_segments],
             "deadline_ms": receipt.deadline_ms,
             "world_origin": receipt.world_origin,
             "transport_id": engine.transport_id,
@@ -460,6 +468,8 @@ class PlaybackCoordinator:
             "hand":intent.hand,
             "from_beat": intent.from_beat,
             "end_beat": intent.end_beat, "bpm": intent.bpm,
+            "tempo_segments":[{"start_beat":start,"end_beat":end,"bpm":rate}
+                for start,end,rate in intent.tempo_segments],
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
             "count_in_plan": intent.count_in.snapshot(),
