@@ -309,6 +309,7 @@ func _ready() -> void:
         score_session,score_runway,score_flow,visual_transport_clock,
         metronome_frame)
     score_admission.admission_problem.connect(func(message: String):
+        practice_view.present_message(message)
         if frame_diagnostics:
             print("SCORE_ADMISSION:",message))
     command_coordinator.succeeded.connect(command_success_effects.apply)
