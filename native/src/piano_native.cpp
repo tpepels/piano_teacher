@@ -44,10 +44,16 @@ std::string python_error() {
 
 void PianoNative::_bind_methods() {
     ClassDB::bind_method(D_METHOD("is_ready"), &PianoNative::is_ready);
+    ClassDB::bind_method(D_METHOD("monotonic_milliseconds"), &PianoNative::monotonic_milliseconds);
     ClassDB::bind_method(D_METHOD("failure_message"), &PianoNative::failure_message);
     ClassDB::bind_method(D_METHOD("submit", "operation", "payload"),
                          &PianoNative::submit);
     ClassDB::bind_method(D_METHOD("take_responses"), &PianoNative::take_responses);
+}
+
+int64_t PianoNative::monotonic_milliseconds() const {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 PianoNative::PianoNative() {
@@ -112,10 +118,16 @@ void PianoNative::initialize_python() {
     PyObject *module = PyImport_ImportModule("piano_teacher.inprocess");
     PyObject *klass = module ? PyObject_GetAttrString(module, "EngineCommands") : nullptr;
     PyObject *instance = klass ? PyObject_CallNoArgs(klass) : nullptr;
-    if (!instance) {
+    // Production cannot silently fall back to headless transport. The
+    // presentation gate is enabled before the first library or MIDI event.
+    PyObject *registered = instance ?
+        PyObject_CallMethod(instance, "require_presentation", nullptr) : nullptr;
+    if (!registered) {
         std::lock_guard<std::mutex> guard(mutex_);
         failure_ = python_error();
+        Py_XDECREF(instance);
     } else {
+        Py_DECREF(registered);
         engine_ = instance;
         ready_ = true;
     }
