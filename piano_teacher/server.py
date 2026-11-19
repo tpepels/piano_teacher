@@ -23,6 +23,7 @@ from .teaching_decisions import (TeachingBinding, TeachingState, TeachingRouteFa
     source_safe_response)
 from .diagnosis_policies import LearnerSnapshot
 from .application import practice_flow
+from .application.playback_coordinator import PlaybackCoordinator
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
@@ -145,6 +146,8 @@ class PracticeEngine:
         self.recorder: Recorder | None = None
         self.visual_transport = VisualTransport(
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
+        self.playback = PlaybackCoordinator()
+        self._playback_authorizing = False
         self.tempo_map_cache = TempoMapCache()
         self.attempt_progression = AttemptProgression()
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
@@ -967,6 +970,7 @@ class PracticeEngine:
 
     def _stop(self, *, reason: str | None = None, preserve_episode: bool = False,
               persist_evidence: bool = True):
+        self.playback.invalidate(reason or self._action_reason)
         reason = reason or self._action_reason
         played = (self.recorder.presses if self.recorder is not None else
                   self.measurement.guided.presses)
@@ -1385,6 +1389,15 @@ class PracticeEngine:
         if (self.mode != "listen" or self.visual_transport.paused or self.running
                 or self.awaiting_score_revision != self.score_revision):
             return
+        if self.playback.presentation_required:
+            start_preview = self.listen.begin_playback(
+                self.score_revision, commit=False)
+            if start_preview is not None:
+                self.playback.request(
+                    self, action="listen", mode="listen",
+                    from_beat=0.0,
+                    count_in_beats=start_preview.count_in_beats)
+            return
         start = self.listen.begin_playback(self.score_revision)
         if start is None:
             return
@@ -1615,6 +1628,8 @@ class PracticeEngine:
               loop_continuation: bool = False, scheduled_deadline: float | None = None,
               presentation_lead_seconds: float = 0.0, decided: bool = False):
         with self.lock:
+            if self.playback.presentation_required and not self._playback_authorizing:
+                raise ValueError("Timed playback requires an admitted score receipt")
             if self.plan is None:
                 raise ValueError("Open a piece first")
             effect = self.session_commands.active
@@ -1702,6 +1717,46 @@ class PracticeEngine:
             self.feedback = "Count in, then play"
             self.next_action = scheduled.next_action
 
+    def _commit_playback_intent(self, intent, receipt) -> None:
+        """Only presentation authorization may execute a timed transition."""
+        deadline = receipt.deadline_ms / 1000.0
+        self._playback_authorizing = True
+        try:
+            if intent.action in ("start", "restart"):
+                self._start_or_restart(intent.action,
+                    presentation_lead_seconds=max(0.0, deadline-self.now()),
+                    scheduled_deadline=deadline)
+            elif intent.action == "resume":
+                self._resume_current_session(
+                    presentation_lead_seconds=max(0.0, deadline-self.now()),
+                    reuse_pending_score=receipt.reused_count_in,
+                    scheduled_deadline=deadline)
+            elif intent.action in ("auto", "score_ready"):
+                self.start(from_beat=intent.from_beat, mode=intent.mode,
+                    loop_continuation=intent.action == "auto",
+                    decided=intent.action == "score_ready",
+                    scheduled_deadline=deadline)
+                self._queue_scheduled_start = (
+                    self.transport_id, self.visual_transport.play_from_beat,
+                    self.visual_transport.run_at, self.plan.identity,
+                    self.score_revision, None)
+            elif intent.action == "listen":
+                start = self.listen.begin_playback(self.score_revision)
+                if start is None:
+                    raise ValueError("Listen score or audio is no longer prepared")
+                self.awaiting_score_revision = None
+                self._open_take()
+                self.running = True
+                self.count_in_bar_beats = start.count_in_bar_beats
+                self.count_in_meter = list(start.count_in_meter)
+                self.count_in_beats = start.count_in_beats
+                self.visual_transport.run_at = deadline
+                self.feedback = "Count in, then listen"
+            else:
+                raise ValueError("Unsupported playback action")
+        finally:
+            self._playback_authorizing = False
+
     def _next_count_in_beats(self) -> float:
         """The one count-in bar a user Play or Resume gets now.
 
@@ -1733,7 +1788,18 @@ class PracticeEngine:
         return [int(meter[0]), int(meter[1])]
 
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
-        """Retain polling overshoot instead of moving the musical deadline."""
+        """Continue only through the unified score-admission gate."""
+        if self.playback.presentation_required:
+            self.visual_transport.next_at = 0.0
+            self.visual_transport.announced_continuation = None
+            self.visual_transport._preparation_pending = False
+            self.visual_transport.pending_rewind = None
+            self.playback.request(
+                self, action="auto", mode=self.mode,
+                from_beat=from_beat, earliest_deadline=deadline)
+            self._queue_scheduled_start = None
+            self.feedback = "Preparing the next passage"
+            return
         announced = self.visual_transport.announced_deadline(from_beat)
         serial = (self.visual_transport.announce_serial
                   if announced is not None and abs(announced - deadline) <= 1e-9 else None)
@@ -1954,6 +2020,14 @@ class PracticeEngine:
                 self.awaiting_score_revision = None
                 self.teaching.start(now=self.now())
             elif decision == "practice":
+                if self.playback.presentation_required:
+                    self.playback.request(
+                        self, action="score_ready",
+                        mode="perform" if self.mode == "perform" else "practice",
+                        from_beat=(self.visual_transport.pending_rewind
+                            if self.visual_transport.pending_rewind is not None
+                            else self.open_from_beat))
+                    return
                 # A take starting on a freshly (re-)engraved score: open it on
                 # the empty strip one count-in bar ahead, with the snapshot
                 # latency allowed, and publish that run_at as its plan.
@@ -2144,15 +2218,43 @@ class PracticeEngine:
         elif action in ("start", "restart"):
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._update_short_rest(kwargs)
-            self._start_or_restart(action, presentation_lead_seconds=self._presentation_lead(kwargs))
+            if self.playback.presentation_required:
+                effect = self.session_commands.active or self._manual_effect(action)
+                route = self.session_commands.start_route(effect, source_changed=(
+                    self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)
+                    if self.mode not in ("listen", "learn") else False))
+                if route in ("listen", "prepare_practice", "reload_score"):
+                    self._start_or_restart(action)
+                else:
+                    selected = effect.decision.next_exposure
+                    if selected is None:
+                        raise ValueError("No playable exposure selected")
+                    self.playback.request(self, action=action,
+                        mode=selected.mode, from_beat=selected.from_beat)
+            else:
+                self._start_or_restart(
+                    action, presentation_lead_seconds=self._presentation_lead(kwargs))
         elif action == "pause":
+            if self.playback.intent is not None:
+                self.playback.invalidate("paused_before_admission")
             self._pause_current_session()
         elif action == "resume":
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._update_short_rest(kwargs)
-            self._resume_current_session(presentation_lead_seconds=self._presentation_lead(kwargs),
-                reuse_pending_score=kwargs.get("reuse_pending_score",False) is True,
-                reuse_announced_score=kwargs.get("reuse_announced_score",False) is True)
+            if self.playback.presentation_required:
+                if not self.visual_transport.paused:
+                    raise ValueError("Cannot resume an unpaused passage")
+                from_beat = self.visual_transport.play_from_beat
+                if self.running:
+                    from_beat += max(0.0, self._elapsed_beat(
+                        self.visual_transport.paused_at
+                        - self.visual_transport.run_at))
+                self.playback.request(self, action="resume",
+                    mode=self.mode, from_beat=from_beat)
+            else:
+                self._resume_current_session(presentation_lead_seconds=self._presentation_lead(kwargs),
+                    reuse_pending_score=kwargs.get("reuse_pending_score",False) is True,
+                    reuse_announced_score=kwargs.get("reuse_announced_score",False) is True)
 
     def _open_selected_measure(self, kwargs: dict):
         effect = self._manual_effect("open_at",values=kwargs)
@@ -2170,7 +2272,8 @@ class PracticeEngine:
             self.next_action = "Press Start to play from the selected measure."
 
     def _start_or_restart(self, action: str, *,
-                          presentation_lead_seconds: float = 0.0):
+                          presentation_lead_seconds: float = 0.0,
+                          scheduled_deadline: float | None = None):
         """Start a take or schedule a seamless retry under the control lock."""
         if self._settlement_failed:
             revision = self.score_revision
@@ -2252,10 +2355,12 @@ class PracticeEngine:
             self._pause_floor = None
             self._schedule_preparation(target, now=sampled, from_visual=position,
                                        reverse_seconds=reverse_seconds,
-                                       reading_lead_included=presentation_lead_seconds > 0)
+                                       reading_lead_included=presentation_lead_seconds > 0,
+                                       short_deadline=scheduled_deadline)
             self.feedback = "Get ready to retry"
             return
         self.start(mode=selected.mode,from_beat=selected.from_beat,decided=True,
+                   scheduled_deadline=scheduled_deadline,
                    presentation_lead_seconds=presentation_lead_seconds)
         return
 
@@ -2296,7 +2401,8 @@ class PracticeEngine:
 
     def _resume_current_session(self, *, presentation_lead_seconds: float = 0.0,
                                 reuse_pending_score: bool = False,
-                                reuse_announced_score: bool = False):
+                                reuse_announced_score: bool = False,
+                                scheduled_deadline: float | None = None):
         """Resume grading after future-only visual notes have reading space."""
         learning = self.mode == "learn" and self.teaching is not None
         shift_run_at = resume_timeline(
@@ -2316,6 +2422,7 @@ class PracticeEngine:
             # invalid command must preserve the paused take unchanged.
             raise ValueError("Cannot reuse a passage after graded notes began")
         previous_origin = self.visual_transport.run_at
+        frozen_musical_seconds = self._pause_floor
         had_reading_lead = self.midi_ingress.resume_grading_after > paused_at
         if learning:
             self.teaching.resume(now=now)
@@ -2362,6 +2469,15 @@ class PracticeEngine:
                 self.visual_transport.run_at += lead_seconds
                 self.midi_ingress.resume_grading_after = now+lead_seconds
                 self.count_in_beats = lead_beats
+        if scheduled_deadline is not None and shift_run_at and self.running:
+            # A resumed take preserves the frozen graded musical position:
+            # its new source segment begins at the admitted deadline, while
+            # the original source-zero epoch is earlier by elapsed music.
+            frozen = (frozen_musical_seconds if frozen_musical_seconds is not None
+                      else max(0.0, paused_at - previous_origin))
+            self.visual_transport.run_at = (scheduled_deadline
+                - max(0.0, frozen))
+            self.midi_ingress.resume_grading_after = scheduled_deadline
         self.measurement.event("timeline_resume", {
             "scheduled_origin_before": previous_origin-self.measurement.origin,
             "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,
@@ -2954,6 +3070,8 @@ class PracticeEngine:
 
     def _run_pre_assessment_transition(self, now: float) -> bool:
         """Apply an explicit non-grading transition under the session lock."""
+        if self.playback.presentation_required and self.playback.intent is not None:
+            return True
         context = TransitionContext(
             has_plan=self.plan is not None,
             learning=self.mode == "learn" and self.teaching is not None,
@@ -3252,6 +3370,15 @@ class PracticeEngine:
         with self.lock:
             self._update()
             state = project_session_state(self._capture_session_snapshot())
+            self.playback.advance(self)
+            if self.playback.presentation_required:
+                state["playback_intent"], state["playback_timeline"] = (
+                    self.playback.snapshot())
+                # There is no promise of a drawable score until it has been
+                # reserved AND presented. No legacy score_queue_next fallback.
+                state.pop("score_queue_next", None)
+                if self.playback.intent is not None:
+                    state["phase"] = "admitting"
             if self.pending_result is not None:
                 state["bpm"] = self._presentation_bpm
             # A single authoritative next-score intent covers automatic
