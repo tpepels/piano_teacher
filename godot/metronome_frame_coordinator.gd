@@ -50,13 +50,15 @@ func acknowledge_reserved_count_in(now_ms: int) -> void:
 
 static func engine_count_in_deadline_ms(state: Dictionary, action: String,
         offset_ms: float) -> float:
-    # The engine's first graded beat of the take this action started, on
-    # the local clock (NAN: the snapshot shows no such take).
-    var plan: Variant = state.get("score_queue_next")
-    if action == "restart":
-        if plan is Dictionary and not bool(state.get("running",false)):
-            return float(plan.get("deadline_at_ms",NAN))+offset_ms
-        return NAN
+    # The coordinator's authorized segment is the exact epoch for Start,
+    # Restart, automatic continuation and Resume. Never infer it from a
+    # speculative score plan or a UI-local timer.
+    var timeline: Variant = state.get("playback_timeline")
+    if timeline is Dictionary and bool(state.get("running",false)) and \
+            not bool(state.get("paused",false)):
+        var agreed: float = float(timeline.get("deadline_ms",NAN))
+        if is_finite(agreed) and agreed > 0.0:
+            return agreed+offset_ms
     if not bool(state.get("running",false)) or bool(state.get("paused",false)):
         return NAN
     var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
@@ -65,9 +67,8 @@ static func engine_count_in_deadline_ms(state: Dictionary, action: String,
             state.has("clock_sampled_at_ms"):
         return float(state["clock_sampled_at_ms"])+offset_ms- \
             TempoTimeline.seconds_from_beats(float(countdown),bpm)*1000.0
-    if state.has("visual_run_at_ms"):
-        return float(state["visual_run_at_ms"])+offset_ms
-    return NAN
+    return float(state.get("visual_run_at_ms",NAN))+offset_ms
+
 
 func _reserved_count_in(state: Dictionary, state_tick_ms: int,
         now_ms: int) -> bool:
