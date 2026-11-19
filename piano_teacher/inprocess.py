@@ -85,6 +85,9 @@ class EngineCommands:
             if operation == "playback.present":
                 with engine.lock:
                     return self._reply(OK, engine.playback.present(engine, **values))
+            if operation == "playback.withdraw":
+                with engine.lock:
+                    return self._reply(OK, engine.playback.withdraw(engine, **values))
             if operation == "playback.failure":
                 with engine.lock:
                     engine.playback.fail(engine, **values)
