@@ -426,7 +426,9 @@ func _cancel_provisional() -> void:
             "intent_id":str(current["intent_id"]),
             "attempt":int(current["attempt"]),
             "reason":"presentation_cancelled"})
-    metronome.cancel_reserved_count_in()
+    # No provisional transaction owns an audible countdown: that
+    # reservation is created only after authorization. Cancelling here
+    # could otherwise silence the previous take's still-active count-in.
     renderer = null
     current.clear()
     receipt.clear()
