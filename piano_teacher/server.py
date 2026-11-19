@@ -3391,7 +3391,8 @@ class PracticeEngine:
                     self.playback.snapshot())
                 # There is no promise of a drawable score until it has been
                 # reserved AND presented. No legacy score_queue_next fallback.
-                state.pop("score_queue_next", None)
+                if self.mode != "learn":
+                    state.pop("score_queue_next", None)
                 if self.playback.intent is not None:
                     state["phase"] = "admitting"
             if self.pending_result is not None:
