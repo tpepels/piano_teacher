@@ -932,19 +932,18 @@ class PracticeEngine:
 
     def _flow_execute(self, transition: practice_flow.Transition) -> None:
         """Execute the selected course step; the session owns flow state."""
-        state = self.flow_session.apply(transition)
-        if state.step is practice_flow.Step.LISTEN:
-            self._prepare_listen(bpm=state.bpm)
-            self.feedback = "Listen"
-            self.next_action = "Listen to the passage and follow the notes."
-        elif state.step is practice_flow.Step.FREE:
+        effect = self.flow_session.execute(transition)
+        if effect.step is practice_flow.Step.LISTEN:
+            self._prepare_listen(bpm=effect.bpm)
+        elif effect.step is practice_flow.Step.FREE:
             self.course_guided = True
             self._begin_learn(from_beat=0.0)
-            self.feedback = "Now without tempo"
-            self.next_action = "Play the notes in order, at your own pace."
-        elif state.step is practice_flow.Step.TEMPO:
+        elif effect.step is practice_flow.Step.TEMPO:
             self._prepare_practice()
-            self._flow_set_bpm(state.bpm)
+            self._flow_set_bpm(effect.bpm)
+        if effect.feedback:
+            self.feedback = effect.feedback
+            self.next_action = effect.next_action
 
     def _flow_open(self) -> None:
         """Open: a fresh piece starts with Listen, a resumed one in Free."""
@@ -1029,26 +1028,11 @@ class PracticeEngine:
         self.recovery_streak.clear()
 
     def display_phrase(self) -> Phrase:
-        """One source-derived fragment in Learn; the exact full variant in time."""
         if self.plan is None:
             raise ValueError("Open a piece first")
-        phrase = self.plan.active_phrase
-        if self.mode != "learn" or self.guided_range is None:
-            return phrase
-        start, end = self.guided_range
-        current = self.guided_session.fragment
-        if (current is not None and current.beat_range == (start, end)
-                and current.phrase.number == phrase.number
-                and current.phrase.start >= phrase.start
-                and current.phrase.end <= phrase.end):
-            return current.phrase
-        grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
-        first = next(i for i, beat in enumerate(grid) if abs(beat-start) < 1e-6)
-        last = next(i for i, beat in enumerate(grid) if abs(beat-end) < 1e-6)
-        absolute_start, absolute_end = phrase.start+start, phrase.start+end
-        return Phrase(phrase.number, phrase.first_bar+first, phrase.first_bar+last-1,
-                      absolute_start, absolute_end,
-                      tuple(n for n in phrase.notes if absolute_start-1e-7 <= n.start < absolute_end-1e-7))
+        return self.guided_session.display_phrase(
+            self.plan.active_phrase,self.plan.piece.bar_boundaries,
+            self.guided_range if self.mode == "learn" else None)
 
     def _begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
                      recovery: bool = False,

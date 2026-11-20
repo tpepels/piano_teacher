@@ -421,6 +421,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Moved full-passage and focused/performance evidence sealing, immutable verdict capture, mastery-eligibility annotation and immediate focused settlement into `AttemptSettlement.seal_completed_take`. The method returns only whether a decision was settled now; the full-passage teaching decision stays pending for its already-announced transition, preserving the existing atomic staged handoff.
 - This removes a second durable evidence writer from the engine without creating a parallel settlement transaction or changing grader selection, source identity or saved progress. No new tests.
 
+### Implementation checkpoint BF — guided score source and flow step delegated to their owners
+
+- `GuidedSession.display_phrase` now owns source-safe guided fragment selection, original bar/note identity and cached fragment reuse. The engine supplies only its explicitly selected phrase and guided range.
+- `PracticeFlowCourseSession.execute` returns one frozen `FlowStepEffect` (typed Listen/Free/Tempo step, BPM, feedback text and next action). PracticeEngine applies that effect and no longer constructs rival labels for the same course decision. No new tests.
+- Core and native checks remain the integration gates for these owner migrations.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

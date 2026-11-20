@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from ..exercise_generator import ExerciseVariant
 from .guided_fragment import select_guided_fragment
 from ..music import Phrase, source_note_id
+from ..measure_grid import phrase_grid
 from ..teaching import TeachingConfig, TeachingController
 from ..clock import Clock, monotonic
 
@@ -91,6 +92,28 @@ class GuidedSession:
         self.controller.bind(stage_key=stage_key, revision=revision,
             variant=fragment.variant, fragment_start=fragment.start_beat,
             fragment_end=fragment.end_beat, now=now, connected=connected)
+
+    def display_phrase(self, phrase: Phrase, boundaries: tuple[float, ...],
+                       guided_range: tuple[float,float] | None) -> Phrase:
+        """Reuse the exact authored Free fragment or safely slice source notes."""
+        if guided_range is None:
+            return phrase
+        start,end = guided_range
+        current = self.fragment
+        if (current is not None and current.beat_range == (start,end)
+                and current.phrase.number == phrase.number
+                and current.phrase.start >= phrase.start
+                and current.phrase.end <= phrase.end):
+            return current.phrase
+        grid = phrase_grid(phrase,boundaries)
+        first = next(i for i,beat in enumerate(grid) if abs(beat-start) < 1e-6)
+        last = next(i for i,beat in enumerate(grid) if abs(beat-end) < 1e-6)
+        absolute_start,absolute_end = phrase.start+start,phrase.start+end
+        return Phrase(
+            phrase.number,phrase.first_bar+first,phrase.first_bar+last-1,
+            absolute_start,absolute_end,
+            tuple(n for n in phrase.notes
+                  if absolute_start-1e-7 <= n.start < absolute_end-1e-7))
 
     def advance(self, *, connected: bool, now: float) -> None:
         """Tick untimed note recognition with explicit MIDI-connection facts."""

@@ -6,8 +6,17 @@ the selected stage, tracks the Listen/Free/Tempo display phase, and formats
 status. It cannot change a LearningPlan or authorize a timed take.
 """
 from __future__ import annotations
+from dataclasses import dataclass
 
 from ..application import practice_flow
+
+
+@dataclass(frozen=True, slots=True)
+class FlowStepEffect:
+    step: practice_flow.Step
+    bpm: int
+    feedback: str = ""
+    next_action: str = ""
 
 
 class PracticeFlowCourseSession:
@@ -32,6 +41,18 @@ class PracticeFlowCourseSession:
         if previous and now-at < 0.5 and message not in previous:
             message = f"{previous} · {message}"
         self._message = (sequence+1,message,now)
+
+    def execute(self, transition: practice_flow.Transition) -> FlowStepEffect:
+        state = self.apply(transition)
+        if state.step is practice_flow.Step.LISTEN:
+            return FlowStepEffect(
+                state.step,state.bpm,"Listen",
+                "Listen to the passage and follow the notes.")
+        if state.step is practice_flow.Step.FREE:
+            return FlowStepEffect(
+                state.step,state.bpm,"Now without tempo",
+                "Play the notes in order, at your own pace.")
+        return FlowStepEffect(state.step,state.bpm)
 
     def apply(self, transition: practice_flow.Transition) -> practice_flow.FlowState:
         self._state = transition.state
