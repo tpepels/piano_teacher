@@ -19,7 +19,7 @@ test -e "$PY_LIB_DIR/libpython$PY_VERSION.so" || {
   echo "Bundled CPython must contain a shared libpython$PY_VERSION.so" >&2
   exit 1
 }
-"$PY" -c 'import mido, rtmidi, verovio, music21, cairosvg, PIL'
+"$PY" -c 'import mido, rtmidi, verovio, cairosvg, PIL'
 STAGE="$PWD/dist/piano-teacher-linux-x86_64"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/runtime" "$STAGE/bin"
@@ -107,7 +107,7 @@ env PYTHONHOME="$STAGE/runtime/python" \
   PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \
   LD_LIBRARY_PATH="$STAGE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
   "$STAGE/runtime/python/bin/python3" -c \
-  'import piano_teacher, mido, rtmidi, verovio, music21, cairosvg, PIL'
+  'import piano_teacher, mido, rtmidi, verovio, cairosvg, PIL'
 # Phase 5 gates the assembled real runtime. Creating and clean-machine
 # executing the compressed distributable is a separate Phase 7 release gate.
 if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then

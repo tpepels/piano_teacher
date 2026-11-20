@@ -36,7 +36,7 @@ def test_import_preserves_crossed_hands_dynamics_meter_and_sustained_end(tmp_pat
         ("Left Hand", [(0, "note_on", 65, 32, 0), (2400, "note_off", 65, 0, 0)]),
         ("Right Hand", [(160, "note_on", 55, 113, 1), (480, "note_on", 55, 0, 1)]),
     ], meter=(6, 8))
-    piece, _ = import_piece(path)
+    piece = import_piece(path)
     assert piece.bpm == 100
     assert piece.time_signatures == ((0, 6, 8),)
     assert piece.bar_boundaries[:3] == (0, 3, 6)
@@ -75,7 +75,7 @@ def test_repair_keeps_valid_notes_and_source_identity_without_inventing_releases
         (480, "note_on", 62, 80, 0), (480, "note_off", 62, 0, 0),
         (480, "note_off", 60, 0, 1),
     ])])
-    repaired, _ = import_piece(path)
+    repaired = import_piece(path)
     assert [(n.source_id, n.pitch, n.start, n.end) for n in repaired.notes] == [
         (original.source_id, 60, 0, 1),
     ]
@@ -105,10 +105,10 @@ def test_bad_meter_metadata_does_not_shift_notes(tmp_path):
 
 
 def test_midi_alone_retains_triplets_and_authored_meter_changes():
-    triplets, _ = import_piece(FIXTURES / "midi_triplets.mid")
+    triplets = import_piece(FIXTURES / "midi_triplets.mid")
     assert [n.start for n in triplets.notes[:3]] == pytest.approx([0, 1 / 3, 2 / 3])
     assert [n.end - n.start for n in triplets.notes[:3]] == pytest.approx([1 / 3] * 3)
-    mixed, _ = import_piece(FIXTURES / "midi_mixed_meter.mid")
+    mixed = import_piece(FIXTURES / "midi_mixed_meter.mid")
     assert len(mixed.time_signatures) > 1
     assert mixed.time_signatures == ((0, 3, 4), (3, 4, 4))
     assert mixed.bar_boundaries == (0, 3, 7, 11)

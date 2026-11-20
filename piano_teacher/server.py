@@ -168,7 +168,6 @@ class PracticeEngine:
         self.attempt = AttemptRuntime()
         self.recovery_streak = RecoveryStreak()
         self.plan: LearningPlan | None = None
-        self.score = None
         self.source = None
         self.is_builtin_warmup = False
         self.fingerprint = ""
@@ -725,7 +724,6 @@ class PracticeEngine:
                 self.source_preparation.source_installed()
                 self.playback_session.select_source()
                 self.guided_session.clear_selection()
-                self.score = prepared.score
                 self.feedback = "Press Start to practice"
                 self.next_action = "Press Start to practice."
                 self.score_revision += 1

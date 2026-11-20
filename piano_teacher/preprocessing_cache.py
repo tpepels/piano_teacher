@@ -130,7 +130,7 @@ class PreprocessingCache:
             pass
 
     def load_import(self, source: Path, fingerprint: str, *, importer=None):
-        """Return cached MIDI Piece and optional importer diagnostics.
+        """Return the cached canonical MIDI Piece.
 
         The original MIDI bytes and canonical source-note IDs always govern
         native notation. A cache hit never creates a second source model.
@@ -145,12 +145,12 @@ class PreprocessingCache:
             try:
                 piece = _piece_from_json(cached)
                 print("PREPROCESS_SOURCE_CACHE_HIT:", source.name)
-                return piece, None
+                return piece
             except (TypeError, ValueError, KeyError, AttributeError):
                 pass
-        piece, score = importer(source)
+        piece = importer(source)
         self.write_json("source", key, asdict(piece))
-        return piece, score
+        return piece
 
     def prune(self) -> None:
         """Bound disk usage; evict oldest cached artifacts across versions."""

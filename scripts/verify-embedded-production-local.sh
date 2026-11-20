@@ -21,7 +21,7 @@ if [[ -z "$GODOT_BIN" || ! -x "$GODOT_BIN" ]] || \
   echo "Godot 4.7.2 must be installed (or specify GODOT_BIN)." >&2
   exit 2
 fi
-if ! "$PYTHON" -c 'import sys; assert sys.version_info[:2] == (3,14); import mido, rtmidi, verovio, music21, cairosvg, PIL'; then
+if ! "$PYTHON" -c 'import sys; assert sys.version_info[:2] == (3,14); import mido, rtmidi, verovio, cairosvg, PIL'; then
   echo "Install Python 3.14 packages: .venv/bin/python -m pip install -e '.[godot,test]'" >&2
   exit 2
 fi

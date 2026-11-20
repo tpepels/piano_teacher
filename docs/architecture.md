@@ -474,6 +474,33 @@ scenarios; it does not close these newly identified gaps. Address A1/A2 first,
 then A3/A4, followed by A5/A6 and obsolete-port cleanup. Keep CI focused on
 player behaviour rather than adding architecture-shape tests.
 
+### MIDI-only source boundary — verified source review 2026-11-20
+
+User source dispatch and persisted library selection both accept MIDI only.
+The old MusicXML importer and direct source-annotation/fingering placement
+parsers were deleted; two dangling imports and an obsolete authored-fingering
+test were subsequently corrected. Internal generated MusicXML and the
+authentic Verovio asset extraction pipeline remain part of the native view.
+
+There is a single imported `Piece`, single immutable attack identity set and
+one original MIDI measure grid. The preprocessing cache returns this `Piece`
+directly, and `SourcePreparationSession` builds curriculum and fingering from
+that same instance. It no longer carries a fictitious score alongside
+`Piece` or installs an always-`None` `PracticeEngine.score`. The unused
+`music21` importer dependency and its package verification checks are
+retired.
+
+Original MusicXML inventory parsing retained under `research/coda_*`
+supports independent comparisons of Coda's symbolic notation ideas. Those
+research tools are not the desktop input seam, own no playback or grading
+clock, and cannot inject source pages into the active application. Do not
+advertise this separate research capability as a user import format.
+
+160 Python application modules were inspected for deleted-module imports
+and stale `source_musicxml` uses; no remaining application reference was
+found outside the isolated research adapters. This static review is distinct
+from native/relocated-package CI and physical piano acceptance.
+
 Architecture review and software execution are distinct from physical acceptance.
 See [development](development.md#verification-and-acceptance) and the dated
 [roadmap](../ROADMAP.md) for what was actually checked on each revision.

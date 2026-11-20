@@ -11,11 +11,11 @@ from pathlib import Path
 from ..music import Piece, load_midi
 
 
-def import_piece(path: str | Path) -> tuple[Piece, None]:
-    """Load one MIDI source; return no external page/notation owner."""
+def import_piece(path: str | Path) -> Piece:
+    """Load one canonical MIDI source with no secondary notation owner."""
     path = Path(path).expanduser().resolve()
     if not path.is_file():
         raise ValueError(f"No file found: {path}")
     if path.suffix.lower() not in {".mid", ".midi"}:
         raise ValueError("Only MIDI files (.mid, .midi) can be imported")
-    return load_midi(path), None
+    return load_midi(path)

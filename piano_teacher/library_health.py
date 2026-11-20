@@ -92,7 +92,7 @@ class LibraryHealth:
                 with self._lock:
                     result = self._cache.get(key)
                 if result is None:
-                    piece, _ = import_piece(Path(path))
+                    piece = import_piece(Path(path))
                     warnings = list(piece.import_warnings)
                     result = {
                         "status": "warning" if warnings else "ok",

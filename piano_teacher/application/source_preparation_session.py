@@ -27,7 +27,6 @@ class PreparedSource:
     path: Path
     fingerprint: str
     plan: LearningPlan
-    score: object
     resumed: bool = False
 
 
@@ -131,7 +130,7 @@ class SourcePreparationSession:
                 diagnostics: bool = False) -> PreparedSource:
         checkpoint = time.perf_counter()
         fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
-        piece, score = preprocessing.load_import(
+        piece = preprocessing.load_import(
             source, fingerprint, importer=importer)
         if diagnostics:
             now = time.perf_counter()
@@ -172,4 +171,4 @@ class SourcePreparationSession:
                 print("SCORE_LOAD_STAGE: parallel_prepare",
                       round((time.perf_counter()-checkpoint)*1000,1),
                       "ms wall",source.name,flush=True)
-        return PreparedSource(source,fingerprint,candidate,score,resumed)
+        return PreparedSource(source,fingerprint,candidate,resumed)

@@ -221,6 +221,37 @@ owners. Its source size is outstanding maintainability debt; this audit did not
 establish a competing transport or assessment owner inside it. Physical
 MIDI/audio and visual acceptance still require the piano and a desktop.
 
+### MIDI-only import seam and package dependency follow-up — 2026-11-20
+
+The desktop library has selected only `.mid`/`.midi` for some time, but
+`import_piece()` still had an external MusicXML route and returned an
+unused second notation object. The initial removal in `a4525f0c`
+identified the following integration regressions: stale imports from the
+deleted fingering placement and notation annotation modules, and a
+MusicXML-only fingering test constructing a removed source field.
+`d7ee11d8` fixes both production import errors; `0608b3fb` retires the
+inapplicable test without introducing a replacement or altering the MIDI
+fingering/manual-correction tests.
+
+A subsequent full source audit of 160 Python product modules found no
+remaining relative imports of deleted modules or production references to
+`Piece.source_musicxml`. MusicXML source readers remain confined to the
+separate Coda research adapters; the desktop does not supply them an
+external source score. Internal MusicXML *generation* remains necessary
+for authentic Verovio glyph extraction.
+
+The final importer seam now returns one canonical `Piece` instead of
+`(Piece, None)`; source preparation and the preprocessing cache pass that
+same object to lesson generation and fingering inference. The dead
+`PreparedSource.score` and `PracticeEngine.score` fields are removed.
+`music21`, formerly required only by the removed external importer, is
+no longer a runtime/package dependency. Existing MIDI import tests have
+their return-value expectations updated; no new tests were added.
+
+This architecture cleanup still needs both CI jobs to pass on the
+final commit. Previous passing software results do not certify physical
+Kawai CA49 MIDI/audio, scrolling appearance, or clean-machine desktop use.
+
 ## Phase status and remaining acceptance
 
 ### Historical architecture re-audit — pre-correction log
@@ -335,8 +366,8 @@ above; it remains historical evidence for that source.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | A1–A6 and their integration diagnostics implemented. Follow-up dependency cleanup and `be98b159`/`c8808e2b` remove remaining old-model consumers and consolidate rolling recovery. The state-loop cleanup is in the next commit. Core CI passed on `c8808e2b`; a full native/package rerun is required for the final source. |
-| Phase 6 — software and physical verification | Full embedded/native and relocated standalone software workflow last passed on `26871f0a` ([run 44801555891](https://github.com/tpepels/piano_teacher/actions/runs/44801555891)). New architecture cleanup requires its own complete result. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
+| Phase 5 — ownership decomposition | A1–A6 implemented. Later commits `be98b159`, `c8808e2b`, `5f685890`, `a4525f0c`, `d7ee11d8` and `0608b3fb` remove old note-identity, rolling recovery, score-loop, source-XML and module-import paths. The latest import seam/runtime dependency changes still need full integration verification. |
+| Phase 6 — software and physical verification | Last fully green core plus native/relocated package run before importer changes: `8330f5c6` ([run 44822877089](https://github.com/tpepels/piano_teacher/actions/runs/44822877089)). Core CI passed on `0608b3fb`; final import/runtime cleanup requires its own core/native/package run. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen

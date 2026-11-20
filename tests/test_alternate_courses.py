@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_selected_coda_course_eventually_returns_each_hand_to_original_source():
-    piece, _ = import_piece(ROOT / "midi" / "J_S_Bach_-_Invention_No_1_(BWV_772).midi")
+    piece = import_piece(ROOT / "midi" / "J_S_Bach_-_Invention_No_1_(BWV_772).midi")
     plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
     assert plan.lesson_steps and plan.lesson_steps[0].required_notes > 0
     assert plan.exercises[-1].kind == "perform"
@@ -33,7 +33,7 @@ def test_selected_coda_course_eventually_returns_each_hand_to_original_source():
 
 
 def test_source_progression_tools_allow_manual_tempo_and_selected_step():
-    piece, _ = import_piece(ROOT / "tests" / "fixtures" / "musical_fidelity" / "midi_mixed_meter.mid")
+    piece = import_piece(ROOT / "tests" / "fixtures" / "musical_fidelity" / "midi_mixed_meter.mid")
     plan = LearningPlan(piece, exercise_strategy="source-progression")
     first = plan.lesson_step_number
     plan.set_practice_bpm(72)
@@ -47,7 +47,7 @@ def test_source_progression_tools_allow_manual_tempo_and_selected_step():
 
 
 def test_generic_source_progression_records_short_release_as_a_failed_take():
-    piece, _ = import_piece(ROOT / "tests" / "fixtures" / "musical_fidelity" / "midi_four_four.mid")
+    piece = import_piece(ROOT / "tests" / "fixtures" / "musical_fidelity" / "midi_four_four.mid")
     plan = LearningPlan(piece, exercise_strategy="source-progression")
     phrase = plan.active_phrase
     recorder = Recorder()
