@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
 from .notation.practice_timeline import (
-    preparation_measure_descriptor, UNLOADED_GAP_BEATS,
+    source_preparation_measure, UNLOADED_GAP_BEATS,
 )
 from .application.musical_scheduler import SCHEDULER, PassagePlan
 
@@ -172,16 +172,8 @@ class VisualTransport:
         Source-space placement, reverse animation and the absolute deadline
         share this transport owner. No engine or second clock is involved.
         """
-        measures = source_model["measures"]
-        context_index = max(
-            index for index, measure in enumerate(measures)
-            if measure["start_beat"] <= source_from_beat + 1e-7)
-        context = measures[context_index]
-        following = (measures[context_index + 1]
-                     if context_index + 1 < len(measures) else None)
-        measure = preparation_measure_descriptor(
-            context, 0.0, source_model["staff_order"],
-            following_measure=following)
+        measure = source_preparation_measure(
+            source_model,source_from_beat,0.0)
         return self.schedule_preparation(
             measure, source_from_beat=source_from_beat,
             from_visual=from_visual, now=now,

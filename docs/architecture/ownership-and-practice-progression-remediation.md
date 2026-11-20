@@ -570,6 +570,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Triggered a new opt-in `[native]` run from the current code to validate every existing software scenario again. No new test files; an app-visible success still cannot certify real MIDI cables, Bluetooth stability, speakers or timing offset.
 - Phase 5 **remains incomplete** while `PracticeEngine` carries large command/continuation orchestration and Main/NativeView are not fully thin. Phase 6 is software-passing only on the tested old revision; current source and physical gates are separate.
 
+### Implementation checkpoint BT — one authored source-meter selector for both retry paths
+
+- Removed duplicate source-measure lookup from `VisualTransport.schedule_source_preparation` and `retry_preparation_rest_beats`. Both now call the pure `notation.practice_timeline.source_preparation_measure`, which resolves the same actual source/pickup/meter context and adjoining measure.
+- Preview display and retry deadline still belong to the one VisualTransport/MusicalScheduler; notation owns only duration and silent measure geometry. This prevents the new source-metrical read and the existing transport reverse preparation from selecting different meters at the same source opening.
+- No new tests or timing fallback. The existing mixed-meter, source-boundary and native Retry checks remain the acceptance gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
