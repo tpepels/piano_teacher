@@ -268,7 +268,8 @@ def mastery_episodes(snapshot, active):
         criterion = rules.get("mastery")
         target_known = c["target_bpm"] is not None
         g = groups.setdefault(k, {**episode_context, "criterion": criterion,
-            "required_accepted_runs": (rules.get("lesson_settings") or {}).get("clean_runs_to_master"),
+            "required_accepted_runs": rules.get("clean_runs_required",
+                (rules.get("lesson_settings") or {}).get("clean_runs_to_master")),
             "attempts_observed": 0, "eligible_attempts": 0, "accepted_eligible_attempts": 0,
             "accepted_eligible_target_attempts": 0,
             "active_seconds_observed": 0, "unknown_phase_attempts": 0, "mastered": False,

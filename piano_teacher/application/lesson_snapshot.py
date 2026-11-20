@@ -47,7 +47,7 @@ def build_lesson_snapshot(plan, exercise, variant, *, fingerprint: str,
             rungs=p.tempo_rungs(), minimum_bpm=SETTINGS.minimum_bpm,
             stage_minimum_bpm=p.minimum_stage_bpm,
             maximum_bpm=SETTINGS.maximum_bpm,
-            clean_runs_required=SETTINGS.clean_runs_to_master,
+            clean_runs_required=p.course_state().clean_runs_required,
             manual_tempo_step_bpm=SETTINGS.manual_tempo_step_bpm,
             automatic_tempo_steps=SETTINGS.automatic_tempo_steps),
     )

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from ..application import practice_flow
-from ..lesson_settings import SETTINGS
 
 
 def teaching_instruction(pending) -> str:
@@ -43,7 +42,7 @@ def next_action(pending, *, target_bpm: float, start_beat: float,
         else:
             message = (
                 f"{label} pass {pending.state.progress.streak+1}/"
-                f"{SETTINGS.clean_runs_to_master} — {teaching_instruction(pending)}.")
+                f"{pending.state.course.clean_runs_required} — {teaching_instruction(pending)}.")
     else:
         message = ("Retry the whole passage (red errors or at least half "
                    "the attacks yellow).")

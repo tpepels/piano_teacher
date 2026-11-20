@@ -94,6 +94,41 @@ runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Evidence:
 This is local software verification; no new remote GitHub result or physical
 acceptance is claimed. The correction record below is historical evidence.
 
+### Coverage extension requested 2026-11-20
+
+The owner requested additional CI coverage while retaining the compact,
+behaviour-focused policy. The extension exercises real-take statistics,
+stable paging and bounded-detail missingness, explicit redacted/atomic export,
+scoped reset/deletion, desktop admission/expiry/failure/retry/Resume/Listen and
+exact repeats, configured piano keys, library-health recovery, all built-in
+warm-ups, native chord/tie/tuplet/meter fidelity and stale preload rejection.
+
+The new mastery-report scenario exposed a real defect: the completed default
+course uses two target successes, but the state snapshot and captured history
+advertised the old generic three-pass rule. The course now exposes its actual
+required count to snapshots, transition messages, evidence and validation; statistics prefer that
+captured rule while retaining the legacy recorded-settings fallback. The
+grading/progression rule itself is unchanged. Both failures were reproduced
+before the fix in `debug-sessions/practice-completion/coverage-mastery-red.log`
+and `coverage-mastery-snapshot-red.log` in the same directory. All 30 focused
+history/course/resume/alternate cases pass in `coverage-mastery-green.log`.
+Review found the same obsolete count in the pending-repeat message; the
+desktop scenario reproduced the actual “Clean pass 1/3” in
+`coverage-pass-notice-red.log`. It now reports the actual 1/2 criterion. All 37
+combined rule/history/desktop/course/resume/alternate checks pass in
+`coverage-rule-green.log`. The independent review found no critical or
+important regressions; whole-source notation parity was narrowed to the actual
+opening chord and held ending.
+
+The expanded Python suite passes **107 tests, one optional system-SF2 skip**.
+Informational coverage rises from **58.9% to 69.5% lines** and **38.3% to
+49.4% branches**, with the same source scope and no exclusions or percentage
+gate. The common CI command also passes Godot parsing and all four native
+behaviour groups, with zero failure counters. Evidence:
+`debug-sessions/practice-completion/coverage-extension-ci-final.log`.
+The full production/package rerun for the reporting correction is pending;
+results will be recorded here after completion.
+
 ## Phase status and remaining acceptance
 
 ### Production rerun and correction record
@@ -160,7 +195,7 @@ above; it remains historical evidence for that source.
 | Phase | State |
 | --- | --- |
 | Phase 5 — ownership decomposition | Complete in source, with reconciled owner contracts; historical architecture audit passed. CI now verifies behaviour rather than module shape. Feedback work removes the independent preview matcher and release pairing. |
-| Phase 6 — software and physical verification | Rebuilt core/native CI and the full embedded/repertoire/relocated-package workflow pass on `5477aa74`. Phase remains incomplete until physical and clean-machine acceptance is performed. |
+| Phase 6 — software and physical verification | Expanded core/native CI passes; full production/package rerun for the mastery-report correction is pending. The prior complete workflow passed on `5477aa74`. Physical and clean-machine acceptance remain open. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen

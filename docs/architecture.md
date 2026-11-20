@@ -57,6 +57,14 @@ do not select another BPM downstream. Each trailing window has independent
 progress, and the full original examination is separate. The complete rules
 live only in [Practice flow](practice-flow.md).
 
+The [course state](../piano_teacher/teaching_course.py) exposes the active
+policy's required clean-run count, using Practice Flow's existing two-take
+constant or the other courses' configured rule. Lesson snapshots, validation
+and captured evidence consume that fact. New rule snapshots retain
+`clean_runs_required`; statistics use the captured value, falling back to the
+recorded lesson settings for older evidence rather than reinterpreting history
+with today's course defaults.
+
 The registered `LessonGenerator` interface receives a canonical `Piece` and
 returns a `LessonPlanDefinition` with source-safe stages and an unchanged
 whole-piece finale. Variants retain source-note IDs and explicit timing/tempo

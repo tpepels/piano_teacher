@@ -39,6 +39,7 @@ class LearningEvidenceSession:
                       "bpm": p.bpm}])
         rule = {"schema_version": 1, "grader": "nearest-onset-v1",
                 "mastery": "accepted-full-target-v1", "lesson_settings": asdict(SETTINGS),
+                "clean_runs_required": p.course_state().clean_runs_required,
                 "onset_formula": "max(0.15,grading_onset_tolerance_seconds,0.25*local_spb)",
                 "hold_formula": "max(grading_duration_floor_seconds,duration*max(grading_duration_tolerance_fraction,min(0.75,grading_duration_tolerance_fraction+0.28*max(0,local_spb-0.5))))",
                 "importer": "midi-source-v1", "generator": p.lesson_generator.name,

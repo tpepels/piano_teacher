@@ -390,7 +390,7 @@ def validate_teaching_decision(decision, *, event, state):
         and full_source_opening(state) and state.route.review_end_beat is None
         and event.assessment is not None and bool(event.assessment.notes) and passed
         and state.route.performed_bpm >= state.progress.target_bpm
-        and state.progress.streak+1 >= (2 if flow else SETTINGS.clean_runs_to_master))
+        and state.progress.streak+1 >= state.course.clean_runs_required)
     if earned and (not eligible or earned != {state.course.key}):
         raise ValueError("Unearned teaching mastery")
     full_target = (event.kind == "full_result" and state.route.mode == "practice"

@@ -54,6 +54,13 @@ class CourseState:
         return self.hands[self.progress.cursor[1]]
 
     @property
+    def clean_runs_required(self):
+        if self.definition.generator_name == "practice-flow":
+            from .application.practice_flow import CLEAN_TAKES_AT_TARGET
+            return CLEAN_TAKES_AT_TARGET
+        return SETTINGS.clean_runs_to_master
+
+    @property
     def stages(self):
         return self.definition.stages(self.exercise, self.hand)
 
