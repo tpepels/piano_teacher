@@ -262,7 +262,7 @@ func observe(state: Dictionary, frame_ms: int) -> void:
             missing_score_frames += 1
             if missing_score_frames >= 4 and reported_failure_segment != segment:
                 reported_failure_segment = segment
-                if failure_request._pending_id < 0:
+                if not failure_request.is_pending():
                     failure_request.request("playback.failure",{
                         "take_id": str(timeline.get("take_id", "")),
                         "segment_id": segment,
@@ -277,12 +277,12 @@ func observe(state: Dictionary, frame_ms: int) -> void:
             # Never infer a rejected reservation from a missing intent in
             # a possibly newer state snapshot. An outstanding reserve or
             # present command must first finish/reconcile.
-            if reserve_request._pending_id >= 0 or \
-                    present_request._pending_id >= 0:
+            if reserve_request.is_pending() or \
+                    present_request.is_pending():
                 return
             if not receipt.is_empty():
                 pending_reconciliation = true
-                if status_request._pending_id < 0 and \
+                if not status_request.is_pending() and \
                         Time.get_ticks_msec()-started_ms >= 400:
                     started_ms = Time.get_ticks_msec()
                     _query_status()
@@ -296,9 +296,9 @@ func observe(state: Dictionary, frame_ms: int) -> void:
     if not current.is_empty():
         if str(current.get("intent_id","")) == identifier and \
                 int(current.get("attempt",-2)) == attempt:
-            if pending_reconciliation and present_request._pending_id < 0 and \
-                    reserve_request._pending_id < 0 and \
-                    status_request._pending_id < 0 and \
+            if pending_reconciliation and not present_request.is_pending() and \
+                    not reserve_request.is_pending() and \
+                    not status_request.is_pending() and \
                     Time.get_ticks_msec()-started_ms > 800 and \
                     not receipt.is_empty():
                 started_ms = Time.get_ticks_msec()
@@ -306,16 +306,16 @@ func observe(state: Dictionary, frame_ms: int) -> void:
             return
         # This is a NEW intent. Reconcile the former reservation before
         # touching its ink, because its result can arrive out of order.
-        if reserve_request._pending_id >= 0 or \
-                present_request._pending_id >= 0 or \
-                status_request._pending_id >= 0:
+        if reserve_request.is_pending() or \
+                present_request.is_pending() or \
+                status_request.is_pending():
             return
         if not receipt.is_empty():
             pending_reconciliation = true
             _query_status()
             return
         _cancel_provisional()
-    if reserve_request._pending_id >= 0 or present_request._pending_id >= 0:
+    if reserve_request.is_pending() or present_request.is_pending():
         return
     _admit(intent,state,frame_ms)
 
@@ -363,7 +363,7 @@ func _presented(code: int, body: PackedByteArray) -> void:
         _query_status()
 
 func _query_status() -> void:
-    if status_request._pending_id < 0 and not receipt.is_empty():
+    if not status_request.is_pending() and not receipt.is_empty():
         status_request.request("playback.status")
 
 func _status_received(code: int, body: PackedByteArray) -> void:
@@ -399,7 +399,7 @@ func _confirm_authorized(data: Dictionary) -> void:
     if runway != null and renderer != null and \
             is_instance_valid(renderer) and runway.owns_prepared_renderer(renderer):
         if not runway.promote_reserved(admission_state):
-            if failure_request._pending_id < 0:
+            if not failure_request.is_pending():
                 failure_request.request("playback.failure",{
                     "take_id":str(receipt.get("take_id","")),
                     "segment_id":expected,
@@ -444,7 +444,7 @@ func _confirm_authorized(data: Dictionary) -> void:
 func _cancel_provisional() -> void:
     if renderer != null and is_instance_valid(renderer):
         renderer.cancel_stream_arm()
-    if not current.is_empty() and withdraw_request._pending_id < 0:
+    if not current.is_empty() and not withdraw_request.is_pending():
         withdraw_request.request("playback.withdraw",{
             "intent_id":str(current["intent_id"]),
             "attempt":int(current["attempt"]),

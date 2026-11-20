@@ -157,6 +157,10 @@ The remaining implementation is A5/A6 and obsolete internal ports.
 A5 now removes the deferred runtime cycles and private source-index coupling;
 all 107 Python checks pass, and the one-off runtime import scan is acyclic.
 Remaining implementation: A6/private requests and obsolete native ports.
+A6 and obsolete native ports are implemented; all six source-audit items now
+have code changes. Full local core CI passes, with 69.6% Python line and 49.4%
+branch coverage. Integrated review and full embedded/package verification are
+pending; physical acceptance remains unverified.
 
 Implementation audited at `640a77f5`. The prior Phase 5 completion assessment
 was too broad and is reopened. The [active audit](docs/architecture.md#remaining-work--source-audit-2026-11-20)

@@ -22,14 +22,6 @@ func sample(at_ms: int, selected_bpm: float = NAN) -> float:
     hold_world = timeline.hold_world
     return beat
 
-func switch_rate_at(at_ms: float, next_bpm: float) -> void:
-    # Compatibility for the presentation adapter. A late clock correction
-    # can change FUTURE velocity only; it never rewrites exposed positions.
-    if not is_finite(at_ms) or not is_finite(next_bpm):
-        return
-    timeline.set_rate(roundi(maxf(at_ms,float(timeline.last_ms))),next_bpm)
-    bpm = timeline.current_rate()
-
 func authorize_source_epoch(deadline_ms: float, opening: float,
         nominal_bpm: float, authored_segments: Array,
         segment_id: String) -> void:

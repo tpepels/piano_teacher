@@ -116,29 +116,6 @@ func transport_preflight_facts(world: float, opening: float) -> Dictionary:
         "bpm":bpm})
     return facts
 
-func record_withdrawn_stream_suffix(previous: Array) -> void:
-    _stream_controller.remember_withdrawn_suffix(previous)
-
-func enable_retry_placement(enabled: bool) -> void:
-    _stream_controller.retry_placement_enabled(enabled)
-
-func restore_withdrawn_stream_suffix(previous: Array, at_world: float) -> bool:
-    return _restore_future_suffix(previous,at_world)
-
-func build_admission_receipt(planned: Dictionary, admitted: Dictionary,
-        world: float, opening: float) -> Dictionary:
-    return _transport_admission_receipt(planned,admitted,world,opening)
-
-# Precomputed genuine horizontal glyph/connector ink; cut decisions are
-# source-revision geometry, never recalculated during the animation loop.
-
-# Public diagnostics are snapshots; the controller retains the live FIFO.
-var stream_passes: Array:
-    get:
-        # Diagnostics/test snapshot only. No rendering or per-frame path may
-        # read this: it copies the whole online queue.
-        return _stream_controller.online_snapshot()
-
 func stream_pass_count() -> int:
     return _stream_controller.online_size()
 
@@ -388,15 +365,6 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 func has_source_windows_at(opening: float) -> bool:
     return not engraving.source_windows(opening).is_empty()
 
-func append_source_take(source_beat: float, start_world: float,
-        from_beat: float, take_key: String, empty_strip: bool = false) -> void:
-    # Score preparation stays in the renderer. The authoritative queue
-    # transaction and take serial assignment belong to the stream controller.
-    var windows: Array[Vector2] = engraving.source_windows(maxf(0.0,from_beat))
-    _stream_controller.append_take(_stream_facts(stream_world_beat),windows,source_beat,start_world,
-        take_key,empty_strip,_first_source_header_spaces(),
-        float(practice_timeline.get("gap",{}).get("duration_beats",0.0)))
-
 func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
 
@@ -406,14 +374,6 @@ func _first_source_header_spaces() -> float:
 func _stream_header_beats(opening: float) -> float:
     return (_first_source_header_spaces() if opening <= .0001 else 1.6)* \
         staff_gap()/maxf(1.0,timeline.pixels_per_beat)
-
-func _transport_admission_receipt(planned: Dictionary,
-        admitted: Dictionary, world: float, opening: float) -> Dictionary:
-    return _stream_controller.receipt(
-        planned,admitted,world,opening,
-        _first_source_header_spaces() if opening <= .0001 else 1.6,
-        timeline.pixels_per_beat,staff_gap(),timeline.sounding_duration_beats,
-        stream_world_beat,_stream_right_beats(),bpm)
 
 func reserve_transport_action(action: String, world: float,
         opening: float, count_in_beats: float, display_context: bool = false) -> Dictionary:
@@ -433,37 +393,11 @@ func reserve_continuation_at(world: float, opening: float,
         "auto",world,opening,count_in_beats,_stream_right_beats(),
         _stream_header_beats(opening),bpm,start_world)
 
-func earliest_continuation_world(world: float, opening: float,
-        count_in_beats: float = 0.0) -> float:
-    if not native_ready or not retained_ready():
-        return NAN
-    return _stream_controller.earliest_continuation(
-        maxf(world,stream_world_beat),count_in_beats,
-        _stream_right_beats(),_stream_header_beats(opening),
-        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        timeline.sounding_duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
-
-func empty_strip_onset(passes: Array, world: float, count_in_beats: float,
-        header: float) -> float:
-    return _stream_controller.empty_strip_onset(
-        passes,world,count_in_beats,header,
-        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        timeline.sounding_duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
-
 func short_rest_geometry() -> Dictionary:
     return _stream_controller.rest_geometry(
         float(practice_timeline.get("gap",{}).get("duration_beats",0.0)),
         maxf(1.0,timeline.pixels_per_beat),staff_gap(),
         _stream_header_beats(0.0))
-
-func arm_stream_take(world: float, opening: float,
-        planned_start_world: float = NAN,
-        resuming_paused: bool = false, retrying: bool = false,
-        empty_strip_count_in: float = 0.0) -> Dictionary:
-    stream_world_beat = maxf(stream_world_beat,world)
-    return _stream_controller.arm_take(_stream_facts(maxf(world,stream_world_beat)),world,opening,
-        _stream_right_beats(),_stream_header_beats(opening),
-        planned_start_world,resuming_paused,retrying,empty_strip_count_in)
 
 func stream_owner_status() -> Dictionary:
     # Stable diagnostic snapshot; no external component may mutate the
@@ -503,9 +437,6 @@ func trim_future_queue(reason: String,
     if not removed.is_empty():
         queue_redraw()
     return removed
-
-func _restore_future_suffix(saved: Array, world: float) -> bool:
-    return _stream_controller.restore_future_suffix(_stream_facts(world),saved,world)
 
 func enqueue_recovery_queue(world: float, source_opening: float,
         graded_deadline_world: float, plan_id: String = "",

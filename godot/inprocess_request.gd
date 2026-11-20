@@ -21,6 +21,9 @@ func configure(bus: Node) -> void:
     _bus = bus
     set_process(false)
 
+func is_pending() -> bool:
+    return _pending_id >= 0
+
 func request(operation: String, payload: Dictionary = {}) -> Error:
     if _bus == null or _pending_id >= 0:
         return ERR_BUSY

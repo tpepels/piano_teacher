@@ -344,6 +344,16 @@ Implementation ledger (main, starting at `82bf06bb`):
   import scan, including deferred imports and excluding TYPE_CHECKING-only
   edges, reports zero cycles (`architecture-a5-imports.log`). This diagnostic
   is not a new architecture CI test.
+- A5 commit: `f8daff77`.
+- A6 implemented: admission/preloading query InProcessRequest's pending
+  operation semantics. The private numeric ID stays inside its request owner.
+  Repository-wide caller inspection removed unused native withdrawal/restore,
+  receipt, append, direct-arm and empty-strip facades, their dead helpers,
+  unused continuation prediction and the unused flow-rate compatibility port.
+  Production admission still uses the existing two-phase executor. Full CI
+  passes: 107 Python checks, one optional system-SF2 skip; parser and four
+  native groups pass; coverage is 69.6% lines / 49.4% branches
+  (`architecture-final-ci.log`). Full embedded/package verification pending.
 
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic

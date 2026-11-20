@@ -300,7 +300,7 @@ func _register_preload_failure(message: String) -> void:
 
 func _report_if_needed(now_ms: int) -> void:
     if not _terminal_preload_failure or _report_accepted or \
-            _report._pending_id >= 0 or now_ms < _next_poll_ms:
+            _report.is_pending() or now_ms < _next_poll_ms:
         return
     if _report.request("score.stage_failed",{
             "fingerprint":_source_fingerprint,
@@ -323,7 +323,7 @@ func _request_if_needed(state: Dictionary, now_ms: int) -> void:
         _report_if_needed(now_ms)
         return
     if _future != null or _ack_waiting or now_ms < _next_poll_ms or \
-            _fetch._pending_id >= 0:
+            _fetch.is_pending():
         return
     if str(state.get("mode","")) != "practice" or \
             not score_session.is_ready() or \
