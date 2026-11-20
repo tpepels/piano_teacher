@@ -385,6 +385,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Existing source preparation, graded retry and continuous-rest timing semantics are preserved. No new transport state cache or second scheduling authority was created.
 - This removes a direct cross-owner field mutation found in the full server.py audit. Existing CI and native passage loops remain the verification gate.
 
+### Implementation checkpoint AZ — playback coordinator can no longer hold engine authority
+
+- Removed `PracticeEngine` arguments from every `PlaybackCoordinator` operation and replaced them with frozen `PlaybackSourceFacts` and `PlaybackRuntimeFacts` (source revision, hand, source bounds, bar/meter, tempo, current timeline and input grading gate). The coordinator cannot mutate foreign state or infer a second start-time clock.
+- A bounded `commit(intent,receipt)` callback activates the graded take once, `capture()` independently verifies the post-commit musical state, and `abort(reason)` rolls back mismatched starts. A separate `notify_failure(reason)` port handles failed displayed scores. In-process dispatcher passes these exact ports under the existing engine lock.
+- Existing source-bound request, reserve, present, withdraw, fail and state/timeout idempotency remain in the original coordinator. No new tests or engine-pointer compatibility branch. This resolves the audit's highest-risk circular dependency.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

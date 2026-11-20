@@ -40,7 +40,7 @@ class EngineCommands:
 
     def require_presentation(self) -> None:
         """Desktop-only transport contract, selected at native bridge startup."""
-        self.engine.playback.enable_presentation(self.engine)
+        self.engine.playback.enable_presentation(self.engine._playback_facts())
 
     def tick(self) -> int:
         """The same native worker advances all musical deadlines."""
@@ -86,16 +86,20 @@ class EngineCommands:
                     return self._reply(OK, engine.playback.status())
             if operation == "playback.reserve":
                 with engine.lock:
-                    return self._reply(OK, engine.playback.reserve(engine, **values))
+                    return self._reply(OK, engine.playback.reserve(engine._playback_facts(), **values))
             if operation == "playback.present":
                 with engine.lock:
-                    return self._reply(OK, engine.playback.present(engine, **values))
+                    return self._reply(OK, engine.playback.present(
+                        engine._playback_facts(),commit=engine._commit_playback_intent,
+                        capture=engine._playback_facts,abort=engine._abort_playback,
+                        **values))
             if operation == "playback.withdraw":
                 with engine.lock:
-                    return self._reply(OK, engine.playback.withdraw(engine, **values))
+                    return self._reply(OK, engine.playback.withdraw(engine._playback_facts(), **values))
             if operation == "playback.failure":
                 with engine.lock:
-                    engine.playback.fail(engine, **values)
+                    engine.playback.fail(notify_failure=engine._on_playback_failure,
+                        **values)
                     return self._reply(OK, {"accepted": True})
             if operation == "score.stage_ready":
                 return self._reply(OK, engine.acknowledge_preloaded_stage(

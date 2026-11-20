@@ -24,6 +24,7 @@ from .teaching_decisions import (TeachingBinding, TeachingState, TeachingRouteFa
 from .diagnosis_policies import LearnerSnapshot
 from .application import practice_flow
 from .application.playback_coordinator import PlaybackCoordinator
+from .application.playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts
 from .application.flow_course_session import PracticeFlowCourseSession
 from .application.learning_evidence_session import LearningEvidenceSession
 from .application.source_preparation_session import SourcePreparationSession
@@ -276,6 +277,49 @@ class PracticeEngine:
             self.progress, self.library, self.measurement, self.midi,
             self.midi_calibration)
         self.source_preparation = SourcePreparationSession()
+
+    def _playback_facts(self, *, from_beat: float | None = None) -> PlaybackRuntimeFacts:
+        """Frozen source, meter and transport facts; never hand over the engine."""
+        source = None
+        if self.plan is not None:
+            plan = self.plan
+            bar, meter = self.count_in_bar_beats, tuple(self.count_in_meter)
+            if from_beat is not None:
+                _, bar, meter = self.attempt_progression.count_in_bar(
+                    phrase=plan.active_phrase,boundaries=plan.piece.bar_boundaries,
+                    time_signatures=plan.piece.time_signatures,position=from_beat)
+            tempo = self._active_tempo_map()
+            segments = tuple((float(s["start_beat"]),float(s["end_beat"]),
+                              float(s["bpm"])) for s in
+                             (tempo.as_segments() if tempo is not None else ()))
+            source = PlaybackSourceFacts(
+                fingerprint=self.fingerprint,stage_key=plan.identity,
+                revision=self.score_revision,hand=plan.hand,bpm=float(plan.bpm),
+                end_beat=plan.active_phrase.end-plan.active_phrase.start,
+                count_in_bar_beats=float(bar),count_in_meter=tuple(meter),
+                tempo_segments=segments)
+        return PlaybackRuntimeFacts(
+            source=source,now=self.now(),mode=self.mode,running=self.running,
+            paused=self.visual_transport.paused,
+            run_at=self.visual_transport.run_at,
+            paused_at=self.visual_transport.paused_at,
+            play_from_beat=self.visual_transport.play_from_beat,
+            resume_grading_after=self.midi_ingress.resume_grading_after,
+            pause_context=self.pause_context,preview_only=self.preview_only,
+            pending_result=self.pending_result is not None,transport_id=self.transport_id)
+
+    def _request_playback(self, *, from_beat: float, **kwargs):
+        return self.playback.request(self._playback_facts(from_beat=from_beat),
+                                     from_beat=from_beat,**kwargs)
+
+    def _abort_playback(self, reason: str) -> None:
+        self._stop(reason=reason)
+
+    def _on_playback_failure(self, reason: str) -> None:
+        if self.running:
+            self._stop(reason=reason)
+        self.feedback = "The score stopped displaying correctly"
+        self.next_action = "Select this lesson again after checking the score."
 
     @property
     def _future_stage_ready(self):
@@ -1194,8 +1238,7 @@ class PracticeEngine:
             start_preview = self.listen.begin_playback(
                 self.score_revision, commit=False)
             if start_preview is not None:
-                self.playback.request(
-                    self, action="listen", mode="listen",
+                self._request_playback( action="listen", mode="listen",
                     from_beat=0.0,
                     count_in_beats=start_preview.count_in_beats)
             return
@@ -1636,8 +1679,7 @@ class PracticeEngine:
             self.visual_transport.announced_continuation = None
             self.visual_transport.finish_preparation_gate()
             self.visual_transport.pending_rewind = None
-            self.playback.request(
-                self, action="auto", mode=self.mode,
+            self._request_playback( action="auto", mode=self.mode,
                 from_beat=from_beat, earliest_deadline=deadline)
             self._queue_scheduled_start = None
             self.feedback = "Preparing the next passage"
@@ -1863,8 +1905,7 @@ class PracticeEngine:
                 self.teaching.start(now=self.now())
             elif decision == "practice":
                 if self.playback.presentation_required:
-                    self.playback.request(
-                        self, action="score_ready",
+                    self._request_playback( action="score_ready",
                         mode="perform" if self.mode == "perform" else "practice",
                         from_beat=(self.visual_transport.pending_rewind
                             if self.visual_transport.pending_rewind is not None
@@ -2077,7 +2118,7 @@ class PracticeEngine:
                     self._start_or_restart(action)
                 else:
                     selected = transition.exposure
-                    self.playback.request(self, action=action,
+                    self._request_playback( action=action,
                         mode=selected.mode, from_beat=selected.from_beat,
                         transition=transition)
             else:
@@ -2100,7 +2141,7 @@ class PracticeEngine:
                     self._paused_playback_intent = None
                     self.visual_transport.resume(now=self.now(),shift_run_at=False)
                     self.pause_context = None
-                    self.playback.request(self,action=suspended.action,
+                    self._request_playback(action=suspended.action,
                         mode=suspended.mode,from_beat=suspended.from_beat)
                     return
                 if not self.running:
@@ -2114,7 +2155,7 @@ class PracticeEngine:
                     from_beat += max(0.0, self._elapsed_beat(
                         self.visual_transport.paused_at
                         - self.visual_transport.run_at))
-                self.playback.request(self, action="resume",
+                self._request_playback( action="resume",
                     mode=self.mode, from_beat=from_beat)
             else:
                 self._resume_current_session(presentation_lead_seconds=self._presentation_lead(kwargs),
@@ -3271,7 +3312,7 @@ class PracticeEngine:
         with self.lock:
             self._update()
             state = project_session_state(self._capture_session_snapshot())
-            self.playback.advance(self)
+            self.playback.advance(self._playback_facts())
             pending, timeline = self.playback.snapshot()
             announced = self.visual_transport.announced_continuation
             plan = self.plan
