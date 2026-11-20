@@ -135,11 +135,23 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     var onset: float = Admission.position(survivors,preview_world,
         right,header,NAN,Admission.READY_TRAVEL_BEATS,
         density,staff_gap,duration)
+    var leading_rest := 0.0
     if action == "restart":
+        # Withdrawing an entirely unseen take also withdraws its paired
+        # rest. The replacement must then own the written preparation bar;
+        # silence before its first note is not itself a printed rest.
+        leading_rest = float(facts["rest_gap"])
+        for item in survivors:
+            if str(item.get("kind","")) == "rest" and \
+                    float(item.get("world_origin",-INF)) >= preview_world-.0001 and \
+                    float(item.get("source_ceiling",0.0)) >= leading_rest-.0001:
+                leading_rest = 0.0
+                break
         onset = Admission.retry_start(survivors,preview_world,right,header,
-            float(facts["rest_gap"]),density,staff_gap,duration)
+            float(facts["rest_gap"]),density,staff_gap,duration,leading_rest)
     if is_finite(peer_floor):
-        onset = maxf(onset,peer_floor+header+Admission.REST_GAP_BEATS)
+        onset = maxf(onset,peer_floor+header+
+            maxf(Admission.REST_GAP_BEATS,leading_rest))
     if is_finite(count_in_beats) and count_in_beats > 0.0:
         # The engine counts one whole bar before grading starts. The slot
         # must be at least that far ahead, or grading (count-in bar) and
@@ -158,5 +170,6 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
             Admission.lead_seconds(maxf(0.0,(first_pixel_x-width)/density),0.0,
                 maxf(1.0,float(facts["bpm"]))),
         "remaining_count":survivors.size(),
+        "leading_rest_beats":leading_rest,
         "withdraw_owners":withdrawn["owners"].duplicate(),
         "reason":"new_immutable_future_slot"}

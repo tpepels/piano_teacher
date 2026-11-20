@@ -57,7 +57,8 @@ static func reserve_action(stream, facts: StreamGeometry, preflight: Dictionary,
     var admitted: Dictionary = stream.arm_take(facts,
         world,opening,right,header,intended,false,false,
         count_in_beats if bool(planned.get("empty_strip",false)) else 0.0,
-        is_finite(exact_start_world),display_context)
+        is_finite(exact_start_world),display_context,
+        float(planned.get("leading_rest_beats",0.0)))
     stream.retry_placement_enabled(false)
     if admitted.is_empty():
         push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")

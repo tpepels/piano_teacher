@@ -13,19 +13,23 @@ const EXIT_MARGIN_PIXELS := 60.0
 static func _offstage(segment: Node2D) -> void:
     segment.position = Vector2(STAGING_X,0.0)
 
-# Each attempt owns one source slot and, when the score has an authored
-# gap, one rest slot. These slots are never independently inserted.
+# Each strip owns its source and any leading/trailing preparation rests.
+# These slots are never independently inserted.
+static func slot_identity(item: Dictionary) -> String:
+    var role: String = str(item.get("kind","source"))
+    if role == "rest" and str(item.get("rest_position","after")) == "before":
+        role = "rest_before"
+    return "%d:%s" % [int(item.get("owner_serial",abs(int(item.get("serial",0))))),role]
+
 static func validate_batch(passes: Array, specs: Array) -> bool:
     var identities: Dictionary = {}
     for item in passes:
-        var existing: String = str(item.get("slot_id",
-            "%d:%s" % [int(item.get("owner_serial",abs(int(item.get("serial",0))))),
-                str(item.get("kind","source"))]))
+        var existing: String = str(item.get("slot_id",slot_identity(item)))
         if identities.has(existing):
             return false
         identities[existing] = true
-    # Every admission is one complete passage: exactly one source and
-    # zero or one dependent rest. A rest-only insertion is forbidden.
+    # Every admission contains exactly one source. Its optional rests are
+    # part of the same rollback identity; a rest-only insertion is forbidden.
     if specs.is_empty():
         return false
     var batch_owner: int = int(specs[0].get("owner_serial",0))
@@ -38,15 +42,19 @@ static func validate_batch(passes: Array, specs: Array) -> bool:
                 owner_serial != batch_owner:
             return false
         if role == "source":
+            if has_source:
+                return false
             has_source = true
-        var identifier: String = "%d:%s" % [owner_serial,role]
+        elif str(spec.get("rest_position","after")) not in ["before","after"]:
+            return false
+        var identifier: String = slot_identity(spec)
         if identities.has(identifier):
             return false
         identities[identifier] = true
     if not has_source:
         return false
     var source_spec: Dictionary = {}
-    var rest_spec: Dictionary = {}
+    var rest_specs: Array[Dictionary] = []
     for spec in specs:
         var origin: float = float(spec.get("world_origin",NAN))
         var floor: float = float(spec.get("source_floor",NAN))
@@ -57,7 +65,7 @@ static func validate_batch(passes: Array, specs: Array) -> bool:
         if str(spec["kind"]) == "source":
             source_spec = spec
         else:
-            rest_spec = spec
+            rest_specs.append(spec)
     var source_length: float = float(source_spec.get("piece_duration",
         source_spec["source_ceiling"]))
     # The source window cannot extend beyond its own declared passage.
@@ -66,8 +74,12 @@ static func validate_batch(passes: Array, specs: Array) -> bool:
     if not is_finite(source_length) or source_length <= 0.0 or \
             float(source_spec["source_ceiling"]) > source_length+.00001:
         return false
-    if not rest_spec.is_empty():
-        if absf(float(rest_spec["world_origin"])-(
+    for rest_spec in rest_specs:
+        if str(rest_spec.get("rest_position","after")) == "before":
+            if float(rest_spec["world_origin"])+float(rest_spec["source_ceiling"]) > \
+                    float(source_spec["world_origin"])+float(source_spec["source_floor"])+.00001:
+                return false
+        elif absf(float(rest_spec["world_origin"])-(
                 float(source_spec["world_origin"])+source_length)) > .00001:
             # Even though source and rest use separate retained CanvasItems,
             # their relative musical position is controlled by ONE batch.
@@ -120,6 +132,9 @@ static func admit(owner: Control, passes: Array, specs: Array,
             bool(spec.get("pending",false)),owner_serial,
             bool(spec.get("hidden_until_armed",false)))
         placed["take_owner"] = int(spec.get("take_owner",owner_serial))
+        if spec.has("rest_position"):
+            placed["rest_position"] = str(spec["rest_position"])
+        placed["slot_id"] = slot_identity(spec)
         if spec.has("clip_floor") and spec.has("clip_ceiling"):
             placed["clip_floor"] = float(spec["clip_floor"])
             placed["clip_ceiling"] = float(spec["clip_ceiling"])
@@ -191,7 +206,12 @@ static func activate(passes: Array, owner_serial: int, key: String,
     for item in passes:
         if int(item.get("take_owner",item.get("owner_serial",0))) != owner_serial:
             continue
-        item["hidden_until_armed"] = false
+        # The source is wholly offscreen during command acknowledgement.
+        # Its leading rest can already be on the empty staff: publish that
+        # rest only after acceptance so a rejected command can still roll
+        # back its entire unseen batch without retracting exposed ink.
+        item["hidden_until_armed"] = armed and \
+            str(item.get("rest_position","after")) == "before"
         if str(item.get("kind","source")) == "source":
             item["take_key"] = key
             item["pending"] = false

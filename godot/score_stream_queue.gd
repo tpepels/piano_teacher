@@ -159,6 +159,8 @@ static func source_record(item: Dictionary) -> Dictionary:
         "slot_id":str(item.get("slot_id","")),
         "take_owner":int(item.get("take_owner",owner_id(item))),
     }
+    if item.has("rest_position"):
+        stored["rest_position"] = str(item["rest_position"])
     if item.has("clip_floor") and item.has("clip_ceiling"):
         stored["clip_floor"] = float(item["clip_floor"])
         stored["clip_ceiling"] = float(item["clip_ceiling"])
@@ -176,10 +178,13 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     # Validate the caller's ORIGINAL musical request before considering
     # an offline template. A malformed rest or overlapping source cannot be
     # silently repaired by a compatible archived passage.
-    if specs.is_empty() or str(specs[0].get("kind","")) != "source" or \
-            not Lifecycle.validate_batch(online,specs):
+    if not Lifecycle.validate_batch(online,specs):
         return false
-    var planned: Dictionary = specs[0]
+    var planned: Dictionary = {}
+    for spec in specs:
+        if str(spec.get("kind","")) == "source":
+            planned = spec
+            break
     var opening_left: float = float(planned.get("world_origin",NAN)) + \
         Admission.clip_bounds(planned,density,gap,source_duration).x / density
     # A new passage must be completely outside the viewport, and behind
@@ -199,13 +204,20 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
             not clears_prior_layers(opening_left,density,
                 viewport_width,playhead_x,inside and onto_empty_strip):
         return false
+    var batch_left: float = opening_left
+    for spec in specs:
+        if str(spec.get("rest_position","after")) == "before":
+            batch_left = minf(batch_left,float(spec["world_origin"]))
+    if batch_left < opening_left-.00001 and not clears_prior_layers(
+            batch_left,density,viewport_width,playhead_x):
+        return false
     if not online.is_empty():
         var end_beat := -INF
         for item in online:
             var bounds: Vector2 = Admission.clip_bounds(
                 item,density,gap,source_duration)
             end_beat = maxf(end_beat,float(item["world_origin"])+bounds.y/density)
-        if opening_left < end_beat-.00001:
+        if batch_left < end_beat-.00001:
             return false
     var prepared: Array = specs
     var matching: Dictionary = _archive.compatible(specs)

@@ -242,17 +242,19 @@ static func position(passes: Array, world: float, right_beats: float,
 
 static func retry_start(passes: Array, world: float, right_beats: float,
         header_beats: float, rest_beats: float, density: float = Spacing.DEFAULT_PIXELS_PER_BEAT,
-        gap: float = FALLBACK_STAFF_GAP_PX, score_duration: float = INF) -> float:
+        gap: float = FALLBACK_STAFF_GAP_PX, score_duration: float = INF,
+        leading_rest_beats: float = 0.0) -> float:
     # Owner, round 4 (item 7): a Retry opens at the right edge at once. Its
     # first printed pixel is just beyond the viewport and directly after
     # the ink already exposed (no REST_GAP, no READY travel), and never
     # closer than the one written rest measure the engine traverses first.
     var start: float = world + maxf(maxf(MIN_READING_BEATS,rest_beats),
         right_beats + header_beats + OFFSCREEN_MARGIN_BEATS)
+    start = maxf(start,world+leading_rest_beats+header_beats)
     var occupied: float = _occupied_end(passes,world,maxf(1.0,density),gap,
         score_duration)
     if is_finite(occupied):
-        start = maxf(start,occupied + header_beats)
+        start = maxf(start,occupied + leading_rest_beats + header_beats)
     return start
 
 static func command_lead_bpm(action: String, flow_bpm: float,

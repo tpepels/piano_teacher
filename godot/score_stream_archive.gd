@@ -176,7 +176,14 @@ func original_plan(owner_serial: int, writer_id: String = "") -> Array:
 
 
 func compatible(requested: Array) -> Dictionary:
-    if requested.is_empty() or str(requested[0].get("kind",""))!="source":
+    if requested.is_empty():
+        return {}
+    var source_index := -1
+    for index in range(requested.size()):
+        if str(requested[index].get("kind","")) == "source":
+            source_index = index
+            break
+    if source_index < 0:
         return {}
     for entry in pending:
         var plan: Array = entry.get("plan",[])
@@ -186,8 +193,8 @@ func compatible(requested: Array) -> Dictionary:
         # source window yet have a different authored passage duration.
         # Reusing that stored rest would silently change the time granted
         # by the caller (and therefore disagree with MIDI grading).
-        var old_source: Dictionary = plan[0]
-        var new_source: Dictionary = requested[0]
+        var old_source: Dictionary = plan[source_index]
+        var new_source: Dictionary = requested[source_index]
         if absf(float(old_source.get("piece_duration",
                 old_source.get("source_ceiling",-1))) -
                 float(new_source.get("piece_duration",
@@ -203,6 +210,7 @@ func compatible(requested: Array) -> Dictionary:
                 float(new_source.get("world_origin",NAN))
             if not is_finite(old_offset) or not is_finite(new_offset) or \
                     str(a.get("kind","")) != str(b.get("kind","")) or \
+                    str(a.get("rest_position","after")) != str(b.get("rest_position","after")) or \
                     a.has("clip_floor") != b.has("clip_floor") or \
                     absf(float(a.get("clip_leading_spaces",0.0))-
                         float(b.get("clip_leading_spaces",0.0)))>.00001 or \

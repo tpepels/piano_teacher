@@ -81,6 +81,14 @@ progress. The first failed run is retained in
 `debug-sessions/practice-completion/embedded-production.log`; this record does
 not substitute focused diagnostics for the required complete rerun.
 
+Asset/readiness source commit: `546bdaca`. Retry now creates its complete
+leading rest in the same admitted source batch and owner when no full
+predecessor rest survives. Stable before/source/after slot identities preserve
+FIFO order, archive replay and rollback; a provisional prefix remains hidden
+until authorization. The unchanged actual Moonlight journey passes Retry,
+visible/audible count-in, Listen, navigation, tempo changes and saved reopening
+(`debug-sessions/practice-completion/retry-fixed-reproduction.log`).
+
 | Phase | State |
 | --- | --- |
 | Phase 5 — ownership decomposition | Source ownership transfers integrated; existing core/native checks pass. New feedback work removes the remaining independent preview matcher and release pairing. |

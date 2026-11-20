@@ -25,10 +25,11 @@ func canvas() -> Control:
 
 func append_source(facts: StreamGeometry, source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool = false,
-        guided: bool = false, display_context: bool = false) -> void:
+        guided: bool = false, display_context: bool = false,
+        leading_rest_beats: float = 0.0) -> void:
     var windows: Array[Vector2] = _source_windows.call(maxf(0.0,from_beat))
     append_take(facts,windows,source_beat,start_world,take_key,empty_strip,
-        facts.first_header_spaces,facts.rest_gap,guided,display_context)
+        facts.first_header_spaces,facts.rest_gap,guided,display_context,leading_rest_beats)
 
 func trim(facts: StreamGeometry, reason: String, protected_take: int = -1) -> Array[int]:
     return trim_future(canvas(),reason,facts.world,facts.density,facts.gap,
@@ -234,7 +235,7 @@ func restore_future_suffix(facts: StreamGeometry, saved: Array, world: float) ->
         for item in queue.online:
             if int(item.get("owner_serial",-1)) == serial:
                 for original in saved:
-                    if int(original.get("serial",0)) == int(item.get("serial",0)):
+                    if str(original.get("slot_id","")) == str(item.get("slot_id","")):
                         item["armed"] = bool(original.get("armed",false))
                         item["ever_visible"] = bool(original.get("ever_visible",false))
                         break
@@ -246,7 +247,8 @@ func restore_future_suffix(facts: StreamGeometry, saved: Array, world: float) ->
 ## admitted owner.
 func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: float,
         start_world: float, take_key: String, empty_strip: bool,
-        first_header_spaces: float, rest_gap: float, guided: bool = false, display_context: bool = false) -> void:
+        first_header_spaces: float, rest_gap: float, guided: bool = false,
+        display_context: bool = false, leading_rest_beats: float = 0.0) -> void:
     last_admitted = -1
     var first_serial: int = serial+1
     var original_origin: float = start_world-source_beat
@@ -284,6 +286,16 @@ func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: fl
             "piece_duration":duration,"take_key":take_key,
             "pending":take_key == "prepared" or guided,
             "hidden_until_armed":hidden}]
+        if is_first and leading_rest_beats > .0001:
+            # The same immutable take owns both its preparation rest and
+            # its source. The header follows the complete written bar.
+            specs.push_front({
+                "kind":"rest","rest_position":"before",
+                "owner_serial":strip_serial,"take_owner":first_serial,
+                "world_origin":start_world-leading_spaces*gap_pixels/density-leading_rest_beats,
+                "source_floor":0.0,"source_ceiling":leading_rest_beats,
+                "take_key":"rest","pending":false,
+                "hidden_until_armed":hidden})
         if is_last and rest_gap > .0001 and not (context and facts.display_end > duration+.0001):
             specs.append({
                 "kind":"rest","owner_serial":strip_serial,
@@ -406,17 +418,18 @@ func reject_candidate(facts: StreamGeometry, owner_serial: int, before_serial: i
 func arm_take(facts: StreamGeometry, world: float, opening: float, right: float,
         header: float, planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false,
-        empty_strip_count_in: float = 0.0, exact_authorized: bool = false, display_context: bool = false) -> Dictionary:
-    return _binding.arm(facts,serial,allocate_source.bind(display_context),reserve_ready,
+        empty_strip_count_in: float = 0.0, exact_authorized: bool = false,
+        display_context: bool = false, leading_rest_beats: float = 0.0) -> Dictionary:
+    return _binding.arm(facts,serial,allocate_source.bind(display_context,leading_rest_beats),reserve_ready,
         reject_candidate,cancel_arm,empty_strip_onset,retry_placement,
         world,opening,right,header,planned_start_world,resuming_paused,
         retrying,empty_strip_count_in,exact_authorized)
 
 func allocate_source(facts: StreamGeometry, source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool,
-        display_context: bool = false) -> int:
+        display_context: bool = false, leading_rest_beats: float = 0.0) -> int:
     var before: int = serial
-    append_source(facts,source_beat,start_world,from_beat,take_key,empty_strip,false,display_context)
+    append_source(facts,source_beat,start_world,from_beat,take_key,empty_strip,false,display_context,leading_rest_beats)
     return last_admitted if serial > before else -1
 
 func schedule_recovery(facts: StreamGeometry, world: float, source_opening: float,
