@@ -44,6 +44,30 @@ class VisualTransport:
     # announcement is new ink; a re-timed one keeps its admitted ink.
     announce_serial: int = 0
 
+    @property
+    def preview_loop_pending(self) -> bool:
+        return self._preview_loop_pending
+
+    @property
+    def retry_previous_pass(self) -> bool:
+        return self._retry_previous_pass
+
+    @property
+    def preparation_pending(self) -> bool:
+        return self._preparation_pending
+
+    def queue_preview_repetition(self) -> None:
+        """A preview may repeat, but no graded attempt is awarded."""
+        self._preview_loop_pending = True
+
+    def set_retry_previous_pass(self, enabled: bool) -> None:
+        """Track retry lifecycle without bypassing the transport owner."""
+        self._retry_previous_pass = bool(enabled)
+
+    def finish_preparation_gate(self) -> None:
+        """Release only the pending preparation flag, retaining authored rest."""
+        self._preparation_pending = False
+
     def announce_continuation(self, source_from_beat: float,
                               deadline: float, bpm: float) -> None:
         self.announce_serial += 1

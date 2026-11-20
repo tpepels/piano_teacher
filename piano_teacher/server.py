@@ -638,7 +638,7 @@ class PracticeEngine:
                 return
             transport = InputTransportFacts(
                 next_at=self.visual_transport.next_at,
-                preview_loop_pending=self.visual_transport._preview_loop_pending,
+                preview_loop_pending=self.visual_transport.preview_loop_pending,
                 pending_teaching_result=self.pending_result is not None,
                 pending_rewind=self.visual_transport.pending_rewind is not None,
                 automatic=self.auto,preview_only=self.preview_only,
@@ -1634,7 +1634,7 @@ class PracticeEngine:
         if self.playback.presentation_required:
             self.visual_transport.next_at = 0.0
             self.visual_transport.announced_continuation = None
-            self.visual_transport._preparation_pending = False
+            self.visual_transport.finish_preparation_gate()
             self.visual_transport.pending_rewind = None
             self.playback.request(
                 self, action="auto", mode=self.mode,
@@ -2216,7 +2216,7 @@ class PracticeEngine:
             self.attempt_settlement.cancel(reason="restart", now=sampled)
             self.teaching_continuation.cancel()
             self._pending_assessed_bpm = None
-            self.visual_transport._retry_previous_pass = False
+            self.visual_transport.set_retry_previous_pass(False)
             self._guided_recovery_pending = False
             self.midi_ingress.resume_grading_after = 0.0
             self.midi_ingress.resume_ignored_pitches.clear()
@@ -2276,7 +2276,7 @@ class PracticeEngine:
         learning = self.mode == "learn" and self.teaching is not None
         shift_run_at = resume_timeline(
             paused=self.visual_transport.paused, learning=learning, running=self.running,
-            preview_pending=self.visual_transport._preview_loop_pending,
+            preview_pending=self.visual_transport.preview_loop_pending,
             automatic_feedback=self.pending_result is not None and self.auto)
         now = self.now()
         paused_at = self.visual_transport.paused_at
@@ -2534,7 +2534,7 @@ class PracticeEngine:
             elif route == "continue":
                 # Failed attempts reuse the existing source; clean attempts
                 # append another passage with the exact authored rest gap.
-                if not self.visual_transport._retry_previous_pass:
+                if not self.visual_transport.retry_previous_pass:
                     self.visual_transport.visual_offset_beats += self._source_model()[
                         "practice_timeline"]["stride_beats"]
                 target = selected.next_exposure.from_beat
@@ -2707,7 +2707,7 @@ class PracticeEngine:
                 self.measurement.persist()
             self.measurement.finish()
             self.running = False
-            self.visual_transport._preview_loop_pending = True
+            self.visual_transport.queue_preview_repetition()
             short = SCHEDULER.measured_rest(
                 self._collect_rest_measurement(from_beat=0.0,source_end=self.visual_transport.run_at + duration),
                 now=self.now(),bpm=self._presentation_bpm)
@@ -2878,7 +2878,7 @@ class PracticeEngine:
         if rewind:
             visual_from = self._visual_motion(now)[0]
             self._note_tempo(now)
-            self.visual_transport._retry_previous_pass = True
+            self.visual_transport.set_retry_previous_pass(True)
             target = exposure.from_beat if exposure else self.visual_transport.play_from_beat
             self._schedule_preparation(target, now=now, from_visual=visual_from,
                 reverse_seconds=SCHEDULER.recovery_rewind(
@@ -2919,7 +2919,7 @@ class PracticeEngine:
                 return
         if not self.auto:
             self.visual_transport.next_at = 0
-        elif not self.visual_transport._retry_previous_pass:
+        elif not self.visual_transport.retry_previous_pass:
             deadline = SCHEDULER.repeat(
                 run_at=self.visual_transport.run_at,source_seconds=duration,
                 gap_beats=self.visual_transport.visual_gap_beats,bpm=self.plan.bpm)
@@ -2936,7 +2936,7 @@ class PracticeEngine:
                 self.visual_transport.announced_continuation = None
                 self.visual_transport.next_at = now if self._short_rest is not None else deadline
             if (self.playback.presentation_required and self.auto
-                    and not self.visual_transport._retry_previous_pass
+                    and not self.visual_transport.retry_previous_pass
                     and self.visual_transport.next_at):
                 # The selected successor is known at completion. Settle
                 # immediately and negotiate its physical admission during
@@ -2978,8 +2978,8 @@ class PracticeEngine:
             has_plan=self.plan is not None,
             learning=self.mode == "learn" and self.teaching is not None,
             paused=self.visual_transport.paused, listening=self.mode == "listen",
-            preview_pending=self.visual_transport._preview_loop_pending,
-            preparation_pending=self.visual_transport._preparation_pending,
+            preview_pending=self.visual_transport.preview_loop_pending,
+            preparation_pending=self.visual_transport.preparation_pending,
             feedback_pending=self.pending_result is not None,
             awaiting_score=self.awaiting_score_revision is not None,
             rewind_pending=self.visual_transport.pending_rewind is not None,
@@ -3062,7 +3062,7 @@ class PracticeEngine:
                     "listen" if self.mode == "listen" else "preview" if self.preview_only else "active", now)
         elif self.pending_result is not None:
             self.measurement.phase_changed("feedback", now)
-        elif self.visual_transport._preparation_pending or self.awaiting_score_revision is not None:
+        elif self.visual_transport.preparation_pending or self.awaiting_score_revision is not None:
             self.measurement.phase_changed("preparation", now)
         else:
             self.measurement.phase_changed("feedback" if self.performance_summary is not None else "idle", now)
@@ -3131,7 +3131,7 @@ class PracticeEngine:
             paused=self.visual_transport.paused, running=self.running, run_at=self.visual_transport.run_at,
             teaching_phase=teaching_phase,
             performance_complete=self.performance_summary is not None,
-            preview_loop_pending=self.visual_transport._preview_loop_pending,
+            preview_loop_pending=self.visual_transport.preview_loop_pending,
             review_complete=self.review_session_complete,
             pending_result=self.pending_result is not None,
             awaiting_score=self.awaiting_score_revision is not None,
@@ -3238,7 +3238,7 @@ class PracticeEngine:
                                           corrected_at=corrected_at, deferred=True)
                 if self.plan is None or self.visual_transport.paused:
                     return 250
-                if (self.running or self.visual_transport._preview_loop_pending or self.visual_transport._preparation_pending
+                if (self.running or self.visual_transport.preview_loop_pending or self.visual_transport.preparation_pending
                         or self.pending_result is not None or self.visual_transport.pending_rewind is not None
                         or self.mode == "listen"):
                     # Responsive automatic transitions, recovery, and practice.

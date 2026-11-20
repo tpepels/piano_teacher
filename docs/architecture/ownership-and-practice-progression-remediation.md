@@ -379,6 +379,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Published the [PracticeEngine extraction audit](practice-engine-decomposition-audit.md): ownership table, overlapping setters/state, engine-pointer cycle through playback admission, private transport access, durable settlement hazards, and a dependency-ordered migration plan. This is evidence against the current source, not the historical 19 November line references.
 - Next work is to implement the bounded state/ownership transfers, not add forwarding functions or claim Phase 5 done because a single file is shorter.
 
+### Implementation checkpoint AY — transport-owned retry, preview and preparation gates
+
+- Replaced all PracticeEngine reads/writes of VisualTransport's private `_preview_loop_pending`, `_retry_previous_pass` and `_preparation_pending` fields with bounded public semantic facts and operations. Only `VisualTransport` can now mutate those three lifecycle flags; MIDI ingress and passage progression consume its observed state.
+- Existing source preparation, graded retry and continuous-rest timing semantics are preserved. No new transport state cache or second scheduling authority was created.
+- This removes a direct cross-owner field mutation found in the full server.py audit. Existing CI and native passage loops remain the verification gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
