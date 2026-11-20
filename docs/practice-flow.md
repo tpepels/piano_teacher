@@ -1,183 +1,168 @@
-# Practice flow for one piece (owner specification)
+# Practice flow for one piece
 
-**Status: Revised source-window progression implemented 2026-11-19;
-physical piano acceptance remains outstanding.** This is the contract the practice state
-machine must follow. The `practice-flow` course (the default strategy) now
-runs states 1-5 by itself: moving windows, hands, final test, Listen -> Free
--> Tempo, the tempo and error rules, two feedback colours, count-in clicks
-with large numbers, an on-screen metronome switch, a minimal status line and
-short messages, and only Pause and Listen again as controls.
+This is the owner specification for the default `practice-flow` course.
+Production code must follow it. Where another document or an older stored
+policy disagrees, this contract governs the normal desktop flow.
+[Architecture](architecture.md) describes its owners; [ROADMAP](../ROADMAP.md)
+records implementation and dated verification. The owner accepts the experience
+by playing at the piano; headless checks do not establish physical acceptance.
 
-Not built yet: the simplified Coda/Fukuda aid; skipping a short pickup rest
-inside the first bar (empty bars are already skipped); the red ghost note
-for a wrong key; lighting notes during Listen; the other hand dimmed
-instead of hidden; dimmed neighbour bars. "Clearly off" timing currently
-uses the existing onset tolerance (130-300 ms depending on tempo), the same
-boundary that colours a note red. It supersedes the stage order in
-[teaching methodology](teaching-methodology.md) for the desktop flow; the
-Coda and Fukuda generators themselves stay unchanged and become an
-announced aid (see "Simplified exercises").
+The learner plays the real notes of the piece unless the app has explicitly
+announced a simplified exercise. Every state should be recognisable from a
+piano lesson.
 
-The guiding rule: every state must be one a pianist recognises from a
-lesson. The learner always plays the real notes of the piece unless the
-app has said, in words, that an exercise is simplified.
+## Open a piece
 
-## States and transitions
+Opening a new MIDI file starts the first measure window with its own Listen
+step. It does not first play the whole piece. The original MIDI supplies target
+tempo, authored measure boundaries, notes, hands and complete releases.
 
-### 1. Open a piece
+## Learn moving measure windows
 
-Opening a piece goes straight to the first measure window (state 2), which starts
-with its own Listen step. The whole piece is **not** played back first
-(owner, 2026-11-18: too long for long pieces).
+Introduce each new authored measure alone, then repeat it with successively
+more preceding measures, up to four measures in a routine window:
 
-### 2. Learn moving measure windows
+**1; 2, 1–2; 3, 2–3, 1–3; 4, 3–4, 2–4, 1–4;
+5, 4–5, 3–5, 2–5; …**
 
-The curriculum begins with each new authored measure **alone**, then
-repeats it with successively more preceding measures, never exceeding
-four measures in a routine practice window.
+Complete each window before advancing. Every window has its own progress,
+tempo and mastery identity; overlapping music does not imply shared completion.
+Practise right hand, then left hand, then both together when those hands have
+notes. Skip empty hands without inventing notes or achievements.
 
-For example: **1; 2, 1–2; 3, 2–3, 1–3; 4, 3–4, 2–4, 1–4;
-5, 4–5, 3–5, 2–5**, then continue sliding forward. Each window
-gets its own independent progress/tempo/mastery identity, and a window
-is completed before advancing to the next one.
-
-Each window is learned with the **right hand**, then **left hand**,
-then **both together** when those hands have notes to play. Empty hands
-are skipped. The same three learning steps apply to each window.
-
-Source measure boundaries are authored MIDI bars. A source note already
-attacked within the window retains its entire release, even if held
-beyond its last barline; a silent bar never creates a fictitious MIDI
-attack. Different windows may overlap in music, but never share mastery
-as an implied completion.
-
-**2a. Listen.** The selected window is played back once at the target tempo; the
-notes move over the staff. No input is graded. Then Free.
-
-**2b. Free (no tempo).** The learner plays the notes in order at any pace.
-
-- On a wrong note the app waits for the correct one and shows which key
-  it is.
-- When every note has been played in order, Tempo starts.
-
-**2c. Tempo.**
-
-- Starts at **50% of the target tempo**.
-- One bar of count-in that ends just before the first note: a rest or
-  pickup at the start of the selected window is skipped, not sat out.
-- After each attempt the next one follows **directly**, again with one bar
-  of count-in; there is no extra pause.
-- Clean attempt: **+10%** of the target tempo, capped at the target.
-- Attempt with errors: repeat at the same tempo. After **2 failed attempts
-  in a row**: **-10%**, never below 50%.
-- At 50% and again 2 failed attempts: back to **Free** (2b).
-- If the window still does not succeed after returning to Free, the app
-  may offer a simplified exercise (see below).
-- **Done** when the current window is played **2 times in a row without errors at
-  the target tempo**. Then the next hand, or after both hands together,
-  the next moving window (state 3).
-
-The target tempo is the **original tempo** of the MIDI file.
-
-### 3. Grow the trailing window
-
-Linking is integrated into the moving-window sequence above:
-each new measure begins alone, then grows backwards one measure
-at a time, capped at four. The next new measure starts alone again.
-There is no independent phrase-link generator that can silently select
-longer or different material.
-
-### 4. Final test
-
-After the final four-bar window: the whole piece with both hands,
-Tempo rules from 50% to the target tempo, done after 2 clean attempts in a
-row at the target tempo. Then the piece is learned.
-
-### 5. Resume
-
-Reopening a piece continues at the **same moving window**, starting again at
-**Free** as a warm-up (not at the saved tempo).
-
-## Simplified exercises (Coda / Fukuda)
-
-The Coda and Fukuda generators are not part of the normal order. They are
-offered only as an aid when a window repeatedly fails, also at a slow
-tempo, and they are **announced as a simplification** (for example
-"Simplified: broken chords played together"). After the aid the learner
-returns to the real notes.
-
-## Implementation and acceptance status
-
-The moving-window sequence is implemented. The current owner, CI and
-remaining architectural and physical acceptance items are maintained in the
-[implementation tracker](architecture/ownership-and-practice-progression-remediation.md).
-The old 17 November state-of-application table is preserved in the
-[historical comparison](architecture/historical/practice-flow-comparison-2026-11-17.md).
-Unverified UI and hardware requirements below remain normative requirements,
-not evidence that those features have already been accepted.
-
-## On screen
-
-### Always
-
-- **Staff:** scrolls from right to left past a fixed playhead, in every
-  state including Listen and Tempo.
-- **Phrase context:** the current phrase is shown with the bar before and
-  the bar after it dimmed, for context.
-- **Hands:** the hand that is not being practised stays visible but dimmed.
-- **Fingering:** numbers are shown wherever they are available.
-- **Spacing:** quick notes (16ths, 8ths) are spaced generously, at least
-  about 3.3 staff spaces per 16th (owner: they were too close together).
-- **Status:** minimal. A small label says where you are; the music is the
-  focus.
-- **Keyboard:** no piano keyboard, except as a hint after a wrong note in
-  Free.
-- **Controls:** Pause and Listen again. Everything else advances by itself.
+A note attacked within the selected window keeps its full original release,
+even beyond the last barline. A silent authored bar creates no MIDI attack.
+The routine four-bar cap does not truncate a sustained ending.
 
 ### Listen
 
-The notes scroll past the playhead and light up as they sound. Nothing is
-graded.
+Play the selected window once at the original target tempo. Notes scroll past
+the playhead and light as they sound. Nothing is graded. Then enter Free.
+
+**Listen again** repeats the current passage at target tempo without awarding
+progress or bypassing its learning steps.
 
 ### Free
 
-- The target note waits on the playhead.
-- After each correct note the staff moves on to the next one; the axis
-  never moves while the learner thinks.
-- A played note turns green.
-- On a wrong note: the intended note turns red, the keyboard appears and
-  shows the key to play, and the app waits for that note.
+The learner finds all notes of the **complete current window** in order at any
+pace, without rhythm scoring. Free does not silently shrink the selected
+window to an earlier two-bar guided unit.
+
+- The next target waits at the playhead. The axis stays still while thinking.
+- A correct note turns green; the staff moves to the next target.
+- A wrong note turns the intended note red, shows the keyboard hint and waits
+  for the correct key. No keyboard appears simply because the learner waits.
+- After every target has been found, Tempo begins automatically.
 
 ### Tempo
 
-**Count-in**
-- One bar of metronome clicks with large numbers 1-2-3-4.
-- It ends just before the first note; a leading rest is not sat out.
+Start at **50% of the original target tempo**, rounded to a positive whole BPM.
+Each attempt has one authored
+bar of count-in ending immediately before the first note. Skip a leading rest
+or pickup inside the selected window, including a short rest within its first
+bar; do not make the learner sit through it.
 
-**Metronome**
-- Can be switched on the screen; on by default.
+| Attempt result | Next action |
+| --- | --- |
+| Clean below target | Increase by 10% of target, capped at target |
+| One failed attempt | Repeat at the same tempo |
+| Two failures in a row above 50% | Decrease by 10% of target, never below 50% |
+| Two failures in a row at 50% | Return to Free |
+| Two consecutive clean attempts at target | Complete this window/hand and advance |
 
-**Feedback while playing**
-- Every note is coloured the moment it is played or missed.
-- Two colours only: **green** for correct, **red** for wrong or missed.
-- A wrong key also shows a red "ghost" note at the pitch that was played.
+A slower success is practice, not target-tempo mastery. A failed attempt breaks
+the target clean streak. A clean flow attempt has all required pitches and
+accepted onsets with no extra keys; key-release precision does not fail it.
+After an attempt, the next follows directly with one
+count-in bar and no added feedback break. The staff keeps moving forward; the
+repeat comes from the right and never jumps back.
 
-**Timing**
-- A note that is a little early or late is accepted (still green).
-- Only a note that is clearly off counts as an error.
-- Proposed threshold, to confirm when building: more than a sixteenth note
-  at the current tempo, and at least 150 ms.
+The one-bar repeat takes priority over decorative context: neighbour bars may
+be limited during the repeat rather than delaying it or overlapping active ink.
 
-**Next attempt**
-- It follows directly: the staff keeps scrolling and the repeat comes in
-  from the right after one count-in bar. It never jumps back.
+## Grow the window and finish
+
+After both hands complete a window, continue the trailing-window sequence.
+There is no separate phrase-link generator that silently selects longer or
+different music. The next new measure starts alone again.
+
+After the last moving window, play the **whole original piece with both hands**
+as the final test. Apply Tempo rules from 50% to original tempo, finishing after
+two consecutive clean attempts at target. Then the piece is learned. The final
+test is separate from the four-bar routine window limit.
+
+## Resume
+
+Reopening saved progress returns to the same window and hand at **Free** for
+warm-up, rather than immediately running at saved tempo. This also applies to
+saved final-test progress: reopen at whole-piece Free, then restart Tempo at
+50%. A partial chord or held physical key is not saved as completed learning.
+
+## Simplified exercises (Coda / Fukuda)
+
+Coda/Fukuda is an aid, not part of the normal Listen → Free → Tempo order.
+On the **second return to Free caused by repeated floor-tempo failure** for
+the same source window/hand, enter an eligible simplified exercise automatically.
+That return count is saved for the exact window and hand across reopening.
+Announce exactly what changed, for example “Simplified: broken chords played
+together”. Never present changed music as the original score.
+
+After the aid, return to **Free on the original notes**, then the normal Tempo
+ladder. Simplified success does not grant original-window mastery. If no genuine
+source-safe simplification is available, retain original Free rather than
+fabricating an exercise. Source IDs, sustained releases and hand identity remain
+bound to the real piece throughout the aid.
+
+## On screen
+
+The music is the focus:
+
+- One staff stream scrolls right to left past a fixed playhead in Listen and
+  Tempo. Free holds the next target at that same playhead.
+- Show the bar before and bar after the active phrase dimmed for context, when
+  that does not obstruct the immediate one-bar repeat.
+- Keep the hand not being practised visible but dimmed.
+- Show finger numbers wherever known. Never invent an unavailable assignment.
+- Space fast notes generously: about **3.3 staff spaces per sixteenth** at least.
+- Use one small status label indicating the current window, hand and step.
+- Hide the piano keyboard except for a wrong-note hint in Free.
+- Keep **Pause/Resume** and **Listen again** as the practice controls. Everything
+  else progresses automatically. This controls the visible normal flow;
+  configured physical MIDI shortcuts and existing keyboard/API tools remain.
+
+### Count-in and metronome
+
+Use one bar of metronome clicks with large beat numbers, appropriate to the
+authored meter. Count-in ends just before the first playable note. The metronome
+is on by default and can be switched on screen. Clicks, spoken cues, note motion
+and MIDI grading follow the same authorized musical deadline.
+
+### Feedback
+
+Colour every played or missed note promptly: **green** for correct and **red**
+for wrong or missed. A wrong key also produces a red ghost at the played pitch.
+Listen lighting is ungraded and cannot award performance credit.
+
+A slightly early/late attack remains green. An onset error counts only outside
+the greater of **150 ms** and **one sixteenth note at the current local tempo**.
+This is an owner-selected tolerance, not a validated universal teaching constant.
+Detailed timing/hold observations remain distinct in local evidence even though
+the display uses two feedback colours. Key-release timing is recorded without
+adding another failure rule or feedback colour to normal Practice Flow.
 
 ### Transitions
 
-- **Step change** (Listen -> Free -> Tempo): a short message for 1-2 s
-  ("Now in tempo - 50%"), then the next step starts by itself.
-- **Tempo change:** a short message ("Faster: 72 BPM", "Slower: 58 BPM").
-- **Hand, phrase or link done:** a short compliment, then the next one
-  starts automatically.
-- **Simplified exercise:** starts automatically when a phrase keeps
-  failing, with a clear message of what was simplified.
+Show a short message for **1–2 seconds** during the automatic transition:
+“Now in tempo — 50%”, “Faster: 72 BPM”, “Slower: 58 BPM”, or a short compliment
+after a hand/window completes. Announce a simplified aid before it starts.
+Messages overlay the single count-in/handoff; they do not add another pause.
+The backend selects the transition deadline; message animation cannot create
+another progression clock or independently delay an already authorized take.
+
+## Acceptance
+
+Implementation and automated checks do not by themselves accept the piano
+experience. The owner checks MIDI response, sound, score motion, count-in,
+feedback, aid return and saved reopen on the instrument. The exact software
+revision and remaining physical/clean-machine gates belong in
+[ROADMAP](../ROADMAP.md), with the [verification protocol](development.md#verification-and-acceptance).

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="220" viewBox="0 0 960 220" role="img" aria-labelledby="title description">
+  <title id="title">Piano Teacher</title>
+  <desc id="description">An ivory piano mark and wordmark on forest green. Practice your music, one measure at a time.</desc>
+  <rect width="960" height="220" rx="22" fill="#0D302A"/>
+  <rect x="58" y="59" width="108" height="102" rx="9" fill="#3CD2A0"/>
+  <g fill="#F3F7F3" stroke="#0D302A" stroke-width="2">
+    <rect x="72" y="75" width="16" height="68" rx="2"/>
+    <rect x="88" y="75" width="16" height="68" rx="2"/>
+    <rect x="104" y="75" width="16" height="68" rx="2"/>
+    <rect x="120" y="75" width="16" height="68" rx="2"/>
+    <rect x="136" y="75" width="16" height="68" rx="2"/>
+  </g>
+  <g fill="#0D302A">
+    <rect x="83" y="75" width="10" height="41" rx="1"/>
+    <rect x="99" y="75" width="10" height="41" rx="1"/>
+    <rect x="131" y="75" width="10" height="41" rx="1"/>
+  </g>
+  <text x="204" y="111" fill="#F3F7F3" font-family="Georgia, 'DejaVu Serif', serif" font-size="54" letter-spacing="-.8">Piano Teacher</text>
+  <text x="207" y="151" fill="#B1C8BF" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="22">Practice your music, one measure at a time.</text>
+</svg>

@@ -1,107 +1,71 @@
-# Piano Teacher
+<div align="center">
 
-**[Current development roadmap](ROADMAP.md) · [Documentation index](docs/README.md)**
+<img src=".github/assets/piano-teacher.svg" alt="Piano Teacher — Practice your music, one measure at a time." width="960">
 
-Offline desktop piano practice, built with Godot 4.7 and embedded CPython.
-**One process, one runtime, one transport: in-memory command and MIDI event
-queues.** No HTTP server, localhost port, UDP bridge or separate Python process.
+An offline desktop companion for learning piano from your own MIDI files.
 
-## Running on a development machine
+[Practice flow](docs/practice-flow.md) · [Build and run](docs/development.md) · [Project roadmap](ROADMAP.md)
 
-Arch Linux development requirements: Godot 4.7.2, Python 3.14, a C++ compiler,
-SCons and the Python packages for this project.
+</div>
 
-```bash
-sudo pacman -S --needed godot python base-devel scons git
-python -m venv .venv
-.venv/bin/python -m pip install -e '.[godot,test]'
-bash scripts/build-inprocess.sh
-./run.sh
-```
+## From listening to playing
 
-The native build links a Godot GDExtension against CPython. The build
-script runs a headless native startup smoke test: Godot must register
-`PianoNative`, import the private Python practice engine and successfully
-retrieve the user's MIDI library through the queue. The launcher also runs
-this check if the native binary/manifest has changed. If the native bridge
-cannot initialize, the app exits with a diagnostic; it never opens a
-nonfunctional library screen.
+Work on a small passage, hear how it sounds, find its notes at your own pace,
+then bring it up to the original tempo. Piano Teacher guides each window through
+**Listen → Free → Tempo**, with the right hand, left hand and both together.
 
-Do not start `python -m piano_teacher.server`. The backend is part of
-the desktop process and has no separate CLI or network listener.
+- **Your music.** Open a `.mid` or `.midi` file. The lessons keep the original
+  notes and complete held endings; simplified exercises are announced.
+- **A manageable next step.** Introduce one measure, then connect it with up to
+  three preceding measures. Each window keeps its own progress.
+- **Room to learn.** Start timed practice at half speed. Clean attempts increase
+  the tempo; repeated trouble returns to slower work and Free practice.
+- **Music in focus.** A scrolling score, available finger numbers, green/red
+  note feedback, count-in and metronome keep the next action clear.
+- **Pick up where you left off.** Reopening returns to the saved window with
+  a Free warm-up before timed practice.
 
-## Product behavior
+Two clean attempts at the original tempo complete a window. After the moving
+windows, the final test brings the whole original piece together.
 
-- Import `.mid` / `.midi` music, restore the last practiced score, and
-  maintain independent lesson progress for hands and practice steps.
-- The desktop uses the adaptive **Coda + Fukuda MIDI** lesson route;
-  saved selections of removed strategies migrate to this default. The UI
-  identifies the active generator and real note/rhythm/tempo transformation.
-  Direct author-style Coda generation is retained for research parity.
-- Onset spacing and tempo adapt to fast passages. The score, playhead,
-  recovery and metronome share one presentation timeline.
-- Incoming MIDI key-down and key-up events immediately enter one
-  acknowledged feedback log, so a played note turns mint (or an early
-  key-up lavender) before settlement; the authoritative assessment, published
-  continuously during playback, then overrides it note by note.
-- Wrong/missed/extra pitches are failures; yellow warnings cause a retry
-  when at least half of distinct attacks are yellow.
-- MIDI calibration uses a visible breathing beat, one initial four-beat
-  count-in, and five uninterrupted eight-tap rounds. Robust outlier filtering
-  requires at least four consistent rounds; the measured offset is saved only
-  after explicit application. The same correction feeds live MIDI feedback
-  and final assessment.
-- Overlapping MIDI voices retain their independent sounding durations and
-  separate opposing stems in internally generated MusicXML for engraving.
-- Offline fingering inference uses the included adapter. For a developer
-  installation, run `bash scripts/setup-fingering.sh` once. The eventual
-  binary package bundles its offline inference runtime.
+## Start a session
 
-The source is MIDI-only for the desktop product. MusicXML is an internal
-engraving interchange format; features not recoverable from MIDI
-(authored expression marks, detailed notation) are not fabricated.
+1. Launch Piano Teacher and connect your MIDI piano in Settings.
+2. Open a MIDI file from your music.
+3. Listen to the first measure, then play its notes when Free begins.
 
-## Tests
+The flow advances automatically. **Pause/Resume** and **Listen again** stay on
+screen, and the metronome can be switched on or off. Keyboard and configured
+piano shortcuts remain available. The keyboard hint appears after a wrong note
+in Free.
 
-```bash
-bash scripts/test.sh            # core Python tests, then the Godot check
-bash scripts/test.sh --python-only
-```
+The current build targets Linux. Follow [development setup](docs/development.md#build-and-run)
+to run from source; [packaging instructions](docs/development.md#standalone-linux-package)
+describe the assembled standalone application. Release readiness and remaining
+physical piano checks are recorded in [ROADMAP](ROADMAP.md).
 
-The suite is deliberately small (2026-11-18, owner decision): it guards
-behaviour a player notices — MIDI import, grading, lesson/course building,
-Listen audio, MIDI devices and calibration, progress and settings storage,
-the engine command bridge and state contract — plus a Godot parse check
-and a few headless UI scenarios. It runs in well under a minute. There are
-no notation pixel tests; notation is judged on screen. A new test is added
-only for behaviour the owner has confirmed at the piano. GitHub runs the
-same script (`.github/workflows/ci.yml`). Tests never replace physical
-MIDI, rendering or audio checks.
+## Local by design
 
-Local learning history is stored with progress in SQLite. Settings provides
-detail retention (365 days / 256 MiB by default), local JSON export with optional
-note detail, and confirmed deletion of piece or learner history and learning
-progress. Reset Lesson preserves history. Exports omit source paths and device
-names; exported copies remain outside the app's deletion control. See the
-[learning evidence contract](docs/learning-measurement.md).
+Practice, automatic fingering and saved progress work offline after setup.
+There is no account or background upload. Learning history stays locally with
+your progress; Settings provides retention, JSON export and confirmed deletion.
+Manual fingering corrections follow their original notes across exercises.
 
-## Packaging
+See [fingering and privacy](docs/reference.md) for model provenance, data limits
+and exactly what export or deletion includes. Piano Teacher does not claim that
+software tests establish teaching efficacy or physical MIDI/audio acceptance.
 
-`scripts/package-inprocess.sh` assembles the distributable desktop
-directory with Godot, GDExtension, CPython and offline inference runtime.
-No compiler, SCons, system Python, pip or localhost service is required
-for end users. Developer MIDI repertoire and MCP editor configuration are
-excluded from the distributable. Linux hardware drivers are supplied by the operating
-system. See [native runtime and packaging](docs/inprocess-runtime.md).
+## Inside the project
 
-For reference specifications, verification and archived research evidence,
-use the [documentation index](docs/README.md). The [roadmap](ROADMAP.md)
-is the only active phase plan.
+The application uses Godot 4.7, embedded CPython and authentic Verovio notation
+in one desktop process. The technical details live in four documents:
 
-## Development-only editor tools
+| Document | Read it for |
+| --- | --- |
+| [Practice flow](docs/practice-flow.md) | The learner-visible behaviour contract |
+| [Architecture](docs/architecture.md) | Current owners, immutable score and timing contracts |
+| [Development](docs/development.md) | Setup, checks, packaging and physical acceptance |
+| [Reference](docs/reference.md) | Fingering, local evidence, privacy and research limits |
 
-The vendored Godot MCP toolkit under godot/addons/godot_mcp_toolkit/ is
-optional editor tooling. It is **not** part of the application architecture
-and is stripped from release packages. Do not enable its editor WebSocket
-service when testing network-free runtime behavior. Godot-generated .godot/
-caches are ignored, whereas source .gd.uid identifiers are committed.
+[ROADMAP](ROADMAP.md) remains the product and phase record. Superseded designs
+and implementation history are available through Git.
