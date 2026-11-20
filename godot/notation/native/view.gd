@@ -123,30 +123,13 @@ func stream_peer_clearance_facts() -> Dictionary:
         float(timeline.duration_beats),size.x*PLAYHEAD_FRACTION)
 
 func transport_preflight_facts(world: float, opening: float) -> Dictionary:
-    # The transport policy receives an immutable score-geometry/read
-    # snapshot. The live queue, peer registry and paused take identity
-    # remain owned by this renderer revision; no policy may mutate them.
-    var density: float = timeline.pixels_per_beat
-    var width: float = size.x
-    var gap: float = staff_gap()
-    var at_world: float = maxf(world,stream_world_beat)
-    var preview: Dictionary = _stream_queue.preview_tail_withdrawal(
-        at_world,density,gap,timeline.duration_beats,
-        width,width*PLAYHEAD_FRACTION)
-    return {
-        "source_exists": has_source_windows_at(opening),
-        "online": _stream_controller.online_snapshot(),
-        "withdrawn": preview.duplicate(true),
-        "peer_floor": _stream_queue.minimum_peer_opening(
-            density,width,width*PLAYHEAD_FRACTION),
-        "right": _stream_right_beats(),
-        "header": _stream_header_beats(opening),
-        "preview_world": at_world,
-        "was_paused": _stream_controller.was_paused,
-        "paused_source": _stream_controller.paused_source,
-        "paused_owner": _stream_controller.paused_owner,
-        "last_take": _stream_controller.last_take
-    }
+    return _stream_controller.preflight_facts(
+        maxf(world,stream_world_beat),opening,
+        has_source_windows_at(opening),_stream_right_beats(),
+        _stream_header_beats(opening),
+        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
+        timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
+
 
 func record_withdrawn_stream_suffix(previous: Array) -> void:
     _stream_controller.remember_withdrawn_suffix(previous)
@@ -728,34 +711,12 @@ func _stream_header_beats(opening: float) -> float:
 
 
 func _transport_admission_receipt(planned: Dictionary,
-        reserved: Dictionary, world: float, opening: float) -> Dictionary:
-    if reserved.is_empty():
-        return {}
-    # A bounded, externally inspectable receipt for every accepted user
-    # transport. This is the SAME deadline later sent to the backend.
-    var entry_beats: float = float(reserved["start_world"])-opening+ \
-        StreamAdmission.clip_bounds({
-            "kind":"source","source_floor":opening,
-            "source_ceiling":timeline.duration_beats,
-            "clip_floor":opening,
-            "clip_ceiling":timeline.duration_beats,
-            "clip_leading_spaces":_first_source_header_spaces() if opening <= .0001 else 1.6
-        },timeline.pixels_per_beat,staff_gap(),
-            timeline.duration_beats).x/maxf(1.0,timeline.pixels_per_beat) - \
-        stream_world_beat-_stream_right_beats()
-    var entry_seconds: float = StreamAdmission.lead_seconds(entry_beats,0.0,bpm)
-    var receipt: Dictionary = {"action":str(planned["action"]),
-        "mode":str(planned["mode"]),
-        "start_world":float(reserved["start_world"]),
-        "source_opening":opening,"at_world":world,
-        "lead_seconds":StreamAdmission.lead_seconds(
-            float(reserved["start_world"]),world,bpm),
-        "first_ink_delay_seconds":entry_seconds,
-        "online_strips":_stream_queue.online.size()}
-    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
-        print("SCORE_TRANSPORT_RECEIPT:",JSON.stringify(receipt))
-    reserved["admission_receipt"] = receipt
-    return reserved
+        admitted: Dictionary, world: float, opening: float) -> Dictionary:
+    return _stream_controller.receipt(
+        planned,admitted,world,opening,
+        _first_source_header_spaces() if opening <= .0001 else 1.6,
+        timeline.pixels_per_beat,staff_gap(),timeline.duration_beats,
+        stream_world_beat,_stream_right_beats(),bpm)
 
 
 func reserve_transport_action(action: String, world: float,

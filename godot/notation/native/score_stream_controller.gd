@@ -53,6 +53,29 @@ func online_snapshot() -> Array:
 func online_size() -> int:
     return queue.online.size()
 
+## The renderer owns header and source glyph measurement; only this
+## stream ledger may snapshot an immutable physical withdrawal preview.
+## No cross-component caller reads the private live queue or peer registry.
+func preflight_facts(world: float, opening: float, source_exists: bool,
+        right: float, header: float, density: float, gap: float,
+        duration: float, width: float, playhead: float) -> Dictionary:
+    var preview: Dictionary = queue.preview_tail_withdrawal(
+        world,density,gap,duration,width,playhead)
+    return {
+        "source_exists":source_exists,
+        "online":online_snapshot(),
+        "withdrawn":preview.duplicate(true),
+        "peer_floor":queue.minimum_peer_opening(density,width,playhead),
+        "right":right,
+        "header":header,
+        "preview_world":world,
+        "was_paused":was_paused,
+        "paused_source":paused_source,
+        "paused_owner":paused_owner,
+        "last_take":last_take,
+    }
+
+
 func remember_withdrawn_suffix(previous: Array) -> void:
     # Rollback is owned by the stream ledger. The native executor may
     # attach only the exact suffix removed by its immediately preceding
@@ -381,6 +404,41 @@ func append_take(view, windows: Array[Vector2], source_beat: float,
 
 ## Single transport reservation authority for Play, Resume, Retry, and
 ## pre-ACK paused source reuse. A view exposes only source geometry.
+## A successful immutable admission is reported using exactly the
+## controller's committed queue generation and measured source geometry.
+## This receipt is sent unchanged to the Python playback coordinator.
+func receipt(planned: Dictionary, admitted: Dictionary, world: float,
+        opening: float, header_spaces: float, density: float, gap: float,
+        duration: float, current_world: float, right: float,
+        bpm: float) -> Dictionary:
+    if admitted.is_empty():
+        return {}
+    var entry_beats: float = float(admitted["start_world"])-opening+ \
+        Admission.clip_bounds({
+            "kind":"source","source_floor":opening,
+            "source_ceiling":duration,
+            "clip_floor":opening,"clip_ceiling":duration,
+            "clip_leading_spaces":header_spaces,
+        },density,gap,duration).x/maxf(1.0,density) - \
+        current_world-right
+    var entry_seconds: float = Admission.lead_seconds(
+        entry_beats,0.0,bpm)
+    var receipt_data: Dictionary = {
+        "action":str(planned["action"]),
+        "mode":str(planned["mode"]),
+        "start_world":float(admitted["start_world"]),
+        "source_opening":opening,"at_world":world,
+        "lead_seconds":Admission.lead_seconds(
+            float(admitted["start_world"]),world,bpm),
+        "first_ink_delay_seconds":entry_seconds,
+        "online_strips":queue.online.size(),
+    }
+    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+        print("SCORE_TRANSPORT_RECEIPT:",JSON.stringify(receipt_data))
+    admitted["admission_receipt"] = receipt_data
+    return admitted
+
+
 func reserve_ready(view, world: float, opening: float,
         right: float, header: float) -> int:
     if not view.native_ready or not view.retained_ready() or \

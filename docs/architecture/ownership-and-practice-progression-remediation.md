@@ -311,6 +311,12 @@
 - Main's `_input` and `_unhandled_key_input` now delegate to this session and only mark accepted events as handled. Source-picker pointer events remain available for normal GUI delivery. No other musical timing or backend action is independently decided in Main.
 - No test additions. Existing core CI and the production keyboard/physical MIDI acceptance matrix remain the verification gates.
 
+### Implementation checkpoint AN — move physical queue preflight and transport receipts to the ledger
+
+- `NativeScoreView.transport_preflight_facts` now supplies measured source/header/staff geometry to `ScoreStreamController.preflight_facts`. Only the stream controller may snapshot unseen-strip withdrawals, peer-floor clearance, paused-owner facts and the live queue.
+- Moved the full admission receipt computation (earliest printed ink, actual first-ink lead, source onset, online strip count and diagnostic publication) into `ScoreStreamController.receipt`. `NativeScoreView._transport_admission_receipt` is now a renderer-geometry delegation port and no longer reads the live queue.
+- Removed a remaining independent view-level admission computation; no new tests. CI and native admission checks are still required on this revision.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
