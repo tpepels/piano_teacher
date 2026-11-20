@@ -691,10 +691,7 @@ class PracticeEngine:
                 self.feedback = "Press Start to practice"
                 self.next_action = "Press Start to practice."
                 self.score_revision += 1
-                self.attempt.pending_result = None
-                self.attempt.pending_assessed_bpm = None
-                self.attempt.feedback_marks = []
-                self.attempt.feedback_unmapped = 0
+                self.attempt.reset_source_presentation()
                 if self._flow_active():
                     self._flow_open()
         if diagnostics:
@@ -1369,9 +1366,7 @@ class PracticeEngine:
         else:
             self.teaching_continuation.consume_committed_asset(
                 None,changed=False,auto=self.auto,selection=None)
-        self.attempt.pending_result = None
-        self.attempt.pending_assessed_bpm = None
-        self.attempt.settlement_failed = False
+        self.attempt.finish_settlement()
         return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
@@ -1481,7 +1476,7 @@ class PracticeEngine:
                 if self.attempt.pending_result is not None:
                     self.attempt_settlement.cancel(
                         reason="restart", now=self.now())
-                    self.attempt.pending_result = None
+                    self.attempt.clear_pending()
                     self.teaching_continuation.cancel()
                     self.visual_transport.next_at = 0.0
                     self.visual_transport.announced_continuation = None
@@ -2133,10 +2128,9 @@ class PracticeEngine:
             self.pause_context = None
             self._deferred_score_ack = None
             self.awaiting_score_revision = None
-            self.attempt.pending_result = None
+            self.attempt.clear_pending()
             self.attempt_settlement.cancel(reason="restart", now=sampled)
             self.teaching_continuation.cancel()
-            self.attempt.pending_assessed_bpm = None
             self.visual_transport.set_retry_previous_pass(False)
             self.attempt.guided_recovery_pending = False
             self.midi_ingress.resume_grading_after = 0.0
@@ -2389,8 +2383,7 @@ class PracticeEngine:
                 print("ASSESSMENT_SETTLEMENT_FAILED:",
                       type(exc).__name__, str(exc), flush=True)
                 return
-            self.attempt.feedback_marks=[]
-            self.attempt.feedback_unmapped=0
+            self.attempt.clear_feedback()
             assignment = self._remediation_pending
             self._remediation_pending = None
             selected = self.attempt_settlement.pending.decision
@@ -2513,7 +2506,8 @@ class PracticeEngine:
         # Capture marks at the performance tempo, not at the slower
         # BPM selected for the next retry. Re-scaling the recorded
         # timestamps early would move mistakes to incorrect notes.
-        self.attempt.feedback_marks=self._live_feedback((now-self.visual_transport.run_at))
+        self.attempt.publish_live_marks(
+            self._live_feedback((now-self.visual_transport.run_at)))
         self.live_assessment.publish(self.attempt.feedback_marks, self._feedback_take())
         pending = self.attempt_settlement.pending
         if self.attempt.pending_rolling is None or pending is None:

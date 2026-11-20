@@ -552,6 +552,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - A stale or mismatched graphical receipt cannot consume Listen or open a graded recorder. The engine performs only the subsequent authorized transport/evidence commit, preserving its existing one-time start and rollback path.
 - No new test, alternate cue clock or decoder. Existing native Listen/Free/Tempo and core source-ack tests are the acceptance gates.
 
+### Implementation checkpoint BQ — single AttemptRuntime pending/feedback transitions
+
+- Consolidated the remaining scattered pairs of `pending_result`/`pending_assessed_bpm` mutations into `AttemptRuntime.clear_pending` and `finish_settlement`. Successful settlement clears the failure marker in the same operation; explicit Retry/restart keeps its original cancellation semantics.
+- Source publication now uses `AttemptRuntime.reset_source_presentation`, feedback handoff uses `clear_feedback`, and rolling-grading snapshots are installed by `publish_live_marks`. `PracticeEngine` cannot accidentally clear only one half of an assessment result at these boundaries.
+- The durable `AttemptSettlement`, source-specific feedback and cross-attempt `RecoveryStreak` remain independent owners. No new tests. Core and native completion/recovery assertions remain the acceptance gates.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

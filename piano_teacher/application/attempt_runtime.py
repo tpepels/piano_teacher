@@ -42,6 +42,26 @@ class AttemptRuntime:
         self.pending_result = result
         self.pending_assessed_bpm = bpm
 
+    def clear_pending(self) -> None:
+        """Discard a cancelled decision without altering unrelated review."""
+        self.pending_result = None
+        self.pending_assessed_bpm = None
+
+    def finish_settlement(self) -> None:
+        self.clear_pending()
+        self.settlement_failed = False
+
+    def clear_feedback(self) -> None:
+        self.feedback_marks = []
+        self.feedback_unmapped = 0
+
+    def reset_source_presentation(self) -> None:
+        self.clear_pending()
+        self.clear_feedback()
+
+    def publish_live_marks(self, marks: list[dict]) -> None:
+        self.feedback_marks = marks
+
     def publish_completion(self, *, marks: list[dict], unmapped: int) -> None:
         self.feedback_marks = marks
         self.feedback_unmapped = unmapped
