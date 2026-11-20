@@ -432,11 +432,6 @@ func present_frame(_state: Dictionary, global_beat: float) -> void:
             "revision":_bundle["revision"]}) == OK
 
 
-func promote_if_ready(_state: Dictionary, _run_at_world: float = NAN) -> bool:
-    # No retrospective promotion from an already-running transport.
-    # ScoreAdmissionGateway promotes only a presented reservation.
-    return false
-
 
 func promote_reserved(state: Dictionary) -> bool:
     if not has_prepared_destination(state):

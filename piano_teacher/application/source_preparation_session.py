@@ -3,18 +3,23 @@
 This owner imports an exact MIDI source, starts independent fingering
 inference while compiling its learning curriculum, restores its saved
 progress under the caller's short state lock, and publishes only a fully
-prepared immutable result. It has no access to the PracticeEngine object
-and cannot replace the current playing piece or its score revision.
+prepared immutable result. The same owner serializes source replacement and
+fingering correction, validates their generation/original-note identity, and
+returns an exact correction install effect. It retains no engine or live plan.
 """
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, replace, asdict
 from pathlib import Path
 import hashlib
 import time
+from threading import Lock
 
 from ..learning import LearningPlan
+from ..music import Note, Piece
+from ..fingering.types import FingeringPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,7 +30,59 @@ class PreparedSource:
     score: object
 
 
+@dataclass(frozen=True, slots=True)
+class CorrectionIdentity:
+    generation: int
+    fingerprint: str
+    notes: tuple[Note, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedFingeringCorrection:
+    identity: CorrectionIdentity
+    fingering: FingeringPlan
+
+
+@dataclass(frozen=True, slots=True)
+class FingeringInstall:
+    piece: Piece
+    score_revision: int
+
+
+_SOURCE_CHANGED = "The loaded piece changed; refresh the score before correcting fingering"
+
+
 class SourcePreparationSession:
+    def __init__(self):
+        self._source_mutation = Lock()
+        self._generation = 0
+
+    @contextmanager
+    def source_mutation(self):
+        """Serialize full import/correction work outside the musical lock."""
+        with self._source_mutation:
+            yield
+
+    def source_installed(self) -> None:
+        """Called under source_mutation and the short application state lock."""
+        self._generation += 1
+
+    def capture_correction(self, *, piece: Piece | None, fingerprint: str,
+                           requested_fingerprint: str | None) -> CorrectionIdentity:
+        """Capture immutable request identity under the application state lock."""
+        if piece is None:
+            raise ValueError("Open a piece before correcting fingering")
+        if requested_fingerprint is not None and requested_fingerprint != fingerprint:
+            raise ValueError(_SOURCE_CHANGED)
+        return CorrectionIdentity(self._generation,fingerprint,piece.notes)
+
+    def _require_current(self, identity: CorrectionIdentity, *,
+                         piece: Piece | None, fingerprint: str) -> Piece:
+        if (identity.generation != self._generation or piece is None
+                or fingerprint != identity.fingerprint or piece.notes is not identity.notes):
+            raise ValueError(_SOURCE_CHANGED)
+        return piece
+
     @staticmethod
     def fingering_status(piece) -> dict:
         plan = piece.fingering_plan if piece is not None else None
@@ -34,22 +91,38 @@ class SourcePreparationSession:
                     for source_id,assignment in plan.assignments.items()}
                     if plan is not None else {}}
 
-    @staticmethod
-    def correct_fingering(*, piece, fingerprint: str,
+    def correct_fingering(self, identity: CorrectionIdentity, *,
+                          piece: Piece | None, fingerprint: str,
                           source_id: str, finger: int | None,
-                          fingering):
-        """Validate one original source note and return its corrected plan.
+                          fingering) -> PreparedFingeringCorrection:
+        """Validate one serialized source-bound edit before durable inference.
 
-        This worker cannot replace a loaded LearningPlan. Caller serializes
-        it against source loads and rechecks its generation before commit.
+        The caller supplies a state-locked Piece snapshot after entering
+        source_mutation. Navigation may replace the live plan during inference;
+        correction_install validates the current original source again.
         """
+        piece = self._require_current(identity,piece=piece,fingerprint=fingerprint)
         if not isinstance(source_id,str) or not source_id:
             raise ValueError("Choose an original source note")
         if finger is not None and (type(finger) is not int or
                                    not 1 <= finger <= 5):
             raise ValueError(
                 "Finger must be an integer from 1 to 5, or null to remove a correction")
-        return fingering.correct(piece,fingerprint,source_id,finger)
+        return PreparedFingeringCorrection(identity,
+            fingering.correct(piece,fingerprint,source_id,finger))
+
+    def correction_install(self, corrected: PreparedFingeringCorrection, *,
+                           piece: Piece | None, fingerprint: str,
+                           score_revision: int) -> FingeringInstall:
+        """Return the exact new Piece/revision under the state lock.
+
+        Rebase only fingering onto the current Piece, including after a lesson
+        reset. The original note tuple must be the same object throughout.
+        """
+        current = self._require_current(corrected.identity,piece=piece,
+                                        fingerprint=fingerprint)
+        return FingeringInstall(replace(current,fingering_plan=corrected.fingering),
+                                score_revision+1)
 
     def prepare(self, source: Path, *, warmup: bool, preprocessing, fingering,
                 progress, fukuda_mistakes, library, state_lock, importer,

@@ -247,8 +247,9 @@ func _process(_delta: float) -> bool:
                     str(item.get("kind","source")) == "source":
                 # Automatic successors can already be prepared during the
                 # first graded frame, but NEVER inside the visible viewport.
-                var leading: float = renderer._stream_header_beats(
-                    float(item["source_floor"]))
+                var physical: Dictionary = renderer.transport_preflight_facts(
+                    renderer.stream_world_beat,float(item["source_floor"]))
+                var leading: float = float(physical["header"])
                 var onset: float = float(item["world_origin"])+ \
                     float(item["source_floor"])
                 var left: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \

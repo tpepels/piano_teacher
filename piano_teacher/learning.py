@@ -262,7 +262,7 @@ class LearningPlan:
         """Read the generated course; never choose passages on navigation."""
         return self.lesson_definition.stages(exercise,hand)
 
-    def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
+    def stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         return tuple(stage.variant for stage in self.lesson_definition.stages(exercise,hand))
 
     def _stage_key(self, exercise: Exercise, hand: str, variant: ExerciseVariant) -> str:
@@ -277,7 +277,7 @@ class LearningPlan:
             for index, ex in enumerate(self.exercises):
                 hands = lesson_hands(ex)
                 for hand in hands:
-                    for variant in self._stage_variants(ex, hand):
+                    for variant in self.stage_variants(ex, hand):
                         steps.append(LessonStep(
                             index, hand, variant.level, self._stage_key(ex, hand, variant),
                             ex.phrase.first_bar, ex.phrase.last_bar,

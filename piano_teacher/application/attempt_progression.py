@@ -13,6 +13,10 @@ from typing import Any, Callable
 from ..lesson_timing import preparation_meter
 from .musical_scheduler import SCHEDULER, SETTLEMENT_SECONDS
 from .playback_transitions import CountInPlan
+from .playback_facts import (
+    FullPassageFacts, PassageRuntimeFacts, PassageFinishPlan, PreparationRequest,
+)
+from .passage_outcome_presenter import next_action as passage_next_action
 
 from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
 from ..music import Phrase
@@ -145,6 +149,58 @@ class AttemptProgression:
             next_action=("Watch the moving score; connect a piano for feedback."
                 if preview else
                 f"Play from bar {bar_number_at(grid,from_beat,phrase.first_bar)} at {bpm} BPM."))
+
+    @staticmethod
+    def plan_full_passage(facts: FullPassageFacts,
+                          runtime: PassageRuntimeFacts) -> PassageFinishPlan:
+        """Project a selected result into one metrical playback publication."""
+        pending,decision = facts.pending,facts.pending.decision
+        exposure = decision.next_exposure
+        same_timed = (exposure is not None and exposure.stage_key == facts.stage_key
+            and exposure.mode == "practice" and decision.remediation is None)
+        rewind = decision.invalidate_failed_streak and runtime.automatic
+        stop = facts.warmup and decision.invalidate_failed_streak
+        automatic = runtime.automatic and not stop
+        preparation = None
+        if rewind:
+            target = exposure.from_beat if exposure is not None else runtime.from_beat
+            preparation = PreparationRequest(facts.source_model,target,facts.now,
+                facts.visual_from,SCHEDULER.recovery_rewind(
+                    feedback_seconds=facts.feedback_seconds,
+                    passage_beats=facts.total_beats,bpm=facts.bpm),
+                facts.presentation_bpm,facts.horizon_beats,announce=same_timed,
+                short_deadline=SCHEDULER.measured_rest(
+                    facts.retry_rest,now=facts.now,bpm=facts.presentation_bpm))
+        if rewind and facts.presentation_required and automatic:
+            return PassageFinishPlan(preparation,stop,"advance",advance_early=True)
+        notice = passage_next_action(pending,target_bpm=facts.target_bpm,
+            start_beat=runtime.from_beat,assessed_bpm=facts.assessed_bpm)
+        if facts.assets_ready:
+            return PassageFinishPlan(preparation,stop,"ready",next_action=notice)
+        if not automatic:
+            return PassageFinishPlan(preparation,stop,"stop",next_action=notice)
+        if runtime.retry_previous_pass or rewind:
+            return PassageFinishPlan(preparation,stop,"hold",next_action=notice)
+        deadline = SCHEDULER.repeat(run_at=runtime.run_at,
+            source_seconds=facts.duration,gap_beats=runtime.gap_beats,bpm=facts.bpm)
+        if same_timed:
+            short = SCHEDULER.measured_rest(
+                facts.repeat_rest,now=facts.now,bpm=facts.presentation_bpm)
+            deadline = short if short is not None else SCHEDULER.missing_horizon(
+                deadline=deadline,rest_beats=runtime.gap_beats,
+                reading_horizon_beats=facts.horizon_beats,bpm=facts.presentation_bpm)
+        elif facts.short_rest_enabled:
+            deadline = facts.now
+        return PassageFinishPlan(preparation,stop,"announce" if same_timed else "wait",
+            deadline=deadline,next_action=notice,
+            advance_early=facts.presentation_required and automatic)
+
+    @staticmethod
+    def preloaded_feedback_due(source, *, now: float, run_at: float,
+                               from_beat: float) -> bool:
+        finish = (run_at+SCHEDULER.source_seconds(source.tempo,source.duration_beats,source.bpm)
+            - SCHEDULER.source_seconds(source.tempo,from_beat,source.bpm)+SETTLEMENT_SECONDS)
+        return now >= finish-1e-7
 
     def inspect(self, tick: AttemptTick,
                 recover: Callable[[float, tuple[float, ...]], Any],

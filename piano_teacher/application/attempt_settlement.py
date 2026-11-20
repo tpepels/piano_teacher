@@ -8,13 +8,14 @@ from dataclasses import dataclass, replace, asdict
 from ..teaching_decisions import validate_teaching_decision
 from .mistake_responses import mistake_policy_facts
 from .assessment_settlement import AssessedTake, assess_completed_take
-from ..completion_route import completion_route
+from ..completion_route import completion_route, completion_effect, CompletionEffect
 from typing import Callable, Sequence
 from ..music import Phrase
 from ..practice import Assessment, PlayedNote
 from ..exercise_contracts import TempoMap
 from .practice_assessment import PracticeAssessmentPolicies
 from .score_artifacts import ScoreSelection
+from .rolling_recovery import project_rolling_response
 
 
 @dataclass(slots=True)
@@ -22,11 +23,14 @@ class PendingTeachingDecision:
     event: object
     state: object
     decision: object
-    assessment: object
     checkpoint_progress: object = None
     phase: str = "decided"
     receipt: object = None
     publication: object = None
+
+    @property
+    def assessment(self):
+        return self.event.assessment
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +66,31 @@ class CompletedTake:
     pending: object
     response: object
     settled: bool
+    effect: CompletionEffect
+
+
+@dataclass(frozen=True, slots=True)
+class PendingFullCompletion:
+    pending: PendingTeachingDecision
+    total_beats: float
+    duration: float
+
+    @property
+    def result(self):
+        return self.pending.assessment
+
+
+@dataclass(frozen=True, slots=True)
+class RollingTake:
+    decision: object
+    phrase: Phrase
+    grid: tuple
+    score_beat: float
+    sampled_at: float
+    pending: PendingTeachingDecision
+    transition: object
+    outgoing_bpm: float
+    scored_end: float
 
 
 
@@ -73,6 +102,8 @@ class AttemptSettlement:
         self.learner_progress = learner_progress
         self.pending = None
         self._completion = None
+        self._full_completion: PendingFullCompletion | None = None
+        self._rolling = None
         self.authority_revision = 0
         self.course_revision = 0
         self.cancellation_generation = 0
@@ -84,7 +115,7 @@ class AttemptSettlement:
             return self.pending
         decision = generator.decide_teaching(event, state)
         validate_teaching_decision(decision, event=event, state=state)
-        pending = PendingTeachingDecision(event, state, decision, event.assessment)
+        pending = PendingTeachingDecision(event, state, decision)
         self.pending = pending
         return pending
 
@@ -103,6 +134,78 @@ class AttemptSettlement:
     def finish_publication(self) -> None:
         if self.pending is not None:
             self.pending.phase = "published"
+
+    @property
+    def pending_full_completion(self) -> PendingFullCompletion | None:
+        return self._full_completion
+
+    @property
+    def feedback_pending(self) -> bool:
+        return self.pending_result is not None or self._full_completion is not None
+
+    def begin_full_completion(self, result, *, total_beats: float,
+                              duration: float) -> PendingFullCompletion:
+        pending = self.pending
+        if pending is None or pending.assessment is not result:
+            raise ValueError("Completed passage has no selected assessment")
+        if self._full_completion is None:
+            self._full_completion = PendingFullCompletion(pending,total_beats,duration)
+        elif self._full_completion.pending is not pending:
+            raise ValueError("Another selected passage owns completion publication")
+        return self._full_completion
+
+    def finish_full_completion(self, completed: PendingFullCompletion) -> None:
+        # A successfully started successor cancels the old epoch itself.
+        if self._full_completion is not None and self._full_completion is not completed:
+            raise ValueError("Cannot finish another passage's publication")
+        self._full_completion = None
+
+    def command_applied(self) -> None:
+        """Invalidate bindings after one accepted manual progress mutation."""
+        self.authority_revision += 1
+
+    @property
+    def pending_rolling(self):
+        r = self._rolling
+        return (r.decision,r.phrase,r.grid,r.score_beat,r.sampled_at) if r else None
+
+    def finish_rolling_publication(self) -> None:
+        self._rolling = None
+
+    def complete_rolling(self, *, decision, phrase, grid, score_beat,
+                         now, bpm, scored_end, hand, played, from_beat,
+                         tempo, policies, prepare_decision, plan, binding,
+                         policy) -> RollingTake:
+        """Retain original source/tempo facts through rolling storage retries."""
+        if self._rolling is None:
+            assessed = policies.select(tempo).grade(
+                phrase,hand=hand,bpm=bpm,played=played,from_beat=from_beat,
+                end_beat=decision.end_beat,tempo=tempo)
+            pending = prepare_decision("rolling_result",assessed,
+                rolling=decision,end_beat=decision.end_beat)
+            response = pending.decision.response
+            chosen = replace(pending.state.course,
+                definition=pending.decision.definition_after,
+                progress=pending.decision.progress_after)
+            transition = (None if response.action == "continue" else
+                project_rolling_response(response,decision,grid=grid,
+                    first_bar=phrase.first_bar,
+                    before_bpm=pending.state.route.performed_bpm,now=now,
+                    same_stage=chosen.key == pending.state.binding.stage_key,
+                    source_duration=phrase.end-phrase.start))
+            self._rolling = RollingTake(decision,phrase,grid,score_beat,now,
+                pending,transition,bpm,scored_end)
+        completed = self._rolling
+        if completed.transition is None:
+            # No interruption and no durable assessment; keep recording the
+            # same exposure, rather than leaving a selected stale decision.
+            self.pending = None
+            self._rolling = None
+            return completed
+        self.seal_rolling_recovery(completed.pending,played=played,
+            result=completed.pending.assessment,end_beat=completed.decision.end_beat,
+            plan=plan,binding=binding,now=now,policy=policy)
+        return completed
 
     def commit_full_passage(self, *, plan, binding, now: float,
                             continuation, policy, score_revision: int,
@@ -182,7 +285,8 @@ class AttemptSettlement:
                 pending = prepare_decision("focused_result",result,end_beat=end_beat)
                 response = pending.decision.response
             self._completion = CompletedTake(
-                assessed,route,summary,pending,response,False)
+                assessed,route,summary,pending,response,False,
+                completion_effect(route,pending.decision))
         completed = self._completion
         assessed,route,summary,pending,response = (
             completed.assessed,completed.route,completed.summary,
@@ -356,16 +460,6 @@ class AttemptSettlement:
             result=result,extra={"assessed_end_beat":end_beat})
         self.settle(pending,plan=plan,binding=binding,now=now,policy=policy)
 
-    def seal_missing_full_passage(self, pending, *, played) -> None:
-        """Preserve an already-selected verdict if capture was not sealed."""
-        if self.capture.attempt_id is None or self.capture.sealed is not None:
-            return
-        self.capture.seal(
-            played,state="completed",reason="full_passage",
-            result=pending.assessment,
-            eligible=pending.decision.mastery_eligible,
-            verdict=pending.decision.verdict)
-
     def seal_guided_preparation(self, pending, *, guidance: dict,
                                 plan, binding, now, policy) -> None:
         """Atomically finish a completed guided attempt and its decision.
@@ -407,4 +501,6 @@ class AttemptSettlement:
             return
         self.pending = None
         self._completion = None
+        self._full_completion = None
+        self._rolling = None
         self.cancellation_generation += 1

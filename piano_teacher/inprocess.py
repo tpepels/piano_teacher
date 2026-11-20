@@ -40,7 +40,7 @@ class EngineCommands:
 
     def require_presentation(self) -> None:
         """Desktop-only transport contract, selected at native bridge startup."""
-        self.engine.playback.enable_presentation(self.engine._playback_facts())
+        self.engine.require_presentation()
 
     def tick(self) -> int:
         """The same native worker advances all musical deadlines."""
@@ -82,35 +82,18 @@ class EngineCommands:
             if operation == "playback.status":
                 if values:
                     raise ValueError("playback.status takes no input")
-                with engine.lock:
-                    return self._reply(OK, engine.playback.status())
+                return self._reply(OK, engine.playback_status())
             if operation == "playback.reserve":
-                with engine.lock:
-                    return self._reply(OK, engine.playback.reserve(engine._playback_facts(), **values))
+                return self._reply(OK, engine.reserve_playback(**values))
             if operation == "playback.present":
-                with engine.lock:
-                    return self._reply(OK, engine.playback.present(
-                        engine._playback_facts(),commit=engine._commit_playback_intent,
-                        capture=engine._playback_facts,abort=engine._abort_playback,
-                        **values))
+                return self._reply(OK, engine.present_playback(**values))
             if operation == "playback.withdraw":
-                with engine.lock:
-                    return self._reply(OK, engine.playback.withdraw(engine._playback_facts(), **values))
+                return self._reply(OK, engine.withdraw_playback(**values))
             if operation == "playback.failure":
-                with engine.lock:
-                    engine.playback.fail(notify_failure=engine._on_playback_failure,
-                        **values)
-                    return self._reply(OK, {"accepted": True})
+                return self._reply(OK, engine.report_playback_failure(**values))
             if operation == "score.stage_ready":
                 return self._reply(OK, engine.acknowledge_preloaded_stage(
-                    stage_key=values["stage_key"], revision=values["revision"],
-                    presentation_lead_beats=float(
-                        values.get("presentation_lead_beats",0.0)),
-                    presentation_clear_beats=(
-                        float(values["presentation_clear_beats"])
-                        if values.get("presentation_clear_beats") is not None else None),
-                    continuation_clear_beats=values.get("continuation_clear_beats"),
-                    continuation_header_beats=values.get("continuation_header_beats")))
+                    stage_key=values["stage_key"], revision=values["revision"]))
             if operation == "score.stage_failed":
                 return self._reply(OK, engine.report_preload_failure(
                     fingerprint=values["fingerprint"],

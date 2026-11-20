@@ -106,7 +106,7 @@ def test_unplug_during_clean_feedback_discards_pending_mastery(connected):
     engine.plan.bpm = engine.plan.target_bpm
     engine.plan.streak = 2
     engine.start()
-    engine.running = False
+    engine.playback_session.finish_take()
     result = Assessment(tuple(NoteAssessment(n, "correct")
                               for n in engine.plan.active_phrase.notes), 0)
     engine._prepare_teaching("full_result", result)

@@ -14,10 +14,18 @@ from .notation.practice_timeline import (
 )
 from .application.musical_scheduler import SCHEDULER, PassagePlan
 from .application.transport_commands import resume_timeline, resume_timing
+from .application.playback_facts import RestResumeFacts
 
 
 @dataclass
 class VisualTransport:
+    def install_timed_origin(self, *, from_beat: float, run_at: float,
+                             gap_beats: float) -> None:
+        """Install the already selected onset shared by score and grading."""
+        self.play_from_beat = from_beat
+        self.run_at = run_at
+        self.visual_gap_beats = gap_beats
+
     _pause_floor: float | None = None
     run_at: float = 0.0
     play_from_beat: float = 0.0
@@ -45,6 +53,50 @@ class VisualTransport:
     # Identity of the announcement (part of score_queue_next.plan_id). A new
     # announcement is new ink; a re-timed one keeps its admitted ink.
     announce_serial: int = 0
+    _tempo_key: tuple | None = None
+    _tempo_epoch: float | None = None
+
+    @property
+    def tempo_epoch(self) -> float | None:
+        return self._tempo_epoch
+
+    def tempo_epoch_for(self, *, stage: str, bpm: float) -> float | None:
+        return self._tempo_epoch if self._tempo_key == (stage,float(bpm)) else None
+
+    def note_tempo(self, *, stage: str, bpm: float, now: float) -> None:
+        self._tempo_key,self._tempo_epoch = SCHEDULER.tempo_epoch(
+            stage=stage,bpm=bpm,now=now,
+            prior_key=self._tempo_key,prior_epoch=self._tempo_epoch)
+
+    def reannounce_after_rest_pause(self, facts: RestResumeFacts) -> None:
+        announced = self.announced_continuation
+        if (facts.running or facts.bpm is None or facts.mode != "practice"
+                or announced is None or self.announced_deadline(announced[0]) is None):
+            return
+        if (facts.reading_lead_seconds <= 0 and not facts.physical_rest_enabled
+                and facts.horizon_beats <= 0):
+            return
+        short = (SCHEDULER.measured_rest(facts.rest,
+            now=facts.now,bpm=facts.presentation_bpm)
+            if facts.physical_rest_enabled and not facts.reuse else None)
+        reuse = facts.reuse and facts.reading_lead_seconds > 0
+        deadline = SCHEDULER.fresh_resume(now=facts.now,old_deadline=announced[1],
+            reading_lead_seconds=max(0.0,float(facts.reading_lead_seconds)),
+            horizon_beats=facts.horizon_beats,bpm=facts.bpm,
+            short_rest_at=short,reuse=reuse)
+        if reuse:
+            self.retime_announcement(deadline)
+        else:
+            self.announce_continuation(announced[0],deadline,announced[2])
+
+    def refloor_announcement(self, *, now: float, bpm: float,
+                             count_in_beats: float, latency: float) -> None:
+        if self.announced_continuation is None:
+            return
+        floor = SCHEDULER.resolve("post_settlement_snapshot",now=now,bpm=bpm,
+            count_in_beats=count_in_beats,latency=latency).run_at
+        if self.announced_continuation[1] < floor:
+            self.retime_announcement(floor)
 
     @property
     def preview_loop_pending(self) -> bool:
@@ -119,6 +171,14 @@ class VisualTransport:
     def withdraw_announcement(self) -> None:
         """Retire only the advertised successor, retaining a waiting rest."""
         self.announced_continuation = None
+
+    def wait_for_continuation(self, deadline: float) -> None:
+        """Retain a selected unannounced boundary without creating new ink."""
+        self.next_at = float(deadline)
+
+    def advance_source_stride(self, stride: float) -> None:
+        """Retain prior exposed source on the forward world axis."""
+        self.visual_offset_beats += stride
 
     def clear_pause_for_restart(self) -> None:
         """An explicit Restart abandons the paused epoch without resuming it.

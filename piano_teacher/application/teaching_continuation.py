@@ -32,6 +32,110 @@ class ContinuationEffect:
     count_in: float | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class FeedbackWaiting:
+    message: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class FeedbackFault:
+    feedback: str
+    next_action: str
+    pause: bool = False
+    stop_automatic: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class FeedbackTransaction:
+    pending: object
+    decision_id: str
+    deadline: float
+    source_revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class ContinuationIdentity:
+    decision_id: str
+    fingerprint: str
+    stage_key: str
+    revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class HandoffScore:
+    identity: ContinuationIdentity
+    exposure: object
+    earliest_deadline: float
+    count_in_beats: float
+    bpm: float
+
+
+@dataclass(frozen=True, slots=True)
+class EnterSelectedExposure:
+    identity: ContinuationIdentity
+    exposure: object
+
+
+@dataclass(frozen=True, slots=True)
+class ApplySelectedResponse:
+    identity: ContinuationIdentity
+    response: object
+    exposure: object
+    deadline: float
+
+
+@dataclass(frozen=True, slots=True)
+class EnterSelectedRemediation:
+    identity: ContinuationIdentity
+    assignment: object
+    exposure: object
+    deadline: float
+
+
+@dataclass(frozen=True, slots=True)
+class AwaitSelectedScore:
+    identity: ContinuationIdentity
+
+
+@dataclass(frozen=True, slots=True)
+class ContinueSelectedScore:
+    identity: ContinuationIdentity
+    exposure: object
+    deadline: float
+    bpm: float
+
+
+@dataclass(frozen=True, slots=True)
+class StopSelectedContinuation:
+    identity: ContinuationIdentity
+    message: str
+
+
+SettledEffect = (HandoffScore | EnterSelectedExposure | ApplySelectedResponse |
+    EnterSelectedRemediation | AwaitSelectedScore | ContinueSelectedScore |
+    StopSelectedContinuation)
+
+
+@dataclass(frozen=True, slots=True)
+class SettledSourceFacts:
+    fingerprint: str
+    stage_key: str
+    revision: int
+    now: float
+    bpm: float
+    presentation_bpm: float
+    count_in_beats: float
+    automatic: bool
+    flow_active: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SettledPublication:
+    effect: SettledEffect
+    flow_outcome: object | None
+    message: str
+
+
 class UnpreparedNextStage(RuntimeError):
     """A prepared source changed before atomic settlement completed."""
 
@@ -46,6 +150,49 @@ class TeachingContinuation:
         self.reservation = None
         self.schedule = None
         self.generation = 0
+        self._readiness_poll_at = 0.0
+        self._feedback_transaction: FeedbackTransaction | None = None
+        self._settled_publication: SettledPublication | None = None
+
+    def begin_feedback(self, pending, *, now: float, automatic: bool,
+                       force_early: bool, revision: int, fingerprint: str
+                       ) -> FeedbackWaiting | FeedbackFault | FeedbackTransaction:
+        if (not automatic or not self.transport.next_at or pending is None
+                or not (force_early or now >= self.transport.next_at)):
+            return FeedbackWaiting()
+        if self._feedback_transaction is not None:
+            if self._feedback_transaction.pending is pending:
+                return self._feedback_transaction
+            raise ValueError("Another selected decision owns feedback publication")
+        effect = self.advance(pending,now=now,
+            readiness=self.readiness(revision=revision,fingerprint=fingerprint))
+        if effect.action == "fault":
+            return FeedbackFault("Cannot prepare the next lesson score",
+                f"{effect.message}. Select another step or reopen the piece.",pause=True)
+        if effect.action == "await":
+            return FeedbackWaiting(effect.message)
+        self._feedback_transaction = FeedbackTransaction(pending,
+            pending.decision.decision_id,self.transport.next_at,revision)
+        return self._feedback_transaction
+
+    @staticmethod
+    def settlement_failure(error: Exception) -> FeedbackFault:
+        if isinstance(error,UnpreparedNextStage):
+            return FeedbackFault("The next lesson score changed during grading",
+                f"{error}. Select another step or reopen the piece.",pause=True)
+        return FeedbackFault("Could not save the assessment",
+            "Check storage or lesson generation, then Retry the attempt.",stop_automatic=True)
+
+    def readiness(self, *, revision: int, fingerprint: str) -> ContinuationReadiness:
+        return ContinuationReadiness(self.acknowledged,revision,fingerprint,self.native_failure)
+
+    def decision_assets_ready(self, pending, *, revision: int, fingerprint: str) -> bool:
+        planned = self.selection(pending,revision=revision,fingerprint=fingerprint)
+        if planned is None:
+            return False
+        selection,_ = planned
+        return (self.acknowledged == (selection.stage_key,selection.revision)
+                and self.future_score.ready(selection))
 
     def choose_ahead(self, plan, *, fingerprint: str, revision: int,
                      offset: int = 1, decided=None):
@@ -101,6 +248,7 @@ class TeachingContinuation:
         if not self.future_score.ready(selection):
             raise ValueError("Next lesson notation is not yet prepared")
         self.acknowledged = (stage_key,revision)
+        self._readiness_poll_at = 0.0
         return {"accepted":True,"step_number":number,
                 "revision":revision,"stage_key":stage_key}
 
@@ -181,6 +329,8 @@ class TeachingContinuation:
             raise ValueError("Announced teaching schedule no longer matches the selected exposure")
 
     def advance(self, pending, *, now, readiness):
+        if now < self._readiness_poll_at:
+            return ContinuationEffect("await")
         selected = self.selection(pending,revision=readiness.revision,fingerprint=readiness.fingerprint)
         if selected is None:
             return ContinuationEffect("settle")
@@ -196,11 +346,12 @@ class TeachingContinuation:
             if accepted and self.future_score.ready(selection):
                 failure = failure or "Prepared stage assets were lost"
             if failure is not None:
-                self.transport.pause(at=now)
-                self.transport.next_at = 0.
                 return ContinuationEffect("fault",failure)
-            self.transport.next_at = now+.10
+            # Retry only the asset lookup. Readiness cannot retime the
+            # announced musical deadline or schedule the next take.
+            self._readiness_poll_at = now+.10
             return ContinuationEffect("await","Preparing the next lesson while scrolling")
+        self._readiness_poll_at = 0.0
         self.reservation = (selection.identity,prebuilt)
         return ContinuationEffect("settle")
 
@@ -219,17 +370,59 @@ class TeachingContinuation:
             return ContinuationEffect("remediation")
         return ContinuationEffect("await_score" if score_changed else "continue")
 
-    def apply_settled_effect(self, decision, *, score_changed: bool,
-                            stage_key: str, revision: int) -> ContinuationEffect:
-        """Consume exact preloaded-stage identity once when grading commits."""
-        prepared = (self.prepared_published and
-                    self.acknowledged == (stage_key,revision))
-        effect = self.after_settlement(
-            decision,score_changed=score_changed,prepared=prepared)
+    def finish_feedback(self, transaction: FeedbackTransaction,
+                        facts: SettledSourceFacts) -> SettledPublication:
+        """Publish one exact source effect after its durable selected decision."""
+        if self._feedback_transaction is not transaction:
+            raise ValueError("Feedback transaction is no longer current")
+        identity = ContinuationIdentity(transaction.decision_id,facts.fingerprint,
+            facts.stage_key,facts.revision)
+        committed = transaction.pending.publication
+        if committed is None:
+            raise ValueError("Feedback continuation was not durably committed")
+        selected = committed.selection
+        binding = transaction.pending.state.binding
+        expected = (binding.fingerprint,
+            selected.stage_key if selected is not None else binding.stage_key,
+            selected.revision if selected is not None else committed.source_revision)
+        if (facts.fingerprint,facts.stage_key,facts.revision) != expected:
+            raise ValueError("Feedback publication no longer matches its committed source")
+        if self._settled_publication is not None:
+            if self._settled_publication.effect.identity != identity:
+                raise ValueError("The committed continuation source changed during publication")
+            return self._settled_publication
+        decision = transaction.pending.decision
+        prepared = self.prepared_published and self.acknowledged == (
+            facts.stage_key,facts.revision)
+        chosen = self.after_settlement(decision,
+            score_changed=facts.revision != transaction.source_revision,prepared=prepared)
         self.prepared_published = False
-        if effect.action == "handoff":
+        if chosen.action == "handoff":
             self.acknowledged = None
-        return effect
+        route = chosen.action
+        if route == "guided":
+            route = ("remediation" if decision.remediation is not None else
+                "response" if decision.response is not None and decision.response.guided else
+                "exposure")
+        exposure = decision.next_exposure
+        if route == "handoff":
+            effect = HandoffScore(identity,exposure,transaction.deadline,
+                facts.count_in_beats,facts.bpm)
+        elif route == "exposure":
+            effect = EnterSelectedExposure(identity,exposure)
+        elif route == "response" and decision.response is not None and exposure is not None and facts.automatic:
+            effect = ApplySelectedResponse(identity,decision.response,exposure,transaction.deadline)
+        elif route == "remediation":
+            effect = EnterSelectedRemediation(identity,decision.remediation,exposure,transaction.deadline)
+        elif route == "await_score":
+            effect = AwaitSelectedScore(identity)
+        elif route == "continue":
+            effect = ContinueSelectedScore(identity,exposure,transaction.deadline,facts.presentation_bpm)
+        else:
+            effect = StopSelectedContinuation(identity,decision.message)
+        self._settled_publication = SettledPublication(effect,
+            decision.flow_outcome if facts.flow_active else None,decision.message)
+        return self._settled_publication
 
     def capture_state(self):
         return (self.acknowledged,self.reservation,self.schedule,self.generation)
@@ -289,5 +482,13 @@ class TeachingContinuation:
             raise UnpreparedNextStage("The next lesson score changed during settlement")
 
     def cancel(self, *, generation=None):
+        self._feedback_transaction = None
+        self._settled_publication = None
         self.reservation = self.schedule = None
+        self._readiness_poll_at = 0.0
         self.generation = self.generation+1 if generation is None else generation
+
+    def stop(self) -> None:
+        self.cancel()
+        self.prepared_published = False
+        self.native_failure = None

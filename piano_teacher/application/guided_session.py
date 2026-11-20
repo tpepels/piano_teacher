@@ -81,24 +81,40 @@ class GuidedSession:
         self.fragment = None
         self._stage_key = ""
 
-    def bind(self, fragment: GuidedFragment, *, stage_key: str, revision: int,
-             now: float, connected: bool, recovery: bool = False) -> None:
+    @property
+    def beat_range(self) -> tuple[float, float] | None:
+        return self.fragment.beat_range if self.fragment is not None else None
+
+    def select(self, fragment: GuidedFragment, *, stage_key: str,
+               recovery: bool = False) -> None:
+        """Select the sole source interval before opening its capture epoch."""
         self.fragment = fragment
         self._stage_key = stage_key
         self.prepared = False
-        self.return_context = (stage_key, fragment.start_beat) if recovery else None
+        self.return_context = (stage_key,fragment.start_beat) if recovery else None
+
+    def bind(self, fragment: GuidedFragment, *, stage_key: str, revision: int,
+             now: float, connected: bool, recovery: bool = False) -> None:
+        self.select(fragment,stage_key=stage_key,recovery=recovery)
+        self.bind_selected(revision=revision,now=now,connected=connected)
+
+    def bind_selected(self, *, revision: int, now: float, connected: bool) -> None:
+        fragment = self.fragment
+        if fragment is None:
+            raise ValueError("Select a guided source interval before binding teaching")
         if self.controller is None:
             self.controller = TeachingController(TeachingConfig(persistent_hints=self.persistent_hints))
-        self.controller.bind(stage_key=stage_key, revision=revision,
+        self.controller.bind(stage_key=self._stage_key, revision=revision,
             variant=fragment.variant, fragment_start=fragment.start_beat,
             fragment_end=fragment.end_beat, now=now, connected=connected)
 
     def display_phrase(self, phrase: Phrase, boundaries: tuple[float, ...],
-                       guided_range: tuple[float,float] | None) -> Phrase:
+                       *, active: bool) -> Phrase:
         """Reuse the exact authored Free fragment or safely slice source notes."""
-        if guided_range is None:
+        selected = self.beat_range if active else None
+        if selected is None:
             return phrase
-        start,end = guided_range
+        start,end = selected
         current = self.fragment
         if (current is not None and current.beat_range == (start,end)
                 and current.phrase.number == phrase.number

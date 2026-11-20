@@ -6,7 +6,7 @@ the selected stage, tracks the Listen/Free/Tempo display phase, and formats
 status. It cannot change a LearningPlan or authorize a timed take.
 """
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ..application import practice_flow
 
@@ -14,9 +14,14 @@ from ..application import practice_flow
 @dataclass(frozen=True, slots=True)
 class FlowStepEffect:
     step: practice_flow.Step
-    bpm: int
     feedback: str = ""
     next_action: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class FlowTempoEntry:
+    active: bool
+    clear_guided_return: bool = False
 
 
 class PracticeFlowCourseSession:
@@ -24,6 +29,7 @@ class PracticeFlowCourseSession:
         self._clock = clock
         self._state: practice_flow.FlowState | None = None
         self._message: tuple[int, str, float] = (0, "", 0.0)
+        self._settled_decision_id: str | None = None
 
     @property
     def state(self) -> practice_flow.FlowState | None:
@@ -32,6 +38,42 @@ class PracticeFlowCourseSession:
     @property
     def message(self) -> tuple[int, str, float]:
         return self._message
+
+    @staticmethod
+    def active(plan, *, warmup: bool) -> bool:
+        return (plan is not None and not warmup
+                and plan.lesson_definition.generator_name == "practice-flow")
+
+    def stage_entry(self, plan, *, resumed: bool = False) -> practice_flow.Transition:
+        return self.enter(stage_key=plan.identity,
+            final=plan.exercise.kind == "perform",target_bpm=int(plan.target_bpm),
+            resumed=resumed,hand_text={"right":"Right hand","left":"Left hand"}.get(
+                plan.hand,"Both hands"))
+
+    def opening(self, plan) -> practice_flow.Transition:
+        """A fresh course starts in Listen; a saved window warms up in Free."""
+        return self.stage_entry(plan,
+            resumed=plan.lesson_steps[0].key != plan.identity)
+
+    def guided_entry(self, plan, *, warmup: bool, recovery: bool,
+                     simplified: bool) -> practice_flow.Transition | None:
+        """A new source window/hand enters its course step before Free binds."""
+        if (self.active(plan,warmup=warmup) and not recovery and not simplified
+                and (self._state is None or self._state.stage_key != plan.identity)):
+            return self.stage_entry(plan)
+        return None
+
+    def tempo_entry(self, plan, *, warmup: bool, bpm: int) -> FlowTempoEntry:
+        active = self.active(plan,warmup=warmup)
+        if (active and self._state is not None and self._state.stage_key == plan.identity
+                and self._state.step is practice_flow.Step.FREE):
+            progress = plan.teaching_progress()
+            state = replace(self._state,step=practice_flow.Step.TEMPO,bpm=int(bpm),
+                failures=progress.failures,clean_at_target=progress.streak)
+            self.apply(practice_flow.Transition(
+                state,f"Now in tempo · {state.tempo_percent}%"))
+            return FlowTempoEntry(True,True)
+        return FlowTempoEntry(active)
 
     def say(self, message: str) -> None:
         if not message:
@@ -46,13 +88,13 @@ class PracticeFlowCourseSession:
         state = self.apply(transition)
         if state.step is practice_flow.Step.LISTEN:
             return FlowStepEffect(
-                state.step,state.bpm,"Listen",
+                state.step,"Listen",
                 "Listen to the passage and follow the notes.")
         if state.step is practice_flow.Step.FREE:
             return FlowStepEffect(
-                state.step,state.bpm,"Now without tempo",
+                state.step,"Now without tempo",
                 "Play the notes in order, at your own pace.")
-        return FlowStepEffect(state.step,state.bpm)
+        return FlowStepEffect(state.step)
 
     def apply(self, transition: practice_flow.Transition) -> practice_flow.FlowState:
         self._state = transition.state
@@ -75,29 +117,29 @@ class PracticeFlowCourseSession:
             raise ValueError("No selected Practice Flow course")
         return practice_flow.listen_again(self._state)
 
-    def free_completed(self) -> practice_flow.FlowState:
-        if self._state is None:
-            raise ValueError("No selected Practice Flow course")
-        return self.apply(practice_flow.free_completed(self._state))
-
     def settle_decided(self, outcome: practice_flow.Outcome, *,
-                       plan, message: str) -> practice_flow.FlowState:
+                       plan, message: str, decision_id: str | None = None
+                       ) -> practice_flow.FlowState:
         """Only the course session may resolve the continuing stage label.
 
         A completed stage retains its previous identity until a new
         Listen/Free/Tempo entry is actually selected; a current-stage result
         follows the already-committed LearningPlan progression.
         """
+        if decision_id is not None and decision_id == self._settled_decision_id:
+            return self._state
         progress = plan.teaching_progress()
         done = outcome in (practice_flow.Outcome.STAGE_DONE,
                            practice_flow.Outcome.PIECE_DONE)
         stage_key = (self._state.stage_key
                      if done and self._state is not None else plan.identity)
-        return self.settle(
+        state = self.settle(
             outcome,stage_key=stage_key,
             final=plan.exercise.kind == "perform",
             bpm=int(plan.bpm),target_bpm=int(plan.target_bpm),
             failures=progress.failures,clean=progress.streak,message=message)
+        self._settled_decision_id = decision_id
+        return state
 
     def settle(self, outcome: practice_flow.Outcome, *, stage_key: str,
                final: bool, bpm: int, target_bpm: int, failures: int,

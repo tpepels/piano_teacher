@@ -8,7 +8,7 @@ material is an explicitly announced aid, never a hidden course stage.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .exercise_generator import generate_variants
 from .exercise_pipeline import ExerciseStage
@@ -53,6 +53,34 @@ def original_stage(exercise: Exercise, hand: str) -> ExerciseStage:
     return ExerciseStage(variants[-1])
 
 
+def _at_tempo(decision, bpm: int, *, reset: bool = False):
+    """Commit one selected tempo to progress and its exact next exposure."""
+    progress = decision.progress_after
+    if reset or progress.bpm != bpm:
+        progress = replace(progress,bpm=bpm,streak=0,failures=0)
+    exposure = decision.next_exposure
+    return replace(decision,progress_after=progress,
+        next_exposure=replace(exposure,bpm=bpm) if exposure is not None else None)
+
+
+def _entry_tempo(event, state, decision):
+    exposure = decision.next_exposure
+    if exposure is None:
+        return decision
+    if exposure.mode in ("listen","learn"):
+        return _at_tempo(decision,int(decision.progress_after.target_bpm))
+    exercise = decision.definition_after.exercises[decision.progress_after.cursor[0]]
+    final_entry = (exercise.kind == "perform"
+        and (exposure.stage_key != state.course.key
+             or event.action in ("practice","perform","course_stage","open_at")))
+    if (event.kind == "manual" and exposure.mode == "practice"
+            and (state.route.mode in ("learn","listen") or final_entry)):
+        from .application.practice_flow import floor_bpm
+        return _at_tempo(decision,floor_bpm(int(decision.progress_after.target_bpm)),
+                         reset=True)
+    return decision
+
+
 @dataclass(frozen=True)
 class PracticeFlowLessonGenerator:
     """Real notes only, in the owner's phrase / hand / link order."""
@@ -61,17 +89,19 @@ class PracticeFlowLessonGenerator:
     flow_rules: bool = True
 
     def decide_teaching(self, event, state):
-        from dataclasses import replace
         from .teaching_decisions import TeachingExposure, decide_standard_teaching
         decision = decide_standard_teaching(event, state, generator=self,
                                             allow_heuristic_remediation=False)
         course = state.course
         if event.kind == "guided_completed" and event.completed:
             # 2b -> 2c: every note found in order, Tempo starts by itself.
+            from .application.practice_flow import floor_bpm
+            bpm = floor_bpm(int(decision.progress_after.target_bpm))
             exposure = TeachingExposure(
-                course.key, course.hand, 0.0, None, decision.progress_after.bpm,
+                course.key, course.hand, 0.0, None, bpm,
                 "practice", False, True, False, "count_in")
-            return replace(decision, next_exposure=exposure, continuation="continue")
+            return _at_tempo(replace(decision,next_exposure=exposure,
+                                     continuation="continue"),bpm,reset=True)
         exposure = decision.next_exposure
         if exposure is not None and exposure.mode == "perform":
             # 4: the final test follows the same Tempo rules (50% -> target,
@@ -85,18 +115,21 @@ class PracticeFlowLessonGenerator:
                                mode="learn", assisted=True, automatic=True,
                                require_full_verification=True,
                                preparation="count_in")
-            return replace(decision, next_exposure=exposure, continuation="guided")
+            return _entry_tempo(event,state,
+                replace(decision,next_exposure=exposure,continuation="guided"))
         if (exposure is not None and exposure.mode != "learn"
                 and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
-                and ":flow:final:" not in exposure.stage_key):
+                and decision.definition_after.exercises[
+                    decision.progress_after.cursor[0]].kind != "perform"):
             # A new hand or window starts at Listen -> Free, never
             # directly in tempo. The engine plays Listen before Free.
             exposure = replace(exposure, from_beat=0.0, end_beat=None,
                                mode="learn", assisted=True, automatic=True,
                                require_full_verification=True,
                                preparation="count_in")
-            return replace(decision, next_exposure=exposure, continuation="guided")
-        return decision
+            return _entry_tempo(event,state,
+                replace(decision,next_exposure=exposure,continuation="guided"))
+        return _entry_tempo(event,state,decision)
 
     def generate(self, piece: Piece):
         from .lesson_generators import LessonPlanDefinition

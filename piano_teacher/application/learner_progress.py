@@ -180,7 +180,7 @@ class LearnerProgress:
             if step is None or (stage_key is not None and stage_key != key):
                 continue
             if key not in canonical:
-                variant = next((variant for variant in plan._stage_variants(
+                variant = next((variant for variant in plan.stage_variants(
                     plan.exercises[step.exercise_index], step.hand) if variant.level == step.level), None)
                 canonical[key] = guided_units(variant, plan.piece.bar_boundaries) if variant else ()
             unit = next((unit for unit in canonical[key]

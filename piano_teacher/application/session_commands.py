@@ -4,6 +4,7 @@ The engine supplies facts under its lock; this owner never receives the engine
 or a callback bag. Infrastructure acknowledgements do not create decisions.
 """
 from dataclasses import dataclass
+from contextlib import contextmanager
 from ..teaching_decisions import validate_teaching_decision
 
 
@@ -19,6 +20,16 @@ class SessionCommands:
         self.active = None
         self.applied = None
         self.prepared = None
+
+    @contextmanager
+    def executing(self, effect):
+        """Scope the original chosen effect while applying an authorization."""
+        previous = self.active
+        self.active = effect
+        try:
+            yield
+        finally:
+            self.active = previous
 
     def prepare(self, *, event, state, generator):
         decision = generator.decide_teaching(event, state)

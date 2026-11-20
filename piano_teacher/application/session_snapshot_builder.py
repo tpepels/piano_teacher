@@ -1,8 +1,8 @@
 """Construct a backend state snapshot under the caller's existing session lock.
 
-The builder owns presentation data assembly and preserves the monotonic
-sampling order, while PracticeEngine retains MIDI, lesson, grading, and
-musical transition authority. The returned dataclass is projected separately.
+The builder assembles presentation data from the domain owners and preserves
+the monotonic sampling order. The returned dataclass is projected separately;
+source lookup cannot mutate musical scheduling state.
 """
 from __future__ import annotations
 
@@ -73,10 +73,7 @@ class SnapshotValues:
 
 @dataclass(frozen=True)
 class SnapshotReadPorts:
-    """Named operations, sampled under the engine lock.
-
-    The sole write port synchronizes the preparation gap after source lookup.
-    """
+    """Named read operations, sampled under the engine lock."""
     seek_grid: Callable[..., Any]
     learner_snapshot: Callable[..., Any]
     elapsed_beat: Callable[..., Any]
@@ -91,7 +88,6 @@ class SnapshotReadPorts:
     live_input_snapshot: Callable[..., Any]
     preparation_schedule: Callable[..., Any]
     teaching_snapshot: Callable[..., Any] | None
-    set_visual_gap_beats: Callable[[float], None]
     clock: Callable[[], float]
 
 
@@ -152,7 +148,6 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
             transport_id=state.transport_id, activity=activity)
     practice_timeline = reads.source_model()["practice_timeline"]
     gap_beats = practice_timeline["gap"]["duration_beats"]
-    reads.set_visual_gap_beats(gap_beats)
     ex, variant = p.exercise, p.active_variant
     # Only the current exercise's hand rows are used by the HUD.
     # Capturing/freezing the full sequence of thousands of lesson stages

@@ -16,7 +16,6 @@ class AttemptRuntime:
     recorder: Recorder | None = None
     feedback_marks: list[dict] = field(default_factory=list)
     feedback_unmapped: int = 0
-    pending_rolling: tuple | None = None
     settlement_failed: bool = False
     performance_summary: dict | None = None
     review_stage_identity: str | None = None
@@ -65,12 +64,32 @@ class AttemptRuntime:
         self.performance_summary = summary
         self.review_stage_identity = stage_key
 
+    def finish_section_review(self) -> None:
+        self.review_end_beat = None
+        self.review_session_complete = True
+        self.retry_range = None
+
+    def prepare_full_retry(self) -> None:
+        self.review_end_beat = None
+        self.automatic_remedial_review = False
+        self.retry_range = None
+
+    def apply_recovery(self, transition) -> None:
+        self.guided_recovery_pending = transition.guided
+        self.recovery_notice = transition.display.notice
+        self.retry_range = transition.display.retry_range
+
+    def prepare_recovery(self, prepared) -> None:
+        self.review_end_beat = prepared.end
+        self.retry_range = dict(prepared.retry_range) if prepared.retry_range is not None else None
+        if prepared.automatic_review is not None:
+            self.automatic_remedial_review = prepared.automatic_review
+
     def reset_for_stop(self) -> None:
         """Reset every attempt/review/recovery field in one stable owner."""
         self.recorder = None
         self.feedback_marks = []
         self.feedback_unmapped = 0
-        self.pending_rolling = None
         self.settlement_failed = False
         self.performance_summary = None
         self.review_stage_identity = None
