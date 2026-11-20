@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from math import isfinite
 from .teaching_course import (PlanProgress, CourseState, assessed_progress, manual_progress,
     refresh_course, revisit_course, minimum_bpm, steps, preserve_mastered)
-from .lesson_generators import LessonPlanDefinition
+from .lesson_contracts import LessonPlanDefinition
 from .practice import Assessment
 from .music import Piece
 from .diagnosis_policies import (LearnerSnapshot, AssessmentEvidence,

@@ -8,15 +8,12 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
-import math
+from .learning_statistics_facts import number, Residual, compatibility, performed_context
+from .learning_statistics_metrics import extend_report
 
 
 def _object(encoded):
     return json.loads(encoded) if encoded else {}
-
-
-def _number(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _day(value):
@@ -27,79 +24,6 @@ def _day(value):
         return parsed.astimezone(timezone.utc).date().isoformat() if parsed.tzinfo else None
     except (ValueError, TypeError):
         return None
-
-
-class _Residual:
-    def __init__(self):
-        self.samples = []
-        self.count = 0
-        self.total = self.absolute = self.mean = self.m2 = 0.0
-        self.minimum = self.maximum = None
-
-    def add(self, value):
-        if not _number(value):
-            return
-        self.count += 1
-        self.samples.append(value)
-        delta = value - self.mean
-        self.mean += delta / self.count
-        self.m2 += delta * (value - self.mean)
-        self.total += value
-        self.absolute += abs(value)
-        self.minimum = value if self.minimum is None else min(self.minimum, value)
-        self.maximum = value if self.maximum is None else max(self.maximum, value)
-
-    def result(self):
-        samples = sorted(self.samples)
-        def quantile(p):
-            if not samples:
-                return None
-            index = (len(samples)-1)*p
-            lo, hi = math.floor(index), math.ceil(index)
-            return samples[lo] + (samples[hi]-samples[lo])*(index-lo)
-        return {"sample_count": self.count,
-                "quantiles_seconds": {key: quantile(p) for key, p in (("p05", .05), ("p25", .25), ("p50", .5), ("p75", .75), ("p95", .95))},
-                "mean_seconds": self.mean if self.count else None,
-                "mean_absolute_seconds": self.absolute / self.count if self.count else None,
-                "population_std_seconds": math.sqrt(max(0.0, self.m2 / self.count)) if self.count else None,
-                "minimum_seconds": self.minimum, "maximum_seconds": self.maximum}
-
-
-def _performed_context(context, terminal):
-    result = dict(context)
-    if isinstance(terminal.get("assistance_used"), bool):
-        result["assistance"] = terminal["assistance_used"]
-    assessed_end, planned_end = terminal.get("assessed_end_beat"), context.get("end_beat")
-    if _number(assessed_end) and _number(planned_end) and assessed_end < planned_end:
-        result["end_beat"] = assessed_end
-        if result.get("scope") == "full":
-            result["scope"] = "partial"
-    return result
-
-
-def _compatibility(before, after):
-    """Recheck context rather than trusting an outcome's comparability flags."""
-    if before is None or after is None:
-        return "unknown"
-    left = _performed_context(before["context"], before["terminal"])
-    right = _performed_context(after["context"], after["terminal"])
-    dimensions = []
-    for fields in (("fingerprint", "stage_key", "hand"), ("performed_bpm",),
-                   ("scope", "from_beat", "end_beat"), ("rule_id",)):
-        dimensions.append(None if any(left.get(k) is None or right.get(k) is None for k in fields)
-                          else all(left[k] == right[k] for k in fields))
-    for field in ("tempo_map_hash", "calibration_ms", "midi_available"):
-        if field in left or field in right:
-            dimensions.append(None if left.get(field) is None or right.get(field) is None
-                              else left[field] == right[field])
-    support = []
-    for attempt in (before, after):
-        value = attempt["terminal"].get("assistance_used", attempt["context"].get("assistance"))
-        support.append(value if isinstance(value, bool) else None)
-    dimensions.append(None if any(value is None for value in support) else support[0] == support[1])
-    if False in dimensions:
-        return "incompatible"
-    return "compatible" if all(value is True for value in dimensions) else "unknown"
 
 
 def learning_statistics(ledger, fingerprint: str | None = None, *, query=None, snapshot=None) -> dict:
@@ -129,7 +53,7 @@ def learning_statistics(ledger, fingerprint: str | None = None, *, query=None, s
     assessments = dict(assessed=0, accepted=0, rejected=0, acceptance_unknown=0,
         strict_clean=0, clean_unknown=0, mastery_eligible=0, accepted_mastery_eligible=0,
         accepted_with_warnings=0, extra_notes=0, expected_notes=0)
-    residuals = {name: _Residual() for name in ("onset", "release", "duration")}
+    residuals = {name: Residual() for name in ("onset", "release", "duration")}
     elapsed, known_duration, detail_attempts, observation_count = 0.0, 0, 0, 0
     pruned = legacy = unknown_suffix = incomplete_context = 0
     bpm_levels = Counter()
@@ -149,7 +73,7 @@ def learning_statistics(ledger, fingerprint: str | None = None, *, query=None, s
             unknown_attempt_dates += 1
         else:
             daily_attempts[day] += 1
-        performed = _performed_context(context, terminal)
+        performed = performed_context(context, terminal)
         group = (row["fingerprint"], row["stage_key"], context.get("hand"),
                  performed.get("scope"), context.get("performed_bpm"),
                  terminal.get("assistance_used", context.get("assistance")), row["rule_id"],
@@ -159,10 +83,10 @@ def learning_statistics(ledger, fingerprint: str | None = None, *, query=None, s
         else:
             incomplete_context += 1
         bpm = context.get("performed_bpm", row["assessed_bpm"])
-        if _number(bpm) and bpm > 0:
+        if number(bpm) and bpm > 0:
             bpm_levels[bpm] += 1
         start, end = context.get("monotonic_start"), terminal.get("monotonic_end")
-        if _number(start) and _number(end) and end >= start:
+        if number(start) and number(end) and end >= start:
             elapsed += end - start
             known_duration += 1
         if row["assessment_json"] is not None:
@@ -201,7 +125,7 @@ def learning_statistics(ledger, fingerprint: str | None = None, *, query=None, s
     def tempo_change(data):
         before = data.get("before_bpm", (data.get("before") or {}).get("bpm"))
         after = data.get("after_bpm", (data.get("after") or {}).get("bpm"))
-        if _number(before) and _number(after) and before != after:
+        if number(before) and number(after) and before != after:
             tempo_changes["recorded_changes"] += 1
             tempo_changes["increases" if after > before else "reductions"] += 1
     for row in snapshot["decisions"]:
@@ -223,7 +147,7 @@ def learning_statistics(ledger, fingerprint: str | None = None, *, query=None, s
             outcome_counts["censored_outcomes"] += 1
             continue
         after = attempts.get(row["attempt_id"])
-        category = _compatibility(attempts.get(decisions[row["decision_id"]]), after)
+        category = compatibility(attempts.get(decisions[row["decision_id"]]), after)
         outcome_counts[category + "_outcomes"] += 1
         if category == "compatible" and after["state"] == "completed" and after["passed"] is not None:
             outcome_counts["compatible_assessed_outcomes"] += 1
@@ -282,5 +206,4 @@ def learning_statistics(ledger, fingerprint: str | None = None, *, query=None, s
                                 "Active-session intervals may not yet be flushed. No retention study or causal teaching effect is estimated."]},
     }
 
-    from .learning_statistics_metrics import extend_report
     return extend_report(report, snapshot)

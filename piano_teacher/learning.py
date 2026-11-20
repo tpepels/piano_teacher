@@ -16,10 +16,11 @@ from .lesson_settings import SETTINGS
 from . import teaching_course as course_policy
 from .tempo_difficulty import suggested_start_bpm
 from .repeated_passages import exact_repetition_signature
+from .lesson_contracts import LessonGenerator, LessonPlanDefinition, lesson_hands
+from .lesson_source_planner import Exercise
 from .lesson_generators import (
-    Exercise, LessonGenerator, LessonPlanDefinition, build_lesson_generator,
+    build_lesson_generator,
     lesson_generator_registration,
-    lesson_hands,
 )
 
 @dataclass(frozen=True)

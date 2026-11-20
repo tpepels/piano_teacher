@@ -14,6 +14,7 @@ from .exercise_generator import generate_variants
 from .exercise_pipeline import ExerciseStage
 from .lesson_settings import SETTINGS
 from .lesson_source_planner import Exercise
+from .lesson_contracts import LessonPlanDefinition
 from .music import Phrase, Piece
 from .practice_windows import moving_windows, MAX_PRACTICE_BARS
 
@@ -84,22 +85,23 @@ def _entry_tempo(event, state, decision):
 @dataclass(frozen=True)
 class PracticeFlowLessonGenerator:
     """Real notes only, in the owner's phrase / hand / link order."""
+    components: tuple
     name: str = "practice-flow"
     # Tempo/timing rules of docs/practice-flow.md (teaching_decisions).
     flow_rules: bool = True
 
-    @staticmethod
-    def _simplified_aid(course, result):
+    def _simplified_aid(self, course, result):
         """Ask existing MIDI contributors for this exact source window/hand."""
-        from .lesson_generators import FukudaMidiLessonGenerator, CodaLessonGenerator
         from .lesson_stage_semantics import teaching_sequence
         from .remediation import RemedialAssignment
         original = course.stage.variant
         evidence = {entry.note.source_id:entry.status for entry in result.notes
                     if entry.status != "correct"}
-        failed = frozenset(evidence)
         candidates = []
-        for contributor in (FukudaMidiLessonGenerator(mistakes=failed),CodaLessonGenerator()):
+        for contributor in self.components:
+            feedback = getattr(contributor,"with_feedback",None)
+            if callable(feedback):
+                contributor = feedback(evidence,course.definition)
             candidates.extend(contributor.passage_stages(
                 course.piece,original,kind="learn")[:-1])
         chosen = teaching_sequence((*candidates,course.stage),evidence=evidence)
@@ -188,7 +190,6 @@ class PracticeFlowLessonGenerator:
         return decision
 
     def generate(self, piece: Piece):
-        from .lesson_generators import LessonPlanDefinition
         exercises = course_exercises(piece)
         stages = {(ex.key, hand): (original_stage(ex, hand),)
                   for ex in exercises for hand in ex.hands}

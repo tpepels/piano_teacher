@@ -5,7 +5,7 @@ from hashlib import sha256
 from datetime import datetime
 import json
 
-from .learning_statistics import _number, _Residual, _compatibility, _performed_context
+from .learning_statistics_facts import number, Residual, compatibility, performed_context
 
 
 def obj(value):
@@ -18,7 +18,7 @@ CONTEXT = ("fingerprint", "stage_key", "hand", "performed_bpm", "scope", "from_b
 
 def context(row):
     c = obj(row["summary_json"])
-    c = _performed_context(c, c.get("terminal") or {})
+    c = performed_context(c, c.get("terminal") or {})
     return {k: c.get(k, row.get(k)) for k in CONTEXT}
 
 
@@ -45,7 +45,7 @@ def phase_intervals(snapshot):
             missing += 1
             continue
         for interval in intervals:
-            if not (isinstance(interval, dict) and _number(interval.get("start")) and _number(interval.get("end"))
+            if not (isinstance(interval, dict) and number(interval.get("start")) and number(interval.get("end"))
                     and 0 <= interval["start"] <= interval["end"] and isinstance(interval.get("phase"), str)):
                 missing += 1
                 continue
@@ -107,7 +107,7 @@ def extend_report(report, snapshot):
                            "reason": a["reason"], "accepted": None if a["passed"] is None else bool(a["passed"])})
         start, end = summary.get("monotonic_start"), terminal.get("monotonic_end")
         ranges = {}
-        if (_number(start) and _number(end) and 0 <= start <= end
+        if (number(start) and number(end) and 0 <= start <= end
                 and summary.get("run_id", session_runs.get(a["session_id"])) == session_runs.get(a["session_id"])):
             for phase, (pairs, starts, ends) in phase_index.get(a["session_id"], {}).items():
                 lo, hi = bisect_right(ends, start), bisect_left(starts, end)
@@ -150,12 +150,12 @@ def extend_report(report, snapshot):
         known = 0
         for o in observations:
             local_spb = o.get("local_seconds_per_beat")
-            local = {**c, "local_seconds_per_beat": local_spb if _number(local_spb) and local_spb > 0 else None,
-                     "local_bpm": 60/local_spb if _number(local_spb) and local_spb > 0 else None}
+            local = {**c, "local_seconds_per_beat": local_spb if number(local_spb) and local_spb > 0 else None,
+                     "local_bpm": 60/local_spb if number(local_spb) and local_spb > 0 else None}
             local_key = key(local)
             if local_key in residual_contexts or len(residual_contexts) < 250:
                 residual = residual_contexts.setdefault(local_key, {"context": local,
-                    **{name: _Residual() for name in ("onset", "release", "duration")}, "observations": 0})
+                    **{name: Residual() for name in ("onset", "release", "duration")}, "observations": 0})
                 residual["observations"] += 1
                 for name in ("onset", "release", "duration"):
                     residual[name].add(o.get(name+"_residual"))
@@ -375,7 +375,7 @@ def policy_comparison(snapshot, by_id, active):
             after = by_id.get(outcome["attempt_id"])
             def adapter(a):
                 return None if a is None else {"context": obj(a["summary_json"]), "terminal": obj(a["summary_json"]).get("terminal") or {}}
-            compatible = _compatibility(adapter(before), adapter(after))
+            compatible = compatibility(adapter(before), adapter(after))
             if compatible == "compatible" and any(
                     context(a).get(field) is None for a in (before, after)
                     for field in ("tempo_map_hash", "calibration_ms", "midi_available")):

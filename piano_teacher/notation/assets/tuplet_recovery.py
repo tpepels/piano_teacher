@@ -98,7 +98,7 @@ def _isolated_score(ids: tuple[str, ...], source: dict[str, ET.Element],
 
 
 def recover_missing_tuplets(notation_xml: str, model: dict,
-                            missing: tuple[tuple[str, ...], ...]) -> dict:
+                            missing: tuple[tuple[str, ...], ...], *, extract) -> dict:
     """Return only proved, Verovio-engraved fragments for missing groups."""
     if not notation_xml or not missing:
         return {}
@@ -106,7 +106,6 @@ def recover_missing_tuplets(notation_xml: str, model: dict,
     # a second Verovio toolkit.
     import verovio
     from .runtime import _create_verovio_toolkit
-    from .tuplets import extract_tuplets
 
     source, divisions = _source_notes(notation_xml)
     if not divisions:
@@ -143,7 +142,7 @@ def recover_missing_tuplets(notation_xml: str, model: dict,
             if not toolkit.loadData(isolated):
                 continue
             pages = [toolkit.renderToSVG(1)]
-            found = extract_tuplets(pages, subset)
+            found = extract(pages, subset)
         except (ValueError, TypeError, RuntimeError, ET.ParseError):
             continue
         key = "|".join(ids)

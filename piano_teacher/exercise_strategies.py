@@ -12,10 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Owner practice flow (docs/practice-flow.md), the default since 2026-11-18.
-DEFAULT_STRATEGY = "practice-flow"
-CODA_FUKUDA_STRATEGY = "coda-fukuda-midi"
-WARMUP_STRATEGY = "source-progression"
+from .lesson_contracts import DEFAULT_STRATEGY, CODA_FUKUDA_STRATEGY, WARMUP_STRATEGY
 
 # The entries the settings picker offers.
 APP_STRATEGIES = (

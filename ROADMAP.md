@@ -154,6 +154,9 @@ system-SF2 skip); remaining work is A4–A6 and obsolete internal ports.
 A4 now removes transition execution and guided-deadline scheduling from reads.
 Full local CI passes (107 Python, one optional skip; native/parser pass).
 The remaining implementation is A5/A6 and obsolete internal ports.
+A5 now removes the deferred runtime cycles and private source-index coupling;
+all 107 Python checks pass, and the one-off runtime import scan is acyclic.
+Remaining implementation: A6/private requests and obsolete native ports.
 
 Implementation audited at `640a77f5`. The prior Phase 5 completion assessment
 was too broad and is reopened. The [active audit](docs/architecture.md#remaining-work--source-audit-2026-11-20)

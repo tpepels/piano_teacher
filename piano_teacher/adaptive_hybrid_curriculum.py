@@ -7,7 +7,6 @@ renderer, MIDI grader or persistence system is introduced.
 """
 from __future__ import annotations
 
-from bisect import bisect_left, bisect_right
 from collections import Counter
 from dataclasses import replace
 import os
@@ -20,42 +19,18 @@ from .fukuda_midi import as_fukuda_stage
 from .lesson_settings import SETTINGS
 from .lesson_source_planner import Exercise, _focus_phrases, _hands_for_learning
 from .music import Phrase, Piece
+from .source_attack_index import SourceAttackIndex
+from .lesson_contracts import LessonPlanDefinition, lesson_hands
 
 
-class _SourceAttackIndex:
-    """One source-order-preserving index for repeated passage range queries.
-
-    The long Hanon score previously re-scanned every source note for each
-    passage, seam and consolidation candidate. Sorting once by attack
-    position bounds each query to the notes actually inside that passage.
-    Returned tuples retain the original source note order and identities.
-    """
-
-    def __init__(self, piece: Piece):
-        self._notes = piece.notes
-        onsets = sorted((note.start, index)
-                        for index, note in enumerate(piece.notes))
-        self._starts = tuple(start for start, _ in onsets)
-        self._indices = tuple(index for _, index in onsets)
-
-    def notes_in(self, start: float, end: float) -> tuple:
-        low = bisect_left(self._starts, start)
-        high = bisect_left(self._starts, end)
-        return tuple(self._notes[i] for i in sorted(self._indices[low:high]))
-
-    def crossing(self, start: float, end: float) -> bool:
-        return any(note.end > end + 1e-7
-                   for note in self.notes_in(start, end - 1e-7))
-
-
-def _segments(piece: Piece, *, source: _SourceAttackIndex | None = None) -> tuple[Phrase, ...]:
+def _segments(piece: Piece, *, source: SourceAttackIndex | None = None) -> tuple[Phrase, ...]:
     """Focus in two-bar units; join sections if a note sustains over the cut.
 
     The segmentation respects original measure boundaries and never crops or
     invents a MIDI attack/release. Entirely silent introductory bars are left
     for the last full-score performance.
     """
-    source = source if source is not None else _SourceAttackIndex(piece)
+    source = source if source is not None else SourceAttackIndex(piece)
     base = _focus_phrases(piece)
     if not base:
         raise ValueError("Hybrid curriculum needs at least one playable passage")
@@ -95,7 +70,7 @@ def _segments(piece: Piece, *, source: _SourceAttackIndex | None = None) -> tupl
 
 
 def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
-    source = _SourceAttackIndex(piece)
+    source = SourceAttackIndex(piece)
     passages = _segments(piece, source=source)
     out = []
     for i, phrase in enumerate(passages):
@@ -164,7 +139,7 @@ class PassageContributor(Protocol):
 
 
 def compile_hybrid_catalog(
-    piece: Piece, *, components: tuple[PassageContributor, ...] | None = None,
+    piece: Piece, *, components: tuple[PassageContributor, ...],
     name: str = "coda-fukuda-midi",
 ):
     """Compile independent contributor stages once, then select via feedback.
@@ -173,11 +148,6 @@ def compile_hybrid_catalog(
     algorithm requires a passage_stages method and source-safe terminal
     original notes; the catalog compiler contains no author-name branches.
     """
-    from .lesson_generators import LessonPlanDefinition, lesson_hands
-    if components is None:
-        from .lesson_generators import (
-            CodaLessonGenerator, FukudaMidiLessonGenerator)
-        components = (FukudaMidiLessonGenerator(), CodaLessonGenerator())
     if not components or len({component.name for component in components}) != len(components):
         raise ValueError("Adaptive composition requires unique passage contributors")
     if (piece.source_format != "midi" or piece.source_musicxml
@@ -302,7 +272,6 @@ def select_hybrid_stages(catalog, evidence: Mapping[str, str]):
     Exact original MIDI attacks remain the final stage for every hand,
     every passage, and the complete final performance.
     """
-    from .lesson_generators import LessonPlanDefinition, lesson_hands
     stages = {}
     for ex in catalog.exercises:
         for hand in lesson_hands(ex):

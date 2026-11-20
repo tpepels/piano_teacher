@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .adaptive_hybrid_curriculum import _SourceAttackIndex
+from .source_attack_index import SourceAttackIndex
 from .music import Piece, Phrase
 
 MAX_PRACTICE_BARS = 4
@@ -57,7 +57,7 @@ def moving_windows(piece: Piece, *, maximum_bars: int = MAX_PRACTICE_BARS
     grid = piece.bar_boundaries
     if len(grid) < 2:
         raise ValueError("Imported score has no authored bar boundaries")
-    source = _SourceAttackIndex(piece)
+    source = SourceAttackIndex(piece)
     windows: list[PracticeWindow] = []
     for last in range(1, len(grid)):
         for width in range(1, min(maximum_bars, last) + 1):

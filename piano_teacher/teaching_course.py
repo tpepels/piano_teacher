@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 import hashlib
 import json
 import math
-from .lesson_generators import LessonPlanDefinition, lesson_hands
+from .lesson_contracts import LessonPlanDefinition, lesson_hands
 from .lesson_settings import SETTINGS
 from .music import Piece
 from .tempo_difficulty import suggested_start_bpm

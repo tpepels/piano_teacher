@@ -458,7 +458,8 @@ def tuplet_fragments(svgs,model,cache=None,identity="",
     if missing and notation_xml:
         try:
             from .tuplet_recovery import recover_missing_tuplets
-            recovered = recover_missing_tuplets(notation_xml,model,missing)
+            recovered = recover_missing_tuplets(
+                notation_xml,model,missing,extract=extract_tuplets)
             results.update(recovered)
             if recovered and os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
                 print("VEROVIO_TUPLET_RECOVERED:", len(recovered),

@@ -333,6 +333,17 @@ Implementation ledger (main, starting at `82bf06bb`):
   explicitly tick the worker instead of relying on obsolete poll advancement.
   Full CI script passes: 107 Python tests, one optional system-SF2 skip,
   parser and four native groups (`architecture-a4-ci-final.log`).
+- A4 commit: `1507b427`.
+- A5 implemented: immutable lesson contracts and the shared source-attack
+  index sit below curriculum policies. Composers receive explicit contributors;
+  Practice Flow uses their feedback contracts without importing the registry.
+  Statistics share pure evidence/numerical operations, and tuplet recovery
+  receives the authentic extractor as an explicit operation. No algorithms
+  or supported strategies were removed. All 107 Python checks pass (one
+  optional system-SF2 skip; `architecture-a5-ci.log`). The one-off runtime
+  import scan, including deferred imports and excluding TYPE_CHECKING-only
+  edges, reports zero cycles (`architecture-a5-imports.log`). This diagnostic
+  is not a new architecture CI test.
 
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic
