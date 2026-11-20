@@ -1478,8 +1478,7 @@ class PracticeEngine:
                         reason="restart", now=self.now())
                     self.attempt.clear_pending()
                     self.teaching_continuation.cancel()
-                    self.visual_transport.next_at = 0.0
-                    self.visual_transport.announced_continuation = None
+                    self.visual_transport.cancel_continuation()
                 # The prior ink is immutable and continues scrolling; the
                 # new recorder starts only at this authorized deadline.
                 transition = intent.transition
@@ -1562,8 +1561,7 @@ class PracticeEngine:
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Continue only through the unified score-admission gate."""
         if self.playback.presentation_required:
-            self.visual_transport.next_at = 0.0
-            self.visual_transport.announced_continuation = None
+            self.visual_transport.cancel_continuation()
             self.visual_transport.finish_preparation_gate()
             self.visual_transport.pending_rewind = None
             self._request_playback( action="auto", mode=self.mode,
@@ -1699,7 +1697,7 @@ class PracticeEngine:
             else:
                 self.visual_transport.announce_continuation(target,self.visual_transport.next_at,self._presentation_bpm)
         else:
-            self.visual_transport.announced_continuation = None
+            self.visual_transport.withdraw_announcement()
         self.running = False
         self.attempt.recorder = None
         self.count_in_beats = 0.0
@@ -2078,8 +2076,7 @@ class PracticeEngine:
         if self.attempt.pending_rolling is not None:
             decision, phrase, grid, score_beat, _old_now = self.attempt.pending_rolling
             self._apply_rolling_recovery(decision, phrase, grid, score_beat, self.now())
-            self.visual_transport.paused = False
-            self.visual_transport.paused_at = 0.0
+            self.visual_transport.clear_pause_for_restart()
             return
         p = self.plan
         if p is None:
@@ -2123,8 +2120,7 @@ class PracticeEngine:
                     rest_seconds=SCHEDULER.beats_seconds(
                         rest_beats,self.plan.bpm))
             self.attempt_settlement.interrupt_current(reason="restart",played=self.attempt.recorder.presses if self.attempt.recorder else ())
-            self.visual_transport.paused = False
-            self.visual_transport.paused_at = 0.0
+            self.visual_transport.clear_pause_for_restart()
             self.pause_context = None
             self._deferred_score_ack = None
             self.awaiting_score_revision = None
@@ -2430,8 +2426,7 @@ class PracticeEngine:
                 self.awaiting_score_revision = self.score_revision
                 self.auto = False
                 self.feedback = "Preparing next passage"
-                self.visual_transport.next_at = 0
-                self.visual_transport.announced_continuation = None
+                self.visual_transport.cancel_continuation()
             elif route == "continue":
                 # Failed attempts reuse the existing source; clean attempts
                 # append another passage with the exact authored rest gap.
@@ -2445,8 +2440,7 @@ class PracticeEngine:
                     now=self.now(),bpm=self._presentation_bpm),
                                   from_beat=target)
             else:
-                self.visual_transport.next_at = 0
-                self.visual_transport.announced_continuation = None
+                self.visual_transport.cancel_continuation()
                 self.auto = False
                 self.feedback = message or self.feedback
         return
@@ -2579,7 +2573,7 @@ class PracticeEngine:
         self.attempt.guided_recovery_pending = transition.guided
         if transition.guided:
             # The next step is note-by-note learning, not a timed take.
-            self.visual_transport.announced_continuation = None
+            self.visual_transport.withdraw_announcement()
         self.attempt.recovery_notice = transition.display.notice
         self.attempt.retry_range = transition.display.retry_range
         self.feedback = transition.display.feedback
@@ -2780,7 +2774,7 @@ class PracticeEngine:
                         reading_horizon_beats=self._continuous_horizon_beats,
                         bpm=self._presentation_bpm))
             else:
-                self.visual_transport.announced_continuation = None
+                self.visual_transport.withdraw_announcement()
                 self.visual_transport.next_at = now if self._short_rest is not None else deadline
             if (self.playback.presentation_required and self.auto
                     and not self.visual_transport.retry_previous_pass

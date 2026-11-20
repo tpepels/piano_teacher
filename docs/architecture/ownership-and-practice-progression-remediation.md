@@ -576,6 +576,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Preview display and retry deadline still belong to the one VisualTransport/MusicalScheduler; notation owns only duration and silent measure geometry. This prevents the new source-metrical read and the existing transport reverse preparation from selecting different meters at the same source opening.
 - No new tests or timing fallback. The existing mixed-meter, source-boundary and native Retry checks remain the acceptance gate.
 
+### Implementation checkpoint BU — transport-owned cancellation and restart epochs
+
+- Replaced the four recurring `next_at=0; announced_continuation=None` engine mutation pairs with the semantic `VisualTransport.cancel_continuation` transaction. The three locations that must preserve their existing rest/deadline while only withdrawing an advertised successor use `VisualTransport.withdraw_announcement`.
+- Replaced two manual `paused=False; paused_at=0` pairs with `clear_pause_for_restart`. This is intentionally distinct from normal `resume()`, which must shift the authoritative run epoch; an explicit Restart instead abandons the paused clock without retiming old graded evidence.
+- No deadline recomputation, second clock, or new tests. The remaining clock/assessment coordination inside PracticeEngine is not yet a thin facade; current core/native tests remain the integration gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -109,6 +109,23 @@ class VisualTransport:
             self.announced_continuation,deadline=deadline)
         self.next_at = float(deadline)
 
+    def cancel_continuation(self) -> None:
+        """Cancel an uncommitted next-take deadline and its announcement."""
+        self.next_at = 0.0
+        self.announced_continuation = None
+
+    def withdraw_announcement(self) -> None:
+        """Retire only the advertised successor, retaining a waiting rest."""
+        self.announced_continuation = None
+
+    def clear_pause_for_restart(self) -> None:
+        """An explicit Restart abandons the paused epoch without resuming it.
+
+        Normal Resume must instead call resume() to shift the source clock.
+        """
+        self.paused = False
+        self.paused_at = 0.0
+
     def announced_deadline(self, source_from_beat: float) -> float | None:
         """The announced graded deadline of this source opening, if any."""
         announced = self.announced_continuation
