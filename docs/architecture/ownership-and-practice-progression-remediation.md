@@ -432,6 +432,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Removed the two independent Engine implementations of upcoming full-bar count-in duration and meter. `AttemptProgression.next_count_in` now returns one pair `(beats,meter)` from the selected original authored starting bar, reusing the already-active bar on Pause/Resume and preserving the existing scheduler/compound-meter calculation.
 - Backend snapshots and PlaybackSourceFacts use the same AttemptProgression bar-count authority; the engine's public getters are bounded projections without a second policy. No new tests or independent clock.
 
+### Implementation checkpoint BH — one completion grading/settlement boundary
+
+- `assessment_settlement.complete_grading_and_settlement` now owns the complete graded-take transition: one source-mapped assessment, one full/focused/performance route, one performance summary, one typed teaching-decision preparation, and one `AttemptSettlement.seal_completed_take` call. The immutable `CompletedTake` result carries the selected decision, optional policy response, feedback projection and actual settlement result.
+- `AttemptRuntime.hold_full_result` records the one pending source-tempo result *before* its teaching decision is prepared. The original `PracticeEngine._complete_attempt` now requests this transaction and applies the one returned presentation/recovery effect; `_finish_full_passage` no longer reinitializes the pending result. No second grader or evidence writer has been introduced.
+- No new tests. The same existing CI and native Play/Retry/automatic continuation tests must verify this integration before software acceptance is claimed.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -37,6 +37,11 @@ class AttemptRuntime:
         self.feedback_marks = []
         self.feedback_unmapped = 0
 
+    def hold_full_result(self, result, bpm: float) -> None:
+        """One pending result and source tempo until its durable settlement."""
+        self.pending_result = result
+        self.pending_assessed_bpm = bpm
+
     def publish_completion(self, *, marks: list[dict], unmapped: int) -> None:
         self.feedback_marks = marks
         self.feedback_unmapped = unmapped

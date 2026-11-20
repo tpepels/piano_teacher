@@ -68,7 +68,7 @@ from .application.transport_commands import require_pausable, resume_timeline
 from .application.stage_change import prepare_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick
-from .application.assessment_settlement import assess_completed_take
+from .application.assessment_settlement import complete_grading_and_settlement
 from .application.guided_session import GuidedSession, GuidedFragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
@@ -2697,44 +2697,26 @@ class PracticeEngine:
             elif now >= self.visual_transport.next_at:
                 self._update()
             return
-        tempo_map = self._active_tempo_map()
-        # Grading/projection uses explicit assessment inputs. The engine
-        # still owns take settlement and every subsequent state mutation.
-        assessed = assess_completed_take(
-            phrase=phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-            played=self.attempt.recorder.presses if self.attempt.recorder else [],
-            from_beat=self.visual_transport.play_from_beat, end_beat=ending,
-            tempo=tempo_map, policies=self.assessment_policies,
-            layout_for_feedback=self._layout_for_completed_take)
-        result = assessed.result
-        route = completion_route(self.mode, self.attempt.review_end_beat, self.visual_transport.play_from_beat)
-        if self.attempt.automatic_remedial_review and route == "section_review":
-            route = "partial_recovery"
-        summary = self._performance_review(phrase, result)
         completed_visual = self._visual_motion(now)[0]
-        # Select the assessment policy ONCE before evidence is sealed.
-        # A Practice Flow take can pass its lenient, source-bound timing
-        # policy while the generic raw grader reports a different outcome.
-        # Neither storage nor the next-action presenter may re-decide it.
-        if route == "full_passage":
-            self.attempt.pending_result = result
-            self.attempt.pending_assessed_bpm = self.plan.bpm
-            pending = self._prepare_teaching("full_result", result)
-            response = None
-        else:
-            pending = self._prepare_teaching(
-                "focused_result", result, end_beat=ending)
-            response = pending.decision.response
-        settled = self.attempt_settlement.seal_completed_take(
-            pending,played=(self.attempt.recorder.presses
-                            if self.attempt.recorder else ()),
-            route=route,mode=self.mode,
-            at_target=self.plan.bpm >= self.plan.target_bpm,
-            assessed_end_beat=ending,result=result,
+        completed = complete_grading_and_settlement(
+            phrase=phrase,hand=self.plan.hand,bpm=self.plan.bpm,
+            played=(self.attempt.recorder.presses
+                    if self.attempt.recorder else ()),
+            from_beat=self.visual_transport.play_from_beat,end_beat=ending,
+            tempo=self._active_tempo_map(),policies=self.assessment_policies,
+            layout_for_feedback=self._layout_for_completed_take,
+            mode=self.mode,review_end_beat=self.attempt.review_end_beat,
+            automatic_remedial_review=self.attempt.automatic_remedial_review,
+            performance_review=self._performance_review,
+            prepare_decision=self._prepare_teaching,
+            attempt=self.attempt,settlement=self.attempt_settlement,
             plan=self.plan,binding=self._teaching_binding(),now=now,
             policy=resolve_mistake_policy(
-                self.library.settings["mistake_response_strategy"]),
-            performance_summary=summary)
+                self.library.settings["mistake_response_strategy"]))
+        assessed = completed.assessed
+        result,route,summary = assessed.result,completed.route,completed.summary
+        pending,response,settled = (
+            completed.pending,completed.response,completed.settled)
         if settled:
             self._note_tempo(now)
         self.attempt.publish_completion(
@@ -2824,8 +2806,7 @@ class PracticeEngine:
         return "now play all the notes" if chosen.stage.variant.level == "original" else "now add more melody notes"
 
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
-        self.attempt.pending_result = result
-        self.attempt.pending_assessed_bpm = self.plan.bpm
+        # CompletedTake installed the pending result before decision selection.
         pending = self.attempt_settlement.pending
         if pending is None or pending.assessment is not result:
             pending = self._prepare_teaching("full_result", result)
