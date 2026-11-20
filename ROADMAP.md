@@ -31,6 +31,7 @@ The separate final examination uses the whole original piece.
 | 2026-11-20 | After the second floor-failure return to Free for the same window/hand, announce one real Coda/Fukuda aid, then return to original Free without mastery. |
 | 2026-11-20 | Saved first-window and final-exam sessions reopen in complete-window Free, then Tempo at 50% of original target. |
 | 2026-11-20 | Exactly one count-in bar between automatic repeats takes priority over showing both dim neighbours. Messages overlay the handoff without adding delay. |
+| 2026-11-20 | Rebuild CI around player behaviour; remove architecture/implementation-shape checks and report coverage without percentage gates. |
 | 2026-11-20 | Consolidate docs recursively into four Markdown files and make README learner-facing. |
 
 ## Implementation and verification record
@@ -51,35 +52,40 @@ New commits are local on main. No push or new remote CI result is claimed.
 | Practice controls | `79e05ad8`: stable Pause/Resume and Listen again controls, wrong-note-only Free keyboard hints, two-second messages. Existing UI/Godot checks passed. |
 | Complete practice flow and feedback | `6ef9dd30`: complete-window Free; explicit saved first/final warm-up; original MIDI target including half-speed below 12 BPM; persistent second-return aid and original return; authored bounds distinct from intact release tails; first-attack-aligned audio/grading; exact one-bar repeat admission with physical source/header clearance. |
 | Authentic score and one feedback owner | `6ef9dd30`, refined in `ee6ccbf3`: both staves and dim source neighbours share existing renderer/queue. Active IDs alone are graded. Genuine carry-in ties and held tails retain source IDs. Recorder alone pairs presses/releases; live projection uses the final grader's assignment and frozen musical elapsed time. Source-to-head validation, full provisional replacement, explicit final locking, pending withdrawals and beat-gated tied heads prevent stale/future ink. Listen lighting, Free ink and actual-pitch ghosts share the retained source strips. |
-| Existing core/native verification | Existing CI gates pass: **335 Python passed, one optional system SF2/libfluidsynth check skipped**; existing Godot scenarios report zero failures and `GODOT_STARTUP_SYNTAX_OK`. No tests added; existing assertions/doubles changed only for obsolete interfaces and owner-approved practice rules. Logs: `debug-sessions/practice-completion/python-final.log` and `godot-resume-final.log` in the same directory. Final carry-in model/server/import subset: 13 passed. Python source was unchanged by the final Godot-only Resume correction. |
+| Previous core/native verification | At the pre-rebuild source, CI gates passed: **335 Python passed, one optional system SF2/libfluidsynth check skipped**; existing Godot scenarios report zero failures and `GODOT_STARTUP_SYNTAX_OK`. No tests added; existing assertions/doubles changed only for obsolete interfaces and owner-approved practice rules. Logs: `debug-sessions/practice-completion/python-final.log` and `godot-resume-final.log` in the same directory. Final carry-in model/server/import subset: 13 passed. Python source was unchanged by the final Godot-only Resume correction. |
 | Additional source diagnostics | Actual engine: full four-bar Free, saved first/final Free, original tempo despite old manual target, announced aid → original Free without mastery, persisted return count, clean/failed exact repeat deadlines, leading-rest PCM alignment and complete held tails. Actual native assets: Moonlight selected/display identities, context/carry-in ties, no foreign graded attacks, future-tie gating, provisional retraction, Listen release and actual-pitch ghost facts. |
 | Large-score work | Strict feedback lookup is linear and live observations bounded while canonical assignment is retained. Actual 18,058-note Hanon live-grader call measured about 9–26 ms; this is software cost, not physical MIDI/audio latency. |
 | Full embedded and relocated package | **Passed on source `bc957d37`**: all seven full-workflow cases, including fixture creation, native bridge, production controls, Moonlight, Peace Piece, Chopin and strict relocated package build/boot. Checkout/package architecture audits report `PHASE5_ARCHITECTURE_AUDIT_OK`; runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Log: `debug-sessions/practice-completion/embedded-production-accepted.log`. |
 | Documentation | `75ae738e` consolidates the historical tree into four current Markdown documents and introduces the learner README and dedicated wordmark. Final review reconciles Retry/Resume ownership and per-hand completion. All 104 local links/anchors across these guides, README and ROADMAP pass; all 14 prior research citations remain. Recursive Markdown count is exactly four. |
 
-### Test-suite renewal requested 2026-11-20
+### CI suite rebuilt 2026-11-20
 
-The owner requested a ground-up suite rebuild around relevant behaviour.
-Read-only Python/native audits found implementation-shape assertions, unnamed
-alternate-course coverage and no native graded-event/future-note cases. The
-unchanged baseline at `16a064e2` collects 336 Python cases: 335 pass, one optional
-SF2/libfluidsynth case skips (`debug-sessions/practice-completion/test-rebuild-baseline.log`).
-No tests or production code have changed in this audit step. A reviewed
-replacement design is in [development](docs/development.md#test-suite-replacement-design--approved-2026-11-20).
-The owner approved continuing, prioritizing compact CI coverage of learner
-behaviour and rejecting architecture checks that constrain refactoring.
-Implementation is in progress. The earlier software acceptance
-below remains evidence for the unchanged source, not for an implemented new suite.
+The owner approved a ground-up rebuild prioritizing player behaviour and
+refactoring freedom. The unchanged baseline at `16a064e2` had 35 Python
+modules/336 collected cases (335 passed, one optional audio skip) and 26
+native scenario invocations. Baseline log:
+`debug-sessions/practice-completion/test-rebuild-baseline.log`.
 
-The first replacement course checks exposed an actual manual final-entry bug:
-selecting the final and requesting Learn could start a timed `learn` take at
-target tempo with no guided targets. Automatic final progression was verified
-separately and already entered Practice at 50%. The flow session now keeps an
-explicit final Learn request in whole-piece Free before normal half-speed
-Tempo. The focused regression failed before the fix
-(`debug-sessions/practice-completion/final-learn-red.log`); the course/resume/
-timeline/feedback group then passed 47 cases in `course-feedback-green.log` in
-the same directory. No architecture assertions were added.
+The replacement has ten Python modules/85 cases and four executed Godot
+groups. It covers the actual default course, complete Free windows, growing
+windows/hands, tempo/failure/aid/final progression, saved migrations, MIDI
+recovery, real audio, fingering and source/take-specific feedback. Architecture,
+source-text, private-shape, parity and widget/layout checks are removed.
+Package validation retains required runtime assets and actual import closure
+without historical module-name restrictions. See the [coverage map](docs/development.md#ci-coverage).
+
+The rebuild exposed a real manual final-entry defect: selecting the final and
+requesting Learn could start timed Learn at target tempo without guided targets.
+Commit `0e060629` keeps explicit final Learn in whole-piece Free before normal
+half-speed Tempo. Automatic final progression already entered Practice at 50%.
+The regression failed before the fix in `debug-sessions/practice-completion/final-learn-red.log`.
+
+Current local CI passes: **84 Python passed, one absent optional system-SF2
+skip; production Godot parsing and all four native behaviour groups pass**.
+Python coverage is **58.9% lines, 38.3% branches**, informational without a gate.
+CI uploads XML/JSON coverage reports. Evidence: `debug-sessions/practice-completion/ci-rebuild-final.log`.
+The full embedded/repertoire/relocated-package workflow is being rerun on the
+committed replacement; the earlier results below remain historical evidence.
 
 ## Phase status and remaining acceptance
 
@@ -99,7 +105,7 @@ so readiness cannot precede its matching status notification. The five existing
 asset-session scenarios pass, the exact Peace/Chopin native assets compile,
 and the actual production Play/Pause/Resume journey passes.
 
-The current Python suite passes **335 tests, one optional audio dependency
+At that pre-rebuild source, the Python suite passed **335 tests, one optional audio dependency
 skip**. Final native checks and the complete production/package rerun pass.
 The first failed run is retained in
 `debug-sessions/practice-completion/embedded-production.log`; acceptance below
@@ -141,13 +147,13 @@ Piece/Chopin Resume checks and actual relocated standalone package build/boot
 under a clean HOME and cleared environment. Log:
 `debug-sessions/practice-completion/embedded-production-accepted.log`.
 The same run passes the architecture audit for checkout and packaged source.
-Subsequent changes only reconcile this record, the four guides and README;
-they do not change production code or acceptance checks.
+That run predates the CI rebuild and manual final-Learn correction recorded
+above; it remains historical evidence for that source.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | Complete in source, with reconciled owner contracts and passing architecture audit. Feedback work removes the independent preview matcher and release pairing. |
-| Phase 6 — software and physical verification | Applicable automated core/native, full embedded repertoire/control and strict relocated-package checks pass. Phase remains incomplete until physical and clean-machine acceptance is performed. |
+| Phase 5 — ownership decomposition | Complete in source, with reconciled owner contracts; historical architecture audit passed. CI now verifies behaviour rather than module shape. Feedback work removes the independent preview matcher and release pairing. |
+| Phase 6 — software and physical verification | Rebuilt core/native CI passes; full embedded/repertoire/relocated-package rerun pending. Phase remains incomplete until physical and clean-machine acceptance is performed. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen

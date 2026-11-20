@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on removed runtime modules and missing relative Python imports.
+"""Validate import closure and the assembled application's required assets.
 
 Runs on source and on an assembled standalone release directory. It does not
 import the application or need optional MIDI, Godot, ML or Verovio packages.
@@ -10,18 +10,6 @@ import argparse
 import ast
 from pathlib import Path
 
-REMOVED = (
-    "piano_teacher/score.py",
-    "piano_teacher/score_geometry.py",
-    "piano_teacher/raster.py",
-    "piano_teacher/rendering/legacy",
-    "piano_teacher/ui",
-    "piano_teacher/qt_ui",
-)
-REMOVED_IMPORTS = (
-    "piano_teacher.score_geometry", "piano_teacher.raster",
-    "piano_teacher.rendering.legacy",
-)
 DEV_ONLY_GODOT_PATHS = (
     "godot/native_bridge_smoke.gd",
     "godot/production_ui_smoke.gd",
@@ -35,9 +23,6 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
     source = root / "piano_teacher"
     if not (source / "__init__.py").is_file():
         return ["Missing canonical piano_teacher package"]
-    for name in REMOVED:
-        if (root / name).exists():
-            result.append(f"Removed compatibility module was bundled: {name}")
     for file in sorted(source.rglob("*.py")):
         try:
             module = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
@@ -49,17 +34,8 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
         if file.name == "__init__.py":
             parts = relative.parts[:-1]
         for node in ast.walk(module):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name.startswith(REMOVED_IMPORTS):
-                        result.append(f"{relative}:{node.lineno}: removed import {alias.name}")
             if not isinstance(node, ast.ImportFrom):
                 continue
-            if node.module and any(
-                node.module == old or node.module.startswith(old + ".")
-                for old in REMOVED_IMPORTS
-            ):
-                result.append(f"{relative}:{node.lineno}: removed import {node.module}")
             if not node.level:
                 continue
             if node.level > len(parts):
@@ -130,7 +106,7 @@ def main() -> int:
     if errors:
         print("\n".join(errors))
         return 1
-    print("PHASE5_ARCHITECTURE_AUDIT_OK")
+    print("PACKAGE_CONTENTS_OK")
     return 0
 
 

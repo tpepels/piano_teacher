@@ -91,23 +91,15 @@ func _process(_delta: float) -> bool:
             _fail("Loaded a different MIDI from the requested real score")
             return true
         var chrome = app.practice_view
-        # One bottom Play/Pause control. Only BPM and Settings occupy the
-        # header, on the same row, even for long titles.
-        if not (chrome.practice_navigation is HBoxContainer) or (
-                absf(chrome.speed_label.get_global_rect().get_center().y
-                    - chrome.practice_settings_button.get_global_rect().get_center().y) > 2.0):
-            _fail("Practice BPM and Settings wrapped onto different rows: bpm=%s settings=%s nav=%s header=%s" % [
-                str(chrome.speed_label.get_global_rect()),
-                str(chrome.practice_settings_button.get_global_rect()),
-                str(chrome.practice_navigation.get_global_rect()),
-                str(chrome.practice_header.get_global_rect())])
-            return true
-        if chrome.practice_header.size.y > 56.0 or chrome.start_button.size.y > 60.0:
-            _fail("Practice chrome is too tall and crowds out the score")
-            return true
-        if chrome.stage.fingering_status_label.get_parent() != chrome.details_panel:
-            _fail("Fingering diagnostics still occupy the notation stage")
-            return true
+        if fixture_name == DEFAULT_FIXTURE:
+            var selected: Dictionary = app.current_state()
+            if str(selected.get("exercise_strategy","")) != "practice-flow" or \
+                    str(selected.get("flow",{}).get("step","")) != "listen" or \
+                    int(selected.get("first_bar",0)) != 1 or \
+                    int(selected.get("last_bar",0)) != 1:
+                _fail("Fresh default course must open its first measure in Listen")
+                return true
+            print("PHASE6_DEFAULT_PRACTICE_FLOW_OK")
         var voice = app.get_node_or_null("CountInVoicePlayer")
         if voice == null or not voice.available():
             _fail("Production scene does not own four playable offline voice recordings")
@@ -431,8 +423,8 @@ func _process(_delta: float) -> bool:
         _fail("Resume changed committed notation, lost a live take, " +
             "or admitted new notes within the viewport")
         return true
-    if not is_equal_approx(renderer.timeline.pixels_per_beat,
-            renderer.configured_density) and renderer.timeline.pixels_per_beat < 1.0:
+    if not is_finite(renderer.timeline.pixels_per_beat) or \
+            renderer.timeline.pixels_per_beat <= 0.0:
         _fail("Score horizontal density is invalid")
         return true
     if not renderer.retained_ready():

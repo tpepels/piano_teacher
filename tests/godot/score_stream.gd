@@ -1,0 +1,135 @@
+extends SceneTree
+## Semantic source windows and already-compiled buffers are fixtures, not a
+## simulated app. Production admission, binding, queue and projection run here.
+const Flow := preload("res://continuous_score_flow.gd")
+const Controller := preload("res://notation/native/score_stream_controller.gd")
+const Pool := preload("res://notation/native/retained_notation_pool.gd")
+const Geometry := preload("res://notation/native/stream_geometry.gd")
+const Lifecycle := preload("res://notation/native/stream_lifecycle.gd")
+const Reservation := preload("res://score_transport_reservation.gd")
+const Admission := preload("res://score_stream_admission.gd")
+var failures := 0
+
+func check(ok: bool, message: String) -> void:
+    if not ok:
+        failures += 1
+        printerr("SCORE_STREAM_FAIL: ",message)
+
+func geometry(world: float):
+    return Geometry.new(true,world,100.0,20.0,4.0,1000.0,330.0,4.0,2.0)
+
+func facts(controller, world: float) -> Dictionary:
+    var result: Dictionary = controller.preflight_facts(world,0.0,true,6.7,0.4,
+        100.0,20.0,4.0,1000.0,330.0)
+    result.merge({"ready":true,"duration":4.0,"density":100.0,"gap":20.0,
+        "width":1000.0,"playhead":330.0,"rest_gap":4.0,"bpm":60.0})
+    return result
+
+func acknowledge(controller, world: float, key: String, segment: String) -> void:
+    check(controller.bind_segment(segment) and controller.acknowledge_arm(),"The authorized take can be acknowledged")
+    controller.observe_transport(geometry(world),world,0.0,0.0,key,"count_in",false,true,true,segment,true)
+
+func fixed_music(snapshot: Array) -> Array:
+    var result: Array = []
+    for item in snapshot:
+        result.append([item.world_origin,item.source_floor,item.source_ceiling,item.kind])
+    return result
+
+func _initialize() -> void:
+    call_deferred("run")
+
+func run() -> void:
+    var canvas := Control.new()
+    root.add_child(canvas)
+    var pool := Pool.new()
+    var controller := Controller.new()
+    var windows: Array[Vector2] = [Vector2(0.0,4.0)]
+    pool.install(canvas,windows)
+    controller.bind_surface(canvas,pool,func(_opening: float) -> Array[Vector2]: return windows)
+    var plan: Dictionary = Reservation.plan_facts(facts(controller,0.0),"start",0.0,0.0,4.0)
+    check(bool(plan.get("ok",false)) and float(plan.start_world) >= 4.0,"Play reserves a complete count-in before the first note")
+    var armed: Dictionary = controller.arm_take(geometry(0.0),0.0,0.0,6.7,0.4,
+        float(plan.start_world),false,false,4.0)
+    check(not armed.is_empty(),"The physical source accepts the planned start")
+    acknowledge(controller,0.0,"piece|7|10|practice","first")
+    var original: Array = controller.online_snapshot()
+    var music: Array = fixed_music(original)
+    # Admit a second, unseen preparation; Pause must preserve exposed music.
+    for item in controller.queue.online:
+        item.segment.compiled = true
+    controller.attach_compiled()
+    for item in controller.queue.online:
+        Lifecycle.project(item,2.0,330.0,100.0,20.0,Vector2(1000,600),4.0)
+    var first: Dictionary = controller.queue.online[0]
+    check(bool(first.get("ever_visible",false)),"The admitted source reaches the visible score")
+    var before_x: float = first.clip.position.x+first.segment.position.x
+    controller.observe_transport(geometry(2.0),2.0,0.0,0.0,"piece|7|10|practice","paused",true,false,true,"first",true)
+    controller.observe_transport(geometry(2.5),2.5,0.0,0.0,"piece|7|10|practice","paused",true,false,true,"first",true)
+    check(fixed_music(controller.online_snapshot()) == music,"Pause preserves every committed source and release boundary")
+    Lifecycle.project(first,2.5,330.0,100.0,20.0,Vector2(1000,600),4.0)
+    check(first.clip.position.x+first.segment.position.x < before_x,"Exposed score continues left during Pause")
+    var resume: Dictionary = Reservation.plan_facts(facts(controller,2.5),"resume",2.5,0.0,4.0)
+    check(bool(resume.get("ok",false)),"Resume can reserve new ink without moving exposed music")
+    var resumed: Dictionary = controller.arm_take(geometry(2.5),2.5,0.0,6.7,0.4,
+        float(resume.start_world),true,false,4.0)
+    check(not resumed.is_empty(),"Resume commits its reserved source")
+    acknowledge(controller,2.5,"piece|7|10|practice","resume")
+    var after_resume: Array = controller.online_snapshot()
+    check(fixed_music(after_resume).slice(0,music.size()) == music,"Resume leaves the scrolling prefix at its original positions")
+    check(controller.visible_take_keys().has("piece|7|10|practice"),"Resume retains the attempt's performance identity")
+    # Retry always allocates a future copy; it cannot re-anchor the old one.
+    var retry: Dictionary = Reservation.plan_facts(facts(controller,3.0),"restart",3.0,0.0,4.0)
+    check(bool(retry.get("ok",false)) and float(retry.first_pixel_x) > 1000.0
+        and float(retry.start_world) >= 7.0,"Retry enters from the right after its count-in")
+    controller.trim(geometry(3.0),"retry")
+    controller.retry_placement_enabled(true)
+    var restarted: Dictionary = controller.arm_take(geometry(3.0),3.0,0.0,6.7,0.4,
+        float(retry.start_world),false,true,0.0,false,false,float(retry.get("leading_rest_beats",0.0)))
+    check(not restarted.is_empty(),"Retry commits the future reservation")
+    acknowledge(controller,3.0,"piece|7|11|practice","retry")
+    check(fixed_music(controller.online_snapshot()).slice(0,music.size()) == music,
+        "Retry preserves exposed original notes and their written rest")
+    check(controller.visible_take_keys().has("piece|7|10|practice")
+        and controller.visible_take_keys().has("piece|7|11|practice"),"Old and retried score copies keep separate results")
+    # A direct Tempo repeat uses the backend's deadline, even with a long
+    # decorative outgoing rest. It cannot schedule another runway delay.
+    var repeat_facts := facts(controller,8.0)
+    repeat_facts.online = [{"kind":"rest","world_origin":8.0,"source_floor":0.0,"source_ceiling":20.0}]
+    repeat_facts.withdrawn = {"remaining":repeat_facts.online,"owners":[]}
+    repeat_facts.peer_source_floor = -INF
+    var repeat: Dictionary = Reservation.plan_facts(repeat_facts,"auto",8.0,0.0,4.0,12.0)
+    check(bool(repeat.get("ok",false)) and is_equal_approx(float(repeat.start_world),12.0),
+        "Decorative rest context cannot postpone an authorized one-bar Tempo repeat")
+    repeat_facts.withdrawn.remaining = [{"kind":"source","world_origin":10.0,
+        "source_floor":0.0,"source_ceiling":4.0}]
+    check(not bool(Reservation.plan_facts(repeat_facts,"auto",8.0,0.0,4.0,12.0).get("ok",false)),
+        "A direct repeat refuses overlap with exposed source ink")
+    # Preserve the owner's 2026-11-18 Pathétique regression as measured
+    # preflight facts, without a second renderer/queue implementation.
+    var slow_world := 18.3153996732027
+    var slow_header := 0.82415522875817
+    var outgoing_rest_end := 18.5358163398694+2.0
+    var slow_facts := {"ready":true,"duration":8.0,"density":288.0,"gap":22.0,
+        "width":1256.0,"playhead":1256.0*0.33,"rest_gap":2.0,"bpm":16.0,
+        "source_exists":true,"online":[],"withdrawn":{"remaining":[],"owners":[]},
+        "peer_floor":outgoing_rest_end,"right":1256.0*0.67/288.0,
+        "header":slow_header,"preview_world":slow_world}
+    var slow: Dictionary = Reservation.plan_facts(slow_facts,"start",slow_world,0.0,2.0+0.4*16.0/60.0)
+    check(bool(slow.get("ok",false)) and float(slow.first_pixel_x) > 1256.0
+        and float(slow.start_world)-slow_header > outgoing_rest_end
+        and float(slow.start_world) > 20.4215330065361,
+        "First slow Tempo entry clears the outgoing written rest instead of using the refused deadline")
+    var flow := Flow.new()
+    flow.sample(1000,60.0)
+    var previous: float = flow.sample(2000,60.0)
+    check(flow.sample(3000,90.0) > previous and flow.sample(2500,90.0) >= previous,
+        "Pause/retry handoffs and delayed frames cannot rewind the score world")
+    flow.hold_at(flow.beat+1.0)
+    flow.sample(10000,90.0)
+    var held: float = flow.beat
+    check(is_equal_approx(flow.project(20000),held),"Free holds the target while the learner thinks")
+    flow.hold_at(held+1.0)
+    check(flow.sample(21000,90.0) > held,"A correct Free target permits forward motion to the next target")
+    canvas.free()
+    print("SCORE_STREAM_FAILURES:",failures)
+    quit(0 if failures == 0 else 1)

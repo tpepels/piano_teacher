@@ -78,7 +78,7 @@ rm -f "$STAGE/godot/.mcp.json"
 for fixture in native_bridge_smoke production_ui_smoke production_session_journey; do
   rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
 done
-python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
+python3 scripts/verify-package-contents.py --root "$STAGE" --package
 # The released folder cannot rely on the editor's first-launch importer.
 # Compile real Ogg/assets into the staged project with the bundled Godot
 # editor in CI, then preserve ONLY its required imported runtime bytes.
@@ -100,8 +100,8 @@ for name in ichi ni san shi; do
 done
 find "$STAGE/godot/.godot" -mindepth 1 -maxdepth 1 \
   ! -name imported -exec rm -rf {} +
-# The architecture gate permits only those independently built import bytes.
-python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
+# Verify that the runtime's independently built import bytes are included.
+python3 scripts/verify-package-contents.py --root "$STAGE" --package
 # Validate imports through the assembled prefix, not the builder environment.
 env PYTHONHOME="$STAGE/runtime/python" \
   PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \

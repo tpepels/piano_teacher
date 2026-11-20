@@ -58,31 +58,4 @@ for script in \
     exit 1
   fi
 done
-# The scrolling score axis (including the held target in Free).
-echo "Checking Godot behavior: continuous_score_flow"
-GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/continuous_score_flow.gd"
-# An automatic Free-to-Tempo promotion must reserve its score while the
-# previous guided layer's written rest is still moving.
-echo "Checking Godot behavior: tempo_score_reservation"
-GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/tempo_score_reservation.gd"
-# Run the real Practice UI in the headless Godot harness after parsing.
-for scenario in captions signals score_gate intro_markers source_picker resume_choice midi_guard layout; do
-  echo "Checking Practice UI: $scenario"
-  GODOT_BIN="$binary" bash scripts/godot-test.sh 15s --headless --path godot \
-    --script "$PWD/tests/godot/practice_screen.gd" -- "$scenario"
-done
-for scenario in preferences tempo_draft signals pickers layout hierarchy; do
-  echo "Checking Settings: $scenario"
-  GODOT_BIN="$binary" bash scripts/godot-test.sh 15s --headless --path godot \
-    --script "$PWD/tests/godot/settings_ownership.gd" -- "$scenario"
-done
-for scenario in overview choices reset layout large_course; do
-  echo "Checking Lesson Path: $scenario"
-  GODOT_BIN="$binary" bash scripts/godot-test.sh 15s --headless --path godot \
-    --script "$PWD/tests/godot/lesson_ownership.gd" -- "$scenario"
-done
-for contract in publication stale retry failure native; do
-  echo "Checking Godot score-session contract: $contract"
-  GODOT_BIN="$binary" bash scripts/godot-test.sh 12s --headless --path godot --script "$PWD/tests/godot/score_asset_session.gd" -- "$contract"
-done
 echo "GODOT_STARTUP_SYNTAX_OK"

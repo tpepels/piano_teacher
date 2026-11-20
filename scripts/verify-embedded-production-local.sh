@@ -141,7 +141,7 @@ PY
 }
 verify_fixture_ui() {
   set_case fixture
-  seed phase6_native_fixture.mid
+  seed phase6_native_fixture.mid practice-flow
   timeout 105s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
     --script res://production_ui_smoke.gd
 }

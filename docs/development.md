@@ -42,160 +42,79 @@ when required: `PianoNative` must register, embedded Python must import and
 `PIANO_PYTHON` and `GODOT_BIN` select explicit developer runtimes where supported
 by the scripts. Use the actual Godot project in [godot/](../godot/).
 
-## Existing checks
+## CI coverage
 
-```bash
-bash scripts/test.sh
+The local and [GitHub CI](../.github/workflows/ci.yml) entry point is
+[test.sh](../scripts/test.sh). CI requests informational Python coverage:
+
+~~~bash
+bash scripts/test.sh --coverage
 bash scripts/test.sh --python-only
+bash scripts/test.sh --python-only tests/test_note_feedback.py
 bash scripts/verify-native-bridge.sh
-bash scripts/verify-embedded-production-local.sh --without-package
-```
+bash scripts/verify-embedded-production-local.sh
+~~~
 
-The first command is also the [GitHub workflow](../.github/workflows/ci.yml):
-core Python tests followed by Godot parser and existing component/UI scenarios.
-The suite is deliberately small. Add a regression only after the owner confirms
-the behaviour at the piano. Do not add abstract infrastructure, parity or pixel
-tests; do not encode superseded behaviour to force production workarounds.
-Notation is judged on screen. Existing negative fixtures deliberately print
-diagnostics; their declared failure counters and wrapper exit status determine
-the result.
+The common command runs Python, production Godot parsing and four executed
+Godot behaviour groups. Arguments after runner options go to pytest.
+Coverage produces ignored XML/JSON reports, uploaded by GitHub; line and branch
+percentages are reported separately, without a minimum percentage gate.
+They measure Python execution, not Godot or physical acceptance.
 
-The native smoke executes embedded startup and typed IPC. The existing production
-workflow executes real application scenes and repertoire journeys. Full mode
-also builds and boots a relocated package. These are different checks; parsing
-a production fixture does not mean its application journey ran. Serialize Godot
-imports/checks against a shared project and retain source revision plus logs.
+The owner approved rebuilding the suite on 2026-11-20 around player behaviour.
+The previous 35 Python modules/336 collected cases and 26 native scenario
+invocations are replaced by ten Python modules/85 cases and four native groups.
+Git retains the old suite. Architecture/source-text checks, contract parity,
+private aliases, exhaustive reducer combinations, exact captions, container
+hierarchy, shader choices and pixel/layout assertions were removed. Package
+validation checks required runtime contents and import closure rather than
+banning historical module names.
 
-### Test-suite replacement design — approved 2026-11-20
-
-Status: approved; implementation in progress. The owner prioritizes CI tests
-for player behaviour and explicitly rejects architecture/implementation checks
-that constrain refactoring. Coverage reports are informational, without a
-percentage gate or a required test for every internal branch.
-The owner requested a ground-up rebuild because tests may encode irrelevant or
-superseded behaviour. This request authorizes replacement tests; physical
-acceptance remains separate. This design stays in the existing guide to keep
-the documentation tree at four Markdown files.
-
-The unchanged baseline at `16a064e2` collects 336 Python cases: 335 pass and one
-optional system SF2/libfluidsynth case skips. The fast Godot runner parses
-production scripts and executes 26 component/UI scenario invocations. It does
-not execute the full embedded workflow. The audit found these concrete gaps:
-
-- Some cases assert shaders, node names, container hierarchy, exact captions,
-  private aliases, reducer enumeration or generated-contract parity.
-- Learner-state fixtures force the older split-unit policy. Other tests use
-  source-progression without naming it, making that supported alternate route
-  look like the default practice course.
-- No existing native case ingests graded events to check wrong/future-note
-  colouring, source/take isolation, timed tied continuations or ungraded Listen.
-- The full repertoire verifier explicitly selects Coda/Fukuda. Its successful
-  journeys do not establish complete default Practice Flow coverage.
-
-**Approach.** Rebuild from the current learner contract, replacing each area
-with its smaller behavioural counterpart before removing old scaffolding.
-This implements the requested rebuild while preserving useful failure/recovery
-coverage throughout. Merely renaming or pruning cases leaves the default-flow
-gaps. Deleting everything before replacement removes existing protection for
-progress migration, source fidelity and MIDI recovery. The chosen migration
-order preserves useful coverage during the approved rebuild.
-
-Every retained case must identify a learner-visible contract or a failure that
-would lose progress, play/grade the wrong source, prevent practice or fabricate
-credit. Passing counts and coverage percentages are not acceptance criteria.
-
-| Behaviour area | Replacement evidence |
+| Python coverage | Player-visible contracts |
 | --- | --- |
-| Default course | Open actual MIDI through the engine; start at the first measure's Listen. Complete the entire selected Free window before Tempo. Verify Right → Left → Together, empty-hand skipping, independent backward-growing windows capped at four bars and the separate whole-piece final. |
-| Tempo and aids | Verify original-target 50% entry, 10% steps, same-tempo first retry, two-failure slowdown/floor return, broken clean streak and two target successes. Persist the exact window/hand's second Free return, announce a genuine aid, return to original Free without mastery, and retain original Free when no aid exists. |
-| Resume and progress | Reopen the saved window/hand and final test at complete-window Free, then 50%. Preserve supported persistent migrations, isolate pieces/hands/windows, and prevent interrupted or twice-delivered completion from awarding credit. |
-| Musical time | Verify an authored count-in bar ending at the first playable attack, local/mixed meter, preserved release tails and the exact one-bar automatic repeat. Pause/Resume freezes musical elapsed time while keeping the world axis forward. Listen again adds no mastery. First entry may require safe physical clearance; automatic repeats retain their stricter deadline. |
-| Performance feedback | Drive real MIDI ingress/Recorder and compare live and settled source assignments. Cover repeated pitches, chords, wrong/missed/extra notes, accepted early/late boundaries, independent release evidence and the default two-colour policy. A later same-pitch note or another take remains neutral. |
-| Authentic notation | Real MIDI import retains attacks, hand identity, meter, tuplets and complete releases. Active performance IDs remain distinct from dim neighbours/other-hand/carry-in ink. Native source heads and timed ties receive only their own take's feedback; wrong-key ghosts retain the played pitch. No pixel or aesthetic assertions. |
-| Device and user data | Simulate only external MIDI/device failures and filesystem failure boundaries. Verify unplug/reconnect cancellation, fresh physical attacks, explicit disconnect, calibration application, settings/library recovery and scoped saved-data operations. These establish software reactions, not hardware acceptance. |
-| Listen and fingering | Verify actual source-timed PCM preparation, current audio/score readiness, cancellation/failure recovery, offline fallback and sustained endings. Retain real-model smoke, manual correction persistence and honest unavailable/impossible fingering results. Avoid frozen waveform or model-choice snapshots. |
-| Supported alternatives | Explicitly select source-progression/Coda/Fukuda for compact feature coverage. Their manual tempo, short guided-unit and detailed generic release grading rules must not become default Practice Flow expectations. |
+| [Practice course](../tests/test_practice_course.py) | Actual MIDI opening, complete-window Free, backward growth up to four bars, hands, clean tempo ladder, failures and automatic final entry. |
+| [Resume](../tests/test_practice_resume.py) | Reopened windows/final, interrupted input, progress migration, genuine persisted second-return aid and return to original Free without mastery. |
+| [Timeline](../tests/test_practice_timeline.py) | Authored/first-attack count-in, exact repeat deadlines, full held endings, Pause/Resume, Listen again, published feedback and disconnect before completion. |
+| [Note feedback](../tests/test_note_feedback.py) | Real MIDI ingress and Recorder, shared live/final grading, onset boundaries, repeated pitches, chords, wrong/extra/missing notes, releases and neutral future notes. |
+| [Score import](../tests/test_score_import.py) | Hands, attacks, velocity, overlapping unisons, intact tails, meter, tuplets and rejected non-piano input. |
+| [Library/settings](../tests/test_library_and_settings.py) | Scoped imports, persistence/migration, malformed settings and failed-save recovery without cancelling practice. |
+| [MIDI devices](../tests/test_midi_devices.py) | Unplug/reconnect, explicit disconnect, failed-open recovery, fresh attacks and calibration timestamps. |
+| [Listen audio](../tests/test_listen_audio.py) | Real PCM timing/pitch/chords/tails, audio/score readiness, cancelled stale workers, failure recovery, fallback and count-in assets. |
+| [Fingering](../tests/test_fingering.py) | Real installed model inference, impossible/unavailable results, manual corrections and corrupt derived-cache recovery. |
+| [Alternate courses](../tests/test_alternate_courses.py) | Explicit source-progression/Coda selection, source-safe aids, manual controls and their distinct generic release policy. |
 
-**Test boundaries.** Keep pytest and native Godot; add no framework or service.
-Prefer public engine/typed commands and snapshots, published source/deadline
-facts, feedback events and saved reopen. Small direct musical algorithms may
-be tested where the output itself is the player contract. Assertions must not
-require private owner fields, object identity, implementation names, exact
-dataclass/JSON dumps or source-code text searches.
+[Test inputs](../tests/session_inputs.py) supply small actual MIDI files, one
+injected input clock and external ports; the production engine decides grading
+and progression. Tests inspect public commands, snapshots, feedback and saved
+reopening. External I/O failures are controlled without duplicating application
+rules. Engines, workers and ports are released after each session.
 
-Use a controllable injected clock and real small MIDI fixtures in temporary
-directories. These supply input; they must not implement a second grader,
-progression machine, queue or clock policy. Fake only external ports, controlled
-I/O failures and absent optional runtimes. Release engines/threads/ports in
-fixture cleanup and never touch actual learner progress or attached hardware.
-Preserve installed-but-broken optional-runtime failures; only genuinely absent
-optional dependencies may skip, with an explicit reason.
+Native groups in [tests/godot/](../tests/godot/) exercise actual controls,
+immutable score admission and forward movement through Pause/Resume/Retry,
+source/take-bound note feedback including future ties, and score readiness/
+failure/retry. [Syntax checking](../scripts/check-godot-syntax.sh) and
+[executed behaviour](../scripts/test-godot-behavior.sh) have separate log markers.
+Expected negative asset fixtures print diagnostics; declared failure counters
+and wrapper exit status still determine success.
 
-**Native checks.** Replace widget/layout implementation cases with four small
-groups: normal controls/Free hints, immutable score admission and Pause/Resume/
-Retry, source/take-bound feedback including future ties, and score readiness/
-failure/recovery. Exercise the production owners and authentic notation facts.
-Keep native bridge/standalone validation and real repertoire journeys; add
-explicit default-course execution rather than relabelling alternate journeys.
+Only genuinely absent optional audio/model runtimes skip, with a stated
+reason; installed-but-broken runtimes fail. Required CI dependencies do not
+become optional. The latest measured run has 84 passed/one absent-system-SF2
+skip, 58.9% Python line coverage and 38.3% branch coverage. These percentages
+are an inventory of execution, not a completeness claim.
 
-**Runner and integration.** Keep `bash scripts/test.sh` as the common local/CI
-entry point and preserve `--python-only` and pytest argument forwarding. Separate
-parser checks from executed Godot behaviour so logs state what actually ran.
-Keep full embedded/relocated packaging as the existing explicit production
-gate. Update CI commands only where needed for the reorganized suite, without
-lowering failures, weakening assertions or making required dependencies skip.
+Future regression additions follow the [repository policy](../AGENTS.md):
+owner-confirmed player behaviour, without abstract infrastructure, parity or
+pixel tests. The requested suite rebuild was an explicit exception to the
+prior restriction on adding tests. Notation appearance is judged on screen.
 
-Replace the old test files and helpers rather than leave duplicate suites or
-an archived legacy suite in the checkout; Git retains history. Group the new
-tests by the behaviour areas above, with shared fixtures limited to test input
-and cleanup. Production features and policies stay unchanged. If replacement
-tests uncover an actual production defect or a contract ambiguity, diagnose
-and report it separately instead of adjusting an assertion to match a bug.
-
-**Completion evidence.** Record a before/after map of retained, replaced and
-removed coverage here. Run the complete replacement Python/native suite and
-the full embedded workflow, including all named repertoire and strict relocated
-package build/boot. Record source commit, results and optional skips in ROADMAP.
-Keep physical CA49 USB/Bluetooth, sound, display, latency and clean-machine
-acceptance explicitly unverified. Work directly on main in coherent commits;
-do not push, create branches/worktrees or expand the four-file docs tree.
-
-#### CI test rebuild implementation plan
-
-**Goal:** A compact CI suite that catches broken lessons, feedback and saved
-progress while allowing the architecture and visual implementation to change.
-**Architecture:** Real engine inputs and outputs for the course; focused musical
-and external-I/O contracts; native checks for visible feedback and score lifetime.
-**Tech stack:** pytest, Godot and optional informational Python coverage.
-**Spec:** This design and [Practice flow](practice-flow.md).
-
-Global constraints: main only; no push; four docs; no architecture/parity/pixel
-tests; no simulated application rules; physical acceptance remains separate.
-The latest owner instruction authorizes replacement tests for current contracts.
-
-Review focus: future same-pitch notes, partial four-bar Free, reopened final,
-second floor-return aid and interruption during a pending completion.
-
-- [ ] Replace Python course/state/teaching scaffolding with default-course,
-  resume/aid, timeline and feedback scenarios. Use actual MIDI imports and one
-  injected input clock; inspect commands/snapshots/events and reopened progress.
-  Assert the full-window and two-target-clean rules, first-attack count-in,
-  exact repeat deadline, held tails and advisory releases.
-- [ ] Consolidate import, device, library/settings, audio and fingering cases
-  into focused feature files. Preserve real fault/recovery cases and explicit
-  supported alternate routes; remove source-text, object-shape and parity checks.
-- [ ] Replace native widget/layout/ownership cases with controls, immutable
-  admission, feedback and readiness/failure cases. Assert outcomes rather than
-  node names, shaders, exact captions or container dimensions.
-- [ ] Separate syntax parsing from executed behaviour in the runners; keep
-  `scripts/test.sh`, `--python-only` and pytest argument forwarding. Make default
-  Practice Flow explicit in production verification while retaining repertoire
-  and relocated package acceptance. Add informational coverage without a gate.
-- [ ] Run each changed group, verify meaningful negative/boundary cases, review
-  the integrated diff, then run full CI and embedded/package checks. Record the
-  coverage map and measured results, remove superseded helpers, and commit each
-  coherent step. Production fixes require actual defect evidence and are
-  recorded separately; assertions are not relaxed to make a bug pass.
+The full [production verifier](../scripts/verify-embedded-production-local.sh)
+runs embedded startup, a real default Practice Flow fixture, and Moonlight,
+Peace Piece and Chopin journeys with explicitly selected Coda/Fukuda.
+Full mode also builds and boots the relocated standalone package. These checks
+exercise built application routes, separately from the fast suite. Serialize
+Godot imports/checks against a shared project and retain source revision and
+logs. Parsing a production fixture does not establish that its journey ran.
 
 ## Standalone Linux package
 
@@ -215,9 +134,11 @@ the native extension must use its matching ABI. Output is
 `dist/piano-teacher-linux-x86_64/` with a `PianoTeacher` launcher and a tar archive.
 The packager verifies imports through the assembled prefix and prepares actual
 Godot imported count-in bytes. It excludes developer repertoire, test smoke
-scenes and MCP editor tooling. Existing source audits run against both the
-checkout and assembled runtime through
-[verify-phase5-architecture.py](../scripts/verify-phase5-architecture.py).
+scenes and MCP editor tooling. Package-content audits run against checkout and the
+assembled runtime through
+[verify-package-contents.py](../scripts/verify-package-contents.py). This checks
+actual import closure and required runtime assets, not historical module names
+or architecture shape.
 
 End users do not need a compiler, pip, system Python or a separate Godot install
 for that assembled package. The host still supplies compatible OS/ELF runtime,
