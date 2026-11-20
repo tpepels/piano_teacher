@@ -59,7 +59,11 @@ class PracticeFlowCourseSession:
         """A new source window/hand enters its course step before Free binds."""
         if (self.active(plan,warmup=warmup) and not recovery and not simplified
                 and (self._state is None or self._state.stage_key != plan.identity)):
-            return self.stage_entry(plan)
+            # Explicit Learn requests Free, including for the whole-piece
+            # final. Automatic final entry uses its timed exposure directly.
+            # Selecting Tempo here would conflict with the already selected
+            # manual Learn exposure and start a take without guided targets.
+            return self.stage_entry(plan,resumed=plan.exercise.kind == "perform")
         return None
 
     def tempo_entry(self, plan, *, warmup: bool, bpm: int) -> FlowTempoEntry:

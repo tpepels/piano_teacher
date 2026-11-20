@@ -56,3 +56,18 @@ def lumikey_runtime():
         pytest.skip(f"LumiKey fingering runtime is not installed ({detail}); run scripts/setup-fingering.sh")
     if state == "broken":
         pytest.fail(f"LumiKey fingering runtime is installed but broken: {detail}", pytrace=False)
+
+
+@pytest.fixture
+def practice_session(tmp_path, monkeypatch):
+    from session_inputs import PracticeSession
+    sessions = []
+
+    def create(**options):
+        session = PracticeSession(tmp_path/str(len(sessions)), monkeypatch, **options)
+        sessions.append(session)
+        return session
+
+    yield create
+    for session in sessions:
+        session.close()

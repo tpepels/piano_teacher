@@ -65,9 +65,21 @@ alternate-course coverage and no native graded-event/future-note cases. The
 unchanged baseline at `16a064e2` collects 336 Python cases: 335 pass, one optional
 SF2/libfluidsynth case skips (`debug-sessions/practice-completion/test-rebuild-baseline.log`).
 No tests or production code have changed in this audit step. A reviewed
-replacement design is in [development](docs/development.md#test-suite-replacement-design--proposed-2026-11-20),
-awaiting owner approval before implementation. The earlier software acceptance
+replacement design is in [development](docs/development.md#test-suite-replacement-design--approved-2026-11-20).
+The owner approved continuing, prioritizing compact CI coverage of learner
+behaviour and rejecting architecture checks that constrain refactoring.
+Implementation is in progress. The earlier software acceptance
 below remains evidence for the unchanged source, not for an implemented new suite.
+
+The first replacement course checks exposed an actual manual final-entry bug:
+selecting the final and requesting Learn could start a timed `learn` take at
+target tempo with no guided targets. Automatic final progression was verified
+separately and already entered Practice at 50%. The flow session now keeps an
+explicit final Learn request in whole-piece Free before normal half-speed
+Tempo. The focused regression failed before the fix
+(`debug-sessions/practice-completion/final-learn-red.log`); the course/resume/
+timeline/feedback group then passed 47 cases in `course-feedback-green.log` in
+the same directory. No architecture assertions were added.
 
 ## Phase status and remaining acceptance
 

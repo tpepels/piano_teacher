@@ -66,9 +66,12 @@ also builds and boots a relocated package. These are different checks; parsing
 a production fixture does not mean its application journey ran. Serialize Godot
 imports/checks against a shared project and retain source revision plus logs.
 
-### Test-suite replacement design — proposed 2026-11-20
+### Test-suite replacement design — approved 2026-11-20
 
-Status: audit complete; replacement awaits owner approval of this design.
+Status: approved; implementation in progress. The owner prioritizes CI tests
+for player behaviour and explicitly rejects architecture/implementation checks
+that constrain refactoring. Coverage reports are informational, without a
+percentage gate or a required test for every internal branch.
 The owner requested a ground-up rebuild because tests may encode irrelevant or
 superseded behaviour. This request authorizes replacement tests; physical
 acceptance remains separate. This design stays in the existing guide to keep
@@ -95,7 +98,7 @@ This implements the requested rebuild while preserving useful failure/recovery
 coverage throughout. Merely renaming or pruning cases leaves the default-flow
 gaps. Deleting everything before replacement removes existing protection for
 progress migration, source fidelity and MIDI recovery. The chosen migration
-order is an engineering recommendation, not an owner-approved design yet.
+order preserves useful coverage during the approved rebuild.
 
 Every retained case must identify a learner-visible contract or a failure that
 would lose progress, play/grade the wrong source, prevent practice or fabricate
@@ -156,6 +159,43 @@ package build/boot. Record source commit, results and optional skips in ROADMAP.
 Keep physical CA49 USB/Bluetooth, sound, display, latency and clean-machine
 acceptance explicitly unverified. Work directly on main in coherent commits;
 do not push, create branches/worktrees or expand the four-file docs tree.
+
+#### CI test rebuild implementation plan
+
+**Goal:** A compact CI suite that catches broken lessons, feedback and saved
+progress while allowing the architecture and visual implementation to change.
+**Architecture:** Real engine inputs and outputs for the course; focused musical
+and external-I/O contracts; native checks for visible feedback and score lifetime.
+**Tech stack:** pytest, Godot and optional informational Python coverage.
+**Spec:** This design and [Practice flow](practice-flow.md).
+
+Global constraints: main only; no push; four docs; no architecture/parity/pixel
+tests; no simulated application rules; physical acceptance remains separate.
+The latest owner instruction authorizes replacement tests for current contracts.
+
+Review focus: future same-pitch notes, partial four-bar Free, reopened final,
+second floor-return aid and interruption during a pending completion.
+
+- [ ] Replace Python course/state/teaching scaffolding with default-course,
+  resume/aid, timeline and feedback scenarios. Use actual MIDI imports and one
+  injected input clock; inspect commands/snapshots/events and reopened progress.
+  Assert the full-window and two-target-clean rules, first-attack count-in,
+  exact repeat deadline, held tails and advisory releases.
+- [ ] Consolidate import, device, library/settings, audio and fingering cases
+  into focused feature files. Preserve real fault/recovery cases and explicit
+  supported alternate routes; remove source-text, object-shape and parity checks.
+- [ ] Replace native widget/layout/ownership cases with controls, immutable
+  admission, feedback and readiness/failure cases. Assert outcomes rather than
+  node names, shaders, exact captions or container dimensions.
+- [ ] Separate syntax parsing from executed behaviour in the runners; keep
+  `scripts/test.sh`, `--python-only` and pytest argument forwarding. Make default
+  Practice Flow explicit in production verification while retaining repertoire
+  and relocated package acceptance. Add informational coverage without a gate.
+- [ ] Run each changed group, verify meaningful negative/boundary cases, review
+  the integrated diff, then run full CI and embedded/package checks. Record the
+  coverage map and measured results, remove superseded helpers, and commit each
+  coherent step. Production fixes require actual defect evidence and are
+  recorded separately; assertions are not relaxed to make a bug pass.
 
 ## Standalone Linux package
 
