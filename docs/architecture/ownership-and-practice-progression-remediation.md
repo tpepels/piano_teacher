@@ -5,6 +5,8 @@
 **Scope:** Practice Flow, learning/assessment, playback and score admission, presentation timing, and the three largest first-party production source files.  
 **Goal:** One authoritative owner for each domain decision; explicit typed boundaries; no independent recomputation of a decision downstream; preserve the continuous native score and all existing capabilities.
 
+See also the current source-based [PracticeEngine responsibility/dependency audit](practice-engine-decomposition-audit.md), which distinguishes actual mutable owners from wrappers and defines the dependency-ordered extraction work.
+
 ## Implementation progress
 
 **Implementation branch:** `main`. **Tests:** No new tests introduced. Existing fixtures were migrated to current public admission/score ports and one legacy parser assertion was retired. Core CI passed on `eee14c54` ([run 44637473989](https://github.com/tpepels/piano_teacher/actions/runs/44637473989)); newer source CI and full native verification are tracked below, not assumed green. Physical audio/MIDI cannot be certified by headless runs.
@@ -370,6 +372,12 @@
 
 - This checkpoint fixes the software candidate for one complete opt-in native run covering the newly extracted SourcePreparationSession, RetainedNotationPool, single presentation/beat projector, queue-owned preflight/receipt/continuation, all existing musical repertoire journeys and the clean extracted package launcher. Run all independent cases, collect their actual results, and leave any failed cases explicitly open.
 - No new automated tests or hidden compatibility transport were introduced. Hardware-specific CA49, USB, Bluetooth, nonheadless speaker output and precise audiovisual drift remain manual-only and unverified in this environment.
+
+### Implementation checkpoint AX — source-level server.py dependency/ownership audit
+
+- Examined all 158 PracticeEngine method/property definitions and the ~99 mutable fields initialized at startup, inspected the largest start, Resume, Retry, recovery, full-attempt settlement, continuation and state snapshot methods and the actual implementation of PlaybackCoordinator, AttemptSettlement and TeachingContinuation.
+- Published the [PracticeEngine extraction audit](practice-engine-decomposition-audit.md): ownership table, overlapping setters/state, engine-pointer cycle through playback admission, private transport access, durable settlement hazards, and a dependency-ordered migration plan. This is evidence against the current source, not the historical 19 November line references.
+- Next work is to implement the bounded state/ownership transfers, not add forwarding functions or claim Phase 5 done because a single file is shorter.
 
 #### Phase 6 acceptance matrix
 
