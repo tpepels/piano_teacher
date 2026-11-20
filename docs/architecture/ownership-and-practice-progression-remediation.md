@@ -496,6 +496,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - `SourcePreparationSession` now validates finger values and source-note IDs, applies user corrections with the same `FingeringService` worker, and prepares complete original-piece fingering status. PracticeEngine remains solely responsible for generation-locked installation into the *current* LearningPlan after the expensive correction returns, never an obsolete captured piece.
 - This removes an independent source-validation path from the application facade; load and correct still share their existing serialized fingering lock, and reopening/resetting a piece rejects stale in-flight corrections. No tests added.
 
+### Implementation checkpoint BS — repair frozen-source admission guard found by native integration
+
+- Full native [run 44729438368](https://github.com/tpepels/piano_teacher/actions/runs/44729438368) compiled the GDExtension and embedded Python and **passed the clean relocated package**, but Play/Pause/Resume, Moonlight Retry/Listen, Peace Piece and Chopin UI checks failed because `PlaybackCoordinator.advance` called `_valid_source(engine,...)` after retiring its engine argument. This caused a `NameError` whenever a graphical playback intent was pending. Core CI alone had not executed this graphical path.
+- Fixed that final stale argument to the source-identity validation port's frozen `PlaybackRuntimeFacts` and reviewed the entire coordinator for any remaining live `engine` references. There are none. No extra clock, policy, tests or compatibility engine adapter were introduced.
+- Trigger the complete native/playback/repertoire/relocated-package acceptance on this exact corrected source; physical Kawai, speaker and Bluetooth remain unchecked.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

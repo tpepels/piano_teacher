@@ -418,7 +418,7 @@ class PlaybackCoordinator:
         if not self.presentation_required:
             return
         if self.intent is not None:
-            if not self._valid_source(engine, self.intent):
+            if not self._valid_source(facts, self.intent):
                 self.invalidate("Source changed before notation admission")
             return
         if not self.active_take_id:
