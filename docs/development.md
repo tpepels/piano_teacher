@@ -116,6 +116,10 @@ exercise built application routes, separately from the fast suite. Serialize
 Godot imports/checks against a shared project and retain source revision and
 logs. Parsing a production fixture does not establish that its journey ran.
 
+The rebuilt suite and all seven full production/package cases pass on source
+`5477aa74`. [ROADMAP](../ROADMAP.md#ci-suite-rebuilt-2026-11-20) records the logs,
+manual final-Learn correction, optional skip and outstanding physical acceptance.
+
 ## Standalone Linux package
 
 [package-inprocess.sh](../scripts/package-inprocess.sh) assembles Godot, the

@@ -66,7 +66,7 @@ modules/336 collected cases (335 passed, one optional audio skip) and 26
 native scenario invocations. Baseline log:
 `debug-sessions/practice-completion/test-rebuild-baseline.log`.
 
-The replacement has ten Python modules/85 cases and four executed Godot
+Commit `5477aa74` replaces the suite with ten Python modules/85 cases and four executed Godot
 groups. It covers the actual default course, complete Free windows, growing
 windows/hands, tempo/failure/aid/final progression, saved migrations, MIDI
 recovery, real audio, fingering and source/take-specific feedback. Architecture,
@@ -84,8 +84,15 @@ Current local CI passes: **84 Python passed, one absent optional system-SF2
 skip; production Godot parsing and all four native behaviour groups pass**.
 Python coverage is **58.9% lines, 38.3% branches**, informational without a gate.
 CI uploads XML/JSON coverage reports. Evidence: `debug-sessions/practice-completion/ci-rebuild-final.log`.
-The full embedded/repertoire/relocated-package workflow is being rerun on the
-committed replacement; the earlier results below remain historical evidence.
+The **full embedded workflow passes all seven cases on `5477aa74`**: isolated
+fixture, embedded registration/real score, default Practice Flow controls,
+Moonlight Sonata with Retry/Listen/navigation, Peace Piece, Chopin and strict
+relocated standalone package build/boot with a cleared environment and clean
+HOME. Checkout and packaged source both report `PACKAGE_CONTENTS_OK`; the
+runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Evidence:
+`debug-sessions/practice-completion/embedded-ci-rebuild.log`.
+This is local software verification; no new remote GitHub result or physical
+acceptance is claimed. The correction record below is historical evidence.
 
 ## Phase status and remaining acceptance
 
@@ -153,7 +160,7 @@ above; it remains historical evidence for that source.
 | Phase | State |
 | --- | --- |
 | Phase 5 — ownership decomposition | Complete in source, with reconciled owner contracts; historical architecture audit passed. CI now verifies behaviour rather than module shape. Feedback work removes the independent preview matcher and release pairing. |
-| Phase 6 — software and physical verification | Rebuilt core/native CI passes; full embedded/repertoire/relocated-package rerun pending. Phase remains incomplete until physical and clean-machine acceptance is performed. |
+| Phase 6 — software and physical verification | Rebuilt core/native CI and the full embedded/repertoire/relocated-package workflow pass on `5477aa74`. Phase remains incomplete until physical and clean-machine acceptance is performed. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen
