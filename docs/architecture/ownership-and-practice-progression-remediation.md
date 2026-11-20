@@ -508,6 +508,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Moved post-settlement preloader `prepared_published`/acknowledged-identity consumption into `TeachingContinuation.apply_settled_effect`. PracticeEngine no longer writes the same flags in both the handoff and non-handoff branches.
 - The already existing `PracticeFlowCourseSession.settle_decided` remains the sole selected flow outcome owner. No tests added. Current native/software acceptance must be repeated after this change.
 
+### Implementation checkpoint BI — passage outcome text is a pure projection
+
+- Moved the remaining `PracticeEngine._teaching_instruction` decision-to-text logic and full-passage Retry/slowdown/mastery recommendations into `application.passage_outcome_presenter`. Its functions consume only the already-selected immutable `PendingTeachingDecision` and explicit numeric source facts, and cannot alter the plan, select another policy or schedule transport.
+- `PracticeEngine._finish_full_passage` now applies one output string. Recovery timing and graded settlement are unchanged. No tests added; existing core CI is the regression gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

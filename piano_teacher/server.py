@@ -26,6 +26,7 @@ from .application import practice_flow
 from .application.playback_coordinator import PlaybackCoordinator
 from .application.playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts
 from .application.flow_course_session import PracticeFlowCourseSession
+from .application.passage_outcome_presenter import next_action as passage_next_action
 from .application.learning_evidence_session import LearningEvidenceSession
 from .application.source_preparation_session import SourcePreparationSession
 from .application.score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
@@ -2761,22 +2762,6 @@ class PracticeEngine:
         self.attempt.retry_range = None
 
     @staticmethod
-    def _teaching_instruction(pending):
-        decision,state = pending.decision,pending.state
-        if decision.progress_after.cursor == state.progress.cursor:
-            return ("passage mastered"
-                    if decision.flow_outcome is practice_flow.Outcome.PIECE_DONE
-                    else "play the passage again")
-        chosen = replace(state.course,definition=decision.definition_after,progress=decision.progress_after)
-        if chosen.progress.cursor[0] != state.progress.cursor[0]:
-            return "now learn the next passage"
-        if chosen.hand != state.course.hand:
-            return "now play both hands together" if chosen.hand == "both" else f"now learn the {chosen.hand} hand"
-        notes = chosen.stage.variant.notes
-        if any(sum(abs(other.start-note.start)<1e-6 for other in notes)>1 for note in notes):
-            return "now restore missing chord notes"
-        return "now play all the notes" if chosen.stage.variant.level == "original" else "now add more melody notes"
-
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
         # CompletedTake installed the pending result before decision selection.
         pending = self.attempt_settlement.pending
@@ -2816,17 +2801,10 @@ class PracticeEngine:
             # rest, not when the old count-in deadline elapses.
             self._advance_pending_feedback(now, force_early=True)
             return
-        if decision.verdict is not None and decision.verdict.accepted:
-            label = "Clean" if decision.verdict.clean else "Accepted"
-            self.next_action = (f"{label} passage — restore tempo to {decision.progress_after.bpm} BPM toward {self.plan.target_bpm} BPM."
-                if pending.state.progress.bpm < pending.state.progress.target_bpm else
-                f"{label} pass {pending.state.progress.streak+1}/{SETTINGS.clean_runs_to_master} — {self._teaching_instruction(pending)}.")
-        else:
-            self.next_action = "Retry the whole passage (red errors or at least half the attacks yellow)."
-        if response is not None and response.restart_beat > self.visual_transport.play_from_beat+1e-7:
-            self.next_action = "Repeat the difficult measure at %d BPM, then play the whole passage." % response.bpm
-        elif response is not None and response.bpm < self.attempt.pending_assessed_bpm:
-            self.next_action = "Retry more slowly at %d BPM." % response.bpm
+        self.next_action = passage_next_action(
+            pending,target_bpm=self.plan.target_bpm,
+            start_beat=self.visual_transport.play_from_beat,
+            assessed_bpm=self.attempt.pending_assessed_bpm)
         planned = self._decided_stage_selection()
         if planned is not None:
             selection, _number = planned
