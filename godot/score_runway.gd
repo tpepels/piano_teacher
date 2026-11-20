@@ -198,7 +198,6 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     # as the active stage before its retained note ink is pre-engraved.
     if is_instance_valid(stage.renderer):
         _future.external_backdrop = stage.renderer.external_backdrop
-        _future.compact_inactive_staff = stage.renderer.compact_inactive_staff
         # Use the NEXT stage's published hand, not the current stage's hand.
         # Pre-engraving must already occupy the eventual single-staff lane.
         _future.active_hand = str(value.get("hand","both"))
@@ -404,7 +403,6 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     var outgoing = stage.renderer
     var incoming = NativeView.new()
     incoming.external_backdrop = outgoing.external_backdrop
-    incoming.compact_inactive_staff = outgoing.compact_inactive_staff
     incoming.active_hand = str(state.get("hand","both"))
     incoming.set_density(float(outgoing.configured_density))
     incoming.set_transport_overlay_enabled(true)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field, replace
 from typing import Callable, Literal
 from .music import Note, Phrase
@@ -122,7 +123,7 @@ class Assessment:
     def flow_passed(self) -> bool:
         """Practice flow: wrong, missed and extra notes fail; timing fails
         only when an attack is clearly off, i.e. outside the onset tolerance
-        (130-300 ms by tempo) that the screen also shows in red. Key-release
+        (150 ms or a sixteenth at the local tempo) shown in red. Key-release
         timing never fails a take."""
         if not self.notes or self.extra_notes:
             return False
@@ -147,7 +148,8 @@ class Assessment:
 
 
 def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
-             expected_seconds: Callable[[Note], tuple[float, float, float]] | None = None) -> Assessment:
+             expected_seconds: Callable[[Note], tuple[float, float, float]] | None = None,
+             observation_window: tuple[float, float] | None = None) -> Assessment:
     """Score pitch, start timing, and held duration independently.
 
     Matching uses the nearest unused same-pitch onset in a generous window;
@@ -163,7 +165,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
     for note in expected:
         if expected_seconds is None:
             start = (note.start - phrase.start) * seconds_per_beat
-            duration = (min(note.end, phrase.end) - note.start) * seconds_per_beat
+            duration = (note.end - note.start) * seconds_per_beat
             release = start + duration
             local_spb = seconds_per_beat
         else:
@@ -209,42 +211,53 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
     # Closest-onset assignment first: an omitted repeated note must not steal
     # the correct press belonging to the next 16th of the same pitch.
     pairs = []
+    by_pitch = defaultdict(list)
+    for index, event in enumerate(played):
+        by_pitch[event.pitch].append((event.onset, index))
+    for attacks in by_pitch.values():
+        attacks.sort()
     for note_index, (note, (start, _, _, local_spb)) in enumerate(zip(expected, timing)):
         window = max(SETTINGS.grading_match_window_min_seconds,
                      SETTINGS.grading_match_window_beats * local_spb)
-        pairs.extend((abs(event.onset - start), note_index, event_index)
-                     for event_index, event in enumerate(played)
-                     if event.pitch == note.pitch and abs(event.onset-start) <= window)
+        attacks = by_pitch[note.pitch]
+        first = bisect_left(attacks, (start-window, -1))
+        last = bisect_right(attacks, (start+window, len(played)))
+        pairs.extend((abs(onset - start), note_index, event_index)
+                     for onset, event_index in attacks[first:last])
     matched = {}
     for _, note_index, event_index in sorted(pairs):
         if note_index not in matched and event_index in unused:
             matched[note_index] = event_index
             unused.remove(event_index)
 
+    # Reserve wrong-pitch presses after all exact-pitch matches, for every
+    # source attack even when the caller requests only bounded observations.
+    # This is the same assignment for live projection and full settlement.
     for note_index, note in enumerate(expected):
+        if not unused:
+            break
+        if note_index in matched:
+            continue
+        start, _, _, spb = timing[note_index]
+        candidates = [(abs(played[j].onset-start),j) for j in unused
+                      if abs(played[j].onset-start) <= onset_tolerance(spb)]
+        if candidates:
+            _, index = min(candidates)
+            unused.remove(index)
+            matched[note_index] = index
+
+    for note_index, note in enumerate(expected):
+        if observation_window is not None and not (
+                observation_window[0] <= timing[note_index][0] <= observation_window[1]):
+            continue
         if note_index not in matched:
             assessments.append(NoteAssessment(note, "missed", observation=observation_for(note_index)))
             continue
         observation = observation_for(note_index, matched[note_index])
-        status = (observation.timing_error or
+        status = ("wrong" if observation.pitch_error else observation.timing_error or
                   ("short" if observation.unreleased else observation.hold_error) or "correct")
-        assessments.append(NoteAssessment(note, status, observation=observation))
-    # Reclassify a missing pitch as 'wrong' only when an as-yet-unmatched
-    # played note started at the expected beat. This avoids counting an
-    # incorrect chord note as both 'missed' and 'extra'. Exact-pitch matching
-    # is completed first so a wrong note cannot steal another correct note.
-    for i, entry in enumerate(assessments):
-        if entry.status != "missed":
-            continue
-        expected_onset = timing[i][0]
-        candidates = [(abs(played[j].onset - expected_onset), j)
-                      for j in unused
-                      if abs(played[j].onset - expected_onset) <= onset_tolerance(timing[i][3])]
-        if candidates:
-            _, index = min(candidates)
-            unused.remove(index)
-            assessments[i] = NoteAssessment(entry.note, "wrong", played[index].pitch,
-                                             observation_for(i, index))
+        assessments.append(NoteAssessment(note, status,
+            observation.actual_pitch if observation.pitch_error else None, observation))
     leftovers = tuple(played[i] for i in sorted(unused))
     return Assessment(tuple(assessments), len(leftovers), leftovers)
 
@@ -256,7 +269,7 @@ class Recorder:
         self.presses: list[PlayedNote] = []
         self.active: dict[int, deque[int]] = defaultdict(deque)
 
-    def add(self, pitch: int, is_on: bool, at_seconds: float) -> None:
+    def add(self, pitch: int, is_on: bool, at_seconds: float) -> PlayedNote | None:
         if at_seconds < -0.08:
             return  # ignore count-in notes
         if is_on:
@@ -270,7 +283,9 @@ class Recorder:
             active.append(index)
             self.presses.append(PlayedNote(pitch, at_seconds, None,
                                            ambiguous_pairing=ambiguous, press_id=index))
+            return self.presses[index]
         elif self.active[pitch]:
             index = self.active[pitch].popleft()
             press = self.presses[index]
             self.presses[index] = replace(press, release=at_seconds)
+            return self.presses[index]

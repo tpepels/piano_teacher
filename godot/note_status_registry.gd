@@ -85,6 +85,15 @@ func clear() -> void:
     _notes_by_take.clear()
     _revision_by_take.clear()
 
+## Retract provisional assignment when the canonical matcher revises it.
+func clear_note(take: String, note_id: String, provisional_only: bool = true) -> bool:
+    var notes: Dictionary = _notes_by_take.get(take,{})
+    if not notes.has(note_id) or (provisional_only and bool(notes[note_id].get("settled",false))):
+        return false
+    notes.erase(note_id)
+    _revision_by_take[take] = int(_revision_by_take.get(take,0))+1
+    return true
+
 func record_of(take: String, note_id: String) -> Dictionary:
     return ((_notes_by_take.get(take,{}) as Dictionary).get(note_id,{}) as Dictionary)
 
@@ -97,13 +106,13 @@ func status(take: String, note_id: String) -> String:
 ## Merge observations for one physical note. Returns true when its displayed
 ## status changed. Provisional evidence never overrides a settled record.
 func observe(take: String, note_id: String, observation: Dictionary,
-        settled: bool) -> bool:
+        settled: bool, replace_existing: bool = false) -> bool:
     if take.is_empty() or note_id.is_empty():
         return false
     var notes: Dictionary = _notes_by_take.get(take,{})
     var previous: Dictionary = notes.get(note_id,{})
     var locked: bool = not settled and bool(previous.get("settled",false))
-    var record: Dictionary = {} if settled else previous.duplicate()
+    var record: Dictionary = {} if settled or replace_existing else previous.duplicate()
     for dimension in DIMENSIONS:
         var value: Variant = observation.get(dimension)
         if value != null and not str(value).is_empty():

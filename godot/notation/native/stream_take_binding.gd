@@ -174,7 +174,7 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
         world: float, opening: float, right: float,
         header: float, planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false,
-        empty_strip_count_in: float = 0.0) -> Dictionary:
+        empty_strip_count_in: float = 0.0, exact_authorized: bool = false) -> Dictionary:
     # The common future-only admission route owns a rollback snapshot until
     # the backend confirms the newly armed transport. Failure returns all
     # source/rest clip roles to their exact original state.
@@ -210,7 +210,7 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
             reused = true
             reused_unplayed = true
     if candidate_serial < 0 and is_finite(planned_start_world):
-        var checked: float = Admission.position(queue.online,
+        var checked: float = planned_start_world if exact_authorized else Admission.position(queue.online,
             facts.world,right,
             header,planned_start_world,0.0,
             facts.density,facts.gap,facts.duration)

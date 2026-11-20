@@ -90,6 +90,7 @@ class HeadlessStartTiming:
 class ListenActivation:
     started: bool = False
     requested_count_in: float | None = None
+    from_beat: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +139,7 @@ class FullPassageFacts:
     retry_rest: RestMeasurement | None
     repeat_rest: RestMeasurement | None
     assets_ready: bool
+    exact_repeats: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -25,7 +25,7 @@ def expected_note_seconds(phrase: Phrase, clock: BeatClock, from_beat: float = 0
 
     def expected(note: Note) -> tuple[float, float, float]:
         attack = note.start - phrase.start
-        release = min(note.end, phrase.end) - phrase.start
+        release = note.end - phrase.start
         return (clock.seconds_at(attack) - origin,
                 clock.seconds_at(release) - origin,
                 SCHEDULER.seconds_per_beat(clock.bpm_at(attack)))

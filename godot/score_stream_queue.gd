@@ -424,7 +424,8 @@ static func source_identity(candidate: Dictionary) -> String:
     # backend revision or transport ID. Reopening the same actual score
     # can therefore recover its withdrawn material without mixing songs.
     var source: Dictionary = {}
-    for key in ["schema","duration_beats","notes","notation_events",
+    for key in ["schema","duration_beats","sounding_duration_beats","notes",
+            "display_notes","display_extent","display_measures","active_note_ids","notation_events",
             "measures","time_signatures","key_signatures","clefs",
             "beam_groups","tie_groups","slur_pairs","tuplets",
             "tempo_changes","hand"]:

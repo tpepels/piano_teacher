@@ -1,82 +1,71 @@
-"""Incremental student feedback for the most recent two-bar practice window.
-
-Only settled notes are scored. Waiting for the expected release and an onset
-grace period avoids false "missed" or "short" flashes while a key is held.
-No video-frame clock or Godot interaction is involved.
-"""
+"""Live projection of the canonical grader, without a second note matcher."""
 from __future__ import annotations
+
+from .assessment_clock import expected_note_seconds
+from .exercise_contracts import TempoMap
+from .lesson_settings import SETTINGS
+from .grading_tolerance import onset_tolerance
 from .music import Phrase
-from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
+from .practice import Assessment, PlayedNote, evaluate
 from .application.musical_scheduler import SCHEDULER
 
 
-def settled_assessment(phrase: Phrase, hand: str, bpm: float,
-                       played: list[PlayedNote], *, from_beat: float,
-                       until_beat: float, beats_per_bar: float) -> Assessment | None:
-    if bpm <= 0 or beats_per_bar <= 0:
-        raise ValueError("Tempo and measure length must be positive")
-    grace = SCHEDULER.seconds_beats(.12,bpm)  # 120 ms after expected note release
-    earliest = max(from_beat, until_beat - 2*beats_per_bar)
-    required = tuple(
-        n for n in phrase.notes
-        if (hand == "both" or n.hand == hand)
-        and phrase.start+earliest-1e-7 <= n.start
-        and n.end <= phrase.start+until_beat-grace+1e-7
-    )
-    if not required:
-        return None
-    # PlayedNote timestamps have the same origin as the whole current take.
-    # Keeping that origin avoids drift at restarts and recovery sub-passages.
-    passage = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
-                     phrase.start+from_beat, phrase.end, required)
-    # Do not classify notes that occur later in the take as "extras" yet.
-    # This also makes deterministic prerecorded performance fixtures valid.
-    upto = SCHEDULER.beats_seconds(until_beat-from_beat,bpm)+.12
-    since = max(0.0,SCHEDULER.beats_seconds(earliest-from_beat,bpm)-.15)
-    eligible = [n for n in played if since <= n.onset <= upto]
-    result = evaluate(passage, hand, bpm, eligible)
-    # Project only required settled notes here. Early/key mistakes remain
-    # marked at their corresponding noteheads; extra-note labels are shown
-    # in the final assessment to avoid a misleading moving marker.
-    return Assessment(result.notes, 0, ())
+def live_scope(phrase: Phrase, *, from_beat: float, elapsed_seconds: float,
+               bpm: float, tempo: TempoMap | None = None) -> tuple[float, float]:
+    """Bound display work only; canonical matching still sees the full take."""
+    origin = tempo.seconds_at(from_beat) if tempo is not None else 0.0
+    beat = (tempo.beat_at(origin+max(0.,elapsed_seconds)) if tempo is not None
+            else from_beat+SCHEDULER.seconds_beats(max(0.,elapsed_seconds),bpm))
+    bar = (phrase.end-phrase.start)/max(1,phrase.last_bar-phrase.first_bar+1)
+    start = max(from_beat,beat-2*bar)
+    seconds = (tempo.seconds_at(start)-origin if tempo is not None else
+               SCHEDULER.beats_seconds(start-from_beat,bpm))
+    return start, seconds
 
 
-def expired_attack_misses(phrase: Phrase, hand: str, bpm: float,
-                          played: list[PlayedNote], *, from_beat: float,
-                          until_beat: float,
-                          window_start_beat: float | None = None) -> Assessment | None:
-    """Mark only individual missing pitches after their allowable onset window.
+def live_assessment(phrase: Phrase, hand: str, bpm: float,
+                    played: list[PlayedNote], *, from_beat: float,
+                    elapsed_seconds: float,
+                    tempo: TempoMap | None = None) -> Assessment:
+    """Use final scoring's assignment and recorded time, with no mutable matches.
 
-    A two-beat held chord must not wait for release before its unplayed
-    pitches become red. Use exactly the same pitch/onset matching window as
-    evaluate(), so a valid late note cannot first flash as missing.
-    This is a display-only assessment: it never increments failure counts.
+    An accepted early attack may light its upcoming head. An erroneous early
+    attack waits until that source onset; missing notes wait for the canonical
+    matching window. No live view ever claims a distant future head.
     """
     if bpm <= 0:
         raise ValueError("Tempo must be positive")
-    seconds_per_beat = SCHEDULER.seconds_per_beat(bpm)
-    search_window = max(.35, .65 * seconds_per_beat)
-    elapsed = (until_beat - from_beat) * seconds_per_beat
-    start = max(from_beat, window_start_beat if window_start_beat is not None else from_beat)
-    required = [
-        note for note in phrase.notes
-        if (hand == "both" or note.hand == hand)
-        and note.start - phrase.start >= start - 1e-7
-        and ((note.start - phrase.start - from_beat) * seconds_per_beat
-             + search_window <= elapsed + 1e-7)
-    ]
-    unused = set(range(len(played)))
-    misses = []
-    for note in required:
-        onset = (note.start - phrase.start - from_beat) * seconds_per_beat
-        candidates = [
-            (abs(played[index].onset - onset), index)
-            for index in unused
-            if played[index].pitch == note.pitch
-            and abs(played[index].onset - onset) <= search_window
-        ]
-        if candidates:
-            unused.remove(min(candidates)[1])
-        else:
-            misses.append(NoteAssessment(note, "missed"))
-    return Assessment(tuple(misses), 0, ()) if misses else None
+    if elapsed_seconds < 0:
+        return Assessment((), 0)
+    notes = tuple(note for note in phrase.notes
+                  if note.start - phrase.start >= from_beat - 1e-7)
+    selected = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
+                      phrase.start + from_beat, phrase.end, notes)
+    eligible = [event for event in played if event.onset <= elapsed_seconds + 1e-7]
+    _, since = live_scope(phrase,from_beat=from_beat,
+        elapsed_seconds=elapsed_seconds,bpm=bpm,tempo=tempo)
+    slowest = min((segment.bpm for segment in tempo.segments),default=bpm) if tempo else bpm
+    result = evaluate(selected, hand, bpm, eligible,
+                      expected_seconds=(expected_note_seconds(phrase, tempo, from_beat)
+                                        if tempo is not None else None),
+                      observation_window=(since,elapsed_seconds+onset_tolerance(
+                          SCHEDULER.seconds_per_beat(slowest))))
+    visible = []
+    for entry in result.notes:
+        observation = entry.observation
+        if observation is None:
+            continue
+        onset = observation.expected_onset
+        if observation.actual_onset is None:
+            window = max(SETTINGS.grading_match_window_min_seconds,
+                         SETTINGS.grading_match_window_beats * observation.local_seconds_per_beat)
+            if onset + window > elapsed_seconds + 1e-7:
+                continue
+        elif onset > elapsed_seconds + 1e-7:
+            if (onset - elapsed_seconds > observation.onset_tolerance + 1e-7
+                    or observation.timing_error is not None or observation.pitch_error):
+                continue
+        visible.append(entry)
+    # Unmatched physical presses already travel through FeedbackEventLog as
+    # actual-pitch ghosts. Never invent a second estimated ghost position.
+    return Assessment(tuple(visible), 0)

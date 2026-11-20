@@ -30,6 +30,7 @@ class ListenSelection:
     bar_boundaries: tuple[float, ...]
     time_signatures: tuple[tuple[float, int, int], ...]
     tempo_map: TempoMap | None = None
+    from_beat: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class ListenStart:
     count_in_meter: tuple[int, int]
     count_in_beats: float
     delay_seconds: float
+    from_beat: float = 0.0
 
 
 class ListenSession:
@@ -71,8 +73,10 @@ class ListenSession:
                 "token": token, "audio_available": False,
                 "instrument": "Preparing piano audio",
                 "duration_seconds": (selected.tempo_map.duration_seconds
+                                     -selected.tempo_map.seconds_at(selected.from_beat)
                                      if selected.tempo_map is not None
-                                     else SCHEDULER.beats_seconds(audio_end-variant.phrase.start,selected.bpm)),
+                                     else SCHEDULER.beats_seconds(
+                                         audio_end-variant.phrase.start-selected.from_beat,selected.bpm)),
                 "ready": False, "stage_key": selected.stage_key,
                 "source_ids": [f"{selected.stage_key}:{index}" for index in variant.source_indices],
                 "canonical_source_ids": [source_note_id(note, index)
@@ -96,8 +100,13 @@ class ListenSession:
                     end=offset+SCHEDULER.seconds_beats(tempo_map.seconds_at(note.end-offset),selected.bpm))
                     for note in variant.notes)
                 warped = replace(variant.phrase, notes=warped_notes,
+                    start=offset+SCHEDULER.seconds_beats(
+                        tempo_map.seconds_at(selected.from_beat),selected.bpm),
                     end=offset+SCHEDULER.seconds_beats(tempo_map.duration_seconds,selected.bpm))
                 variant = replace(variant, phrase=warped)
+            elif selected.from_beat:
+                variant = replace(variant,phrase=replace(variant.phrase,
+                    start=variant.phrase.start+selected.from_beat))
             audio = cache.render(variant, selected.bpm)
         except Exception as exc:
             with self._lock:
@@ -158,8 +167,10 @@ class ListenSession:
             grid = phrase_grid(phrase, selected.bar_boundaries)
             bar_beats = grid[1]-grid[0]
             meter = next(((num, den) for beat, num, den in
-                sorted(selected.time_signatures, reverse=True) if beat <= phrase.start+1e-7), None)
-            meter = preparation_meter(meter, selected.time_signatures, phrase.start)
+                sorted(selected.time_signatures, reverse=True)
+                if beat <= phrase.start+selected.from_beat+1e-7), None)
+            meter = preparation_meter(meter, selected.time_signatures,
+                phrase.start+selected.from_beat)
             count_meter = meter if meter is not None else (max(1, round(bar_beats)), 4)
             if meter is not None:
                 bar_beats = meter[0]*4/meter[1]
@@ -167,7 +178,7 @@ class ListenSession:
             if commit:
                 self._started = True
             return ListenStart(bar_beats,count_meter,count_beats,
-                SCHEDULER.beats_seconds(count_beats,selected.bpm))
+                SCHEDULER.beats_seconds(count_beats,selected.bpm),selected.from_beat)
 
     def authorize_playback(self, revision: int, count_in_plan) -> ListenStart | None:
         """Validate the exact physical CountInPlan before consuming Listen.

@@ -104,7 +104,7 @@ func rebuild_index() -> void:
         if str(source_event.get("kind", "")) == "note":
             expression_note_index[str(source_event.get("id", ""))] = source_event
     prepared_hairpins = SourceSpans.hairpins(source_expressions,self)
-    prepared_voltas = SourceSpans.voltas(timeline.measures,timeline.duration_beats)
+    prepared_voltas = SourceSpans.voltas(timeline.display_measures,timeline.display_end_beat)
     chord_members = index["chord_members"]
     sorted_chord_members.clear()
     for leader_id in chord_members:
@@ -163,7 +163,7 @@ func clef_for(staff: String, measure: Dictionary) -> Dictionary:
 
 func measure_for(event: Dictionary) -> Dictionary:
     var number: int = int(event.get("measure", -1))
-    return measure_by_number.get(number, timeline.measures[0])
+    return measure_by_number.get(number, timeline.display_measures[0])
 
 func prepare_event_positions(gap: float) -> void:
     # Pitch spelling, clef and voice rest lanes are score/viewport properties.
@@ -590,7 +590,7 @@ const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 
 func barline_geometry(measure: Dictionary, clock: float,
         playhead_x: float, gap: float, play_from_beat: float = 0.0) -> Dictionary:
-    var info: Dictionary = BarlineLayout.boundary(timeline.measures, measure, timeline,
+    var info: Dictionary = BarlineLayout.boundary(timeline.display_measures, measure, timeline,
         clock, playhead_x, play_from_beat, gap,
         barline_top(gap),
         barline_bottom(gap))
@@ -600,7 +600,7 @@ func barline_geometry(measure: Dictionary, clock: float,
 
 func terminal_barline_geometry(clock: float,
         playhead_x: float, gap: float, play_from_beat: float = 0.0) -> Dictionary:
-    var info: Dictionary = BarlineLayout.terminal(timeline.measures, timeline,
+    var info: Dictionary = BarlineLayout.terminal(timeline.display_measures, timeline,
         clock, playhead_x, play_from_beat, gap,
         barline_top(gap),
         barline_bottom(gap))

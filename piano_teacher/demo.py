@@ -53,8 +53,8 @@ def _prepare(variant: ExerciseVariant, bpm: Real, sample_rate: int, chunk_frames
     if not isinstance(chunk_frames, int) or isinstance(chunk_frames, bool) or not 1 <= chunk_frames <= 65536:
         raise ValueError("Audio chunk size must be an integer between 1 and 65536 frames")
     bpm = _finite(bpm, "BPM")
-    if not 12 <= bpm <= 300:
-        raise ValueError("BPM must be between 12 and 300")
+    if not 1 <= bpm <= 300:
+        raise ValueError("BPM must be between 1 and 300")
     phrase = variant.phrase
     start, end = _finite(phrase.start, "Phrase start"), _finite(phrase.end, "Phrase end")
     if end <= start:

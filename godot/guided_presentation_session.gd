@@ -57,7 +57,7 @@ func publish_authorized_target(parsed: Dictionary, renderer,
         visual_world,float(guided["source_from_beat"]),
         target_world,str(guided["plan_id"]),true,
         float(guided.get("count_in_beats",0.0)),
-        false,true)
+        false,true,preload("res://note_status_registry.gd").take_key(parsed))
     if not admitted:
         return
     var key: String = str(guided["plan_id"])

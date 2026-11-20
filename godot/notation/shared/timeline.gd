@@ -17,6 +17,10 @@ var model: Dictionary = {}
 var notes: Array = []
 var measures: Array = []
 var duration_beats := 0.0
+var sounding_duration_beats := 0.0
+var display_measures: Array = []
+var display_start_beat := 0.0
+var display_end_beat := 0.0
 var revision := -1
 var last_error := ""
 
@@ -50,8 +54,16 @@ func load_model(candidate: Dictionary) -> bool:
     if not is_finite(length) or length <= 0.0 or new_measures.is_empty():
         last_error = "Missing exercise or invalid duration"
         return false
+    var extent: Dictionary = candidate.get("display_extent",{})
+    var display_first: float = float(extent.get("start_beat",0.0))
+    var sounding: float = float(candidate.get("sounding_duration_beats",length))
+    var display_last: float = float(extent.get("end_beat",maxf(length,sounding)))
+    if not is_finite(display_first) or not is_finite(display_last) or \
+            not is_finite(sounding) or display_first > 0.0 or display_last < sounding or sounding < length:
+        last_error = "Invalid display or sounding extent"
+        return false
     var seen: Dictionary = {}
-    for note in new_notes:
+    for note in candidate.get("display_notes",new_notes):
         if not note is Dictionary:
             last_error = "Invalid semantic note"
             return false
@@ -59,11 +71,11 @@ func load_model(candidate: Dictionary) -> bool:
         var onset: float = float(note.get("onset_beats", -INF))
         var duration: float = float(note.get("duration_beats", -INF))
         if ident.is_empty() or seen.has(ident) or not is_finite(onset) \
-                or not is_finite(duration) or onset < 0.0 \
-                or duration <= 0.0 or onset + duration > length + .0001:
+                or not is_finite(duration) or onset+duration <= display_first \
+                or duration <= 0.0 or onset >= display_last + .0001:
             last_error = "Invalid source note ID, onset or duration"
             return false
-        seen[ident] = true
+        seen[ident] = note
     var previous := 0.0
     for measure in new_measures:
         if not measure is Dictionary:
@@ -79,10 +91,38 @@ func load_model(candidate: Dictionary) -> bool:
     if absf(previous - length) > .0001:
         last_error = "Measure grid does not match exercise duration"
         return false
+    var performance_ids: Dictionary = {}
+    for note in new_notes:
+        if not note is Dictionary or not seen.has(str(note.get("id",""))) or \
+                note != seen[str(note.get("id",""))]:
+            last_error = "Performance note differs from its authentic display source"
+            return false
+        performance_ids[str(note["id"])] = note
+    for active_id in candidate.get("active_note_ids",[]):
+        var active_note: Dictionary = performance_ids.get(str(active_id),{})
+        if active_note.is_empty() or float(active_note["onset_beats"]) < 0.0 or \
+                float(active_note["onset_beats"]) >= length or \
+                float(active_note["onset_beats"])+float(active_note["duration_beats"]) > sounding+.0001:
+            last_error = "Active source identity is missing from display envelope"
+            return false
+    var display_grid: Array = candidate.get("display_measures",new_measures)
+    var display_previous: float = display_first
+    for measure in display_grid:
+        if not measure is Dictionary or absf(float(measure.get("start_beat",INF))-display_previous) > .0001:
+            last_error = "Display measure grid is not contiguous"
+            return false
+        display_previous = float(measure.get("end_beat",-INF))
+    if display_previous < length-.0001 or display_previous > display_last+.0001:
+        last_error = "Display grid lost the authored window"
+        return false
     model = candidate.duplicate(true)
     notes = model["notes"]
     measures = model["measures"]
     duration_beats = length
+    sounding_duration_beats = sounding
+    display_measures = model.get("display_measures",measures)
+    display_start_beat = display_first
+    display_end_beat = display_last
     revision = int(candidate.get("revision", -1))
     last_error = ""
     return true

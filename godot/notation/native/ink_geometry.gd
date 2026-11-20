@@ -158,9 +158,9 @@ func outgoing_beam_stems(gap: float, heads: Dictionary) -> Dictionary:
 func outgoing_boundary_strokes(gap: float) -> Array:
     var result: Array = []
     var boundaries: Array = []
-    for measure in score.timeline.measures:
+    for measure in score.timeline.display_measures:
         boundaries.append({"beat":float(measure["start_beat"]),"geometry":score.barline_geometry(measure,0.0,0.0,gap)})
-    boundaries.append({"beat":score.timeline.duration_beats,"geometry":score.terminal_barline_geometry(0.0,0.0,gap)})
+    boundaries.append({"beat":float(score.timeline.display_measures[-1]["end_beat"]),"geometry":score.terminal_barline_geometry(0.0,0.0,gap)})
     # The terminal boundary also owns the source-to-preparation junction D.
     # Repetition changes the camera offset, not its local outgoing spacing.
     for boundary in boundaries:

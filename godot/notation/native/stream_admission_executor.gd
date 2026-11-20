@@ -8,13 +8,16 @@ const TransportReservation := preload("res://score_transport_reservation.gd")
 
 static func reserve_action(stream, facts: StreamGeometry, preflight: Dictionary,
         action: String, world: float, opening: float, count_in_beats: float,
-        right: float, header: float, bpm: float) -> Dictionary:
+        right: float, header: float, bpm: float,
+        exact_start_world: float = NAN, display_context: bool = false) -> Dictionary:
     # The ONLY user-command route. First compute both the future slot and
     # safe suffix on immutable previews; failed preflight cannot withdraw
     # any source or start the backend transport. count_in_beats is the
     # engine's next_count_in_beats (one count-in bar).
+    preflight = preflight.duplicate()
+    preflight["display_context_required"] = display_context
     var planned: Dictionary = TransportReservation.plan_facts(
-        preflight,action,world,opening,count_in_beats)
+        preflight,action,world,opening,count_in_beats,exact_start_world)
     if not bool(planned.get("ok",false)):
         push_error("SCORE_TRANSPORT_PREFLIGHT: %s action=%s opening=%.3f" % [
             str(planned.get("reason","unknown")),action,opening])
@@ -53,7 +56,8 @@ static func reserve_action(stream, facts: StreamGeometry, preflight: Dictionary,
     stream.retry_placement_enabled(action == "restart")
     var admitted: Dictionary = stream.arm_take(facts,
         world,opening,right,header,intended,false,false,
-        count_in_beats if bool(planned.get("empty_strip",false)) else 0.0)
+        count_in_beats if bool(planned.get("empty_strip",false)) else 0.0,
+        is_finite(exact_start_world),display_context)
     stream.retry_placement_enabled(false)
     if admitted.is_empty():
         push_error("SCORE_TRANSPORT_COMMIT: preflighted future take was not admitted")

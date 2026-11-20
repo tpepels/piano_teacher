@@ -159,7 +159,8 @@ func paint(canvas, clock: float, playhead_x: float, gap: float,
         if rect.position.x < 30.0 or rect.end.x > score_layout.size.x:
             continue
         var active_hand: String = str(context.get("active_hand","both"))
-        var selected: bool = active_hand == "both" or active_hand == str(item["hand"])
+        var selected: bool = (active_hand == "both" or active_hand == str(item["hand"])) and \
+            str(source_note.get("display_role","active")) == "active"
         var ink: Color = Design.SCORE_INK if selected else Color(Design.STAFF_MUTED,.46)
         if item["hand"] == "left":
             ink = ink.lerp(Design.BLUE,.32)

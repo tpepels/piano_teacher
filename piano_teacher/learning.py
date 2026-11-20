@@ -77,6 +77,7 @@ class LearningPlan:
         self._variants_cached: tuple | None = None
         self.streak = 0
         self.failures = 0
+        self.free_returns: dict[str,int] = {}
         self.target_bpm = piece.bpm
         self.mastered: dict[str, int] = {}
         # Tempo is a ladder for each source passage/hand/variant, not just
@@ -104,7 +105,8 @@ class LearningPlan:
         return course_policy.PlanProgress(
             (self.index, self.hand_index, self.variant_index), self.bpm, self.target_bpm,
             self.streak, self.failures, tuple(sorted(self.mastered.items())),
-            tuple(sorted(self.stage_tempos.items())), tuple(sorted(self.transferable_tempos)))
+            tuple(sorted(self.stage_tempos.items())), tuple(sorted(self.transferable_tempos)),
+            tuple(sorted(self.free_returns.items())))
 
     def course_state(self) -> course_policy.CourseState:
         return course_policy.CourseState(self.piece, self.lesson_definition,
@@ -124,6 +126,7 @@ class LearningPlan:
         self.mastered = dict(progress.mastered)
         self.stage_tempos = dict(progress.stage_tempos)
         self.transferable_tempos = set(progress.transferable_tempos)
+        self.free_returns = dict(progress.free_returns)
         self._variants_cached = None
 
     def _install_course(self, course) -> None:

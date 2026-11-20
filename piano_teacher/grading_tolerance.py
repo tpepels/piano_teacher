@@ -5,9 +5,9 @@ from .lesson_settings import SETTINGS
 
 
 def onset_tolerance(seconds_per_beat: float) -> float:
-    """A gentler 300ms ceiling for slow lessons, 130ms at full tempo."""
-    return max(SETTINGS.grading_onset_tolerance_seconds,
-               min(0.30, 0.20 * seconds_per_beat))
+    """Allow 150 ms or one sixteenth at the local tempo, whichever is longer."""
+    return max(0.15, SETTINGS.grading_onset_tolerance_seconds,
+               0.25 * seconds_per_beat)
 
 
 def duration_tolerance(duration_seconds: float, seconds_per_beat: float) -> float:

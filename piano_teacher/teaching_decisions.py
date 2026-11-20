@@ -170,6 +170,12 @@ def source_safe_response(response, *, phrase, hand, grid):
     return replace(response, restart_beat=start, end_beat=end)
 
 
+def full_source_opening(state) -> bool:
+    """Skipping source silence cannot turn a complete take into a partial one."""
+    return (abs(state.route.from_beat) <= 1e-7 or
+        abs(state.route.from_beat-state.course.stage.variant.phrase.first_attack_beat) <= 1e-7)
+
+
 def decide_standard_teaching(event, state, *, generator=None,
                              allow_heuristic_remediation=True):
     c, route, result = state.course, state.route, event.assessment
@@ -178,7 +184,7 @@ def decide_standard_teaching(event, state, *, generator=None,
     feedback = dict(state.source_feedback)
     continuation = "continue"
     eligible = (event.kind == "full_result" and route.mode == "practice"
-        and not route.preview_only and not route.assistance_used and route.from_beat == 0
+        and not route.preview_only and not route.assistance_used and full_source_opening(state)
         and route.review_end_beat is None and bool(result and result.notes))
     flow = bool(getattr(generator, "flow_rules", False))
     verdict = (AssessmentVerdict.decide(result,
@@ -341,15 +347,19 @@ def validate_teaching_decision(decision, *, event, state):
             if any(stage not in allowed for stage in sequence):
                 raise ValueError("Unknown teaching catalog candidate")
     p = decision.progress_after
+    lower_bpm = 1 if state.definition.generator_name == "practice-flow" else SETTINGS.minimum_bpm
     if (type(p.cursor) is not tuple or len(p.cursor) != 3
-            or any(type(value) is not tuple for value in (p.mastered,p.stage_tempos,p.transferable_tempos))
+            or any(type(value) is not tuple for value in (p.mastered,p.stage_tempos,p.transferable_tempos,p.free_returns))
             or type(decision.feedback_after) is not tuple):
         raise ValueError("Mutable teaching progress")
     for value in (p.bpm, p.target_bpm):
-        if type(value) not in (int, float) or not isfinite(value) or not SETTINGS.minimum_bpm <= value <= SETTINGS.maximum_bpm:
+        if type(value) not in (int, float) or not isfinite(value) or not lower_bpm <= value <= SETTINGS.maximum_bpm:
             raise ValueError("Invalid teaching BPM")
     if any(type(value) is not int or value < 0 for value in (*p.cursor, p.streak, p.failures)):
         raise ValueError("Invalid teaching progress")
+    if any(type(key) is not str or type(count) is not int or count < 0
+           for key,count in p.free_returns):
+        raise ValueError("Invalid Free return history")
     chosen = replace(state.course, definition=decision.definition_after, progress=p)
     try:
         key, hand, phrase = chosen.key, chosen.hand, chosen.stage.variant.phrase
@@ -370,14 +380,14 @@ def validate_teaching_decision(decision, *, event, state):
             event.assessment,policy="practice-flow" if flow else "standard",
             eligible=(event.kind == "full_result" and state.route.mode == "practice"
                 and not state.route.preview_only and not state.route.assistance_used
-                and state.route.from_beat == 0
+                and full_source_opening(state)
                 and state.route.review_end_beat is None
                 and bool(event.assessment.notes)))
         if decision.verdict != expected_verdict:
             raise ValueError("Teaching and settlement disagree on assessment policy")
     eligible = (event.kind == "full_result" and state.route.mode == "practice"
         and not state.route.preview_only and not state.route.assistance_used
-        and state.route.from_beat == 0 and state.route.review_end_beat is None
+        and full_source_opening(state) and state.route.review_end_beat is None
         and event.assessment is not None and bool(event.assessment.notes) and passed
         and state.route.performed_bpm >= state.progress.target_bpm
         and state.progress.streak+1 >= (2 if flow else SETTINGS.clean_runs_to_master))
@@ -385,7 +395,7 @@ def validate_teaching_decision(decision, *, event, state):
         raise ValueError("Unearned teaching mastery")
     full_target = (event.kind == "full_result" and state.route.mode == "practice"
         and not state.route.preview_only and not state.route.assistance_used
-        and state.route.from_beat == 0 and state.route.review_end_beat is None
+        and full_source_opening(state) and state.route.review_end_beat is None
         and event.assessment is not None and bool(event.assessment.notes))
     if decision.invalidate_failed_streak != bool(full_target and not passed):
         raise ValueError("Invalid failed-streak checkpoint")
@@ -398,7 +408,7 @@ def validate_teaching_decision(decision, *, event, state):
     for entries in (p.mastered,p.stage_tempos):
         if any(type(entry) is not tuple or len(entry) != 2 or type(entry[0]) is not str
                 or type(entry[1]) not in (int,float) or not isfinite(entry[1])
-                or not SETTINGS.minimum_bpm <= entry[1] <= SETTINGS.maximum_bpm for entry in entries):
+                or not lower_bpm <= entry[1] <= SETTINGS.maximum_bpm for entry in entries):
             raise ValueError("Invalid recorded teaching tempo")
     exposure = decision.next_exposure
     if (decision.continuation in ("stop","pause")) != (exposure is None):

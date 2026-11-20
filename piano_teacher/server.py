@@ -25,6 +25,7 @@ from .diagnosis_policies import LearnerSnapshot
 from .application import practice_flow
 from .application.playback_coordinator import PlaybackCoordinator
 from .application.playback_session import PlaybackSession
+from .application.playback_transitions import CountInPlan
 from .application.playback_facts import (
     PlaybackSourceFacts, PlaybackRuntimeFacts, TimedTakeSource, TimedStartRequest,
     PreparationRequest, ResumeRequest, FullPassageFacts, RestResumeFacts, PreloadedFeedbackSource,
@@ -91,6 +92,7 @@ from . import state_contract
 from .clock import Clock, monotonic
 from .feedback_events import FeedbackEventLog
 from .live_assessment_publisher import LiveAssessmentPublisher
+from .live_feedback import live_scope
 from .runtime_timings import RuntimeTimings
 from .live_input_view import LiveInputView
 from .learner_state import guided_units
@@ -326,7 +328,7 @@ class PracticeEngine:
             source = PlaybackSourceFacts(
                 fingerprint=self.fingerprint,stage_key=plan.identity,
                 revision=self.score_revision,hand=plan.hand,bpm=float(plan.bpm),
-                end_beat=plan.active_phrase.end-plan.active_phrase.start,
+                end_beat=plan.active_phrase.sounding_end-plan.active_phrase.start,
                 count_in_bar_beats=float(bar),count_in_meter=tuple(meter),
                 tempo_segments=segments)
         return self.playback_session.facts(source)
@@ -446,7 +448,9 @@ class PracticeEngine:
             score_revision=self.score_revision, count_in_beats=self.playback_session.count_in_beats,
             count_in_meter=self.playback_session.count_in_meter,
             guided_config=self.teaching.config if self.teaching is not None else None,
-            persistent_hints=self.persistent_hints)
+            persistent_hints=self.persistent_hints,
+            variant=(self.guided_session.fragment.variant
+                if scope == "guided" and self.guided_session.fragment is not None else None))
 
     def learning_history_status(self) -> dict:
         with self.lock:
@@ -730,7 +734,7 @@ class PracticeEngine:
                 self.score_revision += 1
                 self.attempt.reset_source_presentation()
                 if self._flow_active():
-                    self._flow_open()
+                    self._flow_open(resumed=prepared.resumed)
         if diagnostics:
             print("SCORE_LOAD_STAGE: ready",
                   round((time.perf_counter()-began)*1000,1),
@@ -879,6 +883,8 @@ class PracticeEngine:
         self.guided_session.prepared = not pending.state.route.remediation_active
         if pending.decision.next_exposure is not None:
             self._enter_selected_exposure(pending.decision.next_exposure)
+        if pending.decision.message:
+            self._flow_say(pending.decision.message)
 
 
     def _learner_snapshot(self) -> dict:
@@ -923,11 +929,14 @@ class PracticeEngine:
             self.feedback = effect.feedback
             self.next_action = effect.next_action
 
-    def _flow_open(self) -> None:
+    def _flow_open(self, *, resumed: bool = False) -> None:
         """Open: a fresh piece starts with Listen, a resumed one in Free."""
         self.course_guided = True
         self.playback_session.continue_course()
-        self._flow_execute(self.flow_session.opening(self.plan))
+        # Even an opening Listen is a selected window. Closing before the
+        # first Free note must still reopen that saved location in Free.
+        self._save()
+        self._flow_execute(self.flow_session.opening(self.plan,resumed=resumed))
 
     def _flow_say(self, text: str) -> None:
         self.flow_session.say(text)
@@ -1120,7 +1129,7 @@ class PracticeEngine:
         activation = self.playback_session.begin_listen_if_ready(
             revision=self.score_revision,presentation_required=self.playback.presentation_required)
         if activation.requested_count_in is not None:
-            self._request_playback(action="listen",mode="listen",from_beat=0.0,
+            self._request_playback(action="listen",mode="listen",from_beat=activation.from_beat,
                 count_in_beats=activation.requested_count_in)
         elif activation.started:
             self.feedback = "Count in, then listen"
@@ -1212,7 +1221,9 @@ class PracticeEngine:
             assisted_count=assisted_count, completed=completed, reason=values.get("reason"),
             bar=values.get("bar"), first_bar=values.get("first_bar"), last_bar=values.get("last_bar"),
             scope=values.get("scope"), requested_stage=values.get("stage_key"), requested_mode=values.get("mode"))
-        scope = completion_route(self.playback_session.mode, self.attempt.review_end_beat, self.visual_transport.play_from_beat)
+        scope = completion_route(self.playback_session.mode, self.attempt.review_end_beat,
+            self.visual_transport.play_from_beat,
+            full_from_beat=p.active_phrase.first_attack_beat)
         if self.attempt.automatic_remedial_review and scope == "section_review":
             scope = "partial_recovery"
         policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
@@ -1225,7 +1236,7 @@ class PracticeEngine:
                 preview_only=self.playback_session.preview_only, assistance_used=self.measurement.assistance_used,
                 scope=scope, performed_bpm=self.attempt_settlement.pending_assessed_bpm or p.bpm,
                 from_beat=self.visual_transport.play_from_beat,
-                end_beat=end_beat if end_beat is not None else p.active_phrase.end-p.active_phrase.start,
+                end_beat=end_beat if end_beat is not None else p.active_phrase.sounding_end-p.active_phrase.start,
                 course_guided=self.course_guided, guided_return=self.guided_session.return_context,
                 guided_range=self.guided_session.beat_range, review_end_beat=self.attempt.review_end_beat,
                 remediation_active=self._remediation_active is not None,
@@ -1410,7 +1421,8 @@ class PracticeEngine:
         if self.playback.presentation_required:
             self.playback_session.prepare_admitted_continuation()
             self._request_playback( action="auto", mode=self.playback_session.mode,
-                from_beat=from_beat, earliest_deadline=deadline)
+                from_beat=from_beat, earliest_deadline=deadline,
+                fixed_deadline=deadline if self._flow_active() else None)
             self._queue_scheduled_start = None
             self.feedback = "Preparing the next passage"
             return
@@ -1418,7 +1430,11 @@ class PracticeEngine:
         serial = (self.visual_transport.announce_serial
                   if announced is not None and abs(announced - deadline) <= 1e-9 else None)
         self.start(from_beat=from_beat, mode=self.playback_session.mode, loop_continuation=True,
-                   scheduled_deadline=deadline)
+                   scheduled_deadline=deadline,
+                   count_in_plan=(CountInPlan.create(
+                       bar_beats=self._next_count_in_beats(),
+                       meter=tuple(self._next_count_in_meter()),bpm=self.plan.bpm,
+                       beats=self._next_count_in_beats()) if self._flow_active() else None))
         self._queue_scheduled_start = (
             self.playback_session.transport_id, self.visual_transport.play_from_beat,
             self.visual_transport.run_at, self.plan.identity,
@@ -1461,7 +1477,7 @@ class PracticeEngine:
         """Read the one transport projection, including authored tempo and silence."""
         phrase = self.plan.active_phrase
         return self.visual_transport.position(
-            now, phrase_length=phrase.end-phrase.start, bpm=self.plan.bpm,
+            now, phrase_length=phrase.sounding_end-phrase.start, bpm=self.plan.bpm,
             running=self.playback_session.running,
             pending_auto_result=(self.attempt_settlement.pending_result is not None and self.playback_session.auto),
             tempo_map=self._active_tempo_map())
@@ -2218,7 +2234,8 @@ class PracticeEngine:
             repeat_rest=self._collect_rest_measurement(from_beat=0.0,
                 source_end=self.visual_transport.run_at+duration),
             assets_ready=self.teaching_continuation.decision_assets_ready(pending,
-                revision=self.score_revision,fingerprint=self.fingerprint)))
+                revision=self.score_revision,fingerprint=self.fingerprint),
+            exact_repeats=self._flow_active()))
         if completion.next_action is not None:
             self.next_action = completion.next_action
         if completion.advance_feedback:
@@ -2375,14 +2392,15 @@ class PracticeEngine:
             review_end=self.attempt.review_end_beat, preview=self.playback_session.preview_only,
             auto=self.playback_session.auto, mode=self.playback_session.mode,
             bpm=self.plan.bpm, gap_beats=self.visual_transport.visual_gap_beats),
-            self._assess_rolling_boundary, self._elapsed_seconds)
+            self._assess_rolling_boundary, self._elapsed_seconds,
+            exact_repeats=self._flow_active())
         self.next_boundary_beat = step.next_boundary
         if step.action == "recovery":
             self._apply_rolling_recovery(
                 step.recovery, phrase, step.grid, score_beat, now)
         elif step.action == "complete":
             self._complete_attempt(phrase, step.ending,
-                                   phrase.end-phrase.start, step.duration, now)
+                                   phrase.sounding_end-phrase.start, step.duration, now)
             self.playback_session.refloor_fresh_announcement(TimedTakeSource(
                 self.plan.active_phrase,self.plan.piece.bar_boundaries,
                 self.plan.piece.time_signatures,self.plan.bpm,
@@ -2447,9 +2465,12 @@ class PracticeEngine:
             return
         if self.visual_transport.paused:
             return
-        elapsed = self.now() - self.visual_transport.run_at
+        elapsed = self._musical_seconds(self.now())
         marks = self._live_feedback(elapsed) if elapsed >= 0 else []
-        self.live_assessment.publish(marks, self._feedback_take())
+        scope, _ = live_scope(self.plan.active_phrase,
+            from_beat=self.visual_transport.play_from_beat,elapsed_seconds=elapsed,
+            bpm=self.plan.bpm,tempo=self._active_tempo_map())
+        self.live_assessment.publish(marks, self._feedback_take(),scope_start_beat=scope)
 
     def _live_marks_for_snapshot(self, _elapsed_seconds: float) -> list[dict]:
         # _state_snapshot runs _update first, which refreshed these marks.
@@ -2700,7 +2721,7 @@ class PracticeEngine:
             accepted = self.teaching_continuation.acknowledge_stage(
                 self._next_stage_selection(),stage_key=stage_key,revision=revision)
             source = (PreloadedFeedbackSource(
-                self.plan.active_phrase.end-self.plan.active_phrase.start,
+                self.plan.active_phrase.sounding_end-self.plan.active_phrase.start,
                 self.plan.bpm,self._active_tempo_map()) if self.plan is not None else None)
             released_at = self.playback_session.activate_preloaded_feedback(source,
                 revision=self.score_revision,fingerprint=self.fingerprint)
@@ -2718,7 +2739,9 @@ class PracticeEngine:
         return ScoreSelection(piece=p.piece, phrase=self.display_phrase(),
             hand=p.hand, stage_key=p.identity, revision=self.score_revision,
             fingerprint=self.fingerprint,
-            transformed_rhythm=p.active_stage.transformed_rhythm)
+            transformed_rhythm=(self._remediation_active.transformed_rhythm
+                if self._remediation_active is not None else p.active_stage.transformed_rhythm),
+            display_name=(self._remediation_active.focus if self._remediation_active is not None else ""))
 
     def _source_model(self) -> dict:
         with self.lock:

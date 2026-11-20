@@ -41,7 +41,7 @@ def course_exercises(piece: Piece) -> tuple[Exercise, ...]:
     # deliberately not a fifth-bar routine practice window.
     last = len(piece.bar_boundaries) - 1
     complete = Phrase(0, 1, last, piece.bar_boundaries[0],
-                      max(piece.bar_boundaries[-1], max(n.end for n in piece.notes)),
+                      piece.bar_boundaries[-1],
                       piece.notes)
     out.append(Exercise("perform", complete, "flow:final", hands=("both",)))
     return tuple(out)
@@ -88,17 +88,61 @@ class PracticeFlowLessonGenerator:
     # Tempo/timing rules of docs/practice-flow.md (teaching_decisions).
     flow_rules: bool = True
 
+    @staticmethod
+    def _simplified_aid(course, result):
+        """Ask existing MIDI contributors for this exact source window/hand."""
+        from .lesson_generators import FukudaMidiLessonGenerator, CodaLessonGenerator
+        from .lesson_stage_semantics import teaching_sequence
+        from .remediation import RemedialAssignment
+        original = course.stage.variant
+        evidence = {entry.note.source_id:entry.status for entry in result.notes
+                    if entry.status != "correct"}
+        failed = frozenset(evidence)
+        candidates = []
+        for contributor in (FukudaMidiLessonGenerator(mistakes=failed),CodaLessonGenerator()):
+            candidates.extend(contributor.passage_stages(
+                course.piece,original,kind="learn")[:-1])
+        chosen = teaching_sequence((*candidates,course.stage),evidence=evidence)
+        # Free can teach reduced attacks and chord groupings. A tempo-only
+        # variant would be inaudibly identical in an untimed exercise.
+        aid = next((stage for stage in chosen
+            if stage.variant.notes != original.notes),None)
+        if aid is None:
+            return None
+        return RemedialAssignment("note-isolation",
+            f"Simplified: {aid.display_name}",0.0,
+            original.phrase.end-original.phrase.start,aid.variant,course.key,
+            "second_return_to_free",aid.transformed_rhythm)
+
     def decide_teaching(self, event, state):
         from .teaching_decisions import TeachingExposure, decide_standard_teaching
         decision = decide_standard_teaching(event, state, generator=self,
                                             allow_heuristic_remediation=False)
         course = state.course
+        if (event.kind == "manual" and decision.next_exposure is not None
+                and decision.next_exposure.mode == "learn"
+                and decision.continuation == "guided"):
+            # Free is the complete selected window, including resumed final
+            # examinations. Other courses retain their short guided ideas.
+            exposure = replace(decision.next_exposure,from_beat=0.0,
+                end_beat=None,assisted=True)
+            decision = replace(decision,next_exposure=exposure)
         if event.kind == "guided_completed" and event.completed:
+            if state.route.guided_range != (0.0,course.stage.variant.phrase.end-course.stage.variant.phrase.start):
+                raise ValueError("Free must find every attack in the selected window")
+            if state.route.remediation_active:
+                # The aid earns no source credit. Find every real note again
+                # before returning to the source's Tempo ladder.
+                exposure = TeachingExposure(course.key,course.hand,0.0,None,
+                    int(course.progress.target_bpm),"learn",True,True,True,"count_in")
+                return _at_tempo(replace(decision,next_exposure=exposure,
+                    continuation="guided",message="Now the original notes · without tempo"),
+                    int(course.progress.target_bpm),reset=True)
             # 2b -> 2c: every note found in order, Tempo starts by itself.
             from .application.practice_flow import floor_bpm
             bpm = floor_bpm(int(decision.progress_after.target_bpm))
             exposure = TeachingExposure(
-                course.key, course.hand, 0.0, None, bpm,
+                course.key, course.hand, course.stage.variant.phrase.first_attack_beat, None, bpm,
                 "practice", False, True, False, "count_in")
             return _at_tempo(replace(decision,next_exposure=exposure,
                                      continuation="continue"),bpm,reset=True)
@@ -115,8 +159,11 @@ class PracticeFlowLessonGenerator:
                                mode="learn", assisted=True, automatic=True,
                                require_full_verification=True,
                                preparation="count_in")
+            aid = (self._simplified_aid(course,event.assessment)
+                   if dict(decision.progress_after.free_returns).get(course.key,0) == 2 else None)
             return _entry_tempo(event,state,
-                replace(decision,next_exposure=exposure,continuation="guided"))
+                replace(decision,next_exposure=exposure,continuation="guided",
+                    remediation=aid,message=aid.focus if aid is not None else decision.message))
         if (exposure is not None and exposure.mode != "learn"
                 and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
                 and decision.definition_after.exercises[
@@ -129,7 +176,16 @@ class PracticeFlowLessonGenerator:
                                preparation="count_in")
             return _entry_tempo(event,state,
                 replace(decision,next_exposure=exposure,continuation="guided"))
-        return _entry_tempo(event,state,decision)
+        decision = _entry_tempo(event,state,decision)
+        exposure = decision.next_exposure
+        if (exposure is not None and exposure.mode == "practice"
+                and exposure.from_beat == 0 and exposure.end_beat is None):
+            source = decision.definition_after.stages(
+                decision.definition_after.exercises[decision.progress_after.cursor[0]],
+                exposure.hand)[decision.progress_after.cursor[2]].variant.phrase
+            decision = replace(decision,next_exposure=replace(exposure,
+                from_beat=source.first_attack_beat))
+        return decision
 
     def generate(self, piece: Piece):
         from .lesson_generators import LessonPlanDefinition

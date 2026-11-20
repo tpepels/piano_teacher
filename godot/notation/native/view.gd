@@ -82,7 +82,6 @@ var selected_density: float:
 var external_backdrop: bool:
     get: return painter.external_backdrop
     set(value): painter.external_backdrop = value
-var compact_inactive_staff := false
 # One infinite front-of-house camera. Grading never reads this axis.
 var stream_world_beat := 0.0
 var _stream_controller = ScoreStreamController.new()
@@ -101,7 +100,7 @@ func online_stream_count() -> int:
 func stream_peer_clearance_facts() -> Dictionary:
     return _stream_controller.peer_clearance_facts(
         maxf(1.0,float(timeline.pixels_per_beat)),float(staff_gap()),
-        float(timeline.duration_beats),size.x*PLAYHEAD_FRACTION)
+        float(timeline.sounding_duration_beats),size.x*PLAYHEAD_FRACTION)
 
 func transport_preflight_facts(world: float, opening: float) -> Dictionary:
     var facts: Dictionary = _stream_controller.preflight_facts(
@@ -109,9 +108,9 @@ func transport_preflight_facts(world: float, opening: float) -> Dictionary:
         has_source_windows_at(opening),_stream_right_beats(),
         _stream_header_beats(opening),
         maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
+        timeline.sounding_duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
     facts.merge({"ready":native_ready and retained_ready(),
-        "duration":timeline.duration_beats,"density":timeline.pixels_per_beat,
+        "duration":timeline.sounding_duration_beats,"density":timeline.pixels_per_beat,
         "gap":staff_gap(),"width":size.x,"playhead":size.x*PLAYHEAD_FRACTION,
         "rest_gap":float(practice_timeline.get("gap",{}).get("duration_beats",0.0)),
         "bpm":bpm})
@@ -304,8 +303,7 @@ func load_score(candidate: Dictionary) -> bool:
             _stream_controller.source_identity_error()
         notice = failure_reason
         return false
-    if not engraving.prepare(configured_density,size,active_hand,
-            compact_inactive_staff,PLAYHEAD_FRACTION):
+    if not engraving.prepare(configured_density,size,PLAYHEAD_FRACTION):
         failure_reason = engraving.failure_reason
         notice = failure_reason
         return false
@@ -409,16 +407,26 @@ func _transport_admission_receipt(planned: Dictionary,
     return _stream_controller.receipt(
         planned,admitted,world,opening,
         _first_source_header_spaces() if opening <= .0001 else 1.6,
-        timeline.pixels_per_beat,staff_gap(),timeline.duration_beats,
+        timeline.pixels_per_beat,staff_gap(),timeline.sounding_duration_beats,
         stream_world_beat,_stream_right_beats(),bpm)
 
 func reserve_transport_action(action: String, world: float,
-        opening: float, count_in_beats: float) -> Dictionary:
+        opening: float, count_in_beats: float, display_context: bool = false) -> Dictionary:
     stream_world_beat = maxf(stream_world_beat,world)
     return StreamAdmissionExecutor.reserve_action(_stream_controller,
         _stream_facts(stream_world_beat),transport_preflight_facts(world,opening),
         action,world,opening,count_in_beats,_stream_right_beats(),
-        _stream_header_beats(opening),bpm)
+        _stream_header_beats(opening),bpm,NAN,display_context)
+
+## Consume the coordinator's exact deadline through the same physical
+## preflight and immutable commit used for user transport actions.
+func reserve_continuation_at(world: float, opening: float,
+        start_world: float, count_in_beats: float) -> Dictionary:
+    stream_world_beat = maxf(stream_world_beat,world)
+    return StreamAdmissionExecutor.reserve_action(_stream_controller,
+        _stream_facts(stream_world_beat),transport_preflight_facts(world,opening),
+        "auto",world,opening,count_in_beats,_stream_right_beats(),
+        _stream_header_beats(opening),bpm,start_world)
 
 func earliest_continuation_world(world: float, opening: float,
         count_in_beats: float = 0.0) -> float:
@@ -428,14 +436,14 @@ func earliest_continuation_world(world: float, opening: float,
         maxf(world,stream_world_beat),count_in_beats,
         _stream_right_beats(),_stream_header_beats(opening),
         maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
+        timeline.sounding_duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
 
 func empty_strip_onset(passes: Array, world: float, count_in_beats: float,
         header: float) -> float:
     return _stream_controller.empty_strip_onset(
         passes,world,count_in_beats,header,
         maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
+        timeline.sounding_duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
 
 func short_rest_geometry() -> Dictionary:
     return _stream_controller.rest_geometry(
@@ -485,7 +493,7 @@ func trim_future_queue(reason: String,
         protected_take: int = -1) -> Array[int]:
     var removed: Array[int] = _stream_controller.trim_future(
         self,reason,stream_world_beat,timeline.pixels_per_beat,
-        staff_gap(),timeline.duration_beats,size.x,
+        staff_gap(),timeline.sounding_duration_beats,size.x,
         size.x*PLAYHEAD_FRACTION,protected_take)
     if not removed.is_empty():
         queue_redraw()
@@ -497,19 +505,20 @@ func _restore_future_suffix(saved: Array, world: float) -> bool:
 func enqueue_recovery_queue(world: float, source_opening: float,
         graded_deadline_world: float, plan_id: String = "",
         allow_count_in: bool = false, count_in_beats: float = 0.0,
-        deadline_at_or_after: bool = false, untimed: bool = false) -> bool:
+        deadline_at_or_after: bool = false, untimed: bool = false,
+        presentation_take: String = "") -> bool:
     stream_world_beat = maxf(stream_world_beat,world)
     return _stream_controller.schedule_recovery(
         _stream_facts(maxf(world,stream_world_beat)),world,source_opening,graded_deadline_world,
         _stream_right_beats(),_stream_header_beats(source_opening),
-        plan_id,allow_count_in,count_in_beats,deadline_at_or_after,untimed)
+        plan_id,allow_count_in,count_in_beats,deadline_at_or_after,untimed,presentation_take)
 
 func present_flow(world_beat: float, state: Dictionary,
         graded_beat: float, allow_admission: bool = true) -> void:
     stream_world_beat = maxf(stream_world_beat,world_beat)
     _stream_controller.prune_expired(self,stream_world_beat,
         maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        timeline.duration_beats,size.x*PLAYHEAD_FRACTION)
+        timeline.sounding_duration_beats,size.x*PLAYHEAD_FRACTION)
     if not native_ready or not retained_ready():
         queue_redraw()
         return
@@ -540,13 +549,7 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
             "paused":paused,
             "phase":str(state.get("phase",""))
         }))
-    var focus_changed: bool = layout.set_focused_staff(engraving.focused_staff(active_hand,compact_inactive_staff))
-    if focus_changed and native_ready and size.y >= 100.0:
-        # Focusing a staff moves every note on it and drops the prepared
-        # source geometry. Rebuild it now: painting must never meet a stale
-        # cache, or the retained ink would never compile.
-        _prepare_static_geometry()
-    if old_hand != active_hand or focus_changed:
+    if old_hand != active_hand:
         _invalidate_retained_segments()
         queue_redraw()
 
@@ -585,10 +588,11 @@ func _new_paint_frame(clock: float, playhead_x: float, gap: float,
 const StreamGeometry := preload("res://notation/native/stream_geometry.gd")
 func _stream_facts(world: float):
     return StreamGeometry.new(native_ready and retained_ready(),world,
-        timeline.pixels_per_beat,staff_gap(),timeline.duration_beats,
+        timeline.pixels_per_beat,staff_gap(),timeline.sounding_duration_beats,
         size.x,size.x*PLAYHEAD_FRACTION,
         float(practice_timeline.get("gap",{}).get("duration_beats",0.0)),
-        engraving.first_header_spaces())
+        engraving.first_header_spaces(),timeline.display_start_beat,
+        timeline.display_end_beat)
 
 ## Exact admitted world position of a coordinator-authored guided target.
 func scheduled_plan_opening(identity: String) -> float:

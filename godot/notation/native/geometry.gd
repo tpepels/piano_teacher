@@ -122,7 +122,7 @@ static func supported(model: Dictionary) -> String:
         if str(event.get("staff", "")) not in ["right", "left"]:
             return "Unsupported staff"
     var previous_right: Variant = null
-    for measure in model.get("measures", []):
+    for measure in model.get("display_measures",model.get("measures", [])):
         if not measure is Dictionary:
             return "Invalid measure"
         var opening: Variant = measure.get("left_barline")

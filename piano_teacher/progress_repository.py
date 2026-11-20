@@ -51,6 +51,10 @@ class ProgressRepository:
         self.db.execute("""CREATE TABLE IF NOT EXISTS repeat_tempo_credit (
             fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
             PRIMARY KEY (fingerprint,stage_key))""")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS flow_returns (
+            fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
+            count INTEGER NOT NULL,
+            PRIMARY KEY (fingerprint,stage_key))""")
         self.db.commit()
         # One owner initializes both progress and learner-state tables.
         self.learner_store = LearnerStateStore(self.db)
@@ -68,17 +72,18 @@ class ProgressRepository:
             raise
 
     def restore(self, plan: LearningPlan | None, fingerprint: str, *,
-                restore_session: bool = True) -> None:
+                restore_session: bool = True) -> bool:
         p = plan
         if p is None:
-            return
+            return False
+        lower_bpm = 1 if p.profile == "practice-flow" else SETTINGS.minimum_bpm
         # The piece-wide target is independent of the selected curriculum.
         # The sessions table is the current per-piece target owner. Its old
         # positional fields are never interpreted as lesson indices.
         saved_target = self.db.execute(
             "SELECT target_bpm FROM sessions WHERE fingerprint=?", (fingerprint,)
         ).fetchone()
-        if saved_target and saved_target[0] is not None:
+        if p.profile != "practice-flow" and saved_target and saved_target[0] is not None:
             p.target_bpm = max(SETTINGS.minimum_bpm, min(
                 SETTINGS.maximum_bpm, int(saved_target[0])))
 
@@ -93,11 +98,17 @@ class ProgressRepository:
         ).fetchone()
         saved_mastery = dict(self.db.execute(
             "SELECT exercise, bpm FROM mastery WHERE fingerprint=?", (fingerprint,)))
+        if p.profile == "practice-flow":
+            saved_mastery = {key:bpm for key,bpm in saved_mastery.items()
+                             if bpm >= p.piece.bpm}
         # Feedback can omit mastered candidates from the initial selection.
         # Recover exact catalog definitions before filtering durable credit;
         # unknown versions/content never match the current course keys.
         p.restore_mastered_stages(saved_mastery)
         current = {step.key: step for step in p.lesson_steps}
+        p.free_returns = {key:int(count) for key,count in self.db.execute(
+            "SELECT stage_key,count FROM flow_returns WHERE fingerprint=?",(fingerprint,))
+            if key in current}
         exact = False
         if row and restore_session and isinstance(row[0], str):
             selected = current.get(row[0])
@@ -133,7 +144,7 @@ class ProgressRepository:
             if key in current:
                 # Learners may deliberately practise faster than the song's
                 # source tempo; preserve that manual choice per stage.
-                p.stage_tempos[key] = max(SETTINGS.minimum_bpm, min(
+                p.stage_tempos[key] = max(lower_bpm, min(
                     SETTINGS.maximum_bpm, int(bpm)))
         for (key,) in self.db.execute(
             "SELECT stage_key FROM repeat_tempo_credit WHERE fingerprint=?",
@@ -148,7 +159,7 @@ class ProgressRepository:
         if exact:
             # A matching, current-version source stage may safely restore its
             # deliberate BPM and clean-pass streak; no other row may.
-            p.bpm = max(SETTINGS.minimum_bpm, min(
+            p.bpm = max(lower_bpm, min(
                 SETTINGS.maximum_bpm, int(row[6])))
             p.streak = min(SETTINGS.clean_runs_to_master - 1,
                            max(0, int(row[7])))
@@ -156,6 +167,7 @@ class ProgressRepository:
         else:
             p.bpm = p._tempo_for_current_stage()
             p.streak = 0
+        return bool(row and restore_session)
 
     def save(self, plan: LearningPlan | None, fingerprint: str) -> None:
         p=plan
@@ -195,13 +207,16 @@ class ProgressRepository:
                                 (fingerprint,key))
             for key, bpm in p.mastered.items():
                 self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (fingerprint,key,bpm))
+            for key, count in p.free_returns.items():
+                self.db.execute("INSERT OR REPLACE INTO flow_returns VALUES (?,?,?)",
+                                (fingerprint,key,count))
 
 
     def reset_piece(self, fingerprint: str) -> None:
         """Reset saved progress while preserving the authoritative evidence ledger."""
         with sqlite_atomic(self.db):
             for table in ("strategy_sessions", "learner_units", "learner_stages", "repeat_tempo_credit",
-                          "stage_tempos", "mastery", "sessions"):
+                          "stage_tempos", "mastery", "sessions", "flow_returns"):
                 self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
             # A reset is historical exposure context, distinct from deletion.
             session = self.db.execute("""SELECT session_id FROM learning_sessions

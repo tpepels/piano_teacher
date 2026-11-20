@@ -244,7 +244,8 @@ class AttemptSettlement:
         prepared = continuation.reserved_asset(
             pending,changed=changed,revision=score_revision,
             fingerprint=state.binding.fingerprint)
-        duration = state.course.stage.variant.phrase.end-state.course.stage.variant.phrase.start
+        source = state.course.stage.variant.phrase
+        duration = source.sounding_end-source.start
         outcome = self.settle(pending,plan=plan,binding=binding,now=now,
                               continuation=continuation,policy=policy)
         pending.publication = CommittedAttempt(
@@ -274,7 +275,8 @@ class AttemptSettlement:
                 from_beat=from_beat,end_beat=end_beat,tempo=tempo,
                 policies=policies,layout_for_feedback=layout_for_feedback)
             result = assessed.result
-            route = completion_route(mode,review_end_beat,from_beat)
+            route = completion_route(mode,review_end_beat,from_beat,
+                full_from_beat=phrase.first_attack_beat)
             if automatic_remedial_review and route == "section_review":
                 route = "partial_recovery"
             summary = performance_review(phrase,result)

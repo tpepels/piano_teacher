@@ -11,7 +11,7 @@ from .music import Phrase, note_name
 from .measure_grid import phrase_grid, two_bar_chunks, bar_number_at
 from .practice import evaluate
 from .feedback import project_assessment
-from .live_feedback import settled_assessment, expired_attack_misses
+from .live_feedback import live_assessment
 from .application.musical_scheduler import SCHEDULER
 
 
@@ -107,36 +107,11 @@ class AssessmentService:
     def live_marks(self, *, phrase: Phrase, hand: str, bpm: float, played,
                    played_from_beat: float, elapsed_seconds: float,
                    bar_boundaries, layout: dict, projector=project_assessment) -> list[dict]:
-        """Score settled attacks and independently recognize expired misses."""
-        total=phrase.end-phrase.start
-        if total<=0 or elapsed_seconds<0:
+        """Project the canonical scorer's current observations."""
+        if elapsed_seconds < 0:
             return []
-        per_bar=total/max(1,phrase.last_bar-phrase.first_bar+1)
-        now_beat=played_from_beat+SCHEDULER.seconds_beats(elapsed_seconds,bpm)
-        settled=settled_assessment(phrase,hand,bpm,played,
-                                  from_beat=played_from_beat,
-                                  until_beat=now_beat,beats_per_bar=per_bar)
-        grid=phrase_grid(phrase,bar_boundaries)
-        active_bar=max(index for index, bar_beat in enumerate(grid)
-                       if bar_beat <= now_beat + 1e-7)
-        window_start=grid[max(0, active_bar-2)]
-        missed=expired_attack_misses(phrase,hand,bpm,played,
-                                     from_beat=played_from_beat,
-                                     until_beat=now_beat,
-                                     window_start_beat=window_start)
-        if settled is None and missed is None:
-            return []
-        try:
-            marks=[]
-            if settled is not None:
-                marks=projector(settled,phrase,bpm,layout,
-                                         played_from_beat=played_from_beat)["marks"]
-            if missed is not None:
-                existing={m.get("note_id") for m in marks}
-                new=projector(missed,phrase,bpm,layout,
-                                       played_from_beat=played_from_beat)["marks"]
-                marks.extend(m for m in new if m.get("note_id") not in existing)
-            return marks
-        except (ValueError, RuntimeError, KeyError):
-            return []
-
+        result = live_assessment(
+            phrase, hand, bpm, list(played), from_beat=played_from_beat,
+            elapsed_seconds=elapsed_seconds)
+        return projector(result, phrase, bpm, layout,
+                         played_from_beat=played_from_beat)["marks"]

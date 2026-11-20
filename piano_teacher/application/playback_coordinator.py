@@ -52,6 +52,7 @@ class PlaybackIntent:
     earliest_deadline_ms: float
     requested_at: float
     transition: PlaybackTransition | None = None
+    fixed_deadline_ms: float | None = None
 
     @property
     def count_in_beats(self) -> float:
@@ -146,7 +147,8 @@ class PlaybackCoordinator:
     def request(self, facts: PlaybackRuntimeFacts, *, action: str, mode: str,
                 from_beat: float, earliest_deadline: float | None = None,
                 count_in_beats: float | None = None,
-                transition: PlaybackTransition | None = None) -> PlaybackIntent:
+                transition: PlaybackTransition | None = None,
+                fixed_deadline: float | None = None) -> PlaybackIntent:
         if not self.presentation_required:
             raise RuntimeError("A graphical admission request requires presentation mode")
         source = facts.source
@@ -198,6 +200,10 @@ class PlaybackCoordinator:
             now + SCHEDULER.beats_seconds(count_in, bpm)
             + SNAPSHOT_LATENCY_SECONDS,
             earliest_deadline if earliest_deadline is not None else 0.0)
+        if fixed_deadline is not None:
+            if action != "auto" or not math.isfinite(fixed_deadline) or fixed_deadline <= now:
+                raise ValueError("An automatic continuation requires its future exact deadline")
+            earliest = fixed_deadline
         self.sequence += 1
         attempt = 0
         take_id = (self.active_take_id if action == "resume"
@@ -216,7 +222,8 @@ class PlaybackCoordinator:
             resume_remaining_beats=resume_remaining,
             earliest_deadline_ms=earliest * 1000.0,
             requested_at=now,
-            transition=transition)
+            transition=transition,
+            fixed_deadline_ms=None if fixed_deadline is None else fixed_deadline*1000.0)
         self.receipt = None
         self.state = PlaybackState.AWAITING_ADMISSION
         self.failure = ""
@@ -263,10 +270,14 @@ class PlaybackCoordinator:
             earliest = (intent.requested_at + SNAPSHOT_LATENCY_SECONDS
                         + SCHEDULER.beats_seconds(
                             intent.resume_remaining_beats,intent.bpm)) * 1000.0
+        if intent.fixed_deadline_ms is not None and abs(
+                deadline_ms-intent.fixed_deadline_ms) > .01:
+            raise ValueError("A direct repeat cannot change its one-bar deadline")
         chosen = SCHEDULER.resolve(
             intent.action,now=facts.now,bpm=intent.bpm,
             count_in_beats=(intent.resume_remaining_beats
-                if reused_count_in else intent.count_in_beats),
+                if reused_count_in else 0.0 if intent.fixed_deadline_ms is not None
+                else intent.count_in_beats),
             latency=0.0,
             physical_at=deadline_ms/1000.0,
             earliest_at=earliest/1000.0)
@@ -313,7 +324,7 @@ class PlaybackCoordinator:
             raise ValueError("No matching score reservation to present")
         now = facts.now
         remaining = (intent.resume_remaining_beats if receipt.reused_count_in
-                     else intent.count_in_beats)
+                     else 0.0 if intent.fixed_deadline_ms is not None else intent.count_in_beats)
         count_in_seconds = SCHEDULER.beats_seconds(remaining, intent.bpm)
         if receipt.deadline_ms / 1000.0 < now + count_in_seconds - 1e-4:
             self._expire(message="Score admission expired before its count-in")
@@ -472,6 +483,7 @@ class PlaybackCoordinator:
             "count_in_plan": intent.count_in.snapshot(),
             "resume_remaining_beats":intent.resume_remaining_beats,
             "earliest_deadline_ms": intent.earliest_deadline_ms,
+            "fixed_deadline_ms": intent.fixed_deadline_ms,
             "status": self.state.value,
         }
         timeline = {"state": self.state.value, "take_id": self.active_take_id,

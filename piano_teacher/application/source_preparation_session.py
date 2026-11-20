@@ -28,6 +28,7 @@ class PreparedSource:
     fingerprint: str
     plan: LearningPlan
     score: object
+    resumed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +160,7 @@ class SourcePreparationSession:
                 piece,warmup=warmup,exercise_strategy=strategy,
                 fukuda_mistakes=mistakes,feedback=evidence)
             with state_lock:
-                progress.restore(candidate,fingerprint)
+                resumed = progress.restore(candidate,fingerprint)
             course_ms = (time.perf_counter()-started_course)*1000.0
             fingering_plan,infer_ms = predicted.result()
             candidate.piece = replace(piece,fingering_plan=fingering_plan)
@@ -171,4 +172,4 @@ class SourcePreparationSession:
                 print("SCORE_LOAD_STAGE: parallel_prepare",
                       round((time.perf_counter()-checkpoint)*1000,1),
                       "ms wall",source.name,flush=True)
-        return PreparedSource(source,fingerprint,candidate,score)
+        return PreparedSource(source,fingerprint,candidate,score,resumed)

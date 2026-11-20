@@ -1,4 +1,4 @@
-"""The practice flow lesson state machine (docs/architecture/practice-state-machine.md).
+"""The practice flow lesson state machine (docs/architecture.md#practice-state-and-timing).
 
 The only owner of "where in the lesson": which step (Listen, Free, Tempo) of
 which course stage, at what tempo, and how many takes failed or were clean.
@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import Enum
-
-from ..lesson_settings import SETTINGS
 
 CLEAN_TAKES_AT_TARGET = 2
 FAILURES_BEFORE_SLOWER = 2
@@ -61,7 +59,7 @@ class Transition:
 
 def floor_bpm(target_bpm: int) -> int:
     """Tempo starts at half the target tempo and never goes below it."""
-    return max(SETTINGS.minimum_bpm, round(target_bpm * .5))
+    return max(1, round(target_bpm * .5))
 
 
 def step_bpm(target_bpm: int) -> int:
@@ -79,11 +77,11 @@ def enter_stage(stage_key: str, *, final: bool, target_bpm: int,
     """A new phrase/link/hand starts with Listen; a resumed one warms up in
     Free; the final whole-piece test goes straight into Tempo at 50%."""
     floor = floor_bpm(target_bpm)
-    if final:
+    if final and not resumed:
         return Transition(FlowState(stage_key, True, Step.TEMPO, floor, target_bpm),
                           "Whole piece · 50%")
     if resumed:
-        return Transition(FlowState(stage_key, False, Step.FREE, target_bpm, target_bpm),
+        return Transition(FlowState(stage_key, final, Step.FREE, target_bpm, target_bpm),
                           "Now without tempo")
     return Transition(FlowState(stage_key, False, Step.LISTEN, target_bpm, target_bpm),
                       f"Listen · {hand_text}" if hand_text else "Listen")

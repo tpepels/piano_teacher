@@ -147,6 +147,18 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var planned: Dictionary = {}
     var partial: float = float(intent.get("resume_remaining_beats",0.0))
     var admitted_floor: float = backend_floor
+    var fixed: Variant = intent.get("fixed_deadline_ms")
+    if fixed != null:
+        if action != "auto" or not is_finite(float(fixed)) or float(fixed) <= backend_now:
+            _report_problem("Direct repeat deadline expired before score admission")
+            return
+        var exact_world: float = flow.project_authored_future(
+            frame_ms+roundi(float(fixed)-backend_now),frame_ms,
+            float(state.get("clock_beat",0.0)),tempo,authored)
+        planned = view.reserve_continuation_at(world,opening,exact_world,count_in)
+        if planned.is_empty():
+            _report_problem("Cannot admit the direct repeat at its one-bar deadline")
+            return
     if action == "resume" and partial > 0.0:
         # Reuse an already-spoken count-in only when the ORIGINAL unexposed
         # source is still ahead of the playhead. The pure preflight avoids
@@ -174,7 +186,8 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         # Every newly inserted source gets its own complete bar. Reuse is
         # the sole exception; the count-in is never silently shortened.
         planned = view.reserve_transport_action(
-            reservation_action,world,opening,required_slot)
+            reservation_action,world,opening,required_slot,
+            str(intent.get("mode","")) == "listen")
     if planned.is_empty():
         _report_problem("Cannot reserve source notation for this playback")
         return
@@ -192,7 +205,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     if not is_finite(lead_ms):
         _cancel_provisional()
         return
-    var deadline: float = backend_now+lead_ms
+    var deadline: float = float(fixed) if fixed != null else backend_now+lead_ms
     if deadline < admitted_floor-.01:
         _cancel_provisional()
         _report_problem("Reserved notation precedes its musical deadline")

@@ -28,6 +28,8 @@ from ..music import Phrase, Piece
 from ..notation.lesson import (LessonScore, build_lesson_score,
                                infer_piece_clefs, infer_midi_clef_plan)
 from ..notation.model import build_score_model
+from ..notation.display_envelope import (display_envelope, project_display_model,
+                                          project_performance_layout)
 from ..preprocessing_cache import PreprocessingCache
 from ..engraving.engraving import EngravedScore, render_layout
 from . import score_preparation
@@ -78,8 +80,10 @@ class ScoreArtifacts:
     def _selected_notation_locked(self, selected: ScoreSelection) -> LessonScore:
         if selected.identity != self._notation_identity or self._notation is None:
             piece = selected.piece
+            envelope = display_envelope(piece, selected.phrase,
+                transformed=selected.transformed_rhythm)
             notation = build_lesson_score(
-                selected.phrase, boundaries=piece.bar_boundaries,
+                envelope.phrase, boundaries=piece.bar_boundaries,
                 time_signatures=piece.time_signatures,
                 key_signatures=piece.key_signatures,
                 clef_changes=piece.clef_changes,
@@ -108,9 +112,11 @@ class ScoreArtifacts:
         with self._model_lock:
             notation = self._selected_notation(selected)
             if self._model is None:
-                self._model = build_score_model(notation,
+                envelope = display_envelope(selected.piece, selected.phrase,
+                    transformed=selected.transformed_rhythm)
+                self._model = project_display_model(build_score_model(notation,
                     boundaries=selected.piece.bar_boundaries,
-                    hand=selected.hand, revision=selected.revision)
+                    hand=selected.hand, revision=selected.revision), envelope, selected.hand)
             return self._model
 
     def semantic_score(self, selected: ScoreSelection) -> dict:
@@ -153,13 +159,15 @@ class ScoreArtifacts:
             return cached
         piece, phrase = selected.piece, selected.phrase
         notation = self._selected_notation(selected)
+        envelope = display_envelope(piece, phrase, transformed=selected.transformed_rhythm)
+        display_phrase = envelope.phrase
         # Short exercises remain continuous; larger works retain bounded pages.
         compact = phrase.last_bar-phrase.first_bar+1 <= 12 and phrase.end-phrase.start <= 48
         fingering_sources = authored_projection_sources(piece.fingering_plan)
         fingering_key = ((("fingering_sources", tuple(sorted(fingering_sources))),)
                          if fingering_sources else ())
         key = self.preprocessing.key(
-            "engraving", "readable-midi-engraving-v4",
+            "engraving", "authentic-display-envelope-v1",
             hashlib.sha256(notation.musicxml.encode("utf-8")).hexdigest(),
             selected.fingerprint, selected.stage_key,
             phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
@@ -182,8 +190,10 @@ class ScoreArtifacts:
             except (TypeError, ValueError, KeyError, AssertionError):
                 layout = None
         if layout is None:
-            layout = render_layout(notation, phrase.first_bar, phrase.last_bar, selected.hand,
-                total_beats=phrase.end-phrase.start, bpm=piece.bpm, continuous=compact)
+            complete = render_layout(notation, display_phrase.first_bar, display_phrase.last_bar, "both",
+                total_beats=display_phrase.end-display_phrase.start, bpm=piece.bpm, continuous=compact)
+            require_lesson_alignment(display_phrase, complete.layout, "both")
+            layout = EngravedScore(complete.pages, project_performance_layout(complete.layout, envelope))
             require_lesson_alignment(phrase, layout.layout, selected.hand)
             self.preprocessing.write_json("engraving", key,
                 {"pages": list(layout.pages), "layout": layout.layout})

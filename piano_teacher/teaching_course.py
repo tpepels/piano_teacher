@@ -25,6 +25,7 @@ class PlanProgress:
     mastered: tuple[tuple[str, int], ...]
     stage_tempos: tuple[tuple[str, int], ...]
     transferable_tempos: tuple[str, ...]
+    free_returns: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +98,9 @@ def start_bpm(course):
 
 
 def minimum_bpm(course):
+    if course.profile == "practice-flow":
+        from .application.practice_flow import floor_bpm
+        return floor_bpm(int(course.progress.target_bpm))
     floor = math.ceil(course.stage.ladder_bpm(SETTINGS.minimum_bpm)-1e-9)
     return max(SETTINGS.minimum_bpm, min(course.progress.target_bpm, floor))
 
@@ -203,13 +207,16 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
             cursor = (index, 0, 0)
         return select_cursor(course, cursor)
     if action == "tempo":
-        if type(bpm) not in (int, float) or not math.isfinite(bpm) or not SETTINGS.minimum_bpm <= bpm <= SETTINGS.maximum_bpm:
+        lower = 1 if course.profile == "practice-flow" else SETTINGS.minimum_bpm
+        if type(bpm) not in (int, float) or not math.isfinite(bpm) or not lower <= bpm <= SETTINGS.maximum_bpm:
             raise ValueError(f"BPM must be between {SETTINGS.minimum_bpm} and {SETTINGS.maximum_bpm}")
-        return course.with_progress(bpm=bpm, target_bpm=bpm, stage_tempos=(),
+        target = course.piece.bpm if course.profile == "practice-flow" else bpm
+        return course.with_progress(bpm=min(bpm,target), target_bpm=target, stage_tempos=(),
                                     transferable_tempos=(), streak=0, failures=0)
     tempos, transferable = dict(p.stage_tempos), set(p.transferable_tempos)
     if action == "tempo_up" and p.bpm < SETTINGS.maximum_bpm:
-        ceiling = p.target_bpm if p.bpm < p.target_bpm else SETTINGS.maximum_bpm
+        ceiling = (p.target_bpm if course.profile == "practice-flow" or p.bpm < p.target_bpm
+                   else SETTINGS.maximum_bpm)
         bpm = min(ceiling, p.bpm + SETTINGS.manual_tempo_step_bpm)
         transferable.add(course.key)
     elif action == "tempo_down" and p.bpm > minimum_bpm(course):
@@ -230,14 +237,19 @@ def flow_assessed_progress(course, *, accepted, include_outcome: bool = False):
     p = course.progress
     state = flow.FlowState(course.key, course.exercise.kind == "perform",
                            flow.Step.TEMPO, int(p.bpm), int(p.target_bpm),
-                           failures=p.failures, clean_at_target=p.streak)
+                           failures=p.failures, clean_at_target=p.streak,
+                           free_returns=dict(p.free_returns).get(course.key,0))
     t = flow.take_graded(state, passed=accepted)
     def selected(c, message):
         return (c, message, t.outcome) if include_outcome else (c, message)
     if t.outcome not in (flow.Outcome.STAGE_DONE, flow.Outcome.PIECE_DONE):
         bpm = p.bpm if t.outcome is flow.Outcome.BACK_TO_FREE else t.state.bpm
+        returns = dict(p.free_returns)
+        if t.outcome is flow.Outcome.BACK_TO_FREE:
+            returns[course.key] = t.state.free_returns
         return selected(course.with_progress(bpm=bpm, failures=t.state.failures,
-                                    streak=t.state.clean_at_target), t.message)
+                                    streak=t.state.clean_at_target,
+                                    free_returns=tuple(sorted(returns.items()))), t.message)
     mastered = dict(p.mastered)
     mastered[course.key] = p.target_bpm
     course = course.with_progress(streak=0, failures=0,

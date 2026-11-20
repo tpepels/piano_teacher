@@ -206,8 +206,8 @@ class CodaLessonGenerator:
         """Contribute source-backed passage stages to any adaptive composer."""
         from .application.coda_midi_curriculum import midi_coda_stages
         phrase = original.phrase
-        if (kind == "learn" and
-                abs(phrase.end - piece.bar_boundaries[phrase.last_bar]) > 1e-7):
+        if (kind == "learn" and (phrase.sounding_end > phrase.end+1e-7 or
+                abs(phrase.end - piece.bar_boundaries[phrase.last_bar]) > 1e-7)):
             # Preserve a sounding MIDI release beyond the barline. This
             # particular passage cannot be transformed at authored meter
             # boundaries, but it can still be practised as original notes.

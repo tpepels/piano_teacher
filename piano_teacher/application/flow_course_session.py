@@ -50,10 +50,9 @@ class PracticeFlowCourseSession:
             resumed=resumed,hand_text={"right":"Right hand","left":"Left hand"}.get(
                 plan.hand,"Both hands"))
 
-    def opening(self, plan) -> practice_flow.Transition:
+    def opening(self, plan, *, resumed: bool = False) -> practice_flow.Transition:
         """A fresh course starts in Listen; a saved window warms up in Free."""
-        return self.stage_entry(plan,
-            resumed=plan.lesson_steps[0].key != plan.identity)
+        return self.stage_entry(plan,resumed=resumed)
 
     def guided_entry(self, plan, *, warmup: bool, recovery: bool,
                      simplified: bool) -> practice_flow.Transition | None:
@@ -138,6 +137,8 @@ class PracticeFlowCourseSession:
             final=plan.exercise.kind == "perform",
             bpm=int(plan.bpm),target_bpm=int(plan.target_bpm),
             failures=progress.failures,clean=progress.streak,message=message)
+        self._state = state = replace(state,
+            free_returns=dict(progress.free_returns).get(stage_key,0))
         self._settled_decision_id = decision_id
         return state
 

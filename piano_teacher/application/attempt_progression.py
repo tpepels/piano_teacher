@@ -158,7 +158,7 @@ class AttemptProgression:
         exposure = decision.next_exposure
         same_timed = (exposure is not None and exposure.stage_key == facts.stage_key
             and exposure.mode == "practice" and decision.remediation is None)
-        rewind = decision.invalidate_failed_streak and runtime.automatic
+        rewind = decision.invalidate_failed_streak and runtime.automatic and not facts.exact_repeats
         stop = facts.warmup and decision.invalidate_failed_streak
         automatic = runtime.automatic and not stop
         preparation = None
@@ -175,6 +175,18 @@ class AttemptProgression:
             return PassageFinishPlan(preparation,stop,"advance",advance_early=True)
         notice = passage_next_action(pending,target_bpm=facts.target_bpm,
             start_beat=runtime.from_beat,assessed_bpm=facts.assessed_bpm)
+        if facts.exact_repeats and automatic and same_timed:
+            from ..notation.practice_timeline import retry_preparation_rest_beats
+            bar = retry_preparation_rest_beats(facts.source_model,exposure.from_beat)
+            deadline = SCHEDULER.repeat(run_at=runtime.run_at,
+                source_seconds=facts.duration,gap_beats=bar,bpm=exposure.bpm)
+            return PassageFinishPlan(None,False,"announce",deadline=deadline,
+                next_action=notice,advance_early=True)
+        if facts.exact_repeats:
+            # Free, the next hand/window, and piece completion are selected
+            # immediately. Messages never add a pedagogical waiting interval.
+            return PassageFinishPlan(None,stop,"ready" if automatic else "stop",
+                next_action=notice)
         if facts.assets_ready:
             return PassageFinishPlan(preparation,stop,"ready",next_action=notice)
         if not automatic:
@@ -204,11 +216,11 @@ class AttemptProgression:
 
     def inspect(self, tick: AttemptTick,
                 recover: Callable[[float, tuple[float, ...]], Any],
-                seconds_at: Callable[[float], float]) -> AttemptStep:
+                seconds_at: Callable[[float], float], *, exact_repeats: bool = False) -> AttemptStep:
         """Decide the next transition without modifying transport or learner state."""
         grid = self.grid_for(tick.phrase,tick.boundaries)
         boundary = tick.next_boundary
-        total_beats = tick.phrase.end-tick.phrase.start
+        total_beats = tick.phrase.sounding_end-tick.phrase.start
         while (tick.mode == "practice" and tick.review_end is None
                and not tick.preview
                and boundary and tick.score_beat >= boundary):
@@ -223,7 +235,7 @@ class AttemptProgression:
         ending = (min(total_beats,tick.review_end)
                   if tick.review_end is not None else total_beats)
         duration = seconds_at(ending)-seconds_at(tick.from_beat)
-        settlement = SETTLEMENT_SECONDS
+        settlement = 0.0 if exact_repeats else SETTLEMENT_SECONDS
         if tick.preview or (tick.auto and tick.review_end is None):
             settlement = min(settlement,
                              SCHEDULER.beats_seconds(tick.gap_beats,tick.bpm))

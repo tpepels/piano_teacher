@@ -58,6 +58,16 @@ class Phrase:
     end: float
     notes: tuple[Note, ...]
 
+    @property
+    def sounding_end(self) -> float:
+        """Release of the selected attacks, independent of authored barlines."""
+        return max(self.end, max((note.end for note in self.notes), default=self.end))
+
+    @property
+    def first_attack_beat(self) -> float:
+        """First selected attack in unchanged, phrase-local source beats."""
+        return max(0.0, min((note.start-self.start for note in self.notes), default=0.0))
+
 
 @dataclass(frozen=True)
 class BarlineChange:

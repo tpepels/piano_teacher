@@ -89,11 +89,12 @@ def prepare_guided(source: ExposureSource, selected: TeachingExposure, *,
     # current teaching controller or interrupting its durable exposure.
     original = materialize_fragment(source.variant,source.boundaries,
                                    start=start,end=end)
-    fragment = (replace(original,variant=remediation.variant)
+    fragment = (materialize_fragment(remediation.variant,source.boundaries,start=start,end=end)
                 if remediation is not None else original)
     return GuidedPreparation(
         source,fragment,revision+int(bump_revision),recovery,remediation,
         tuple(retry_range.items()) if recovery and retry_range is not None else None,
+        remediation.focus if remediation is not None else
         "Now without tempo" if source.flow else "Preparing a short idea to learn",
         f"Learn the selected {remediation.focus} notes, then retry the original."
         if remediation is not None else
@@ -124,7 +125,8 @@ def prepare_listen(source: ExposureSource, *, revision: int, bpm: float,
     return ListenPreparation(ListenSelection(
         variant=source.variant,bpm=bpm,stage_key=source.stage_key,
         revision=revision+1,bar_boundaries=source.boundaries,
-        time_signatures=source.time_signatures,tempo_map=tempo_map))
+        time_signatures=source.time_signatures,tempo_map=tempo_map,
+        from_beat=source.variant.phrase.first_attack_beat if source.flow else 0.0))
 
 
 @dataclass(frozen=True, slots=True)

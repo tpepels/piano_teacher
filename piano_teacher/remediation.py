@@ -26,6 +26,7 @@ class RemedialAssignment:
     variant: ExerciseVariant
     stage_key: str
     reason: str
+    transformed_rhythm: bool = False
 
     @property
     def guided(self) -> bool:

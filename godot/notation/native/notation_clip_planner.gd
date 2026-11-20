@@ -53,8 +53,8 @@ static func ink_safe_boundaries(layout, timeline, gap: float) -> Array[Vector2]:
     # would silently sever its header. The same applies to the regular
     # barline stroke itself. Preserve connected context as indivisible ink.
     var previous: Dictionary = {}
-    for i in range(timeline.measures.size()):
-        var measure: Dictionary = timeline.measures[i]
+    for i in range(timeline.display_measures.size()):
+        var measure: Dictionary = timeline.display_measures[i]
         var at: float = float(measure.get("start_beat",0.0))
         if i == 0:
             previous = measure
@@ -117,5 +117,5 @@ static func source_windows(timeline, opening: float, intervals: Array[Vector2]) 
     # than let Pause remove half of a source glyph. World-note deadlines and
     # authored measure positions do not change.
     return ScoreStreamWindowCuts.safe_windows(
-        opening,timeline.duration_beats,timeline.measures,
+        opening,timeline.sounding_duration_beats,timeline.measures,
         intervals)

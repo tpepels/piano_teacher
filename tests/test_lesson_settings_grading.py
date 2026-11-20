@@ -18,10 +18,10 @@ def _phrase():
 
 
 def test_onset_threshold_changes_grade_without_changing_source(monkeypatch):
-    played = [PlayedNote(60, 0.21, 1.21)]
+    played = [PlayedNote(60, 0.26, 1.26)]
     assert practice.evaluate(_phrase(), "right", 60, played).notes[0].status == "late"
     monkeypatch.setattr(grading_tolerance, "SETTINGS", replace(
-        SETTINGS, grading_onset_tolerance_seconds=0.22))
+        SETTINGS, grading_onset_tolerance_seconds=0.27))
     assert practice.evaluate(_phrase(), "right", 60, played).clean
 
 

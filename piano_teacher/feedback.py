@@ -26,33 +26,46 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
     if strict:
         from .lesson_validation import require_lesson_alignment
         require_lesson_alignment(phrase,layout,'both')
+        by_id = {glyph.get('id'): glyph for glyph in glyphs}
+        by_source = {source: by_id[identifier]
+                     for source, identifier in layout['attack_map'].items()}
+        # Canonical notes already carry their source ID. Only anonymous
+        # callers need the phrase's stable fallback index, including a
+        # value-equivalent copied Note accepted by the existing API.
+        anonymous_identity = {}
+        anonymous_value = {}
+        for index, note in enumerate(phrase.notes):
+            if not note.source_id:
+                source = source_note_id(note, index)
+                anonymous_identity[id(note)] = source
+                anonymous_value.setdefault(note, source)
     elif any(entry.note.source_id for entry in assessment.notes):
         raise ValueError('Canonical source feedback requires explicit engraved identity mapping')
-    by_id = {glyph.get('id'): glyph for glyph in glyphs}
-    unused = set(range(len(glyphs)))
+    unused = set() if strict else set(range(len(glyphs)))
     result = []
     unmapped = 0
     for entry in assessment.notes:
         beat = entry.note.start - phrase.start
-        options = [
-            (abs(float(glyphs[i]["beat"]) - beat), i)
-            for i in unused
-            if glyphs[i].get("pitch") == entry.note.pitch
-            and abs(float(glyphs[i]["beat"]) - beat) <= 0.125
-        ]
         if strict:
-            index = next((i for i,note in enumerate(phrase.notes) if note is entry.note),None)
-            if index is None:
-                index = next((i for i,note in enumerate(phrase.notes) if note == entry.note),None)
-            source = source_note_id(entry.note,index) if index is not None else entry.note.source_id
-            glyph = by_id.get(layout['attack_map'].get(source))
+            source = entry.note.source_id
+            if not source:
+                source = anonymous_identity.get(id(entry.note))
+                if source is None:
+                    source = anonymous_value.get(entry.note)
+            glyph = by_source.get(source)
             if glyph is None:
                 unmapped += 1
                 continue
-        elif not options:
-            unmapped += 1
-            continue
         else:
+            options = [
+                (abs(float(glyphs[i]["beat"]) - beat), i)
+                for i in unused
+                if glyphs[i].get("pitch") == entry.note.pitch
+                and abs(float(glyphs[i]["beat"]) - beat) <= 0.125
+            ]
+            if not options:
+                unmapped += 1
+                continue
             _, index = min(options)
             unused.remove(index)
             glyph = glyphs[index]

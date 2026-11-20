@@ -13,12 +13,12 @@ CompletionRoute = Literal["perform", "section_review", "partial_recovery", "full
 
 
 def completion_route(mode: str, review_end_beat: float | None,
-                     play_from_beat: float) -> CompletionRoute:
+                     play_from_beat: float, *, full_from_beat: float = 0.0) -> CompletionRoute:
     if mode == "perform":
         return "perform"
     if review_end_beat is not None:
         return "section_review"
-    if play_from_beat > 1e-6:
+    if play_from_beat > 1e-6 and abs(play_from_beat-full_from_beat) > 1e-6:
         return "partial_recovery"
     return "full_passage"
 

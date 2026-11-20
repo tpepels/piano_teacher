@@ -124,6 +124,7 @@ func present_frame(state: Dictionary, beat: float, world: float) -> void:
         return
     renderer.present_clock(beat,world-float(renderer.runway_origin_beat))
     renderer.present_flow(world,state,beat)
+    practice_view.stage.feedback.present_source_beat(state,beat)
 
 
 func accept(state: Dictionary, request_midpoint_ms: int,

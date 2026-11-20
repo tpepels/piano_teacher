@@ -11,7 +11,7 @@ static func build(model: Dictionary, glyphs) -> Dictionary:
     var beam_stem_up_by_note: Dictionary = source_beams.get("stem_up_by_note",{})
     var notation_tuplets: Array = Geometry.tuplet_groups(model)
     var measure_by_number: Dictionary = {}
-    for measure in model.get("measures",[]):
+    for measure in model.get("display_measures",model.get("measures",[])):
         measure_by_number[int(measure.get("number", -1))] = measure
     var ordered_events: Array = model.get("notation_events", []).duplicate()
     ordered_events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -38,7 +38,7 @@ static func build(model: Dictionary, glyphs) -> Dictionary:
     var previous_attack_before_measure: Dictionary = {}
     var scan := 0
     var last_attack := -INF
-    for measure in model.get("measures",[]):
+    for measure in model.get("display_measures",model.get("measures",[])):
         var boundary: float = float(measure.get("start_beat", 0.0))
         while scan < ordered_events.size() and \
                 float(ordered_events[scan].get("beat",0.0)) < boundary-.0001:

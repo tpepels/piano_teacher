@@ -62,7 +62,7 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
     monkeypatch.setattr(score_artifacts,"render_layout",fake_render)
     assert engine.engraving().pages == ("<svg>page 1</svg>","<svg>page 2</svg>")
     assert engine.engraving().layout["pages"] == 2
-    assert calls == [(1,2,"right",8,100)]
+    assert calls == [(1,2,"both",8,100)]
     engine.control("hand",hand="both")
     assert engine.engraving().layout["pages"] == 2
     assert calls[-1] == (1,2,"both",8,100)

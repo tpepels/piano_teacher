@@ -114,19 +114,6 @@ func load_assets(items: Dictionary, note_items: Dictionary = {},
     failure_reason = ""
     return true
 
-func focused_staff(active_hand: String, compact_inactive_staff: bool) -> String:
-    if not compact_inactive_staff or active_hand not in ["right","left"]:
-        return ""
-    # Preserve the grand staff whenever the performing hand has authentic
-    # cross-staff notes. Only an entirely unused opposite staff is collapsed.
-    for event in timeline.model.get("notation_events",[]):
-        if not event is Dictionary or str(event.get("kind","")) != "note":
-            continue
-        var owner := str(event.get("hand",event.get("staff","")))
-        if owner == active_hand and str(event.get("staff","")) != active_hand:
-            return ""
-    return active_hand
-
 func missing_engraving() -> String:
     return EngravingReadiness.missing(
         layout, glyphs, connector_geometry, expected_beam_groups,
@@ -177,8 +164,8 @@ func first_header_spaces() -> float:
             float(box[2])/500.0+1.0)
     return margin
 
-func prepare(configured_density: float, viewport: Vector2, active_hand: String,
-        compact_inactive_staff: bool, playhead_fraction: float) -> bool:
+func prepare(configured_density: float, viewport: Vector2,
+        playhead_fraction: float) -> bool:
     # The actual native glyph solver below is the only authority for
     # readable note spacing. A separate rhythm-only estimate used to be
     # computed and then discarded, while its extreme-density failure gate
@@ -198,7 +185,7 @@ func prepare(configured_density: float, viewport: Vector2, active_hand: String,
     selected_density = density
     layout.set_viewport(viewport)
     layout.rebuild_index()
-    layout.set_focused_staff(focused_staff(active_hand,compact_inactive_staff))
+    layout.set_focused_staff("")
     failure_reason = missing_engraving()
     if not failure_reason.is_empty():
         return false

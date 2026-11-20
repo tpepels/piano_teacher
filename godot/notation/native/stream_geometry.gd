@@ -1,6 +1,12 @@
 extends RefCounted
 ## A physical admission snapshot. Only primitive display facts cross into
 ## stream policy; this value cannot mutate the renderer or its score.
+var _display_start := 0.0
+var display_start: float:
+    get: return _display_start
+var _display_end := 0.0
+var display_end: float:
+    get: return _display_end
 var _ready: bool
 var ready: bool:
     get: return _ready
@@ -31,7 +37,10 @@ var first_header_spaces: float:
 
 func _init(is_ready: bool, at_world: float, pixels_per_beat: float,
         staff_gap: float, source_duration: float, viewport_width: float,
-        playhead_x: float, written_rest: float, header_spaces: float) -> void:
+        playhead_x: float, written_rest: float, header_spaces: float, display_first: float = 0.0,
+        display_last: float = NAN) -> void:
+    _display_start = display_first
+    _display_end = display_last if is_finite(display_last) else source_duration
     _ready = is_ready
     _world = at_world
     _density = pixels_per_beat

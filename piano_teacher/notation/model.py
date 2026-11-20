@@ -118,7 +118,7 @@ def _notes(phrase: Phrase) -> tuple[ScoreNote, ...]:
         ids.add(identifier)
         notes.append(ScoreNote(
             identifier, round(note.start - phrase.start, 8),
-            round(min(note.end, phrase.end) - note.start, 8),
+            round(note.end - note.start, 8),
             note.pitch, note.velocity, note.hand, note.voice,
             note.track, note.channel, note.spelling))
     return tuple(sorted(notes, key=lambda item: (

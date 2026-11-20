@@ -7,10 +7,10 @@ const MAX_STAFF_GAP := Spacing.MAX_STAFF_GAP
 const MIN_LOOKAHEAD_BEATS := Spacing.MIN_LOOKAHEAD_BEATS
 const MIN_READABLE_STAFF_GAP := Spacing.MIN_READABLE_STAFF_GAP
 static func choose(score, ink_geometry, preferred: float, playhead_fraction: float) -> Dictionary:
-    # Maintain at least 36px between repeated quick attacks. The existing
-    # authentic-ink collision solver may raise this floor as necessary.
+    # Staff-space readability is recomputed for every authentic candidate
+    # scale; collision clearance may raise that uniform floor further.
     var density: float = InkSpacing.readable_density(
-        score.timeline.model.get("notes", []), preferred)
+        score.timeline.model.get("display_notes",score.timeline.notes), preferred)
     var ink_density: float = density
     var staff_gap_limit: float = MAX_STAFF_GAP
     var selected_density_witness: Dictionary = {}
@@ -26,8 +26,10 @@ static func choose(score, ink_geometry, preferred: float, playhead_fraction: flo
     var fallbacks: Array = []
     for candidate_gap in [MAX_STAFF_GAP,17.0,MIN_READABLE_STAFF_GAP,11.0,8.5]:
         var tested_gap: float = float(candidate_gap)
-        score.layout_rest_lanes(tested_gap,density)
-        var first: Dictionary = ink_geometry.minimum_density(density,tested_gap)
+        var readable: float = InkSpacing.readable_density(
+            score.timeline.model.get("display_notes",score.timeline.notes),preferred,tested_gap)
+        score.layout_rest_lanes(tested_gap,readable)
+        var first: Dictionary = ink_geometry.minimum_density(readable,tested_gap)
         var trial: float = first["density"]
         var first_witness: Dictionary = first["witness"].duplicate(true)
         score.layout_rest_lanes(tested_gap,trial)

@@ -93,16 +93,16 @@ def test_unreleased_has_no_fabricated_duration_or_measured_short_flag(onset, sta
     assert observation.onset_residual == onset
 
 
-def test_missed_retains_clipped_expected_timing_and_explicit_missing_actuals():
+def test_missed_retains_sounding_tail_and_explicit_missing_actuals():
     phrase = _phrase(Note(4, 7, 60, 0, 0), start=4, end=6)
 
     entry = evaluate(phrase, "right", 120, []).notes[0]
 
     assert entry.status == "missed"
     observation = _observation(entry)
-    assert observation.expected_onset == 0 and observation.expected_release == 1
+    assert observation.expected_onset == 0 and observation.expected_release == 1.5
     assert observation.local_seconds_per_beat == .5
-    assert observation.onset_tolerance == .13 and observation.duration_tolerance == .5
+    assert observation.onset_tolerance == .15 and observation.duration_tolerance == .75
     assert observation.played_index is None and observation.press_id is None
     assert observation.actual_pitch is None
     assert observation.actual_onset is None and observation.actual_release is None
@@ -118,20 +118,20 @@ def test_tempo_mapped_observations_keep_cross_segment_seconds_and_local_toleranc
     tempo = TempoMap("mapped", (TempoSegment(0, 2, 120), TempoSegment(2, 4, 60)))
 
     result = assess_timed_window(phrase, "right", tempo,
-                                [PlayedNote(60, .1, 1.6), PlayedNote(62, .75, 1)],
+                                [PlayedNote(60, .1, 1.6), PlayedNote(62, .8, 1)],
                                 from_beat=1)
 
     assert [entry.status for entry in result.notes] == ["correct", "late"]
     first, second = [_observation(entry) for entry in result.notes]
     assert (first.expected_onset, first.expected_release, first.local_seconds_per_beat) == (0, 1.5, .5)
     assert (second.expected_onset, second.expected_release, second.local_seconds_per_beat) == (.5, 2.5, 1)
-    assert (first.onset_tolerance, first.duration_tolerance) == (.13, .75)
-    assert second.onset_tolerance == .2 and second.duration_tolerance == pytest.approx(1.28)
+    assert (first.onset_tolerance, first.duration_tolerance) == (.15, .75)
+    assert second.onset_tolerance == .25 and second.duration_tolerance == pytest.approx(1.28)
     assert first.onset_residual == pytest.approx(.1)
     assert first.release_residual == pytest.approx(.1)
     assert first.duration_residual == pytest.approx(0)
-    assert second.onset_residual == .25 and second.release_residual == -1.5
-    assert second.duration_residual == -1.75 and second.hold_error == "short"
+    assert second.onset_residual == pytest.approx(.3) and second.release_residual == -1.5
+    assert second.duration_residual == -1.8 and second.hold_error == "short"
 
 
 def test_wrong_pitch_uses_the_same_single_expected_timing_resolution():
@@ -200,7 +200,7 @@ def test_observation_serializes_as_frozen_scalar_facts_without_changing_legacy_c
         "played_index": 0, "press_id": None,
         "expected_onset": 0, "expected_release": 1,
         "actual_pitch": 60, "actual_onset": 0, "actual_release": 1,
-        "local_seconds_per_beat": .5, "onset_tolerance": .13,
+        "local_seconds_per_beat": .5, "onset_tolerance": .15,
         "duration_tolerance": .5, "onset_residual": 0,
         "release_residual": 0, "duration_residual": 0,
         "pitch_error": False, "timing_error": None, "hold_error": None,

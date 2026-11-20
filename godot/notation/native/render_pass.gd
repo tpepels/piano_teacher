@@ -18,6 +18,7 @@ var visual_scroll_beat: float
 # owns; this is physical paint culling, not a change to source beat positions.
 var source_floor := -INF
 var source_ceiling := INF
+var context_role := ""
 var drawn_noteheads: Dictionary = {}
 var pass_noteheads: Dictionary = {}
 var drawn_note_instances: Array = []
@@ -57,10 +58,12 @@ static func intervals_overlap(first: Dictionary, second: Dictionary) -> bool:
 func ink(hand: String) -> Color:
     if not focused_staff.is_empty() and hand != focused_staff:
         return Color.TRANSPARENT
-    var selected: bool = active_hand == "both" or active_hand == hand
+    var selected: bool = (active_hand == "both" or active_hand == hand) and context_role != "context"
     return Design.SCORE_INK if selected else Color(Design.STAFF_MUTED,.46)
 
 func event_ink(score_layout, event: Dictionary) -> Color:
+    if str(event.get("display_role","")) in ["context","inactive_hand"]:
+        return Color(Design.STAFF_MUTED,.46)
     return ink(score_layout.performing_hand(event))
 
 func record_notehead(event: Dictionary, point: Vector2, viewport_width: float,

@@ -40,13 +40,13 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
     var source_last: float = (
         float(last_value) if last_value is float or last_value is int
         else timeline.duration_beats)
-    source_first = clampf(source_first,0.0,timeline.duration_beats)
-    source_last = clampf(source_last,source_first,timeline.duration_beats)
+    source_first = clampf(source_first,timeline.display_start_beat,timeline.display_end_beat)
+    source_last = clampf(source_last,source_first,timeline.display_end_beat)
     # Each CanvasItem compiles only its own measure (plus a small connector
     # margin). This bounds total drawing work to O(source length), rather
     # than one entire-piece command list for EVERY measure strip.
-    var left: float = maxf(0.0,source_first-.25)
-    var right: float = minf(timeline.duration_beats,source_last+.25)
+    var left: float = maxf(timeline.display_start_beat,source_first-.25)
+    var right: float = minf(timeline.display_end_beat,source_last+.25)
     var retained_width: float = maxf(viewport.x,
         (right+1.0)*timeline.pixels_per_beat+viewport.x)
     var frame: RenderPass = engraving.new_frame(
@@ -56,11 +56,11 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
     layout.set_viewport(Vector2(retained_width,viewport.y))
     var font: Font = ThemeDB.fallback_font
     var measure_index: int = _measure_index_at_or_after(
-        timeline.measures,left-.00001)
+        timeline.display_measures,left-.00001)
     var previous_measure: Dictionary = (
-        timeline.measures[measure_index-1] if measure_index > 0 else {})
-    for index in range(measure_index,timeline.measures.size()):
-        var measure: Dictionary = timeline.measures[index]
+        timeline.display_measures[measure_index-1] if measure_index > 0 else {})
+    for index in range(measure_index,timeline.display_measures.size()):
+        var measure: Dictionary = timeline.display_measures[index]
         var at: float = float(measure.get("start_beat",0.0))
         var first: bool = index == 0
         if at > right+.00001:
@@ -71,12 +71,13 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
         var x: float = timeline.screen_x(at,camera_clock,playhead_x,play_from_beat)
         var barline: Dictionary = layout.barline_geometry(
             measure,camera_clock,playhead_x,gap,play_from_beat)
-        if not barline.is_empty() and float(barline["x"])>=-gap*2.0 and \
+        if not barline.is_empty() and float(barline["x"])>=source_first*timeline.pixels_per_beat-gap*2.0 and \
                 float(barline["x"])<=retained_width+gap*2.0:
             context_painter.paint_barline(target,frame,barline,gap)
+        frame.context_role = str(measure.get("display_role","active"))
         var crowded_meter: bool = context_painter.paint_context(
             target,frame,measure,previous_measure,x,gap,first)
-        if not first and not crowded_meter and x>=0.0 and x<=retained_width:
+        if not first and not crowded_meter and x>=source_first*timeline.pixels_per_beat and x<=retained_width:
             target.draw_string(font,Vector2(x+gap*.4,
                 layout.staff_center("right")-gap*4.3),
                 str(int(measure.get("number",0))),
@@ -87,7 +88,7 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
     var terminal: Dictionary = (
         layout.terminal_barline_geometry(
             camera_clock,playhead_x,gap,play_from_beat)
-        if source_last >= timeline.duration_beats-.00001 else {})
+        if source_last >= timeline.display_end_beat-.00001 else {})
     if not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
             float(terminal["x"]) <= retained_width+gap*2.0:
         context_painter.paint_barline(target,frame,terminal,gap)
@@ -101,6 +102,7 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
     var head_offsets: Dictionary = layout.cached_head_offsets
     var beam_data: Dictionary = engraving.beam_plan(frame,head_offsets)
     var beam_stems: Dictionary = beam_data.get("stems", {})
+    frame.context_role = ""
     var compound_ids: Dictionary = {}
     for event in EventWindow.visible(layout.ordered_events,left,right,frame):
         if compound_ids.has(str(event.get("id",""))):

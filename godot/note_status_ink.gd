@@ -17,6 +17,7 @@ const Status := preload("res://note_status_registry.gd")
 const Design := preload("res://practice_theme.gd")
 const EARLY_ONSET := Color("#F08FCB")
 const COLORS := {
+    "sounding": Color("#53E7B7"),
     "hit": Color("#53E7B7"),
     "missed": Color("#F17978"),
     # Practice flow (docs/practice-flow.md): two colours only. An attack

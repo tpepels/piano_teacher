@@ -29,16 +29,17 @@ class LearningEvidenceSession:
                 start: float, end: float, run_at: float | None = None,
                 tempo_map=None, transport_id: int, score_revision: int,
                 count_in_beats: float, count_in_meter,
-                guided_config=None, persistent_hints: bool = False) -> dict:
+                guided_config=None, persistent_hints: bool = False, variant=None) -> dict:
         p = plan
-        phrase = p.active_phrase
+        variant = variant if variant is not None else p.active_variant
+        phrase = variant.phrase
         tempo = tempo_map
         segments = (list(tempo.as_segments()) if tempo is not None else
-                    [{"start_beat": 0.0, "end_beat": phrase.end-phrase.start,
+                    [{"start_beat": 0.0, "end_beat": phrase.sounding_end-phrase.start,
                       "bpm": p.bpm}])
         rule = {"schema_version": 1, "grader": "nearest-onset-v1",
                 "mastery": "accepted-full-target-v1", "lesson_settings": asdict(SETTINGS),
-                "onset_formula": "max(grading_onset_tolerance_seconds,min(0.30,0.20*local_spb))",
+                "onset_formula": "max(0.15,grading_onset_tolerance_seconds,0.25*local_spb)",
                 "hold_formula": "max(grading_duration_floor_seconds,duration*max(grading_duration_tolerance_fraction,min(0.75,grading_duration_tolerance_fraction+0.28*max(0,local_spb-0.5))))",
                 "importer": "midi-source-v1", "generator": p.lesson_generator.name,
                 "generator_version": p.route_version,
@@ -49,10 +50,10 @@ class LearningEvidenceSession:
         rule_id = self._progress.ledger.store_rules(rule)
         return {"fingerprint": fingerprint, "source_sha256": fingerprint,
                 "stage_key": p.identity, "hand": p.hand, "scope": scope,
-                "variant": p.active_variant.level, "generator": p.lesson_generator.name,
+                "variant": variant.level, "generator": p.lesson_generator.name,
                 "generator_version": p.route_version, "rule_id": rule_id,
                 "source_note_ids": [n.source_id for n in phrase.notes],
-                "variant_source_indices": list(p.active_variant.source_indices),
+                "variant_source_indices": list(variant.source_indices),
                 "expected_notes": [asdict(n) for n in phrase.notes],
                 "bar_boundaries": list(p.piece.bar_boundaries),
                 "time_signatures": [list(signature) for signature in p.piece.time_signatures],

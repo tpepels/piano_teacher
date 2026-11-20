@@ -16,8 +16,9 @@ static func plan(renderer, action: String, world: float,
     return plan_facts(facts,action,world,source_opening,count_in_beats)
 
 static func plan_facts(facts: Dictionary, action: String, world: float,
-        source_opening: float, count_in_beats: float) -> Dictionary:
-    if action not in ["start","resume","restart"]:
+        source_opening: float, count_in_beats: float,
+        exact_start_world: float = NAN) -> Dictionary:
+    if action not in ["start","resume","restart","auto"]:
         return _refuse("unsupported_action")
     if not is_finite(world) or not is_finite(source_opening):
         return _refuse("invalid_transport_coordinate")
@@ -46,6 +47,30 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
         return _refuse("incomplete_physical_preflight_facts")
     var survivors: Array = withdrawn["remaining"]
     var peer_floor: float = float(facts["peer_floor"])
+    if action == "auto":
+        # The backend's direct repeat already began its one count-in bar at
+        # the preceding sounding end. Physical admission may consume that
+        # lead; it cannot choose a second musical deadline or extra runway.
+        if not is_finite(exact_start_world) or exact_start_world <= world:
+            return _refuse("expired_direct_repeat")
+        if not facts.has("peer_source_floor"):
+            return _refuse("missing_direct_repeat_peer_clearance")
+        var incoming_left: float = exact_start_world-header
+        for item in survivors:
+            if str(item.get("kind","source")) != "source":
+                continue
+            var ink: Vector2 = Admission.clip_bounds(item,density,staff_gap,duration)
+            var ink_right: float = float(item["world_origin"])+ink.y/density
+            if ink_right > incoming_left+.0001:
+                return _refuse("direct_repeat_overlaps_exposed_source")
+        var peer_source: float = float(facts["peer_source_floor"])
+        if is_finite(peer_source) and peer_source > incoming_left+.0001:
+            return _refuse("direct_repeat_overlaps_peer_source")
+        return {"ok":true,"mode":"append","action":action,
+            "opening":source_opening,"start_world":exact_start_world,
+            "empty_strip":false,"remaining_count":survivors.size(),
+            "withdraw_owners":withdrawn["owners"].duplicate(),
+            "reason":"authoritative_one_bar_repeat"}
     var was_paused: bool = bool(facts.get("was_paused",false))
     var paused_source: float = float(facts.get("paused_source",0.0))
     var paused_owner: int = int(facts.get("paused_owner",-1))
@@ -60,7 +85,8 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     # A prepared, fully offscreen take is the cheapest valid reservation
     # while other ink is still moving ahead of the playhead.
     var reusable := -1
-    if action == "start" and not is_finite(near_onset):
+    if action == "start" and not is_finite(near_onset) and \
+            not bool(facts.get("display_context_required",false)):
         reusable = Admission.select(online,"ready",
             source_opening,preview_world,right,header)
     elif action == "resume":

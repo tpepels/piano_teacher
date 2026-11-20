@@ -91,8 +91,6 @@ class PlaybackSession:
         self.begin_epoch()
         self._input.reset_attempt()
         self._transport.clear_grading_floor()
-        if phrase is not None:
-            self._input.prepare(phrase)
         self._attempt.begin_take(recording=recording)
         self._assessment.clear()
         return self.transport_id
@@ -138,9 +136,9 @@ class PlaybackSession:
             "perform" if request.mode == "perform" else
             "partial" if self._attempt.automatic_remedial_review else
             "section_review" if self._attempt.review_end_beat is not None else
-            "partial" if scheduled.from_beat > 1e-7 else "full")
+            "partial" if scheduled.from_beat > source.phrase.first_attack_beat+1e-7 else "full")
         return StartedTake(scope,scheduled.from_beat,
-            self._attempt.review_end_beat or source.phrase.end-source.phrase.start,
+            self._attempt.review_end_beat or source.phrase.sounding_end-source.phrase.start,
             scheduled.next_boundary_beat,deadline,scheduled.next_action)
 
     def capture_start(self, context: dict) -> None:
@@ -208,7 +206,8 @@ class PlaybackSession:
         if start is None:
             return ListenActivation()
         if presentation_required:
-            return ListenActivation(requested_count_in=start.count_in_beats)
+            return ListenActivation(requested_count_in=start.count_in_beats,
+                from_beat=start.from_beat)
         self._activate_listen(start,deadline=None)
         return ListenActivation(started=True)
 
@@ -220,7 +219,7 @@ class PlaybackSession:
         self.count_in_meter = list(start.count_in_meter)
         self.count_in_beats = start.count_in_beats
         self._transport.install_timed_origin(
-            from_beat=self._transport.play_from_beat,
+            from_beat=start.from_beat,
             run_at=self._clock()+start.delay_seconds if deadline is None else deadline,
             gap_beats=self._transport.visual_gap_beats)
 
@@ -507,7 +506,8 @@ class PlaybackSession:
                 raise ValueError("Continuation requires the exact source measurements")
             deadline = SCHEDULER.continuation(measurement,now=self._clock(),bpm=effect.bpm)
             if not self._transport.retry_previous_pass:
-                self._transport.advance_source_stride(source_stride_beats)
+                self._transport.advance_source_stride(
+                    source_stride_beats-effect.exposure.from_beat)
             result = AppliedContinuation(ScheduledContinuation(
                 effect.exposure.from_beat,deadline))
         elif isinstance(effect,AwaitSelectedScore):

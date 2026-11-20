@@ -40,7 +40,7 @@ class PracticeWindow:
 
     def phrase(self, number: int) -> Phrase:
         return Phrase(number, self.first_bar, self.last_bar,
-                      self.first_beat, self.source_end, self.notes)
+                      self.first_beat, self.last_beat, self.notes)
 
 
 def moving_windows(piece: Piece, *, maximum_bars: int = MAX_PRACTICE_BARS

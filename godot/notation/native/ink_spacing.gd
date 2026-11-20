@@ -7,13 +7,7 @@ extends RefCounted
 # Single owner of horizontal attack-readability policy. The authentic
 # glyph collision solver below may demand more space than these preferences.
 const MIN_SOURCE_ATTACK_SPACING_PX := 25.0
-const QUICK_ATTACK_MIN_INTERVAL_BEATS := 0.12
-const QUICK_ATTACK_MAX_INTERVAL_BEATS := 0.5
-# Owner (2026-11-17): 16th and 8th notes were too close together. A quick
-# attack gets about 3.3 staff spaces at the standard 22 px staff (was 52 px).
-const QUICK_ATTACK_TARGET_PIXELS := 72.0
-const MAX_QUICK_READABILITY_DENSITY := 420.0
-const MIN_REPEATED_QUICK_INTERVALS := 2
+const SIXTEENTH_STAFF_SPACES := 3.3
 
 
 static func source_attack_intervals_fit(events: Array, max_density: float) -> bool:
@@ -29,7 +23,7 @@ static func source_attack_intervals_fit(events: Array, max_density: float) -> bo
         if not event is Dictionary or str(event.get("kind","")) != "note":
             continue
         var clock: float = float(event.get("beat",NAN))
-        if not is_finite(clock) or clock < 0.0:
+        if not is_finite(clock):
             return false
         var lane: String = str(event.get("staff",""))+"|"+str(event.get("voice","1"))
         if not lanes.has(lane):
@@ -50,27 +44,22 @@ static func source_attack_intervals_fit(events: Array, max_density: float) -> bo
 # contours technically do not overlap. Avoid treating a single rolled/grace
 # MIDI attack as a dense passage. Return a whole-score linear density; do not
 # retime events, move individual noteheads or distort notation.
-static func readable_density(notes: Array, preferred: float) -> float:
-    var unique: Dictionary = {}
+static func readable_density(notes: Array, preferred: float, gap: float = 22.0) -> float:
+    # A linear axis guarantees every sixteenth 3.3 spaces whenever genuine
+    # eighth-or-faster source content is present, including a single figure.
+    var beats: Array[float] = []
     for note in notes:
         if not note is Dictionary:
             continue
-        var beat: float = float(note.get("onset_beats", NAN))
-        if is_finite(beat):
-            unique[snappedf(beat, 0.000001)] = true
-    var onsets: Array = unique.keys()
-    onsets.sort()
-    var quick: Array = []
-    for i in range(1, onsets.size()):
-        var distance: float = float(onsets[i])-float(onsets[i-1])
-        if distance >= QUICK_ATTACK_MIN_INTERVAL_BEATS and \
-                distance < QUICK_ATTACK_MAX_INTERVAL_BEATS - 0.000001:
-            quick.append(distance)
-    if quick.size() < MIN_REPEATED_QUICK_INTERVALS:
-        return preferred
-    quick.sort()
-    var interval: float = float(quick[maxi(1, quick.size()/4)])
-    return maxf(preferred, minf(MAX_QUICK_READABILITY_DENSITY,QUICK_ATTACK_TARGET_PIXELS/interval))
+        if float(note.get("duration_beats",INF)) <= .5+.000001:
+            return maxf(preferred,SIXTEENTH_STAFF_SPACES*gap/.25)
+        beats.append(float(note.get("onset_beats",INF)))
+    beats.sort()
+    for index in range(1,beats.size()):
+        var distance: float = beats[index]-beats[index-1]
+        if distance > .000001 and distance <= .5+.000001:
+            return maxf(preferred,SIXTEENTH_STAFF_SPACES*gap/.25)
+    return preferred
 
 static func minimum_density(items: Array, preferred: float, gap: float,
         boundaries: Array = []) -> Dictionary:

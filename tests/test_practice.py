@@ -44,7 +44,7 @@ def test_relaxed_onset_and_release_tolerance():
     expected = Note(0, 1, 60, 0, 0, 'right')
     phrase = Phrase(1, 1, 1, 0, 4, (expected,))
     # 120 BPM: reference duration = 0.5 seconds.
-    assert evaluate(phrase,'right',120,[PlayedNote(60,0.129,0.629)]).clean
-    assert not evaluate(phrase,'right',120,[PlayedNote(60,0.131,0.631)]).clean
+    assert evaluate(phrase,'right',120,[PlayedNote(60,0.149,0.649)]).clean
+    assert not evaluate(phrase,'right',120,[PlayedNote(60,0.151,0.651)]).clean
     assert evaluate(phrase,'right',120,[PlayedNote(60,0.0,0.251)]).clean
     assert not evaluate(phrase,'right',120,[PlayedNote(60,0.0,0.24)]).clean

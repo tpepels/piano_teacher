@@ -100,8 +100,8 @@ func _practice_timeline_error() -> String:
     if not is_finite(duration) or not is_finite(stride) or duration<=0.0 or \
             absf(duration-float(meter[0])*4.0/float(meter[1]))>.00001 or \
             absf(float(practice_timeline.get("source_duration_beats",0.0))-timeline.duration_beats)>.00001 or \
-            absf(stride-timeline.duration_beats-duration)>.00001 or \
-            absf(float(silence.get("start_beat",-INF))-timeline.duration_beats)>.00001 or \
+            absf(stride-timeline.sounding_duration_beats-duration)>.00001 or \
+            absf(float(silence.get("start_beat",-INF))-timeline.sounding_duration_beats)>.00001 or \
             absf(float(silence.get("end_beat",-INF))-stride)>.00001:
         return "Preparation duration differs from its full measure"
     var events: Variant = silence.get("events")

@@ -24,10 +24,11 @@ func canvas() -> Control:
     return _canvas_ref.get_ref() if _canvas_ref != null else null
 
 func append_source(facts: StreamGeometry, source_beat: float, start_world: float,
-        from_beat: float, take_key: String, empty_strip: bool = false) -> void:
+        from_beat: float, take_key: String, empty_strip: bool = false,
+        guided: bool = false, display_context: bool = false) -> void:
     var windows: Array[Vector2] = _source_windows.call(maxf(0.0,from_beat))
     append_take(facts,windows,source_beat,start_world,take_key,empty_strip,
-        facts.first_header_spaces,facts.rest_gap)
+        facts.first_header_spaces,facts.rest_gap,guided,display_context)
 
 func trim(facts: StreamGeometry, reason: String, protected_take: int = -1) -> Array[int]:
     return trim_future(canvas(),reason,facts.world,facts.density,facts.gap,
@@ -80,6 +81,7 @@ func preflight_facts(world: float, opening: float, source_exists: bool,
         "online":online_snapshot(),
         "withdrawn":preview.duplicate(true),
         "peer_floor":queue.minimum_peer_opening(density,width,playhead),
+        "peer_source_floor":queue.minimum_peer_opening(density,width,playhead,true,"source"),
         "right":right,
         "header":header,
         "preview_world":world,
@@ -244,7 +246,7 @@ func restore_future_suffix(facts: StreamGeometry, saved: Array, world: float) ->
 ## admitted owner.
 func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: float,
         start_world: float, take_key: String, empty_strip: bool,
-        first_header_spaces: float, rest_gap: float) -> void:
+        first_header_spaces: float, rest_gap: float, guided: bool = false, display_context: bool = false) -> void:
     last_admitted = -1
     var first_serial: int = serial+1
     var original_origin: float = start_world-source_beat
@@ -255,6 +257,10 @@ func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: fl
     var gap_pixels: float = facts.gap
     var duration: float = facts.duration
     var width: float = facts.width
+    # Only the opening exhibition and untimed Free carry neighboring bars.
+    # Timed repeats retain their one-bar preparation slot and never wait
+    # for contextual attacks or rewrite ink already exposed.
+    var context: bool = display_context or guided
     var added := 0
     for index in range(windows.size()):
         var bounds: Vector2 = windows[index]
@@ -271,13 +277,14 @@ func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: fl
             "take_owner":first_serial,
             "world_origin":original_origin,
             "source_floor":bounds.x,"source_ceiling":bounds.y,
-            "clip_floor":bounds.x,"clip_ceiling":bounds.y,
+            "clip_floor":minf(bounds.x,facts.display_start) if is_first and context else bounds.x,
+            "clip_ceiling":maxf(bounds.y,facts.display_end) if is_last and context else bounds.y,
             "clip_leading_spaces":leading_spaces,
             "clip_trailing_spaces":2.2 if is_last else 0.0,
             "piece_duration":duration,"take_key":take_key,
-            "pending":take_key == "prepared" or take_key.begins_with("guided:"),
+            "pending":take_key == "prepared" or guided,
             "hidden_until_armed":hidden}]
-        if is_last and rest_gap > .0001:
+        if is_last and rest_gap > .0001 and not (context and facts.display_end > duration+.0001):
             specs.append({
                 "kind":"rest","owner_serial":strip_serial,
                 "take_owner":first_serial,
@@ -399,23 +406,25 @@ func reject_candidate(facts: StreamGeometry, owner_serial: int, before_serial: i
 func arm_take(facts: StreamGeometry, world: float, opening: float, right: float,
         header: float, planned_start_world: float = NAN,
         resuming_paused: bool = false, retrying: bool = false,
-        empty_strip_count_in: float = 0.0) -> Dictionary:
-    return _binding.arm(facts,serial,allocate_source,reserve_ready,
+        empty_strip_count_in: float = 0.0, exact_authorized: bool = false, display_context: bool = false) -> Dictionary:
+    return _binding.arm(facts,serial,allocate_source.bind(display_context),reserve_ready,
         reject_candidate,cancel_arm,empty_strip_onset,retry_placement,
         world,opening,right,header,planned_start_world,resuming_paused,
-        retrying,empty_strip_count_in)
+        retrying,empty_strip_count_in,exact_authorized)
 
 func allocate_source(facts: StreamGeometry, source_beat: float, start_world: float,
-        from_beat: float, take_key: String, empty_strip: bool) -> int:
+        from_beat: float, take_key: String, empty_strip: bool,
+        display_context: bool = false) -> int:
     var before: int = serial
-    append_source(facts,source_beat,start_world,from_beat,take_key,empty_strip)
+    append_source(facts,source_beat,start_world,from_beat,take_key,empty_strip,false,display_context)
     return last_admitted if serial > before else -1
 
 func schedule_recovery(facts: StreamGeometry, world: float, source_opening: float,
         graded_deadline_world: float, right: float, header: float,
         plan_id: String = "",
         allow_count_in: bool = false, count_in_beats: float = 0.0,
-        deadline_at_or_after: bool = false, untimed: bool = false) -> bool:
+        deadline_at_or_after: bool = false, untimed: bool = false,
+        presentation_take: String = "") -> bool:
     var prepared: Dictionary = _recovery.prepare(queue,facts,source_opening,
         graded_deadline_world,right,header,plan_id,allow_count_in,
         count_in_beats,deadline_at_or_after,untimed)
@@ -445,7 +454,8 @@ func schedule_recovery(facts: StreamGeometry, world: float, source_opening: floa
     # Free plan ID. This printed source is never eligible for graded reuse;
     # Play/Resume/Retry must reserve and acknowledge their own timed owner.
     append_source(facts,source_opening,checked,source_opening,
-        "guided:"+str(prepared["identity"]),on_empty)
+        presentation_take if not presentation_take.is_empty() else
+            "guided:"+str(prepared["identity"]),on_empty,true)
     _binding.restore_live(prior_live)
     if self.serial > before:
         _recovery.record(str(prepared["identity"]),last_admitted,checked,

@@ -6,6 +6,7 @@ from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import PlayedNote, evaluate
 from piano_teacher.live_input_view import LiveInputView
+from piano_teacher.live_feedback import live_assessment
 from piano_teacher.exercise_contracts import TempoMap, TempoSegment
 
 
@@ -49,11 +50,11 @@ def test_per_stage_start_and_manual_tempo_survive_navigation():
 
 def test_slow_practice_tolerates_drift_and_approximate_hold():
     phrase = Phrase(1, 1, 1, 0, 4, (Note(0, 1, 60, 0, 0, "right"),))
-    assert onset_tolerance(1.5) == pytest.approx(.30)
+    assert onset_tolerance(1.5) == pytest.approx(.375)
     assert evaluate(phrase, "right", 40, [PlayedNote(60, .2, 1.1)]).clean
     assert evaluate(phrase, "right", 40, [PlayedNote(60, .4, 1.7)]).notes[0].status == "late"
     assert not evaluate(phrase, "right", 40, [PlayedNote(61, 0, 1)]).clean
-    assert evaluate(phrase, "right", 120, [PlayedNote(60, .15, .65)]).notes[0].status == "late"
+    assert evaluate(phrase, "right", 120, [PlayedNote(60, .15, .65)]).notes[0].status == "correct"
 
 
 def test_repeated_note_uses_nearest_attack_not_the_first_unplayed_note():
@@ -70,9 +71,13 @@ def test_live_preview_and_final_grading_agree_at_slow_and_shaped_tempo():
     for transport, bpm, tempo in [(1, 40, None), (2, 60, TempoMap("slow", (
             TempoSegment(0, 4, 40),)))]:
         view.reset_attempt()
+        judgement = live_assessment(
+            phrase, "right", bpm, [PlayedNote(60, .2, None)],
+            from_beat=0, elapsed_seconds=.2, tempo=tempo).notes[0]
         event = view.receive(pitch=60, is_on=True, now=10.2, phrase=phrase,
                      hand="right", bpm=bpm, from_beat=0, run_at=10,
                      running=True, paused=False, preview=False,
-                     mode="practice", transport_id=transport, tempo_map=tempo)
+                     mode="practice", transport_id=transport, tempo_map=tempo,
+                     judgement=judgement)
         assert event["status"] == "on_time"
     assert evaluate(phrase, "right", 40, [PlayedNote(60, .2, 1.1)]).clean

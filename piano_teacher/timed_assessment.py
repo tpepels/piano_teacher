@@ -13,7 +13,7 @@ from typing import Sequence
 from .exercise_contracts import TempoMap
 from .assessment_clock import expected_note_seconds as expected_seconds
 from .feedback import project_assessment
-from .lesson_settings import SETTINGS
+from .live_feedback import live_assessment
 from .measure_grid import chunk_start_at_end
 from .music import Phrase
 from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
@@ -29,7 +29,7 @@ def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
     Original Note objects reach the grader and feedback mapper unchanged,
     including source IDs. No mastered stage is changed here.
     """
-    end = (phrase.end - phrase.start if end_beat is None else end_beat)
+    end = (phrase.sounding_end - phrase.start if end_beat is None else end_beat)
     start = from_beat if start_beat is None else max(start_beat, from_beat)
     if not 0 <= from_beat <= start < end <= tempo.duration_beats + 1e-7:
         raise ValueError("Invalid tempo-mapped source interval")
@@ -45,7 +45,7 @@ def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
     # one pressed after the last expected note. Only recovery windows
     # restrict played events to an adjacent interval.
     full_take = (abs(start-from_beat) <= 1e-7
-                 and abs(end-(phrase.end-phrase.start)) <= 1e-7)
+                 and abs(end-(phrase.sounding_end-phrase.start)) <= 1e-7)
     scoped = (list(played) if full_take else
               [note for note in played
                if since-.15 <= note.onset < until+.15])
@@ -56,63 +56,11 @@ def timed_live_marks(phrase: Phrase, hand: str, tempo: TempoMap,
                      played: Sequence[PlayedNote], *, from_beat: float,
                      elapsed_seconds: float, grid: Sequence[float],
                      layout: dict) -> list[dict]:
-    """Show settled/expired notes at their original engraved noteheads."""
-    if elapsed_seconds < 0:
-        return []
-    elapsed = tempo.seconds_at(from_beat) + elapsed_seconds
-    now_beat = min(tempo.duration_beats, tempo.beat_at(elapsed))
-    active = max(0, min(len(grid)-2, bisect_right(grid, now_beat)-1))
-    window_start = max(from_beat, grid[max(0, active-2)])
-    times = expected_seconds(phrase, tempo, from_beat)
-    settled = []
-    pending = []
-    for note in phrase.notes:
-        local = note.start - phrase.start
-        if ((hand != "both" and note.hand != hand) or
-                not window_start-1e-7 <= local <= now_beat+1e-7):
-            continue
-        onset, release, local_spb = times(note)
-        if release + .12 <= elapsed_seconds + 1e-7:
-            settled.append(note)
-        elif onset + max(SETTINGS.grading_match_window_min_seconds,
-                          SETTINGS.grading_match_window_beats * local_spb) <= elapsed_seconds + 1e-7:
-            pending.append(note)
-    marks = []
-    if settled:
-        # A bounded view may contain notes released in the preceding bar.
-        # Their timestamps retain the same run-at origin as the real take.
-        eligible = [n for n in played if n.onset >=
-                    tempo.seconds_at(window_start)-tempo.seconds_at(from_beat)-.15
-                    and n.onset <= elapsed_seconds+.12]
-        selected = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
-                          phrase.start+window_start, phrase.end, tuple(settled))
-        result = evaluate(selected, hand, 60, eligible,
-                          expected_seconds=times)
-        marks.extend(project_assessment(
-            Assessment(result.notes, 0), phrase, 60, layout)["marks"])
-    if pending:
-        # Detect onset-only misses without marking a held note 'short' while
-        # it is still being played. Distinct chord pitches remain distinct.
-        missed = []
-        unused = set(range(len(played)))
-        for note in pending:
-            onset, _, spb = times(note)
-            window = max(SETTINGS.grading_match_window_min_seconds,
-                         SETTINGS.grading_match_window_beats * spb)
-            matches = [(abs(played[i].onset-onset), i) for i in unused
-                       if played[i].pitch == note.pitch
-                       and abs(played[i].onset-onset) <= window]
-            if matches:
-                unused.remove(min(matches)[1])
-            else:
-                missed.append(NoteAssessment(note, "missed"))
-        if missed:
-            ids = {mark.get("source_id") for mark in marks}
-            projected = project_assessment(
-                Assessment(tuple(missed), 0), phrase, 60, layout)["marks"]
-            marks.extend(mark for mark in projected
-                         if mark.get("source_id") not in ids)
-    return marks
+    """Project the same canonical observation stream using the tempo map."""
+    result = live_assessment(
+        phrase, hand, 60, list(played), from_beat=from_beat,
+        elapsed_seconds=elapsed_seconds, tempo=tempo)
+    return project_assessment(result, phrase, 60, layout)["marks"]
 
 
 def timed_rolling_recovery(phrase: Phrase, hand: str, tempo: TempoMap,

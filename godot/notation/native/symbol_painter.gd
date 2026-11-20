@@ -120,6 +120,10 @@ func paint_engraved_chord(canvas, frame: RenderPass, event: Dictionary, x: float
             not score_layout.glyphs.has_chord_stem(key)):
         return []
     var group: Array = score_layout.chord_members.get(str(event.get("id","")),[])
+    # Mixed context/performance chords keep each authentic head's own tint.
+    for member in group:
+        if frame.event_ink(score_layout,member) != ink:
+            return []
     var heads: Array = score_layout.glyphs.chord_heads(key)
     if heads.size() != group.size():
         return []

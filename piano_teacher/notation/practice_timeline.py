@@ -112,7 +112,8 @@ def retry_preparation_rest_beats(source: dict, from_beat: float) -> float:
 
 
 def practice_timeline_descriptor(measures, duration_beats: float,
-                                 staff_order=("right", "left")) -> dict:
+                                 staff_order=("right", "left"), *,
+                                 sounding_duration_beats: float | None = None) -> dict:
     """Append preparation to a contiguous source grid spanning 0..duration."""
     if not measures or not math.isfinite(duration_beats) or duration_beats <= 0:
         raise ValueError("Practice timeline needs source measures and positive duration")
@@ -130,8 +131,12 @@ def practice_timeline_descriptor(measures, duration_beats: float,
         previous_end = end
     if previous_end != duration_beats:
         raise ValueError("Source grid must end at the source duration")
+    sounding = duration_beats if sounding_duration_beats is None else sounding_duration_beats
+    if not math.isfinite(sounding) or sounding < duration_beats:
+        raise ValueError("Sounding duration cannot end before the authored grid")
     gap = preparation_measure_descriptor(
-        measures[0], duration_beats, staff_order,
+        measures[0], sounding, staff_order,
         following_measure=measures[1] if len(measures) > 1 else None)
     return {"schema": SCHEMA, "source_duration_beats": duration_beats,
+            "sounding_duration_beats": sounding,
             "stride_beats": gap["end_beat"], "gap": gap}

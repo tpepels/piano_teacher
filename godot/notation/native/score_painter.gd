@@ -137,7 +137,7 @@ func project_stream(online: Array, retained_all_segments: Array, playhead_x: flo
     # project thousands of offscreen measures on every animation frame.
     for item in online:
         var bounds: Vector2 = StreamLifecycle.screen_bounds(
-            item,density,gap,timeline.duration_beats)
+            item,density,gap,timeline.sounding_duration_beats)
         var screen_left: float = playhead_x + (
             float(item["world_origin"])-stream_world_beat)*density+bounds.x
         if screen_left > size.x+1.0:
@@ -150,7 +150,7 @@ func project_stream(online: Array, retained_all_segments: Array, playhead_x: flo
                 clip == null or not is_instance_valid(clip):
             continue
         if not StreamLifecycle.project(item,stream_world_beat,playhead_x,
-                density,gap,size,timeline.duration_beats):
+                density,gap,size,timeline.sounding_duration_beats):
             continue
         used[segment] = true
         if str(item.get("kind","source")) == "rest":
@@ -178,8 +178,8 @@ func project_stream(online: Array, retained_all_segments: Array, playhead_x: flo
         fingering_pass_clocks.append({
             "clock":stream_world_beat-float(item["world_origin"])-play_from_beat,
             "pass_index":0,"pass_start":0.0,
-            "stream_floor":float(item["source_floor"]),
-            "stream_ceiling":float(item["source_ceiling"])})
+            "stream_floor":float(item.get("clip_floor",item["source_floor"])),
+            "stream_ceiling":float(item.get("clip_ceiling",item["source_ceiling"]))})
     StreamLifecycle.present_pool(retained_all_segments,used)
 
 func playhead_region() -> Rect2:
@@ -293,7 +293,7 @@ func paint_staff(canvas: CanvasItem, online: Array) -> bool:
         var barline_bottom_y: float = layout.barline_bottom(gap)
         var exposed: Dictionary = AmbientMeterGeometry.exposed_lines(
             stream_world_beat,size.x,playhead_x,density,gap,
-            timeline.duration_beats,timeline.measures,_ambient_anchor_world,
+            timeline.sounding_duration_beats,timeline.measures,_ambient_anchor_world,
             online)
         _ambient_anchor_world = float(exposed["anchor"])
         for x in exposed["positions"]:

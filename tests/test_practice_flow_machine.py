@@ -1,5 +1,5 @@
 """Invariants of the practice flow lesson state machine
-(docs/architecture/practice-state-machine.md). Walks every transition."""
+(docs/architecture.md#practice-state-and-timing). Walks every transition."""
 import itertools
 
 import pytest

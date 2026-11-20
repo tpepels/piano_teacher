@@ -8,6 +8,7 @@ from collections import deque
 from dataclasses import dataclass
 import math
 from .musical_scheduler import SCHEDULER
+from ..live_feedback import live_assessment
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,7 +181,7 @@ class MidiIngress:
                 and (transport.automatic or transport.preview_only)):
             duration = SCHEDULER.source_seconds(
                 facts.tempo_map,
-                facts.phrase.end-facts.phrase.start,facts.bpm)
+                facts.phrase.sounding_end-facts.phrase.start,facts.bpm)
             played = SCHEDULER.source_seconds(
                 facts.tempo_map,facts.from_beat,facts.bpm)
             finish = facts.run_at+duration-played
@@ -197,10 +198,25 @@ class MidiIngress:
         if message.type not in ("note_on","note_off"):
             return
         is_on = message.type == "note_on" and message.velocity > 0
+        recorded = None
+        if facts.running and recorder and facts.mode not in ("learn", "listen"):
+            if not is_on or not facts.paused and received_at >= facts.run_at:
+                recorded = recorder.add(message.note,is_on,musical_at)
+        judgement = None
+        if (recorded is not None and facts.phrase is not None
+                and not facts.paused and not facts.preview):
+            assessment = live_assessment(
+                facts.phrase,facts.hand,facts.bpm,recorder.presses,
+                from_beat=facts.from_beat,elapsed_seconds=musical_at,
+                tempo=facts.tempo_map)
+            judgement = next((entry for entry in assessment.notes
+                if entry.observation is not None
+                and entry.observation.press_id == recorded.press_id),None)
         live_event = self.live.receive(pitch=message.note,is_on=is_on,now=corrected_at,
             phrase=facts.phrase,hand=facts.hand,bpm=facts.bpm,from_beat=facts.from_beat,
             run_at=facts.run_at,running=facts.running,paused=facts.paused,preview=facts.preview,
-            mode=facts.mode,transport_id=facts.transport_id,tempo_map=facts.tempo_map,at=musical_at)
+            mode=facts.mode,transport_id=facts.transport_id,tempo_map=facts.tempo_map,
+            at=musical_at,judgement=judgement)
         if live_event is not None:
             self.feedback_events.publish({**live_event,**feedback_take})
         if facts.mode == "learn":
@@ -213,9 +229,3 @@ class MidiIngress:
             return
         if facts.mode == "listen":
             return
-        if facts.running and recorder:
-            if is_on:
-                if not facts.paused and received_at >= facts.run_at:
-                    recorder.add(message.note,True,musical_at)
-            else:
-                recorder.add(message.note,False,musical_at)

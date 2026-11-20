@@ -125,7 +125,6 @@ func _ready() -> void:
     score_frame.add_child(playhead_glow)
     renderer = NativeNotation.new()
     renderer.external_backdrop = true
-    renderer.compact_inactive_staff = true
     renderer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     # The empty moving staff/playhead exists from application startup,
     # before the first score model or retained note buffer is ready.

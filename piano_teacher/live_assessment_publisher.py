@@ -16,34 +16,59 @@ class LiveAssessmentPublisher:
         self.log = log
         self._take: tuple | None = None
         self._published: dict[str, tuple] = {}
+        self._sources: dict[str, str] = {}
+        self._beats: dict[str, float] = {}
         self.latest_marks: list[dict] = []
 
     def clear(self) -> None:
         """Forget the previous take's marks; a new take starts empty."""
         self._take = None
         self._published.clear()
+        self._sources.clear()
+        self._beats.clear()
         self.latest_marks = []
 
-    def publish(self, marks: list[dict], take: dict, *, final: bool = False) -> int:
+    def publish(self, marks: list[dict], take: dict, *, final: bool = False,
+                scope_start_beat: float = -float("inf")) -> int:
         """Publish marks that differ from what this take already published."""
         key = tuple(take[field] for field in
                     ("piece_fingerprint", "revision", "transport_id", "mode"))
         if key != self._take:
             self._take = key
             self._published.clear()
+            self._sources.clear()
+            self._beats.clear()
         self.latest_marks = list(marks)
         if not take["graded"]:
             return 0
         count = 0
+        current_ids = {mark.get("note_id") for mark in marks
+                       if not mark.get("estimated") and mark.get("note_id")}
+        # A later physical press may improve the scorer's closest-onset
+        # assignment. Withdraw its old provisional head rather than retain
+        # ink which no longer exists in the authoritative projection.
+        for note_id in self._published.keys() - current_ids:
+            if self._beats.get(note_id,-float("inf")) < scope_start_beat:
+                continue  # Older exposed ink keeps its last canonical observation.
+            source_id = self._sources.pop(note_id, "")
+            self._beats.pop(note_id,None)
+            self.log.publish({"kind": "assessment", **take,
+                              "note_id": note_id, "source_id": source_id,
+                              "status": "pending", "dimensions": None,
+                              "final": False})
+            del self._published[note_id]
+            count += 1
         for mark in marks:
             note_id = mark.get("note_id")
             if mark.get("estimated") or not note_id:
                 continue
             dimensions = dict(mark.get("dimensions") or {})
-            signature = (mark.get("status"), tuple(sorted(dimensions.items())))
+            signature = (mark.get("status"), tuple(sorted(dimensions.items())), final)
             if self._published.get(note_id) == signature:
                 continue
             self._published[note_id] = signature
+            self._sources[note_id] = mark.get("source_id", "")
+            self._beats[note_id] = float(mark.get("beat",0.0))
             self.log.publish({
                 "kind": "assessment", **take,
                 "note_id": note_id, "source_id": mark.get("source_id", ""),
