@@ -9,8 +9,7 @@ and cannot replace the current playing piece or its score revision.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from dataclasses import replace
+from dataclasses import dataclass, replace, asdict
 from pathlib import Path
 import hashlib
 import time
@@ -27,6 +26,31 @@ class PreparedSource:
 
 
 class SourcePreparationSession:
+    @staticmethod
+    def fingering_status(piece) -> dict:
+        plan = piece.fingering_plan if piece is not None else None
+        return {"summary":plan.summary() if plan is not None else None,
+                "assignments":{source_id:asdict(assignment)
+                    for source_id,assignment in plan.assignments.items()}
+                    if plan is not None else {}}
+
+    @staticmethod
+    def correct_fingering(*, piece, fingerprint: str,
+                          source_id: str, finger: int | None,
+                          fingering):
+        """Validate one original source note and return its corrected plan.
+
+        This worker cannot replace a loaded LearningPlan. Caller serializes
+        it against source loads and rechecks its generation before commit.
+        """
+        if not isinstance(source_id,str) or not source_id:
+            raise ValueError("Choose an original source note")
+        if finger is not None and (type(finger) is not int or
+                                   not 1 <= finger <= 5):
+            raise ValueError(
+                "Finger must be an integer from 1 to 5, or null to remove a correction")
+        return fingering.correct(piece,fingerprint,source_id,finger)
+
     def prepare(self, source: Path, *, warmup: bool, preprocessing, fingering,
                 progress, fukuda_mistakes, library, state_lock, importer,
                 plan_type=LearningPlan,

@@ -718,21 +718,13 @@ class PracticeEngine:
                   "ms total",prepared.path.name,flush=True)
 
     def fingering_status(self) -> dict:
-        """Return the complete original-piece assignments, independent of stage."""
         with self.lock:
-            plan = self.plan.piece.fingering_plan if self.plan is not None else None
-            return {"summary": plan.summary() if plan is not None else None,
-                    "assignments": {sid: asdict(assignment)
-                                    for sid, assignment in plan.assignments.items()}
-                    if plan is not None else {}}
+            return self.source_preparation.fingering_status(
+                self.plan.piece if self.plan is not None else None)
 
     def correct_fingering(self, source_id: str, finger: int | None,
                          *, fingerprint: str | None = None) -> None:
         """Save a source correction without rebuilding learning or grading notes."""
-        if not isinstance(source_id, str) or not source_id:
-            raise ValueError("Choose an original source note")
-        if finger is not None and (type(finger) is not int or not 1 <= finger <= 5):
-            raise ValueError("Finger must be an integer from 1 to 5, or null to remove a correction")
         with self.lock:
             self._apply_listen_failure()
             if self.plan is None:
@@ -745,7 +737,9 @@ class PracticeEngine:
                 if generation != self._piece_generation:
                     raise ValueError("The loaded piece changed; refresh the score before correcting fingering")
                 piece, source_fingerprint = self.plan.piece, self.fingerprint
-            plan = self.fingering.correct(piece, source_fingerprint, source_id, finger)
+            plan = self.source_preparation.correct_fingering(
+                piece=piece,fingerprint=source_fingerprint,
+                source_id=source_id,finger=finger,fingering=self.fingering)
             with self.lock:
                 # Navigation/reset may replace LearningPlan while inference is
                 # running. Update its current Piece, never the captured plan.

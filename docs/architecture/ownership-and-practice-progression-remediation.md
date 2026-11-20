@@ -491,6 +491,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Every case is additionally bounded by a 600-second outer `timeout` with termination and kill-after; individual authentic Godot, repertoire, package and relocated-boot deadlines remain stricter. A timeout records `FAIL` and runs the remaining independent scenarios rather than consuming the entire 55-minute CI budget.
 - No case, assertion or acceptance path was skipped or added. This improves the existing Phase 6 verification procedure, not the application behavior.
 
+### Implementation checkpoint BR — fingering correction and original-source projection belong to source owner
+
+- `SourcePreparationSession` now validates finger values and source-note IDs, applies user corrections with the same `FingeringService` worker, and prepares complete original-piece fingering status. PracticeEngine remains solely responsible for generation-locked installation into the *current* LearningPlan after the expensive correction returns, never an obsolete captured piece.
+- This removes an independent source-validation path from the application facade; load and correct still share their existing serialized fingering lock, and reopening/resetting a piece rejects stale in-flight corrections. No tests added.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
