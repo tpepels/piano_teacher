@@ -25,8 +25,8 @@ then bring it up to the original tempo. Piano Teacher guides each window through
 - **Pick up where you left off.** Reopening returns to the saved window with
   a Free warm-up before timed practice.
 
-Two clean attempts at the original tempo complete a window. After the moving
-windows, the final test brings the whole original piece together.
+Two clean attempts at the original tempo finish the current hand step. After
+all moving windows, the final test brings the whole original piece together.
 
 ## Start a session
 

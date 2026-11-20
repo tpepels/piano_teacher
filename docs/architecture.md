@@ -189,10 +189,19 @@ There are two removal directions:
 
 Replacement is preflighted before mutation. A failed reservation compensates
 its own provisional suffix without repainting earlier ink. Resume may reuse
-the exact interval if safe; otherwise it appends behind the irreversible
-prefix. It never protects obsolete unseen measures merely because an earlier
-strip shared their take. Every incoming renderer checks all still-live outgoing
+the exact interval if safe; otherwise it retains the first paused source strip
+and appends behind that irreversible prefix. Later unseen measures remain
+eligible for withdrawal. The new copy explicitly binds its paused predecessor
+to the same transport without changing either copy's geometry or identity.
+Every incoming renderer checks all still-live outgoing
 layers. Different densities cannot overlap printed music.
+
+When Retry needs a complete leading preparation rest, that prefix is admitted
+in the same immutable batch and take owner as its source. Stable
+before/source/after slot identities distinguish the leading rest, music and
+following rest through FIFO retirement, archive reuse and rollback. A
+provisional prefix stays hidden until authorization; it cannot become a
+separately inserted rest or move the exact automatic-repeat deadline.
 
 The offline FIFO contains available reusable source plans. Its separate
 append-only JSONL journal records checksummed enqueue, withdrawal, completion

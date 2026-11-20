@@ -144,6 +144,7 @@ The optional [Godot MCP toolkit](../godot/addons/godot_mcp_toolkit/) is editor
 tooling and is stripped from the standalone package. Its project path and working
 directory must be `<checkout>/godot`; a graphical editor is needed to launch
 playtests. Keep its WebSocket service disabled during network-free runtime checks.
-Godot cache [`.godot/`](../godot/) data are ignored; source `.gd.uid` files are
-versioned. Do not delete user data or shut down an existing editor to clear a
-diagnostic without authorization.
+Godot cache [`.godot/`](../godot/) data are ignored. Existing tracked `.gd.uid`
+files remain versioned; newly generated IDs are ignored unless a stable
+cross-checkout resource reference requires them. Do not delete user data or
+shut down an existing editor to clear a diagnostic without authorization.

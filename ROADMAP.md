@@ -50,12 +50,12 @@ New commits are local on main. No push or new remote CI result is claimed.
 | --- | --- |
 | Practice controls | `79e05ad8`: stable Pause/Resume and Listen again controls, wrong-note-only Free keyboard hints, two-second messages. Existing UI/Godot checks passed. |
 | Complete practice flow and feedback | `6ef9dd30`: complete-window Free; explicit saved first/final warm-up; original MIDI target including half-speed below 12 BPM; persistent second-return aid and original return; authored bounds distinct from intact release tails; first-attack-aligned audio/grading; exact one-bar repeat admission with physical source/header clearance. |
-| Authentic score and one feedback owner | Both staves and dim source neighbours share existing renderer/queue. Active IDs alone are graded. Genuine carry-in ties and held tails retain source IDs. Recorder alone pairs presses/releases; live projection uses the final grader's assignment and frozen musical elapsed time. Source-to-head validation, full provisional replacement, explicit final locking, pending withdrawals and beat-gated tied heads prevent stale/future ink. Listen lighting, Free ink and actual-pitch ghosts share the retained source strips. |
-| Existing core/native verification | Current `bash scripts/test.sh` passes: **335 Python passed, one optional system SF2/libfluidsynth check skipped**; existing Godot scenarios report zero failures and `GODOT_STARTUP_SYNTAX_OK`. No tests added; only obsolete tolerance, preview-interface and rendered-hand expectations updated. Log: `debug-sessions/practice-completion/core-and-godot.log`. Final carry-in model/server/import subset: 13 passed. |
+| Authentic score and one feedback owner | `6ef9dd30`, refined in `ee6ccbf3`: both staves and dim source neighbours share existing renderer/queue. Active IDs alone are graded. Genuine carry-in ties and held tails retain source IDs. Recorder alone pairs presses/releases; live projection uses the final grader's assignment and frozen musical elapsed time. Source-to-head validation, full provisional replacement, explicit final locking, pending withdrawals and beat-gated tied heads prevent stale/future ink. Listen lighting, Free ink and actual-pitch ghosts share the retained source strips. |
+| Existing core/native verification | Existing CI gates pass: **335 Python passed, one optional system SF2/libfluidsynth check skipped**; existing Godot scenarios report zero failures and `GODOT_STARTUP_SYNTAX_OK`. No tests added; existing assertions/doubles changed only for obsolete interfaces and owner-approved practice rules. Logs: `debug-sessions/practice-completion/python-final.log` and `godot-resume-final.log` in the same directory. Final carry-in model/server/import subset: 13 passed. Python source was unchanged by the final Godot-only Resume correction. |
 | Additional source diagnostics | Actual engine: full four-bar Free, saved first/final Free, original tempo despite old manual target, announced aid → original Free without mastery, persisted return count, clean/failed exact repeat deadlines, leading-rest PCM alignment and complete held tails. Actual native assets: Moonlight selected/display identities, context/carry-in ties, no foreign graded attacks, future-tie gating, provisional retraction, Listen release and actual-pitch ghost facts. |
 | Large-score work | Strict feedback lookup is linear and live observations bounded while canonical assignment is retained. Actual 18,058-note Hanon live-grader call measured about 9–26 ms; this is software cost, not physical MIDI/audio latency. |
-| Full embedded and relocated package | Rerun pending for the current integrated source; the previous passing source is `9654d2a3`. |
-| Documentation | Four current Markdown documents replace the historical tree; README describes the learner experience and uses a dedicated wordmark. 99 local links/anchors and all 14 prior research citations are preserved; recursive Markdown count is exactly four. Full application acceptance is recorded below when complete. |
+| Full embedded and relocated package | **Passed on source `bc957d37`**: all seven full-workflow cases, including fixture creation, native bridge, production controls, Moonlight, Peace Piece, Chopin and strict relocated package build/boot. Checkout/package architecture audits report `PHASE5_ARCHITECTURE_AUDIT_OK`; runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Log: `debug-sessions/practice-completion/embedded-production-accepted.log`. |
+| Documentation | `75ae738e` consolidates the historical tree into four current Markdown documents and introduces the learner README and dedicated wordmark. Final review reconciles Retry/Resume ownership and per-hand completion. All 104 local links/anchors across these guides, README and ROADMAP pass; all 14 prior research citations remain. Recursive Markdown count is exactly four. |
 
 ## Phase status and remaining acceptance
 
@@ -76,17 +76,18 @@ asset-session scenarios pass, the exact Peace/Chopin native assets compile,
 and the actual production Play/Pause/Resume journey passes.
 
 The current Python suite passes **335 tests, one optional audio dependency
-skip**. Final native checks and the complete production/package rerun are in
-progress. The first failed run is retained in
-`debug-sessions/practice-completion/embedded-production.log`; this record does
-not substitute focused diagnostics for the required complete rerun.
+skip**. Final native checks and the complete production/package rerun pass.
+The first failed run is retained in
+`debug-sessions/practice-completion/embedded-production.log`; acceptance below
+uses the subsequent complete rerun rather than focused diagnostics alone.
 
 Asset/readiness source commit: `546bdaca`. Retry now creates its complete
 leading rest in the same admitted source batch and owner when no full
 predecessor rest survives. Stable before/source/after slot identities preserve
 FIFO order, archive replay and rollback; a provisional prefix remains hidden
 until authorization. The unchanged actual Moonlight journey passes Retry,
-visible/audible count-in, Listen, navigation, tempo changes and saved reopening
+count-in state and cue delivery with Dummy audio, Listen, navigation, tempo
+changes and saved reopening
 (`debug-sessions/practice-completion/retry-fixed-reproduction.log`).
 
 Retry source commit: `242d71ae`. Final review also corrected second Pause
@@ -108,13 +109,21 @@ the paused transport predecessor without changing existing geometry or keys.
 Both unchanged repertoire journeys now pass in
 `debug-sessions/practice-completion/resume-fixed-reproduction.log`; the complete
 native script also passes with zero scenario failures in
-`debug-sessions/practice-completion/godot-resume-final.log`. The complete
-production/package workflow must still pass on the committed correction.
+`debug-sessions/practice-completion/godot-resume-final.log`.
+
+Resume source commit: `bc957d37`. The final full production workflow exits zero
+and passes every case on that committed source, including the unchanged Peace
+Piece/Chopin Resume checks and actual relocated standalone package build/boot
+under a clean HOME and cleared environment. Log:
+`debug-sessions/practice-completion/embedded-production-accepted.log`.
+The same run passes the architecture audit for checkout and packaged source.
+Subsequent changes only reconcile this record, the four guides and README;
+they do not change production code or acceptance checks.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | Source ownership transfers integrated; existing core/native checks pass. New feedback work removes the remaining independent preview matcher and release pairing. |
-| Phase 6 — software and physical verification | Current core/native gates pass; full embedded/relocated rerun pending. Phase remains incomplete until physical acceptance is performed. |
+| Phase 5 — ownership decomposition | Complete in source, with reconciled owner contracts and passing architecture audit. Feedback work removes the independent preview matcher and release pairing. |
+| Phase 6 — software and physical verification | Applicable automated core/native, full embedded repertoire/control and strict relocated-package checks pass. Phase remains incomplete until physical and clean-machine acceptance is performed. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen
