@@ -4,6 +4,8 @@ extends RefCounted
 ## admission in ONE transaction-like order before any stage is painted.
 ## Main owns the scene tree and event requests, not this domain sequence.
 const TempoTimeline := preload("res://tempo_timeline.gd")
+const LivingScore := preload("res://living_score.gd")
+const StatusHeadPreloader := preload("res://status_head_preloader.gd")
 
 var visual_clock
 var score_flow
@@ -14,6 +16,14 @@ var admission
 var practice_view
 var score_effects
 var demo_player
+var feedback
+var metronome
+var frames
+var source_groups: Array = []
+var frame_diagnostics := false
+var listen_diagnostics := false
+var smoke := false
+var _status_preloader := StatusHeadPreloader.new()
 
 func _init(clock, flow, guided_owner, assets, score_runway,
         score_gateway, practice, effects, demo) -> void:
@@ -26,6 +36,71 @@ func _init(clock, flow, guided_owner, assets, score_runway,
     practice_view = practice
     score_effects = effects
     demo_player = demo
+
+func bind_frames(feedback_session, metronome_frame, frame_coordinator,
+        diagnostics: bool, listen_sync: bool, phase0_smoke: bool) -> void:
+    feedback = feedback_session
+    metronome = metronome_frame
+    frames = frame_coordinator
+    frame_diagnostics = diagnostics
+    listen_diagnostics = listen_sync
+    smoke = phase0_smoke
+    score_session.assets_invalidated.connect(_source_invalidated)
+    score_session.layout_published.connect(_layout_published)
+    score_session.score_published.connect(_score_published)
+    score_session.score_failed.connect(_score_failed)
+    score_session.status_changed.connect(refresh_status)
+
+func score_ready() -> bool:
+    return score_session.is_ready()
+
+func refresh_status(status: Dictionary = {}) -> void:
+    practice_view.present_score(status if not status.is_empty() else score_session.status())
+
+func _source_invalidated(_revision: int) -> void:
+    feedback.source_invalidated()
+    source_groups.clear()
+
+func _layout_published(revision: int, values: Dictionary) -> void:
+    source_groups = LivingScore.prepare(values)
+    feedback.layout_published(values,revision)
+
+func _score_published(revision: int) -> void:
+    if runway != null:
+        runway.active_revision_published(revision)
+    if smoke:
+        print("PHASE0_SCORE_READY_NATIVE: REVISION:",revision)
+    var renderer = practice_view.stage.renderer
+    print("NATIVE_MODEL_READY: ",revision," NOTES: ",renderer.timeline.notes.size(),
+        " DENSITY: ",renderer.timeline.pixels_per_beat)
+    _status_preloader.warm(renderer)
+
+func _score_failed(message: String) -> void:
+    if smoke:
+        print("PHASE0_SCORE_ERROR:",message)
+    practice_view.present_message(message)
+
+func retry_score() -> void:
+    score_session.retry(Time.get_ticks_msec())
+
+func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
+        delta: float, busy: bool, screen: String) -> void:
+    # One sampled frame instant, one source beat and one forward world
+    # coordinate feed every consumer in this fixed presentation order.
+    var beat: float = transport_beat(state,now_ms)
+    guided.update_hold(state)
+    score_flow.sample(now_ms)
+    var world: float = score_flow.project(now_ms)
+    feedback.poll(now_ms,score_session.layout_revision
+        if score_session.layout_revision == score_session.revision else -1)
+    metronome.update(state,state_tick_ms,beat,now_ms)
+    present_frame(state,beat,world)
+    var arrivals: Array = frames.advance(state,beat,world,now_ms,delta,busy,
+        screen,score_ready(),source_groups,frame_diagnostics,listen_diagnostics,smoke)
+    if not arrivals.is_empty():
+        score_effects.record_preview(arrivals,practice_view.stage)
+    if runway != null:
+        runway.present_frame(state,world)
 
 func _source_rate(state: Dictionary, beat: float) -> float:
     var nominal: float = float(state.get("bpm",40.0))
@@ -53,6 +128,7 @@ func present_frame(state: Dictionary, beat: float, world: float) -> void:
 
 func accept(state: Dictionary, request_midpoint_ms: int,
         received_ms: int) -> void:
+    score_effects.transition_mode(state,practice_view.stage)
     visual_clock.accept(state,request_midpoint_ms,received_ms)
     var beat: float = transport_beat(state,received_ms)
     guided.update_hold(state)

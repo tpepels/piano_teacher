@@ -9,6 +9,20 @@ var player: AudioStreamPlayer
 var high: AudioStreamWAV
 var low: AudioStreamWAV
 var click_cues_total := 0
+var _settings
+var _inbox
+var _smoke := false
+
+func bind_preferences(settings_session, inbox, smoke: bool) -> void:
+    _settings = settings_session
+    _inbox = inbox
+    _smoke = smoke
+
+func practice_click(accent: bool, sampled_beat: float) -> void:
+    if not bool(_settings.preferences.get("metronome",true)) and sampled_beat >= 0.0:
+        return
+    if click(accent) and _smoke:
+        print("PHASE0_CLICK:",str(_inbox.current.get("phase","")))
 
 static func _make_click(frequency: float) -> AudioStreamWAV:
     var samples := PackedByteArray()

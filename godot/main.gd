@@ -1,22 +1,15 @@
 extends Control
 
-# Lightweight Godot presentation. Python owns MIDI timestamps, tempo and grading.
+## Scene composition and application lifetime. Python owns MIDI and grading;
+## Godot sessions own presentation, input, requests and navigation.
 const Design := preload("res://practice_theme.gd")
-const INK := Design.STONE
-const MUTED := Design.SECONDARY_INK
-const PAPER := Design.FOREST
-const WHITE := Design.PANEL
-const ACCENT := Design.TEAL
 const ScoreEffects := preload("res://score_effects.gd")
-const LivingScore := preload("res://living_score.gd")
 const GameBackdrop := preload("res://game_backdrop.gd")
 const UI := preload("res://ui_factory.gd")
 const LibraryScreen := preload("res://library_screen.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const ContinuousScoreFlow := preload("res://continuous_score_flow.gd")
-const TempoTimeline := preload("res://tempo_timeline.gd")
 const FrameMeter := preload("res://frame_meter.gd")
-const SourceMeasurePicker := preload("res://source_measure_picker.gd")
 const SettingsScreen := preload("res://settings_screen.gd")
 const HomeScreen := preload("res://home_screen.gd")
 const LessonScreen := preload("res://lesson_screen.gd")
@@ -33,36 +26,26 @@ const ScoreAdmissionGateway := preload("res://score_admission_gateway.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
-const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
 const CommandSuccessEffects := preload("res://command_success_effects.gd")
-const PracticeControlPolicy := preload("res://practice_control_policy.gd")
-const StreamAdmission := preload("res://score_stream_admission.gd")
-const StatusHeadPreloader := preload("res://status_head_preloader.gd")
-const CountInCueTimeline := preload("res://countin_cue_timeline.gd")
 const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
 const CountInVoicePlayer := preload("res://countin_voice_player.gd")
 const CountInAudioSession := preload("res://countin_audio_session.gd")
-const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationSession := preload("res://navigation_session.gd")
 const ApplicationInputSession := preload("res://application_input_session.gd")
 const SettingsInteractionSession := preload("res://settings_interaction_session.gd")
 const PracticeFeedbackSession := preload("res://practice_feedback_session.gd")
 const ApplicationStateInbox := preload("res://application_state_inbox.gd")
 const ApplicationPollSession := preload("res://application_poll_session.gd")
+const GuidedPresentationSession := preload("res://guided_presentation_session.gd")
+const PracticePresentationSession := preload("res://practice_presentation_session.gd")
+const DebugSessionLogger := preload("res://debug_session_logger.gd")
 
 var navigation_session = NavigationSession.new()
 var state_inbox = ApplicationStateInbox.new()
 var poll_session = ApplicationPollSession.new()
 var input_session = ApplicationInputSession.new()
 var settings_interactions = SettingsInteractionSession.new()
-var status_head_preloader = StatusHeadPreloader.new()
-var current_screen: String:
-    get: return navigation_session.current_screen
-    set(value): navigation_session.current_screen = value
-var settings_return_screen: String:
-    get: return navigation_session.settings_return_screen
-    set(value): navigation_session.settings_return_screen = value
 var navigation_drawer = NavigationDrawer.new()
 var settings_view: SettingsScreen
 var home_view: HomeScreen
@@ -71,92 +54,20 @@ var lesson_view: LessonScreen
 var lesson_session := LessonSession.new()
 var screens: Dictionary = {}
 var library_catalog = LibraryCatalogCoordinator.new()
-var settings_request
-var learning_status_request
-var learning_status_pending := false
 var statistics_coordinator
 var library_view: LibraryScreen
-var settings_pending := false
-var preferences: Dictionary:
-    get: return settings_interactions.preferences
-    set(value): settings_interactions.preferences = value
 var page_margins: Array[MarginContainer] = []
-var fingering_save_error := ""
 var score_session
 var score_queue = ScoreAssetQueue.new()
-var native_score_piece_fingerprint: String:
-    get:
-        return score_session.native_score_piece_fingerprint if score_session != null else ""
-var score_error: String:
-    get:
-        return score_session.score_error if score_session != null else ""
-    set(value):
-        if score_session != null:
-            score_session.score_error = value
-
-var startup_last_music_checked := false
-var state_request
-var layout_request
-var action_request
 var midi_devices = MidiDeviceCoordinator.new()
-var device_request  # Existing request callback wiring.
-var device_menu_requested: bool:
-    get:
-        return midi_devices.picker_requested
-    set(value):
-        midi_devices.picker_requested = value
 var score_effects = ScoreEffects.new()
 var countin_audio = CountInAudioSession.new()
-var device_names: Array:
-    get:
-        return midi_devices.names
-    set(value):
-        midi_devices.names = value
-var revision: int:
-    get:
-        return score_session.revision if score_session != null else -1
-    set(value):
-        if score_session != null:
-            score_session.revision = value
-var layout_revision: int:
-    get:
-        return score_session.layout_revision if score_session != null else -1
-var layout_pending: bool:
-    get:
-        return score_session.layout_pending if score_session != null else false
-var score_layout: Dictionary:
-    get:
-        return score_session.layout_snapshot() if score_session != null else {}
-var living_chords: Array = []
-var rendered_revision: int:
-    get:
-        return score_session.rendered_revision if score_session != null else -1
-
-# Time of the frame being processed; sampled once at the top of _process.
-var frame_ms := 0
 var visual_transport_clock = VisualTransportClock.new()
 var score_flow = ContinuousScoreFlow.new()
-# Untimed guided learning: world position at which the guided passage's
-# opening (source_from_beat) reaches the playhead, from its admitted plan.
-const GuidedPresentationSession := preload("res://guided_presentation_session.gd")
-const PracticePresentationSession := preload("res://practice_presentation_session.gd")
-const DebugSessionLogger := preload("res://debug_session_logger.gd")
 var guided_presentation = GuidedPresentationSession.new(score_flow)
 var presentation_session
 var debug_session_logger = DebugSessionLogger.new()
 var metronome_frame
-# The native compositor is the sole production score view.
-var timeline_model_request
-var timeline_model_pending: bool:
-    get:
-        return score_session.timeline_model_pending if score_session != null else false
-var timeline_model_revision: int:
-    get:
-        return score_session.timeline_model_revision if score_session != null else -1
-var timeline_model_retry_after_ms: int:
-    get:
-        return score_session.timeline_model_retry_after_ms if score_session != null else 0
-
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
@@ -168,12 +79,6 @@ var command_failure_presenter
 var command_coordinator = preload("res://practice_command_coordinator.gd").new()
 var command_success_presenter
 var command_success_effects
-var lesson_request
-var device_pending: bool:
-    get:
-        return midi_devices.pending
-    set(value):
-        midi_devices.pending = value
 var demo_player: Node
 var ui_scale := 1.0
 var practice_backdrop: ColorRect
@@ -183,6 +88,13 @@ var inprocess_bus: Node
 var score_runway
 var score_admission
 var native_started := false
+
+var current_screen: String:
+    get: return navigation_session.current_screen
+var score_error: String:
+    get: return score_session.score_error if score_session != null else ""
+var startup_last_music_checked: bool:
+    get: return library_catalog.startup_checked
 
 func _ready() -> void:
     # On 120/144 Hz laptops Godot otherwise renders the entire translucent
@@ -206,17 +118,15 @@ func _ready() -> void:
     # Apply one device-independent Window scale before creating the controls.
     # Do not enlarge fonts and controls a second time in the layouts.
     _configure_ui_scaling()
-    ui_scale = _readable_ui_scale()
     _build_interface()
     navigation_session.configure(
         practice_backdrop,navigation_drawer,practice_view,
-        library_view,settings_view,lesson_session,screens,
-        Callable(self,"_update_visual_frame_rate"))
+        library_view,settings_view,lesson_session,screens)
     navigation_session.pause_requested.connect(
         func(): _send_action({"action":"pause"}))
-    navigation_session.library_requested.connect(_request_library)
-    navigation_session.settings_requested.connect(_request_settings)
-    navigation_session.devices_requested.connect(_request_devices)
+    navigation_session.library_requested.connect(library_catalog.request_catalog)
+    navigation_session.settings_requested.connect(settings_interactions.request_settings)
+    navigation_session.devices_requested.connect(midi_devices.discover)
     # The screens and navigation ports are now connected. Navigating
     # during _build_interface silently discarded startup presentation
     # because the navigation session did not exist yet.
@@ -224,13 +134,13 @@ func _ready() -> void:
     feedback_session.configure(inprocess_bus,practice_view.stage,visual_transport_clock)
     input_session.configure(practice_view,library_view)
     input_session.exit_requested.connect(_exit_app)
-    input_session.fullscreen_requested.connect(_toggle_fullscreen)
+    input_session.fullscreen_requested.connect(settings_interactions.toggle_fullscreen)
     input_session.navigation_requested.connect(_navigate)
     input_session.advanced_pause_requested.connect(practice_view.open_advanced_pause)
-    input_session.primary_requested.connect(_toggle_playing)
-    input_session.pause_requested.connect(_toggle_pause)
-    input_session.retry_requested.connect(_restart_practice)
-    input_session.listen_requested.connect(_listen_or_return_to_practice)
+    input_session.primary_requested.connect(command_coordinator.primary)
+    input_session.pause_requested.connect(command_coordinator.pause)
+    input_session.retry_requested.connect(command_coordinator.retry)
+    input_session.listen_requested.connect(command_coordinator.listen)
     input_session.command_requested.connect(_send_action)
     # Audio has one root-owned lifetime, including score revisions, Pause,
     # source selection and renderer replacement. The visual countdown merely
@@ -242,16 +152,15 @@ func _ready() -> void:
     demo_player = preload("res://demo_player.gd").new()
     demo_player.call("configure", inprocess_bus)
     add_child(demo_player)
-    settings_view.present_volume(float(demo_player.get("listen_volume_db")))
     demo_player.prepared.connect(func(token: String, ready_revision: int):
         _send_action({"action": "demo_ready", "token": token, "revision": ready_revision}))
     demo_player.failed.connect(func(message: String): practice_view.present_message(message))
     countin_audio.install(self)
+    countin_audio.bind_preferences(settings_interactions,state_inbox,phase0_smoke_mode)
     resized.connect(_update_responsive_layout)
     if not get_window().size_changed.is_connected(_update_responsive_layout):
         get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
-    state_request = _new_request(_on_state)
     score_queue.attach(self, score_session, inprocess_bus)
     score_runway = ScoreRunway.new()
     add_child(score_runway)
@@ -260,25 +169,27 @@ func _ready() -> void:
         practice_view.present_message(message))
     score_runway.renderer_promoted.connect(func(renderer):
         renderer.fingering_change_requested.connect(
-            _on_fingering_change_requested))
-    layout_request = score_queue.layout_request
-    timeline_model_request = score_queue.model_request
+            command_coordinator.correct_fingering))
 
-    action_request = _new_request(_on_action)
+    var action_request = _new_request(command_coordinator.receive)
     action_request.timeout = 90.0
-    device_request = _new_request(_on_devices)
-    midi_devices.attach_request(device_request)
+    midi_devices.attach_request(_new_request(midi_devices.on_devices))
+    midi_devices.bind_context(navigation_session,state_inbox,settings_interactions)
     library_catalog.attach_requests(
         _new_request(library_catalog.on_catalog),
         _new_request(library_catalog.on_health))
-    settings_request = _new_request(_on_settings)
-    learning_status_request = _new_request(_on_learning_status)
+    settings_interactions.bind_application(get_window(),demo_player,practice_view,
+        midi_devices,state_inbox,lesson_session,library_catalog)
+    settings_interactions.attach_requests(_new_request(settings_interactions.on_settings),
+        _new_request(settings_interactions.on_learning_status))
     statistics_coordinator.configure(_new_request(statistics_coordinator.on_report), settings_view.statistics_view)
-    lesson_request = _new_request(_on_lesson)
-    poll_session.state_requested.connect(_poll)
-    poll_session.library_requested.connect(_request_library)
-    poll_session.devices_requested.connect(_request_devices)
-    poll_session.library_health_requested.connect(_request_library_health)
+    lesson_session.attach_request(_new_request(lesson_session.on_overview))
+    poll_session.bind_state_request(_new_request(state_inbox.receive),state_inbox,
+        command_coordinator,score_session,practice_view)
+    poll_session.library_requested.connect(library_catalog.request_catalog)
+    poll_session.devices_requested.connect(midi_devices.discover)
+    poll_session.library_health_requested.connect(library_catalog.request_health)
+    state_inbox.published.connect(poll_session.accept_state)
     add_child(poll_session)
     poll_session.configure(
         func() -> String: return current_screen,
@@ -288,25 +199,24 @@ func _ready() -> void:
         practice_view,settings_view,lesson_view,lesson_session,
         demo_player,frame_meter)
     state_presenter = PracticeStatePresenter.new(
-        practice_view,settings_view,lesson_view,lesson_session,
-        poll_session.state_timer)
+        practice_view,settings_view,lesson_view,lesson_session)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(
         library_view,practice_view,settings_view,lesson_session)
     command_success_effects = CommandSuccessEffects.new(command_success_presenter)
-    command_success_effects.publish_state.connect(_on_state)
+    command_success_effects.publish_state.connect(state_inbox.receive)
     command_success_effects.navigate_practice.connect(_navigate)
-    command_success_effects.request_settings.connect(_request_settings)
-    command_success_effects.request_library.connect(_request_library)
-    command_success_effects.request_library_health.connect(_request_library_health)
-    command_success_effects.refresh_score.connect(_refresh_score_status)
+    command_success_effects.request_settings.connect(settings_interactions.request_settings)
+    command_success_effects.request_library.connect(library_catalog.request_catalog)
+    command_success_effects.request_library_health.connect(library_catalog.request_health)
     metronome_frame = MetronomeFrameCoordinator.new(
         settings_view,practice_view,visual_transport_clock,
-        Callable(self,"_transport_beat_at"),Callable(self,"_count_tick"),
-        Callable(self,"_raw_click"))
-    command_coordinator.configure(practice_view,settings_view,metronome_frame,score_flow,
-        visual_transport_clock,action_request,command_failure_presenter)
+        func(at_ms: int) -> float:
+            return presentation_session.transport_beat(state_inbox.current,at_ms),
+        countin_audio.practice_click,countin_audio.click)
+    command_coordinator.configure(practice_view,settings_view,metronome_frame,
+        action_request,command_failure_presenter,score_session)
     score_admission = ScoreAdmissionGateway.new()
     add_child(score_admission)
     score_admission.configure(self,inprocess_bus,practice_view.stage,
@@ -321,73 +231,18 @@ func _ready() -> void:
         score_session,score_runway,score_admission,
         practice_view,score_effects,demo_player)
     command_coordinator.succeeded.connect(command_success_effects.apply)
-    command_coordinator.learning_accepted.connect(_learning_command_accepted)
-    command_coordinator.library_requested.connect(func(piece: String, resume_saved: bool):
-        call_deferred("_open_library_piece",piece,resume_saved))
-    command_coordinator.refresh_requested.connect(_poll)
-    command_coordinator.fingering_changed.connect(func(message: String):
-        fingering_save_error = message
-        _present_fingering_status(state_inbox.current.get("fingering",{})))
-    command_coordinator.score_error_cleared.connect(func(): score_error = "")
+    command_coordinator.learning_accepted.connect(settings_interactions.learning_command_accepted)
+    command_coordinator.library_requested.connect(command_coordinator.open_library_piece,CONNECT_DEFERRED)
+    command_coordinator.library_open_status.connect(library_view.present_open_status)
+    command_coordinator.refresh_requested.connect(poll_session.poll)
+    presentation_session.bind_frames(feedback_session,metronome_frame,frame_coordinator,
+        frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
+    state_inbox.configure(command_coordinator,practice_view,presentation_session,
+        state_presenter,statistics_coordinator,debug_session_logger,navigation_session)
+    command_success_effects.refresh_score.connect(presentation_session.refresh_status)
+    practice_view.score_retry_requested.connect(presentation_session.retry_score)
+    presentation_session.refresh_status()
     set_process(true)
-
-func _count_tick(accent: bool, sampled_beat: float = NAN) -> void:
-    if not bool(preferences.get("metronome",true)) and \
-            (sampled_beat if is_finite(sampled_beat)
-                else _transport_beat_now()) >= 0.0:
-        return
-    if countin_audio.click(accent) and phase0_smoke_mode:
-        print("PHASE0_CLICK:",str(state_inbox.current.get("phase","")))
-
-
-func _transport_beat_now() -> float:
-    return _transport_beat_at(Time.get_ticks_msec())
-
-func _transport_beat_at(at_ms: int) -> float:
-    # PresentationSession is the sole snapshot-to-musical-beat projector;
-    # a UI control or metronome callback cannot choose a second epoch.
-    if presentation_session != null:
-        return presentation_session.transport_beat(state_inbox.current,at_ms)
-    return float(state_inbox.current.get("clock_beat",0.0))
-
-# Projection only: never change the backend's local MIDI grading clock.
-# Across repeats the model is drawn at consecutive positions on one infinite
-# visual axis. During feedback/recovery the server supplies the desired scroll
-# direction; extrapolate its last snapshot between state polls.
-func _unrolled_score_beat(transport_clock: float) -> float:
-    return _unrolled_score_beat_at(transport_clock,Time.get_ticks_msec())
-
-func _unrolled_score_beat_at(transport_clock: float, at_ms: int) -> float:
-    # The renderer's position is never a transport seek. The hardware
-    # grading clock remains in _transport_beat_at; this one always advances.
-    return score_flow.project(at_ms)
-
-
-func _raw_click(accent: bool) -> void:
-    # All preparation and calibration clicks use the same audio owner,
-    # even when the practice metronome is disabled.
-    countin_audio.click(accent)
-
-func _update_count_in(sampled_beat: float = NAN, now_ms: int = -1) -> void:
-    if now_ms < 0:
-        now_ms = Time.get_ticks_msec()
-    metronome_frame.update(state_inbox.current,state_inbox.tick_ms,sampled_beat,now_ms)
-
-
-func _native_score_ready() -> bool:
-    return score_session != null and score_session.is_ready()
-
-
-func _visible_score_noteheads() -> int:
-    if practice_view.stage.renderer == null or not practice_view.stage.renderer.is_visible_in_tree():
-        return 0
-    var viewport := Rect2(Vector2.ZERO, practice_view.stage.renderer.size)
-    var visible := 0
-    for point in practice_view.stage.renderer.drawn_noteheads.values():
-        if viewport.has_point(point):
-            visible += 1
-    return visible
-
 
 func _new_request(callback: Callable):
     var req = preload("res://inprocess_request.gd").new()
@@ -396,22 +251,6 @@ func _new_request(callback: Callable):
     add_child(req)
     req.request_completed.connect(callback)
     return req
-
-func _decode_json(body: PackedByteArray) -> Variant:
-    # An engine command can return an empty payload on failure.
-    # Avoid parsing empty JSON.
-    if body.is_empty():
-        return null
-    var document := JSON.new()
-    if document.parse(body.get_string_from_utf8()) != OK:
-        return null
-    return document.data
-
-func _command_failure(code: int, body: PackedByteArray) -> String:
-    var response = _decode_json(body)
-    if typeof(response) == TYPE_DICTIONARY:
-        return str(response.get("error", "Command failed (status %d)" % code))
-    return "Embedded practice engine unavailable (status %d)" % code
 
 func _configure_ui_scaling() -> void:
     # Godot must scale the *whole* interface once: text, drawing, music,
@@ -426,11 +265,6 @@ func _configure_ui_scaling() -> void:
     if absf(window.content_scale_factor - factor) > .001:
         window.content_scale_factor = factor
 
-
-func _readable_ui_scale() -> float:
-    # Layout dimensions are logical pixels after Window content scaling.
-    # Multiplying these again by screen resolution causes double scaling.
-    return 1.0
 
 func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
@@ -455,10 +289,6 @@ func _button(label: String, callback: Callable, primary := false,
     return button
 
 
-func _on_listen_volume_changed(db: float) -> void:
-    if demo_player != null:
-        demo_player.call("set_listen_volume_db", db)
-
 func _exit_app() -> void:
     get_tree().quit()
 
@@ -475,28 +305,6 @@ func _screen(name: String) -> MarginContainer:
     return panel
 
 
-# Music selection, lesson path and settings share a dedicated workspace.
-# Opening another view pauses an ongoing attempt
-# without discarding the player's place or MIDI assessment.
-func _update_visual_frame_rate(state: Dictionary) -> void:
-    # An idle screen or paused lesson does not need the same redraw budget
-    # as a scrolling score. This never changes Python-owned audio, tempo
-    # or MIDI grading, only how often the Godot display is presented.
-    # Every loaded Practice phase has the same forward-moving stage.
-    # This includes ordinary pauses, completed takes, manual retries,
-    # waiting for MIDI, and a missing physical keyboard.
-    var active: bool = current_screen == "practice" and bool(state.get("loaded",false))
-    var calibrating := current_screen == "settings" and bool(
-        state.get("midi_calibration", {}).get("active", false))
-    active = active or calibrating
-    var target_fps: int = 60 if active else 30
-    # Interactive transport retains its full 60 FPS camera. Idle score,
-    # settings and library redraw only on user input or changed content.
-    OS.low_processor_usage_mode = not active
-    if Engine.max_fps != target_fps:
-        Engine.max_fps = target_fps
-
-
 func _navigate(screen: String) -> void:
     navigation_session.navigate(
         screen,state_inbox.current,command_coordinator.state)
@@ -511,9 +319,6 @@ func _resize_overlay_drawer() -> void:
     if settings_view != null:
         settings_view.apply_viewport(size, ui_scale)
 
-
-func _go_back() -> void:
-    navigation_session.back(state_inbox.current,command_coordinator.state)
 
 func _build_interface() -> void:
     theme = Design.create()
@@ -548,18 +353,11 @@ void fragment() {
     _build_library_screen()
     _build_settings_screen()
     _build_practice_screen()
-    library_catalog.configure(library_view, home_view,
-        _decode_json, _command_failure, _send_command)
-    library_catalog.catalog_loaded.connect(_resume_last_music_on_start)
-    midi_devices.configure(settings_view,
-        _decode_json, _command_failure, _send_command)
+    library_catalog.configure(library_view,home_view,command_coordinator.request_command)
+    library_catalog.open_requested.connect(command_coordinator.open_library_piece,CONNECT_DEFERRED)
+    midi_devices.configure(settings_view,command_coordinator.request_command)
     score_session = ScoreAssetSession.new(
         practice_view.stage.renderer, practice_view.stage.feedback)
-    score_session.assets_invalidated.connect(_on_score_assets_invalidated)
-    score_session.layout_published.connect(_on_score_layout_published)
-    score_session.score_published.connect(_on_score_published)
-    score_session.score_failed.connect(_on_score_asset_failure)
-    score_session.status_changed.connect(_refresh_score_status)
     score_session.action_requested.connect(_send_action)
 
 
@@ -580,8 +378,9 @@ func _build_library_screen() -> void:
     library_view = LibraryScreen.new()
     page.add_child(library_view)
     library_view.open_requested.connect(_open_library_piece)
-    library_view.refresh_requested.connect(_request_library)
-    library_view.health_check_requested.connect(_start_library_health)
+    library_view.refresh_requested.connect(library_catalog.request_catalog)
+    library_view.health_check_requested.connect(func():
+        library_catalog.start_health(command_coordinator.state.pending))
 
 
 func _build_practice_screen() -> void:
@@ -591,22 +390,17 @@ func _build_practice_screen() -> void:
     page.add_child(practice_view)
     practice_view.navigation_requested.connect(_navigate)
     practice_view.command_requested.connect(_send_action)
-    practice_view.play_requested.connect(_toggle_playing)
-    practice_view.retry_requested.connect(_restart_practice)
-    practice_view.listen_requested.connect(_listen_or_return_to_practice)
-    practice_view.metronome_toggled.connect(func(enabled: bool):
-        preferences["metronome"] = enabled
-        _send_command("settings.update", {"metronome": enabled}))
-    practice_view.score_retry_requested.connect(_retry_score)
-    practice_view.stage.renderer.fingering_change_requested.connect(_on_fingering_change_requested)
+    practice_view.play_requested.connect(command_coordinator.primary)
+    practice_view.retry_requested.connect(command_coordinator.retry)
+    practice_view.listen_requested.connect(command_coordinator.listen)
+    practice_view.metronome_toggled.connect(settings_interactions.set_metronome)
+    practice_view.stage.renderer.fingering_change_requested.connect(command_coordinator.correct_fingering)
     _build_lesson_screen()
     navigation_drawer.mount(self, screens, _button, _navigate, _exit_app)
     _resize_overlay_drawer()
-    _refresh_score_status()
 
 func _update_responsive_layout() -> void:
     _configure_ui_scaling()
-    ui_scale = _readable_ui_scale()
     theme.default_font_size = _ui_font(16)
     _resize_ui_fonts(self)
     var width: float = size.x
@@ -637,13 +431,11 @@ func _build_settings_screen() -> void:
     settings_view.default_font = theme.default_font
     page.add_child(settings_view)
     settings_interactions.configure(settings_view,statistics_coordinator)
-    settings_interactions.devices_requested.connect(_show_devices)
-    settings_interactions.refresh_devices_requested.connect(_request_devices)
-    settings_interactions.command_requested.connect(_send_command)
+    settings_interactions.devices_requested.connect(midi_devices.show_picker)
+    settings_interactions.refresh_devices_requested.connect(midi_devices.discover)
+    settings_interactions.command_requested.connect(command_coordinator.request_command)
     settings_interactions.action_requested.connect(_send_action)
-    settings_view.device_selected.connect(_choose_device)
-    settings_interactions.volume_changed.connect(_on_listen_volume_changed)
-    settings_interactions.fullscreen_requested.connect(_on_fullscreen_toggle)
+    settings_view.device_selected.connect(midi_devices.choose)
     settings_interactions.exit_requested.connect(_exit_app)
 
 func _build_lesson_screen() -> void:
@@ -654,350 +446,8 @@ func _build_lesson_screen() -> void:
     lesson_view.command_requested.connect(_send_action)
     lesson_view.practice_requested.connect(func(): _navigate("practice"))
     lesson_view.advanced_requested.connect(practice_view.open_advanced_pause)
-    lesson_session.request_requested.connect(_request_lesson)
     lesson_session.overview_changed.connect(lesson_view.present_overview)
     lesson_session.request_failed.connect(lesson_view.present_error)
-
-func _request_lesson() -> void:
-    if lesson_request == null or lesson_request.request("lesson.overview") != OK:
-        lesson_session.complete_response(null, "Cannot request lesson overview", Time.get_ticks_msec())
-
-func _on_lesson(code: int, body: PackedByteArray) -> void:
-    lesson_session.complete_response(_decode_json(body) if code == 0 else null,
-        "" if code == 0 else _command_failure(code, body), Time.get_ticks_msec())
-
-func _refresh_score_status(status: Dictionary = {}) -> void:
-    if practice_view != null and score_session != null:
-        practice_view.present_score(
-            status if not status.is_empty() else score_session.status())
-
-func _score_failed(message: String) -> void:
-    if score_session != null:
-        score_session.fail(message)
-
-func _on_score_asset_failure(message: String) -> void:
-    if phase0_smoke_mode:
-        print("PHASE0_SCORE_ERROR:", message)
-    practice_view.present_message(message)
-
-func _on_score_assets_invalidated(_new_revision: int) -> void:
-    feedback_session.source_invalidated()
-    living_chords.clear()
-
-func _on_score_layout_published(_published_revision: int, values: Dictionary) -> void:
-    living_chords = LivingScore.prepare(values)
-    feedback_session.layout_published(values,_published_revision)
-
-func _on_score_published(published_revision: int) -> void:
-    if score_runway != null:
-        score_runway.active_revision_published(published_revision)
-    if phase0_smoke_mode:
-        print("PHASE0_SCORE_READY_NATIVE: REVISION:", published_revision)
-    print("NATIVE_MODEL_READY: ", published_revision,
-        " NOTES: ", practice_view.stage.renderer.timeline.notes.size(),
-        " DENSITY: ", practice_view.stage.renderer.timeline.pixels_per_beat)
-    status_head_preloader.warm(practice_view.stage.renderer)
-
-func _retry_score() -> void:
-    if score_session != null:
-        score_session.retry(Time.get_ticks_msec())
-
-func _resume_last_music_on_start(catalog: Dictionary) -> void:
-    if startup_last_music_checked:
-        return
-    startup_last_music_checked = true
-    var identifier := str(catalog.get("last_piece", ""))
-    if identifier.is_empty():
-        return
-    for entry in catalog.get("pieces", []):
-        if entry is Dictionary and str(entry.get("id", "")) == identifier:
-            call_deferred("_open_library_piece", identifier, true)
-            return
-
-func _request_library() -> void:
-    library_catalog.request_catalog()
-
-func _on_library(code: int, body: PackedByteArray) -> void:
-    library_catalog.on_catalog(code, body)
-
-func _request_library_health() -> void:
-    library_catalog.request_health()
-
-func _on_library_health(code: int, body: PackedByteArray) -> void:
-    library_catalog.on_health(code, body)
-
-func _start_library_health() -> void:
-    library_catalog.start_health(command_coordinator.state.pending)
-
-
-func _open_library_piece(identifier: String, resume_saved := false) -> void:
-    # Pause requests are asynchronous. Store a quick selection and open it
-    # once the transport has acknowledged the pause, rather than dropping
-    # the click while command_coordinator.state.pending is true.
-    if command_coordinator.state.pending:
-        command_coordinator.state.queue_library(identifier,resume_saved)
-        library_view.present_open_status("Preparing your selected music…")
-        return
-    library_view.present_open_status("Opening score…")
-    command_coordinator.state.resume_requested = resume_saved
-    _send_command("library.open", {"id": identifier})
-
-
-func _request_settings() -> void:
-    if settings_pending or settings_request == null:
-        return
-    settings_pending = true
-    if settings_request.request("settings.snapshot") != OK:
-        settings_pending = false
-
-func _on_settings(code: int, body: PackedByteArray) -> void:
-    settings_pending = false
-    if code != 0:
-        settings_view.present_message(_command_failure(code, body))
-        return
-    var parsed = _decode_json(body)
-    if typeof(parsed) != TYPE_DICTIONARY:
-        return
-    var reconnect: String = settings_interactions.accept_preferences(
-        parsed,settings_view,practice_view,
-        str(state_inbox.current.get("device","")),device_names)
-    _request_learning_status()
-    _apply_window_mode(bool(preferences.get("fullscreen",true)))
-    if not reconnect.is_empty():
-        _choose_device(reconnect)
-
-func _request_learning_status() -> void:
-    if learning_status_pending or learning_status_request == null:
-        return
-    learning_status_pending = true
-    if learning_status_request.request("learning.status") != OK:
-        learning_status_pending = false
-        settings_view.present_message("Cannot read local learning history")
-
-func _on_learning_status(code: int, body: PackedByteArray) -> void:
-    learning_status_pending = false
-    if code != 0:
-        settings_view.present_message(_command_failure(code, body))
-        return
-    var parsed = _decode_json(body)
-    if parsed is Dictionary:
-        settings_view.present_learning_status(parsed)
-        statistics_coordinator.update_context(str(parsed.get("current_fingerprint", "")), str(parsed.get("learner_id", "")))
-
-func _learning_command_accepted(operation: String, values: Dictionary) -> void:
-    if operation == "learning.export":
-        settings_view.present_message("Learning history exported to " + str(values.get("path", "chosen file")))
-    else:
-        statistics_coordinator.invalidate()
-        settings_view.present_message("Current piece history and learning progress deleted."
-            if operation == "learning.delete_piece" else "All learner history and learning progress deleted.")
-        lesson_session.invalidate()
-        _request_settings()
-        _request_library()
-    _request_learning_status()
-
-func _apply_window_mode(fullscreen: bool) -> void:
-    var expected := Window.MODE_FULLSCREEN if fullscreen else Window.MODE_WINDOWED
-    if get_window().mode != expected:
-        get_window().mode = expected
-
-func _on_fullscreen_toggle(enabled: bool) -> void:
-    _apply_window_mode(enabled)
-    _send_command("settings.update", {"fullscreen": enabled})
-
-func _toggle_fullscreen() -> void:
-    var enabled := get_window().mode != Window.MODE_FULLSCREEN
-    settings_view.present_window_mode(enabled)
-    _on_fullscreen_toggle(enabled)
-
-func _poll() -> void:
-    if score_session != null and not practice_view.is_source_picker_open():
-        score_session.poll(Time.get_ticks_msec())
-
-    if not state_inbox.pending and not command_coordinator.state.pending:
-        state_inbox.begin_request(Time.get_ticks_msec())
-        if state_request.request("state.snapshot") != OK:
-            state_inbox.pending = false
-
-func _process(_delta: float) -> void:
-    if not native_started and inprocess_bus != null:
-        var native_error: String = str(inprocess_bus.get("ready_error"))
-        if not native_error.is_empty():
-            printerr("Embedded Piano Teacher stopped: " + native_error)
-            get_tree().quit(1)
-            return
-    if not native_started and inprocess_bus != null and inprocess_bus.is_ready():
-        native_started = true
-        if OS.get_environment("PIANO_TEACHER_HEADLESS_SMOKE") == "1":
-            print("PIANO_PACKAGE_NATIVE_READY")
-        _poll()
-        _request_devices()
-        _request_settings()
-        _request_library()
-    # One clock sample per frame: every frame-path consumer sees one instant.
-    frame_ms = Time.get_ticks_msec()
-    var ticks: int = frame_ms
-    var beat: float = _transport_beat_at(ticks)
-    guided_presentation.update_hold(state_inbox.current)
-    score_flow.sample(ticks)
-    var visual_world: float = _unrolled_score_beat_at(beat,ticks)
-    feedback_session.poll(ticks,layout_revision if layout_revision == revision else -1)
-    _update_count_in(beat,ticks)
-    presentation_session.present_frame(state_inbox.current,beat,visual_world)
-    var arrivals: Array = frame_coordinator.advance(
-        state_inbox.current,beat,visual_world,ticks,_delta,
-        command_coordinator.state.pending,current_screen,_native_score_ready(),living_chords,
-        frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
-    if not arrivals.is_empty():
-        score_effects.record_preview(arrivals,practice_view.stage)
-    if score_runway != null:
-        # Old score clips continue exiting even during a revision load or
-        # a source-picker transition with no currently loaded piece.
-        score_runway.present_frame(state_inbox.current,visual_world)
-
-## Untimed guided learning waits for the learner: hold the score axis where
-## the current target note sits on the playhead (continuous_score_flow.gd).
-func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
-    var accepted: Dictionary = state_inbox.accept(
-        code,body,sample_started_ms,command_coordinator.state.started_ms,
-        command_coordinator.last_published_control_started_ms)
-    if accepted.has("error_code"):
-        practice_view.present_message(_command_failure(code,body))
-        return
-    if not accepted.has("state"):
-        return
-    var parsed: Dictionary = accepted["state"]
-    var received_ms: int = int(accepted["received_ms"])
-    debug_session_logger.check_contract(parsed)
-    statistics_coordinator.update_context(str(parsed.get("piece_fingerprint","")))
-    debug_session_logger.record_transition(parsed,received_ms,
-        state_inbox.request_started_ms,_native_score_ready(),
-        layout_pending,timeline_model_pending,frame_diagnostics)
-    if practice_view.is_source_picker_open():
-        practice_view.suppress_piano_input(parsed)
-        return
-    # One accepted snapshot is now the authoritative UI state. The
-    # presentation session alone sequences score/admission and rendering.
-    state_inbox.publish(parsed,int(accepted["tick_ms"]))
-    command_coordinator.last_state = parsed
-    settings_view.present_midi_key_range(
-        parsed.get("midi_key_range",{}) if parsed.get("midi_key_range") is Dictionary else {})
-    _update_visual_frame_rate(parsed)
-    score_effects.transition_mode(parsed,practice_view.stage)
-    presentation_session.accept(parsed,state_inbox.tick_ms,received_ms)
-    state_presenter.present(
-        parsed,current_screen,command_coordinator.state.pending,_native_score_ready(),
-        fingering_save_error,
-        demo_player != null and bool(demo_player.get("audio_error")),
-        sample_started_ms < 0,received_ms,phase0_smoke_mode)
-    _refresh_score_status()
-    debug_session_logger.record(
-        parsed,received_ms,practice_view.stage.renderer,
-        practice_view.stage.keyboard.visible,guided_presentation.world,
-        score_flow.hold_world)
-
-
-## Read-only published state port for native acceptance and diagnostics.
-## Neither tests nor other scenes may assign or retime a backend snapshot.
-func current_state() -> Dictionary:
-    return state_inbox.current.duplicate(true)
-
-
-func _request_layout() -> void:
-    if score_session != null:
-        score_session.request_layout()
-
-func _on_layout(code: int, body: PackedByteArray) -> void:
-    if score_session != null:
-        var began: int = Time.get_ticks_msec()
-        score_session.complete_response(
-            "layout", score_session.pending_id("layout"), code, body,
-            Time.get_ticks_msec())
-        if frame_diagnostics:
-            print("SCORE_ASSET_MAIN_THREAD:", JSON.stringify({
-                "kind":"layout", "elapsed_ms":Time.get_ticks_msec()-began,
-                "revision":score_session.revision, "phase":state_inbox.current.get("phase")}))
-
-func _finish_native_score() -> void:
-    if score_session != null:
-        score_session.finish_native_score()
-
-func _request_timeline_model() -> void:
-    if score_session != null:
-        score_session.request_model()
-
-func _on_timeline_model(code: int, body: PackedByteArray) -> void:
-    if score_session != null:
-        var began: int = Time.get_ticks_msec()
-        score_session.complete_response(
-            "model", score_session.pending_id("model"), code, body,
-            Time.get_ticks_msec())
-        if frame_diagnostics:
-            print("SCORE_ASSET_MAIN_THREAD:", JSON.stringify({
-                "kind":"model", "elapsed_ms":Time.get_ticks_msec()-began,
-                "revision":score_session.revision, "phase":state_inbox.current.get("phase")}))
-
-
-func _send_action(command: Dictionary) -> void:
-    command_coordinator.request_action(command,state_inbox.current)
-
-func _present_fingering_status(summary: Variant) -> void:
-    var issues: int = practice_view.stage.renderer.annotations.fingering_placement_issues.size() if _native_score_ready() else 0
-    practice_view.stage.present_fingering(summary, issues, fingering_save_error)
-
-func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
-    var decision: Dictionary = score_session.fingering_correction_request(
-        source_id,finger,state_inbox.current,command_coordinator.state.pending)
-    if not bool(decision.get("accepted",false)):
-        fingering_save_error = str(decision.get("message","Score not ready"))
-        _present_fingering_status(state_inbox.current.get("fingering",{}))
-        return
-    fingering_save_error = ""
-    _send_command(str(decision["operation"]),decision["payload"])
-
-
-
-func _send_command(operation: String, payload: Dictionary) -> void:
-    command_coordinator.request_command(operation,payload)
-
-func _on_action(code: int, body: PackedByteArray) -> void:
-    command_coordinator.accept_response(command_coordinator.request_token,code,body)
-
-func _apply_practice_control(decision: Dictionary) -> void:
-    if decision.has("message"):
-        practice_view.present_message(str(decision["message"]))
-    elif decision.has("action"):
-        _send_action(decision)
-
-func _listen_or_return_to_practice() -> void:
-    _apply_practice_control(PracticeControlPolicy.listen_toggle(state_inbox.current))
-
-func _toggle_playing() -> void:
-    _apply_practice_control(PracticeControlPolicy.primary(
-        state_inbox.current, _native_score_ready(), score_error))
-
-func _toggle_pause() -> void:
-    _apply_practice_control(PracticeControlPolicy.pause_toggle(
-        state_inbox.current, score_error))
-
-func _restart_practice() -> void:
-    _apply_practice_control(PracticeControlPolicy.retry(
-        state_inbox.current, _native_score_ready()))
-
-func _request_devices() -> void:
-    midi_devices.discover()
-
-func _on_devices(code: int, body: PackedByteArray) -> void:
-    midi_devices.receive(code, body, current_screen,
-        str(state_inbox.current.get("device", "")),
-        str(preferences.get("midi_device", "")))
-
-func _show_devices() -> void:
-    midi_devices.show_picker()
-
-func _choose_device(name: String) -> void:
-    midi_devices.choose(name)
-
 
 func _input(event: InputEvent) -> void:
     if input_session.capture(event,current_screen,get_viewport()):
@@ -1007,3 +457,34 @@ func _input(event: InputEvent) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
     if input_session.dispatch(event,current_screen,get_viewport()):
         get_viewport().set_input_as_handled()
+
+
+func _process(delta: float) -> void:
+    if not native_started and inprocess_bus != null:
+        var native_error: String = str(inprocess_bus.get("ready_error"))
+        if not native_error.is_empty():
+            printerr("Embedded Piano Teacher stopped: " + native_error)
+            get_tree().quit(1)
+            return
+        if inprocess_bus.is_ready():
+            native_started = true
+            if OS.get_environment("PIANO_TEACHER_HEADLESS_SMOKE") == "1":
+                print("PIANO_PACKAGE_NATIVE_READY")
+            poll_session.poll()
+            midi_devices.discover()
+            settings_interactions.request_settings()
+            library_catalog.request_catalog()
+    presentation_session.advance(state_inbox.current,state_inbox.tick_ms,
+        Time.get_ticks_msec(),delta,command_coordinator.state.pending,current_screen)
+
+func current_state() -> Dictionary:
+    return state_inbox.current.duplicate(true)
+
+func _send_action(command: Dictionary) -> void:
+    command_coordinator.request_action(command,state_inbox.current)
+
+func _open_library_piece(identifier: String, resume_saved := false) -> void:
+    command_coordinator.open_library_piece(identifier,resume_saved)
+
+func _transport_beat_now() -> float:
+    return presentation_session.transport_beat(state_inbox.current,Time.get_ticks_msec())

@@ -3,10 +3,64 @@ extends RefCounted
 ## Polls submitted before an acknowledged command cannot overwrite the
 ## newer transport, even after the command's pending state has cleared.
 ## Presentation is published only after the source picker permits adoption.
+signal published(state: Dictionary)
 var current: Dictionary = {}
 var tick_ms := 0
 var pending := false
 var request_started_ms := 0
+const Reply := preload("res://inprocess_request.gd")
+var _commands
+var _practice
+var _presentation
+var _presenter
+var _statistics
+var _logger
+var _navigation
+
+func configure(commands, practice, presentation, presenter, statistics,
+        logger, navigation) -> void:
+    _commands = commands
+    _practice = practice
+    _presentation = presentation
+    _presenter = presenter
+    _statistics = statistics
+    _logger = logger
+    _navigation = navigation
+
+func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
+    var accepted: Dictionary = accept(code,body,sample_started_ms,
+        _commands.state.started_ms,_commands.last_published_control_started_ms)
+    if accepted.has("error_code"):
+        _practice.present_message(Reply.failure_message(code,body))
+        return
+    if not accepted.has("state"):
+        return
+    var parsed: Dictionary = accepted["state"]
+    var received_ms: int = int(accepted["received_ms"])
+    _logger.check_contract(parsed)
+    _statistics.update_context(str(parsed.get("piece_fingerprint","")))
+    var assets = _presentation.score_session
+    _logger.record_transition(parsed,received_ms,request_started_ms,
+        assets.is_ready(),assets.layout_pending,assets.timeline_model_pending,
+        _presentation.frame_diagnostics)
+    if _practice.is_source_picker_open():
+        _practice.suppress_piano_input(parsed)
+        return
+    # Only a published snapshot can drive commands and presentation.
+    # Both poll and acknowledged-control responses pass this same gate.
+    publish(parsed,int(accepted["tick_ms"]))
+    published.emit(parsed)
+    _commands.last_state = parsed
+    _navigation.update_frame_rate(parsed)
+    _presentation.accept(parsed,tick_ms,received_ms)
+    _presenter.present(parsed,_navigation.current_screen,_commands.state.pending,
+        assets.is_ready(),_commands.fingering_save_error,
+        _presentation.demo_player != null and bool(_presentation.demo_player.get("audio_error")),
+        sample_started_ms < 0,received_ms,_presentation.smoke)
+    _presentation.refresh_status()
+    _logger.record(parsed,received_ms,_practice.stage.renderer,
+        _practice.stage.keyboard.visible,_presentation.guided.world,
+        _presentation.score_flow.hold_world)
 
 func begin_request(now_ms: int) -> void:
     if pending:

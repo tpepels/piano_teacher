@@ -88,15 +88,13 @@ def test_godot_contract_is_generated_from_python():
 
 def test_godot_snapshot_consumers_read_only_contract_keys():
     """The main snapshot consumers cannot read a key the engine never sends."""
-    consumers = [("godot/main.gd", "last_state"), ("godot/main.gd", "parsed"),
+    consumers = [("godot/application_state_inbox.gd", "parsed"),
+                 ("godot/practice_command_coordinator.gd", "last_state"),
+                 ("godot/practice_presentation_session.gd", "state"),
                  ("godot/practice_screen.gd", "parsed"),
                  ("godot/practice_state_presenter.gd", "parsed")]
     for path, name in consumers:
         source = (ROOT / path).read_text()
-        if path == "godot/main.gd" and name == "parsed":
-            # _on_state consumes the snapshot; other callbacks handle
-            # separate learning.status responses with their own fields.
-            source = source.split("func _on_state(", 1)[1].split("\nfunc ", 1)[0]
         keys = set(re.findall(name + r'\.get\("([a-z_0-9]+)"', source))
         assert keys <= set(state_contract.SCHEMA), (path, sorted(keys - set(state_contract.SCHEMA)))
 

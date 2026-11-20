@@ -7,19 +7,19 @@ var practice_view
 var settings_view
 var lesson_view
 var lesson_session
-var poll_timer: Timer
 var last_smoke_phase := ""
 
-func _init(practice, settings, lesson, session, timer: Timer) -> void:
+func _init(practice, settings, lesson, session) -> void:
     practice_view = practice
     settings_view = settings
     lesson_view = lesson
     lesson_session = session
-    poll_timer = timer
 
 func present(parsed: Dictionary, screen: String, busy: bool,
         score_ready: bool, fingering_error: String, audio_error: bool,
         sampled_state: bool, now_ms: int, smoke: bool) -> void:
+    settings_view.present_midi_key_range(
+        parsed.get("midi_key_range",{}) if parsed.get("midi_key_range") is Dictionary else {})
     var placement_issues := 0
     if score_ready:
         placement_issues = practice_view.stage.renderer.annotations.fingering_placement_issues.size()
@@ -30,12 +30,6 @@ func present(parsed: Dictionary, screen: String, busy: bool,
         parsed.get("midi_calibration",{}),int(parsed.get("midi_offset_ms",0)))
     lesson_session.update_context(parsed,now_ms)
 
-    if poll_timer != null:
-        var live_rate: bool = screen == "practice" and \
-            not str(parsed.get("device","")).is_empty()
-        var interval := .08 if live_rate else .15
-        if absf(poll_timer.wait_time-interval)>.001:
-            poll_timer.wait_time = interval
     settings_view.present_practice(parsed,screen == "settings")
     practice_view.present(parsed,score_ready,busy,audio_error)
 

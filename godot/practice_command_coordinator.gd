@@ -4,13 +4,14 @@ extends RefCounted
 ## and the one ScoreAdmissionGateway.
 const CommandRequestState := preload("res://command_request_state.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
+const ControlPolicy := preload("res://practice_control_policy.gd")
+const Reply := preload("res://inprocess_request.gd")
 
 signal succeeded(decision: Dictionary, opened: Variant, code: int, body: PackedByteArray, started_ms: int)
 signal learning_accepted(operation: String, values: Dictionary)
 signal library_requested(piece: String, resume_saved: bool)
 signal refresh_requested
-signal fingering_changed(message: String)
-signal score_error_cleared
+signal library_open_status(message: String)
 
 var state = CommandRequestState.new()
 var request_token := 0
@@ -22,31 +23,70 @@ var metronome_frame
 var action_request
 var command_failure_presenter
 var fingering_save_error := ""
+var score_session
 
-func configure(practice, settings, metronome, _flow, _clock, request,
-        failure_presenter) -> void:
+func configure(practice, settings, metronome, request,
+        failure_presenter, assets) -> void:
     practice_view = practice
     settings_view = settings
     metronome_frame = metronome
     action_request = request
     command_failure_presenter = failure_presenter
+    score_session = assets
 
-func _decode_json(body: PackedByteArray) -> Variant:
-    return JSON.parse_string(body.get_string_from_utf8()) if not body.is_empty() else null
+func receive(code: int, body: PackedByteArray) -> void:
+    accept_response(request_token,code,body)
 
-func _command_failure(code: int, body: PackedByteArray) -> String:
-    var response: Variant = _decode_json(body)
-    return str(response.get("error","Command failed (status %d)" % code)) \
-        if response is Dictionary else \
-        "Embedded practice engine unavailable (status %d)" % code
+func primary() -> void:
+    _apply_control(ControlPolicy.primary(last_state,
+        score_session.is_ready(),score_session.score_error))
+
+func pause() -> void:
+    _apply_control(ControlPolicy.pause_toggle(last_state,score_session.score_error))
+
+func retry() -> void:
+    _apply_control(ControlPolicy.retry(last_state,score_session.is_ready()))
+
+func listen() -> void:
+    _apply_control(ControlPolicy.listen_toggle(last_state))
+
+func _apply_control(decision: Dictionary) -> void:
+    if decision.has("message"):
+        practice_view.present_message(str(decision["message"]))
+    elif decision.has("action"):
+        request_action(decision,last_state)
+
+func open_library_piece(identifier: String, resume_saved := false) -> void:
+    # Preserve the latest selection while navigation's asynchronous pause
+    # is pending; opening is dispatched only after its acknowledgement.
+    if state.pending:
+        state.queue_library(identifier,resume_saved)
+        library_open_status.emit("Preparing your selected music…")
+        return
+    library_open_status.emit("Opening score…")
+    state.resume_requested = resume_saved
+    request_command("library.open",{"id":identifier})
+
+func correct_fingering(source_id: String, finger: Variant) -> void:
+    var decision: Dictionary = score_session.fingering_correction_request(
+        source_id,finger,last_state,state.pending)
+    if not bool(decision.get("accepted",false)):
+        fingering_save_error = str(decision.get("message","Score not ready"))
+        present_fingering_status()
+        return
+    fingering_save_error = ""
+    request_command(str(decision["operation"]),decision["payload"])
+
+func present_fingering_status() -> void:
+    var issues: int = practice_view.stage.renderer.annotations.fingering_placement_issues.size() \
+        if score_session.is_ready() else 0
+    practice_view.stage.present_fingering(
+        last_state.get("fingering",{}),issues,fingering_save_error)
 
 func _flush_transport_action() -> void:
     var action: String = state.take_transport()
     if not action.is_empty():
         request_action({"action":action},last_state)
-
-func tick(_now_ms: int) -> void:
-    pass
 
 func request_action(command: Dictionary, presentation_facts: Dictionary) -> void:
     last_state = presentation_facts
@@ -76,7 +116,7 @@ func request_command(operation: String, payload: Dictionary) -> void:
     var message := "Cannot reach practice engine (status %d)" % err
     if operation == "fingering.correct":
         fingering_save_error = message
-        fingering_changed.emit(fingering_save_error)
+        present_fingering_status()
     var queued_library_failed: bool = state.discard_library()
     command_failure_presenter.present(
         message,operation,queued_library_failed)
@@ -94,26 +134,27 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
     if code != 0:
         if operation == "practice.command":
             metronome_frame.cancel_reserved_count_in()
-        var message := _command_failure(code,body)
+        var message := Reply.failure_message(code,body)
         if operation == "fingering.correct":
             fingering_save_error = message
-            fingering_changed.emit(fingering_save_error)
+            present_fingering_status()
         var queued_library_failed: bool = state.discard_library()
         command_failure_presenter.present(
             message,operation,queued_library_failed)
         _flush_transport_action()
         return
-    var opened: Variant = _decode_json(body) if operation == "library.open" else null
+    var opened: Variant = Reply.decode_reply(body) if operation == "library.open" else null
     if operation in ["learning.export","learning.delete_piece","learning.delete_learner"]:
-        var result: Variant = _decode_json(body)
+        var result: Variant = Reply.decode_reply(body)
         learning_accepted.emit(operation,
             result if result is Dictionary else {})
     var decision: Dictionary = CommandSuccessPolicy.decide(
         operation,str(completed["action"]),bool(completed["resume_saved"]),opened)
     if str(decision["kind"]) == "fingering":
         fingering_save_error = ""
+        present_fingering_status()
     elif str(decision["kind"]) == "library_open":
-        score_error_cleared.emit()
+        score_session.score_error = ""
     if bool(decision.get("publish_state",false)):
         last_published_control_started_ms = maxi(
             last_published_control_started_ms,int(completed["started_ms"]))

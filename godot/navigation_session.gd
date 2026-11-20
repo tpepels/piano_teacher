@@ -18,10 +18,9 @@ var _library
 var _settings
 var _lesson
 var _screens: Dictionary = {}
-var _frame_rate: Callable
 
 func configure(backdrop, drawer, practice, library, settings, lesson,
-               screens: Dictionary, frame_rate: Callable) -> void:
+               screens: Dictionary) -> void:
     _backdrop = backdrop
     _drawer = drawer
     _practice = practice
@@ -29,7 +28,17 @@ func configure(backdrop, drawer, practice, library, settings, lesson,
     _settings = settings
     _lesson = lesson
     _screens = screens
-    _frame_rate = frame_rate
+
+func update_frame_rate(state: Dictionary) -> void:
+    # Display cadence follows the visible context, independently of the
+    # backend MIDI/audio timeline and the canonical score projection.
+    var active: bool = current_screen == "practice" and bool(state.get("loaded",false))
+    active = active or (current_screen == "settings" and bool(
+        state.get("midi_calibration",{}).get("active",false)))
+    var target_fps: int = 60 if active else 30
+    OS.low_processor_usage_mode = not active
+    if Engine.max_fps != target_fps:
+        Engine.max_fps = target_fps
 
 func navigate(destination: String, state: Dictionary, pending) -> void:
     if _practice == null or _drawer == null or _screens.is_empty():
@@ -48,8 +57,7 @@ func navigate(destination: String, state: Dictionary, pending) -> void:
     current_screen = target
     if _backdrop != null:
         _backdrop.visible = target == "practice"
-    if _frame_rate.is_valid():
-        _frame_rate.call(state)
+    update_frame_rate(state)
     _drawer.present(target,previous)
     _practice.set_active(target == "practice")
     for screen in _screens:

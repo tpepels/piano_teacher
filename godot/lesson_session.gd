@@ -4,6 +4,8 @@ signal request_requested
 signal overview_changed(values: Dictionary)
 signal request_failed(message: String)
 const RETRY_MS := 1000
+const Reply := preload("res://inprocess_request.gd")
+var _request
 var pending := false
 var _loaded := false
 var _fingerprint := ""
@@ -13,6 +15,18 @@ var _requested_fingerprint := ""
 var _retry_after_ms := 0
 var _overview: Dictionary = {}
 var _needs_refresh := true
+
+func attach_request(request) -> void:
+    _request = request
+    request_requested.connect(_request_overview)
+
+func _request_overview() -> void:
+    if _request == null or _request.request("lesson.overview") != OK:
+        complete_response(null,"Cannot request lesson overview",Time.get_ticks_msec())
+
+func on_overview(code: int, body: PackedByteArray) -> void:
+    complete_response(Reply.decode_reply(body) if code == 0 else null,
+        "" if code == 0 else Reply.failure_message(code,body),Time.get_ticks_msec())
 
 func update_context(state: Dictionary, now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))

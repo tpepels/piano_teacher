@@ -8,6 +8,15 @@ var _bus: Node
 var _pending_id := -1
 var _deadline_ms := 0
 
+static func decode_reply(body: PackedByteArray) -> Variant:
+    return JSON.parse_string(body.get_string_from_utf8()) if not body.is_empty() else null
+
+static func failure_message(code: int, body: PackedByteArray) -> String:
+    var response: Variant = decode_reply(body)
+    return str(response.get("error", "Command failed (status %d)" % code)) \
+        if response is Dictionary else \
+        "Embedded practice engine unavailable (status %d)" % code
+
 func configure(bus: Node) -> void:
     _bus = bus
     set_process(false)

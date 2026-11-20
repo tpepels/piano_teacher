@@ -1,6 +1,6 @@
 extends RefCounted
-## Success classification only. Main owns request sequencing, transport
-## command completion, score publication, and deferred library selection.
+## Success classification only. The command coordinator applies completion
+## effects, score publication and deferred library selection.
 const GUIDED_NAVIGATION := ["skip_stage", "place_original", "revisit_trouble"]
 const CALIBRATION_ACTIONS := ["calibration_apply", "calibration_reset"]
 

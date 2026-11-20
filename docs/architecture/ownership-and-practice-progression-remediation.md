@@ -644,6 +644,14 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Existing Godot checks passed against this integrated source (`GODOT_STARTUP_SYNTAX_OK`, every existing failure counter zero). Existing fixtures were migrated only from retired private queue/geometry/void-clear interfaces; assertions retained, no new tests.
 - Full native production/repertoire/package execution remains due. Physical engraving/display, audio and MIDI acceptance remains unverified.
 
+### Implementation checkpoint CE — Main is scene composition and application lifetime
+
+- `acb26db9` implements checkpoint CD. Main now creates/wires scenes and owns viewport/application lifetime. ApplicationStateInbox sequences accepted command/poll state once; PracticePresentationSession samples/project frames and sequences score publication; ApplicationPollSession owns polling/discovery cadence.
+- Existing command, settings, library, navigation, audio, lesson and MIDI owners now receive their own replies and apply their own effects. Shared InProcessRequest decoding replaces callbacks into Main. Settings→MIDI presentation references avoid a RefCounted ownership cycle.
+- Removed obsolete root property/callback forwarding and moved startup reopen/fingering/control request lifetime to their corresponding owners. The existing smoke-facing observation/command ports remain intact.
+- Existing Godot syntax/UI/ownership/lesson/score checks passed (`GODOT_STARTUP_SYNTAX_OK`). The existing snapshot-consumer fixture now inspects the actual inbox/presentation/command owners instead of the deleted Main._on_state method; its schema assertion is unchanged, no new test.
+- Remaining software gates: backend lifecycle/effect integration, final source review and full production/repertoire/relocated-package run. Physical acceptance remains unverified.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

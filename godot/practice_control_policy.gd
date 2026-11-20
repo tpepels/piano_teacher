@@ -1,6 +1,6 @@
 extends RefCounted
 ## The visible Play/Pause/Retry/Listen decisions are pure facts -> commands.
-## Main sends the command and presents messages; backend remains authoritative.
+## PracticeCommandCoordinator applies the result; backend remains authoritative.
 const ACTIVE_PHASES := [
     "count_in", "playing", "paused", "feedback", "recovering",
     "loading", "preview_gap", "admitting"]
