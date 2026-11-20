@@ -91,10 +91,6 @@ class Piece:
     clef_changes: tuple[ClefChange, ...] = ()
     import_warnings: tuple[str, ...] = ()
     barlines: tuple[BarlineChange, ...] = ()
-    # Original XML is retained, not reconstructed from Note events. It
-    # includes direction, articulation, pedal, ornament, slur and grouping
-    # elements that timed MIDI notes cannot faithfully represent.
-    source_musicxml: str = ""
     # Computed for this complete original piece, never for a lesson variant.
     fingering_plan: FingeringPlan | None = None
     # Explicit import provenance. Generated MusicXML is internal rendering;

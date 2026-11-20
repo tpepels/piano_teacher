@@ -150,7 +150,7 @@ def compile_hybrid_catalog(
     """
     if not components or len({component.name for component in components}) != len(components):
         raise ValueError("Adaptive composition requires unique passage contributors")
-    if (piece.source_format != "midi" or piece.source_musicxml
+    if (piece.source_format != "midi"
             or piece.midi_ticks_per_beat <= 0):
         raise ValueError("Hybrid lessons require imported MIDI with PPQ")
     diagnose = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"

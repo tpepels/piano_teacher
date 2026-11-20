@@ -50,6 +50,6 @@ def resolve_strategy(spec: str | None, *, piece=None) -> ExerciseStrategy:
     if registration is None:
         raise ValueError(f"Unknown exercise strategy {spec!r}")
     if registration.midi_only and (piece is None or
-            piece.source_format != "midi" or piece.source_musicxml):
+            piece.source_format != "midi"):
         raise ValueError(f"{spec} lesson generation requires an imported MIDI piece")
     return ExerciseStrategy(spec)

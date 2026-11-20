@@ -1,8 +1,8 @@
 """Original-piece musical groups for exercise selection.
 
 These are *attack identities*, never freshly inferred from an already
-simplified exercise. MusicXML supplies its authored beams/slurs; MIDI supplies
-the exact full-piece beam declarations written by our notation compiler.
+simplified exercise. The MIDI-only importer supplies the original attacks;
+our internal MusicXML compiler provides their complete native beam inventory.
 A chord is an attack with multiple possible pitches, not multiple attacks.
 """
 from __future__ import annotations
@@ -93,80 +93,6 @@ def _from_sequences(piece: Piece, sequences: list[tuple[str, tuple[str, ...]]]) 
     return MusicalGrouping(tuple(found), {id(n): i for i, n in enumerate(piece.notes)})
 
 
-def _written_groups(piece: Piece) -> list[tuple[str, tuple[str, ...]]]:
-    root = ET.fromstring(piece.source_musicxml)
-    for element in root.iter():
-        element.tag = element.tag.rsplit("}", 1)[-1]
-    sequences = []
-    for part_index, part in enumerate(root.findall("part")):
-        open_ties = {}
-        open_beams = {}
-        open_slurs = {}
-        voices = defaultdict(list)
-        for measure_index, measure in enumerate(part.findall("measure")):
-            open_beams.clear()  # beams never cross a barline
-            for ordinal, note in enumerate(measure):
-                if note.tag != "note" or note.find("pitch") is None or note.find("grace") is not None:
-                    continue
-                voice = note.findtext("voice", "1")
-                staff = note.findtext("staff", "1")
-                pitch = note.find("pitch")
-                pitch_key = (staff, voice, pitch.findtext("step"),
-                             pitch.findtext("alter", "0"), pitch.findtext("octave"))
-                ties = {tag.get("type") for tag in note.findall("tie")}
-                if not ties:
-                    ties = {tag.get("type") for tag in note.findall("notations/tied")}
-                new_id = f"xml-p{part_index}-m{measure_index}-e{ordinal}"
-                source = open_ties.get(pitch_key) if "stop" in ties else new_id
-                if source is None:  # Source importer rejects orphan ties.
-                    continue
-                if "start" in ties:
-                    open_ties[pitch_key] = source
-                elif "stop" in ties:
-                    open_ties.pop(pitch_key, None)
-                # MusicXML voice numbers may be reused on two piano
-                # staves. Keep their authored slur attack sequences apart;
-                # otherwise an interleaved foreign staff can make both
-                # phrases appear to contain notes from different hands.
-                timeline = voices[(voice, staff)]
-                timeline.append(source)
-                position = len(timeline) - 1
-                for mark in note.findall("notations/slur"):
-                    number = mark.get("number", "1")
-                    key = voice, staff, number
-                    action = mark.get("type")
-                    if action == "start":
-                        open_slurs[key] = position
-                    elif action == "stop":
-                        start_key = key
-                        if start_key not in open_slurs:
-                            matches = [k for k in open_slurs
-                                       if k[0] == voice and k[2] == number]
-                            if len(matches) != 1:
-                                continue
-                            start_key = matches[0]
-                        start = open_slurs.pop(start_key)
-                        if start_key[1] == staff:
-                            sequences.append(("slur", tuple(timeline[start:position + 1])))
-                        # Cross-staff source slurs still engrave authentically,
-                        # but their two staff-local practice timelines cannot
-                        # be sliced against each other without false attacks.
-                if note.find("chord") is not None:
-                    continue
-                for mark in note.findall("beam"):
-                    if mark.get("number", "1") != "1":
-                        continue
-                    key = voice, staff
-                    action = (mark.text or "").strip()
-                    if action == "begin":
-                        open_beams[key] = [source]
-                    elif action in ("continue", "end") and key in open_beams:
-                        open_beams[key].append(source)
-                        if action == "end":
-                            sequences.append(("beam", tuple(open_beams.pop(key))))
-    return sequences
-
-
 def _midi_groups(piece: Piece) -> list[tuple[str, tuple[str, ...]]]:
     from .notation.lesson import build_lesson_score
 
@@ -204,7 +130,7 @@ def _midi_groups(piece: Piece) -> list[tuple[str, tuple[str, ...]]]:
 
 
 def grouping_for_piece(piece: Piece) -> MusicalGrouping:
-    if not piece.source_musicxml and (not piece.bar_boundaries or len(piece.notes) < 2):
+    if not piece.bar_boundaries or len(piece.notes) < 2:
         return MusicalGrouping((), {id(n): i for i, n in enumerate(piece.notes)})
-    sequences = _written_groups(piece) if piece.source_musicxml else _midi_groups(piece)
+    sequences = _midi_groups(piece)
     return _from_sequences(piece, sequences)

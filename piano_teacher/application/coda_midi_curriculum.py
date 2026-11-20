@@ -125,7 +125,7 @@ def midi_coda_catalog(piece: Piece, original: ExerciseVariant
     as for the hand-specific teaching path. Unsafe author behavior is never
     represented as a successful result. See entries with non-success status.
     """
-    if piece.source_format != "midi" or piece.source_musicxml:
+    if piece.source_format != "midi":
         raise ValueError("Coda catalog requires imported MIDI")
     phrase = original.phrase
     boundaries = tuple(t for t in piece.bar_boundaries
@@ -135,7 +135,7 @@ def midi_coda_catalog(piece: Piece, original: ExerciseVariant
             abs(boundaries[-1] - phrase.end) > 1e-7):
         raise ValueError("Coda excerpt needs complete MIDI measure boundaries")
     hierarchy = original_coda_levels(
-        original, boundaries=boundaries, source_musicxml="")
+        original, boundaries=boundaries)
     entries = [CodaMidiCatalogEntry(
         "Score Level", "original", None, "inventory", ExerciseStage(original))]
     parts = tuple(item for item in hierarchy if item.level == "part")
@@ -227,7 +227,7 @@ def midi_coda_stages(
     catalogs occur in the existing RH/LH hand lessons, not as duplicated
     or mixed-voice dotted stages in the both-hands route.
     """
-    if piece.source_format != "midi" or piece.source_musicxml:
+    if piece.source_format != "midi":
         raise ValueError("Coda exercises need imported MIDI notes")
     if not variants:
         return ()

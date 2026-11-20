@@ -22,7 +22,7 @@ import threading
 import time
 from dataclasses import dataclass
 
-from ..fingering.projection import authored_projection_sources, project_model
+from ..fingering.projection import project_model
 from ..lesson_validation import require_lesson_alignment
 from ..music import Phrase, Piece
 from ..notation.lesson import (LessonScore, build_lesson_score,
@@ -89,14 +89,8 @@ class ScoreArtifacts:
                 key_signatures=piece.key_signatures,
                 clef_changes=piece.clef_changes,
                 default_clefs=infer_piece_clefs(piece.notes),
-                inferred_clefs=(infer_midi_clef_plan(piece.notes, piece.bar_boundaries)
-                                if not piece.source_musicxml else None),
-                barlines=piece.barlines,
-                # Source slurs/rests use the original event clock. Retimed
-                # drills must engrave their actual durations instead.
-                source_musicxml=piece.source_musicxml,
-                retimed_source=selected.transformed_rhythm,
-                fingering_sources=authored_projection_sources(piece.fingering_plan))
+                inferred_clefs=infer_midi_clef_plan(piece.notes, piece.bar_boundaries),
+                barlines=piece.barlines)
             self._notation = notation
             self._notation_identity = selected.identity
             self._notation_model = None
@@ -131,8 +125,7 @@ class ScoreArtifacts:
             source = self.source_model(selected)
             if self._projected_model is None:
                 self._projected_model = project_model(deepcopy(source),
-                    selected.piece.fingering_plan,
-                    source_musicxml=selected.piece.source_musicxml)
+                    selected.piece.fingering_plan)
             return deepcopy(self._projected_model)
 
     def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
@@ -167,17 +160,13 @@ class ScoreArtifacts:
         display_phrase = envelope.phrase
         # Short exercises remain continuous; larger works retain bounded pages.
         compact = phrase.last_bar-phrase.first_bar+1 <= 12 and phrase.end-phrase.start <= 48
-        fingering_sources = authored_projection_sources(piece.fingering_plan)
-        fingering_key = ((("fingering_sources", tuple(sorted(fingering_sources))),)
-                         if fingering_sources else ())
         key = self.preprocessing.key(
             "engraving", "complete-display-atlas-v2",
             hashlib.sha256(notation.musicxml.encode("utf-8")).hexdigest(),
             selected.fingerprint, selected.stage_key,
             phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
             selected.hand, piece.bpm, compact,
-            tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes),
-            *fingering_key)
+            tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))
         cached = self.preprocessing.read_json("engraving", key)
         layout = None
         if cached is not None:

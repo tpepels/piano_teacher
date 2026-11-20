@@ -8,14 +8,11 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from collections import defaultdict
 from bisect import bisect_left
-from copy import deepcopy
-from functools import lru_cache
 import hashlib
 import math
 from xml.etree import ElementTree as ET
-from ..music import Note, Phrase, assign_hands, named_hand, source_note_id
+from ..music import Phrase, source_note_id
 from ..measure_grid import phrase_grid
-from .source_annotations import project_annotations
 from .midi_beaming import beam_midi_measure
 from .piano_registers import distribute_piano_registers
 
@@ -190,24 +187,6 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
                   voice: int, *, begin_tie=False, end_tie=False, display_start=0,
                   bindings=None, counts=None, hidden_rest=False,
                   stem: str | None = None) -> None:
-    # Authored rest spelling is not derivable from length: a full-measure
-    # rest in 3/4 uses a whole-rest glyph, rather than a dotted half rest.
-    # Keep its complete written representation when the event is uncut.
-    authored = tones[0].get('authored_rest') if len(tones)==1 and tones[0] else None
-    if (authored is not None and duration==tones[0]['authored_duration']
-            and not begin_tie and not end_tie):
-        event = deepcopy(authored)
-        event.attrib.pop('id', None)
-        event.find('duration').text = str(duration)
-        voice_tag = event.find('voice')
-        if voice_tag is None:
-            voice_tag = ET.Element('voice')
-            event.insert(list(event).index(event.find('duration'))+1, voice_tag)
-        voice_tag.text = str(voice)
-        for staff_tag in event.findall('staff'):
-            event.remove(staff_tag)  # Generated hand parts each contain one staff.
-        measure.append(event)
-        return
     parts = _duration_parts(duration)
     position = display_start
     for index, length in enumerate(parts):
@@ -308,108 +287,6 @@ def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
         if position < length:
             _append_event(measure, [None], length-position, lane_idx+1,
                           hidden_rest=lane_idx > 0)
-
-
-@lru_cache(maxsize=16)
-def _authored_source_rests(source_musicxml: str) -> tuple:
-    """Read source-only rest facts once per exact XML text, across exercises.
-
-    Cached elements are private and read-only; emission always deep-copies
-    them before changing duration, voice or staff.
-    """
-    source = ET.fromstring(source_musicxml)
-    for element in source.iter():
-        element.tag = element.tag.rsplit('}', 1)[-1]
-    names = {part.get('id'): part.findtext('part-name', '')
-             for part in source.findall('part-list/score-part')}
-    tracks, track_names, source_staffs = {}, {}, defaultdict(set)
-    source_notes, rests = [], []
-    for pi, part in enumerate(source.findall('part')):
-        divisions, offset = Fraction(1), Fraction(0)
-        for mi, measure in enumerate(part.findall('measure')):
-            cursor = extent = previous = Fraction(0)
-            for ordinal, element in enumerate(measure):
-                if element.tag == 'attributes' and element.find('divisions') is not None:
-                    divisions = Fraction(element.findtext('divisions'))
-                elif element.tag in ('backup', 'forward'):
-                    duration = Fraction(element.findtext('duration')) / divisions
-                    cursor += duration if element.tag == 'forward' else -duration
-                    extent = max(extent, cursor)
-                elif element.tag == 'note' and element.find('grace') is None:
-                    duration = Fraction(element.findtext('duration')) / divisions
-                    onset = previous if element.find('chord') is not None else cursor
-                    if element.find('chord') is None:
-                        previous = cursor
-                        cursor += duration
-                    extent = max(extent, cursor, onset + duration)
-                    staff = element.findtext('staff', '1')
-                    source_staffs[pi].add(staff)
-                    if (pi, staff) not in tracks:
-                        tracks[pi, staff] = len(tracks)
-                        track_names[tracks[pi, staff]] = names.get(part.get('id'), '')
-                    track = tracks[pi, staff]
-                    owner = f"xml-p{pi}-s{staff}-v{element.findtext('voice', '1')}"
-                    absolute_start, absolute_end = float(offset + onset), float(offset + onset + duration)
-                    if element.find('rest') is not None:
-                        rests.append((pi, staff, track, owner, absolute_start, absolute_end, element))
-                    elif element.find('pitch') is not None:
-                        ties = element.findall('tie') or element.findall('notations/tied')
-                        if any(tie.get('type') == 'stop' for tie in ties):
-                            continue  # Hand policy counts original attacks, not tie segments.
-                        pitch = element.find('pitch')
-                        value = ((int(Fraction(pitch.findtext('octave'))) + 1) * 12
-                                 + dict(C=0, D=2, E=4, F=5, G=7, A=9, B=11)[pitch.findtext('step')]
-                                 + int(Fraction(pitch.findtext('alter', '0'))))
-                        source_notes.append(Note(absolute_start, absolute_end, value, track, 0,
-                            source_id=f'xml-p{pi}-m{mi}-e{ordinal}', voice=owner))
-            offset += extent
-    # Resolve empty voices from the whole source's staff/hand policy. The
-    # active phrase may contain no attack at all from that voice or staff.
-    for (pi, staff), track in tracks.items():
-        if len(source_staffs[pi]) == 2 and named_hand(track_names[track]) is None:
-            track_names[track] = 'Right hand' if staff == '1' else 'Left hand'
-    voice_hands, staff_hands = defaultdict(set), defaultdict(set)
-    for note in assign_hands(source_notes, track_names, 60):
-        voice_hands[note.voice].add(note.hand)
-        staff_hands[note.track].add(note.hand)
-    result = []
-    for pi, staff, track, owner, absolute_start, absolute_end, element in rests:
-        candidates = voice_hands[owner] or staff_hands[track]
-        rest_hand = (named_hand(track_names[track])
-                     or (next(iter(candidates)) if len(candidates) == 1 else None)
-                     or ('left' if staff == '2' or pi > 0 else 'right'))
-        result.append((rest_hand, owner, absolute_start, absolute_end, element))
-    return tuple(result)
-
-
-def _project_authored_rests(source_musicxml: str, phrase: Phrase, lanes: list,
-                            hand: str) -> None:
-    """Restore source rests to their imported voice, separately from gap padding."""
-    if not source_musicxml:
-        return
-    destinations = {}
-    for lane in lanes:
-        # Extra overlapping lanes must not duplicate a source voice's rests.
-        destinations.setdefault(lane[0][2][0]['note'].voice, lane)
-    for rest_hand, owner, absolute_start, absolute_end, element in _authored_source_rests(source_musicxml):
-        if rest_hand != hand:
-            continue
-        start = _ticks(max(absolute_start, phrase.start) - phrase.start)
-        end = _ticks(min(absolute_end, phrase.end) - phrase.start)
-        if end <= start:
-            continue
-        lane = destinations.get(owner)
-        if lane is None:
-            lane = []
-            destinations[owner] = lane
-            lanes.append(lane)
-        if any(a < end and b > start for a, b, _ in lane):
-            continue
-        lane.append((start, end, [{'pitch': None,
-            'authored_rest': element, 'authored_duration': _ticks(absolute_end-absolute_start),
-            'hidden_rest': element.get('print-object') == 'no'}]))
-    for lane in lanes:
-        lane.sort(key=lambda event: (event[0], event[1]))
 
 
 def _key_alters(fifths: int) -> dict:
@@ -637,7 +514,7 @@ def _midi_ornament_onsets(phrase, hand):
     Chopin turn illegible and also forces excessive note/accidental spacing.
     Only correct the *display* onsets of a complete four-attack pattern; the
     untouched source beats in note bindings remain authoritative for grading.
-    Unstructured expressive timing and original MusicXML are unaffected.
+    Unchanged source beat assignments and key-release measurements remain authoritative.
     """
     by_lane = defaultdict(set)
     for note in phrase.notes:
@@ -695,7 +572,7 @@ def _release_clusters(tones: list[dict], start: int) -> list[list[dict]]:
     return clusters
 
 
-def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
+def _phrase_lanes(phrase, hand, grid=()):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
@@ -703,8 +580,7 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     # .5: at the 40 BPM practice tempo that shift is 150 ms, larger than
     # the grader's onset tolerance. Only MIDI-tick-sized ornament noise may
     # move the displayed onset; rest clutter is handled independently.
-    triplet_onsets = {} if from_source_musicxml else _midi_ornament_onsets(
-        phrase, hand)
+    triplet_onsets = _midi_ornament_onsets(phrase, hand)
     ornament_onsets = triplet_onsets
     for index, note in enumerate(phrase.notes):
         if note.hand != hand:
@@ -735,13 +611,9 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
             'notation_timing':timing,'end':end})
     events = []
     for (track, voice, start), attack in groups.items():
-        # Authored MusicXML durations are exact: only equal releases form one
-        # chord. A performed chord keeps a real release (its median tone's);
-        # lane quantization below then chooses grid or tuplet once, from that
-        # raw release, exactly as for a single note.
-        clusters = ([[t for t in attack if t['end'] == end]
-                     for end in sorted({t['end'] for t in attack})]
-                    if from_source_musicxml else _release_clusters(attack, start))
+        # A performed MIDI chord keeps measured release offsets; cluster
+        # adjacent releases before choosing notation timing for each group.
+        clusters = _release_clusters(attack, start)
         for tones in clusters:
             end = sorted(t['end'] for t in tones)[(len(tones)-1)//2]
             remaining = sorted(tones,key=lambda tone:(tone['pitch'],tone['source_id']))
@@ -772,32 +644,31 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
             # Only display length changes; source-note timing and grading do
             # not. The onset grid, following source onset (or a completed
             # triplet beat), and tiny release gap must all independently fit.
-            if not from_source_musicxml:
-                third = DIVISIONS // 3
-                target = start + third
-                next_start = lane[i+1][0] if i+1 < len(lane) else None
-                beat_start = start // DIVISIONS * DIVISIONS
-                in_triplet = ((start-beat_start) in (0, third, 2*third)
-                              and end < target
-                              and 0 < target-end <= _ticks(.025)
-                              and target <= _ticks(phrase.end-phrase.start)
-                              and (next_start is None or next_start >= target)
-                              and not any(end <= _ticks(boundary) < target
-                                          for boundary in grid))
-                preceding_pair = (
-                    (start-beat_start) == 2*third
-                    and i >= 2
-                    and lane[i-2][0] == beat_start
-                    and lane[i-1][0] == beat_start+third)
-                if in_triplet and (next_start == target or preceding_pair):
-                    end = target
+            third = DIVISIONS // 3
+            target = start + third
+            next_start = lane[i+1][0] if i+1 < len(lane) else None
+            beat_start = start // DIVISIONS * DIVISIONS
+            in_triplet = ((start-beat_start) in (0, third, 2*third)
+                          and end < target
+                          and 0 < target-end <= _ticks(.025)
+                          and target <= _ticks(phrase.end-phrase.start)
+                          and (next_start is None or next_start >= target)
+                          and not any(end <= _ticks(boundary) < target
+                                      for boundary in grid))
+            preceding_pair = (
+                (start-beat_start) == 2*third
+                and i >= 2
+                and lane[i-2][0] == beat_start
+                and lane[i-1][0] == beat_start+third)
+            if in_triplet and (next_start == target or preceding_pair):
+                end = target
             rounded = round(end/_RELEASE_GRID)*_RELEASE_GRID
             # Performance MIDI stores physical key release, not the intended
             # written duration. At Autumn Leaves measure 8, for example,
             # a 3.798-beat held note was printed as a triple-dotted 3.75
             # because the nearest 16th subdivision was chosen; a whole note
             # is far easier to read when the remainder is just key release.
-            if not from_source_musicxml and end-start >= DIVISIONS:
+            if end-start >= DIVISIONS:
                 close_barline = next((
                     _ticks(boundary) for boundary in grid
                     if 0 < _ticks(boundary)-end <= _ticks(.25)
@@ -807,12 +678,11 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
             # Never shorten an unusual expressive MIDI duration by more
             # than .08 beat. Small release noise around ordinary subdivisions
             # is still normalized; genuine .625-beat values are preserved.
-            tolerance = .12 if from_source_musicxml else _release_tolerance(rounded, end)
-            if not from_source_musicxml and rounded > end and end-start >= DIVISIONS:
+            tolerance = _release_tolerance(rounded, end)
+            if rounded > end and end-start >= DIVISIONS:
                 tolerance = max(tolerance,.25) if rounded in {
                     _ticks(boundary) for boundary in grid} else tolerance
-            if (not from_source_musicxml
-                    and _tuplet_type(end-start) is None and rounded > start
+            if (_tuplet_type(end-start) is None and rounded > start
                     and abs(rounded-end) <= _ticks(tolerance)):
                 end = min(rounded,_ticks(phrase.end-phrase.start),
                           lane[i+1][0] if i+1 < len(lane)
@@ -823,7 +693,7 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
                 # not useful additional rest instructions. Extend display only
                 # to the next attack in this stable lane, within this measure.
                 # Source notes, attack bindings and assessed releases stay exact.
-                if (not from_source_musicxml and 0 < following-end <= DIVISIONS/64
+                if (0 < following-end <= DIVISIONS/64
                         and not any(end <= _ticks(boundary) < following for boundary in grid)):
                     end = following
             lane[i] = (start,end,tones)
@@ -835,9 +705,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        key_signatures=(), clef_changes=(),
                        default_clefs: dict | None = None,
                        inferred_clefs: dict[int, dict[str, dict]] | None = None,
-                       barlines: tuple = (), source_musicxml: str = "",
-                       fingering_sources: frozenset[str] = frozenset(),
-                       retimed_source: bool = False) -> LessonScore:
+                       barlines: tuple = ()) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
@@ -897,9 +765,8 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         ET.SubElement(scorepart, "part-abbreviation").text = " "
     ET.SubElement(partlist, "part-group", type="stop", number="1")
     bindings, counts, staff_clefs = {}, {}, {}
-    lanes_by_staff = {hand:_phrase_lanes(phrase,hand,grid,
-        from_source_musicxml=bool(source_musicxml)) for hand in ('right','left')}
-    if not source_musicxml and not clef_changes:
+    lanes_by_staff = {hand:_phrase_lanes(phrase,hand,grid) for hand in ('right','left')}
+    if not clef_changes:
         display_clefs = (default_clefs or infer_piece_clefs(phrase.notes)).copy()
         if inferred_clefs:
             display_clefs.update(inferred_clefs.get(phrase.first_bar, {}))
@@ -916,8 +783,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                 for tone in tones:
                     attack_key = next((key for key in reversed(keys) if key.beat <= tone['note'].start+1e-7),None)
                     tone['spelling'] = _spelling(tone['note'],attack_key.fifths if attack_key else 0)
-        _project_authored_rests(source_musicxml, phrase, lanes, hand)
-        midi_stems = _midi_voice_stems(lanes) if not source_musicxml else None
+        midi_stems = _midi_voice_stems(lanes)
         for change in (*keys,*clefs):
             if phrase.start < change.beat < phrase.end and not any(abs(change.beat-phrase.start-beat)<1e-7 for beat in grid):
                 raise ValueError('Mid-measure source key/clef changes are not supported in generated lessons')
@@ -941,7 +807,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             # inferring independently from a simplified practice variant.
             midi_bar_clefs = (
                 inferred_clefs.get(phrase.first_bar + b, {})
-                if inferred_clefs is not None and not source_musicxml else {})
+                if inferred_clefs is not None else {})
             if active_clef is not None:
                 chosen_clef = _readable_clef(
                     [note for note in phrase.notes if note.hand == hand],
@@ -980,19 +846,14 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             append_barline(measure,source_beat,"left")
             _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,
                             counts,
-                            hide_performance_micro_rests=not bool(source_musicxml),
+                            hide_performance_micro_rests=True,
                             midi_stems=midi_stems)
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
-            if not source_musicxml or retimed_source:
-                # Transformed attacks require their own beam grouping;
-                # unchanged complete authored groups may override this
-                # during source annotation projection.
-                beam_midi_measure(measure, beats, beat_type, DIVISIONS,
-                                  bar_end - bar_start)
+            # The native compiler engraves the selected MIDI attacks once,
+            # retaining their source identities and actual rhythmic grid.
+            beam_midi_measure(measure, beats, beat_type, DIVISIONS,
+                              bar_end - bar_start)
             append_barline(measure,phrase.start+grid[b+1],"right")
-    xml, unsupported = project_annotations(
-        source_musicxml, ET.tostring(root, encoding="unicode"),
-        bindings, phrase, boundaries=boundaries, fingering_sources=fingering_sources,
-        retimed_source=retimed_source)
-    return LessonScore(xml, phrase, bindings, staff_clefs, unsupported)
+    return LessonScore(
+        ET.tostring(root, encoding="unicode"), phrase, bindings, staff_clefs)

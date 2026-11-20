@@ -23,7 +23,7 @@ def midi_coda_quantization(
     without rounding. The cap is the current 128-pitch matrix allocation limit.
     """
     ppq = piece.midi_ticks_per_beat
-    if piece.source_format != "midi" or piece.source_musicxml or ppq <= 0:
+    if piece.source_format != "midi" or ppq <= 0:
         raise ValueError("Coda MIDI grid requires a genuine MIDI-imported Piece")
     if not phrase.notes or phrase.start < 0 or phrase.end <= phrase.start:
         raise ValueError("Coda MIDI grid requires a nonempty bounded phrase")

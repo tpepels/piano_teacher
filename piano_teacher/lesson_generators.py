@@ -136,7 +136,7 @@ class CodaLessonGenerator:
         return midi_coda_stages(piece, (original,), kind=kind)
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
-        if (piece.source_format!="midi" or piece.source_musicxml or
+        if (piece.source_format!="midi" or
                 piece.midi_ticks_per_beat<=0):
             raise ValueError("Coda lesson generation needs an original MIDI piece")
         from .application.coda_midi_curriculum import midi_coda_stages
@@ -287,7 +287,7 @@ class FukudaMidiLessonGenerator:
         return replace(self, mistakes=failed) if failed != self.mistakes else self
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
-        if piece.source_format!="midi" or piece.source_musicxml:
+        if piece.source_format!="midi":
             raise ValueError("Fukuda MIDI requires an imported MIDI piece")
         # Whole-score assessment first gives Fukuda's three rule families
         # access to any musical pattern across the original piece, not only

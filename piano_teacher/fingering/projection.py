@@ -4,12 +4,6 @@ from .types import FingeringPlan
 from .placement import source_placements
 
 
-def authored_projection_sources(plan: FingeringPlan | None) -> frozenset[str]:
-    """Authored numbers whose ink is now owned by the projected native plan."""
-    return frozenset(sid for sid,a in plan.assignments.items()
-                     if a.finger is not None and a.authored_text) if plan else frozenset()
-
-
 def project_model(model: dict, plan: FingeringPlan | None, *, source_musicxml: str = '') -> dict:
     if plan is None:
         return model
