@@ -21,7 +21,7 @@
 | Decompose server.py / L01 | PARTIALLY DECOMPOSED (~3,621 lines) | LearningEvidenceSession now owns rule snapshots, adaptive retry history, learner history status and read-only statistics queries; deleting learner history preserves the shared LearningCapture owner. PracticeEngine still owns many command/assessment/automatic continuation lifecycle operations |
 | Decompose native/view.gd / L02 | SUBSTANTIALLY DECOMPOSED (~1,302 lines); NOT THIN | ScoreStreamController owns the complete stream admission/recovery/rollback/identity protocol. Writable NativeView transport aliases removed; read-only public owner-status ports added. Retained painting and the internal queue access still require isolation |
 | Decompose main.gd / L03 | SUBSTANTIALLY DECOMPOSED; NOT THIN | ApplicationStateInbox owns accepted snapshots and stale poll suppression; NavigationSession, PracticePresentationSession, ApplicationEventRouter, DebugSessionLogger, StatusHeadPreloader and CountInAudioSession own their domains. Main still composes scenes and routes external replies/actions |
-| Existing CI/native integration | CORE GREEN THROUGH `eee14c54`; FULL NATIVE IN PROGRESS | [Core run 44637473989](https://github.com/tpepels/piano_teacher/actions/runs/44637473989) passed. Native extension compiles and embeds Python, authentic score and UI reached authorized count-in in earlier runs. Later native runs exposed old acceptance assumptions and are being corrected. Relocated package and physical hardware acceptance not yet certified |
+| Existing CI/native integration | FULL EMBEDDED/REPERTOIRE/PACKAGE RUN PASSED AT `89d364d1`; NEWER SOURCE NEEDS RECHECK | [Run 44703830421](https://github.com/tpepels/piano_teacher/actions/runs/44703830421) passed CPython 3.14 GDExtension, Verovio score, UI Play/Pause/Resume, Moonlight Retry/Listen/navigation, Peace Piece, Chopin and the full package audit. Changes after that revision still require rerun. Physical CA49 remains open |
 
 ### Phase completion status
 
@@ -330,18 +330,24 @@
 - Each scenario is executed in a fresh strict Bash subprocess to retain `errexit` inside its nested packaging and fixture functions, not the parent shell's conditional-invocation exception. The same isolated HOME/case-specific XDG directories and existing acceptance scripts are used. Native compilation remains a hard prerequisite.
 - No new test cases, no bypassed failures and no automatic background retry. CI's native job now yields a complete failure matrix from one run, including packaging even when a UI scenario fails.
 
+### Implementation checkpoint AQ — first complete native/repertoire/package run passed
+
+- [Full CI run 44703830421](https://github.com/tpepels/piano_teacher/actions/runs/44703830421), tested at `89d364d1`, passed core Python CI, CPython 3.14 GDExtension build, embedded Godot startup, authentic MIDI/Verovio geometry, Play/Pause/Resume continuous native UI, Moonlight Sonata Retry/Listen/stage navigation, Peace Piece, Chopin Nocturne and the assembled standalone runtime package audit.
+- This is a concrete **Phase 6 software acceptance result at that exact revision**, not acceptance of subsequent Phase 5 refactors or of a physical instrument/audio path. The improved runner now tests the extracted archive/launcher and continues through all independent scenarios even if one fails.
+- A new full native run is being requested against current `main` to cover the subsequent event input, preflight, continuous-rest and queue-ownership changes; the CA49/USB/Bluetooth/speaker checklist stays unchecked.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
 | --- | --- | --- |
 | Python, Godot parse and existing isolated checks | [GitHub Actions 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed at `27f7f580`; existing core checks only | **Verified for tested source revision; native/full physical journeys open** |
-| Actual embedded Python/Godot native boot + authentic score | [Run 44638188623](https://github.com/tpepels/piano_teacher/actions/runs/44638188623): real compiled GDExtension, Python registration, generated two-hand MIDI and score geometry passed; UI later failed the obsolete voice-only assertion | **Verified up to score/UI count-in; complete journey pending** |
+| Actual embedded Python/Godot native boot + authentic score | [Full native run 44703830421](https://github.com/tpepels/piano_teacher/actions/runs/44703830421) passed source, Play, Pause, Resume, Moonlight Retry/Listen, Peace Piece and Chopin at commit `89d364d1` | **Passed at tested revision; later refactors pending** |
 | Pathétique Listen → Free → Tempo near 52%, notes visible and admitted before grading | Source transactions wired; exact user reproduction needs live runtime | **Not verified** |
 | Bars 1; 2,1–2; 3,2–3,1–3; 4,3–4,2–4,1–4; sliding at max width 4 | Authoritative generator and progress identity updated; no physical MIDI observation | **Source implemented; live acceptance pending** |
 | Cross-bar holds, sparse bars, changing meter, very slow BPM, long score | Source-safe windows and count-in map implemented; full native journey not executed | **Not verified** |
 | Pause, Resume and Retry including counted syllables and lowest/highest physical-key shortcuts | Shared route and count-in session integrated; actual Kawai timing not measured | **Not verified** |
 | Auto retry/recovery, preloaded lesson, interruption/close/reopen, saved progress | Source-bound admission + durable settlement implemented; physical and crash/restart cases outstanding | **Not verified** |
-| Self-contained packaged release | Clean-extract compressed archive and boot check implemented in full native script; current native runs stop earlier at UI acceptance | **Not verified** |
+| Self-contained packaged release | [Full native run 44703830421](https://github.com/tpepels/piano_teacher/actions/runs/44703830421) passed assembled standalone runtime package audit at `89d364d1`; clean extraction/boot implemented after this revision | **Assembled package passed; clean extraction/boot must pass on latest run** |
 
 **Existing acceptance commands** (do not add new tests):
 
