@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from bisect import bisect_right
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
 import uuid
