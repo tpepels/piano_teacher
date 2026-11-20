@@ -189,7 +189,9 @@ func set_note_status_visible(enabled: bool) -> void:
         queue_redraw()
 var offline_stream_queue: Array:
     get:
-        return _stream_queue.offline
+        # Public diagnostic snapshot. The authoritative offline history can
+        # be changed only by ScoreStreamQueue retirement/withdrawal.
+        return _stream_queue.offline.duplicate(true)
 # Immutable source event index for cursor ink clearance. The painter may
 # temporarily suppress one glyph for framebuffer controls; that must not
 # change the fixed timing line or alter unrelated image pixels.

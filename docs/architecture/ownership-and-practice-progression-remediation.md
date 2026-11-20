@@ -558,6 +558,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Source publication now uses `AttemptRuntime.reset_source_presentation`, feedback handoff uses `clear_feedback`, and rolling-grading snapshots are installed by `publish_live_marks`. `PracticeEngine` cannot accidentally clear only one half of an assessment result at these boundaries.
 - The durable `AttemptSettlement`, source-specific feedback and cross-attempt `RecoveryStreak` remain independent owners. No new tests. Core and native completion/recovery assertions remain the acceptance gates.
 
+### Implementation checkpoint BR — offline queue diagnostics cannot mutate the real history
+
+- `NativeScoreView.offline_stream_queue` now returns a deep diagnostic snapshot, matching `stream_passes`, instead of exporting the mutable `ScoreStreamQueue.offline` Array. An external HUD/fixture can inspect retired source/rest history but cannot clear or reorder it.
+- The renderer's private retained-pool and stream-ledger ports are unchanged. No new tests; native/packaged rendering acceptance is still required on this change.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
