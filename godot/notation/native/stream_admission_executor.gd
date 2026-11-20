@@ -46,7 +46,8 @@ static func reserve_action(stream, facts: StreamGeometry, preflight: Dictionary,
     # and the SAME world coordinate. Do not recalculate a different
     # placement after removing the unseen suffix.
     var intended: float = float(planned["start_world"])
-    stream.trim(facts,"user_"+action+"_replace_unseen")
+    stream.trim(facts,"user_"+action+"_replace_unseen",-1,
+        int(planned.get("protected_strip",-1)))
     var removed: Array = before.slice(stream.online_size())
     if stream.online_size() != int(planned["remaining_count"]):
         push_error("SCORE_TRANSPORT_COMMIT: online queue changed during preflight")

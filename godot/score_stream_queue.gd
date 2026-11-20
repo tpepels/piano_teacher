@@ -289,7 +289,7 @@ func _is_safe_tail(passes: Array, owner_serial: int, world: float,
 func preview_tail_withdrawal(world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, protected_take: int = -1,
-        just_one_owner: bool = false) -> Dictionary:
+        just_one_owner: bool = false, protected_strip: int = -1) -> Dictionary:
     # Pure admission preview: the actual withdrawal and a preflight
     # reservation use IDENTICAL pixel-exposure and protected-owner rules.
     # No archive, scene tree, or live queue mutation occurs here.
@@ -297,6 +297,8 @@ func preview_tail_withdrawal(world: float, density: float,
     var owners: Array[int] = []
     while not remaining.is_empty():
         var tail: Dictionary = remaining[-1]
+        if owner_id(tail) == protected_strip:
+            break
         if protected_take >= 0 and int(tail.get(
                 "take_owner",owner_id(tail))) == protected_take:
             break
@@ -316,13 +318,13 @@ func withdraw_tail(owner: Control, world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, reason: String,
         force_unacknowledged: bool = false,
-        protected_take: int = -1) -> Array[int]:
+        protected_take: int = -1, protected_strip: int = -1) -> Array[int]:
     # The only permitted right-end dequeue operation. A visible/acknowledged
     # prefix is NEVER changed, even when future musical decisions differ.
     var withdrawn: Array[int] = []
     var preview: Dictionary = preview_tail_withdrawal(
         world,density,gap,duration,viewport_width,playhead_x,
-        protected_take,force_unacknowledged)
+        protected_take,force_unacknowledged,protected_strip)
     for serial in preview["owners"]:
         if online.is_empty() or owner_id(online[-1]) != int(serial):
             push_error("Queue tail changed between preflight and withdrawal")

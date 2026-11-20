@@ -114,7 +114,8 @@ func observe_transport(facts: StreamGeometry, world: float, opening: float,
                 if arm_acknowledged and not expected_segment.is_empty() and \
                         armed_segment_id == expected_segment:
                     if StreamLifecycle.activate(
-                            queue.online,armed_serial,key,false):
+                            queue.online,armed_serial,key,false,
+                            int(arm_rollback.get("predecessor_owner",-1))):
                         live_serial = armed_serial
                         live_segment_id = expected_segment
                         last_take = key
@@ -262,6 +263,7 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
     arm_rollback = {
         "owner_serial":candidate_serial,"source_snapshot":snapshot,
         "newly_allocated":candidate_serial > serial_before,
+        "predecessor_owner":paused_owner if was_paused else -1,
         "old_live_serial":old_live}
     for item in queue.online:
         if int(item.get("serial",-1)) == candidate_serial:

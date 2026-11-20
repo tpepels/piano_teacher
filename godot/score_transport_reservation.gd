@@ -43,6 +43,12 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     var header: float = float(facts["header"])
     var preview_world: float = float(facts["preview_world"])
     var withdrawn: Dictionary = facts["withdrawn"]
+    var protected_strip := -1
+    if action == "resume" and facts.has("resume_protected_strip"):
+        protected_strip = int(facts["resume_protected_strip"])
+        if not facts.has("resume_withdrawn"):
+            return _refuse("missing_paused_source_withdrawal_preview")
+        withdrawn = facts["resume_withdrawn"]
     if not withdrawn.has("remaining") or not withdrawn.has("owners"):
         return _refuse("incomplete_physical_preflight_facts")
     var survivors: Array = withdrawn["remaining"]
@@ -130,6 +136,7 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
                 (near_onset-header-preview_world)*density,
             "first_ink_delay_seconds":0.0,
             "remaining_count":survivors.size(),
+            "protected_strip":protected_strip,
             "withdraw_owners":withdrawn["owners"].duplicate(),
             "reason":"empty_strip_count_in_bar"}
     var onset: float = Admission.position(survivors,preview_world,
@@ -170,6 +177,7 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
             Admission.lead_seconds(maxf(0.0,(first_pixel_x-width)/density),0.0,
                 maxf(1.0,float(facts["bpm"]))),
         "remaining_count":survivors.size(),
+        "protected_strip":protected_strip,
         "leading_rest_beats":leading_rest,
         "withdraw_owners":withdrawn["owners"].duplicate(),
         "reason":"new_immutable_future_slot"}

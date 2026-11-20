@@ -181,7 +181,7 @@ static func restore_owner(passes: Array, owner_serial: int,
     return true
 
 static func activate(passes: Array, owner_serial: int, key: String,
-        armed: bool) -> bool:
+        armed: bool, predecessor_owner: int = -1) -> bool:
     # One engine transport binds all immutable strips of its selected take.
     # Source/geometry never change; only provisional transport state does.
     if owner_serial <= 0 or key.is_empty():
@@ -197,7 +197,8 @@ static func activate(passes: Array, owner_serial: int, key: String,
     var target_floor: float = float(target.get("source_floor",-INF))
     for item in passes:
         if str(item.get("kind","source")) != "source" or \
-                int(item.get("take_owner",item.get("owner_serial",0))) == owner_serial:
+                int(item.get("take_owner",item.get("owner_serial",0))) in \
+                    [owner_serial,predecessor_owner]:
             continue
         if str(item.get("take_key","")) == key and \
                 not bool(item.get("pending",false)) and \

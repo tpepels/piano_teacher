@@ -31,9 +31,10 @@ func append_source(facts: StreamGeometry, source_beat: float, start_world: float
     append_take(facts,windows,source_beat,start_world,take_key,empty_strip,
         facts.first_header_spaces,facts.rest_gap,guided,display_context,leading_rest_beats)
 
-func trim(facts: StreamGeometry, reason: String, protected_take: int = -1) -> Array[int]:
+func trim(facts: StreamGeometry, reason: String, protected_take: int = -1,
+        protected_strip: int = -1) -> Array[int]:
     return trim_future(canvas(),reason,facts.world,facts.density,facts.gap,
-        facts.duration,facts.width,facts.playhead,protected_take)
+        facts.duration,facts.width,facts.playhead,protected_take,protected_strip)
 
 var serial := 0
 var last_admitted := -1
@@ -87,7 +88,23 @@ func preflight_facts(world: float, opening: float, source_exists: bool,
         "header":header,
         "preview_world":world,
     }
-    facts.merge(_binding.preflight())
+    var binding: Dictionary = _binding.preflight()
+    facts.merge(binding)
+    if bool(binding["was_paused"]) and int(binding["paused_owner"]) >= 0:
+        # A fresh Resume count-in may need a new copy, but the paused
+        # source's unexpired head remains immutable even while offscreen.
+        # Protect only its first retained measure; later unseen measures
+        # can still withdraw rather than making a whole-piece Resume wait
+        # through the abandoned remainder.
+        for item in queue.online:
+            if str(item.get("kind","")) == "source" and \
+                    int(item.get("take_owner",-1)) == int(binding["paused_owner"]):
+                var protected_strip: int = queue.owner_id(item)
+                facts["resume_protected_strip"] = protected_strip
+                facts["resume_withdrawn"] = queue.preview_tail_withdrawal(
+                    world,density,gap,duration,width,playhead,-1,false,
+                    protected_strip).duplicate(true)
+                break
     return facts
 
 func remember_withdrawn_suffix(previous: Array) -> void:
@@ -185,10 +202,11 @@ func prune_expired(owner: Control, world: float, density: float,
 
 func trim_future(owner: Control, reason: String, world: float,
         density: float, gap: float, duration: float, width: float,
-        playhead_x: float, protected_take: int = -1) -> Array[int]:
+        playhead_x: float, protected_take: int = -1,
+        protected_strip: int = -1) -> Array[int]:
     var removed: Array[int] = queue.withdraw_tail(
         owner,world,density,gap,duration,width,playhead_x,
-        reason,false,protected_take)
+        reason,false,protected_take,protected_strip)
     if not removed.is_empty():
         _binding.reconcile()
     return removed

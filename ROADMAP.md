@@ -98,6 +98,19 @@ ghosts use the existing physical strip/header bounds. Existing Python remains
 335 passed/one optional skip; the complete final Godot script passes with all
 failure counters zero and `GODOT_STARTUP_SYNTAX_OK`. No new tests were added.
 
+Feedback/clock source commit: `ee6ccbf3`. Its complete production run passed
+the fixture, native registration, Moonlight journey and strict relocated package
+build/boot, but Peace Piece and Chopin exposed a Resume withdrawal of an
+unexpired paused source strip. Resume now protects the first retained paused
+strip while allowing later unseen measures to withdraw; preview and actual
+withdrawal use the same queue policy. Its new admitted copy explicitly retains
+the paused transport predecessor without changing existing geometry or keys.
+Both unchanged repertoire journeys now pass in
+`debug-sessions/practice-completion/resume-fixed-reproduction.log`; the complete
+native script also passes with zero scenario failures in
+`debug-sessions/practice-completion/godot-resume-final.log`. The complete
+production/package workflow must still pass on the committed correction.
+
 | Phase | State |
 | --- | --- |
 | Phase 5 — ownership decomposition | Source ownership transfers integrated; existing core/native checks pass. New feedback work removes the remaining independent preview matcher and release pairing. |
