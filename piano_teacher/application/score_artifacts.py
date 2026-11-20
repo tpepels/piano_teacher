@@ -183,8 +183,9 @@ class ScoreArtifacts:
             except (TypeError, ValueError, KeyError, AssertionError):
                 layout = None
         if layout is None:
-            complete = render_layout(notation, display_phrase.first_bar, display_phrase.last_bar, "both",
-                total_beats=display_phrase.end-display_phrase.start, bpm=piece.bpm, continuous=compact)
+            complete = render_layout(
+                notation, "both", total_beats=display_phrase.end-display_phrase.start,
+                bpm=piece.bpm, continuous=compact)
             require_lesson_alignment(display_phrase, complete.layout, "both")
             layout = EngravedScore(complete.pages, project_performance_layout(complete.layout, envelope))
             require_lesson_alignment(phrase, layout.layout, selected.hand)

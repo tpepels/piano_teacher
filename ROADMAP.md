@@ -244,9 +244,12 @@ The final importer seam now returns one canonical `Piece` instead of
 `(Piece, None)`; source preparation and the preprocessing cache pass that
 same object to lesson generation and fingering inference. The dead
 `PreparedSource.score` and `PracticeEngine.score` fields are removed.
-`music21`, formerly required only by the removed external importer, is
-no longer a runtime/package dependency. Existing MIDI import tests have
-their return-value expectations updated; no new tests were added.
+The final old `music21` consumer was discovered in `render_layout`: an
+untested music21-score branch and its `render_measures` single-page wrapper.
+Both are retired. Engraving accepts only `LessonScore` with canonical source
+IDs, uses Verovio, and no longer requires `music21` as a package dependency.
+Existing MIDI import tests have their return-value expectations updated; no
+new tests were added.
 
 This architecture cleanup still needs both CI jobs to pass on the
 final commit. Previous passing software results do not certify physical

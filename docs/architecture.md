@@ -486,9 +486,11 @@ There is a single imported `Piece`, single immutable attack identity set and
 one original MIDI measure grid. The preprocessing cache returns this `Piece`
 directly, and `SourcePreparationSession` builds curriculum and fingering from
 that same instance. It no longer carries a fictitious score alongside
-`Piece` or installs an always-`None` `PracticeEngine.score`. The unused
-`music21` importer dependency and its package verification checks are
-retired.
+`Piece` or installs an always-`None` `PracticeEngine.score`. The old alternate
+music21-score branch in `render_layout` and its single-page SVG wrapper are
+retired: the engraver accepts the native `LessonScore` exclusively. With
+both external source import and music21 page conversion removed, the
+`music21` package requirement and its verification checks are also retired.
 
 Original MusicXML inventory parsing retained under `research/coda_*`
 supports independent comparisons of Coda's symbolic notation ideas. Those

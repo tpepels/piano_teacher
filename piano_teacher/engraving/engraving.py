@@ -1,7 +1,6 @@
 """Canonical Verovio source engraving and identity-preserving page geometry."""
 from __future__ import annotations
 
-import copy
 from dataclasses import replace
 import json
 import math
@@ -140,70 +139,28 @@ class EngravedScore:
     layout: dict
 
 
-def render_layout(notation: object, first: int, last: int, hand: str = "both",
+def render_layout(notation: LessonScore, hand: str = "both",
                   *, total_beats: float, bpm: float | None = None,
                   continuous: bool = False) -> EngravedScore:
-    """Render *all* score pages and bind their noteheads to Verovio qstamps.
+    """Engrave only the generated source-bound MIDI practice score.
 
-    The returned layout has exact engraved onset anchors, page/system IDs, and
-    SVG viewBox dimensions. A mismatched engraving raises an explicit error;
-    there is deliberately no fake percentage-based cursor fallback.
+    The lesson compiler has already selected the passage. No separate
+    music21 score, source-page selector, or second notation owner exists.
+    Every notehead must match its authoritative imported MIDI source ID.
     """
-    try:
-        import verovio
-        from music21 import stream, clef, key, tempo, metadata
-        from music21.musicxml.m21ToXml import GeneralObjectExporter
-    except ImportError as exc:
-        raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
-    if isinstance(notation, LessonScore):
-        source_hands={source_note_id(note,index):note.hand
-                      for index,note in enumerate(notation.phrase.notes)}
-        if any(source_hands.get(binding['source_id'])!=binding['hand']
-               for binding in notation.note_bindings.values()):
-            raise ValueError('Engraved performing hand differs from source hand')
-        return _engrave_xml(notation.musicxml, hand, total_beats, bpm=bpm,
-                            note_bindings=notation.note_bindings, staff_clefs=notation.staff_clefs,
-                            continuous=continuous)
-    sc = copy.deepcopy(notation)
-    if not list(sc.recurse().getElementsByClass(stream.Measure)):
-        sc.makeMeasures(inPlace=True)
-    out = stream.Score()
-    # Do not insert a generic Music21 Fragment title above every short lesson.
-    out.metadata = metadata.Metadata(title=" ")
-    parts = list(sc.parts) or [sc]
-    for index, part in enumerate(parts):
-        p = stream.Part()
-        p.id = part.id
-        measures = list(part.getElementsByClass(stream.Measure))
-        selected = [m for m in measures if first <= int(m.number) <= last]
-        if not selected:
-            continue
-        for i, measure in enumerate(selected):
-            copied = copy.deepcopy(measure)
-            if i == 0:
-                for element_type in (clef.Clef, key.KeySignature):
-                    if not list(copied.getElementsByClass(element_type)):
-                        context = measure.getContextByClass(element_type)
-                        if context is not None:
-                            copied.insert(0, copy.deepcopy(context))
-            # MIDI imports may have many original tempo changes. The practice
-            # lesson uses one selected BPM, shown in the header instead.
-            for metronome in list(copied.recurse().getElementsByClass(tempo.MetronomeMark)):
-                if metronome.activeSite is not None:
-                    metronome.activeSite.remove(metronome)
-            if hand != "both" and len(parts) >= 2:
-                # For ordinary two-part piano MusicXML: top right, bottom left.
-                inactive = (hand == "right" and index == len(parts) - 1) or (hand == "left" and index == 0)
-                if inactive:
-                    for item in copied.recurse().notes:
-                        item.style.color = "#BFC5C1"
-            p.append(copied)
-        out.append(p)
-    if not list(out.parts):
-        raise ValueError(f"No notation found for measures {first}-{last}")
-    xml = GeneralObjectExporter(out).parse().decode("utf-8")
-    return _engrave_xml(xml, hand, total_beats, bpm=bpm, continuous=continuous)
-
+    if not isinstance(notation, LessonScore):
+        raise TypeError("Native engraving requires a generated LessonScore")
+    source_hands = {
+        source_note_id(note, index): note.hand
+        for index, note in enumerate(notation.phrase.notes)
+    }
+    if any(source_hands.get(binding["source_id"]) != binding["hand"]
+           for binding in notation.note_bindings.values()):
+        raise ValueError("Engraved performing hand differs from source hand")
+    return _engrave_xml(
+        notation.musicxml, hand, total_beats, bpm=bpm,
+        note_bindings=notation.note_bindings, staff_clefs=notation.staff_clefs,
+        continuous=continuous)
 
 def _can_remove_repeated_system_headers(xml: str, note_bindings: dict | None) -> bool:
     """Only flatten generated piano parts when all subsequent headers are repeats.
@@ -325,8 +282,8 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
     if continuous:
         # A continuous exercise must consist of precisely one newly engraved
         # staff system. Never silently show a multi-system raster collage.
-        # If Verovio cannot satisfy this (complex imports/format changes),
-        # use the proven standard renderer for this specific exercise.
+        # If Verovio cannot satisfy this (dense notation/format changes),
+        # preserve its multi-system layout for native glyph extraction.
         systems = sum(len(parse_svg_geometry(page).staff_systems) for page in pages)
         if len(pages) != 1 or systems != 1:
             return _engrave_xml(xml, hand, total_beats, bpm=bpm,
@@ -427,9 +384,3 @@ def _svg_pages(toolkit) -> tuple[str, ...]:
         raise ValueError("Verovio returned an invalid SVG page")
     return pages
 
-
-def render_measures(notation: object, first: int, last: int, hand: str = "both") -> str:
-    """Legacy single-page SVG API. Prefer render_layout for synchronized UI."""
-    # When no exact phrase duration is available, only SVG rendering is needed;
-    # use a duration larger than any excerpt (the caller ignores anchors).
-    return render_layout(notation, first, last, hand, total_beats=1_000_000).pages[0]
