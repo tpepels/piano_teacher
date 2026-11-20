@@ -79,6 +79,28 @@ def preparation_measure_descriptor(measure, start_beat: float,
     }
 
 
+def retry_preparation_rest_beats(source: dict, from_beat: float) -> float:
+    """Read the exact authored preparation meter from original score geometry.
+
+    The retry's silent strip is source-metrical, including pickup and meter
+    changes. It cannot be inferred from visual pixels or a generic 4/4 gap.
+    This function is pure and never chooses or moves a playback deadline.
+    """
+    measures = source["measures"]
+    context_index = max(
+        (index for index, measure in enumerate(measures)
+         if float(measure["start_beat"]) <= from_beat+1e-7),default=0)
+    fallback = float(source["practice_timeline"]["gap"]["duration_beats"])
+    if context_index >= len(measures):
+        return fallback
+    context = measures[context_index]
+    following = (measures[context_index+1]
+                 if context_index+1 < len(measures) else None)
+    return float(preparation_measure_descriptor(
+        context,0.0,source["staff_order"],
+        following_measure=following)["duration_beats"])
+
+
 def practice_timeline_descriptor(measures, duration_beats: float,
                                  staff_order=("right", "left")) -> dict:
     """Append preparation to a contiguous source grid spanning 0..duration."""

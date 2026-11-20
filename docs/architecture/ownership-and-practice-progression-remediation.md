@@ -534,6 +534,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - The existing core CI passed on `ea6f9432` ([run 44732402194](https://github.com/tpepels/piano_teacher/actions/runs/44732402194)), including the corrected static-decorator binding and the immutable continuation preview. The private guided-session alias removal is undergoing core verification.
 - Trigger the existing **unmodified production native matrix** using the workflow's `[native]` release-check opt-in: GDExtension compilation, embedded CPython/Verovio/MIDI, graphical playback/pause/retry, Moonlight/Peace Piece/Chopin and relocated package startup. No new tests. Physical USB/Bluetooth and acoustic-latency observations remain a separate manual gate.
 
+### Implementation checkpoint BN — move source-metrical retry rest lookup into notation ownership
+
+- Removed the engine's inline traversal of source measure dictionaries, fallback meter and pickup/following-measure resolution inside graphical Retry. The pure `notation.practice_timeline.retry_preparation_rest_beats` now obtains the exact original source-metrical rest; `PracticeEngine` passes only the selected source model and authored restart beat.
+- Eliminated the accidental local `selected` shadowing of the immutable teaching exposure in the rewind branch. No second scheduler or musical clock was created: `MusicalScheduler.reserved_retry_reverse` still computes the actual deadline.
+- This is especially relevant to pickup measures and changing time signatures. No new tests; existing end-to-end mixed-meter/glyph and native Retry acceptance remain required.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -2125,23 +2125,11 @@ class PracticeEngine:
             # interrupting the current graded take or clearing pause state.
             reverse_seconds = self.feedback_seconds
             if presentation_lead_seconds > 0:
-                source = self._source_model()
-                measures = source["measures"]
-                context = max(
-                    (index for index, measure in enumerate(measures)
-                     if float(measure["start_beat"]) <= target + 1e-7),
-                    default=0)
-                rest_beats = float(
-                    source["practice_timeline"]["gap"]["duration_beats"])
-                # Source-metre preparation may be a different length from
-                # the general repeat gap (e.g., a changing time signature).
-                if 0 <= context < len(measures):
-                    from .notation.practice_timeline import preparation_measure_descriptor
-                    selected = measures[context]
-                    following = measures[context + 1] if context+1 < len(measures) else None
-                    rest_beats = float(preparation_measure_descriptor(
-                        selected, 0.0, source["staff_order"],
-                        following_measure=following)["duration_beats"])
+                # Preparation silence belongs to source notation, never
+                # a generic 4/4 guess or a viewport-dependent deadline.
+                from .notation.practice_timeline import retry_preparation_rest_beats
+                rest_beats = retry_preparation_rest_beats(
+                    self._source_model(),target)
                 reverse_seconds = SCHEDULER.reserved_retry_reverse(
                     lead_seconds=presentation_lead_seconds,
                     rest_seconds=SCHEDULER.beats_seconds(
