@@ -1580,35 +1580,23 @@ class PracticeEngine:
         finally:
             self._playback_authorizing = False
 
-    def _next_count_in_beats(self) -> float:
-        """The one count-in bar a user Play or Resume gets now.
+    def _next_count_in(self) -> tuple[float,tuple[int,int]]:
+        plan = self.plan
+        return self.attempt_progression.next_count_in(
+            phrase=plan.active_phrase if plan is not None else None,
+            boundaries=plan.piece.bar_boundaries if plan is not None else (),
+            time_signatures=plan.piece.time_signatures if plan is not None else (),
+            bpm=float(plan.bpm) if plan is not None else 0.0,
+            start_from=self.open_from_beat,
+            already_active=self.running or self.visual_transport.paused,
+            current_bar_beats=self.count_in_bar_beats,
+            current_meter=tuple(self.count_in_meter))
 
-        One full bar of the starting measure at any tempo (scheduler count-in,
-        owner decision 2026-11-08). The renderer places an opening on an empty strip
-        exactly this far ahead of the playhead, so Play to first note is one
-        count-in bar and the score and graded deadlines stay identical.
-        """
-        if self.plan is None or self.plan.bpm <= 0:
-            return 0.0
-        if self.running or self.visual_transport.paused:
-            bar_beats = self.count_in_bar_beats
-        else:
-            phrase = self.plan.active_phrase
-            _, bar_beats, _ = self.attempt_progression.count_in_bar(
-                phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
-                time_signatures=self.plan.piece.time_signatures,
-                position=self.open_from_beat)
-        return SCHEDULER.count_in_beats(bar_beats,self.plan.bpm) if bar_beats > 0 else 0.0
+    def _next_count_in_beats(self) -> float:
+        return self._next_count_in()[0]
 
     def _next_count_in_meter(self) -> list[int]:
-        """The meter of that count-in bar (its syllables and pulses)."""
-        if self.plan is None or self.running or self.visual_transport.paused:
-            return list(self.count_in_meter)
-        _, _, meter = self.attempt_progression.count_in_bar(
-            phrase=self.plan.active_phrase, boundaries=self.plan.piece.bar_boundaries,
-            time_signatures=self.plan.piece.time_signatures,
-            position=self.open_from_beat)
-        return [int(meter[0]), int(meter[1])]
+        return list(self._next_count_in()[1])
 
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Continue only through the unified score-admission gate."""

@@ -94,6 +94,27 @@ class AttemptProgression:
             bar_beats = meter[0] * 4 / meter[1]
         return from_beat, bar_beats, meter
 
+    def next_count_in(self, *, phrase: Phrase | None, boundaries: tuple[float,...],
+                      time_signatures: tuple, bpm: float, start_from: float,
+                      already_active: bool, current_bar_beats: float,
+                      current_meter: tuple[int,int]) -> tuple[float, tuple[int,int]]:
+        """Return one count-in time AND meter from the same authored bar.
+
+        The backend and the graphical CountInPlan continue to use one
+        musical scheduling policy. A paused take reuses its original bar
+        rather than reselecting a meter from a later measure.
+        """
+        meter = tuple(current_meter)
+        if phrase is None or bpm <= 0.0:
+            return 0.0,meter
+        bar_beats = current_bar_beats
+        if not already_active:
+            _,bar_beats,meter = self.count_in_bar(
+                phrase=phrase,boundaries=boundaries,
+                time_signatures=time_signatures,position=start_from)
+        return ((SCHEDULER.count_in_beats(bar_beats,bpm)
+                 if bar_beats > 0 else 0.0),meter)
+
     def schedule_start(self, *, phrase: Phrase,
                        boundaries: tuple[float, ...],
                        time_signatures: tuple,

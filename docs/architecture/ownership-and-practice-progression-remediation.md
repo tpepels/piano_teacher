@@ -427,6 +427,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - `PracticeFlowCourseSession.execute` returns one frozen `FlowStepEffect` (typed Listen/Free/Tempo step, BPM, feedback text and next action). PracticeEngine applies that effect and no longer constructs rival labels for the same course decision. No new tests.
 - Core and native checks remain the integration gates for these owner migrations.
 
+### Implementation checkpoint BG — one authored next-count-in tuple from AttemptProgression
+
+- Removed the two independent Engine implementations of upcoming full-bar count-in duration and meter. `AttemptProgression.next_count_in` now returns one pair `(beats,meter)` from the selected original authored starting bar, reusing the already-active bar on Pause/Resume and preserving the existing scheduler/compound-meter calculation.
+- Backend snapshots and PlaybackSourceFacts use the same AttemptProgression bar-count authority; the engine's public getters are bounded projections without a second policy. No new tests or independent clock.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
