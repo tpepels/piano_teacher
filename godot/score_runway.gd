@@ -233,7 +233,7 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     # local score axis; Main feeds it the global minus next-stage origin.
     _future.present({
         "running":true,"paused":false,"phase":"playing",
-        "score_loop_enabled":false,"play_from_beat":0.0,
+        "play_from_beat":0.0,
         "hand":str(value.get("hand","both")),
         "practice_preparation":null},-50.0,-50.0)
     _next_poll_ms = 0

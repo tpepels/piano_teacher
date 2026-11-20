@@ -3,7 +3,7 @@ extends RefCounted
 ## piano_teacher/state_contract.py. Do not edit by hand.
 ## The versioned contract of the per-frame state snapshot.
 
-const VERSION := 3
+const VERSION := 4
 const STATIC_KEYS := ["import_warnings"]
 const SCHEMA := {
     "auto": ["bool"],
@@ -100,7 +100,6 @@ const SCHEMA := {
     "revision": ["number"],
     "running": ["bool"],
     "schema_version": ["number"],
-    "score_loop_enabled": ["bool"],
     "score_queue_next": ["dict", "null"],
     "scoring_available": ["bool"],
     "seek_available": ["bool"],

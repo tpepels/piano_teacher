@@ -321,7 +321,6 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "visual_scroll_speed": timing.visual_motion[1], "visual_gap_beats": timing.visual_gap_beats,
         "practice_timeline": _payload(timing.practice_timeline),
         "practice_preparation": _payload(timing.practice_preparation),
-        "score_loop_enabled": snapshot.mode == "practice" and lesson.kind != "perform",
         "paused": timing.paused, "awaiting_score_revision": timing.awaiting_score_revision,
         "count_in_beats": timing.count_in_beats if timing.running else 0,
         "count_in_bar_beats": timing.count_in_bar_beats, "count_in_meter": list(timing.count_in_meter),

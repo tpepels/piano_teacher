@@ -174,9 +174,59 @@ revision changes to invalidate old synthetic WAVs. A fresh complete CI
 result is required before accepting this correction. Physical and clean-machine
 acceptance remain separate.
 
+### Follow-up: legacy architecture dependency audit — 2026-11-20
+
+The review traced the Python engine, embedded request queue, score admission
+gateway, native stream controller, state projection, fixed/mapped assessment
+policies, real native score tests, and current packaging. A source sweep covered
+all 164 Python product modules and the 147 Godot scripts present before the
+unused coaching card was deleted. The current product does not use a second
+HTTP/UDP engine, page-image renderer, separate note-assignment policy, or
+second MIDI/graded clock.
+
+Remediation after the first integrated verification:
+
+- `be98b159`: native TAKE_WITHOUT_SCORE diagnostics no longer consult the
+  headless-only `score_queue_next` projection; feedback requires the exact
+  canonical source-note map; an unreferenced coaching card and its script are
+  deleted; unsupported expressive marks are reported as unrendered instead
+  of promising a non-existent page renderer. The empty-lesson snapshot no
+  longer advertises an obsolete strategy named `legacy`.
+- `c8808e2b`: core CI caught a real remaining caller of the removed fixed
+  recovery functions. Fixed and tempo-mapped recovery now reduce canonical
+  scored observations with the same source-measure threshold rule, retaining
+  only clock-specific conversion and the narrower warm-up window. Core CI
+  passed on this revision; its native-production job requires a final result.
+- The following source commit removes the unused `score_loop_enabled` state
+  flag. The native view derives its existing authored-timeline validation from
+  current `mode` and `kind`. The shared versioned state schema advances
+  to v4 and is regenerated on both sides.
+
+Historical learning progress, retained evidence, old configuration keys and
+explicit headless test projections remain readable by design. They are not
+alternative desktop renderers, graders or transport owners. Existing product
+behaviour tests were retained; no new test modules, architecture-shape tests,
+or fake playback implementations were introduced.
+
+**Largest current product sources before this final v4 cleanup:**
+
+| Source | Lines | GitHub blob |
+| --- | ---: | ---: |
+| `piano_teacher/server.py` | 2,783 | 151,389 bytes |
+| `piano_teacher/notation/lesson.py` | 999 | 51,214 bytes |
+| `piano_teacher/learning_ledger.py` | 733 | 45,611 bytes |
+
+The engine facade remains oversized (168 methods), despite the extracted
+owners. Its source size is outstanding maintainability debt; this audit did not
+establish a competing transport or assessment owner inside it. Physical
+MIDI/audio and visual acceptance still require the piano and a desktop.
+
 ## Phase status and remaining acceptance
 
-### Architecture re-audit 2026-11-20
+### Historical architecture re-audit — pre-correction log
+
+The statements of remaining A1–A6 implementation below describe intermediate
+commits; they do not supersede the latest dependency audit above.
 
 Remediation execution: A1 now validates authored and sounding bounds from the
 existing semantic source contract. Targeted Python and all native checks pass;
@@ -285,8 +335,8 @@ above; it remains historical evidence for that source.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | A1–A6 implemented in `96c895e7` through `c11517f9`; `ad1055ac` corrected obsolete acceptance diagnostics. Combined core/native/package workflow passed at `ad1055ac`. A follow-up helper-ownership cleanup requires a new full CI result. Physical acceptance remains open. |
-| Phase 6 — software and physical verification | Full embedded/native and relocated standalone software workflow passed on `ad1055ac` ([run 44796955201](https://github.com/tpepels/piano_teacher/actions/runs/44796955201)). Helper-ownership follow-up needs a fresh full CI run. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
+| Phase 5 — ownership decomposition | A1–A6 and their integration diagnostics implemented. Follow-up dependency cleanup and `be98b159`/`c8808e2b` remove remaining old-model consumers and consolidate rolling recovery. The state-loop cleanup is in the next commit. Core CI passed on `c8808e2b`; a full native/package rerun is required for the final source. |
+| Phase 6 — software and physical verification | Full embedded/native and relocated standalone software workflow last passed on `26871f0a` ([run 44801555891](https://github.com/tpepels/piano_teacher/actions/runs/44801555891)). New architecture cleanup requires its own complete result. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen

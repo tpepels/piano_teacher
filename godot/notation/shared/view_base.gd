@@ -22,7 +22,6 @@ var clock_beat := 0.0
 var play_from_beat := 0.0
 var count_in_beats := 0.0
 var visual_scroll_beat := 0.0
-var score_loop_enabled := false
 var practice_timeline: Dictionary = {}
 var practice_preparation: Dictionary = {}
 var practice_contract_error := ""
@@ -140,10 +139,11 @@ func _get_tooltip(_at_position: Vector2) -> String:
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     var next_clock: float = transport_beat
     var next_visual: float = visual_beat if is_finite(visual_beat) else transport_beat + float(state.get("play_from_beat", 0.0))
-    var next_loop: bool = bool(state.get("score_loop_enabled", false))
+    var timed_practice: bool = str(state.get("mode","")) == "practice" and \
+        str(state.get("kind","")) != "perform"
     var next_preparation: Dictionary = state["practice_preparation"].duplicate(true) if state.get("practice_preparation") is Dictionary else {}
     var contract_error := ""
-    if next_loop:
+    if timed_practice:
         contract_error = _practice_timeline_error()
         if contract_error.is_empty() and state.get("practice_timeline",practice_timeline) != practice_timeline:
             contract_error = "Practice timeline differs from the loaded score"
@@ -159,7 +159,7 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
     if next_running or next_paused or absf(float(state.get("visual_scroll_speed",0.0))) > .000001:
         density_locked = true
     if (absf(clock_beat-next_clock) > .00001 or
-        absf(visual_scroll_beat-next_visual) > .00001 or score_loop_enabled != next_loop or
+        absf(visual_scroll_beat-next_visual) > .00001 or
         practice_preparation != next_preparation or practice_contract_error != contract_error or
         absf(play_from_beat-next_from) > .00001 or
         absf(count_in_beats-next_count) > .00001 or
@@ -168,7 +168,6 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
         paused != next_paused):
         clock_beat = next_clock
         visual_scroll_beat = next_visual
-        score_loop_enabled = next_loop
         practice_preparation = next_preparation
         practice_contract_error = contract_error
         play_from_beat = next_from

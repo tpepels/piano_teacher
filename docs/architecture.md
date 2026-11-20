@@ -390,6 +390,54 @@ The review covers the critical production owners and the known dependency
 clusters. It cannot prove absence of every possible defect. The refactored
 source requires a new full CI run and physical acceptance remains separate.
 
+### Legacy-dependency review — 2026-11-20
+
+The production paths were checked against the current ownership table above.
+The runtime has one in-process Godot–Python command transport, one backend
+playback authorization owner, one native score/immutable FIFO and one musical
+grading clock. The forward-scrolling visual timeline projects those authorized
+epochs but cannot grade or admit MIDI.
+
+Source-level findings and changes:
+
+1. The old `score_queue_next` plan remains an explicit headless fixture
+   projection in Python. The Godot stream-binding runtime no longer reads
+   it: missing-score diagnostics now report the actual backend segment
+   identity. The shared snapshot schema can still describe the headless
+   value without choosing it for production admission.
+2. Assessment ink rejects layouts without `source-note-v1` bindings.
+   The former pitch/onset-nearest fallback has been removed; only the
+   canonical note-to-head mapping can colour music.
+3. Fixed-BPM and tempo-mapped recovery now have one reducer over already
+   assessed wrong/missed notes. Their time conversions remain separate and
+   use the same source grid; no additional scorer, progression state, or
+   second recovery clock was introduced. Warm-ups retain their own bounded
+   source window as before.
+4. The obsolete, invisible coaching card and its standalone GDScript were
+   removed. The current native ink/feedback and gameplay rail remain.
+5. The old `score_loop_enabled` state field carried no actual loop authority:
+   the base renderer used it only to gate practice-timeline validation and
+   an otherwise redundant redraw. The validation now derives from accepted
+   `mode == "practice"` and `kind != "perform"`; the Python/Godot
+   state contract advances together to v4.
+6. Unsupported authored expression classes continue to be recorded under
+   `unrendered_expressions`. No complete-page or alternate renderer is
+   available or selected. Native source fidelity is not silently claimed
+   where an authentic glyph cannot be drawn.
+
+The retained migrations in the library, progress repository and learning
+ledger safeguard pre-upgrade saved data; they do not govern new lesson
+decisions. The explicit headless adapter is restricted to no-presentation
+testing. The development MCP toolkit is not enabled by the project and is
+excluded from standalone package assembly.
+
+This source audit, including the production Python/GDScript keyword and
+caller inspection, is evidence about known paths, not a formal proof against
+all dynamic interactions. The main `PracticeEngine` facade is still 2,783
+lines and declares 168 methods; it is the largest remaining maintainability
+risk. CI and instrument-level acceptance are reported independently in the
+roadmap. No new tests or parallel services were added.
+
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic
 found the following remaining work. No production code or tests were changed
