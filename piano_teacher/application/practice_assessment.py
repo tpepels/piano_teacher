@@ -105,6 +105,31 @@ class PracticeAssessmentPolicies:
     def select(self, tempo: TempoMap | None) -> PracticeTimingPolicy:
         return self.fixed if tempo is None else self.mapped
 
+    def live_projection(self, phrase: Phrase, *, hand: str, bpm: float,
+                        played: Sequence[PlayedNote], from_beat: float,
+                        elapsed_seconds: float,
+                        bar_boundaries: Sequence[float], layout: dict,
+                        tempo: TempoMap | None) -> list[dict]:
+        """Project live note status with the one selected grading policy.
+
+        A held key inside the grader's release tolerance remains pending
+        in the UI. This does not change the eventual graded release verdict
+        or any durable assessment.
+        """
+        try:
+            marks = self.select(tempo).live(
+                phrase, hand=hand, bpm=bpm, played=played,
+                from_beat=from_beat, elapsed_seconds=elapsed_seconds,
+                bar_boundaries=bar_boundaries, layout=layout, tempo=tempo)
+        except (ValueError, RuntimeError, KeyError):
+            return []
+        for mark in marks:
+            until = mark.pop("hold_tolerance_until", None)
+            if (until is not None and elapsed_seconds <= until
+                    and (mark.get("dimensions") or {}).get("release") == "unreleased"):
+                mark["dimensions"] = {**mark["dimensions"], "release": None}
+        return marks
+
     @staticmethod
     def project(result: Assessment, phrase: Phrase, *, bpm: float,
                 layout: dict, from_beat: float, tempo: TempoMap | None) -> dict:

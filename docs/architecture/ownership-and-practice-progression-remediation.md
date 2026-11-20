@@ -336,6 +336,12 @@
 - This is a concrete **Phase 6 software acceptance result at that exact revision**, not acceptance of subsequent Phase 5 refactors or of a physical instrument/audio path. The improved runner now tests the extracted archive/launcher and continues through all independent scenarios even if one fails.
 - A new full native run is being requested against current `main` to cover the subsequent event input, preflight, continuous-rest and queue-ownership changes; the CA49/USB/Bluetooth/speaker checklist stays unchecked.
 
+### Implementation checkpoint AR — one live grading interpretation
+
+- Moved live grading policy selection, per-note mark calculation error handling and pending-held-release projection out of `PracticeEngine._live_feedback` into the established `PracticeAssessmentPolicies.live_projection` owner. The engine only captures the currently bound score, source hand, tempo map, MIDI note snapshot and elapsed time, then requests the existing grading policy's projection.
+- No alternative grader was created. The same fixed/tempo-mapped policy and hold tolerance are used; `LiveAssessmentPublisher` still alone emits changed per-note feedback events, and final verdict/mastery remains with assessment settlement.
+- This reduces another backend policy responsibility inside the application facade. No tests added; existing core and native checks remain required.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -3242,32 +3242,20 @@ class PracticeEngine:
         return list(self.live_assessment.latest_marks) if self.running else []
 
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
-        """Only publish source-bound live marks with a current engraved map."""
-        p = self.plan
-        if p is None or self.preview_only or not self.running:
+        """Read the current cached source and ask the single grading owner."""
+        plan = self.plan
+        if plan is None or self.preview_only or not self.running:
             return []
-        engraving = self.score_artifacts.cached_layout(self._score_selection())
-        if engraving is None:
+        engraved = self.score_artifacts.cached_layout(self._score_selection())
+        if engraved is None:
             return []
-        tempo_map = self._active_tempo_map()
-        try:
-            marks = self.assessment_policies.select(tempo_map).live(
-                p.active_phrase, hand=p.hand, bpm=p.bpm,
-                played=self.recorder.presses if self.recorder else [],
-                from_beat=self.visual_transport.play_from_beat, elapsed_seconds=elapsed_seconds,
-                bar_boundaries=p.piece.bar_boundaries,
-                layout=engraving.layout, tempo=tempo_map)
-        except (ValueError, RuntimeError, KeyError):
-            return []
-        # Live display only: a key still held within the grader's own hold
-        # tolerance has no release verdict yet (pending), not "unreleased".
-        # The grading status and the final take assessment are untouched.
-        for mark in marks:
-            until = mark.pop("hold_tolerance_until", None)
-            if (until is not None and elapsed_seconds <= until
-                    and (mark.get("dimensions") or {}).get("release") == "unreleased"):
-                mark["dimensions"] = {**mark["dimensions"], "release": None}
-        return marks
+        return self.assessment_policies.live_projection(
+            plan.active_phrase, hand=plan.hand, bpm=plan.bpm,
+            played=self.recorder.presses if self.recorder else (),
+            from_beat=self.visual_transport.play_from_beat,
+            elapsed_seconds=elapsed_seconds,
+            bar_boundaries=plan.piece.bar_boundaries,
+            layout=engraved.layout, tempo=self._active_tempo_map())
 
     def advance_clock(self) -> int:
         """Advance scheduled transitions without waiting for a UI state request.
