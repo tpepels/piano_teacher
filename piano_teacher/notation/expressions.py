@@ -1,18 +1,19 @@
-"""Timed, non-assessed source MusicXML expressive marks for native engraving.
+"""Timed non-assessed expression marks for native MIDI lesson engraving.
 
-Every mark comes from the projected *lesson* MusicXML, never from the
-unfiltered imported page. Musical beat positions share the scoring clock,
-but these decorations never introduce a graded note or change MIDI timing.
+The only input is the canonical generated lesson MusicXML. Decorations
+never create a graded attack or a second musical clock.
 """
 from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
 from .lesson import DIVISIONS, LessonScore
-from .source_annotations import (
-    NATIVE_ARTICULATIONS, NATIVE_DYNAMICS, NATIVE_PEDAL_TYPES,
-    NATIVE_HAIRPIN_TYPES,
-)
+# Genuine native glyph support. Source MusicXML ingestion was retired, so
+# this native model no longer imports the deleted source-annotation parser.
+NATIVE_ARTICULATIONS = frozenset({"staccato", "tenuto", "accent"})
+NATIVE_DYNAMICS = frozenset({"p", "pp", "ppp", "mp", "mf", "f", "ff", "fff"})
+NATIVE_PEDAL_TYPES = frozenset({"start", "stop"})
+NATIVE_HAIRPIN_TYPES = frozenset({"crescendo", "diminuendo", "stop"})
 
 
 def native_expressions(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
