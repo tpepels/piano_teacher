@@ -500,8 +500,10 @@ advertise this separate research capability as a user import format.
 
 160 Python application modules were inspected for deleted-module imports
 and stale `source_musicxml` uses; no remaining application reference was
-found outside the isolated research adapters. This static review is distinct
-from native/relocated-package CI and physical piano acceptance.
+found outside the isolated research adapters. The subsequent source-only
+dependency and engraver cleanup passed combined core, native source journeys
+and a relocated package boot on `23dd5649` (GitHub Actions run
+44836313449). Physical MIDI/audio/visual acceptance is still separate.
 
 Architecture review and software execution are distinct from physical acceptance.
 See [development](development.md#verification-and-acceptance) and the dated

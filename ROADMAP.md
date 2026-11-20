@@ -251,9 +251,14 @@ IDs, uses Verovio, and no longer requires `music21` as a package dependency.
 Existing MIDI import tests have their return-value expectations updated; no
 new tests were added.
 
-This architecture cleanup still needs both CI jobs to pass on the
-final commit. Previous passing software results do not certify physical
-Kawai CA49 MIDI/audio, scrolling appearance, or clean-machine desktop use.
+Combined software verification passed on `23dd5649`:
+[GitHub Actions run 44836313449](https://github.com/tpepels/piano_teacher/actions/runs/44836313449).
+Core: 103 passed, 4 skipped; Godot startup and all four behaviour suites
+passed. Native: embedded Python registration, isolated two-hand fixture,
+production Play/Pause/Resume, Moonlight Sonata Listen/retry/navigation,
+Peace Piece, Chopin Nocturne, and relocated standalone package boot
+all passed. This does not certify physical Kawai CA49 MIDI/audio,
+scrolling appearance, or clean-machine desktop use.
 
 ## Phase status and remaining acceptance
 
@@ -369,8 +374,8 @@ above; it remains historical evidence for that source.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | A1–A6 implemented. Later commits `be98b159`, `c8808e2b`, `5f685890`, `a4525f0c`, `d7ee11d8` and `0608b3fb` remove old note-identity, rolling recovery, score-loop, source-XML and module-import paths. The latest import seam/runtime dependency changes still need full integration verification. |
-| Phase 6 — software and physical verification | Last fully green core plus native/relocated package run before importer changes: `8330f5c6` ([run 44822877089](https://github.com/tpepels/piano_teacher/actions/runs/44822877089)). Core CI passed on `0608b3fb`; final import/runtime cleanup requires its own core/native/package run. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
+| Phase 5 — ownership decomposition | A1–A6 implemented. Later commits `be98b159`, `c8808e2b`, `5f685890`, `a4525f0c`, `d7ee11d8`, `0608b3fb`, `acf40e7f` and `23dd5649` remove old score-identity, rolling recovery, state-loop, XML import, music21 and duplicate score-object paths. Full source-era core/native/package acceptance passed on `23dd5649`; no second product renderer or scorer is retained. |
+| Phase 6 — software and physical verification | Full core, embedded/native repertoire journeys and relocated standalone package boot passed on `23dd5649` ([run 44836313449](https://github.com/tpepels/piano_teacher/actions/runs/44836313449)). 103 Python tests passed, 4 skipped. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen
