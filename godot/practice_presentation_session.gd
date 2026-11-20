@@ -42,8 +42,8 @@ func present_frame(state: Dictionary, beat: float, world: float) -> void:
     # Single native stream presentation owner. The frame coordinator
     # consumes only visual effects; it must never attempt another queue
     # lifecycle reconciliation from the same or stale backend snapshot.
-    if not bool(state.get("loaded",false)):
-        return
+    # Unloaded/reloading states still have previously exposed clips that
+    # must leave by the same forward world coordinate.
     var renderer = practice_view.stage.renderer
     if renderer == null or not is_instance_valid(renderer):
         return
@@ -92,6 +92,7 @@ func accept(state: Dictionary, request_midpoint_ms: int,
             var new_renderer = practice_view.stage.renderer
             new_renderer.present(
                 state,beat,world-float(new_renderer.runway_origin_beat))
-        practice_view.stage.renderer.present_flow(world,state,beat)
+        # The next frame reconciles stream ink exactly once. Snapshot
+        # acceptance only updates the authoritative model and admission ACK.
     elif admission != null:
         admission.observe(state,received_ms)

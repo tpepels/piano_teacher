@@ -293,6 +293,13 @@
 - Main samples `visual_world` once per frame, then passes that same coordinate to both the presentation owner and outgoing-score runway instead of separately projecting the world twice. The graded transport remains the separate Python-owned musical clock.
 - This removes conflicting queue/arm lifecycle evaluation from the frame-effects component. No additional tests. Native Play/Pause/Resume and full package acceptance must confirm the changed frame ordering.
 
+### Implementation checkpoint AK — current Retry journey and single frame authority
+
+- Native run [44640770507](https://github.com/tpepels/piano_teacher/actions/runs/44640770507) passed compiled bridge, embedded source, native Play/Pause/Resume and immutable world-flow checks; Moonlight failed because the old journey waited for removed `reverse/preparing` backend phases, although the new graphical coordinator had already authorized transport 3 and future-only source.
+- Migrated the existing Moonlight acceptance route to the active graphical contract: monotonic world, authored rest, distinct committed transport identity, exact score revision, one authorized CountInPlan, visible and scheduled-audio count-in, and source admitted strictly to the right or on an explicitly empty strip with an immutable geometry witness. Listen/stage navigation checks remain intact.
+- Removed the second snapshot-time `present_flow` invocation from `PracticePresentationSession.accept`. Stream reconciliation now happens once in `present_frame`; unloaded/reloading states continue projecting old clips until their natural expiry, preserving the continuous bar. No new test files were added.
+- Re-run the existing native journey and package audit. No physical CA49/audio measurement has been conducted.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

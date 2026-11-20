@@ -17,10 +17,10 @@ var paused_serial := -1
 var retry_world_start := NAN
 var paused_head_id := ""
 var paused_head_x := NAN
-var retry_reversed := false
-var retry_prepared := false
 var retry_countdown_seen := false
-var retry_silent_lead_seen := false
+var retry_audio_seen := false
+var retry_audio_at_request := -1
+var retry_rest_seen := false
 var resumed_bpm := 0.0
 var selected_bpm := 0.0
 var selected_revision := -1
@@ -178,69 +178,104 @@ func _process(_delta: float) -> bool:
             if not _press(app.practice_view.practice_retry_button,"Retry"):
                 return false
             retry_world_start = view.stream_world_beat
-            _advance("retry_reverse")
-        "retry_reverse":
-            var prep: Variant = state.get("practice_preparation")
-            if prep is Dictionary and str(prep.get("phase",""))=="reverse":
-                retry_reversed = true
-                if view.stream_world_beat < retry_world_start:
-                    _fail("Retry reversed the display rather than scheduling new ink")
-                    return true
-            if retry_reversed and prep is Dictionary and                     str(prep.get("phase",""))=="preparing":
-                retry_prepared = true
-                _advance("retry_rest")
-        "retry_rest":
-            if str(state.get("phase","")) in ["recovering","feedback"] and                     not bool(state.get("paused",false)):
-                if view.stream_world_beat < retry_world_start:
-                    _fail("Retry rest reversed the perpetual display")
-                    return true
-                if app.visual_transport_clock.retry_preparing(now):
-                    # A retry may have a longer silent preparation lead.
-                    # The owner decision of 2026-11-08 requires exactly one
-                    # count-in bar immediately before the next graded take.
-                    var retry_beat: float = app.visual_transport_clock.retry_count_in_beat(now)
-                    var meter: int = maxi(1,int(round(float(
-                        state.get("count_in_bar_beats",4)))))
-                    var count_visible: bool = app.practice_view.stage.count_in.visible
-                    if retry_beat < -float(meter)-0.12:
-                        retry_silent_lead_seen = true
-                        if count_visible:
-                            _fail("Retry spoke/displayed an extra count-in before the final bar")
-                            return true
-                    elif retry_beat > -float(meter)+0.12 and retry_beat < -0.12:
-                        if not count_visible:
-                            _fail("Retry final count-in bar is not visible")
-                            return true
-                        retry_countdown_seen = true
-            if not bool(state.get("running",false)):
+            var voice = app.get_node_or_null("CountInVoicePlayer")
+            retry_audio_at_request = int(app.countin_audio.click_cues_total) + \
+                (int(voice.spoken_cues_total) if voice != null else 0)
+            _advance("retry_wait")
+        "retry_wait":
+            # One immutable playback transition now owns Retry. The former
+            # server-side reverse/preparing stages are not a second clock or
+            # a prerequisite for admission. The world clock moves forward
+            # while an authored rest and one final count-in precede new ink.
+            if view.stream_world_beat+0.0001 < retry_world_start:
+                _fail("Retry moved the perpetual score world backwards")
+                return true
+            for item in view.stream_passes:
+                if str(item.get("kind","")) == "rest" and \
+                        float(item.get("world_origin",-INF)) >= retry_world_start-5.0:
+                    retry_rest_seen = true
+            var transport: int = int(state.get("transport_id",-1))
+            if transport <= initial_transport or not bool(state.get("running",false)):
                 return false
-            restarted_transport = int(state.get("transport_id",-1))
-            if restarted_transport <= initial_transport or not retry_prepared or                     int(state.get("revision",-1)) != initial_revision:
-                _fail("Retry changed the score or skipped the full rest")
+            restarted_transport = transport
+            if int(state.get("revision",-1)) != initial_revision:
+                _fail("Retry re-engraved or replaced the selected source")
                 return true
-            if not retry_countdown_seen:
-                _fail("Retry began without displaying its final one-bar count-in")
+            var playback: Variant = state.get("playback_timeline")
+            var current: Variant = (playback.get("current") if playback is Dictionary
+                else null)
+            if not current is Dictionary or \
+                    int(current.get("transport_id",-1)) != restarted_transport:
+                return false
+            var count_plan: Variant = current.get("count_in_plan")
+            if not count_plan is Dictionary or \
+                    float(count_plan.get("beats",0.0)) <= 0.0:
+                _fail("Retry lacks its single authorized count-in plan")
                 return true
+            if str(state.get("phase","")) == "count_in":
+                retry_countdown_seen = retry_countdown_seen or \
+                    app.practice_view.stage.count_in.visible
+                var voice = app.get_node_or_null("CountInVoicePlayer")
+                retry_audio_seen = retry_audio_seen or \
+                    (int(app.countin_audio.click_cues_total) + \
+                    (int(voice.spoken_cues_total) if voice != null else 0) > \
+                    retry_audio_at_request)
+                return false
+            if str(state.get("phase","")) != "playing":
+                return false
+            # A second authorized attempt must not silently play without
+            # a displayed final count-in or scheduled audible cue.
+            if not retry_countdown_seen or not retry_audio_seen:
+                _fail("Retry played without its single visible/audible count-in")
+                return true
+            var expected: String = "%s|%d|%d|practice" % [
+                str(state.get("piece_fingerprint","")),
+                initial_revision,restarted_transport]
             var reserved_match := false
             var wrong_side := false
+            var last_rest_end := -INF
             for item in view.stream_passes:
-                if str(item.get("kind","source")) != "source":
+                if str(item.get("kind","")) != "rest":
                     continue
-                var take_key: String = str(item.get("take_key",""))
-                if take_key.contains("|%d|" % restarted_transport) and \
-                        not bool(item.get("pending",false)):
-                    reserved_match = true
-                    # Real note ink must be attached to one immutable
-                    # source position. A reused offscreen candidate is
-                    # allowed; a new serial is not required on Retry.
-                    wrong_side = wrong_side or \
-                        float(item["world_origin"])+float(item["source_floor"]) < \
-                        retry_world_start + 0.25
-            if not _ready_score() or not reserved_match or wrong_side:
-                _fail("Retry lacks a matched future-only source reservation " +
-                    "ready=%s matching=%s early=%s serial=%d before=%d" % [
-                    str(_ready_score()),str(reserved_match),str(wrong_side),
-                    view.admission_queue_generation(),paused_serial])
+                var rest_end: float = float(item.get("world_origin",0.0)) + \
+                    float(item.get("source_ceiling",0.0))
+                if rest_end <= view.stream_world_beat+8.0:
+                    last_rest_end = maxf(last_rest_end,rest_end)
+            for item in view.stream_passes:
+                if str(item.get("kind","source")) != "source" or \
+                        str(item.get("take_key","")) != expected or \
+                        bool(item.get("pending",false)):
+                    continue
+                reserved_match = true
+                var source_at: float = float(item["world_origin"]) + \
+                    float(item.get("source_floor",0.0))
+                wrong_side = wrong_side or source_at <= retry_world_start+0.25
+                var density: float = float(item.get("admitted_density",NAN))
+                var gap: float = float(item.get("admitted_staff_gap",NAN))
+                var world_at: float = float(item.get("admitted_world",NAN))
+                var playhead: float = float(item.get("admitted_playhead_x",NAN))
+                var viewport_width: float = float(item.get("admitted_viewport_width",NAN))
+                if not (is_finite(density) and density > 0.0 and \
+                        is_finite(gap) and is_finite(world_at) and \
+                        is_finite(playhead) and is_finite(viewport_width)):
+                    wrong_side = true
+                    continue
+                var clip: Vector2 = \
+                    preload("res://score_stream_admission.gd").clip_bounds(
+                        item,density,gap,view.timeline.duration_beats)
+                var admitted_left: float = playhead + \
+                    (float(item["world_origin"])-world_at)*density + clip.x
+                wrong_side = wrong_side or \
+                    (admitted_left <= viewport_width and \
+                    not bool(item.get("admitted_on_empty_strip",false)))
+                if last_rest_end > -INF:
+                    wrong_side = wrong_side or source_at < last_rest_end-0.001
+            if not _ready_score() or not reserved_match or wrong_side or \
+                    not retry_rest_seen:
+                _fail("Retry lacks a bounded future source and full rest " + \
+                    "ready=%s matched=%s early=%s rest=%s" % [
+                    str(_ready_score()),str(reserved_match),
+                    str(wrong_side),str(retry_rest_seen)])
                 return true
             if not _press(app.practice_view.listen_button,"Listen"):
                 return false
