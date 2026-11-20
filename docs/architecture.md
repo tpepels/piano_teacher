@@ -5,6 +5,9 @@
 This document is the current technical overview; [development](development.md)
 covers operation and acceptance, and [reference](reference.md) covers fingering,
 learning evidence, privacy and research limitations.
+The ownership descriptions are the required contracts. The
+[current source audit](#remaining-work--source-audit-2026-11-20) records
+remaining deviations; the earlier Phase 5 completion claim is superseded.
 
 ## One desktop runtime
 
@@ -295,6 +298,44 @@ Detached snapshots carry explicit facts/read ports; they cannot mutate the live
 plan, recorder, renderer or clock. Source/fingering installation similarly uses
 an immutable generation/fingerprint/original-notes identity and a validated
 install effect; a late correction cannot replace another source.
+
+## Remaining work — source audit 2026-11-20
+
+Audited implementation: `640a77f5`. Read-only implementation review, a Python
+import-graph inspection and an existing real-MIDI/public-command diagnostic
+found the following remaining work. No production code or tests were changed
+by this audit. Priority reflects demonstrated software consequences versus
+structural debt; physical rendering and instrument acceptance remain separate.
+
+| ID / priority | Remaining work and evidence | Required ownership outcome |
+| --- | --- | --- |
+| A1 / high | **Unify authored and sounding range contracts at admission.** [Python playback facts](../piano_teacher/server.py#L329) use the complete sounding endpoint; [lesson snapshots](../piano_teacher/application/lesson_snapshot.py#L29) publish authored duration. The [Godot admission guard](../godot/score_admission_gateway.gd#L111) incorrectly requires equality. An existing one-bar MIDI fixture with a held ending publishes 4 and 6 respectively, so that guard refuses admission. Accepted state reaches the gateway unchanged. | Carry both meanings explicitly from the selected source and validate prepared coverage against the correct endpoint. Keep the full release and the authored four-bar window limit. Never fix the disagreement by truncating the music. |
+| A2 / high | **Preserve admitted source crops on resize.** [View resize](../godot/notation/native/view.gd#L213) calls [pool resize](../godot/notation/native/retained_notation_pool.gd#L65), which rewrites source windows by pool-array position. [Admission](../godot/notation/native/stream_lifecycle.gd#L122) assigns those same nodes the ledger's context/Resume-specific clips. Resizing can therefore recompile a different source interval under an unchanged admitted ledger record. This is a source-level mutation path, not a claimed visual reproduction. | Stream binding remains authoritative for each allocated node's crop. Pool growth/reflow must preserve bound windows and exposed geometry, and only prepare unbound capacity. |
+| A3 / medium | **Finish lifecycle ownership transfers from the Python facade.** [Exposure installation](../piano_teacher/server.py#L1064) writes transport opening/rewind and attempt review fields directly. [Settlement publication](../piano_teacher/server.py#L1299) clears PlaybackSession's score wait; [transition execution](../piano_teacher/server.py#L2294) mutates the transport preparation dictionary and visual offset. [PlaybackSession](../piano_teacher/application/playback_session.py#L287) also clears AttemptRuntime fields directly. | Give VisualTransport, PlaybackSession, AttemptRuntime and GuidedSession semantic operations for their own lifecycle mutations. Keep the facade's lock/composition role without creating another state holder or moving the same field bag elsewhere. |
+| A4 / medium | **Remove transition execution from snapshot reads.** [State serialization](../piano_teacher/server.py#L2545) calls the same mutating update as [the clock worker](../piano_teacher/server.py#L2507). This is one serialized clock, but two entry paths for grading, settlement, device polling and continuation side effects; the source explicitly retains a compatibility poll route. | The existing worker/command execution boundary advances transitions. Snapshot construction reads a frozen accepted state and cannot settle a take or start its successor. |
+| A5 / medium | **Break deferred dependency cycles and private helper coupling.** [Statistics](../piano_teacher/learning_statistics.py#L285) imports its [metrics module](../piano_teacher/learning_statistics_metrics.py#L8), which imports private helpers back. [Tuplet extraction](../piano_teacher/notation/assets/tuplets.py#L460) calls [recovery](../piano_teacher/notation/assets/tuplet_recovery.py#L109), which imports the extractor back. Course/generator modules also form a deferred cycle; [PracticeWindow](../piano_teacher/practice_windows.py#L16) imports the alternate curriculum's private source index. Type-checking-only edges were excluded from these findings. There is no immediate top-level import failure. | Put shared source indexes/contracts below curriculum policies, and give statistics/tuplet recovery one-way dependencies. Preserve existing algorithms and avoid a duplicate matcher, planner or source index. |
+| A6 / lower | **Close remaining private request-state access.** [Admission](../godot/score_admission_gateway.gd#L275) and [preloading](../godot/score_runway.gd#L303) repeatedly inspect [InProcessRequest's](../godot/inprocess_request.gd#L8) private pending ID to decide timeout/reconciliation/cancellation behaviour. | The request owner exposes pending/completion/cancellation semantics; callers do not depend on its storage representation. No current learner-visible failure was established for this item. |
+
+Lower-priority cleanup: repository-wide caller inspection found unused native
+mutation facades such as [append_source_take](../godot/notation/native/view.gd#L389)
+and [arm_stream_take](../godot/notation/native/view.gd#L457). Review these against
+the supported API, then remove obsolete internal admission/compensation paths
+while keeping the existing executor as the sole production entry.
+
+The earlier extraction is substantive: Main composes application sessions,
+PracticeScreen separates chrome from interaction, glyph assets/masks are
+separate, and ScoreStreamController delegates binding/recovery and retained
+resource lifetime. This audit found no second production score ledger or
+independent progression clock in those paths. File size alone does not justify
+another extraction. Durable assessment/progress transactions already live in
+AttemptSettlement; A3 concerns remaining lifecycle writers and publication.
+
+Diagnostic evidence: `debug-sessions/practice-completion/architecture-range-probe.log`
+records actual Python command values for A1. A2–A6 are source-review findings.
+The prior passing CI/native/package record remains valid for its exercised
+scenarios; it does not close these newly identified gaps. Address A1/A2 first,
+then A3/A4, followed by A5/A6 and obsolete-port cleanup. Keep CI focused on
+player behaviour rather than adding architecture-shape tests.
 
 Architecture review and software execution are distinct from physical acceptance.
 See [development](development.md#verification-and-acceptance) and the dated

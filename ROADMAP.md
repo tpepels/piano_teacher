@@ -140,6 +140,32 @@ acceptance remain unverified.
 
 ## Phase status and remaining acceptance
 
+### Architecture re-audit 2026-11-20
+
+Implementation audited at `640a77f5`. The prior Phase 5 completion assessment
+was too broad and is reopened. The [active audit](docs/architecture.md#remaining-work--source-audit-2026-11-20)
+records six concrete remaining items, priorities and intended owners:
+
+1. A1: authored-versus-sounding endpoint disagreement can refuse desktop
+   admission for a cross-bar held note. Actual existing MIDI/public-command
+   diagnostic publishes 4 versus 6 beats; the inspected Godot guard rejects it.
+2. A2: viewport resizing can rewrite a retained node's source crop outside its
+   admitted immutable stream binding. Source mutation path confirmed; physical
+   appearance has not been observed in this audit.
+3. A3: remaining Engine/PlaybackSession writes bypass transport, attempt and
+   guided lifecycle owners; finish those transfers through semantic operations.
+4. A4: snapshot reads still call the mutating transition loop alongside the
+   existing worker; remove the compatibility advancement path.
+5. A5: deferred statistics, tuplet and course/generator cycles and the private
+   alternate-curriculum source-index dependency remain.
+6. A6: admission/preloader callers still inspect private request IDs. Also
+   remove unused internal mutation facades after checking supported API usage.
+
+No production code or tests were changed for this audit. No new test run,
+remote CI result, graphical reproduction or hardware acceptance is claimed.
+The existing source/method review and recorded public-command diagnostic are
+the evidence. The earlier software gates remain historical scenario evidence.
+
 ### Production rerun and correction record
 
 At `75ae738e`, the full embedded workflow passed native registration and the
@@ -203,8 +229,8 @@ above; it remains historical evidence for that source.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | Complete in source, with reconciled owner contracts; historical architecture audit passed. CI now verifies behaviour rather than module shape. Feedback work removes the independent preview matcher and release pairing. |
-| Phase 6 — software and physical verification | Expanded core/native CI and all seven full embedded/repertoire/relocated-package cases pass on `70f7b459`. Physical and clean-machine acceptance remain open; Phase 6 is not fully complete. |
+| Phase 5 — ownership decomposition | Reopened: A1–A6 and obsolete internal mutation-port cleanup remain after the source audit at `640a77f5`. Earlier extraction and settlement ownership are retained. |
+| Phase 6 — software and physical verification | Expanded core/native CI and all seven full embedded/repertoire/relocated-package cases passed on `70f7b459`; the re-audit identifies unverified cross-layer scenarios needing correction and targeted reruns. Physical and clean-machine acceptance remain open; Phase 6 is not fully complete. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen
