@@ -270,8 +270,6 @@ class Recorder:
         self.active: dict[int, deque[int]] = defaultdict(deque)
 
     def add(self, pitch: int, is_on: bool, at_seconds: float) -> PlayedNote | None:
-        if at_seconds < -0.08:
-            return  # ignore count-in notes
         if is_on:
             active = self.active[pitch]
             ambiguous = bool(active)

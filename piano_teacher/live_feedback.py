@@ -35,8 +35,6 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
     """
     if bpm <= 0:
         raise ValueError("Tempo must be positive")
-    if elapsed_seconds < 0:
-        return Assessment((), 0)
     notes = tuple(note for note in phrase.notes
                   if note.start - phrase.start >= from_beat - 1e-7)
     selected = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,

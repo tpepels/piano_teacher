@@ -27,8 +27,10 @@ def test_note_releases_and_velocity_zero_equivalent():
     r.add(60, True, 0)
     r.add(60, False, 1.1)
     assert r.presses == [PlayedNote(60, 0, 1.1)]
-    r.add(62, True, -4)  # count-in is ignored
-    assert len(r.presses) == 1
+    # Temporal admission belongs to MidiIngress. Recorder retains the
+    # supplied musical time, including an accepted early first attack.
+    r.add(62, True, -.1)
+    assert r.presses[-1] == PlayedNote(62, -.1, None)
 
 
 def test_overlapping_repeated_pitch_matches_nearest():

@@ -151,6 +151,11 @@ take preserves its recorder and frozen musical elapsed time. Key releases
 during pause/lead remain paired and do not count the paused interval as a hold.
 The resumed partial take cannot grade until its admitted opening arrives.
 
+An initial first attack may use the canonical onset allowance before its
+deadline. MidiIngress alone admits that input; Recorder preserves its signed
+musical timestamp. Resume reading lead still suppresses new grading. A second
+Pause during that lead keeps the existing frozen source position.
+
 Stale, expired or infeasible receipts never start grading or audio. A worker
 timeout can lose a reply after commit: query `playback.status` before retrying
 or withdrawing. Presentation is idempotent by segment identity. Missing bound
@@ -164,6 +169,11 @@ reuses the same sealed evidence and receipt without regrading or awarding twice.
 Incomplete capture is interrupted/censored, never manufactured into mastery.
 
 ## Immutable score stream
+
+Retained command-buffer generations identify both geometry changes and
+admission-time source crops. ScoreAssetSession publishes the completed
+generation together with its readiness status; a ready getter cannot outrun
+the corresponding overlay update.
 
 Each logical take is a sequence of adjoining source strips at authored measure
 boundaries, with one take identity. Printed cut points are source beats;
@@ -193,6 +203,10 @@ matching archived plan in a new future owner; it never restores obsolete world
 coordinates or consumes an archive entry after a failed enqueue.
 
 ## Authentic notation and feedback
+
+Every authentic atlas is extracted from the same complete parsed notation
+document. Active performance and bounded display projections cannot remove
+context or carry-in chord/tuplet inventory before asset extraction.
 
 Verovio supplies authentic glyphs and composite note/chord artwork. Native
 layout maps source identities to retained ink; there is no page-image fallback
@@ -237,6 +251,13 @@ Listen lighting are presentation facts, not extra graded source notes. Future
 tied heads inherit the attack colour only when the canonical source beat reaches
 their continuation. Free feedback uses the same canonical physical take key;
 it cannot colour an unrelated future copy of the passage.
+
+The backend carries the selected `release_advisory` display policy on feedback
+events. Normal Practice Flow keeps correctly pitched/on-time notes green for
+short, long or unreleased keys while preserving those measurements in the
+ledger and durable evidence. Other selected grading policies retain their
+release judgments. Signed wrong-key ghosts use their real musical beat and
+the same physical strip/header clip; they cannot enlarge exposed score bounds.
 
 ## Native protocol and workers
 

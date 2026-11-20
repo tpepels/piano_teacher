@@ -2449,6 +2449,7 @@ class PracticeEngine:
         return {"piece_fingerprint": self.fingerprint or "",
                 "revision": int(self.score_revision),
                 "transport_id": int(self.playback_session.transport_id), "mode": self.playback_session.mode,
+                "release_advisory": self._flow_active(),
                 "graded": (not self.playback_session.preview_only
                            and self.playback_session.mode in ("practice", "perform"))}
 
@@ -2466,7 +2467,7 @@ class PracticeEngine:
         if self.visual_transport.paused:
             return
         elapsed = self._musical_seconds(self.now())
-        marks = self._live_feedback(elapsed) if elapsed >= 0 else []
+        marks = self._live_feedback(elapsed)
         scope, _ = live_scope(self.plan.active_phrase,
             from_beat=self.visual_transport.play_from_beat,elapsed_seconds=elapsed,
             bpm=self.plan.bpm,tempo=self._active_tempo_map())

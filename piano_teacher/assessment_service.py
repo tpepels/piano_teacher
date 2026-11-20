@@ -108,8 +108,6 @@ class AssessmentService:
                    played_from_beat: float, elapsed_seconds: float,
                    bar_boundaries, layout: dict, projector=project_assessment) -> list[dict]:
         """Project the canonical scorer's current observations."""
-        if elapsed_seconds < 0:
-            return []
         result = live_assessment(
             phrase, hand, bpm, list(played), from_beat=played_from_beat,
             elapsed_seconds=elapsed_seconds)

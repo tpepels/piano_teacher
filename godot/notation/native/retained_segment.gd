@@ -51,9 +51,10 @@ func set_source_window(first: float, last: float) -> void:
 
 
 ## Bind the strip's current take and the ledger; repaints only on change.
-func sync_note_status(take_key: String, source, visible_ink: bool) -> void:
+func sync_note_status(take_key: String, source, visible_ink: bool,
+        physical_source_bounds: Vector2 = Vector2(NAN,NAN)) -> void:
     if status_layer != null:
-        status_layer.sync(take_key,source,visible_ink)
+        status_layer.sync(take_key,source,visible_ink,physical_source_bounds)
 
 func _draw() -> void:
     compiled = false

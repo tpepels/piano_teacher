@@ -160,7 +160,8 @@ func project_stream(online: Array, retained_all_segments: Array, playhead_x: flo
         var take_key: String = str(item.get("take_key",""))
         # Status ink is a child of this strip: it inherits the strip's exact
         # transform and clip window. Repaints only when its take changes.
-        segment.sync_note_status(take_key,note_status_source,note_status_visible)
+        segment.sync_note_status(take_key,note_status_source,note_status_visible,
+            bounds/maxf(1.0,density))
         var clip_bounds: Vector2 = bounds
         # Register every head the strip actually shows, including heads a
         # voice column displaced left of its source floor into the clip's

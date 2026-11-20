@@ -43,7 +43,7 @@ class LiveInputView:
                 self.held[pitch] = remaining
             else:
                 self.held.pop(pitch, None)
-        graded = running and not paused and not preview and at >= 0 and mode in ("practice", "perform")
+        graded = running and not paused and not preview and mode in ("practice", "perform")
         observation = judgement.observation if judgement is not None and graded else None
         if not is_on:
             if observation is None or observation.pitch_error or observation.actual_release is None:
@@ -56,7 +56,7 @@ class LiveInputView:
                     "transport_id": transport_id, "received_at": now}
         status, source, reference = "heard", "", ""
         if running and not paused and mode in ("practice", "perform"):
-            if at < 0:
+            if at < 0 and judgement is None:
                 status = "count_in"
             elif not preview:
                 status = "unexpected"
@@ -67,8 +67,8 @@ class LiveInputView:
                         source = judgement.note.source_id
                         status = observation.timing_error or "on_time"
         origin = tempo_map.seconds_at(from_beat) if tempo_map is not None else 0.
-        beat = (tempo_map.beat_at(origin + max(0., at)) if tempo_map is not None
-                else from_beat + SCHEDULER.seconds_beats(max(0., at), bpm))
+        beat = (tempo_map.beat_at(origin + at) if tempo_map is not None
+                else from_beat + SCHEDULER.seconds_beats(at, bpm))
         event = {"kind": "attack", "pitch": pitch, "status": status,
                  "source_id": source, "reference_source_id": reference,
                  "played_source_beat": beat,

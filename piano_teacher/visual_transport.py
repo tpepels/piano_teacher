@@ -337,6 +337,12 @@ class VisualTransport:
         if self._pause_floor is None:
             return seconds
         if self.paused:
+            # A second Pause inside Resume's reading lead retains the
+            # already frozen source position. Raw at-run_at is deliberately
+            # behind that position until this lead ends. Outside that case,
+            # retain earlier corrected hardware timestamps before Pause.
+            if self.paused_at < grading_after:
+                return self._pause_floor
             return min(seconds,self._pause_floor)
         if at < grading_after:
             return max(seconds,self._pause_floor)

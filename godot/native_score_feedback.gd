@@ -145,14 +145,16 @@ func ingest(event: Dictionary) -> String:
             if onset not in ["on_time","early","late"] or id.is_empty():
                 ignored_events += 1
                 return "ignored"
-            changed = statuses.observe(take,id,{"pitch":"correct","onset":onset},false)
+            changed = statuses.observe(take,id,{"pitch":"correct","onset":onset},false,false,
+                bool(event.get("release_advisory",false)))
         "release":
             var release: String = str(event.get("release",""))
             var id: String = _note_for_source(revision,str(event.get("source_id","")))
             if release not in ["on_time","short","long"] or id.is_empty():
                 ignored_events += 1
                 return "ignored"
-            changed = statuses.observe(take,id,{"pitch":"correct","release":release},false)
+            changed = statuses.observe(take,id,{"pitch":"correct","release":release},false,false,
+                bool(event.get("release_advisory",false)))
         "assessment":
             var id: String = str(event.get("note_id",""))
             var dimensions: Variant = event.get("dimensions")
@@ -162,7 +164,8 @@ func ingest(event: Dictionary) -> String:
             if str(event.get("status","")) == "pending" and dimensions == null:
                 changed = statuses.clear_note(take,id,true)
             elif dimensions is Dictionary:
-                changed = statuses.observe(take,id,dimensions,bool(event.get("final",false)),true)
+                changed = statuses.observe(take,id,dimensions,bool(event.get("final",false)),true,
+                    bool(event.get("release_advisory",false)))
             else:
                 ignored_events += 1
                 return "ignored"

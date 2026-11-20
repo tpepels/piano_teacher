@@ -39,13 +39,18 @@ func _init(owner_segment: Node2D) -> void:
     _ghost_layer.draw.connect(_paint_ghosts)
     add_child(_ghost_layer)
 
-func sync(take: String, source, visible_ink: bool) -> void:
+func sync(take: String, source, visible_ink: bool,
+        physical_source_bounds: Vector2 = Vector2(NAN,NAN)) -> void:
     var revision: int = -1
     if source != null and is_instance_valid(source):
         revision = int(source.take_revision(take))
     else:
         source = null
-    var signature: Array = [take,revision,visible_ink,
+    if not is_finite(physical_source_bounds.x):
+        physical_source_bounds.x = segment.source_floor
+    if not is_finite(physical_source_bounds.y):
+        physical_source_bounds.y = segment.source_ceiling
+    var signature: Array = [take,revision,visible_ink,physical_source_bounds,
         int(segment.compile_generation),
         source.get_instance_id() if source != null else 0]
     if signature == _signature:
@@ -64,7 +69,10 @@ func sync(take: String, source, visible_ink: bool) -> void:
                 _colored.append({"instance":instance,"status":statuses[id]})
         for ghost in _source.ghosts_for_take(take):
             var at: float = float(ghost["beat"])
-            if at >= segment.source_floor and at < segment.source_ceiling:
+            # The existing physical window owns ghost ink too, including
+            # its measured header lead. Never clamp a played beat to zero
+            # or enlarge a source strip just to reveal an early wrong key.
+            if at >= physical_source_bounds.x and at < physical_source_bounds.y:
                 _ghosts.append(ghost)
     _ghost_layer.queue_redraw()
     painted_instances = _colored.size()

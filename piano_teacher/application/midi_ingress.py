@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import math
 from .musical_scheduler import SCHEDULER
 from ..live_feedback import live_assessment
+from ..grading_tolerance import onset_tolerance
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,7 +201,10 @@ class MidiIngress:
         is_on = message.type == "note_on" and message.velocity > 0
         recorded = None
         if facts.running and recorder and facts.mode not in ("learn", "listen"):
-            if not is_on or not facts.paused and received_at >= facts.run_at:
+            spb = SCHEDULER.seconds_per_beat(
+                facts.tempo_map.bpm_at(facts.from_beat)
+                if facts.tempo_map is not None else facts.bpm)
+            if not is_on or not facts.paused and musical_at >= -onset_tolerance(spb):
                 recorded = recorder.add(message.note,is_on,musical_at)
         judgement = None
         if (recorded is not None and facts.phrase is not None

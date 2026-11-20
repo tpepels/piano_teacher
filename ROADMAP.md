@@ -89,6 +89,15 @@ until authorization. The unchanged actual Moonlight journey passes Retry,
 visible/audible count-in, Listen, navigation, tempo changes and saved reopening
 (`debug-sessions/practice-completion/retry-fixed-reproduction.log`).
 
+Retry source commit: `242d71ae`. Final review also corrected second Pause
+during a Resume reading lead, accepted early first attacks and signed ghost
+coordinates. MidiIngress alone applies the temporal gate; Recorder preserves
+the accepted timestamp. Backend-selected `release_advisory` keeps accepted flow
+notes green while retaining complete measured release dimensions. Native
+ghosts use the existing physical strip/header bounds. Existing Python remains
+335 passed/one optional skip; the complete final Godot script passes with all
+failure counters zero and `GODOT_STARTUP_SYNTAX_OK`. No new tests were added.
+
 | Phase | State |
 | --- | --- |
 | Phase 5 — ownership decomposition | Source ownership transfers integrated; existing core/native checks pass. New feedback work removes the remaining independent preview matcher and release pairing. |

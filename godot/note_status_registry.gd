@@ -49,10 +49,11 @@ static func display_status(record: Dictionary) -> String:
         return LATE
     if onset == "early":
         return EARLY_ONSET
-    if release == "short":
-        return EARLY_RELEASE
-    if release in ["long", "unreleased"]:
-        return LATE
+    if not bool(record.get("release_advisory",false)):
+        if release == "short":
+            return EARLY_RELEASE
+        if release in ["long", "unreleased"]:
+            return LATE
     if pitch == "correct" or onset == "on_time" or release == "on_time":
         return HIT
     return UNPLAYED
@@ -106,7 +107,8 @@ func status(take: String, note_id: String) -> String:
 ## Merge observations for one physical note. Returns true when its displayed
 ## status changed. Provisional evidence never overrides a settled record.
 func observe(take: String, note_id: String, observation: Dictionary,
-        settled: bool, replace_existing: bool = false) -> bool:
+        settled: bool, replace_existing: bool = false,
+        release_advisory: bool = false) -> bool:
     if take.is_empty() or note_id.is_empty():
         return false
     var notes: Dictionary = _notes_by_take.get(take,{})
@@ -121,6 +123,9 @@ func observe(take: String, note_id: String, observation: Dictionary,
             if locked and not str(previous.get(dimension,"")).is_empty():
                 continue
             record[dimension] = str(value)
+    # The backend selects grading policy. Keep measured release facts for
+    # history even when this course treats them as advice rather than errors.
+    record["release_advisory"] = release_advisory
     var shown: String = display_status(record)
     if shown == UNPLAYED:
         return false
