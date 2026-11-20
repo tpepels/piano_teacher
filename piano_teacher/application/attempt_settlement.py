@@ -175,6 +175,57 @@ class AttemptSettlement:
         self.capture.finish()
         return receipt
 
+    def interrupt_current(self, *, reason: str, played=(),
+                          censor: bool = True, extra=None,
+                          now: float | None = None,
+                          flush: bool = False) -> None:
+        """Single transaction owner for stopping or replacing a take."""
+        with self.capture.atomic():
+            self.capture.interrupt(reason,played,censor=censor,extra=extra)
+            if flush:
+                self.capture.flush_intervals(now)
+
+    def reset_piece_path(self, *, fingerprint: str, replacement,
+                         played, now: float) -> None:
+        """Reset the exact piece and its source feedback with one savepoint."""
+        with self.capture.atomic():
+            self.capture.interrupt("lesson_reset",played)
+            self.capture.flush_intervals(now)
+            self.repository.reset_piece(fingerprint)
+            self.source_feedback.reset(fingerprint)
+            self.repository.save(replacement,fingerprint)
+            self.capture.event("lesson_reset",{
+                "fingerprint":fingerprint,"preserves_history":True})
+
+    def finish_preview(self) -> None:
+        """Preview cannot award assessment, evidence credit or mastery."""
+        self.capture.seal((),state="completed",reason="preview")
+        with self.capture.atomic():
+            self.capture.persist()
+        self.capture.finish()
+
+    def checkpoint(self, played, *, boundary: float) -> None:
+        self.capture.checkpoint(played,boundary=boundary)
+
+    def seal_rolling_recovery(self, pending, *, played, result,
+                              end_beat: float, plan, binding, now,
+                              policy) -> None:
+        """One evidence writer for interrupted rolling-window recovery."""
+        self.capture.seal(
+            played,state="interrupted",reason="rolling_recovery",
+            result=result,extra={"assessed_end_beat":end_beat})
+        self.settle(pending,plan=plan,binding=binding,now=now,policy=policy)
+
+    def seal_missing_full_passage(self, pending, *, played) -> None:
+        """Preserve an already-selected verdict if capture was not sealed."""
+        if self.capture.attempt_id is None or self.capture.sealed is not None:
+            return
+        self.capture.seal(
+            played,state="completed",reason="full_passage",
+            result=pending.assessment,
+            eligible=pending.decision.mastery_eligible,
+            verdict=pending.decision.verdict)
+
     def seal_guided_preparation(self, pending, *, guidance: dict,
                                 plan, binding, now, policy) -> None:
         """Atomically finish a completed guided attempt and its decision.

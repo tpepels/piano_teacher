@@ -788,15 +788,11 @@ class PracticeEngine:
                     exercise_strategy=self.plan.exercise_strategy.name,
                     fukuda_mistakes=frozenset(), feedback={})
         # Publish all replacement records before stopping the current take.
-        with self.measurement.atomic():
-            self.measurement.interrupt("lesson_reset", self.attempt.recorder.presses if self.attempt.recorder else
-                                       self.measurement.guided.presses)
-            self.measurement.flush_intervals(self.now())
-            self.progress.reset_piece(fingerprint)
-            self.fukuda_mistakes.reset(fingerprint)
-            self.progress.save(replacement, fingerprint)
-            self.measurement.event("lesson_reset", {"fingerprint": fingerprint,
-                                                    "preserves_history": True})
+        self.attempt_settlement.reset_piece_path(
+            fingerprint=fingerprint,replacement=replacement,
+            played=(self.attempt.recorder.presses if self.attempt.recorder
+                    else self.measurement.guided.presses),
+            now=self.now())
         self._stop(reason="lesson_reset", persist_evidence=False)
         self._reset_trouble()
         self.plan = replacement
@@ -819,11 +815,11 @@ class PracticeEngine:
         played = (self.attempt.recorder.presses if self.attempt.recorder is not None else
                   self.measurement.guided.presses)
         if persist_evidence:
-            with self.measurement.atomic():
-                self.measurement.interrupt(reason, played, censor=not preserve_episode,
-                    extra={"guidance": self.teaching.snapshot(now=self.now())}
-                          if self.mode == "learn" and self.teaching is not None else None)
-                self.measurement.flush_intervals(self.now())
+            self.attempt_settlement.interrupt_current(
+                reason=reason,played=played,censor=not preserve_episode,
+                extra={"guidance": self.teaching.snapshot(now=self.now())}
+                      if self.mode == "learn" and self.teaching is not None else None,
+                now=self.now(),flush=True)
         self.attempt_settlement.cancel(reason=reason, now=self.now())
         self.midi_ingress.deferred.clear()
         self.midi_ingress.resume_grading_after = 0.0
@@ -1433,7 +1429,7 @@ class PracticeEngine:
                 self._prepare_practice(exposure=selected)
                 return
             if self.measurement.attempt_id is not None:
-                self.measurement.interrupt("restart", self.attempt.recorder.presses if self.attempt.recorder else ())
+                self.attempt_settlement.interrupt_current(reason="restart",played=self.attempt.recorder.presses if self.attempt.recorder else ())
             self.midi_ingress.resume_grading_after = 0.0
             self.midi_ingress.resume_ignored_pitches.clear()
             self._pause_floor = None
@@ -2171,7 +2167,7 @@ class PracticeEngine:
                     lead_seconds=presentation_lead_seconds,
                     rest_seconds=SCHEDULER.beats_seconds(
                         rest_beats,self.plan.bpm))
-            self.measurement.interrupt("restart", self.attempt.recorder.presses if self.attempt.recorder else ())
+            self.attempt_settlement.interrupt_current(reason="restart",played=self.attempt.recorder.presses if self.attempt.recorder else ())
             self.visual_transport.paused = False
             self.visual_transport.paused_at = 0.0
             self.pause_context = None
@@ -2589,13 +2585,14 @@ class PracticeEngine:
         from .application.rolling_recovery import project_rolling_response
         transition = project_rolling_response(response,decision,grid=grid,
             first_bar=phrase.first_bar,before_bpm=pending.state.route.performed_bpm,now=now)
-        self.measurement.seal(self.attempt.recorder.presses if self.attempt.recorder else (),
-            state="interrupted", reason="rolling_recovery", result=assessed,
-            extra={"assessed_end_beat": decision.end_beat})
         try:
-            self.attempt_settlement.settle(pending, plan=self.plan,
-                binding=self._teaching_binding(), now=now,
-                policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
+            self.attempt_settlement.seal_rolling_recovery(
+                pending,played=(self.attempt.recorder.presses
+                                if self.attempt.recorder else ()),
+                result=assessed,end_beat=decision.end_beat,
+                plan=self.plan,binding=self._teaching_binding(),now=now,
+                policy=resolve_mistake_policy(
+                    self.library.settings["mistake_response_strategy"]))
         except Exception:
             self.attempt.pending_rolling = (decision, phrase, grid, score_beat, now)
             self.running = self.auto = False
@@ -2605,7 +2602,6 @@ class PracticeEngine:
             self.next_action = "Check storage, then press Retry to save this same attempt."
             raise
         self.attempt.pending_rolling = None
-        self.measurement.finish()
         self._note_tempo(now)
         # A recovery at the final boundary must use the SAME one-rest,
         # one-count-in deadline as an ordinary completed take. Previously
@@ -2657,10 +2653,7 @@ class PracticeEngine:
         if self.preview_only:
             # Disconnected MIDI: repeat as an ungraded preview, never create
             # fake notes, misses, accepted passes or mastery.
-            self.measurement.seal((), state="completed", reason="preview")
-            with self.measurement.atomic():
-                self.measurement.persist()
-            self.measurement.finish()
+            self.attempt_settlement.finish_preview()
             self.running = False
             self.visual_transport.queue_preview_repetition()
             short = SCHEDULER.measured_rest(
@@ -2801,10 +2794,9 @@ class PracticeEngine:
         decision = pending.decision
         exposure = decision.next_exposure
         response = decision.response
-        if self.measurement.attempt_id is not None and self.measurement.sealed is None:
-            self.measurement.seal(self.attempt.recorder.presses if self.attempt.recorder else (),state="completed",
-                reason="full_passage",result=result,eligible=decision.mastery_eligible,
-                verdict=decision.verdict)
+        self.attempt_settlement.seal_missing_full_passage(
+            pending,played=(self.attempt.recorder.presses
+                            if self.attempt.recorder else ()))
         self.attempt_settlement.checkpoint_failed_streak(pending, plan=self.plan, now=now)
         same_timed = (exposure is not None and exposure.stage_key == self.plan.identity
                       and exposure.mode == "practice" and decision.remediation is None)
@@ -2883,7 +2875,9 @@ class PracticeEngine:
                                  grid: tuple[float, ...]):
         """Grade one authored boundary under the existing session lock."""
         try:
-            self.measurement.checkpoint(self.attempt.recorder.presses if self.attempt.recorder else (), boundary=boundary)
+            self.attempt_settlement.checkpoint(
+                self.attempt.recorder.presses if self.attempt.recorder else (),
+                boundary=boundary)
         except Exception:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=self.now())

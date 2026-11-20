@@ -467,6 +467,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Reconciled the top-level Phase 5 status table with the actual current production file sizes and domain owners instead of the historical initial metrics.
 - This `[native]` checkpoint requests the existing full production CI: Python core, actual Godot/GDExtension and embedded Python, authentic score rendering, Play/Pause/Resume, Moonlight Retry/Listen/navigation, Peace Piece, Chopin, and clean relocated package extraction/boot. All assertions must pass on this exact commit; hardware-specific CA49, USB/Bluetooth and physical audible timing are explicitly **not** asserted by headless CI.
 
+### Implementation checkpoint BN — all durable attempt endings have one transaction owner
+
+- Consolidated every remaining direct `LearningCapture.seal`, `persist`, `finish`, `interrupt` and `checkpoint` call in `PracticeEngine` behind the existing `AttemptSettlement` owner. This includes preview completion (never earns progress), rolling recovery, mid-piece checkpoints, Start/Retry interruption, Stop interruption/phase flush, defensive full-passage seal and exact-source Lesson Path reset.
+- The reset operation still performs interrupt, interval flush, piece progress reset, Fukuda source-feedback reset, replacement course save and the reset event in **one original SQLite transaction**; Engine stops after it without repeating evidence writes. Rolling recovery still settles the immutable pending decision once, and `AttemptSettlement.settle` alone finishes the capture.
+- All outcomes are still tied to the same current attempt and source identifier; no alternative evidence store, timeout path or grader was added. No new tests; explicit core/native acceptance required.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
