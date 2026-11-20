@@ -1,8 +1,27 @@
 # PracticeEngine ownership and extraction audit
 
 **Revision audited:** `89771989f615480d6035919679c275e4632a6894` (20 November 2026), `piano_teacher/server.py` (3,572 lines, ~194 KB).  
-**Scope:** Every application method and state group, existing domain collaborators, and the next safe ownership transfers. This is the **current** audit; the original L01 discussion in the remediation tracker records historical baseline source locations.  
+**Scope:** Every application method and state group, existing domain collaborators, and the next safe ownership transfers. This is the **baseline audit** before the subsequent extraction checkpoints; the implementation-status section immediately below is current. The original L01 discussion in the remediation tracker records historical baseline source locations.  
 **Method scan:** 158 `def` definitions including property accessors, with approximately 99 fields assigned during `PracticeEngine.__init__` and a 148-line constructor. High line count is a symptom; multiple writable owners, hidden re-entrancy and ordering dependencies are the actual risks.
+
+## Resolution and remaining ownership audit — `c65679ce`
+
+The baseline below deliberately preserves the observed pre-extraction violations. These are **not all outstanding**. The latest source still contains approximately 3,366 lines of `PracticeEngine`, but most former domain mutation policies are now owned by dedicated objects. At this revision, [core CI 44733911571](https://github.com/tpepels/piano_teacher/actions/runs/44733911571) passed through the AttemptRuntime update. The [full native/product/package suite 44732784904](https://github.com/tpepels/piano_teacher/actions/runs/44732784904) passed at `dedc7bd5`; latest changes are being rechecked separately.
+
+| Original violation | Resolution implemented | Still required before Phase 5 closure |
+| --- | --- | --- |
+| Entire `PracticeEngine` passed to PlaybackCoordinator | **Resolved:** frozen `PlaybackSourceFacts` and `PlaybackRuntimeFacts`, one explicit commit/capture/abort port; coordinator no longer reads `engine.*` | Inspect every exceptional Retry and Listen rollback against real source during native revalidation |
+| Multiple writers of take state | **Substantially resolved:** `AttemptRuntime` now owns recorder, pending result, assessed BPM, review and feedback; `RecoveryStreak` owns across-attempt trouble; `AttemptSettlement` owns durable evidence | Finish separation of `_advance_pending_feedback`, `_finish_full_passage` and rollback after persisted-but-not-published steps |
+| Private VisualTransport lifecycle access | **Resolved for preview/retry/preparation flags:** semantic public ports and transport-owned preview rest scheduling | Eliminate remaining command-level writes of `run_at`, `paused`, `next_at` and direct MIDI grading epoch outside their owners |
+| Future-score readiness/state duplicated in engine | **Substantially resolved:** `TeachingContinuation` selects/preloads/acknowledges, validates reservations and adopts assets only after durable commit; dead readiness poll fixed | Exact acknowledgement/failure interleavings and stage asset propagation require native/physical verification |
+| Lesson/flow verdict message parsing | **Resolved:** one typed `Outcome`, `PracticeFlowCourseSession.settle_decided`, pure `PassageOutcomePresenter` | Consolidate remaining UI text updates so asynchronous failures cannot overwrite fresher selected decisions |
+| Incorrect or repeated source facts | **Substantially resolved:** notation owns source-metrical retry silence; `ListenSession` validates CountInPlan before starting; GuidedSession owns source-bound fragment; SourcePreparation handles MIDI+fingering import | Atomic retargeting of a fingering correction while a score revision changes |
+| Native/renderer state exposure | **Substantially resolved:** stream admission/recovery and immutable ledger in ScoreStreamController, retained compiled pool in RetainedNotationPool, online/offline external queues deep-snapshotted; root input/feedback handlers extracted | Native view and Main remain large UI composition/painter facades; inspect residual cross-owner property mutation and draw lifecycle |
+| Version-specific software product verification | **Passed at previous source:** native bridge, graphical Play/Pause/Resume/Retry, Listen, Moonlight/Peace Piece/Chopin and clean extracted package boot at `dedc7bd5` | Full native rerun at current source and physical CA49/USB/Bluetooth/speaker latency and mastery checks (not available here) |
+
+**Open structural blocker:** `PracticeEngine` still has lengthy, mixed side-effect control methods (`start`, `_start_or_restart`, `_resume_current_session`, `_advance_pending_feedback`, `_complete_attempt`, `_finish_full_passage`). They legitimately coordinate several existing owners, but combine event authorization, mutable session state, UI text, clock changes and next-source handoff. Future extraction must reduce direct mutations via explicit effect application without introducing a second deadline chooser or passing the full engine to a new facade.
+
+**Phase 5 state:** incomplete. **Phase 6 state:** earlier software suite passed; current suite in progress; physical acceptance incomplete. No new tests have been authored.
 
 ## Concrete responsibilities and existing authorities
 
