@@ -57,6 +57,18 @@ New commits are local on main. No push or new remote CI result is claimed.
 | Full embedded and relocated package | **Passed on source `bc957d37`**: all seven full-workflow cases, including fixture creation, native bridge, production controls, Moonlight, Peace Piece, Chopin and strict relocated package build/boot. Checkout/package architecture audits report `PHASE5_ARCHITECTURE_AUDIT_OK`; runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Log: `debug-sessions/practice-completion/embedded-production-accepted.log`. |
 | Documentation | `75ae738e` consolidates the historical tree into four current Markdown documents and introduces the learner README and dedicated wordmark. Final review reconciles Retry/Resume ownership and per-hand completion. All 104 local links/anchors across these guides, README and ROADMAP pass; all 14 prior research citations remain. Recursive Markdown count is exactly four. |
 
+### Test-suite renewal requested 2026-11-20
+
+The owner requested a ground-up suite rebuild around relevant behaviour.
+Read-only Python/native audits found implementation-shape assertions, unnamed
+alternate-course coverage and no native graded-event/future-note cases. The
+unchanged baseline at `16a064e2` collects 336 Python cases: 335 pass, one optional
+SF2/libfluidsynth case skips (`debug-sessions/practice-completion/test-rebuild-baseline.log`).
+No tests or production code have changed in this audit step. A reviewed
+replacement design is in [development](docs/development.md#test-suite-replacement-design--proposed-2026-11-20),
+awaiting owner approval before implementation. The earlier software acceptance
+below remains evidence for the unchanged source, not for an implemented new suite.
+
 ## Phase status and remaining acceptance
 
 ### Production rerun and correction record

@@ -66,6 +66,97 @@ also builds and boots a relocated package. These are different checks; parsing
 a production fixture does not mean its application journey ran. Serialize Godot
 imports/checks against a shared project and retain source revision plus logs.
 
+### Test-suite replacement design — proposed 2026-11-20
+
+Status: audit complete; replacement awaits owner approval of this design.
+The owner requested a ground-up rebuild because tests may encode irrelevant or
+superseded behaviour. This request authorizes replacement tests; physical
+acceptance remains separate. This design stays in the existing guide to keep
+the documentation tree at four Markdown files.
+
+The unchanged baseline at `16a064e2` collects 336 Python cases: 335 pass and one
+optional system SF2/libfluidsynth case skips. The fast Godot runner parses
+production scripts and executes 26 component/UI scenario invocations. It does
+not execute the full embedded workflow. The audit found these concrete gaps:
+
+- Some cases assert shaders, node names, container hierarchy, exact captions,
+  private aliases, reducer enumeration or generated-contract parity.
+- Learner-state fixtures force the older split-unit policy. Other tests use
+  source-progression without naming it, making that supported alternate route
+  look like the default practice course.
+- No existing native case ingests graded events to check wrong/future-note
+  colouring, source/take isolation, timed tied continuations or ungraded Listen.
+- The full repertoire verifier explicitly selects Coda/Fukuda. Its successful
+  journeys do not establish complete default Practice Flow coverage.
+
+**Approach.** Rebuild from the current learner contract, replacing each area
+with its smaller behavioural counterpart before removing old scaffolding.
+This implements the requested rebuild while preserving useful failure/recovery
+coverage throughout. Merely renaming or pruning cases leaves the default-flow
+gaps. Deleting everything before replacement removes existing protection for
+progress migration, source fidelity and MIDI recovery. The chosen migration
+order is an engineering recommendation, not an owner-approved design yet.
+
+Every retained case must identify a learner-visible contract or a failure that
+would lose progress, play/grade the wrong source, prevent practice or fabricate
+credit. Passing counts and coverage percentages are not acceptance criteria.
+
+| Behaviour area | Replacement evidence |
+| --- | --- |
+| Default course | Open actual MIDI through the engine; start at the first measure's Listen. Complete the entire selected Free window before Tempo. Verify Right → Left → Together, empty-hand skipping, independent backward-growing windows capped at four bars and the separate whole-piece final. |
+| Tempo and aids | Verify original-target 50% entry, 10% steps, same-tempo first retry, two-failure slowdown/floor return, broken clean streak and two target successes. Persist the exact window/hand's second Free return, announce a genuine aid, return to original Free without mastery, and retain original Free when no aid exists. |
+| Resume and progress | Reopen the saved window/hand and final test at complete-window Free, then 50%. Preserve supported persistent migrations, isolate pieces/hands/windows, and prevent interrupted or twice-delivered completion from awarding credit. |
+| Musical time | Verify an authored count-in bar ending at the first playable attack, local/mixed meter, preserved release tails and the exact one-bar automatic repeat. Pause/Resume freezes musical elapsed time while keeping the world axis forward. Listen again adds no mastery. First entry may require safe physical clearance; automatic repeats retain their stricter deadline. |
+| Performance feedback | Drive real MIDI ingress/Recorder and compare live and settled source assignments. Cover repeated pitches, chords, wrong/missed/extra notes, accepted early/late boundaries, independent release evidence and the default two-colour policy. A later same-pitch note or another take remains neutral. |
+| Authentic notation | Real MIDI import retains attacks, hand identity, meter, tuplets and complete releases. Active performance IDs remain distinct from dim neighbours/other-hand/carry-in ink. Native source heads and timed ties receive only their own take's feedback; wrong-key ghosts retain the played pitch. No pixel or aesthetic assertions. |
+| Device and user data | Simulate only external MIDI/device failures and filesystem failure boundaries. Verify unplug/reconnect cancellation, fresh physical attacks, explicit disconnect, calibration application, settings/library recovery and scoped saved-data operations. These establish software reactions, not hardware acceptance. |
+| Listen and fingering | Verify actual source-timed PCM preparation, current audio/score readiness, cancellation/failure recovery, offline fallback and sustained endings. Retain real-model smoke, manual correction persistence and honest unavailable/impossible fingering results. Avoid frozen waveform or model-choice snapshots. |
+| Supported alternatives | Explicitly select source-progression/Coda/Fukuda for compact feature coverage. Their manual tempo, short guided-unit and detailed generic release grading rules must not become default Practice Flow expectations. |
+
+**Test boundaries.** Keep pytest and native Godot; add no framework or service.
+Prefer public engine/typed commands and snapshots, published source/deadline
+facts, feedback events and saved reopen. Small direct musical algorithms may
+be tested where the output itself is the player contract. Assertions must not
+require private owner fields, object identity, implementation names, exact
+dataclass/JSON dumps or source-code text searches.
+
+Use a controllable injected clock and real small MIDI fixtures in temporary
+directories. These supply input; they must not implement a second grader,
+progression machine, queue or clock policy. Fake only external ports, controlled
+I/O failures and absent optional runtimes. Release engines/threads/ports in
+fixture cleanup and never touch actual learner progress or attached hardware.
+Preserve installed-but-broken optional-runtime failures; only genuinely absent
+optional dependencies may skip, with an explicit reason.
+
+**Native checks.** Replace widget/layout implementation cases with four small
+groups: normal controls/Free hints, immutable score admission and Pause/Resume/
+Retry, source/take-bound feedback including future ties, and score readiness/
+failure/recovery. Exercise the production owners and authentic notation facts.
+Keep native bridge/standalone validation and real repertoire journeys; add
+explicit default-course execution rather than relabelling alternate journeys.
+
+**Runner and integration.** Keep `bash scripts/test.sh` as the common local/CI
+entry point and preserve `--python-only` and pytest argument forwarding. Separate
+parser checks from executed Godot behaviour so logs state what actually ran.
+Keep full embedded/relocated packaging as the existing explicit production
+gate. Update CI commands only where needed for the reorganized suite, without
+lowering failures, weakening assertions or making required dependencies skip.
+
+Replace the old test files and helpers rather than leave duplicate suites or
+an archived legacy suite in the checkout; Git retains history. Group the new
+tests by the behaviour areas above, with shared fixtures limited to test input
+and cleanup. Production features and policies stay unchanged. If replacement
+tests uncover an actual production defect or a contract ambiguity, diagnose
+and report it separately instead of adjusting an assertion to match a bug.
+
+**Completion evidence.** Record a before/after map of retained, replaced and
+removed coverage here. Run the complete replacement Python/native suite and
+the full embedded workflow, including all named repertoire and strict relocated
+package build/boot. Record source commit, results and optional skips in ROADMAP.
+Keep physical CA49 USB/Bluetooth, sound, display, latency and clean-machine
+acceptance explicitly unverified. Work directly on main in coherent commits;
+do not push, create branches/worktrees or expand the four-file docs tree.
+
 ## Standalone Linux package
 
 [package-inprocess.sh](../scripts/package-inprocess.sh) assembles Godot, the
