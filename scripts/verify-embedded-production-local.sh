@@ -55,17 +55,28 @@ set_case() {
   export XDG_CACHE_HOME="$WORK/cache-$case_name"
   mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 }
+FAILED_CASES=()
+CASE_COUNT=0
 check() {
   local label="$1"
   shift
-  if "$@" >> "$LOG" 2>&1; then
+  CASE_COUNT=$((CASE_COUNT+1))
+  local case_log="$WORK/native-case-$CASE_COUNT.log"
+  printf '\n=== %s ===\n' "$label" >> "$LOG"
+  # Run each existing acceptance case in its own strict Bash process.
+  # A failed command inside audit_package must not be accidentally ignored
+  # because the parent is evaluating this check in an "if" expression.
+  if bash -Eeuo pipefail -c '"$@"' _ "$@" > "$case_log" 2>&1; then
+    cat "$case_log" >> "$LOG"
     printf 'PASS  %s\n' "$label"
+    return 0
   else
     local status=$?
+    cat "$case_log" >> "$LOG"
     printf 'FAIL  %s (exit %d)\n' "$label" "$status"
-    tail -n 45 "$LOG"
-    printf 'Full log: %s\n' "$LOG"
-    exit "$status"
+    tail -n 45 "$case_log"
+    FAILED_CASES+=("$label (exit $status)")
+    return "$status"
   fi
 }
 seed() {
@@ -220,24 +231,39 @@ audit_package() {
   echo "Relocated standalone package boot passed"
 }
 
+# Export only this runner's local case helpers. Each subprocess inherits
+# the isolated HOME and native ABI configuration; no case can leave the
+# following scenarios unrun after a nonfatal failure.
+export ROOT WORK PYTHON GODOT_BIN PY_SITE PY_LIB
+export -f set_case seed verify_bridge make_fixture verify_fixture_ui
+export -f verify_moonlight verify_real_source audit_package
+
 printf 'Revision: %s\n' "$(git rev-parse --short HEAD)"
 printf 'Log: %s\n' "$LOG"
 if ! "$PYTHON" scripts/dev_runtime_state.py check-native >> "$LOG" 2>&1; then
   check "Build native bridge for current source/ABI" \
-    env PIANO_SKIP_NATIVE_SMOKE=1 bash scripts/build-inprocess.sh
+    env PIANO_SKIP_NATIVE_SMOKE=1 bash scripts/build-inprocess.sh || {
+      printf 'Native bridge build failed; dependent scenarios cannot run.\n' >&2
+      exit 1
+    }
 fi
-check "Create isolated two-hand MIDI fixture" make_fixture
-check "Embedded Godot + Python registration and real score" verify_bridge
-check "Production UI / Play / Pause / Resume" verify_fixture_ui
-check "Moonlight Sonata / retry / Listen / lesson navigation" verify_moonlight
+check "Create isolated two-hand MIDI fixture" make_fixture || :
+check "Embedded Godot + Python registration and real score" verify_bridge || :
+check "Production UI / Play / Pause / Resume" verify_fixture_ui || :
+check "Moonlight Sonata / retry / Listen / lesson navigation" verify_moonlight || :
 check "Peace Piece native score" verify_real_source peace \
-  'Peace_Piece_-_Bill_Evans_(Piano_Solo).midi'
+  'Peace_Piece_-_Bill_Evans_(Piano_Solo).midi' || :
 check "Chopin Nocturne native score" verify_real_source chopin \
-  'Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi'
+  'Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi' || :
 if [[ "$MODE" == full ]]; then
-  check "Assembled standalone runtime package audit" audit_package
+  check "Relocated standalone runtime package audit" audit_package || :
 else
   printf 'SKIP  Package audit (explicit --without-package)\n'
 fi
-printf 'PASS  LOCAL EMBEDDED PRODUCTION CONTROL\n'
 printf 'Full log: %s\n' "$LOG"
+if (("${#FAILED_CASES[@]}" > 0)); then
+  printf 'NATIVE ACCEPTANCE FAILED: %d independent scenario(s):\n' "${#FAILED_CASES[@]}" >&2
+  printf '  - %s\n' "${FAILED_CASES[@]}" >&2
+  exit 1
+fi
+printf 'PASS  LOCAL EMBEDDED PRODUCTION CONTROL\n'

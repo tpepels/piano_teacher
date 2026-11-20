@@ -324,6 +324,12 @@
 - All existing entrance geometry, rest-gap rules and offscreen margins are preserved. The view retains canvas painting and source-glyph measurement. No new tests.
 - Phase 5 remains open because the renderer's retained-painter lifecycle, PracticeEngine orchestration and Main composition still need decomposition.
 
+### Implementation checkpoint AP — independently run every existing native/product/package scenario
+
+- The full embedded production runner no longer exits on the first failed UI/Moonlight acceptance: after a successful build it executes the existing bridge, generated-MIDI UI, Moonlight, Peace Piece, Chopin and clean relocated-package checks separately, logging each failure and returning an overall nonzero result only after all independent scenarios have run.
+- Each scenario is executed in a fresh strict Bash subprocess to retain `errexit` inside its nested packaging and fixture functions, not the parent shell's conditional-invocation exception. The same isolated HOME/case-specific XDG directories and existing acceptance scripts are used. Native compilation remains a hard prerequisite.
+- No new test cases, no bypassed failures and no automatic background retry. CI's native job now yields a complete failure matrix from one run, including packaging even when a UI scenario fails.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
