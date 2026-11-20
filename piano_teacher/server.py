@@ -88,7 +88,7 @@ from .learner_state import guided_units
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
-from .application.learning_capture import LearningCapture, identifier
+from .application.learning_capture import LearningCapture, CapturePhaseFacts, identifier
 
 from .practice_history import PracticePolicyService
 from .fukuda_mistake_store import FukudaMistakeStore
@@ -2889,28 +2889,21 @@ class PracticeEngine:
         self._poll_midi_connection()
         self._apply_listen_failure()
         now = self.now()
-        if self.visual_transport.paused:
-            self.measurement.phase_changed("pause", now)
-        elif self.mode == "learn":
-            self.measurement.phase_changed("preparation" if self.awaiting_score_revision else
-                "feedback" if self.teaching is not None and self.teaching.snapshot(now=now)["completed"] else "guided", now)
-        elif self.running:
-            # Resume after a partial take has a NEW admitted source opening.
-            # The old take's grading epoch remains intact, but no assessment
-            # boundary can advance until that new opening reaches the playhead.
-            activation = max(self.visual_transport.run_at,
-                             self.midi_ingress.resume_grading_after)
-            if self.measurement.phase == "count_in" and now >= activation:
-                self.measurement.phase_changed("active", activation)
-            else:
-                self.measurement.phase_changed("count_in" if now < activation else
-                    "listen" if self.mode == "listen" else "preview" if self.preview_only else "active", now)
-        elif self.attempt.pending_result is not None:
-            self.measurement.phase_changed("feedback", now)
-        elif self.visual_transport.preparation_pending or self.awaiting_score_revision is not None:
-            self.measurement.phase_changed("preparation", now)
-        else:
-            self.measurement.phase_changed("feedback" if self.attempt.performance_summary is not None else "idle", now)
+        learning = self.mode == "learn"
+        guided_completed = bool(
+            learning and self.teaching is not None
+            and self.teaching.snapshot(now=now)["completed"])
+        self.measurement.observe_phase(CapturePhaseFacts(
+            paused=self.visual_transport.paused,learning=learning,
+            awaiting_score=self.awaiting_score_revision is not None,
+            guided_completed=guided_completed,running=self.running,
+            count_in_activation=max(
+                self.visual_transport.run_at,
+                self.midi_ingress.resume_grading_after),
+            mode=self.mode,preview=self.preview_only,
+            pending_result=self.attempt.pending_result is not None,
+            preparation_pending=self.visual_transport.preparation_pending,
+            performance_complete=self.attempt.performance_summary is not None),now)
         if self._run_pre_assessment_transition(now):
             return
         if (self.running and self._pause_floor is not None

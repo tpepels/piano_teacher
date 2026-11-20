@@ -600,6 +600,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - The final direct `StreamLifecycle.attach_compiled` call in the renderer now belongs to `RetainedNotationPool.attach_compiled`, alongside the pool's already-owned CanvasItem allocation, precompile, invalidation and retirement. The native view only requests the prepared pool be attached before its visual projection.
 - This removes two remaining non-painting writes from the view without changing clip source, world position, pause or retry. The renderer still reads the internal online source for efficient paint projection; it does not mutate queue membership. No new tests. Native compile/repertoire/package CI remains the acceptance gate.
 
+### Implementation checkpoint BY — evidence phase selection belongs to LearningCapture
+
+- Introduced frozen `CapturePhaseFacts`; `PracticeEngine._update_transition` captures its current musical/mode facts but no longer selects and writes pause, guided, preparation, count-in, active, preview, feedback or idle intervals itself.
+- `LearningCapture.observe_phase` now owns that evidence projection, including precise closure of a running count-in at the scheduled activation timestamp (instead of the potentially late worker poll). The MIDI grading clock and musical scheduler are untouched.
+- All existing intervals and source/attempt identities use the one existing capture ledger. No new tests; core timing/ledger and native playback checks remain required.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

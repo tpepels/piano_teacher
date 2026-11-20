@@ -27,6 +27,21 @@ def identifier() -> str:
     return str(uuid.uuid4())
 
 
+@dataclass(frozen=True, slots=True)
+class CapturePhaseFacts:
+    paused: bool
+    learning: bool
+    awaiting_score: bool
+    guided_completed: bool
+    running: bool
+    count_in_activation: float
+    mode: str
+    preview: bool
+    pending_result: bool
+    preparation_pending: bool
+    performance_complete: bool
+
+
 class LearningCapture:
     def __init__(self, ledger, *, clock: Clock = monotonic):
         self._clock = clock
@@ -74,6 +89,35 @@ class LearningCapture:
         except BaseException:
             self.restore_state(before)
             raise
+
+    def observe_phase(self, facts: CapturePhaseFacts, now: float) -> None:
+        """Own exact evidence interval classification from immutable facts.
+
+        A previously opened count-in interval must close at the *scheduled*
+        activation epoch even if the worker poll arrives late. No second
+        grading clock or transport deadline is selected here.
+        """
+        if facts.paused:
+            self.phase_changed("pause",now)
+        elif facts.learning:
+            self.phase_changed(
+                "preparation" if facts.awaiting_score else
+                "feedback" if facts.guided_completed else "guided",now)
+        elif facts.running:
+            if self.phase == "count_in" and now >= facts.count_in_activation:
+                self.phase_changed("active",facts.count_in_activation)
+            else:
+                self.phase_changed(
+                    "count_in" if now < facts.count_in_activation else
+                    "listen" if facts.mode == "listen" else
+                    "preview" if facts.preview else "active",now)
+        elif facts.pending_result:
+            self.phase_changed("feedback",now)
+        elif facts.preparation_pending or facts.awaiting_score:
+            self.phase_changed("preparation",now)
+        else:
+            self.phase_changed(
+                "feedback" if facts.performance_complete else "idle",now)
 
     def phase_changed(self, phase: str, now: float) -> None:
         if phase == self.phase:
