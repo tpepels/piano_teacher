@@ -2920,7 +2920,7 @@ class PracticeEngine:
             running=self.running, run_at=self.visual_transport.run_at)
         decision = decide_transition(
             context, now=now, next_at=self.visual_transport.next_at,
-            preparation_at=self.visual_transport._preparation_at)
+            preparation_at=self.visual_transport.preparation_deadline)
         if decision.preparation_phase is not None:
             self.visual_transport.practice_preparation["phase"] = decision.preparation_phase
         if decision.action == "learning":

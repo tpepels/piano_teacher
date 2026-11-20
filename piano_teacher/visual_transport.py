@@ -56,6 +56,11 @@ class VisualTransport:
     def preparation_pending(self) -> bool:
         return self._preparation_pending
 
+    @property
+    def preparation_deadline(self) -> float:
+        """Only VisualTransport owns the pending rest/preparation epoch."""
+        return self._preparation_at
+
     def queue_preview_repetition(self) -> None:
         """A preview may repeat, but no graded attempt is awarded."""
         self._preview_loop_pending = True
