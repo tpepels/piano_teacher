@@ -5,6 +5,7 @@ LearningPlan navigation, or the engine; mode/session owners execute its effects.
 """
 from dataclasses import dataclass, replace
 from ..teaching_course import steps
+from ..teaching_manual import manual_progress
 from .score_artifacts import ScoreSelection
 
 
@@ -41,9 +42,76 @@ class TeachingContinuation:
         self.future_score = future_score
         self.transport = transport
         self.acknowledged = None
+        self.native_failure: tuple | None = None
+        self.prepared_published = False
         self.reservation = None
         self.schedule = None
         self.generation = 0
+
+    def choose_ahead(self, plan, *, fingerprint: str, revision: int,
+                     offset: int = 1, decided=None):
+        """Select an exact future source without changing the active cursor."""
+        if decided is not None and offset == 1:
+            return decided
+        number = plan.lesson_step_number + offset
+        if number > len(plan.lesson_steps):
+            return None
+        future = manual_progress(
+            plan.course_state(),"select_step",number=number)
+        return ScoreSelection(
+            piece=future.piece,phrase=future.stage.variant.phrase,
+            hand=future.hand,stage_key=future.key,revision=revision+offset,
+            fingerprint=fingerprint,
+            transformed_rhythm=future.stage.transformed_rhythm,
+            display_name=str(future.stage.display_name or "")),number
+
+    @staticmethod
+    def stage_label(step, display_name: str = "") -> str:
+        hand = {"right":"Right hand","left":"Left hand",
+                "both":"Both hands"}.get(step.hand,step.hand.capitalize())
+        return f'{hand} · {display_name or "Next exercise"}'
+
+    def ensure_next(self, planned) -> bytes:
+        if planned is None:
+            return b'{"status":"none"}'
+        selection,number = planned
+        return self.future_score.ensure(
+            selection,number=number,
+            label=self.stage_label(selection,selection.display_name))
+
+    def report_native_failure(self, planned, *, fingerprint: str,
+                              step_number: int, revision: int, error: str) -> dict:
+        if planned is None:
+            return {"accepted":False}
+        selection,number = planned
+        if (fingerprint != selection.fingerprint or number != step_number
+                or selection.revision != revision):
+            return {"accepted":False}
+        message = str(error).strip()[:400] or "Native score compilation failed"
+        self.native_failure = (
+            fingerprint,revision,selection.stage_key,number,message)
+        return {"accepted":True,"revision":revision,"step_number":number}
+
+    def acknowledge_stage(self, planned, *, stage_key: str,
+                          revision: int) -> dict:
+        if planned is None:
+            raise ValueError("No next lesson step to preload")
+        selection,number = planned
+        if selection.stage_key != stage_key or selection.revision != revision:
+            raise ValueError("Preloaded step no longer matches the active course")
+        if not self.future_score.ready(selection):
+            raise ValueError("Next lesson notation is not yet prepared")
+        self.acknowledged = (stage_key,revision)
+        return {"accepted":True,"step_number":number,
+                "revision":revision,"stage_key":stage_key}
+
+    def warm_more(self, planned) -> None:
+        if planned is None:
+            return
+        selection,number = planned
+        self.future_score.warm(
+            selection,number=number,
+            label=self.stage_label(selection,selection.display_name))
 
     @staticmethod
     def selection(pending, *, revision, fingerprint):

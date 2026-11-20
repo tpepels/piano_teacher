@@ -404,6 +404,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Corrected the attempt-domain boundary discovered during review: the consecutive two-take trouble key/count must **survive** Stop/Retry. Moved them from `AttemptRuntime` into `RecoveryStreak`, whose explicit `record` and `clear` operations are driven only by the teaching transition or stage change. `AttemptRuntime.reset_for_stop` now clears only genuinely take-scoped recorder/evidence/review state.
 - Existing CI must confirm the full retry/reconnect behavior; headless CI still does not certify the CA49 physical note path.
 
+### Implementation checkpoint BC — future stage identity and native preload acknowledgement have one owner
+
+- Moved source-identity-safe next-stage selection, serialized ahead-of-time engraving, staged-score labels, native compilation failure matching, exact revision acknowledgement and farther warmup into the existing `TeachingContinuation` / `FutureScore` owner. `PracticeEngine` no longer independently chooses or validates multiple future-stage revisions.
+- Removed the writable `_future_stage_ready` and `future_score` forwarding properties. Native preload failures and the prepared-published flag are now stored on `TeachingContinuation`, alongside its reservation and acknowledged identity. The engine retains only the already-authorized settlement timing effect after the expected asset becomes ready; no independent preloader deadline was introduced.
+- This shrinks the `server.py` stage/preloading section while keeping selected source metadata, failure messages and future handoff behavior. No tests added.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

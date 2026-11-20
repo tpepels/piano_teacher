@@ -233,11 +233,9 @@ class PracticeEngine:
         self._rest_take_end: tuple[float, float] | None = None
         self._tempo_key = None
         self._tempo_epoch: float | None = None
-        self._prepared_stage_published = False
         # Global musical origin of a delayed, pre-engraved next stage.
         # Pin the renderer-acknowledged source assets through settlement.
         # Final native renderer failures are tied to one exact future step.
-        self._native_preload_failure: tuple[str, int, str, int, str] | None = None
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
@@ -306,22 +304,6 @@ class PracticeEngine:
             self._stop(reason=reason)
         self.feedback = "The score stopped displaying correctly"
         self.next_action = "Select this lesson again after checking the score."
-
-    @property
-    def _future_stage_ready(self):
-        return self.teaching_continuation.acknowledged
-
-    @_future_stage_ready.setter
-    def _future_stage_ready(self, identity):
-        self.teaching_continuation.acknowledged = identity
-
-    @property
-    def future_score(self):
-        return self.teaching_continuation.future_score
-
-    @future_score.setter
-    def future_score(self, owner):
-        self.teaching_continuation.future_score = owner
 
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
         """Cancel session state after detachment and before closing the input."""
@@ -853,9 +835,9 @@ class PracticeEngine:
         # notation. Its stage-key + score revision remain authoritative:
         # navigation, library changes and generation mismatches fail that
         # identity check automatically at the next settlement.
-        self._prepared_stage_published = False
+        self.teaching_continuation.prepared_published = False
         self.teaching_continuation.cancel()
-        self._native_preload_failure = None
+        self.teaching_continuation.native_failure = None
         self.guided_session.stop()
         self.visual_transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
@@ -1393,7 +1375,7 @@ class PracticeEngine:
         prebuilt = None
         if changed and self.teaching_continuation.reservation is not None:
             selection, _ = self._decided_stage_selection()
-            if self._future_stage_ready != (selection.stage_key, selection.revision) or self.teaching_continuation.reservation[0] != selection.identity:
+            if self.teaching_continuation.acknowledged != (selection.stage_key, selection.revision) or self.teaching_continuation.reservation[0] != selection.identity:
                 raise UnpreparedNextStage("The decided lesson selected a different next score")
             prebuilt = self.teaching_continuation.reservation[1]
             if prebuilt is None:
@@ -1406,7 +1388,7 @@ class PracticeEngine:
             self.attempt.settlement_failed = True
             raise
         # Mechanical publication occurs only after the shared transaction commits.
-        self._prepared_stage_published = False
+        self.teaching_continuation.prepared_published = False
         self.attempt.retry_range = None
         if decision.verdict is not None and decision.verdict.clears_trouble:
             self._reset_trouble()
@@ -1421,11 +1403,11 @@ class PracticeEngine:
             self.attempt.performance_summary = self.attempt.review_stage_identity = None
             self.score_revision += 1
             self.awaiting_score_revision = None
-            if prebuilt is None and self.auto and self._future_stage_ready == (p.identity, self.score_revision):
-                prebuilt = self.future_score.adopt(self._score_selection())
+            if prebuilt is None and self.auto and self.teaching_continuation.acknowledged == (p.identity, self.score_revision):
+                prebuilt = self.teaching_continuation.future_score.adopt(self._score_selection())
             if prebuilt is not None:
                 self.score_artifacts = prebuilt
-                self._prepared_stage_published = True
+                self.teaching_continuation.prepared_published = True
                 self.visual_transport.visual_offset_beats += (
                     previous_duration+
                     SCHEDULER.seconds_beats(SETTLEMENT_SECONDS,outcome.previous_bpm))
@@ -2441,8 +2423,8 @@ class PracticeEngine:
         if self.auto and self.visual_transport.next_at and (
                 force_early or now >= self.visual_transport.next_at):
             readiness = ContinuationReadiness(
-                self._future_stage_ready,self.score_revision,
-                self.fingerprint,self._native_preload_failure)
+                self.teaching_continuation.acknowledged,self.score_revision,
+                self.fingerprint,self.teaching_continuation.native_failure)
             effect = self.teaching_continuation.advance(self.attempt_settlement.pending,now=now,readiness=readiness)
             if effect.action == "fault":
                 self.feedback = "Cannot prepare the next lesson score"
@@ -2502,11 +2484,11 @@ class PracticeEngine:
                     message=selected.message)
             effect = self.teaching_continuation.after_settlement(selected,
                 score_changed=self.score_revision != previous_revision,
-                prepared=self._prepared_stage_published and self._future_stage_ready == (self.plan.identity,self.score_revision))
+                prepared=self.teaching_continuation.prepared_published and self.teaching_continuation.acknowledged == (self.plan.identity,self.score_revision))
             route = effect.action
             if route == "handoff":
-                self._future_stage_ready = None
-                self._prepared_stage_published = False
+                self.teaching_continuation.acknowledged = None
+                self.teaching_continuation.prepared_published = False
                 # Assets are ready; physical placement is negotiated only
                 # by ScoreAdmissionGateway. No preloader-supplied lead/clear
                 # may independently move the new stage's musical onset.
@@ -2516,7 +2498,7 @@ class PracticeEngine:
                 self._continue_at(earliest,
                     from_beat=selected.next_exposure.from_beat)
                 return
-            self._prepared_stage_published = False
+            self.teaching_continuation.prepared_published = False
             # The selected teaching exposure has precedence over a timed
             # policy reply. A prepared untimed Learn step must never be
             # redirected to timed Practice just because feedback also carries
@@ -2923,7 +2905,7 @@ class PracticeEngine:
         planned = self._decided_stage_selection()
         if planned is not None:
             selection, _number = planned
-            if self._future_stage_ready == (selection.stage_key, selection.revision) and self.future_score.ready(selection):
+            if self.teaching_continuation.acknowledged == (selection.stage_key, selection.revision) and self.teaching_continuation.future_score.ready(selection):
                 self.visual_transport.next_at = now
                 self._advance_pending_feedback(now, prepared_on_time=True)
                 return
@@ -3434,78 +3416,32 @@ class PracticeEngine:
         return capture_session_snapshot(values, reads)
 
     def _next_stage_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:
-        """Snapshot an upcoming lesson without mutating its active cursor."""
         if self.plan is None or self.is_builtin_warmup or self.mode != "practice":
             return None
         decided = self._decided_stage_selection() if offset == 1 else None
-        if decided is not None:
-            return decided
-        p = self.plan
-        number = p.lesson_step_number + offset
-        if number > len(p.lesson_steps):
-            return None
-        future = manual_progress(p.course_state(), "select_step", number=number)
-        return ScoreSelection(piece=future.piece, phrase=future.stage.variant.phrase,
-            hand=future.hand, stage_key=future.key, revision=self.score_revision+offset,
-            fingerprint=self.fingerprint, transformed_rhythm=future.stage.transformed_rhythm,
-            display_name=str(future.stage.display_name or "")), number
-
-    @staticmethod
-    def _stage_runway_label(step, display_name: str = "") -> str:
-        hand = {"right": "Right hand", "left": "Left hand",
-                "both": "Both hands"}.get(step.hand, step.hand.capitalize())
-        # Presentation is derived from the registered stage description,
-        # never a technical generator identifier used for saved progress.
-        return f'{hand} · {display_name or "Next exercise"}'
+        return self.teaching_continuation.choose_ahead(
+            self.plan,fingerprint=self.fingerprint,revision=self.score_revision,
+            offset=offset,decided=decided)
 
     def next_stage_score(self) -> bytes:
-        """Begin ahead-of-time score preparation without blocking MIDI timing."""
         with self.lock:
-            planned = self._next_stage_selection()
-            if planned is None:
-                return b'{"status":"none"}'
-            selection, number = planned
-            label = self._stage_runway_label(selection, selection.display_name)
-            return self.future_score.ensure(
-                selection, number=number, label=label)
+            return self.teaching_continuation.ensure_next(
+                self._next_stage_selection())
 
     def report_preload_failure(self, *, fingerprint: str, step_number: int,
                                revision: int, error: str) -> dict:
-        """Fail closed on an exact Godot native-ink compilation failure.
-
-        An old response cannot poison another piece or the next stage.
-        The current scored take still finishes; the failure is consumed only
-        at its already scheduled transition boundary.
-        """
         with self.lock:
-            planned = self._next_stage_selection()
-            if planned is None:
-                return {"accepted": False}
-            selection, number = planned
-            if (fingerprint != self.fingerprint or number != step_number or
-                    selection.revision != revision):
-                return {"accepted": False}
-            message = str(error).strip()[:400] or "Native score compilation failed"
-            self._native_preload_failure = (
-                self.fingerprint, revision, selection.stage_key, number, message)
-            return {"accepted": True, "revision": revision, "step_number": number}
+            return self.teaching_continuation.report_native_failure(
+                self._next_stage_selection(),fingerprint=fingerprint,
+                step_number=step_number,revision=revision,error=error)
 
     def acknowledge_preloaded_stage(self, *, stage_key: str,
                                     revision: int) -> dict:
-        """Acknowledge exact preloaded ASSET identity, never playback time."""
         with self.lock:
-            planned = self._next_stage_selection()
-            if planned is None:
-                raise ValueError("No next lesson step to preload")
-            selection, number = planned
-            if selection.stage_key != stage_key or selection.revision != revision:
-                raise ValueError("Preloaded step no longer matches the active course")
-            if not self.future_score.ready(selection):
-                raise ValueError("Next lesson notation is not yet prepared")
-            self._future_stage_ready = (stage_key, revision)
-            # If the future ink became ready during the existing rest gap,
-            # schedule its exact delayed start immediately. Waiting for the
-            # old full-bar deadline would show native ink on a false origin.
+            accepted = self.teaching_continuation.acknowledge_stage(
+                self._next_stage_selection(),stage_key=stage_key,revision=revision)
+            # A prepared stage may settle in its previously scheduled rest,
+            # but asset readiness must not choose a new musical deadline.
             if (self.attempt.pending_result is not None and self.auto and
                     not self.running and not self.visual_transport.paused and
                     self._decided_stage_selection() is not None):
@@ -3518,18 +3454,9 @@ class PracticeEngine:
                 if now >= finish - 1e-7:
                     self.visual_transport.next_at = now
                     self._advance_pending_feedback(now)
-            # Prepare one more source-identity-bound stage while this step is
-            # still being played. The next stage remains first in the queue.
-            farther = self._next_stage_selection(offset=2)
-            if farther is not None:
-                ahead_selection, ahead_number = farther
-                ahead_step = self.plan.lesson_steps[ahead_number-1]
-                self.future_score.warm(
-                    ahead_selection, number=ahead_number,
-                    label=self._stage_runway_label(
-                        ahead_step, ahead_selection.display_name))
-            return {"accepted": True, "step_number": number,
-                    "revision": revision, "stage_key": stage_key}
+            self.teaching_continuation.warm_more(
+                self._next_stage_selection(offset=2))
+            return accepted
 
     def _score_selection(self) -> ScoreSelection:
         """Capture the selected source under the application lock."""
