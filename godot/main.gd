@@ -358,13 +358,11 @@ func _transport_beat_now() -> float:
     return _transport_beat_at(Time.get_ticks_msec())
 
 func _transport_beat_at(at_ms: int) -> float:
-    # The one Godot-side projection of the engine's musical clock. It is
-    # phase-locked to accepted snapshots; the Python engine stays
-    # authoritative for note timing and assessment. Until a snapshot of this
-    # transport is accepted, the last reported beat is held, never guessed.
-    if visual_transport_clock.matches(state_inbox.current):
-        return visual_transport_clock.score_beat(at_ms)
-    return float(state_inbox.current.get("clock_beat", 0.0))
+    # PresentationSession is the sole snapshot-to-musical-beat projector;
+    # a UI control or metronome callback cannot choose a second epoch.
+    if presentation_session != null:
+        return presentation_session.transport_beat(state_inbox.current,at_ms)
+    return float(state_inbox.current.get("clock_beat",0.0))
 
 # Projection only: never change the backend's local MIDI grading clock.
 # Across repeats the model is drawn at consecutive positions on one infinite

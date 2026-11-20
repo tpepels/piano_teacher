@@ -360,6 +360,12 @@
 - Later Python source preparation and native retained-pool decomposition also passed the existing core CI at [44706877402](https://github.com/tpepels/piano_teacher/actions/runs/44706877402), but this does not parse and execute the new Godot retained-pool source. Initiating the same full native/software/package acceptance once more at the current revision.
 - Phase 5 and the physical portion of Phase 6 remain open. Software checks do not constitute Kawai USB/Bluetooth, speaker latency, nonheadless install or real performer mastery acceptance.
 
+### Implementation checkpoint AV — single snapshot-to-musical-beat projection in Godot
+
+- Removed Main's duplicate `VisualTransportClock.matches` / `score_beat` fallback algorithm. Metronome and control callback `_transport_beat_at` now delegates to the existing `PracticePresentationSession.transport_beat` owner; before session construction there is only a static published-beat fallback, never another estimated clock.
+- The Python MIDI grading clock remains authoritative and unchanged, and the global visual world position still comes from one forward-only presentation timeline. No additional tests.
+- Physical count-in and timing acceptance remains open.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
