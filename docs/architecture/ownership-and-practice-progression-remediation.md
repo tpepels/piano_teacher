@@ -391,6 +391,13 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - A bounded `commit(intent,receipt)` callback activates the graded take once, `capture()` independently verifies the post-commit musical state, and `abort(reason)` rolls back mismatched starts. A separate `notify_failure(reason)` port handles failed displayed scores. In-process dispatcher passes these exact ports under the existing engine lock.
 - Existing source-bound request, reserve, present, withdraw, fail and state/timeout idempotency remain in the original coordinator. No new tests or engine-pointer compatibility branch. This resolves the audit's highest-risk circular dependency.
 
+### Implementation checkpoint BA — one attempt-scoped state owner and atomic reset paths
+
+- Introduced `AttemptRuntime` as the sole storage owner for seventeen related fields: recorder, pending complete/rolling assessments and BPM, feedback marks, persistence failure, performance review, retry/recovery and consecutive trouble state. The engine no longer has independent writable fields for them.
+- `PracticeEngine._open_take` now calls `AttemptRuntime.begin_take`; `_stop` calls `reset_for_stop` once **after the authoritative evidence interrupt/flush**; trouble-history resets use the same owner. Final assessment marks and review completion use explicit state-install operations rather than independent writes scattered through the main completion method.
+- Existing tests that intentionally inspect or inject a live recorder/pending result were migrated to `engine.attempt` without changing assertions. No new tests, compatibility shadow fields or replacement of the shared LearningCapture.
+- Settlement still owns durable progress/evidence; the attempt object owns only the lifetime of transient grading/retry state. Remaining `PracticeEngine` orchestration must continue to move before L01 closes.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -72,7 +72,7 @@ def test_unplug_stops_attempt_and_retains_saved_device_for_replug(connected):
 
     assert engine.midi.port is None and engine.midi.device == ""
     assert old_port.closed
-    assert not engine.running and engine.recorder is None
+    assert not engine.running and engine.attempt.recorder is None
     assert not engine.auto and engine.visual_transport.next_at == 0
     assert "disconnected" in engine.feedback.lower()
     assert "USB Piano" in engine.feedback
@@ -107,13 +107,13 @@ def test_unplug_during_clean_feedback_discards_pending_mastery(connected):
     engine.plan.streak = 2
     engine.start()
     engine.running = False
-    engine.pending_result = SimpleNamespace(correct=1, notes=[object()], extra_notes=0)
+    engine.attempt.pending_result = SimpleNamespace(correct=1, notes=[object()], extra_notes=0)
     engine.visual_transport.next_at = 1.0
     midi.names = []
 
     engine.ports()
 
-    assert engine.pending_result is None
+    assert engine.attempt.pending_result is None
     assert engine.state()["phase"] == "ready"
     assert not engine.plan.mastered
 
@@ -232,7 +232,7 @@ def test_auto_reconnect_after_usb_return_never_resumes_cancelled_take(
     midi.names = []
     assert engine.ports() == []
     assert original.closed
-    assert not engine.running and engine.recorder is None
+    assert not engine.running and engine.attempt.recorder is None
     assert engine.preferences()["midi_device"] == "USB Piano"
     assert not engine.auto
 
@@ -245,7 +245,7 @@ def test_auto_reconnect_after_usb_return_never_resumes_cancelled_take(
     assert engine.ports() == midi.names
     assert engine.midi.device == "USB Piano"
     assert engine.midi.port is not original
-    assert not engine.running and engine.recorder is None
+    assert not engine.running and engine.attempt.recorder is None
     assert engine.transport_id == transport_before
     assert not engine.plan.mastered
     assert "Press Start" in engine.feedback
@@ -320,7 +320,7 @@ def test_device_release_cancels_the_take_before_the_backend_closes(connected, mo
 
     def closing():
         assert engine.lock._is_owned()
-        observed.append((engine.running, engine.recorder, engine.auto,
+        observed.append((engine.running, engine.attempt.recorder, engine.auto,
                          engine.visual_transport.next_at, engine.midi.port))
         close()
 

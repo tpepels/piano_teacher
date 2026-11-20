@@ -63,7 +63,7 @@ def test_rejected_strategy_preserves_live_transport_and_preferences(tmp_path):
         engine.fingerprint = "switch-fixture"
         engine.start()
         plan = engine.plan
-        recorder = engine.recorder
+        recorder = engine.attempt.recorder
         transport_id = engine.transport_id
         revision = engine.score_revision
         run_at = engine.visual_transport.run_at
@@ -74,7 +74,7 @@ def test_rejected_strategy_preserves_live_transport_and_preferences(tmp_path):
         assert engine.library.settings == before
         assert engine.library.settings_path.read_bytes() == disk
         assert engine.plan is plan
-        assert engine.recorder is recorder
+        assert engine.attempt.recorder is recorder
         assert engine.running
         assert engine.transport_id == transport_id
         assert engine.score_revision == revision
@@ -127,7 +127,7 @@ def test_reselecting_the_default_strategy_keeps_the_running_course(tmp_path):
             exercise_strategy="coda-fukuda-midi")
         assert response["exercise_strategy"] == "coda-fukuda-midi"
         assert engine.plan is old_plan
-        assert engine.running and engine.recorder is not None
+        assert engine.running and engine.attempt.recorder is not None
         assert engine.score_revision == old_revision
         assert ScoreLibrary(tmp_path / "app" / "config").settings[
             "exercise_strategy"] == "coda-fukuda-midi"

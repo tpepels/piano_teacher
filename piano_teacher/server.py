@@ -30,6 +30,7 @@ from .application.learning_evidence_session import LearningEvidenceSession
 from .application.source_preparation_session import SourcePreparationSession
 from .application.score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
 from .application.attempt_settlement import AttemptSettlement
+from .application.attempt_runtime import AttemptRuntime
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
 from .application.musical_scheduler import (
@@ -44,7 +45,6 @@ from .application.midi_connection import MidiConnection, MidiNotice
 from .application.midi_key_shortcuts import MidiKeyShortcuts
 from .application.midi_ingress import MidiIngress, MidiInputFacts, InputTransportFacts
 from .application.listen_session import ListenSelection, ListenSession
-from .practice import Recorder
 from .importing.pieces import import_piece
 from .engraving.engraving import EngravedScore
 from .fingering import FingeringService
@@ -142,12 +142,12 @@ class PracticeEngine:
         self._fingering_lock = threading.Lock()
         self._piece_generation = 0
         self.guided_session = GuidedSession(clock=self.now)
+        self.attempt = AttemptRuntime()
         self.plan: LearningPlan | None = None
         self.score = None
         self.source = None
         self.is_builtin_warmup = False
         self.fingerprint = ""
-        self.recorder: Recorder | None = None
         self.visual_transport = VisualTransport(
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
         self.playback = PlaybackCoordinator()
@@ -165,7 +165,6 @@ class PracticeEngine:
                                 else FeedbackEventLog())
         self.live_assessment = LiveAssessmentPublisher(self.feedback_events)
         self.runtime_timings = RuntimeTimings()
-        self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
         # Musical clock resumes at its previous beat after a reading lead-in.
         # No MIDI attack during that lead-in can alter a graded attempt.
@@ -175,21 +174,12 @@ class PracticeEngine:
         self._pause_floor: float | None = None
         self._deferred_score_ack: int | None = None
         self.next_action = "Open a MIDI file."
-        self.retry_range: dict | None = None
         # Persistent trouble means two boundary failures in consecutive takes
         # at the same stage and source two-bar chunk. Only a clean full take
         # or explicit stage navigation resets the history.
-        self._trouble_key: tuple | None = None
-        self._trouble_count = 0
-        self._guided_recovery_pending = False
         self._guided_return: tuple[str, float] | None = None
-        self.performance_summary: dict | None = None
-        self.review_stage_identity: str | None = None
-        self.review_end_beat: float | None = None
         # Automatic remedial sections are timed source reviews, never an
         # input-blocking lesson. A partial review never awards mastery.
-        self._automatic_remedial_review = False
-        self.review_session_complete = False
         self.course_guided = False
         # Practice flow lesson state: changed only through the transitions
         # of application/practice_flow.py (see _flow_execute).
@@ -210,10 +200,6 @@ class PracticeEngine:
         self.feedback = "Open a MIDI file"
         self.score_revision = 0
         self.awaiting_score_revision: int | None = None
-        self.pending_result = None
-        self._pending_assessed_bpm: float | None = None
-        self.feedback_marks: list[dict] = []
-        self.feedback_unmapped = 0
         self.midi = MidiConnection(enabled=enable_midi, clock=self.now)
         self.live_input = LiveInputView()
         self.assessment = AssessmentService()
@@ -257,8 +243,6 @@ class PracticeEngine:
         self.progress.ledger.prune(days=self.library.settings["evidence_retention_days"],
                                    budget_mib=self.library.settings["evidence_budget_mib"])
         self._action_reason = "transition"
-        self._pending_rolling = None
-        self._settlement_failed = False
         self.fukuda_mistakes = FukudaMistakeStore(self.db)
         self.learner_store = self.progress.learner_store
         self.learner_progress = LearnerProgress(self.learner_store)
@@ -306,7 +290,7 @@ class PracticeEngine:
             play_from_beat=self.visual_transport.play_from_beat,
             resume_grading_after=self.midi_ingress.resume_grading_after,
             pause_context=self.pause_context,preview_only=self.preview_only,
-            pending_result=self.pending_result is not None,transport_id=self.transport_id)
+            pending_result=self.attempt.pending_result is not None,transport_id=self.transport_id)
 
     def _request_playback(self, *, from_beat: float, **kwargs):
         return self.playback.request(self._playback_facts(from_beat=from_beat),
@@ -462,9 +446,9 @@ class PracticeEngine:
         phrase = self.plan.active_phrase
         full_end = phrase.end-phrase.start
         self.open_from_beat = response.restart_beat
-        self.review_end_beat = response.end_beat if response.end_beat is not None and response.end_beat < full_end-1e-7 else None
-        self.retry_range = ({"start_beat": response.restart_beat, "end_beat": response.end_beat,
-                             "response": response.action} if self.review_end_beat is not None else None)
+        self.attempt.review_end_beat = response.end_beat if response.end_beat is not None and response.end_beat < full_end-1e-7 else None
+        self.attempt.retry_range = ({"start_beat": response.restart_beat, "end_beat": response.end_beat,
+                             "response": response.action} if self.attempt.review_end_beat is not None else None)
         instruction = {
             "repeat": f"Repeat this passage at {response.bpm} BPM.",
             "isolate": f"Practise the difficult measures at {response.bpm} BPM before reconnecting the passage.",
@@ -683,13 +667,13 @@ class PracticeEngine:
             transport = InputTransportFacts(
                 next_at=self.visual_transport.next_at,
                 preview_loop_pending=self.visual_transport.preview_loop_pending,
-                pending_teaching_result=self.pending_result is not None,
+                pending_teaching_result=self.attempt.pending_result is not None,
                 pending_rewind=self.visual_transport.pending_rewind is not None,
                 automatic=self.auto,preview_only=self.preview_only,
                 visual_gap_beats=self.visual_transport.visual_gap_beats,
                 awaiting_score=self.awaiting_score_revision is not None,
                 exercise_kind=(self.plan.exercise.kind if self.plan else ""),
-                review_end_beat=self.review_end_beat,
+                review_end_beat=self.attempt.review_end_beat,
                 presentation_required=self.playback.presentation_required,
                 successor_action=(self.playback.intent.action
                     if self.playback.intent is not None else None))
@@ -704,7 +688,7 @@ class PracticeEngine:
                 return
             musical_at = self._musical_seconds(corrected_at)
             self.midi_ingress.deliver(message,facts=facts,received_at=now,corrected_at=corrected_at,
-                musical_at=musical_at,recorder=self.recorder,teaching=self.teaching,
+                musical_at=musical_at,recorder=self.attempt.recorder,teaching=self.teaching,
                 feedback_take=self._feedback_take())
 
     def load(self, path: str, *, warmup: bool = False):
@@ -740,10 +724,10 @@ class PracticeEngine:
                 self.feedback = "Press Start to practice"
                 self.next_action = "Press Start to practice."
                 self.score_revision += 1
-                self.pending_result = None
-                self._pending_assessed_bpm = None
-                self.feedback_marks = []
-                self.feedback_unmapped = 0
+                self.attempt.pending_result = None
+                self.attempt.pending_assessed_bpm = None
+                self.attempt.feedback_marks = []
+                self.attempt.feedback_unmapped = 0
                 if self._flow_active():
                     self._flow_open()
         if diagnostics:
@@ -823,7 +807,7 @@ class PracticeEngine:
                     fukuda_mistakes=frozenset(), feedback={})
         # Publish all replacement records before stopping the current take.
         with self.measurement.atomic():
-            self.measurement.interrupt("lesson_reset", self.recorder.presses if self.recorder else
+            self.measurement.interrupt("lesson_reset", self.attempt.recorder.presses if self.attempt.recorder else
                                        self.measurement.guided.presses)
             self.measurement.flush_intervals(self.now())
             self.progress.reset_piece(fingerprint)
@@ -850,7 +834,7 @@ class PracticeEngine:
         self.playback.invalidate(reason or self._action_reason)
         self._paused_playback_intent = None
         reason = reason or self._action_reason
-        played = (self.recorder.presses if self.recorder is not None else
+        played = (self.attempt.recorder.presses if self.attempt.recorder is not None else
                   self.measurement.guided.presses)
         if persist_evidence:
             with self.measurement.atomic():
@@ -880,27 +864,13 @@ class PracticeEngine:
         self.preview_only=False
         self.count_in_beats=0
         self.awaiting_score_revision=None
-        self.recorder=None
-        self.pending_result=None
-        self._pending_assessed_bpm = None
-        self.feedback_marks=[]
-        self.feedback_unmapped=0
-        self.recovery_notice = None
+        self.attempt.reset_for_stop()
         self.live_input.reset_attempt()
-        self.retry_range=None
-        self._guided_recovery_pending=False
         self._guided_return=None
         self.listen.cancel()
-        self.performance_summary=None
-        self.review_stage_identity=None
-        self.review_end_beat=None
-        self._automatic_remedial_review=False
-        self.review_session_complete=False
         self._guided_prepared=False
         self._remediation_pending = None
         self._remediation_active = None
-        self._pending_rolling = None
-        self._settlement_failed = False
 
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
@@ -1057,7 +1027,7 @@ class PracticeEngine:
         self.learner_progress.reactivate_trouble(fingerprint=self.fingerprint, stage_key=selected.stage_key)
         self.course_guided = True
         grid = phrase_grid(self.plan.active_phrase,self.plan.piece.bar_boundaries)
-        self.retry_range = {"first_bar":self.plan.active_phrase.first_bar+grid.index(selected.from_beat),
+        self.attempt.retry_range = {"first_bar":self.plan.active_phrase.first_bar+grid.index(selected.from_beat),
             "last_bar":self.plan.active_phrase.first_bar+grid.index(selected.end_beat)-1,
             "start_beat":selected.from_beat,"end_beat":selected.end_beat}
         self._begin_learn(from_beat=selected.from_beat,recovery=True,exposure=selected)
@@ -1071,8 +1041,7 @@ class PracticeEngine:
                 start=start, end=end, errors=errors)
 
     def _reset_trouble(self):
-        self._trouble_key = None
-        self._trouble_count = 0
+        self.attempt.clear_trouble()
 
     def display_phrase(self) -> Phrase:
         """One source-derived fragment in Learn; the exact full variant in time."""
@@ -1112,12 +1081,12 @@ class PracticeEngine:
             end = self.plan.active_phrase.end-self.plan.active_phrase.start
         from .application.guided_session import materialize_fragment
         fragment = materialize_fragment(self.plan.active_variant,self.plan.piece.bar_boundaries,start=start,end=end)
-        retry_range = self.retry_range if recovery else None
+        retry_range = self.attempt.retry_range if recovery else None
         self._stop(reason="guided_recovery" if recovery else "learn", preserve_episode=recovery)
         self.score_state_publisher.reset_guided()
         self._remediation_active = remediation
         if recovery:
-            self.retry_range = retry_range
+            self.attempt.retry_range = retry_range
             self._guided_return = (self.plan.identity, start)
         self.mode = "learn"
         self.guided_range = (start, end)
@@ -1173,14 +1142,14 @@ class PracticeEngine:
             self._flow_set_bpm(state.bpm)
             self._guided_return = None
         return_context = self._guided_return
-        retry_range = self.retry_range
+        retry_range = self.attempt.retry_range
         self._stop(reason="reintegration", preserve_episode=return_context is not None)
         self.visual_transport.play_from_beat = selected.from_beat
         self.open_from_beat = selected.from_beat
-        self.review_end_beat = selected.end_beat
+        self.attempt.review_end_beat = selected.end_beat
         if return_context is not None:
             self.visual_transport.pending_rewind = selected.from_beat
-            self.retry_range = retry_range
+            self.attempt.retry_range = retry_range
             self._guided_return = return_context
         self.mode = "practice"
         self.teaching = None
@@ -1261,7 +1230,7 @@ class PracticeEngine:
         selected = exposure or self._install_command(effect)
         self._stop()
         self.open_from_beat = selected.from_beat
-        self.review_end_beat = selected.end_beat
+        self.attempt.review_end_beat = selected.end_beat
         self.mode = "perform"
         self.teaching = None
         self.guided_range = None
@@ -1285,9 +1254,9 @@ class PracticeEngine:
         selected = self._install_command(effect)
         self._prepare_practice(exposure=selected)
         self.open_from_beat = selected.from_beat
-        self.review_end_beat = selected.end_beat or self.plan.active_phrase.end-self.plan.active_phrase.start
-        self.retry_range = {"first_bar":first_bar,"last_bar":last_bar,
-            "start_beat":self.open_from_beat,"end_beat":self.review_end_beat}
+        self.attempt.review_end_beat = selected.end_beat or self.plan.active_phrase.end-self.plan.active_phrase.start
+        self.attempt.retry_range = {"first_bar":first_bar,"last_bar":last_bar,
+            "start_beat":self.open_from_beat,"end_beat":self.attempt.review_end_beat}
         self.awaiting_score_revision = None
         self.auto = False
         self.feedback = f"Ready to repeat measures {first_bar}-{last_bar}"
@@ -1298,13 +1267,13 @@ class PracticeEngine:
         selected = self._install_command(effect)
         self._prepare_practice(exposure=selected)
         self.open_from_beat = selected.from_beat
-        self.review_end_beat = selected.end_beat or self.plan.active_phrase.end-self.plan.active_phrase.start
+        self.attempt.review_end_beat = selected.end_beat or self.plan.active_phrase.end-self.plan.active_phrase.start
         # _prepare_practice resets a previous retry range. Re-publish the
         # bounded, source-selected weak passage after preparing the new take,
         # exactly as the explicit review_retry command does. The frontend
         # and review completion must agree on this one graded interval.
-        self.retry_range = {"start_beat": self.open_from_beat,
-                            "end_beat": self.review_end_beat}
+        self.attempt.retry_range = {"start_beat": self.open_from_beat,
+                            "end_beat": self.attempt.review_end_beat}
         self.awaiting_score_revision = None
         self.auto = False
         self.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
@@ -1331,7 +1300,7 @@ class PracticeEngine:
         else:
             self._prepare_practice(exposure=selected)
             self.visual_transport.pending_rewind = selected.from_beat
-            self.retry_range = {"first_bar":bar,"last_bar":self.plan.active_phrase.last_bar,
+            self.attempt.retry_range = {"first_bar":bar,"last_bar":self.plan.active_phrase.last_bar,
                 "start_beat":selected.from_beat,"end_beat":self.plan.active_phrase.end-self.plan.active_phrase.start}
             self.next_action = f"Get ready to play from bar {bar} at {selected.bpm} BPM."
 
@@ -1351,8 +1320,8 @@ class PracticeEngine:
             assisted_count=assisted_count, completed=completed, reason=values.get("reason"),
             bar=values.get("bar"), first_bar=values.get("first_bar"), last_bar=values.get("last_bar"),
             scope=values.get("scope"), requested_stage=values.get("stage_key"), requested_mode=values.get("mode"))
-        scope = completion_route(self.mode, self.review_end_beat, self.visual_transport.play_from_beat)
-        if self._automatic_remedial_review and scope == "section_review":
+        scope = completion_route(self.mode, self.attempt.review_end_beat, self.visual_transport.play_from_beat)
+        if self.attempt.automatic_remedial_review and scope == "section_review":
             scope = "partial_recovery"
         policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
         history = (self.practice_policy.store.recent(self.fingerprint, p.identity)
@@ -1362,13 +1331,13 @@ class PracticeEngine:
             history, self._retry_context(result, end_beat=end_beat) if result is not None and (policy.whole_handler is not None or policy.rolling_handler is not None) else None,
             TeachingRouteFacts(mode=self.mode, automatic=self.auto, warmup=self.is_builtin_warmup,
                 preview_only=self.preview_only, assistance_used=self.measurement.assistance_used,
-                scope=scope, performed_bpm=self._pending_assessed_bpm or p.bpm,
+                scope=scope, performed_bpm=self.attempt.pending_assessed_bpm or p.bpm,
                 from_beat=self.visual_transport.play_from_beat,
                 end_beat=end_beat if end_beat is not None else p.active_phrase.end-p.active_phrase.start,
                 course_guided=self.course_guided, guided_return=self._guided_return,
-                guided_range=self.guided_range, review_end_beat=self.review_end_beat,
+                guided_range=self.guided_range, review_end_beat=self.attempt.review_end_beat,
                 remediation_active=self._remediation_active is not None,
-                trouble_key=self._trouble_key, trouble_count=self._trouble_count,
+                trouble_key=self.attempt.trouble_key, trouble_count=self.attempt.trouble_count,
                 parent_decision_id=self.measurement.parent_decision),
             self.practice_policy.diagnosis, self.practice_policy.learner,
             getattr(p.lesson_generator, "catalog", None),
@@ -1376,8 +1345,8 @@ class PracticeEngine:
                 trouble=tuple((unit["stage_key"],unit["start_beat"],unit["end_beat"],tuple(unit["source_indices"]))
                     for unit in self._valid_trouble_spots()),
                 review=tuple((u["first_bar"],u["last_bar"],u["start_beat"],u["end_beat"],u["errors"])
-                    for u in (self.performance_summary or {}).get("sections",())),
-                review_current=self.review_stage_identity == p.identity,
+                    for u in (self.attempt.performance_summary or {}).get("sections",())),
+                review_current=self.attempt.review_stage_identity == p.identity,
                 paused=self.visual_transport.paused,
                 guidance_completed=bool(self.teaching is not None and self.teaching.snapshot(now=self.now())["completed"]),
                 open_from_beat=self.open_from_beat,pending_rewind=self.visual_transport.pending_rewind))
@@ -1406,12 +1375,12 @@ class PracticeEngine:
         return self.plan.bpm if self.plan is not None else 0
 
     def _commit_pending(self) -> str:
-        if self.pending_result is None or self.plan is None:
+        if self.attempt.pending_result is None or self.plan is None:
             return ""
         p = self.plan
         pending = self.attempt_settlement.pending
-        if pending is None or pending.assessment is not self.pending_result:
-            pending = self._prepare_teaching("full_result", self.pending_result)
+        if pending is None or pending.assessment is not self.attempt.pending_result:
+            pending = self._prepare_teaching("full_result", self.attempt.pending_result)
         decision = pending.decision
         self.teaching_continuation.validate_announcement(pending)
         if pending.state.policy != resolve_mistake_policy(self.library.settings["mistake_response_strategy"]):
@@ -1432,22 +1401,22 @@ class PracticeEngine:
             outcome = self.attempt_settlement.settle(pending, plan=p,
                 binding=self._teaching_binding(), now=self.now(),continuation=self.teaching_continuation)
         except BaseException:
-            self._settlement_failed = True
+            self.attempt.settlement_failed = True
             raise
         # Mechanical publication occurs only after the shared transaction commits.
         self._prepared_stage_published = False
-        self.retry_range = None
+        self.attempt.retry_range = None
         if decision.verdict is not None and decision.verdict.clears_trouble:
             self._reset_trouble()
         self._remediation_pending = decision.remediation
         if outcome.accelerated:
-            self.recovery_notice = {"kind": "speedup", "errors": 0,
+            self.attempt.recovery_notice = {"kind": "speedup", "errors": 0,
                 "from_bpm": outcome.previous_bpm, "to_bpm": p.bpm,
                 "first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar,
                 "expires_at": self.now()+7.0}
         if changed:
             self.open_from_beat = 0.0
-            self.performance_summary = self.review_stage_identity = None
+            self.attempt.performance_summary = self.attempt.review_stage_identity = None
             self.score_revision += 1
             self.awaiting_score_revision = None
             if prebuilt is None and self.auto and self._future_stage_ready == (p.identity, self.score_revision):
@@ -1461,9 +1430,9 @@ class PracticeEngine:
             else:
                 self.score_artifacts.invalidate()
                 self.visual_transport.visual_offset_beats = 0.0
-        self.pending_result = None
-        self._pending_assessed_bpm = None
-        self._settlement_failed = False
+        self.attempt.pending_result = None
+        self.attempt.pending_assessed_bpm = None
+        self.attempt.settlement_failed = False
         self.teaching_continuation.reservation = None
         return outcome.message
 
@@ -1497,7 +1466,7 @@ class PracticeEngine:
                 self._prepare_practice(exposure=selected)
                 return
             if self.measurement.attempt_id is not None:
-                self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
+                self.measurement.interrupt("restart", self.attempt.recorder.presses if self.attempt.recorder else ())
             self.midi_ingress.resume_grading_after = 0.0
             self.midi_ingress.resume_ignored_pitches.clear()
             self._pause_floor = None
@@ -1505,9 +1474,9 @@ class PracticeEngine:
             self.teaching = None
             self.guided_range = None
             self._guided_return = None
-            self.performance_summary = None
-            self.review_stage_identity = None
-            self.review_session_complete = False
+            self.attempt.performance_summary = None
+            self.attempt.review_stage_identity = None
+            self.attempt.review_session_complete = False
             self.preview_only = not self.midi.connected
             phrase = self.plan.active_phrase
             # Only the engine mutates transport and input state. The timing
@@ -1544,17 +1513,17 @@ class PracticeEngine:
                     presentation_lead_seconds if scheduled_deadline is None else 0.0),
                 continuation=scheduled_deadline is not None).run_at
             scope = ("preview" if self.preview_only else "perform" if mode == "perform" else
-                     "partial" if self._automatic_remedial_review else
-                     "section_review" if self.review_end_beat is not None else
+                     "partial" if self.attempt.automatic_remedial_review else
+                     "section_review" if self.attempt.review_end_beat is not None else
                      "partial" if scheduled.from_beat > 1e-7 else "full")
             try:
                 self.measurement.begin(self._learning_context(
                     scope=scope, start=scheduled.from_beat,
-                    end=self.review_end_beat or phrase.end-phrase.start,
+                    end=self.attempt.review_end_beat or phrase.end-phrase.start,
                     run_at=self.visual_transport.run_at))
             except Exception:
                 self.running = False
-                self.recorder = None
+                self.attempt.recorder = None
                 self.auto = False
                 self.feedback = "Could not record the start of this attempt"
                 raise
@@ -1571,10 +1540,10 @@ class PracticeEngine:
                 # An explicit restart supersedes unfinished grading and any
                 # old automatic teaching settlement. Never carry that result
                 # into the next admitted transport.
-                if self.pending_result is not None:
+                if self.attempt.pending_result is not None:
                     self.attempt_settlement.cancel(
                         reason="restart", now=self.now())
-                    self.pending_result = None
+                    self.attempt.pending_result = None
                     self.teaching_continuation.cancel()
                     self.visual_transport.next_at = 0.0
                     self.visual_transport.announced_continuation = None
@@ -1814,7 +1783,7 @@ class PracticeEngine:
         else:
             self.visual_transport.announced_continuation = None
         self.running = False
-        self.recorder = None
+        self.attempt.recorder = None
         self.count_in_beats = 0.0
         self.measurement.phase_changed("preparation", now)
 
@@ -1825,7 +1794,7 @@ class PracticeEngine:
         return self.visual_transport.position(
             now, phrase_length=phrase.end-phrase.start, bpm=self.plan.bpm,
             running=self.running,
-            pending_auto_result=(self.pending_result is not None and self.auto),
+            pending_auto_result=(self.attempt.pending_result is not None and self.auto),
             tempo_map=self._active_tempo_map())
 
     def control(self, action: str, **kwargs) -> None:
@@ -1837,7 +1806,7 @@ class PracticeEngine:
                       "bpm": self.plan.bpm if self.plan else None, "mode": self.mode}
             previous_command = self.session_commands.active
             route = ControlDispatcher.route(action)
-            if self.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self._settlement_failed or self._pending_rolling is not None)):
+            if self.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt.pending_rolling is not None)):
                 change = (prepare_stage_change(self.plan, action, kwargs, warmup=self.is_builtin_warmup)
                           if route == "stage" else None)
                 self.session_commands.active = self._prepare_teaching("manual", manual=change,
@@ -2102,7 +2071,7 @@ class PracticeEngine:
             self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self._update_short_rest(kwargs)
             if self.playback.presentation_required:
-                if self._settlement_failed or self._pending_rolling is not None:
+                if self.attempt.settlement_failed or self.attempt.pending_rolling is not None:
                     self._start_or_restart(action)
                     return
                 effect = self.session_commands.active or self._manual_effect(action)
@@ -2181,15 +2150,15 @@ class PracticeEngine:
                           presentation_lead_seconds: float = 0.0,
                           scheduled_deadline: float | None = None):
         """Start a take or schedule a seamless retry under the control lock."""
-        if self._settlement_failed:
+        if self.attempt.settlement_failed:
             revision = self.score_revision
             self.feedback = self._commit_pending() or "Assessment saved"
             if self.score_revision != revision:
                 self.awaiting_score_revision = self.score_revision
             self.next_action = "Press Play when the score is ready."
             return
-        if self._pending_rolling is not None:
-            decision, phrase, grid, score_beat, _old_now = self._pending_rolling
+        if self.attempt.pending_rolling is not None:
+            decision, phrase, grid, score_beat, _old_now = self.attempt.pending_rolling
             self._apply_rolling_recovery(decision, phrase, grid, score_beat, self.now())
             self.visual_transport.paused = False
             self.visual_transport.paused_at = 0.0
@@ -2247,18 +2216,18 @@ class PracticeEngine:
                     lead_seconds=presentation_lead_seconds,
                     rest_seconds=SCHEDULER.beats_seconds(
                         rest_beats,self.plan.bpm))
-            self.measurement.interrupt("restart", self.recorder.presses if self.recorder else ())
+            self.measurement.interrupt("restart", self.attempt.recorder.presses if self.attempt.recorder else ())
             self.visual_transport.paused = False
             self.visual_transport.paused_at = 0.0
             self.pause_context = None
             self._deferred_score_ack = None
             self.awaiting_score_revision = None
-            self.pending_result = None
+            self.attempt.pending_result = None
             self.attempt_settlement.cancel(reason="restart", now=sampled)
             self.teaching_continuation.cancel()
-            self._pending_assessed_bpm = None
+            self.attempt.pending_assessed_bpm = None
             self.visual_transport.set_retry_previous_pass(False)
-            self._guided_recovery_pending = False
+            self.attempt.guided_recovery_pending = False
             self.midi_ingress.resume_grading_after = 0.0
             self.midi_ingress.resume_ignored_pitches.clear()
             self._pause_floor = None
@@ -2318,7 +2287,7 @@ class PracticeEngine:
         shift_run_at = resume_timeline(
             paused=self.visual_transport.paused, learning=learning, running=self.running,
             preview_pending=self.visual_transport.preview_loop_pending,
-            automatic_feedback=self.pending_result is not None and self.auto)
+            automatic_feedback=self.attempt.pending_result is not None and self.auto)
         now = self.now()
         paused_at = self.visual_transport.paused_at
         if reuse_pending_score and (
@@ -2416,7 +2385,7 @@ class PracticeEngine:
         was_guided = self.mode == "learn"
         guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
         guided_return = self._guided_return
-        guided_retry_range = self.retry_range
+        guided_retry_range = self.attempt.retry_range
         self._stop()
         self._reset_trouble()
         # Preserve the original ordering of the source opening reset.
@@ -2438,7 +2407,7 @@ class PracticeEngine:
             if selected is not None and selected.mode == "learn":
                 recovery = change.tempo_only and guided_return is not None and guided_return[0] == p.identity
                 if recovery:
-                    self.retry_range = guided_retry_range
+                    self.attempt.retry_range = guided_retry_range
                 self._begin_learn(from_beat=selected.from_beat,bump_revision=False,recovery=recovery,exposure=selected)
             elif selected is not None:
                 self._enter_selected_exposure(selected)
@@ -2464,9 +2433,9 @@ class PracticeEngine:
                                   prepared_on_time: bool = False,
                                   force_early: bool = False):
         """Settle before presenting the next count-in, never after it starts."""
-        if self.pending_result is not None and (self.attempt_settlement.pending is None
-                or self.attempt_settlement.pending.assessment is not self.pending_result):
-            self._prepare_teaching("full_result", self.pending_result)
+        if self.attempt.pending_result is not None and (self.attempt_settlement.pending is None
+                or self.attempt_settlement.pending.assessment is not self.attempt.pending_result):
+            self._prepare_teaching("full_result", self.attempt.pending_result)
         if self.auto and self.visual_transport.next_at and (
                 force_early or now >= self.visual_transport.next_at):
             readiness = ContinuationReadiness(
@@ -2509,8 +2478,8 @@ class PracticeEngine:
                 print("ASSESSMENT_SETTLEMENT_FAILED:",
                       type(exc).__name__, str(exc), flush=True)
                 return
-            self.feedback_marks=[]
-            self.feedback_unmapped=0
+            self.attempt.feedback_marks=[]
+            self.attempt.feedback_unmapped=0
             assignment = self._remediation_pending
             self._remediation_pending = None
             selected = self.attempt_settlement.pending.decision
@@ -2612,11 +2581,11 @@ class PracticeEngine:
         if automatic:
             self.open_from_beat = review.start_beat
             full_end = self.plan.active_phrase.end-self.plan.active_phrase.start
-            self._automatic_remedial_review = (
+            self.attempt.automatic_remedial_review = (
                 review.start_beat > 1e-7 or review.end_beat < full_end-1e-7)
-            self.review_end_beat = (review.end_beat if
+            self.attempt.review_end_beat = (review.end_beat if
                 review.end_beat < full_end-1e-7 else None)
-            self.retry_range = review.retry_range
+            self.attempt.retry_range = review.retry_range
             self.feedback = f"Retrying {assignment.focus} with the music still moving"
             self.next_action = "Play this section, then return to the complete passage."
             self._continue_at(
@@ -2633,8 +2602,8 @@ class PracticeEngine:
         else:
             self._prepare_practice(exposure=exposure)
             self.open_from_beat = review.start_beat
-            self.review_end_beat = review.end_beat
-            self.retry_range = review.retry_range
+            self.attempt.review_end_beat = review.end_beat
+            self.attempt.retry_range = review.retry_range
             self.awaiting_score_revision = None
             self.feedback = f"Focused {assignment.focus} practice ready"
             self.next_action = (
@@ -2646,14 +2615,14 @@ class PracticeEngine:
         # Capture marks at the performance tempo, not at the slower
         # BPM selected for the next retry. Re-scaling the recorded
         # timestamps early would move mistakes to incorrect notes.
-        self.feedback_marks=self._live_feedback((now-self.visual_transport.run_at))
-        self.live_assessment.publish(self.feedback_marks, self._feedback_take())
+        self.attempt.feedback_marks=self._live_feedback((now-self.visual_transport.run_at))
+        self.live_assessment.publish(self.attempt.feedback_marks, self._feedback_take())
         pending = self.attempt_settlement.pending
-        if self._pending_rolling is None or pending is None:
+        if self.attempt.pending_rolling is None or pending is None:
             tempo_map = self._active_tempo_map()
             assessed = self.assessment_policies.select(tempo_map).grade(
                 phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-                played=self.recorder.presses if self.recorder else [],
+                played=self.attempt.recorder.presses if self.attempt.recorder else [],
                 from_beat=self.visual_transport.play_from_beat, end_beat=decision.end_beat,
                 tempo=tempo_map)
             pending = self._prepare_teaching("rolling_result", assessed, rolling=decision, end_beat=decision.end_beat)
@@ -2675,7 +2644,7 @@ class PracticeEngine:
         from .application.rolling_recovery import project_rolling_response
         transition = project_rolling_response(response,decision,grid=grid,
             first_bar=phrase.first_bar,before_bpm=pending.state.route.performed_bpm,now=now)
-        self.measurement.seal(self.recorder.presses if self.recorder else (),
+        self.measurement.seal(self.attempt.recorder.presses if self.attempt.recorder else (),
             state="interrupted", reason="rolling_recovery", result=assessed,
             extra={"assessed_end_beat": decision.end_beat})
         try:
@@ -2683,14 +2652,14 @@ class PracticeEngine:
                 binding=self._teaching_binding(), now=now,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
         except Exception:
-            self._pending_rolling = (decision, phrase, grid, score_beat, now)
+            self.attempt.pending_rolling = (decision, phrase, grid, score_beat, now)
             self.running = self.auto = False
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=now)
             self.feedback = "Could not save the retry evidence"
             self.next_action = "Check storage, then press Retry to save this same attempt."
             raise
-        self._pending_rolling = None
+        self.attempt.pending_rolling = None
         self.measurement.finish()
         self._note_tempo(now)
         # A recovery at the final boundary must use the SAME one-rest,
@@ -2713,14 +2682,14 @@ class PracticeEngine:
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds,
             short_deadline=short_deadline)
-        self._trouble_key = transition.trouble_key
-        self._trouble_count = transition.trouble_count
-        self._guided_recovery_pending = transition.guided
+        self.attempt.trouble_key = transition.trouble_key
+        self.attempt.trouble_count = transition.trouble_count
+        self.attempt.guided_recovery_pending = transition.guided
         if transition.guided:
             # The next step is note-by-note learning, not a timed take.
             self.visual_transport.announced_continuation = None
-        self.recovery_notice = transition.display.notice
-        self.retry_range = transition.display.retry_range
+        self.attempt.recovery_notice = transition.display.notice
+        self.attempt.retry_range = transition.display.retry_range
         self.feedback = transition.display.feedback
         self.next_action = transition.display.next_action
         if transition.action != "repair":
@@ -2776,13 +2745,13 @@ class PracticeEngine:
         # still owns take settlement and every subsequent state mutation.
         assessed = assess_completed_take(
             phrase=phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-            played=self.recorder.presses if self.recorder else [],
+            played=self.attempt.recorder.presses if self.attempt.recorder else [],
             from_beat=self.visual_transport.play_from_beat, end_beat=ending,
             tempo=tempo_map, policies=self.assessment_policies,
             layout_for_feedback=self._layout_for_completed_take)
         result = assessed.result
-        route = completion_route(self.mode, self.review_end_beat, self.visual_transport.play_from_beat)
-        if self._automatic_remedial_review and route == "section_review":
+        route = completion_route(self.mode, self.attempt.review_end_beat, self.visual_transport.play_from_beat)
+        if self.attempt.automatic_remedial_review and route == "section_review":
             route = "partial_recovery"
         summary = self._performance_review(phrase, result)
         completed_visual = self._visual_motion(now)[0]
@@ -2791,15 +2760,15 @@ class PracticeEngine:
         # policy while the generic raw grader reports a different outcome.
         # Neither storage nor the next-action presenter may re-decide it.
         if route == "full_passage":
-            self.pending_result = result
-            self._pending_assessed_bpm = self.plan.bpm
+            self.attempt.pending_result = result
+            self.attempt.pending_assessed_bpm = self.plan.bpm
             pending = self._prepare_teaching("full_result", result)
             response = None
         else:
             pending = self._prepare_teaching(
                 "focused_result", result, end_beat=ending)
             response = pending.decision.response
-        self.measurement.seal(self.recorder.presses if self.recorder else (),
+        self.measurement.seal(self.attempt.recorder.presses if self.attempt.recorder else (),
             state="completed", reason=route, result=result,
             verdict=pending.decision.verdict,
             eligible=(route == "full_passage" and self.mode == "practice"
@@ -2811,17 +2780,15 @@ class PracticeEngine:
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
                 performance_summary=summary if route == "perform" else None)
             self._note_tempo(now)
-        self.feedback_marks = assessed.marks
-        self.feedback_unmapped = assessed.unmapped
+        self.attempt.publish_completion(
+            marks=assessed.marks,unmapped=assessed.unmapped)
         # The completed take's settled grades, before any transition below can
         # start another transport.
-        self.live_assessment.publish(self.feedback_marks, self._feedback_take(),
+        self.live_assessment.publish(self.attempt.feedback_marks, self._feedback_take(),
                                      final=True)
         self.feedback = assessed.feedback
         self.running=False
-        self.recorder=None
-        self.performance_summary = summary
-        self.review_stage_identity = self.plan.identity
+        self.attempt.finish_review(summary,self.plan.identity)
         self.measurement.phase_changed("feedback", now)
         if response is not None:
             self._apply_policy_response(response, now=now, visual_from=completed_visual)
@@ -2849,7 +2816,7 @@ class PracticeEngine:
         self.next_action = ("Review your performance, then press Start to repeat this warm-up."
             if self.is_builtin_warmup else
             "Review your performance, then Practice the weakest section."
-            if self.performance_summary["weakest_bars"] else
+            if self.attempt.performance_summary["weakest_bars"] else
             "Clean performance. Choose Practice to build your clean-run streak.")
         self.auto = False
 
@@ -2859,10 +2826,10 @@ class PracticeEngine:
         # selected boundary, preserve detailed feedback, and never
         # auto-advance to a different passage.
         self.auto = False
-        self.review_end_beat = None
-        self.review_session_complete = True
+        self.attempt.review_end_beat = None
+        self.attempt.review_session_complete = True
         self.visual_transport.pending_rewind = None
-        self.retry_range = None
+        self.attempt.retry_range = None
         self.open_from_beat = 0.0
         self.feedback = "Section review finished · " + result.summary
         self.next_action = "Review the notes or press Start for the whole passage."
@@ -2871,8 +2838,8 @@ class PracticeEngine:
         """Complete finish partial recovery after a scored take."""
         # A clean *partial* recovery cannot confer full passage mastery.
         # Clear the bounded review before the scheduled full-pass retry.
-        self.review_end_beat = None
-        self._automatic_remedial_review = False
+        self.attempt.review_end_beat = None
+        self.attempt.automatic_remedial_review = False
         self.open_from_beat = exposure.from_beat if exposure is not None else 0.0
         self._schedule_preparation(self.open_from_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + self.visual_transport.play_from_beat
@@ -2880,7 +2847,7 @@ class PracticeEngine:
             reverse_seconds=self.feedback_seconds)
         self.feedback = "Selected section finished · " + result.summary
         self.next_action = "Next: play the whole passage from its beginning to earn mastery."
-        self.retry_range = None
+        self.attempt.retry_range = None
 
     @staticmethod
     def _teaching_instruction(pending):
@@ -2900,8 +2867,8 @@ class PracticeEngine:
         return "now play all the notes" if chosen.stage.variant.level == "original" else "now add more melody notes"
 
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
-        self.pending_result = result
-        self._pending_assessed_bpm = self.plan.bpm
+        self.attempt.pending_result = result
+        self.attempt.pending_assessed_bpm = self.plan.bpm
         pending = self.attempt_settlement.pending
         if pending is None or pending.assessment is not result:
             pending = self._prepare_teaching("full_result", result)
@@ -2909,7 +2876,7 @@ class PracticeEngine:
         exposure = decision.next_exposure
         response = decision.response
         if self.measurement.attempt_id is not None and self.measurement.sealed is None:
-            self.measurement.seal(self.recorder.presses if self.recorder else (),state="completed",
+            self.measurement.seal(self.attempt.recorder.presses if self.attempt.recorder else (),state="completed",
                 reason="full_passage",result=result,eligible=decision.mastery_eligible,
                 verdict=decision.verdict)
         self.attempt_settlement.checkpoint_failed_streak(pending, plan=self.plan, now=now)
@@ -2949,7 +2916,7 @@ class PracticeEngine:
             self.next_action = "Retry the whole passage (red errors or at least half the attacks yellow)."
         if response is not None and response.restart_beat > self.visual_transport.play_from_beat+1e-7:
             self.next_action = "Repeat the difficult measure at %d BPM, then play the whole passage." % response.bpm
-        elif response is not None and response.bpm < self._pending_assessed_bpm:
+        elif response is not None and response.bpm < self.attempt.pending_assessed_bpm:
             self.next_action = "Retry more slowly at %d BPM." % response.bpm
         planned = self._decided_stage_selection()
         if planned is not None:
@@ -2990,7 +2957,7 @@ class PracticeEngine:
                                  grid: tuple[float, ...]):
         """Grade one authored boundary under the existing session lock."""
         try:
-            self.measurement.checkpoint(self.recorder.presses if self.recorder else (), boundary=boundary)
+            self.measurement.checkpoint(self.attempt.recorder.presses if self.attempt.recorder else (), boundary=boundary)
         except Exception:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=self.now())
@@ -3004,7 +2971,7 @@ class PracticeEngine:
         tempo_map = self._active_tempo_map()
         return self.assessment_policies.select(tempo_map).recover(
             self.plan.active_phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-            played=self.recorder.presses if self.recorder else [],
+            played=self.attempt.recorder.presses if self.attempt.recorder else [],
             from_beat=self.visual_transport.play_from_beat, end_beat=boundary, grid=grid,
             threshold=(SETTINGS.warmup_recovery_errors
                        if self.is_builtin_warmup
@@ -3021,7 +2988,7 @@ class PracticeEngine:
             paused=self.visual_transport.paused, listening=self.mode == "listen",
             preview_pending=self.visual_transport.preview_loop_pending,
             preparation_pending=self.visual_transport.preparation_pending,
-            feedback_pending=self.pending_result is not None,
+            feedback_pending=self.attempt.pending_result is not None,
             awaiting_score=self.awaiting_score_revision is not None,
             rewind_pending=self.visual_transport.pending_rewind is not None,
             running=self.running, run_at=self.visual_transport.run_at)
@@ -3052,7 +3019,7 @@ class PracticeEngine:
         elif decision.action == "feedback":
             self._advance_pending_feedback(now)
         elif decision.action == "rewind_due":
-            if self._guided_recovery_pending:
+            if self.attempt.guided_recovery_pending:
                 self._begin_learn(from_beat=self.visual_transport.pending_rewind, recovery=True,
                     exposure=self.attempt_settlement.pending.decision.next_exposure)
             else:
@@ -3101,12 +3068,12 @@ class PracticeEngine:
             else:
                 self.measurement.phase_changed("count_in" if now < activation else
                     "listen" if self.mode == "listen" else "preview" if self.preview_only else "active", now)
-        elif self.pending_result is not None:
+        elif self.attempt.pending_result is not None:
             self.measurement.phase_changed("feedback", now)
         elif self.visual_transport.preparation_pending or self.awaiting_score_revision is not None:
             self.measurement.phase_changed("preparation", now)
         else:
-            self.measurement.phase_changed("feedback" if self.performance_summary is not None else "idle", now)
+            self.measurement.phase_changed("feedback" if self.attempt.performance_summary is not None else "idle", now)
         if self._run_pre_assessment_transition(now):
             return
         if (self.running and self._pause_floor is not None
@@ -3124,7 +3091,7 @@ class PracticeEngine:
             phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
             now=now, score_beat=score_beat, from_beat=self.visual_transport.play_from_beat,
             run_at=self.visual_transport.run_at, next_boundary=self.next_boundary_beat,
-            review_end=self.review_end_beat, preview=self.preview_only,
+            review_end=self.attempt.review_end_beat, preview=self.preview_only,
             auto=self.auto, mode=self.mode,
             bpm=self.plan.bpm, gap_beats=self.visual_transport.visual_gap_beats),
             self._assess_rolling_boundary, self._elapsed_seconds)
@@ -3171,10 +3138,10 @@ class PracticeEngine:
         return project_phase(PhaseSnapshot(
             paused=self.visual_transport.paused, running=self.running, run_at=self.visual_transport.run_at,
             teaching_phase=teaching_phase,
-            performance_complete=self.performance_summary is not None,
+            performance_complete=self.attempt.performance_summary is not None,
             preview_loop_pending=self.visual_transport.preview_loop_pending,
-            review_complete=self.review_session_complete,
-            pending_result=self.pending_result is not None,
+            review_complete=self.attempt.review_session_complete,
+            pending_result=self.attempt.pending_result is not None,
             awaiting_score=self.awaiting_score_revision is not None,
             pending_rewind=self.visual_transport.pending_rewind is not None,
         ), mode=self.mode, now=now)
@@ -3208,11 +3175,7 @@ class PracticeEngine:
         self._pause_floor = None
         if phrase is not None:
             self.live_input.prepare(phrase)
-        self.recorder = Recorder() if recording else None
-        self.pending_result = None
-        self._pending_assessed_bpm = None
-        self.feedback_marks = []
-        self.feedback_unmapped = 0
+        self.attempt.begin_take(recording=recording)
         self.live_assessment.clear()
         return self.transport_id
 
@@ -3255,7 +3218,7 @@ class PracticeEngine:
             return []
         return self.assessment_policies.live_projection(
             plan.active_phrase, hand=plan.hand, bpm=plan.bpm,
-            played=self.recorder.presses if self.recorder else (),
+            played=self.attempt.recorder.presses if self.attempt.recorder else (),
             from_beat=self.visual_transport.play_from_beat,
             elapsed_seconds=elapsed_seconds,
             bar_boundaries=plan.piece.bar_boundaries,
@@ -3280,7 +3243,7 @@ class PracticeEngine:
                 if self.plan is None or self.visual_transport.paused:
                     return 250
                 if (self.running or self.visual_transport.preview_loop_pending or self.visual_transport.preparation_pending
-                        or self.pending_result is not None or self.visual_transport.pending_rewind is not None
+                        or self.attempt.pending_result is not None or self.visual_transport.pending_rewind is not None
                         or self.mode == "listen"):
                     # Responsive automatic transitions, recovery, and practice.
                     # The musical deadline is still the absolute monotonic epoch.
@@ -3353,7 +3316,7 @@ class PracticeEngine:
                 return bars,meter,self._start_rate_bpm(from_beat,rate)
             self.score_state_publisher.publish(
                 state,facts,now=now,measure_at=count_in_source_at)
-            if self.pending_result is not None:
+            if self.attempt.pending_result is not None:
                 state["bpm"] = self._presentation_bpm
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self._flow_active():
@@ -3397,7 +3360,7 @@ class PracticeEngine:
     def _capture_session_snapshot(self) -> SessionSnapshot:
         """Sample named read ports under the existing application lock."""
         values = SnapshotValues(
-            _guided_recovery_pending=self._guided_recovery_pending,
+            _guided_recovery_pending=self.attempt.guided_recovery_pending,
             _guided_return=self._guided_return,
             _remediation_active=self._remediation_active,
             auto=self.auto,
@@ -3406,8 +3369,8 @@ class PracticeEngine:
             count_in_beats=self.count_in_beats,
             count_in_meter=self.count_in_meter,
             feedback=self.feedback,
-            feedback_marks=self.feedback_marks,
-            feedback_unmapped=self.feedback_unmapped,
+            feedback_marks=self.attempt.feedback_marks,
+            feedback_unmapped=self.attempt.feedback_unmapped,
             fingerprint=self.fingerprint,
             guided_range=self.guided_range,
             is_builtin_warmup=self.is_builtin_warmup,
@@ -3417,7 +3380,7 @@ class PracticeEngine:
             midi_input_at=self.midi.input_at,
             midi_connected=self.midi.connected,
             midi_device=self.midi.device,
-            midi_notes=len(self.recorder.presses) if self.recorder is not None else 0,
+            midi_notes=len(self.attempt.recorder.presses) if self.attempt.recorder is not None else 0,
             teaching_active=self.teaching is not None,
             mode=self.mode,
             next_action=self.next_action,
@@ -3426,22 +3389,22 @@ class PracticeEngine:
             pause_context=self.pause_context,
             paused=self.visual_transport.paused,
             paused_at=self.visual_transport.paused_at,
-            pending_result=self.pending_result,
+            pending_result=self.attempt.pending_result,
             assessment_verdict=(
                 self.attempt_settlement.pending.decision.verdict
                 if self.attempt_settlement.pending is not None
-                and self.attempt_settlement.pending.assessment is self.pending_result
+                and self.attempt_settlement.pending.assessment is self.attempt.pending_result
                 else None),
             pending_rewind=self.visual_transport.pending_rewind,
-            performance_summary=self.performance_summary,
+            performance_summary=self.attempt.performance_summary,
             persistent_hints=self.persistent_hints,
             plan=self.plan,
             play_from_beat=self.visual_transport.play_from_beat,
             practice_preparation=self.visual_transport.practice_preparation,
             preview_only=self.preview_only,
-            recovery_notice=self.recovery_notice,
-            retry_range=self.retry_range,
-            review_end_beat=self.review_end_beat,
+            recovery_notice=self.attempt.recovery_notice,
+            retry_range=self.attempt.retry_range,
+            review_end_beat=self.attempt.review_end_beat,
             run_at=self.visual_transport.run_at,
             running=self.running,
             score_revision=self.score_revision,
@@ -3541,7 +3504,7 @@ class PracticeEngine:
             # If the future ink became ready during the existing rest gap,
             # schedule its exact delayed start immediately. Waiting for the
             # old full-bar deadline would show native ink on a false origin.
-            if (self.pending_result is not None and self.auto and
+            if (self.attempt.pending_result is not None and self.auto and
                     not self.running and not self.visual_transport.paused and
                     self._decided_stage_selection() is not None):
                 now = self.now()

@@ -59,7 +59,7 @@ def test_invalid_stage_command_preserves_active_take(tmp_path, command):
             bar_boundaries=(0, 4)), exercise_strategy="source-progression")
         engine.fingerprint = "invalid-stage-command-fixture"
         engine.start()
-        recorder = engine.recorder
+        recorder = engine.attempt.recorder
         recorder.add(60, True, 0)
         before = (engine.plan.identity, engine.plan.bpm, engine.transport_id,
                   engine.score_revision, engine.visual_transport.run_at)
@@ -69,7 +69,7 @@ def test_invalid_stage_command_preserves_active_take(tmp_path, command):
 
         assert status == INVALID and json.loads(raw)["error"]
         assert engine.running
-        assert engine.recorder is recorder and len(recorder.presses) == 1
+        assert engine.attempt.recorder is recorder and len(recorder.presses) == 1
         assert (engine.plan.identity, engine.plan.bpm, engine.transport_id,
                 engine.score_revision, engine.visual_transport.run_at) == before
     finally:
@@ -95,7 +95,7 @@ def test_invalid_midi_name_preserves_connected_port_and_active_take(tmp_path, na
         engine.midi.port, engine.midi.device = port, "Current piano"
         engine.library.update(midi_device="Current piano")
         engine.start()
-        recorder = engine.recorder
+        recorder = engine.attempt.recorder
         recorder.add(60, True, 0)
         before = (engine.transport_id, engine.score_revision,
                   engine.visual_transport.run_at)
@@ -107,7 +107,7 @@ def test_invalid_midi_name_preserves_connected_port_and_active_take(tmp_path, na
         assert engine.midi.port is port and not port.closed
         assert engine.midi.device == "Current piano"
         assert engine.preferences()["midi_device"] == "Current piano"
-        assert engine.running and engine.recorder is recorder
+        assert engine.running and engine.attempt.recorder is recorder
         assert len(recorder.presses) == 1
         assert (engine.transport_id, engine.score_revision,
                 engine.visual_transport.run_at) == before
