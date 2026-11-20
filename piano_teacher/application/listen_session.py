@@ -169,6 +169,24 @@ class ListenSession:
             return ListenStart(bar_beats,count_meter,count_beats,
                 SCHEDULER.beats_seconds(count_beats,selected.bpm))
 
+    def authorize_playback(self, revision: int, count_in_plan) -> ListenStart | None:
+        """Validate the exact physical CountInPlan before consuming Listen.
+
+        A mismatched renderer receipt must not mark the demo audio started
+        or open a graded take. The selected score/audio source remains
+        unchanged until this check has succeeded under the same lock.
+        """
+        with self._lock:
+            start = self.begin_playback(revision,commit=False)
+            if start is None:
+                return None
+            if (abs(start.count_in_bar_beats-count_in_plan.bar_beats)>1e-5
+                    or tuple(start.count_in_meter)!=tuple(count_in_plan.meter)
+                    or abs(start.count_in_beats-count_in_plan.beats)>1e-5):
+                raise ValueError(
+                    "Listen audio disagrees with authorized count-in plan")
+            return self.begin_playback(revision,commit=True)
+
     def finished(self, *, now: float, run_at: float) -> bool:
         with self._lock:
             return bool(self._started and self._info is not None

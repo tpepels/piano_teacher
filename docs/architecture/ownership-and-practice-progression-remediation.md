@@ -546,6 +546,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - The first operation validates the exact source/revision/identity **before** durable `AttemptSettlement.settle` without consuming the prepared source; the second promotes or invalidates the reusable asset only after a successful settlement, clearing the reservation exactly once. PracticeEngine now only installs the returned authoritative asset and advances its existing score revision/visual offset.
 - This removes another duplicate future-score writer. No new tests; existing core/native settlement and prepared-handoff tests remain the acceptance gate.
 
+### Implementation checkpoint BP — atomic Listen score/audio count-in authorization
+
+- Moved the real Listen audio-versus-engraved-source CountInPlan equality check out of `PracticeEngine._commit_playback_intent` into `ListenSession.authorize_playback`. The owner now checks the selected score revision, prepared audio, exact bar/meter/beat plan and started flag *before* changing its `_started` state.
+- A stale or mismatched graphical receipt cannot consume Listen or open a graded recorder. The engine performs only the subsequent authorized transport/evidence commit, preserving its existing one-time start and rollback path.
+- No new test, alternate cue clock or decoder. Existing native Listen/Free/Tempo and core source-ack tests are the acceptance gates.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -1529,16 +1529,13 @@ class PracticeEngine:
                     self.visual_transport.run_at, self.plan.identity,
                     self.score_revision, None)
             elif intent.action == "listen":
-                start = self.listen.begin_playback(self.score_revision)
+                start = self.listen.authorize_playback(
+                    self.score_revision,intent.count_in)
                 if start is None:
                     raise ValueError("Listen score or audio is no longer prepared")
                 self.awaiting_score_revision = None
                 self._open_take()
                 self.running = True
-                if (abs(start.count_in_bar_beats-intent.count_in.bar_beats)>1e-5
-                        or tuple(start.count_in_meter)!=intent.count_in.meter
-                        or abs(start.count_in_beats-intent.count_in.beats)>1e-5):
-                    raise ValueError("Listen audio disagrees with authorized count-in plan")
                 self.count_in_bar_beats = intent.count_in.bar_beats
                 self.count_in_meter = list(intent.count_in.meter)
                 self.count_in_beats = intent.count_in.beats
