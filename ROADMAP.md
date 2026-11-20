@@ -151,6 +151,9 @@ controller journey with a resize diagnostic pass. A3–A6 and obsolete-port
 cleanup remain open. Physical resize acceptance remains unverified.
 A3 lifecycle transfers now pass all 107 Python behaviour checks (one optional
 system-SF2 skip); remaining work is A4–A6 and obsolete internal ports.
+A4 now removes transition execution and guided-deadline scheduling from reads.
+Full local CI passes (107 Python, one optional skip; native/parser pass).
+The remaining implementation is A5/A6 and obsolete internal ports.
 
 Implementation audited at `640a77f5`. The prior Phase 5 completion assessment
 was too broad and is reopened. The [active audit](docs/architecture.md#remaining-work--source-audit-2026-11-20)

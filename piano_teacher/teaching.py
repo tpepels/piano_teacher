@@ -197,7 +197,6 @@ class TeachingController:
                             if now - at <= self.config.chord_window_seconds + 1e-9}
 
     def snapshot(self, *, now: float) -> dict:
-        self.tick(now=now)
         active_hint = self._phase == "guided_wait" and (self._persistent_hints or bool(self._hint_reason))
         return {
             "phase": self._phase, "revision": self._revision,

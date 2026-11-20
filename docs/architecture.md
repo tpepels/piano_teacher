@@ -325,6 +325,14 @@ Implementation ledger (main, starting at `82bf06bb`):
   reset and assistance capture also mutate inside their owners. All existing
   Python behaviour checks pass: 107 passed, one optional system-SF2 skip
   (`architecture-a3-ci.log`).
+- A3 commit: `e7b10962`.
+- A4 implemented: snapshots sample one instant without executing transitions.
+  Teaching and calibration reads are passive; their worker/command operations
+  advance them. Guided presentation scheduling also moved out of serialization
+  into the accepted command/tick boundary. Three existing behaviour cases now
+  explicitly tick the worker instead of relying on obsolete poll advancement.
+  Full CI script passes: 107 Python tests, one optional system-SF2 skip,
+  parser and four native groups (`architecture-a4-ci-final.log`).
 
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic

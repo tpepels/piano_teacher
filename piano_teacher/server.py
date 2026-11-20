@@ -411,6 +411,7 @@ class PracticeEngine:
             elif action == "calibration_cancel":
                 self.midi_calibration.cancel()
             elif action == "calibration_apply":
+                self.midi_calibration.advance(self.now())
                 result = self.midi_calibration.snapshot(self.now())["result"]
                 if not result or not result.get("reliable"):
                     raise ValueError("Finish a consistent calibration before applying it")
@@ -1476,6 +1477,7 @@ class PracticeEngine:
             try:
                 with self.session_commands.executing(effect):
                     result = self._dispatch_control(action, **kwargs)
+                    self._prepare_score_presentation()
                     if action not in ("score_ready", "demo_ready", "reset_path"):
                         self.measurement.event("manual_action", {"action": action,
                             "fingerprint": before["fingerprint"] or None,
@@ -2319,9 +2321,9 @@ class PracticeEngine:
             raise
         # A playback intent is reconciled by the actual monotonic worker
         # transition, never by a later serializer's snapshot traversal.
-        # Any caller of _update (worker or compatibility state poll) sees
-        # the same admitted source/clock epoch.
+        # Only worker/command execution advances the accepted lifecycle.
         self.playback.advance(self._playback_facts())
+        self._prepare_score_presentation()
         # Display publication must never pause the take or alter feedback text.
         try:
             self._publish_live_assessment()
@@ -2332,6 +2334,7 @@ class PracticeEngine:
     def _update_transition(self) -> None:
         """Advance the backend clock under its existing session lock."""
         self._poll_midi_connection()
+        self.midi_calibration.advance(self.now())
         self._apply_listen_failure()
         now = self.now()
         learning = self.playback_session.mode == "learn"
@@ -2451,7 +2454,7 @@ class PracticeEngine:
         self.live_assessment.publish(marks, self._feedback_take(),scope_start_beat=scope)
 
     def _live_marks_for_snapshot(self, _elapsed_seconds: float) -> list[dict]:
-        # _state_snapshot runs _update first, which refreshed these marks.
+        # The command worker publishes marks; serialization only reads them.
         return list(self.live_assessment.latest_marks) if self.playback_session.running else []
 
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
@@ -2517,41 +2520,53 @@ class PracticeEngine:
             state.pop(key, None)
         return state
 
+    def _score_projection_facts(self, pending, timeline) -> ScoreProjectionFacts:
+        announced = self.visual_transport.announced_continuation
+        plan = self.plan
+        return ScoreProjectionFacts(
+            fingerprint=self.fingerprint,
+            stage_key=plan.identity if plan is not None else "",
+            revision=self.score_revision,
+            transport_id=self.playback_session.transport_id,
+            mode=self.playback_session.mode,
+            running=self.playback_session.running,
+            paused=self.visual_transport.paused,
+            awaiting_score=self.playback_session.awaiting_score_revision is not None,
+            bpm=float(plan.bpm) if plan is not None else 0.0,
+            presentation_bpm=float(self._presentation_bpm),
+            run_at=self.visual_transport.run_at,
+            play_from_beat=self.visual_transport.play_from_beat,
+            announced=announced,
+            announced_deadline=(self.visual_transport.announced_deadline(
+                announced[0]) if announced is not None else None),
+            announcement_serial=self.visual_transport.announce_serial,
+            scheduled_start=self._queue_scheduled_start,
+            timeline=({"intent":pending,"current":timeline}
+                      if self.playback.presentation_required else {}),
+            next_count_in_beats=self._next_count_in_beats(),
+            next_count_in_meter=tuple(self._next_count_in_meter()),
+            continuous_horizon_beats=self._continuous_horizon_beats,
+            duration_beats=(self.display_phrase().end-self.display_phrase().start
+                            if plan is not None else 0.0),
+            has_source=plan is not None,
+        )
+
+    def _prepare_score_presentation(self) -> None:
+        if self.plan is None or self.playback_session.mode != "learn":
+            return
+        now = self.now()
+        state = project_session_state(self._capture_session_snapshot(sampled_at=now))
+        pending, timeline = self.playback.snapshot()
+        self.score_state_publisher.prepare_guided(
+            state,self._score_projection_facts(pending,timeline),now=now)
+
     def _state_snapshot(self) -> dict:
         with self.lock:
-            self._update()
-            state = project_session_state(self._capture_session_snapshot())
-            pending, timeline = self.playback.snapshot()
-            announced = self.visual_transport.announced_continuation
-            plan = self.plan
             now = self.now()
-            facts = ScoreProjectionFacts(
-                fingerprint=self.fingerprint,
-                stage_key=plan.identity if plan is not None else "",
-                revision=self.score_revision,
-                transport_id=self.playback_session.transport_id,
-                mode=self.playback_session.mode,
-                running=self.playback_session.running,
-                paused=self.visual_transport.paused,
-                awaiting_score=self.playback_session.awaiting_score_revision is not None,
-                bpm=float(plan.bpm) if plan is not None else 0.0,
-                presentation_bpm=float(self._presentation_bpm),
-                run_at=self.visual_transport.run_at,
-                play_from_beat=self.visual_transport.play_from_beat,
-                announced=announced,
-                announced_deadline=(self.visual_transport.announced_deadline(
-                    announced[0]) if announced is not None else None),
-                announcement_serial=self.visual_transport.announce_serial,
-                scheduled_start=self._queue_scheduled_start,
-                timeline=({"intent":pending,"current":timeline}
-                          if self.playback.presentation_required else {}),
-                next_count_in_beats=self._next_count_in_beats(),
-                next_count_in_meter=tuple(self._next_count_in_meter()),
-                continuous_horizon_beats=self._continuous_horizon_beats,
-                duration_beats=(self.display_phrase().end-self.display_phrase().start
-                                if plan is not None else 0.0),
-                has_source=plan is not None,
-            )
+            state = project_session_state(self._capture_session_snapshot(sampled_at=now))
+            pending, timeline = self.playback.snapshot()
+            facts = self._score_projection_facts(pending,timeline)
+            plan = self.plan
             def count_in_source_at(from_beat, rate):
                 _, bars, meter = self.attempt_progression.count_in_bar(
                     phrase=plan.active_phrase,
@@ -2573,8 +2588,8 @@ class PracticeEngine:
                     state["tempo_epoch_ms"] = epoch*1000.0
             if self.plan is not None:
                 beat = self.plan.active_phrase.start + self.visual_transport.play_from_beat
-                if self.playback_session.running and self.now() >= self.visual_transport.run_at:
-                    beat += self._elapsed_beat(self.now() - self.visual_transport.run_at)
+                if self.playback_session.running and now >= self.visual_transport.run_at:
+                    beat += self._elapsed_beat(now - self.visual_transport.run_at)
                 keys = [key for key in self.plan.piece.key_signatures
                         if key.beat <= beat + 1e-7
                         and key.hand in ("both", self.plan.hand)]
@@ -2582,7 +2597,7 @@ class PracticeEngine:
             # A score-free Settings screen still needs an authoritative
             # backend clock epoch for its MIDI tap calibration. Midpoint-only
             # UI extrapolation drifts when score and device requests queue.
-            calibration_sample_at = self.now()
+            calibration_sample_at = now
             state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
             state["next_count_in_beats"] = self._next_count_in_beats()
@@ -2600,7 +2615,7 @@ class PracticeEngine:
                 calibration_sample_at)
             return state
 
-    def _capture_session_snapshot(self) -> SessionSnapshot:
+    def _capture_session_snapshot(self, *, sampled_at=None) -> SessionSnapshot:
         """Sample named read ports under the existing application lock."""
         values = SnapshotValues(
             _guided_recovery_pending=self.attempt.guided_recovery_pending,
@@ -2669,7 +2684,7 @@ class PracticeEngine:
             live_input_snapshot=self.live_input.snapshot,
             preparation_schedule=self.visual_transport.preparation_schedule,
             teaching_snapshot=self.teaching.snapshot if self.teaching is not None else None,
-            clock=self.now,
+            clock=self.now if sampled_at is None else lambda: sampled_at,
         )
         return capture_session_snapshot(values, reads)
 

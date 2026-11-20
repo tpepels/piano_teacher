@@ -56,6 +56,7 @@ def test_only_presented_score_starts_grading_and_repeated_acknowledgement_is_saf
     session.clock.at = receipt["deadline_ms"]/1000
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 1
+    session.tick()  # The production worker, rather than a read, accepts time transitions.
     assert session.snapshot()["playback_timeline"]["state"] == "playing"
 
 

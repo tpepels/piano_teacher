@@ -180,6 +180,7 @@ def test_calibration_collects_real_ingress_then_applies_persists_and_resets(conn
         backend.ports[-1].press()
         backend.ports[-1].release()
     now[0] = epoch + 44 * period + .1
+    engine.advance_clock()
     result = engine.state()["midi_calibration"]["result"]
     assert result["reliable"] and result["samples"] == 40
     assert engine.preferences()["midi_offset_ms"] == 0
@@ -212,6 +213,7 @@ def test_calibration_excludes_one_outlying_round_but_rejects_disagreement(offset
         first = calibration.start_at + (4 + round_index * 8) * calibration.period
         for tap in range(8):
             assert calibration.observe(first + tap * calibration.period + offset)
+    calibration.advance(calibration.start_at + 44 * calibration.period + .1)
     result = calibration.snapshot(calibration.start_at + 44 * calibration.period + .1)["result"]
     assert result["reliable"] is reliable
     if reliable:
@@ -277,6 +279,7 @@ def test_a_configured_end_key_in_the_exercise_remains_a_musical_note(practice_se
     session.strike(72)
     assert session.snapshot()["teaching"]["target_index"] == 1
     session.strike(79)
+    session.tick()
     state = session.ready_score()
     assert state["flow"]["step"] == "tempo" and not state["paused"]
     assert state["bpm"] == 40

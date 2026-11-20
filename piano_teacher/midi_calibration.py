@@ -133,10 +133,13 @@ class MidiTapCalibration:
                if failure is None else {"error": failure}),
         }
 
-    def snapshot(self, now: float) -> dict:
+    def advance(self, now: float) -> None:
         beat = (now - self.start_at) / self.period
         if self.active and beat >= self.total_beats:
             self._finish()
+
+    def snapshot(self, now: float) -> dict:
+        beat = (now - self.start_at) / self.period
         active_beat = min(self.total_beats - 1e-8, max(0.0, beat))
         tap_beat = max(0.0, active_beat - self.count_in)
         round_index = min(self.rounds - 1, int(tap_beat // self.ticks))

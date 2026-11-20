@@ -92,11 +92,11 @@ class SnapshotReadPorts:
 
 
 def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
-    """Capture values under the session lock, including stateful read adapters.
+    """Capture values under the session lock, using read-only adapters.
 
     The clock is sampled ONCE: every time-derived field of one snapshot
-    describes the same instant. Teaching snapshots may tick the controller;
-    all such work finishes before pure projection.
+    describes the same instant. Teaching/transport advancement belongs to the worker and command boundary;
+    reading these adapters cannot advance an exposure.
     """
     sampled_at = reads.clock()
     p = state.plan

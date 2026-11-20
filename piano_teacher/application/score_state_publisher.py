@@ -46,22 +46,25 @@ class ScoreStatePublisher:
     def reset_guided(self) -> None:
         self.guided_deadline = None
 
-    def _guided_plan(self, state: dict, facts: ScoreProjectionFacts,
-                     *, now: float) -> dict | None:
+    def prepare_guided(self, state: dict, facts: ScoreProjectionFacts,
+                       *, now: float) -> None:
         if (not facts.has_source or facts.mode != "learn" or facts.paused
-                or facts.awaiting_score or
-                state.get("phase") not in
+                or facts.awaiting_score or state.get("phase") not in
                     ("guided_wait", "introducing", "disconnected")):
-            return None
-        duration = max(.25,facts.duration_beats)
-        if (state.get("phase") != "guided_wait"
-                or self.guided_deadline is None):
+            return
+        if state.get("phase") != "guided_wait" or self.guided_deadline is None:
             self.guided_deadline = SCHEDULER.guided(
                 now=now, previous_deadline=self.guided_deadline,
-                duration_beats=duration,
+                duration_beats=max(.25,facts.duration_beats),
                 count_in_beats=facts.next_count_in_beats,
-                horizon_beats=facts.continuous_horizon_beats,
-                bpm=facts.bpm)
+                horizon_beats=facts.continuous_horizon_beats,bpm=facts.bpm)
+
+    def _guided_plan(self, state: dict, facts: ScoreProjectionFacts) -> dict | None:
+        if (not facts.has_source or facts.mode != "learn" or facts.paused
+                or facts.awaiting_score or self.guided_deadline is None
+                or state.get("phase") not in
+                    ("guided_wait", "introducing", "disconnected")):
+            return None
         key = (f"guided:{facts.fingerprint}:{facts.stage_key}:"
                f"{facts.revision}:{facts.transport_id}:"
                f"{self.guided_deadline:.6f}")
@@ -75,7 +78,7 @@ class ScoreStatePublisher:
 
     def publish(self, state: dict, facts: ScoreProjectionFacts,
                 *, now: float, measure_at) -> None:
-        guided = self._guided_plan(state,facts,now=now)
+        guided = self._guided_plan(state,facts)
         if facts.timeline:
             # Desktop: transport intent/receipts were calculated in the
             # coordinator and physically admitted by Godot. There is no
