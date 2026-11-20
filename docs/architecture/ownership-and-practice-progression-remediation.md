@@ -449,6 +449,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Moved the fixed cursor's binary-searched engraved-note/rest contour exclusions into `CursorInkClearance.exclusions`, also consuming the same immutable source snapshot and authored layout. The fixed playhead and glyph painter now share one native geometry result without `NativeScoreView` directly inspecting the live mutable strip FIFO.
 - This reduces mixed queue/paint responsibility and leaves `NativeScoreView` closer to a rendering facade. No tests added; the existing native graphics and real repertoire journeys must verify the extracted drawing helpers.
 
+### Implementation checkpoint BK — SettingsScreen commands and saved-device selection leave Main
+
+- Added `SettingsInteractionSession` as the single translation of every SettingsScreen event (MIDI picker/range, tempo, exercise/diagnosis/learner/mistake strategy, history deletion/export, evidence retention, metronome, volume, fullscreen and exit) into a bounded command or intent. Statistics invalidation precedes deletion in this owner rather than being an incidental Main UI closure.
+- Settings preferences and saved-device reconnect selection now belong to this session. Main only builds the scene, connects typed signals to the existing command coordinator, and applies the explicitly returned device selection. No alternative command route or setter is introduced.
+- Reduced the main scene's settings-specific event handling without moving screen composition or changing application policy. No new tests; native Settings and MIDI-device acceptance must verify integration.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

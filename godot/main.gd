@@ -46,12 +46,14 @@ const CountInAudioSession := preload("res://countin_audio_session.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationSession := preload("res://navigation_session.gd")
 const ApplicationInputSession := preload("res://application_input_session.gd")
+const SettingsInteractionSession := preload("res://settings_interaction_session.gd")
 const PracticeFeedbackSession := preload("res://practice_feedback_session.gd")
 const ApplicationStateInbox := preload("res://application_state_inbox.gd")
 
 var navigation_session = NavigationSession.new()
 var state_inbox = ApplicationStateInbox.new()
 var input_session = ApplicationInputSession.new()
+var settings_interactions = SettingsInteractionSession.new()
 var status_head_preloader = StatusHeadPreloader.new()
 var current_screen: String:
     get: return navigation_session.current_screen
@@ -73,7 +75,9 @@ var learning_status_pending := false
 var statistics_coordinator
 var library_view: LibraryScreen
 var settings_pending := false
-var preferences: Dictionary = {}
+var preferences: Dictionary:
+    get: return settings_interactions.preferences
+    set(value): settings_interactions.preferences = value
 var page_margins: Array[MarginContainer] = []
 var fingering_save_error := ""
 var score_session
@@ -650,41 +654,15 @@ func _build_settings_screen() -> void:
     settings_view.ui_scale = ui_scale
     settings_view.default_font = theme.default_font
     page.add_child(settings_view)
-    settings_view.choose_devices_requested.connect(_show_devices)
-    settings_view.refresh_devices_requested.connect(_request_devices)
-    settings_view.save_folder_requested.connect(func(path: String):
-        _send_command("settings.update", {"music_dir": path}))
+    settings_interactions.configure(settings_view,statistics_coordinator)
+    settings_interactions.devices_requested.connect(_show_devices)
+    settings_interactions.refresh_devices_requested.connect(_request_devices)
+    settings_interactions.command_requested.connect(_send_command)
+    settings_interactions.action_requested.connect(_send_action)
     settings_view.device_selected.connect(_choose_device)
-    settings_view.tempo_requested.connect(func(bpm: int):
-        _send_action({"action": "tempo", "bpm": bpm}))
-    settings_view.strategy_requested.connect(func(strategy: String):
-        _send_command("settings.update", {"exercise_strategy": strategy}))
-    settings_view.diagnosis_strategy_requested.connect(func(strategy: String):
-        _send_command("settings.update", {"diagnosis_strategy": strategy}))
-    settings_view.learner_strategy_requested.connect(func(strategy: String):
-        _send_command("settings.update", {"learner_strategy": strategy}))
-    settings_view.mistake_response_requested.connect(func(strategy: String):
-        _send_command("settings.update", {"mistake_response_strategy": strategy}))
-    settings_view.metronome_requested.connect(func(enabled: bool):
-        _send_command("settings.update", {"metronome": enabled}))
-    settings_view.retention_save_requested.connect(func(days: int, budget_mib: int):
-        _send_command("settings.update", {
-            "evidence_retention_days": days, "evidence_budget_mib": budget_mib}))
-    settings_view.history_export_requested.connect(func(path: String, include_detail: bool):
-        _send_command("learning.export", {"path": path, "include_detail": include_detail}))
-    settings_view.piece_history_delete_requested.connect(func(fingerprint: String):
-        statistics_coordinator.invalidate()
-        _send_command("learning.delete_piece", {"fingerprint": fingerprint, "confirm": true}))
-    settings_view.learner_history_delete_requested.connect(func():
-        statistics_coordinator.invalidate()
-        _send_command("learning.delete_learner", {"confirm": true}))
-    settings_view.calibration_requested.connect(func(action: String):
-        _send_action({"action": action}))
-    settings_view.midi_range_requested.connect(func(action: String):
-        _send_action({"action": action}))
-    settings_view.volume_changed.connect(_on_listen_volume_changed)
-    settings_view.fullscreen_requested.connect(_on_fullscreen_toggle)
-    settings_view.exit_requested.connect(_exit_app)
+    settings_interactions.volume_changed.connect(_on_listen_volume_changed)
+    settings_interactions.fullscreen_requested.connect(_on_fullscreen_toggle)
+    settings_interactions.exit_requested.connect(_exit_app)
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
@@ -798,15 +776,13 @@ func _on_settings(code: int, body: PackedByteArray) -> void:
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
-    preferences = parsed
-    settings_view.present_preferences(preferences)
-    practice_view.present_metronome(bool(preferences.get("metronome", true)))
+    var reconnect: String = settings_interactions.accept_preferences(
+        parsed,settings_view,practice_view,
+        str(state_inbox.current.get("device","")),device_names)
     _request_learning_status()
-    _apply_window_mode(bool(preferences.get("fullscreen", true)))
-    var saved_device := str(preferences.get("midi_device", ""))
-    if not saved_device.is_empty() and str(state_inbox.current.get("device", "")) == "" and not device_names.is_empty():
-        if device_names.has(saved_device) and not saved_device.to_lower().contains("midi through"):
-            _choose_device(saved_device)
+    _apply_window_mode(bool(preferences.get("fullscreen",true)))
+    if not reconnect.is_empty():
+        _choose_device(reconnect)
 
 func _request_learning_status() -> void:
     if learning_status_pending or learning_status_request == null:
