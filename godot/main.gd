@@ -964,20 +964,14 @@ func _present_fingering_status(summary: Variant) -> void:
     practice_view.stage.present_fingering(summary, issues, fingering_save_error)
 
 func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
-    if command_coordinator.state.pending or not _native_score_ready() or layout_pending or timeline_model_pending or \
-            int(state_inbox.current.get("revision",-1)) != timeline_model_revision or \
-            native_score_piece_fingerprint != str(state_inbox.current.get("piece_fingerprint","")):
-        fingering_save_error = "Wait for the current score operation to finish, then try again."
+    var decision: Dictionary = score_session.fingering_correction_request(
+        source_id,finger,state_inbox.current,command_coordinator.state.pending)
+    if not bool(decision.get("accepted",false)):
+        fingering_save_error = str(decision.get("message","Score not ready"))
         _present_fingering_status(state_inbox.current.get("fingering",{}))
         return
     fingering_save_error = ""
-    var payload: Dictionary = {"source_id":source_id,"finger":finger}
-    # XML identities repeat between pieces. Bind a correction to the piece
-    # visible when the popup was opened even if another client loads music.
-    var fingerprint: String = native_score_piece_fingerprint
-    if not fingerprint.is_empty():
-        payload["fingerprint"] = fingerprint
-    _send_command("fingering.correct",payload)
+    _send_command(str(decision["operation"]),decision["payload"])
 
 
 

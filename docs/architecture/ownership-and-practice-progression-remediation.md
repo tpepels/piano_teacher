@@ -473,6 +473,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - The reset operation still performs interrupt, interval flush, piece progress reset, Fukuda source-feedback reset, replacement course save and the reset event in **one original SQLite transaction**; Engine stops after it without repeating evidence writes. Rolling recovery still settles the immutable pending decision once, and `AttemptSettlement.settle` alone finishes the capture.
 - All outcomes are still tied to the same current attempt and source identifier; no alternative evidence store, timeout path or grader was added. No new tests; explicit core/native acceptance required.
 
+### Implementation checkpoint BO — score-bound fingering correction admission is asset-owned
+
+- Moved the entire source/revision/native-layout/command-busy validation and source-identity payload creation for persistent fingering edits out of Main into `ScoreAssetSession.fingering_correction_request`. A stale popup cannot submit a correction to a new score, nor can a partially engraved revision accept a write.
+- Main only forwards the selected source note/finger and the accepted UI snapshot, presents an explicit rejection, or submits the one bounded accepted operation. This removes another scene-owned source-identity policy decision without changing how fingering overrides are persisted or projected. No new tests.
+- Core and Godot production tests remain the execution gate for the native score/fingering UI integration.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

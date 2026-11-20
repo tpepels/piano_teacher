@@ -82,6 +82,26 @@ func replace_renderer(next_renderer) -> void:
 func source_fingerprint() -> String:
     return _fingerprint
 
+func fingering_correction_request(source_id: String, finger: Variant,
+        current_state: Dictionary, command_pending: bool) -> Dictionary:
+    ## Sole identity-based admission policy for persisted fingering edits.
+    ## A renderer correction cannot target a newer stage/piece or an
+    ## incomplete native layout, even if its glyph editor remains open.
+    var valid: bool = not command_pending and is_ready() and \
+        not layout_pending and not timeline_model_pending and \
+        int(current_state.get("revision",-1)) == timeline_model_revision and \
+        native_score_piece_fingerprint == \
+            str(current_state.get("piece_fingerprint",""))
+    if not valid:
+        return {"accepted":false,
+            "message":"Wait for the current score operation to finish, then try again."}
+    var payload: Dictionary = {"source_id":source_id,"finger":finger}
+    if not native_score_piece_fingerprint.is_empty():
+        payload["fingerprint"] = native_score_piece_fingerprint
+    return {"accepted":true,"operation":"fingering.correct",
+        "payload":payload}
+
+
 
 func matches_ready_source(intent: Dictionary) -> bool:
     # Public, identity-bound readiness port. Consumers never inspect
