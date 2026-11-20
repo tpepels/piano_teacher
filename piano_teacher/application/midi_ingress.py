@@ -62,6 +62,40 @@ class MidiIngress:
         self.resume_ignored_pitches = set()
         self.deferred = deque()
 
+    def dispatch(self, message, *, facts: MidiInputFacts,
+                 received_at: float, corrected_at: float | None,
+                 deferred: bool, midi_offset_seconds: float,
+                 apply_shortcut, transport_facts, musical_seconds,
+                 recorder, teaching, feedback_take) -> None:
+        """One ordering for MIDI shortcuts, timestamp deferral and grading.
+
+        The source facts describe the *incoming* take. A shortcut may
+        synchronously change the current session; afterward, only the
+        separate immutable transport gate is resampled. Never recapture
+        source identity and silently credit this key to a new take.
+        """
+        effect = self.classify(
+            message,facts=facts,now=received_at,deferred=deferred)
+        if effect.action or effect.completed_range is not None:
+            apply_shortcut(effect)
+        if effect.consumed:
+            return
+        gates = transport_facts()
+        if self.suppress_for_successor(facts,gates):
+            return
+        adjusted = (received_at-midi_offset_seconds
+                    if corrected_at is None else corrected_at)
+        if self.defer_boundary_note(
+                message,facts=facts,transport=gates,
+                received_at=received_at,corrected_at=adjusted,
+                replaying=deferred):
+            return
+        self.deliver(
+            message,facts=facts,received_at=received_at,
+            corrected_at=adjusted,musical_at=musical_seconds(adjusted),
+            recorder=recorder(),teaching=teaching(),
+            feedback_take=feedback_take())
+
     def classify(self,message,*,facts,now,deferred=False):
         if self.calibration.active:
             if not deferred:

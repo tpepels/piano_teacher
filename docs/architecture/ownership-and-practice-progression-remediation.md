@@ -455,6 +455,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Settings preferences and saved-device reconnect selection now belong to this session. Main only builds the scene, connects typed signals to the existing command coordinator, and applies the explicitly returned device selection. No alternative command route or setter is introduced.
 - Reduced the main scene's settings-specific event handling without moving screen composition or changing application policy. No new tests; native Settings and MIDI-device acceptance must verify integration.
 
+### Implementation checkpoint BL — MIDI callback ordering has one owner
+
+- `MidiIngress.dispatch` now exclusively sequences hardware shortcut classification, any accepted range/command, the **post-command** transport-gate snapshot, successor suppression, original-timestamp boundary deferral, and final live/graded note delivery. It retains the original frozen incoming-take identity even when an accepted shortcut synchronously changes the session; a key cannot silently earn credit in a replacement take.
+- PracticeEngine supplies only one immutable `MidiInputFacts`, a separate immutable `InputTransportFacts` port, the calibrated timestamp and explicit shortcut/grading-output callbacks. It no longer independently decides when to defer or deliver a note or repeats the MIDI ingress sequence.
+- No new tests. Existing reconnect, shortcut, calibration, delayed-boundary and repeated-take tests remain the acceptance gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

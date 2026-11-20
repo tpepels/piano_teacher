@@ -629,8 +629,31 @@ class PracticeEngine:
             self.runtime_timings.midi_ms.append(
                 (time.perf_counter()-began)*1000.0)
 
+    def _midi_transport_facts(self) -> InputTransportFacts:
+        """Snapshot only the transport gates needed by the one MIDI router."""
+        return InputTransportFacts(
+            next_at=self.visual_transport.next_at,
+            preview_loop_pending=self.visual_transport.preview_loop_pending,
+            pending_teaching_result=self.attempt.pending_result is not None,
+            pending_rewind=self.visual_transport.pending_rewind is not None,
+            automatic=self.auto,preview_only=self.preview_only,
+            visual_gap_beats=self.visual_transport.visual_gap_beats,
+            awaiting_score=self.awaiting_score_revision is not None,
+            exercise_kind=(self.plan.exercise.kind if self.plan else ""),
+            review_end_beat=self.attempt.review_end_beat,
+            presentation_required=self.playback.presentation_required,
+            successor_action=(self.playback.intent.action
+                if self.playback.intent is not None else None))
+
+    def _apply_midi_shortcut(self, effect) -> None:
+        if effect.completed_range is not None:
+            ranges = self.library.settings["midi_key_ranges"].copy()
+            ranges[self.midi.device] = list(effect.completed_range)
+            self.set_preferences(midi_key_ranges=ranges)
+        if effect.action:
+            self.control(effect.action)
+
     def _receive_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
-        # Timestamp in the hardware input callback, not on the rendering thread.
         now = self.now() if received_at is None else received_at
         with self.lock:
             facts = MidiInputFacts(self.fingerprint,self.score_revision,
@@ -639,41 +662,16 @@ class PracticeEngine:
                 self.mode,self.running,self.visual_transport.paused,self.preview_only,
                 self.visual_transport.play_from_beat,self.visual_transport.run_at,self.transport_id,
                 self._active_tempo_map(),self.running or (self.mode == "learn" and self.teaching is not None))
-            effect = self.midi_ingress.classify(message,facts=facts,now=now,deferred=deferred)
-            if effect.completed_range is not None:
-                ranges = self.library.settings["midi_key_ranges"].copy()
-                ranges[self.midi.device] = list(effect.completed_range)
-                self.set_preferences(midi_key_ranges=ranges)
-            if effect.action:
-                self.control(effect.action)
-            if effect.consumed:
-                return
-            transport = InputTransportFacts(
-                next_at=self.visual_transport.next_at,
-                preview_loop_pending=self.visual_transport.preview_loop_pending,
-                pending_teaching_result=self.attempt.pending_result is not None,
-                pending_rewind=self.visual_transport.pending_rewind is not None,
-                automatic=self.auto,preview_only=self.preview_only,
-                visual_gap_beats=self.visual_transport.visual_gap_beats,
-                awaiting_score=self.awaiting_score_revision is not None,
-                exercise_kind=(self.plan.exercise.kind if self.plan else ""),
-                review_end_beat=self.attempt.review_end_beat,
-                presentation_required=self.playback.presentation_required,
-                successor_action=(self.playback.intent.action
-                    if self.playback.intent is not None else None))
-            if self.midi_ingress.suppress_for_successor(facts,transport):
-                return
-            corrected_at = (now - self.library.settings["midi_offset_ms"] / 1000.0
-                            if corrected_at is None else corrected_at)
-            if self.midi_ingress.defer_boundary_note(
-                    message,facts=facts,transport=transport,
-                    received_at=now,corrected_at=corrected_at,
-                    replaying=deferred):
-                return
-            musical_at = self._musical_seconds(corrected_at)
-            self.midi_ingress.deliver(message,facts=facts,received_at=now,corrected_at=corrected_at,
-                musical_at=musical_at,recorder=self.attempt.recorder,teaching=self.teaching,
-                feedback_take=self._feedback_take())
+            self.midi_ingress.dispatch(
+                message,facts=facts,received_at=now,
+                corrected_at=corrected_at,deferred=deferred,
+                midi_offset_seconds=self.library.settings["midi_offset_ms"]/1000.0,
+                apply_shortcut=self._apply_midi_shortcut,
+                transport_facts=self._midi_transport_facts,
+                musical_seconds=self._musical_seconds,
+                recorder=lambda: self.attempt.recorder,
+                teaching=lambda: self.teaching,
+                feedback_take=self._feedback_take)
 
     def load(self, path: str, *, warmup: bool = False):
         """Commit one source only after its MIDI, curriculum and fingering exist."""
