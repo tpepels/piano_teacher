@@ -524,6 +524,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Core CI found that retiring the static `_teaching_instruction` method accidentally left its `@staticmethod` on the following instance method `_finish_full_passage`. Removed the stray decorator, restoring the original bound-method signature; previously this raised `TypeError` at completion on flow/midi state-contract tests.
 - No test was added, skipped, or weakened. Existing CI must pass again before any native/product acceptance claim.
 
+### Implementation checkpoint BL — remove duplicate private guided-session property aliases
+
+- Removed the writable `_guided_return` and `_guided_prepared` property forwarding descriptors from `PracticeEngine`. Every transition now reads and writes `GuidedSession.return_context` and `GuidedSession.prepared` on the sole existing guided owner, including retry reintegration, selected Free completion, source reset and snapshot capture.
+- Public guided controls and source notation handling remain unchanged. This eliminates two more transitional engine properties and redundant mutation entrypoints. No new tests; existing guided/recovery CI must validate source behavior.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

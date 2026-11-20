@@ -117,22 +117,6 @@ class PracticeEngine:
     def persistent_hints(self, enabled: bool) -> None:
         self.guided_session.persistent_hints = bool(enabled)
 
-    @property
-    def _guided_prepared(self) -> bool:
-        return self.guided_session.prepared
-
-    @_guided_prepared.setter
-    def _guided_prepared(self, prepared: bool) -> None:
-        self.guided_session.prepared = prepared
-
-    @property
-    def _guided_return(self):
-        return self.guided_session.return_context
-
-    @_guided_return.setter
-    def _guided_return(self, context):
-        self.guided_session.return_context = context
-
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
                  feedback_events: FeedbackEventLog | None = None,
                  clock: Clock | None = None):
@@ -180,7 +164,7 @@ class PracticeEngine:
         # Persistent trouble means two boundary failures in consecutive takes
         # at the same stage and source two-bar chunk. Only a clean full take
         # or explicit stage navigation resets the history.
-        self._guided_return: tuple[str, float] | None = None
+        self.guided_session.return_context: tuple[str, float] | None = None
         # Automatic remedial sections are timed source reviews, never an
         # input-blocking lesson. A partial review never awards mastery.
         self.course_guided = False
@@ -188,7 +172,7 @@ class PracticeEngine:
         # of application/practice_flow.py (see _flow_execute).
         self.flow_session = PracticeFlowCourseSession(self.now)
         # One short on-screen message at a time: (serial, text, engine time).
-        self._guided_prepared = False
+        self.guided_session.prepared = False
         self.transport_id = 0
         self.mode = "practice"
         self.teaching = None
@@ -839,9 +823,9 @@ class PracticeEngine:
         self.awaiting_score_revision=None
         self.attempt.reset_for_stop()
         self.live_input.reset_attempt()
-        self._guided_return=None
+        self.guided_session.return_context=None
         self.listen.cancel()
-        self._guided_prepared=False
+        self.guided_session.prepared=False
         self._remediation_pending = None
         self._remediation_active = None
 
@@ -1045,7 +1029,7 @@ class PracticeEngine:
         self._remediation_active = remediation
         if recovery:
             self.attempt.retry_range = retry_range
-            self._guided_return = (self.plan.identity, start)
+            self.guided_session.return_context = (self.plan.identity, start)
         self.mode = "learn"
         self.guided_range = (start, end)
         unit = self._guided_unit()
@@ -1098,8 +1082,8 @@ class PracticeEngine:
             # Free complete -> Tempo (the state machine sets 50%).
             state = self.flow_session.free_completed()
             self._flow_set_bpm(state.bpm)
-            self._guided_return = None
-        return_context = self._guided_return
+            self.guided_session.return_context = None
+        return_context = self.guided_session.return_context
         retry_range = self.attempt.retry_range
         self._stop(reason="reintegration", preserve_episode=return_context is not None)
         self.visual_transport.play_from_beat = selected.from_beat
@@ -1108,7 +1092,7 @@ class PracticeEngine:
         if return_context is not None:
             self.visual_transport.pending_rewind = selected.from_beat
             self.attempt.retry_range = retry_range
-            self._guided_return = return_context
+            self.guided_session.return_context = return_context
         self.mode = "practice"
         self.teaching = None
         self.guided_range = None
@@ -1292,7 +1276,7 @@ class PracticeEngine:
                 scope=scope, performed_bpm=self.attempt.pending_assessed_bpm or p.bpm,
                 from_beat=self.visual_transport.play_from_beat,
                 end_beat=end_beat if end_beat is not None else p.active_phrase.end-p.active_phrase.start,
-                course_guided=self.course_guided, guided_return=self._guided_return,
+                course_guided=self.course_guided, guided_return=self.guided_session.return_context,
                 guided_range=self.guided_range, review_end_beat=self.attempt.review_end_beat,
                 remediation_active=self._remediation_active is not None,
                 trouble_key=self.recovery_streak.key, trouble_count=self.recovery_streak.count,
@@ -1431,7 +1415,7 @@ class PracticeEngine:
             self.mode = mode
             self.teaching = None
             self.guided_range = None
-            self._guided_return = None
+            self.guided_session.return_context = None
             self.attempt.performance_summary = None
             self.attempt.review_stage_identity = None
             self.attempt.review_session_complete = False
@@ -1898,7 +1882,7 @@ class PracticeEngine:
                     or not self.teaching.snapshot(now=self.now())["completed"]):
                 raise ValueError("Find the current notes before continuing to the next idea")
             self._save_guided_preparation()
-            if self._guided_return is not None:
+            if self.guided_session.return_context is not None:
                 self._prepare_practice()
             else:
                 self._begin_course_stage()
@@ -1923,7 +1907,7 @@ class PracticeEngine:
                 from_beat=float(kwargs.get(
                     "from_beat",
                     previous_start if action == "learn_retry" else 0.0)),
-                recovery=self._guided_return is not None and action == "learn_retry")
+                recovery=self.guided_session.return_context is not None and action == "learn_retry")
         elif action == "open_at":
             self._open_selected_measure(kwargs)
         elif action == "hints":
@@ -2330,7 +2314,7 @@ class PracticeEngine:
             p, action, kwargs, warmup=self.is_builtin_warmup)
         was_guided = self.mode == "learn"
         guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
-        guided_return = self._guided_return
+        guided_return = self.guided_session.return_context
         guided_retry_range = self.attempt.retry_range
         self._stop()
         self._reset_trouble()
@@ -3247,7 +3231,7 @@ class PracticeEngine:
         """Sample named read ports under the existing application lock."""
         values = SnapshotValues(
             _guided_recovery_pending=self.attempt.guided_recovery_pending,
-            _guided_return=self._guided_return,
+            _guided_return=self.guided_session.return_context,
             _remediation_active=self._remediation_active,
             auto=self.auto,
             awaiting_score_revision=self.awaiting_score_revision,
