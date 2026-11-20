@@ -7,6 +7,14 @@ from __future__ import annotations
 from dataclasses import dataclass, replace, asdict
 from ..teaching_decisions import validate_teaching_decision
 from .mistake_responses import mistake_policy_facts
+from .assessment_settlement import AssessedTake, assess_completed_take
+from ..completion_route import completion_route
+from typing import Callable, Sequence
+from ..music import Phrase
+from ..practice import Assessment, PlayedNote
+from ..exercise_contracts import TempoMap
+from .practice_assessment import PracticeAssessmentPolicies
+from .score_artifacts import ScoreSelection
 
 
 @dataclass(slots=True)
@@ -18,6 +26,7 @@ class PendingTeachingDecision:
     checkpoint_progress: object = None
     phase: str = "decided"
     receipt: object = None
+    publication: object = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +43,28 @@ class SettlementReceipt:
         return self.decision.message
 
 
+@dataclass(frozen=True, slots=True)
+class CommittedAttempt:
+    receipt: SettlementReceipt
+    selection: ScoreSelection | None
+    prepared: object
+    source_revision: int
+    previous_duration: float
+    previous_visual_offset: float
+    committed_at: float
+
+
+@dataclass(frozen=True)
+class CompletedTake:
+    assessed: AssessedTake
+    route: str
+    summary: dict
+    pending: object
+    response: object
+    settled: bool
+
+
+
 class AttemptSettlement:
     def __init__(self, repository, capture, source_feedback, learner_progress):
         self.repository = repository
@@ -41,6 +72,7 @@ class AttemptSettlement:
         self.source_feedback = source_feedback
         self.learner_progress = learner_progress
         self.pending = None
+        self._completion = None
         self.authority_revision = 0
         self.course_revision = 0
         self.cancellation_generation = 0
@@ -55,6 +87,114 @@ class AttemptSettlement:
         pending = PendingTeachingDecision(event, state, decision, event.assessment)
         self.pending = pending
         return pending
+
+    @property
+    def pending_result(self):
+        """The selected full result has one lifetime, through publication."""
+        p = self.pending
+        return (p.assessment if p is not None and
+                p.event.kind == "full_result" and p.phase != "published" else None)
+
+    @property
+    def pending_assessed_bpm(self):
+        return (self.pending.state.route.performed_bpm
+                if self.pending_result is not None else None)
+
+    def finish_publication(self) -> None:
+        if self.pending is not None:
+            self.pending.phase = "published"
+
+    def commit_full_passage(self, *, plan, binding, now: float,
+                            continuation, policy, score_revision: int,
+                            visual_offset: float) -> CommittedAttempt:
+        """Freeze successor publication before committing any progress.
+
+        A failed post-commit publication retries this same receipt, source
+        revision and offset. It cannot grade again, select a second exposure
+        or increment the revision twice because the plan already advanced.
+        """
+        pending = self.pending
+        if pending.publication is not None:
+            committed = pending.publication
+            expected_piece = (committed.selection.piece if committed.selection
+                              else pending.state.course.piece)
+            if (binding.fingerprint != pending.state.binding.fingerprint
+                    or plan.piece is not expected_piece
+                    or score_revision not in (committed.source_revision,
+                        committed.selection.revision if committed.selection
+                        else committed.source_revision)):
+                raise ValueError("Committed source changed before publication")
+            return committed
+        continuation.validate_announcement(pending)
+        if policy != pending.state.policy:
+            raise ValueError("Teaching policy changed before settlement")
+        decision, state = pending.decision,pending.state
+        chosen = replace(state.course,definition=decision.definition_after,
+                         progress=decision.progress_after)
+        changed = chosen.key != state.binding.stage_key
+        selection = (ScoreSelection(
+            piece=chosen.piece,phrase=chosen.stage.variant.phrase,
+            hand=chosen.hand,stage_key=chosen.key,revision=score_revision+1,
+            fingerprint=state.binding.fingerprint,
+            transformed_rhythm=chosen.stage.transformed_rhythm,
+            display_name=str(chosen.stage.display_name or "")) if changed else None)
+        prepared = continuation.reserved_asset(
+            pending,changed=changed,revision=score_revision,
+            fingerprint=state.binding.fingerprint)
+        duration = state.course.stage.variant.phrase.end-state.course.stage.variant.phrase.start
+        outcome = self.settle(pending,plan=plan,binding=binding,now=now,
+                              continuation=continuation,policy=policy)
+        pending.publication = CommittedAttempt(
+            outcome,selection,prepared,score_revision,duration,visual_offset,now)
+        return pending.publication
+
+    def complete_take(
+        self, *, phrase: Phrase, hand: str, bpm: float,
+        played: Sequence[PlayedNote], from_beat: float, end_beat: float,
+        tempo: TempoMap | None, policies: PracticeAssessmentPolicies,
+        layout_for_feedback: Callable[[], dict], mode: str,
+        review_end_beat: float | None, automatic_remedial_review: bool,
+        performance_review: Callable[[Phrase, Assessment], dict],
+        prepare_decision: Callable, plan,
+        binding, now: float, policy,
+    ) -> CompletedTake:
+        """One full/focused grading and evidence-settlement boundary.
+
+        All routes use the same assessed notes and the same immutable decision;
+        no progress, verdict or next exposure is reselected by the caller.
+        Full-passage outcomes remain pending for their authorized successor
+        boundary; focused/performance decisions settle immediately.
+        """
+        if self._completion is None:
+            assessed = assess_completed_take(
+                phrase=phrase,hand=hand,bpm=bpm,played=played,
+                from_beat=from_beat,end_beat=end_beat,tempo=tempo,
+                policies=policies,layout_for_feedback=layout_for_feedback)
+            result = assessed.result
+            route = completion_route(mode,review_end_beat,from_beat)
+            if automatic_remedial_review and route == "section_review":
+                route = "partial_recovery"
+            summary = performance_review(phrase,result)
+            if route == "full_passage":
+                pending = prepare_decision("full_result",result)
+                response = None
+            else:
+                pending = prepare_decision("focused_result",result,end_beat=end_beat)
+                response = pending.decision.response
+            self._completion = CompletedTake(
+                assessed,route,summary,pending,response,False)
+        completed = self._completion
+        assessed,route,summary,pending,response = (
+            completed.assessed,completed.route,completed.summary,
+            completed.pending,completed.response)
+        result = assessed.result
+        settled = self.seal_completed_take(
+            pending,played=played,route=route,mode=mode,
+            at_target=bpm >= plan.target_bpm,
+            assessed_end_beat=end_beat,result=result,plan=plan,
+            binding=binding,now=now,policy=policy,performance_summary=summary)
+        self._completion = replace(completed,settled=settled)
+        return self._completion
 
     def checkpoint_failed_streak(self, pending, *, plan, now):
         if not pending.decision.invalidate_failed_streak or pending.checkpoint_progress is not None:
@@ -266,4 +406,5 @@ class AttemptSettlement:
         if pending is not None and pending is not self.pending:
             return
         self.pending = None
+        self._completion = None
         self.cancellation_generation += 1

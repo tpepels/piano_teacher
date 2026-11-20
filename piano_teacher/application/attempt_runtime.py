@@ -14,8 +14,6 @@ from ..practice import Recorder
 @dataclass(slots=True)
 class AttemptRuntime:
     recorder: Recorder | None = None
-    pending_result: object | None = None
-    pending_assessed_bpm: float | None = None
     feedback_marks: list[dict] = field(default_factory=list)
     feedback_unmapped: int = 0
     pending_rolling: tuple | None = None
@@ -32,31 +30,14 @@ class AttemptRuntime:
     def begin_take(self, *, recording: bool) -> None:
         """Open one recorder and discard only per-take grading output."""
         self.recorder = Recorder() if recording else None
-        self.pending_result = None
-        self.pending_assessed_bpm = None
         self.feedback_marks = []
         self.feedback_unmapped = 0
-
-    def hold_full_result(self, result, bpm: float) -> None:
-        """One pending result and source tempo until its durable settlement."""
-        self.pending_result = result
-        self.pending_assessed_bpm = bpm
-
-    def clear_pending(self) -> None:
-        """Discard a cancelled decision without altering unrelated review."""
-        self.pending_result = None
-        self.pending_assessed_bpm = None
-
-    def finish_settlement(self) -> None:
-        self.clear_pending()
-        self.settlement_failed = False
 
     def clear_feedback(self) -> None:
         self.feedback_marks = []
         self.feedback_unmapped = 0
 
     def reset_source_presentation(self) -> None:
-        self.clear_pending()
         self.clear_feedback()
 
     def publish_live_marks(self, marks: list[dict]) -> None:
@@ -66,6 +47,19 @@ class AttemptRuntime:
         self.feedback_marks = marks
         self.feedback_unmapped = unmapped
 
+    def apply_settlement(self, committed, *, plan) -> None:
+        """Apply attempt presentation from the exact durable receipt."""
+        outcome = committed.receipt
+        self.retry_range = None
+        if outcome.accelerated:
+            self.recovery_notice = {"kind":"speedup", "errors":0,
+                "from_bpm":outcome.previous_bpm,"to_bpm":plan.bpm,
+                "first_bar":plan.active_phrase.first_bar,
+                "last_bar":plan.active_phrase.last_bar,
+                "expires_at":committed.committed_at+7.0}
+        if outcome.stage_changed:
+            self.performance_summary = self.review_stage_identity = None
+
     def finish_review(self, summary: dict | None, stage_key: str) -> None:
         self.recorder = None
         self.performance_summary = summary
@@ -74,8 +68,6 @@ class AttemptRuntime:
     def reset_for_stop(self) -> None:
         """Reset every attempt/review/recovery field in one stable owner."""
         self.recorder = None
-        self.pending_result = None
-        self.pending_assessed_bpm = None
         self.feedback_marks = []
         self.feedback_unmapped = 0
         self.pending_rolling = None

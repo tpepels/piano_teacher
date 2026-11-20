@@ -100,20 +100,22 @@ def test_closed_port_is_detected_even_when_name_is_still_enumerated(connected):
 
 
 def test_unplug_during_clean_feedback_discards_pending_mastery(connected):
-    from types import SimpleNamespace
+    from piano_teacher.practice import Assessment, NoteAssessment
 
     engine, midi = connected
     engine.plan.bpm = engine.plan.target_bpm
     engine.plan.streak = 2
     engine.start()
     engine.running = False
-    engine.attempt.pending_result = SimpleNamespace(correct=1, notes=[object()], extra_notes=0)
+    result = Assessment(tuple(NoteAssessment(n, "correct")
+                              for n in engine.plan.active_phrase.notes), 0)
+    engine._prepare_teaching("full_result", result)
     engine.visual_transport.next_at = 1.0
     midi.names = []
 
     engine.ports()
 
-    assert engine.attempt.pending_result is None
+    assert engine.attempt_settlement.pending_result is None
     assert engine.state()["phase"] == "ready"
     assert not engine.plan.mastered
 

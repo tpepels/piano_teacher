@@ -263,6 +263,14 @@ class VisualTransport:
     def clear_grading_floor(self) -> None:
         self._pause_floor = None
 
+    def adopt_committed_stage(self, committed, *, preserved: bool) -> None:
+        """Idempotently retain the outgoing source after durable settlement."""
+        from .application.musical_scheduler import SETTLEMENT_SECONDS
+        self.visual_offset_beats = (
+            committed.previous_visual_offset+committed.previous_duration+
+            SCHEDULER.seconds_beats(SETTLEMENT_SECONDS,committed.receipt.previous_bpm)
+            if preserved else 0.0)
+
     def musical_seconds(self, at: float, *, grading_after: float) -> float:
         """Source time freezes for a held key through Pause and reading lead."""
         seconds = at-self.run_at

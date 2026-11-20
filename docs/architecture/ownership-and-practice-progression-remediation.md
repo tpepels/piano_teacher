@@ -620,6 +620,14 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Ruling: use the existing audit/phase plan, existing tests, direct main commits and autonomous execution as explicitly requested; do not create a worktree, add tests or request another design approval. The referenced machine file `/home/tom/.codex/RTK.md` is absent; repository instructions were read directly.
 - Remaining work: complete durable completion/publication, facade decomposition and public ports; rerun full native, repertoire and relocated package checks. Physical acceptance remains unverified.
 
+### Implementation checkpoint CB — one pending result and durable completion transaction
+
+- `fdf21b4b` implements checkpoint CA. This step removes the second writable pending assessment/BPM from AttemptRuntime: AttemptSettlement now exposes the exact pending decision's result and performed BPM as read-only facts.
+- Moved complete-take grading/decision/sealing/settlement orchestration into AttemptSettlement; the assessment helper now only grades/projects. A cached immutable completion preserves the chosen grade through storage retries. No second decision or evidence writer remains in that helper.
+- Full-passage settlement freezes a CommittedAttempt before source publication. Publication retries use its original source revision, prepared asset, duration and visual offset; applying the same receipt cannot increment the source revision/offset twice after the database already committed. AttemptRuntime applies review/reset display effects from that receipt.
+- Updated the existing unplug fixture to prepare a real canonical assessment through the decision owner instead of writing the retired shadow pending field. No new tests. `bash scripts/test.sh --python-only` passed (335 passed, one skipped); integrated run also passed Python, with native extraction parser issues being corrected before full Godot verification.
+- Remaining work: facade and continuation effects extraction, final owner audit, full native/package acceptance and documentation reconciliation. Physical acceptance stays unverified.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
