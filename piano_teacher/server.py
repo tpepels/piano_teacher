@@ -2433,13 +2433,11 @@ class PracticeEngine:
             if outcome is not None:
                 self.flow_session.settle_decided(
                     outcome,plan=self.plan,message=selected.message)
-            effect = self.teaching_continuation.after_settlement(selected,
-                score_changed=self.score_revision != previous_revision,
-                prepared=self.teaching_continuation.prepared_published and self.teaching_continuation.acknowledged == (self.plan.identity,self.score_revision))
+            effect = self.teaching_continuation.apply_settled_effect(
+                selected,score_changed=self.score_revision != previous_revision,
+                stage_key=self.plan.identity,revision=self.score_revision)
             route = effect.action
             if route == "handoff":
-                self.teaching_continuation.acknowledged = None
-                self.teaching_continuation.prepared_published = False
                 # Assets are ready; physical placement is negotiated only
                 # by ScoreAdmissionGateway. No preloader-supplied lead/clear
                 # may independently move the new stage's musical onset.
@@ -2449,7 +2447,6 @@ class PracticeEngine:
                 self._continue_at(earliest,
                     from_beat=selected.next_exposure.from_beat)
                 return
-            self.teaching_continuation.prepared_published = False
             # The selected teaching exposure has precedence over a timed
             # policy reply. A prepared untimed Learn step must never be
             # redirected to timed Practice just because feedback also carries

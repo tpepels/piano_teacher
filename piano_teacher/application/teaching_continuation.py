@@ -199,7 +199,7 @@ class TeachingContinuation:
                 self.transport.pause(at=now)
                 self.transport.next_at = 0.
                 return ContinuationEffect("fault",failure)
-                self.transport.next_at = now+.10
+            self.transport.next_at = now+.10
             return ContinuationEffect("await","Preparing the next lesson while scrolling")
         self.reservation = (selection.identity,prebuilt)
         return ContinuationEffect("settle")
@@ -218,6 +218,18 @@ class TeachingContinuation:
         if decision.remediation is not None:
             return ContinuationEffect("remediation")
         return ContinuationEffect("await_score" if score_changed else "continue")
+
+    def apply_settled_effect(self, decision, *, score_changed: bool,
+                            stage_key: str, revision: int) -> ContinuationEffect:
+        """Consume exact preloaded-stage identity once when grading commits."""
+        prepared = (self.prepared_published and
+                    self.acknowledged == (stage_key,revision))
+        effect = self.after_settlement(
+            decision,score_changed=score_changed,prepared=prepared)
+        self.prepared_published = False
+        if effect.action == "handoff":
+            self.acknowledged = None
+        return effect
 
     def capture_state(self):
         return (self.acknowledged,self.reservation,self.schedule,self.generation)

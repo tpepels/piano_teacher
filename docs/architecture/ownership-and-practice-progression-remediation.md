@@ -502,6 +502,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Fixed that final stale argument to the source-identity validation port's frozen `PlaybackRuntimeFacts` and reviewed the entire coordinator for any remaining live `engine` references. There are none. No extra clock, policy, tests or compatibility engine adapter were introduced.
 - Trigger the complete native/playback/repertoire/relocated-package acceptance on this exact corrected source; physical Kawai, speaker and Bluetooth remain unchecked.
 
+### Implementation checkpoint BH — eliminate duplicate stage-readiness state mutation
+
+- Fixed an unreachable polling deadline in `TeachingContinuation.advance`: the source-awaiting branch now advances its bounded 100 ms readiness check; an actual native compilation failure still stops and reports the fault.
+- Moved post-settlement preloader `prepared_published`/acknowledged-identity consumption into `TeachingContinuation.apply_settled_effect`. PracticeEngine no longer writes the same flags in both the handoff and non-handoff branches.
+- The already existing `PracticeFlowCourseSession.settle_decided` remains the sole selected flow outcome owner. No tests added. Current native/software acceptance must be repeated after this change.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
