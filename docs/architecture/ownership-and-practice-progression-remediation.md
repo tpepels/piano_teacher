@@ -628,6 +628,13 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Updated the existing unplug fixture to prepare a real canonical assessment through the decision owner instead of writing the retired shadow pending field. No new tests. `bash scripts/test.sh --python-only` passed (335 passed, one skipped); integrated run also passed Python, with native extraction parser issues being corrected before full Godot verification.
 - Remaining work: facade and continuation effects extraction, final owner audit, full native/package acceptance and documentation reconciliation. Physical acceptance stays unverified.
 
+### Implementation checkpoint CC — Practice screen construction and layout owner
+
+- `1028dd32` implements checkpoint CB. PracticeChrome now owns its widget tree, responsive layout, modal presentation and voice status; PracticeScreen consumes backend snapshots and handles interaction through semantic signals.
+- Chrome is a composed VBoxContainer, retains no application/screen reference and stores no duplicate transport or teaching policy. Existing public widget observations remain available to preserve current UI contracts.
+- Existing Godot checks passed after integration, including all Practice UI scenarios and source-marker assertions. The existing Python suite also passed (335 passed, one skipped). No tests were added; physical display/input behavior remains unverified.
+- Remaining gates: renderer/stream, root scene and backend ownership commits; fix the fresh-review Free→Tempo authority and failed-journal teardown findings; full embedded production and package run.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
