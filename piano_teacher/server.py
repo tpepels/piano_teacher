@@ -2755,7 +2755,6 @@ class PracticeEngine:
         self.next_action = "Next: play the whole passage from its beginning to earn mastery."
         self.attempt.retry_range = None
 
-    @staticmethod
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
         # CompletedTake installed the pending result before decision selection.
         pending = self.attempt_settlement.pending

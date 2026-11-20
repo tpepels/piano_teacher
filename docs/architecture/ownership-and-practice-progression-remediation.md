@@ -519,6 +519,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - `AttemptSettlement.finish_preview` remains the only evidence writer, so this path cannot earn a graded press, clean pass or mastery. Source playback and UI notices are unchanged. No extra clocks or new tests.
 - Core and native acceptance will verify that repeated preview admission remains strictly future-only.
 
+### Implementation checkpoint BK — correct the extracted presentation decorator
+
+- Core CI found that retiring the static `_teaching_instruction` method accidentally left its `@staticmethod` on the following instance method `_finish_full_passage`. Removed the stray decorator, restoring the original bound-method signature; previously this raised `TypeError` at completion on flow/midi state-contract tests.
+- No test was added, skipped, or weakened. Existing CI must pass again before any native/product acceptance claim.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
