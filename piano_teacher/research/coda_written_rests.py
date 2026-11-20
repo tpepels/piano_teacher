@@ -31,7 +31,7 @@ class MatrixWrittenRest:
         return f"xml-p{self.part_index}-s{self.staff}-v{self.voice}"
 
 
-def _positive_fraction(value: str | None, label: str) -> Fraction:
+def positive_fraction(value: str | None, label: str) -> Fraction:
     try:
         number = Fraction(value)
     except (TypeError, ValueError, ZeroDivisionError) as exc:
@@ -71,9 +71,9 @@ def extract_written_rests(source_musicxml: str, *, first_bar: int,
                 if tag == "attributes":
                     value = element.findtext("{*}divisions")
                     if value is not None:
-                        divisions = _positive_fraction(value, "divisions")
+                        divisions = positive_fraction(value, "divisions")
                 elif tag in ("backup", "forward"):
-                    delta = _positive_fraction(
+                    delta = positive_fraction(
                         element.findtext("{*}duration"), "cursor duration") / divisions
                     cursor += delta if tag == "forward" else -delta
                     if cursor < 0:
@@ -82,7 +82,7 @@ def extract_written_rests(source_musicxml: str, *, first_bar: int,
                 elif tag == "note":
                     if element.find("{*}grace") is not None:
                         continue
-                    duration = _positive_fraction(
+                    duration = positive_fraction(
                         element.findtext("{*}duration"), "note duration") / divisions
                     is_chord = element.find("{*}chord") is not None
                     if is_chord:

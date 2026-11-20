@@ -107,7 +107,7 @@ def note_name(pitch: int) -> str:
     return f"{'C C# D D# E F F# G G# A A# B'.split()[pitch % 12]}{pitch // 12 - 1}"
 
 
-def _named_hand(name: str) -> str | None:
+def named_hand(name: str) -> str | None:
     if re.search(r"(^|\W)(left|lh|mano sinistra)(\W|$)", name, re.I):
         return "left"
     if re.search(r"(^|\W)(right|rh|mano destra)(\W|$)", name, re.I):
@@ -115,14 +115,14 @@ def _named_hand(name: str) -> str | None:
     return None
 
 
-def _assign_hands(notes: list[Note], names: dict[int, str], split: int) -> list[Note]:
+def assign_hands(notes: list[Note], names: dict[int, str], split: int) -> list[Note]:
     groups: dict[int, list[int]] = defaultdict(list)
     for note in notes:
         groups[note.track].append(note.pitch)
     ranked = sorted(groups, key=lambda t: median(groups[t]))
     track_hands: dict[int, str] = {}
     for track, name in names.items():
-        hand = _named_hand(name)
+        hand = named_hand(name)
         if hand is not None:
             track_hands[track] = hand
     # Two piano tracks are usually left/right, even when each crosses middle C.
@@ -162,7 +162,7 @@ def _bar_boundaries(length: float, changes: list[tuple[float, int, int]]) -> lis
     return boundaries
 
 
-def _phrases(notes: list[Note], boundaries: list[float], bars_per_phrase: int) -> tuple[Phrase, ...]:
+def phrases_from_notes(notes: list[Note], boundaries: list[float], bars_per_phrase: int) -> tuple[Phrase, ...]:
     phrases: list[Phrase] = []
     for bar in range(0, len(boundaries) - 1, bars_per_phrase):
         end_index = min(bar + bars_per_phrase, len(boundaries) - 1)
@@ -268,7 +268,7 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     changes = valid_changes
     initial_tempo = sorted(tempos)[0][1] if tempos and min(t for t, _ in tempos) == 0 else 500000
     bpm = round(60_000_000 / initial_tempo)
-    notes = sorted(_assign_hands(notes, names, split_pitch), key=lambda n: (n.start, n.pitch, n.track))
+    notes = sorted(assign_hands(notes, names, split_pitch), key=lambda n: (n.start, n.pitch, n.track))
     signatures = {}
     for beat, numerator, denominator in changes:
         if beat in signatures and signatures[beat] != (numerator, denominator):
@@ -291,7 +291,7 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
             f"Ignored {discarded_orphan_releases} unmatched MIDI note-off event(s).")
     if repaired_meters:
         warnings.append("Ignored implausible time signature(s): " + ", ".join(repaired_meters) + ".")
-    return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase),
+    return Piece(Path(path).stem, bpm, tuple(notes), phrases_from_notes(notes, boundaries, bars_per_phrase),
                  split_pitch, tuple(boundaries), tuple(sorted(set(changes))),
                  tuple(sorted(set(keys), key=lambda signature: (signature.beat, signature.fifths))),
                  import_warnings=tuple(warnings),

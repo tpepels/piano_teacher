@@ -13,7 +13,7 @@ from functools import lru_cache
 import hashlib
 import math
 from xml.etree import ElementTree as ET
-from ..music import Note, Phrase, _assign_hands, _named_hand, source_note_id
+from ..music import Note, Phrase, assign_hands, named_hand, source_note_id
 from ..measure_grid import phrase_grid
 from .source_annotations import project_annotations
 from .midi_beaming import beam_midi_measure
@@ -366,16 +366,16 @@ def _authored_source_rests(source_musicxml: str) -> tuple:
     # Resolve empty voices from the whole source's staff/hand policy. The
     # active phrase may contain no attack at all from that voice or staff.
     for (pi, staff), track in tracks.items():
-        if len(source_staffs[pi]) == 2 and _named_hand(track_names[track]) is None:
+        if len(source_staffs[pi]) == 2 and named_hand(track_names[track]) is None:
             track_names[track] = 'Right hand' if staff == '1' else 'Left hand'
     voice_hands, staff_hands = defaultdict(set), defaultdict(set)
-    for note in _assign_hands(source_notes, track_names, 60):
+    for note in assign_hands(source_notes, track_names, 60):
         voice_hands[note.voice].add(note.hand)
         staff_hands[note.track].add(note.hand)
     result = []
     for pi, staff, track, owner, absolute_start, absolute_end, element in rests:
         candidates = voice_hands[owner] or staff_hands[track]
-        rest_hand = (_named_hand(track_names[track])
+        rest_hand = (named_hand(track_names[track])
                      or (next(iter(candidates)) if len(candidates) == 1 else None)
                      or ('left' if staff == '2' or pi > 0 else 'right'))
         result.append((rest_hand, owner, absolute_start, absolute_end, element))

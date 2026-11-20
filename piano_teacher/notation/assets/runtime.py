@@ -32,7 +32,7 @@ def create_verovio_toolkit(verovio_module):
     return toolkit
 
 
-def _verovio_object(value, description: str):
+def verovio_object(value, description: str):
     """Accept native Python results from the 5.x binding or older JSON strings."""
     if isinstance(value, (dict, list)):
         return value

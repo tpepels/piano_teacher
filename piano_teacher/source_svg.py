@@ -19,7 +19,7 @@ TRANSFORM = re.compile(r"(matrix|translate|scale)\s*\(([^)]*)\)")
 NUMBERS = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?")
 
 
-def _mul(a: Matrix, b: Matrix) -> Matrix:
+def multiply_svg_transform(a: Matrix, b: Matrix) -> Matrix:
     aa, ab, ac, ad, ae, af = a
     ba, bb, bc, bd, be, bf = b
     return (aa * ba + ac * bb, ab * ba + ad * bb,
@@ -27,7 +27,7 @@ def _mul(a: Matrix, b: Matrix) -> Matrix:
             aa * be + ac * bf + ae, ab * be + ad * bf + af)
 
 
-def _transform(text: str) -> Matrix:
+def svg_transform(text: str) -> Matrix:
     matrix = IDENTITY
     for item in TRANSFORM.finditer(text):
         numbers = [float(s) for s in NUMBERS.findall(item.group(2))]
@@ -39,11 +39,11 @@ def _transform(text: str) -> Matrix:
             op = (numbers[0], 0, 0, numbers[1] if len(numbers) > 1 else numbers[0], 0, 0)
         else:
             raise ValueError(f"Unsupported SVG transform: {item.group()}")
-        matrix = _mul(matrix, op)  # SVG transform-list ordering
+        matrix = multiply_svg_transform(matrix, op)  # SVG transform-list ordering
     return matrix
 
 
-def _apply(m: Matrix, x: float, y: float) -> tuple[float, float]:
+def apply_svg_transform(m: Matrix, x: float, y: float) -> tuple[float, float]:
     return (m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5])
 
 
@@ -51,7 +51,7 @@ def _classes(element: ET.Element) -> set[str]:
     return set(element.get("class", "").split())
 
 
-def _element_position(group: ET.Element, transforms: dict[ET.Element, Matrix]) -> tuple[float, float] | None:
+def svg_notehead_position(group: ET.Element, transforms: dict[ET.Element, Matrix]) -> tuple[float, float] | None:
     """A notehead's glyph origin (not its stem, accidental, or decorative glyph)."""
     head = next((e for e in group.iter() if "notehead" in _classes(e)), None)
     candidates = list(head.iter()) if head is not None else list(group.iter())
@@ -61,7 +61,7 @@ def _element_position(group: ET.Element, transforms: dict[ET.Element, Matrix]) -
         try:
             x = float(element.get("x", "0"))
             y = float(element.get("y", "0"))
-            return _apply(transforms[element], x, y)
+            return apply_svg_transform(transforms[element], x, y)
         except (ValueError, KeyError):
             continue
     return None
@@ -99,7 +99,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
 
     def walk(node: ET.Element, ancestor: Matrix, system: str,
              viewport: tuple[float, float], staff: ET.Element | None = None):
-        transform = _mul(ancestor, _transform(node.get("transform", "")))
+        transform = multiply_svg_transform(ancestor, svg_transform(node.get("transform", "")))
         # Verovio uses an outer SVG viewport (e.g. 1056x255) containing a
         # second <svg class="definition-scale" viewBox="0 0 22000 5310">.
         # A nested viewBox maps its local coordinates into the parent's
@@ -129,7 +129,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                     dy = (local_height - scale * nested[3]) / 2 - scale * nested[1]
                 x_offset = float(node.get("x", "0"))
                 y_offset = float(node.get("y", "0"))
-                transform = _mul(transform, (sx, 0, 0, sy,
+                transform = multiply_svg_transform(transform, (sx, 0, 0, sy,
                                              dx + x_offset, dy + y_offset))
                 viewport = (nested[2], nested[3])
         matrix[node] = transform
@@ -153,8 +153,8 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                 % ((NUMBERS.pattern,) * 4), item.get("d", ""))
             if match:
                 x1, y1, x2, y2 = map(float, match.groups())
-                left, _ = _apply(matrix[item], x1, y1)
-                right, _ = _apply(matrix[item], x2, y2)
+                left, _ = apply_svg_transform(matrix[item], x1, y1)
+                right, _ = apply_svg_transform(matrix[item], x2, y2)
                 ledgers[staffs[group]].append((min(left, right), max(left, right)))
     # Verovio puts each staff's five horizontal paths directly inside a
     # staff group, repeated in every measure. Only inspect those children:
@@ -178,8 +178,8 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                     continue
             if segment is None:
                 continue
-            x1, y1 = _apply(matrix[item], *segment[:2])
-            x2, y2 = _apply(matrix[item], *segment[2:])
+            x1, y1 = apply_svg_transform(matrix[item], *segment[:2])
+            x2, y2 = apply_svg_transform(matrix[item], *segment[2:])
             if abs(y2 - y1) <= 1e-5 and abs(x2 - x1) > 1e-5:
                 staff_segments[systems[staff]].append(
                     ((min(x1, x2)-bx)/width, (max(x1, x2)-bx)/width, (y1-by)/height))
@@ -190,7 +190,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
         identifier = elem.get("id")
         if not identifier:
             continue
-        point = _element_position(elem, matrix)
+        point = svg_notehead_position(elem, matrix)
         if point is None:
             continue
         x, y = point
@@ -210,7 +210,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                 rx, ry = float(rect.get("x", "0")), float(rect.get("y", "0"))
                 rw, rh = float(rect.get("width", "0")), float(rect.get("height", "0"))
                 if rw > 0 and rh > 0:
-                    left = min(left, *(_apply(matrix[rect], cx, cy)[0]
+                    left = min(left, *(apply_svg_transform(matrix[rect], cx, cy)[0]
                         for cx, cy in ((rx, ry), (rx+rw, ry), (rx, ry+rh), (rx+rw, ry+rh))))
         for ledger_left, ledger_right in ledgers.get(staffs[elem], []):
             if ledger_left <= x <= ledger_right:
@@ -236,7 +236,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                     x, y = float(match.group(1)), float(match.group(2))
                 else:
                     continue
-                actual_x, _ = _apply(matrix[item], x, y)
+                actual_x, _ = apply_svg_transform(matrix[item], x, y)
                 fraction = (actual_x - bx) / width
                 if math.isfinite(fraction) and -0.01 <= fraction <= 1.01:
                     positions.append(fraction)
@@ -279,7 +279,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                              path.get("d", ""))
             if match is None:
                 continue
-            x, _ = _apply(matrix[path], float(match.group(1)), float(match.group(2)))
+            x, _ = apply_svg_transform(matrix[path], float(match.group(1)), float(match.group(2)))
             normalized = (x-bx)/width
             if math.isfinite(normalized):
                 for note in owner.iter():

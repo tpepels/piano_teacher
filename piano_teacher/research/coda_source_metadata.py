@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from xml.etree import ElementTree as ET
 
-from .coda_written_rests import _positive_fraction
+from .coda_written_rests import positive_fraction
 
 
 @dataclass(frozen=True)
@@ -67,9 +67,9 @@ def source_elements(source_musicxml: str, *, first_bar: int, last_bar: int,
                 if kind == "attributes":
                     value = element.findtext("{*}divisions")
                     if value is not None:
-                        divisions = _positive_fraction(value, "divisions")
+                        divisions = positive_fraction(value, "divisions")
                 elif kind in ("backup", "forward"):
-                    duration = _positive_fraction(
+                    duration = positive_fraction(
                         element.findtext("{*}duration"), "cursor duration") / divisions
                     cursor += duration if kind == "forward" else -duration
                     if cursor < 0:
@@ -80,7 +80,7 @@ def source_elements(source_musicxml: str, *, first_bar: int, last_bar: int,
                     voice = element.findtext("{*}voice", "1")
                     voice_id = f"xml-p{pi}-s{staff}-v{voice}"
                     if element.find("{*}grace") is None:
-                        duration = _positive_fraction(
+                        duration = positive_fraction(
                             element.findtext("{*}duration"), "note duration") / divisions
                         if element.find("{*}chord") is not None:
                             if previous is None:

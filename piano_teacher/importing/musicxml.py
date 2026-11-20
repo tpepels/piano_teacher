@@ -14,7 +14,7 @@ import zipfile
 
 from ..music import (
     Note, Piece, KeySignature, ClefChange, BarlineChange,
-    _assign_hands, _named_hand, _phrases,
+    assign_hands, named_hand, phrases_from_notes,
 )
 from ..notation.musicxml import parse_barline
 
@@ -221,9 +221,9 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
     # A source piano grand staff supplies conventional upper/lower roles.
     for (part_index, staff), track in tracks.items():
         name = track_names[track]
-        if len(source_staffs[part_index]) == 2 and _named_hand(name) is None:
+        if len(source_staffs[part_index]) == 2 and named_hand(name) is None:
             track_names[track] = 'Right hand' if staff == '1' else 'Left hand'
-    notes = _assign_hands(notes, track_names, 60)
+    notes = assign_hands(notes, track_names, 60)
     hands = {}
     for note in notes:
         hands.setdefault(note.track, set()).add(note.hand)
@@ -231,7 +231,7 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
     for kind, part_index, staff, beat, *values in metadata:
         chosen = [track for (part, source_staff), track in tracks.items()
                   if part == part_index and (staff is None or source_staff == staff)]
-        role = set().union(*(hands.get(track, {_named_hand(track_names[track])}) for track in chosen)) - {None}
+        role = set().union(*(hands.get(track, {named_hand(track_names[track])}) for track in chosen)) - {None}
         if not role:
             continue  # No active or explicitly named hand for this empty source staff.
         hand = next(iter(role)) if len(role) == 1 else 'both'
@@ -242,7 +242,7 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
     notes.sort(key=lambda note: (note.start, note.pitch, note.track))
     boundaries = tuple(float(beat) for beat in grid)
     changes = tuple((float(beat), *signature) for beat, signature in sorted(signatures.items()))
-    return Piece(path.stem, bpm, tuple(notes), _phrases(notes, list(boundaries), 2),
+    return Piece(path.stem, bpm, tuple(notes), phrases_from_notes(notes, list(boundaries), 2),
                  bar_boundaries=boundaries, time_signatures=changes,
                  key_signatures=tuple(dict.fromkeys(keys)),
                  clef_changes=tuple(dict.fromkeys(clefs)),

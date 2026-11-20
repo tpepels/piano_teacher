@@ -32,7 +32,7 @@ def _pitches_from_verovio(toolkit, events: list[dict]) -> dict[str, int]:
     result = {}
     for identifier in note_ids:
         try:
-            data = _verovio_object(toolkit.getMIDIValuesForElement(identifier), "MIDI pitch")
+            data = verovio_object(toolkit.getMIDIValuesForElement(identifier), "MIDI pitch")
             pitch = data.get("pitch") if isinstance(data, dict) else None
             if isinstance(pitch, (int, float)) and 0 <= pitch <= 127:
                 result[identifier] = int(pitch)
@@ -43,7 +43,7 @@ def _pitches_from_verovio(toolkit, events: list[dict]) -> dict[str, int]:
 
 # Single canonical Verovio runtime shared by native notation and offline proof.
 from ..notation.assets.runtime import (
-    _create_verovio_toolkit, _verovio_resources, _verovio_object,
+    create_verovio_toolkit, verovio_resources, verovio_object,
 )
 
 
@@ -82,10 +82,10 @@ def _fade_inactive_staff(svg: str, hand: str, *, note_bindings: dict | None = No
                 # staff's local coordinates. A shared rule is active when any
                 # contributing performer is active, just like a shared head.
                 from ..source_svg import (
-                    IDENTITY, NUMBERS, _mul, _transform, _apply, _element_position)
+                    IDENTITY, NUMBERS, multiply_svg_transform, svg_transform, apply_svg_transform, svg_notehead_position)
                 matrices={}
                 def locate(node,parent):
-                    matrices[node]=_mul(parent,_transform(node.get('transform','')))
+                    matrices[node]=multiply_svg_transform(parent,svg_transform(node.get('transform','')))
                     for child in node:
                         locate(child,matrices[node])
                 locate(staff,IDENTITY)
@@ -93,7 +93,7 @@ def _fade_inactive_staff(svg: str, hand: str, *, note_bindings: dict | None = No
                 for node in staff.iter():
                     if 'note' not in node.get('class','').split() or node.get('id') not in bindings:
                         continue
-                    position=_element_position(node,matrices)
+                    position=svg_notehead_position(node,matrices)
                     if position is not None:
                         heads.append((*position,bindings[node.get('id')]['hand']))
                 def shade_ledgers(group):
@@ -104,8 +104,8 @@ def _fade_inactive_staff(svg: str, hand: str, *, note_bindings: dict | None = No
                         owners=set()
                         if match:
                             x0,y0,x1,y1=map(float,match.groups())
-                            x0,y0=_apply(matrices[path],x0,y0)
-                            x1,y1=_apply(matrices[path],x1,y1)
+                            x0,y0=apply_svg_transform(matrices[path],x0,y0)
+                            x1,y1=apply_svg_transform(matrices[path],x1,y1)
                             owners={performer for x,y,performer in heads
                                     if min(x0,x1)-1e-5<=x<=max(x0,x1)+1e-5
                                     and (y>=max(y0,y1)-1e-5 if below else y<=min(y0,y1)+1e-5)}
@@ -250,7 +250,7 @@ def _safe_reprinted_header_starts(xml: str, note_bindings: dict | None) -> list[
     if note_bindings is None:
         return []
     import xml.etree.ElementTree as ET
-    from .spacing import _measure_lengths
+    from .spacing import measure_lengths
     root = ET.fromstring(xml)
     parts = root.findall("part")
     if [part.get("id") for part in parts] != ["RH", "LH"]:
@@ -258,7 +258,7 @@ def _safe_reprinted_header_starts(xml: str, note_bindings: dict | None) -> list[
     measures = [part.findall("measure") for part in parts]
     if not measures[0] or len(measures[0]) != len(measures[1]):
         return []
-    lengths = _measure_lengths(root)
+    lengths = measure_lengths(root)
     starts = []
     beat = 0.0
     for index, length in enumerate(lengths):
@@ -305,7 +305,7 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                 identities.append(identifier)
         if len(set(identities)) != len(identities) or set(identities) != set(note_bindings):
             raise ValueError('Source-note identity mapping is missing or duplicated')
-    toolkit = _create_verovio_toolkit(verovio)
+    toolkit = create_verovio_toolkit(verovio)
     # Use one common layout for the SVGs and timing map. Timemap qstamps are
     # quarter-note units and remain correct when the practice tempo changes.
     options = {"inputFrom": "xml", "scale": 48,
@@ -378,11 +378,11 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                 for note in list(measure):
                     if note.tag == "note" and note.find("grace") is not None:
                         measure.remove(note)
-            timed_toolkit = _create_verovio_toolkit(verovio)
+            timed_toolkit = create_verovio_toolkit(verovio)
             if not timed_toolkit.setOptions(options) or not timed_toolkit.loadData(
                     ET.tostring(stable, encoding="unicode")):
                 raise ValueError("Cannot preserve canonical note timing around source grace")
-        events = _verovio_object(timed_toolkit.renderToTimemap(
+        events = verovio_object(timed_toolkit.renderToTimemap(
             {"includeRests": True, "includeMeasures": True}), "note timing map")
     except (ValueError, TypeError) as exc:
         raise ValueError("Verovio produced an invalid note timing map") from exc

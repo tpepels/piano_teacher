@@ -23,7 +23,7 @@ NOTE_SPACING = 0.095
 RHYTHM_SPACING = 1.0
 
 
-def _measure_lengths(root: ET.Element) -> list[float]:
+def measure_lengths(root: ET.Element) -> list[float]:
     """Read actual voice durations, including pickups, backups and chords."""
     lengths: list[float] = []
     for part in root.findall("part"):
@@ -71,7 +71,7 @@ def space_for_reading(xml: str, bpm: float) -> tuple[str, dict]:
     if not math.isfinite(bpm) or bpm <= 0:
         raise ValueError("Practice tempo must be a positive, finite BPM")
     root = ET.fromstring(xml)
-    lengths = _measure_lengths(root)
+    lengths = measure_lengths(root)
     if not lengths:
         raise ValueError("Practice score contains no measures")
     linear = min(1.0, 4.0 / bpm)
@@ -121,7 +121,7 @@ def space_for_continuous_reading(xml: str, bpm: float) -> tuple[str, dict]:
     if not math.isfinite(bpm) or bpm <= 0:
         raise ValueError("Practice tempo must be a positive, finite BPM")
     root = ET.fromstring(xml)
-    lengths = _measure_lengths(root)
+    lengths = measure_lengths(root)
     if not lengths:
         raise ValueError("Practice score contains no measures")
     # The score's horizontal density is independent of practice tempo.
