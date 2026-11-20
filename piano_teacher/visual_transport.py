@@ -13,10 +13,12 @@ from .notation.practice_timeline import (
     source_preparation_measure, UNLOADED_GAP_BEATS,
 )
 from .application.musical_scheduler import SCHEDULER, PassagePlan
+from .application.transport_commands import resume_timeline, resume_timing
 
 
 @dataclass
 class VisualTransport:
+    _pause_floor: float | None = None
     run_at: float = 0.0
     play_from_beat: float = 0.0
     pending_rewind: float | None = None
@@ -123,6 +125,7 @@ class VisualTransport:
 
         Normal Resume must instead call resume() to shift the source clock.
         """
+        self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
 
@@ -143,6 +146,7 @@ class VisualTransport:
 
     def reset_for_stop(self, *, rewind_seconds: float) -> None:
         """Forget the visible attempt but retain the loaded score's gap duration."""
+        self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
         self.visual_offset_beats = 0.0
@@ -162,6 +166,7 @@ class VisualTransport:
 
     def begin_take(self, *, loop_continuation: bool) -> None:
         """Clear the former attempt while retaining its finished preparation."""
+        self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
         self._preview_loop_pending = False
@@ -255,10 +260,30 @@ class VisualTransport:
             "to_beat": self._visual_rewind_to,
         }
 
-    def pause(self, *, at: float) -> None:
+    def clear_grading_floor(self) -> None:
+        self._pause_floor = None
+
+    def musical_seconds(self, at: float, *, grading_after: float) -> float:
+        """Source time freezes for a held key through Pause and reading lead."""
+        seconds = at-self.run_at
+        if self._pause_floor is None:
+            return seconds
+        if self.paused:
+            return min(seconds,self._pause_floor)
+        if at < grading_after:
+            return max(seconds,self._pause_floor)
+        return seconds
+
+    def grading_is_frozen(self, at: float, *, grading_after: float) -> bool:
+        return self._pause_floor is not None and at < grading_after
+
+    def pause(self, *, at: float, freeze_grading: bool = False,
+              grading_after: float = 0.0) -> None:
         """Freeze the presentation clock at one sampled instant."""
         if self.paused:
             raise ValueError("Transport is already paused")
+        if freeze_grading:
+            self._pause_floor = self.musical_seconds(at,grading_after=grading_after)
         self.paused_at = at
         self.paused = True
 
@@ -284,6 +309,43 @@ class VisualTransport:
             self._preparation_at,duration,active=self._preparation_pending)
         self.paused_at = 0.0
         self.paused = False
+
+    def resume_attempt(self, *, now: float, learning: bool, running: bool,
+                       automatic_feedback: bool, grading_after: float, mode: str,
+                       pause_context: str | None, bpm: float | None,
+                       count_in_beats: float, full_count_in_beats: float, bar_beats: float,
+                       reading_lead_seconds: float, reuse_pending_score: bool,
+                       midi_connected: bool, preview: bool,
+                       scheduled_deadline: float | None):
+        """Validate, shift and authorize the resumed source clock once."""
+        shift = resume_timeline(
+            paused=self.paused,learning=learning,running=running,
+            preview_pending=self.preview_loop_pending,
+            automatic_feedback=automatic_feedback)
+        paused_at, previous_origin = self.paused_at,self.run_at
+        if reuse_pending_score and (
+                reading_lead_seconds <= 0.0 or not (shift and running
+                and mode in ("practice", "perform"))
+                or pause_context != "count_in" or self.run_at <= paused_at):
+            raise ValueError("Cannot reuse a passage after graded notes began")
+        frozen = self._pause_floor
+        had_reading_lead = grading_after > paused_at
+        self.resume(now=now,shift_run_at=shift)
+        if had_reading_lead:
+            grading_after += max(0.0,now-paused_at)
+        timing = resume_timing(
+            now=now,origin=self.run_at,previous_origin=previous_origin,
+            paused_at=paused_at,frozen_seconds=frozen,
+            grading_after=grading_after,had_reading_lead=had_reading_lead,
+            shift_run_at=shift,running=running,mode=mode,
+            pause_context=pause_context,bpm=bpm,count_in_beats=count_in_beats,
+            full_count_in_beats=full_count_in_beats,
+            bar_beats=bar_beats,reading_lead_seconds=reading_lead_seconds,
+            reuse_pending_score=reuse_pending_score,
+            midi_connected=midi_connected,preview=preview,
+            scheduled_deadline=scheduled_deadline)
+        self.run_at = timing.origin
+        return previous_origin,shift,timing
 
     def position(
         self, now: float, *, phrase_length: float, bpm: float,

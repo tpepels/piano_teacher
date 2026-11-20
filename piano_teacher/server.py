@@ -65,7 +65,7 @@ from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.control_dispatch import ControlDispatcher
 from .application.score_ack import ScoreAckState, choose_score_ack_action
-from .application.transport_commands import require_pausable, resume_timeline
+from .application.transport_commands import require_pausable
 from .application.stage_change import prepare_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick
@@ -158,7 +158,6 @@ class PracticeEngine:
         # Graded musical position (seconds since run_at) at the Pause moment.
         # The graded timeline stands still there until grading resumes after
         # Resume's lead; see _musical_seconds (R1 F2).
-        self._pause_floor: float | None = None
         self._deferred_score_ack: int | None = None
         self.next_action = "Open a MIDI file."
         # Persistent trouble means two boundary failures in consecutive takes
@@ -799,7 +798,7 @@ class PracticeEngine:
         self.attempt_settlement.cancel(reason=reason, now=self.now())
         self.midi_ingress.deferred.clear()
         self.midi_ingress.clear_resume_gate()
-        self._pause_floor = None
+        self.visual_transport.clear_grading_floor()
         # Stopping/restarting a take does not invalidate precompiled next
         # notation. Its stage-key + score revision remain authoritative:
         # navigation, library changes and generation mismatches fail that
@@ -1400,7 +1399,7 @@ class PracticeEngine:
             if self.measurement.attempt_id is not None:
                 self.attempt_settlement.interrupt_current(reason="restart",played=self.attempt.recorder.presses if self.attempt.recorder else ())
             self.midi_ingress.clear_resume_gate()
-            self._pause_floor = None
+            self.visual_transport.clear_grading_floor()
             self.mode = mode
             self.teaching = None
             self.guided_range = None
@@ -2128,7 +2127,7 @@ class PracticeEngine:
             self.visual_transport.set_retry_previous_pass(False)
             self.attempt.guided_recovery_pending = False
             self.midi_ingress.clear_resume_gate()
-            self._pause_floor = None
+            self.visual_transport.clear_grading_floor()
             self._schedule_preparation(target, now=sampled, from_visual=position,
                                        reverse_seconds=reverse_seconds,
                                        reading_lead_included=presentation_lead_seconds > 0,
@@ -2149,15 +2148,8 @@ class PracticeEngine:
         lead): a key held across the pause excludes the paused interval, and
         a key-up while paused or in the lead counts at the pause moment.
         """
-        seconds = at - self.visual_transport.run_at
-        floor = self._pause_floor
-        if floor is None:
-            return seconds
-        if self.visual_transport.paused:
-            return min(seconds, floor)
-        if at < self.midi_ingress.resume_grading_after:
-            return max(seconds, floor)
-        return seconds
+        return self.visual_transport.musical_seconds(
+            at,grading_after=self.midi_ingress.resume_grading_after)
 
     def _pause_current_session(self, *, pending_admission: bool = False):
         """Pause learning, playback or preparation using one sampled clock."""
@@ -2166,11 +2158,8 @@ class PracticeEngine:
             if not self.visual_transport.paused else ""
         require_pausable(paused=self.visual_transport.paused, phase=context)
         self.pause_context = context
-        if self.running:
-            # A second Pause inside the resume lead keeps the first pause
-            # moment: the graded timeline has not moved since.
-            self._pause_floor = self._musical_seconds(now)
-        self.visual_transport.pause(at=now)
+        self.visual_transport.pause(at=now,freeze_grading=self.running,
+            grading_after=self.midi_ingress.resume_grading_after)
         self.measurement.phase_changed("pause", now)
         if self.mode == "learn" and self.teaching is not None:
             self.teaching.pause(now=now)
@@ -2182,79 +2171,29 @@ class PracticeEngine:
                                 scheduled_deadline: float | None = None):
         """Resume grading after future-only visual notes have reading space."""
         learning = self.mode == "learn" and self.teaching is not None
-        shift_run_at = resume_timeline(
-            paused=self.visual_transport.paused, learning=learning, running=self.running,
-            preview_pending=self.visual_transport.preview_loop_pending,
-            automatic_feedback=self.attempt.pending_result is not None and self.auto)
         now = self.now()
-        paused_at = self.visual_transport.paused_at
-        if reuse_pending_score and (
-                presentation_lead_seconds <= 0.0 or
-                not (shift_run_at and self.running and
-                     self.mode in ("practice", "perform")) or
-                self.pause_context != "count_in" or
-                self.visual_transport.run_at <= paused_at):
-            # Reuse is permitted only for a count-in that never reached the
-            # first attack. Reject before mutable transport.resume(): an
-            # invalid command must preserve the paused take unchanged.
-            raise ValueError("Cannot reuse a passage after graded notes began")
-        previous_origin = self.visual_transport.run_at
-        frozen_musical_seconds = self._pause_floor
-        had_reading_lead = self.midi_ingress.resume_grading_after > paused_at
+        previous_origin,shift_run_at,timing = self.visual_transport.resume_attempt(
+            now=now,learning=learning,running=self.running,
+            automatic_feedback=self.attempt.pending_result is not None and self.auto,
+            grading_after=self.midi_ingress.resume_grading_after,
+            mode=self.mode,pause_context=self.pause_context,
+            bpm=self.plan.bpm if self.plan is not None else None,
+            count_in_beats=self.count_in_beats,
+            full_count_in_beats=self._next_count_in_beats(),
+            bar_beats=self.count_in_bar_beats,
+            reading_lead_seconds=presentation_lead_seconds,
+            reuse_pending_score=reuse_pending_score,
+            midi_connected=self.midi.connected,preview=self.preview_only,
+            scheduled_deadline=scheduled_deadline)
+        self.midi_ingress.authorize_grading_after(timing.grading_after)
+        self.count_in_beats = timing.count_in_beats
         if learning:
             self.teaching.resume(now=now)
-        self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
-        if had_reading_lead:
-            self.midi_ingress.shift_resume_gate(max(0.0, now-paused_at))
         self._reannounce_after_rest_pause(now, presentation_lead_seconds,
                                           reuse=reuse_announced_score)
         pending = self.attempt_settlement.pending
         if pending is not None and self.teaching_continuation.schedule is not None and self.visual_transport.announced_continuation is not None:
             self.teaching_continuation.announce(pending,deadline=self.visual_transport.announced_continuation[1])
-        # A paused passage returns with a short genuine count-in. Its
-        # authoritative run_at moves, so MIDI grading and source ink agree
-        # and no note is required during the visual reading lead-in.
-        if (shift_run_at and self.running and self.plan is not None
-                and self.mode in ("practice", "perform")
-                and self.pause_context in ("playing", "count_in")):
-            if presentation_lead_seconds > 0.0:
-                # With an original source copy still ahead of the playhead,
-                # never double-add a full reading lead to the old count-in.
-                # Restore the graded downbeat to that exact unchanged future
-                # world position. Earlier graded keys cannot exist yet.
-                # The count-in is the one bar before grading resumes; a
-                # longer reading lead before it is silent (owner decision
-                # 2026-11-08). It never grows with the presentation lead.
-                count_in = self._next_count_in_beats()
-                deadline,grading_after = SCHEDULER.resume_playing(
-                    now=now,origin=self.visual_transport.run_at,
-                    bpm=self.plan.bpm,count_in_beats=count_in,
-                    reading_lead_seconds=presentation_lead_seconds,
-                    already_waiting=max(0.,self.midi_ingress.resume_grading_after-now),
-                    reuse=reuse_pending_score)
-                self.visual_transport.run_at = deadline
-                self.midi_ingress.authorize_grading_after(grading_after)
-                self.count_in_beats = count_in
-            elif (self.midi.connected and not self.preview_only
-                  and self.pause_context == "playing"
-                  and not had_reading_lead
-                  and self.visual_transport.run_at <= now):
-                # Preserve the established direct-MIDI transport contract;
-                # it does not have a connected renderer's reservations.
-                lead_beats = max(1.0,min(4.0,self.count_in_bar_beats))
-                lead_seconds = SCHEDULER.beats_seconds(lead_beats,self.plan.bpm)
-                self.visual_transport.run_at += lead_seconds
-                self.midi_ingress.authorize_grading_after(now+lead_seconds)
-                self.count_in_beats = lead_beats
-        if scheduled_deadline is not None and shift_run_at and self.running:
-            # A resumed take preserves the frozen graded musical position:
-            # its new source segment begins at the admitted deadline, while
-            # the original source-zero epoch is earlier by elapsed music.
-            frozen = (frozen_musical_seconds if frozen_musical_seconds is not None
-                      else max(0.0, paused_at - previous_origin))
-            self.visual_transport.run_at = (scheduled_deadline
-                - max(0.0, frozen))
-            self.midi_ingress.authorize_grading_after(scheduled_deadline)
         self.measurement.event("timeline_resume", {
             "scheduled_origin_before": previous_origin-self.measurement.origin,
             "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,
@@ -2906,8 +2845,8 @@ class PracticeEngine:
             performance_complete=self.attempt.performance_summary is not None),now)
         if self._run_pre_assessment_transition(now):
             return
-        if (self.running and self._pause_floor is not None
-                and now < self.midi_ingress.resume_grading_after):
+        if (self.running and self.visual_transport.grading_is_frozen(
+                    now,grading_after=self.midi_ingress.resume_grading_after)):
             # The canonical recorder and live-assessment clock stand at the
             # paused source position. Do not inspect rolling checkpoints,
             # missed attacks, completion or recovery during the admitted
@@ -3002,7 +2941,7 @@ class PracticeEngine:
         self.teaching_continuation.cancel()
         self.transport_id += 1
         self.live_input.reset_attempt()
-        self._pause_floor = None
+        self.visual_transport.clear_grading_floor()
         if phrase is not None:
             self.live_input.prepare(phrase)
         self.attempt.begin_take(recording=recording)

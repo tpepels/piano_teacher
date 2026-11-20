@@ -612,6 +612,14 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Removed all three Timer creations, timer callbacks and their discovery rules from `Main._ready`. Main only connects existing backend request handlers and supplies the selected `state_timer` to `PracticeStatePresenter`.
 - Preserved all exact intervals and the prior device-discovery suppression during an already-connected practice session. No new tests; Godot parse/native UI and package CI remain required.
 
+### Implementation checkpoint CA — resumed source time belongs to VisualTransport
+
+- Continued from verified source `12f50e66`, rather than replaying the earlier `619bc29c` work. [Core CI 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032) passed; recent failed runs 44734763275, 44735018269 and 44735265422 all referenced the retired preparation helper in an existing fixture, already migrated at `d608ec3f`.
+- Moved the held-note pause floor, source-time clamping, resumed source epoch and scheduled-admission timing out of PracticeEngine into VisualTransport and the pure transport command reducer. MidiIngress still owns the one graded-input gate; transport returns the exact gate to apply, without holding a duplicate gate.
+- Existing baseline `bash scripts/test.sh` passed (335 Python tests, one skipped, Godot checks). This transport step passed `bash scripts/test.sh --python-only` (335 passed, one skipped). Native production validation remains due after integration. No tests added or changed.
+- Ruling: use the existing audit/phase plan, existing tests, direct main commits and autonomous execution as explicitly requested; do not create a worktree, add tests or request another design approval. The referenced machine file `/home/tom/.codex/RTK.md` is absent; repository instructions were read directly.
+- Remaining work: complete durable completion/publication, facade decomposition and public ports; rerun full native, repertoire and relocated package checks. Physical acceptance remains unverified.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
