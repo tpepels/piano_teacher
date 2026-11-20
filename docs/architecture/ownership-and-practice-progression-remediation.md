@@ -479,6 +479,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Main only forwards the selected source note/finger and the accepted UI snapshot, presents an explicit rejection, or submits the one bounded accepted operation. This removes another scene-owned source-identity policy decision without changing how fingering overrides are persisted or projected. No new tests.
 - Core and Godot production tests remain the execution gate for the native score/fingering UI integration.
 
+### Implementation checkpoint BP — playback status transition precedes snapshot publication
+
+- Moved `PlaybackCoordinator.advance(frozen_facts)` from `PracticeEngine._state_snapshot` into the single backend `_update` clock-transition step. Native worker ticks now reconcile pending/active playback even when the UI stops requesting snapshots, and a snapshot cannot capture session state **before** invalidating or advancing the admission state that it then displays.
+- `_state_snapshot` now reads the already-reconciled playback status without mutating its owner mid-serialization. Existing compatibility state polling still calls `_update`, so it uses the same transition ordering and continues to advance time when no dedicated timer exists.
+- This removes a mixed-epoch state-publication bug without adding a clock, changing source deadlines, or writing tests. Existing backend/native CountIn/Play/Pause/Retry integration must verify.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

@@ -2960,6 +2960,11 @@ class PracticeEngine:
             self.feedback = "Could not save or finish the practice transition"
             self.next_action = "Check storage or the reported error, then Resume to retry this same take."
             raise
+        # A playback intent is reconciled by the actual monotonic worker
+        # transition, never by a later serializer's snapshot traversal.
+        # Any caller of _update (worker or compatibility state poll) sees
+        # the same admitted source/clock epoch.
+        self.playback.advance(self._playback_facts())
         # Display publication must never pause the take or alter feedback text.
         try:
             self._publish_live_assessment()
@@ -3195,7 +3200,6 @@ class PracticeEngine:
         with self.lock:
             self._update()
             state = project_session_state(self._capture_session_snapshot())
-            self.playback.advance(self._playback_facts())
             pending, timeline = self.playback.snapshot()
             announced = self.visual_transport.announced_continuation
             plan = self.plan
