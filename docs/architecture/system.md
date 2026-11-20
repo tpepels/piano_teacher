@@ -52,14 +52,14 @@ and [playback coordinator contract](playback-coordinator.md) and
 
 ## Verification and remaining gates
 
-Phase 5 source ownership review and existing core checks pass. The current
-embedded production, repertoire and relocated-package workflow is running
-and must pass before source integration closes. Phase 6 remains incomplete
-without the physical acceptance gates below. The latest cited remote baseline is
-[`12f50e66`, run 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032).
-Earlier local core checks reported 335 passed/1 skipped and passing existing
-Godot checks; those checkpoint results do not certify subsequent edits or the
-current production package.
+Phase 5 is complete: the final independent source review found no remaining
+concrete architectural blocker, and existing core/native checks pass. The
+full embedded production/repertoire/strict relocated-package workflow passed
+at `9654d2a3`. Python reported 335 passed/one skipped (the existing optional
+system SF2/libfluidsynth check); all existing Godot failure counters were zero.
+The source stayed on main and was not pushed. The latest cited remote
+baseline remains [`12f50e66`, run 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032).
+Phase 6 remains incomplete for physical acceptance below.
 
 Run the existing [test entrypoint](../../scripts/test.sh); it does not establish
 audible output, physical MIDI latency or on-screen rendering acceptance.

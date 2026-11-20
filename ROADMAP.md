@@ -54,29 +54,27 @@ substitutes simplified notes.
 |---|---|
 | Foundation: MIDI import, library, native start, one process | Done |
 | Practice flow, backend (authored moving windows, hands, Listen/Free/Tempo, tempo/error rules, separate final test, resume) | Source integrated 2026-11-19; physical piano acceptance open |
-| Playback coordination (all timed routes, physical score admission, shared deadline, cancellation/reconciliation) | Source integrated; current-source production and physical session acceptance outstanding |
+| Playback coordination (all timed routes, physical score admission, shared deadline, cancellation/reconciliation) | Source and existing embedded production checks pass at 9654d2a3; physical session acceptance outstanding |
 | Practice flow, screen (status line, messages, Pause + Listen again, metronome switch, two colours, count-in numbers) | Built 2026-11-18; owner testing at the piano |
 | Notation (native Verovio ink, display-scale glyphs) | Working; judged on screen |
 | MIDI calibration | Built; USB/Bluetooth accuracy not measured on hardware |
-| Packaging (`scripts/package-inprocess.sh`) | Staged runtime audit exists; clean-machine release not done |
-| Phase 5: ownership decomposition | Engraving/painting/stream, Godot application sessions and backend playback/exposure owners integrated; final source authority review pending |
-| Phase 6: software and product acceptance | Current-source full production/package verification pending; physical Kawai/USB/Bluetooth and clean-machine acceptance incomplete |
+| Packaging (`scripts/package-inprocess.sh`) | Strict relocated build/clean-HOME boot passes at 9654d2a3; clean-machine desktop acceptance open |
+| Phase 5: ownership decomposition | Complete: owner transfers integrated, independent source review cleared, existing core/native checks pass |
+| Phase 6: software and product acceptance | Software gates pass at 9654d2a3; phase remains incomplete for physical Kawai/USB/Bluetooth, speakers, latency, real playing and clean-machine acceptance |
 
 The latest cited remote baseline is
 [`12f50e66`, run 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032).
-Earlier local checkpoints reported 335 core tests passed/1 skipped and passing
-existing Godot checks. Those results apply to the checked source and do not
-certify subsequent edits, the current production package or physical piano
-behavior. The implementation tracker records final verification outcomes.
+Local software verification at `9654d2a3` passes: 335 Python tests (one
+existing optional SF2/libfluidsynth check skipped), all existing Godot checks,
+embedded Python/GDExtension registration, real-source Play/Pause/Resume,
+Moonlight Retry/Listen/navigation/tempo/reopen, Peace Piece, Chopin, and the
+strict relocated standalone package build/boot with an empty environment and
+clean HOME. New commits remain local: no push or new remote CI run is claimed.
+The [implementation tracker](docs/architecture/ownership-and-practice-progression-remediation.md)
+records exact commands, earlier failures/fixes and manual gates.
 
 ## Open work
 
-0. Complete the final Phase 5 source ownership review in the
-   [implementation tracker](docs/architecture/ownership-and-practice-progression-remediation.md):
-   verify the extracted generator, playback/exposure, application-session and
-   native engraving/stream boundaries against their actual readers, writers
-   and effects. Do not close a phase while a second decision authority,
-   duplicate mutable ledger or private forwarding path remains.
 1. Owner verification of the integrated playback coordinator
    ([contract](docs/architecture/playback-coordinator.md)): real
    Listen → Free → Tempo, automatic repeats, Pause/Resume, physical-key

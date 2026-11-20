@@ -16,15 +16,15 @@ new local commits have not been pushed.
 
 | Baseline violation | Authoritative implementation now | Verification / remaining gate |
 | --- | --- | --- |
-| Whole Engine passed to PlaybackCoordinator | Frozen source/runtime facts, one authorization protocol; PlaybackSession executes the exact original admitted transition | Existing core suite passes; current production journey running |
+| Whole Engine passed to PlaybackCoordinator | Frozen source/runtime facts, one authorization protocol; PlaybackSession executes the exact original admitted transition | Existing core suite passes; full production journey passes at 9654d2a3 |
 | Several take-state writers and mixed start/resume/stop logic | PlaybackSession owns mode, running/automatic/preview flags, take epoch, count-in, score wait, suspended intent and deferred ACK. Engine captures facts and applies returned effects. | Independent final source review cleared the implemented fixes |
 | Duplicate pending assessment and incomplete completion transaction | AttemptSettlement owns the exact event assessment, selected completion, rolling recovery and committed receipt. Original source revision, visual offset, performed BPM and asset identity survive storage/publication retries. AttemptRuntime holds recorder/review projections only. | Checkpoint and guided publication retries reviewed; existing core suite passes |
 | Feedback/recovery policy in Engine | CompletionEffect, exposure preparation, AttemptProgression and TeachingContinuation select typed routes. Engine dispatches source effects; it does not choose another grade, window, outcome or tempo. Flow display consumes the selected decision ID once. | Existing core suite passes after the failure-order fixes |
-| Private transport mutations and duplicate source epochs | VisualTransport owns musical source epochs, held-note pause floor, tempo epoch, rest-resume announcement and preview/preparation state. MidiIngress alone owns the input grading gate. PlaybackSession applies metrical effects through those owners. | No foreign private-field access remains in the three facades; current native verification due |
-| Preloader supplies timing or several future-asset policies | TeachingContinuation owns exact future selection, reservation, readiness and source-stamped post-settlement publication. Its retry-poll timestamp cannot retime an announced musical deadline. MusicalScheduler remains the single deadline calculator. | Final native stage-handoff journey due |
+| Private transport mutations and duplicate source epochs | VisualTransport owns musical source epochs, held-note pause floor, tempo epoch, rest-resume announcement and preview/preparation state. MidiIngress alone owns the input grading gate. PlaybackSession applies metrical effects through those owners. | No foreign private-field access remains in the three facades; full embedded production passes at 9654d2a3 |
+| Preloader supplies timing or several future-asset policies | TeachingContinuation owns exact future selection, reservation, readiness and source-stamped post-settlement publication. Its retry-poll timestamp cannot retime an announced musical deadline. MusicalScheduler remains the single deadline calculator. | Existing native production/lesson navigation and core continuation checks pass |
 | Fingering correction identity checks in Engine | SourcePreparationSession owns source mutation serialization, generation and original-note identity validation, then returns an exact Piece/revision install effect. Engine applies it under its existing short state lock. | Existing correction/concurrency tests pass |
 | Snapshot traversal writes musical state | SnapshotReadPorts now contains reads only. The timed source installation installs the authentic source gap through VisualTransport; serialization cannot alter rest scheduling. | Existing core suite passes with the write port removed |
-| Native view combines engraving, paint and queue mutations | NativeScoreView composes ScoreEngraving, ScorePainter, ScoreStreamController, StreamTakeBinding, StreamRecoveryPlanner and RetainedNotationPool. Only ScoreStreamQueue mutates FIFO membership; no executor receives the entire renderer. GlyphAssets, GlyphHeadMasks and Glyphs separate artwork, masks and drawing. | Existing Godot checks pass; full current embedded/native run due |
+| Native view combines engraving, paint and queue mutations | NativeScoreView composes ScoreEngraving, ScorePainter, ScoreStreamController, StreamTakeBinding, StreamRecoveryPlanner and RetainedNotationPool. Only ScoreStreamQueue mutates FIFO membership; no executor receives the entire renderer. GlyphAssets, GlyphHeadMasks and Glyphs separate artwork, masks and drawing. | Existing Godot checks pass; full current embedded/native run passes at 9654d2a3 |
 | Root scene owns callback/event policy | Main wires scenes and application lifetime. Inbox, presentation, polling, command, library, settings, MIDI, navigation, lesson and audio sessions own their respective replies/effects. PracticeChrome separates construction/layout from PracticeScreen interaction. | Existing Godot syntax/UI/schema checks pass |
 | Replacement modules grow into another monolith | PlaybackSession is a cohesive take-lifecycle executor; pure scheduling remains in AttemptProgression, immutable DTOs in playback_facts. TeachingContinuation owns source readiness/publication, with no generator or Engine reference. ScoreStreamController coordinates one transaction queue; binding/recovery, painting and resource lifetime have distinct owners. | Independent review found no second grader, FIFO or world clock |
 
@@ -34,11 +34,14 @@ native-journal teardown. It found no remaining concrete structural or
 correctness blocker and no second grader, FIFO or world clock. The existing
 core suite passes after these fixes (335 passed, one skipped, all Godot checks);
 the structural verifier reports `PHASE5_ARCHITECTURE_AUDIT_OK`.
-**Phase 5 source review is complete; closure awaits the running integrated
-production verification. Phase 6 remains incomplete:** current embedded/
-repertoire/relocated-package results must be recorded, and physical
-CA49 USB/Bluetooth MIDI, speakers, latency, performance and clean-machine
-desktop acceptance cannot be inferred from headless checks. No tests were added.
+**Phase 5 is complete in source and existing software verification. Phase 6
+software gates pass at `9654d2a3`:** full embedded Python/GDExtension, production
+controls, Moonlight Retry/Listen/navigation/tempo/reopen, Peace Piece, Chopin,
+and strict relocated standalone package build/boot. Phase 6 itself remains
+incomplete: CA49 USB/Bluetooth MIDI, speakers, latency, real performance and
+clean-machine desktop acceptance are unverified. No tests were added; the
+existing optional SF2/libfluidsynth check remains skipped because those host
+components are absent. Current commits are local, not a new remote CI result.
 
 ## Historical baseline audit
 

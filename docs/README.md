@@ -30,9 +30,11 @@ preserve earlier implementations. They do not override the current owner map,
 playback/score ownership or moving-window teaching contracts. Older reports,
 screenshots and plans remain available in git history.
 
-Phase 5 remains pending final ownership review. Phase 6 includes current-source
-embedded production/package checks and physical acceptance; core tests and
-headless Godot checks alone cannot certify those gates.
+Phase 5 is complete in source: independent ownership review and existing
+core/native checks pass. Phase 6 software gates pass at `9654d2a3`, including
+the strict relocated standalone build/boot. Phase 6 remains incomplete for
+physical MIDI, speakers, latency, real playing and clean-machine desktop
+acceptance; see the tracker for the verified/unverified matrix.
 
 ## Rules
 

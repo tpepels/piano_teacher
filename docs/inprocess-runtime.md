@@ -178,7 +178,12 @@ These checks have different meanings: core/Godot checks cover their existing
 software contracts; the native smoke exercises embedded startup/typed IPC;
 the production and relocated-package scripts exercise the built application
 and assembled runtime. Results apply to their recorded source revision.
-Phase 5 awaits final ownership review and Phase 6 remains incomplete until
-current-source production/package checks and owner hardware acceptance are
-recorded. Headless results do not certify audible output, physical MIDI,
-Bluetooth latency or visual acceptance at the piano.
+Phase 5 source review and existing core/native checks pass. The full existing
+production workflow passed at `9654d2a3`, including Moonlight Retry/Listen/
+navigation/tempo/reopen, Peace Piece, Chopin and the strict relocated archive
+build/boot under an empty environment and clean HOME. The archive was built
+from tracked current source and isolated bundled dependencies, without global
+host site-packages. This is same-host software acceptance, not a clean-machine
+desktop session. Phase 6 remains incomplete for physical CA49 USB/Bluetooth,
+audible speakers, measured latency, visual/real-performance acceptance and
+clean-machine desktop testing. See the remediation tracker for exact evidence.

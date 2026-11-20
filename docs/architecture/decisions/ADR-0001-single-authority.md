@@ -62,8 +62,10 @@ The separate whole-piece final examination is exempt from the window cap.
 The source entrypoint is the [current owner map](../system.md). All current
 behavior and remaining integration must be checked against
 [the implementation tracker](../ownership-and-practice-progression-remediation.md).
-This ADR is the architectural decision; it is not a claim that all prior
-internal code has already been migrated. Phase 5 remains pending final source
-review; current-source production/package verification and physical
-Kawai/real-device acceptance remain Phase 6 gates. Neither a green core check
-nor a headless rendering/IPC run certifies acceptance at the piano.
+The final independent source review cleared the implemented owner boundaries;
+Phase 5 is complete with passing existing core and native integration checks.
+Phase 6 software gates passed at `9654d2a3`, including the full embedded
+production journey and strict relocated standalone build/boot. Phase 6 remains
+incomplete for physical Kawai USB/Bluetooth MIDI, speakers, measured latency,
+real playing and clean-machine desktop acceptance. Headless checks do not
+certify acceptance at the piano.

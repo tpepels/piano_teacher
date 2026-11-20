@@ -1,6 +1,7 @@
 # Ownership, lesson-window and large-file architectural audit
 
-**Status:** Implementation underway on `main`. This file tracks actual code commits; unfinished items remain explicitly marked. The detailed audit below is historical baseline evidence; it is not a description of current source paths or unresolved behavior.  
+**Status:** Phase 5 complete on `main`; Phase 6 software gates pass at `9654d2a3`, with physical acceptance explicitly incomplete. This file tracks actual commits and distinguishes verified software from manual gates. The detailed audit below is historical baseline evidence; it is not a description of current source paths or unresolved behavior.
+
 **Source baseline:** [main at 9a01a9b7](https://github.com/tpepels/piano_teacher/tree/9a01a9b7d9434ae6a3ef7bc72fd6844222d718ef), 19 November 2026.  
 **Scope:** Practice Flow, learning/assessment, playback and score admission, presentation timing, and the three largest first-party production source files.  
 **Goal:** One authoritative owner for each domain decision; explicit typed boundaries; no independent recomputation of a decision downstream; preserve the continuous native score and all existing capabilities.
@@ -9,33 +10,41 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 
 ## Implementation progress
 
-**Implementation branch:** `main`. **Tests:** No new tests introduced. Existing fixtures were migrated only when removing obsolete interfaces. The remote baseline `12f50e66` passed [core CI 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032). Current local implementation checkpoints CA onward record their own checks; these commits have not been pushed. The existing full embedded/repertoire/package workflow is being rerun against the integrated source. Physical audio/MIDI cannot be certified by headless runs.
+**Implementation branch:** `main`. **Tests:** No new tests introduced. Existing
+fixtures changed only when removing obsolete interfaces. Current local source
+passed 335 Python tests (one existing optional system SF2/libfluidsynth check
+skipped), every existing Godot check, the architecture verifier, the full
+embedded production/repertoire workflow and strict relocated standalone
+build/boot. The remote baseline `12f50e66` passed
+[core CI 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032).
+New commits were not pushed; no new remote CI result is claimed. Physical
+MIDI/audio/performance and clean-machine desktop acceptance remain unverified.
 
 | Workstream | Status | Notes |
 | --- | --- | --- |
 | Moving-window curriculum / P01 | INTEGRATED; PHYSICAL ACCEPTANCE OUTSTANDING | `practice_windows.py` selects n, n−1..n, n−2..n, n−3..n (max 4) and emits real source-bounded course exercises; independently identified windows, versioned saved progress and separate final exam; existing CI passed on `f1d3385` |
 | Typed course outcomes / O02 | SINGLE TYPED PRODUCTION PATH; LEGACY PARSER REMOVED | `TeachingDecision.flow_outcome` carries `Outcome` directly through course/engine; `outcome_of(message)` and its obsolete parser assertion have been deleted |
-| Unified assessment verdict / O03 | INTEGRATED ACROSS TEACHING, EVIDENCE AND SNAPSHOTS; LIVE CHECK OPEN | The selected verdict now drives course progression, recorded acceptance, UI summary and durable trouble clearing; raw grader acceptance is retained under a separate diagnostic field; non-graded legacy adapters remain distinct |
-| Unified playback transitions / O01, O04 | ONE AUTHORIZATION AND LIFETIME PATH; FINAL ACCEPTANCE OPEN | PlaybackCoordinator accepts immutable PlaybackTransition and CountInPlan once; PlaybackSession executes the take lifecycle. VisualTransport owns source epochs and pause floors; MidiIngress owns the graded-input gate. The metronome consumes the authorized take. |
+| Unified assessment verdict / O03 | SINGLE SELECTED VERDICT; PHYSICAL CHECK OPEN | The selected verdict now drives course progression, recorded acceptance, UI summary and durable trouble clearing; raw grader acceptance is retained as a diagnostic and cannot override the selected teaching verdict |
+| Unified playback transitions / O01, O04 | ONE AUTHORIZATION AND LIFETIME PATH; SOFTWARE VERIFIED | PlaybackCoordinator accepts immutable PlaybackTransition and CountInPlan once; PlaybackSession executes the take lifecycle. VisualTransport owns source epochs and pause floors; MidiIngress owns the graded-input gate. The metronome consumes the authorized take. |
 | Asset admission / O05, O08 | SINGLE FIFO WITH DISTINCT TRANSACTION, BINDING AND PAINT OWNERS | ScoreTransportReservation consumes frozen physical facts; ScoreStreamController coordinates the sole queue, StreamTakeBinding owns take reconciliation, and StreamRecoveryPlanner selects untimed placement. Journal failure preserves complete exposed ink and compiled resources. NativeScoreView delegates engraving and paint. |
 | Deterministic presentation timeline / O06 | INTEGRATED IN GODOT; PHYSICAL VALIDATION OPEN | Versioned PresentationTimeline owns world-position/rate epochs, Free holds and hypothetical forecasts; ContinuousScoreFlow delegates; Main no longer retroactively integrates tempo debt; native audio/MIDI acceptance unverified |
-| Architecture docs / O07 | CURRENT OWNER MAP RECONCILED; FINAL EVIDENCE UPDATE OPEN | Current system map, runtime, playback contract, state machine and ADR-0001 describe the integrated owners. The former system inventory is archived; baseline findings below remain historical evidence. |
-| Decompose server.py / L01 | API/LOCK/FACT/EFFECT FACADE; FINAL REVIEW OPEN | PlaybackSession owns take lifetime, AttemptSettlement owns selected grades and durable publication, TeachingContinuation owns exact asset readiness and typed post-settlement routes, and exposure preparation materializes selected intervals. Engine invokes those owners and installs their effects; no whole-engine references are passed. Source correction identity review remains in progress. |
-| Decompose native/view.gd / L02 | CANVAS AND LIFECYCLE FACADE (~581 lines) | ScoreEngraving and ScorePainter own source assembly and drawing. RetainedNotationPool owns compiled CanvasItems. No admission executor receives the whole view; queue snapshots are read-only. Glyph catalogs, masks and drawing are separate owners. |
+| Architecture docs / O07 | CURRENT CONTRACTS AND EVIDENCE RECONCILED | Current system map, runtime, playback contract, state machine and ADR-0001 describe the integrated owners. The former system inventory is archived; baseline findings below remain historical evidence. |
+| Decompose server.py / L01 | API/LOCK/FACT/EFFECT FACADE; REVIEW AND CHECKS PASS | PlaybackSession owns take lifetime, AttemptSettlement owns selected grades and durable publication, TeachingContinuation owns exact asset readiness and typed post-settlement routes, and exposure preparation materializes selected intervals. Engine invokes those owners and installs their effects; no whole-engine references are passed. SourcePreparationSession owns correction serialization and exact generation/note identity. |
+| Decompose native/view.gd / L02 | CANVAS AND LIFECYCLE FACADE (~595 lines) | ScoreEngraving and ScorePainter own source assembly and drawing. RetainedNotationPool owns compiled CanvasItems. No admission executor receives the whole view; queue snapshots are read-only. Glyph catalogs, masks and drawing are separate owners. |
 | Decompose main.gd / L03 | SCENE COMPOSITION (~490 lines) | ApplicationStateInbox accepts snapshots; PracticePresentationSession orders frame effects; ApplicationPollSession owns discovery cadence. Command, library, settings, MIDI, lesson, navigation and audio sessions process their own replies. PracticeChrome owns control construction/layout. |
-| Existing CI/native integration | LOCAL CORE PASSES; INTEGRATED PRODUCTION RUN DUE | Current checkpoints record 335 passed/one skipped and successful existing Godot checks. Remote baseline core and earlier native runs are distinct evidence, not certification of new local commits. Full current production/package results will be recorded below. |
+| Existing CI/native integration | CORE, FULL PRODUCTION AND RELOCATED PACKAGE PASS | At 9654d2a3, 335 Python tests pass/one optional check skips; all existing Godot checks, embedded/repertoire/control journeys and strict relocated standalone build/boot pass. New commits remain local; physical MIDI/audio and clean-machine desktop acceptance are unverified. |
 
 ### Phase completion status
 
 | Phase | State | Outstanding completion gate |
 | --- | --- | --- |
-| 0 — Domain and acceptance contracts | **Documented; integration audit open** | Full producer/consumer migration, versioned presentation and physical acceptance assertions |
-| 1 — Teaching/assessment authority | **Substantial source integration; not complete** | Collapse remaining overlapping course/flow decision state and verify assisted/interrupted/recovery paths in native product |
-| 2 — Moving-window pedagogy | **Source implementation complete; native acceptance pending** | Physically observe every window/hand, sparse and cross-bar sustained notes, saved reopen; no new tests requested |
-| 3 — Playback/count-in authority | **Integrated graphical gate; exceptions still to audit** | Confirm all manual, MIDI shortcut, automatic, recovery and preloaded pathways with real score+audio |
-| 4 — Presentation and admission | **Canonical projector and read-only preflight implemented; native acceptance pending** | Validate immutable ink/cross-layer clearance under changing tempo and real runtime |
-| 5 — Three large-class decomposition | **Incomplete** | Remove remaining policy/ledger logic and transitional property adapters from PracticeEngine, NativeView and Main |
-| 6 — Retire docs and accept product | **Historical docs reconciled; product acceptance incomplete** | Run existing embedded production and packaging scripts; physical Kawai CA49 exercises and manual scenarios in acceptance matrix |
+| 0 — Domain and acceptance contracts | **Current software contracts reconciled** | Manual assertions remain in the physical Phase 6 protocol below |
+| 1 — Teaching/assessment authority | **Single selected outcome integrated; existing software checks pass** | Real-performance judgement and mastery acceptance remain manual |
+| 2 — Moving-window pedagogy | **Source and software flow verified** | Observe every window/hand, sparse/cross-bar holds and saved progress at the piano |
+| 3 — Playback/count-in authority | **Existing core and actual embedded control/Listen/Retry journeys pass** | Physical key shortcuts, sound and latency remain manual |
+| 4 — Presentation and admission | **One world projector, immutable FIFO and identity-bound readiness verified in software** | Physical rendering/ink and audio/video alignment remain manual |
+| 5 — Three large-class decomposition | **Complete** | No remaining concrete structural blocker after final review; existing core and full native production checks pass |
+| 6 — Retire docs and accept product | **Software gates complete; phase incomplete** | Physical CA49 USB/Bluetooth, speakers, latency, real playing and clean-machine desktop acceptance remain unverified |
 
 **Current instruction supersedes the earlier recommended prefix ladder:** For each newly encountered bar `n`, practice `n` alone, then `n-1…n`, `n-2…n`, `n-3…n` (until bar 1), in that order. Every routine practice window is at most four authored bars wide. The distinct whole-piece final examination remains a deliberate exception.
 
@@ -674,18 +683,29 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - The host Python stdlib contains globally installed site-packages with an absolute certificate symlink. Copying the application venv over that directory tried to overwrite the host certificate through the staged symlink. The existing verifier now stages stdlib excluding host site-packages, then copies the exact venv dependencies. This fixes staging and keeps the strict relocated package boot check intact.
 - Existing Godot checks pass after the source fix (`GODOT_STARTUP_SYNTAX_OK`, all failure counters zero); shell syntax and diff checks pass. Full production/package verification must now be repeated. No tests added or changed. Physical acceptance remains unverified.
 
+### Implementation checkpoint CI — verified software and explicit manual gates
+
+- `9654d2a3` implements checkpoint CH. The full existing `bash scripts/verify-embedded-production-local.sh` returned exit 0 and `PASS LOCAL EMBEDDED PRODUCTION CONTROL`: embedded Python/GDExtension registration/authentic score, real production UI Play/Pause/Resume, Moonlight Retry/Listen/lesson navigation/tempo/saved reopen, Peace Piece, Chopin, and strict relocated standalone runtime audit all pass. The archive builds and boots with `env -i`, clean HOME, bundled interpreter/dependencies and no development PYTHONPATH.
+- Both initially failing checks now pass unchanged: Moonlight reports `PHASE6_REAL_SCORE_JOURNEY_OK` after Listen and the package reports `Relocated standalone package boot passed`. No acceptance condition was relaxed. Evidence: local `debug-sessions/phase56/production-final.log`; prior failure/fix evidence is preserved in checkpoint CH and `production.log`.
+- Final Python check reports 335 passed, one skipped: the pre-existing real-system SF2/libfluidsynth check is unavailable on this host. All existing Godot checks pass with zero failure counters and `GODOT_STARTUP_SYNTAX_OK`. The architecture verifier reports `PHASE5_ARCHITECTURE_AUDIT_OK`; all 217 local links in the revised active documents, tracker and archived inventory resolve, and diff checks pass. Existing real-engine flow publication coverage exercises Listen → Free → repeated Tempo; no new tests were added.
+- Read-only generation from the three original repertoire files confirms 273 Moonlight, 305 Peace Piece and 149 Chopin routine windows, maximum four authored bars, original note objects retained, the authored n; n−1..n; n−2..n; n−3..n order, Right → Left → Together where both hands exist, and separate whole-piece `perform` exercises. This is source evidence, not a physical performance observation.
+- Phase 5 is complete: final source review and integrated software checks leave no known concrete structural blocker. Active contracts, roadmap, audit and this tracker are reconciled. Source commits remain local on main; no push or new GitHub Actions result is claimed.
+- Phase 6 is **not fully complete**. No CA49, USB/Bluetooth MIDI, real speakers, measured latency, visible desktop performance or clean target machine was available for acceptance. The manual protocol below stays unchecked. Existing learner-visible product TODOs remain in Practice Flow and are not silently counted as completed by this architectural work.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
 | --- | --- | --- |
-| Python, Godot parse and existing isolated checks | [GitHub Actions 44625683191](https://github.com/tpepels/piano_teacher/actions/runs/44625683191) passed at `27f7f580`; existing core checks only | **Verified for tested source revision; native/full physical journeys open** |
-| Actual embedded Python/Godot native boot + authentic score | [Full native run 44703830421](https://github.com/tpepels/piano_teacher/actions/runs/44703830421) passed source, Play, Pause, Resume, Moonlight Retry/Listen, Peace Piece and Chopin at commit `89d364d1` | **Passed at tested revision; later refactors pending** |
-| Pathétique Listen → Free → Tempo near 52%, notes visible and admitted before grading | Source transactions wired; exact user reproduction needs live runtime | **Not verified** |
-| Bars 1; 2,1–2; 3,2–3,1–3; 4,3–4,2–4,1–4; sliding at max width 4 | Authoritative generator and progress identity updated; no physical MIDI observation | **Source implemented; live acceptance pending** |
-| Cross-bar holds, sparse bars, changing meter, very slow BPM, long score | Source-safe windows and count-in map implemented; full native journey not executed | **Not verified** |
-| Pause, Resume and Retry including counted syllables and lowest/highest physical-key shortcuts | Shared route and count-in session integrated; actual Kawai timing not measured | **Not verified** |
-| Auto retry/recovery, preloaded lesson, interruption/close/reopen, saved progress | Source-bound admission + durable settlement implemented; physical and crash/restart cases outstanding | **Not verified** |
-| Self-contained packaged release | [Native run 44705537079](https://github.com/tpepels/piano_teacher/actions/runs/44705537079) passed strict relocated archive extraction and bundled Godot/Python entrypoint boot at `7008a9aa`; current retained-pool/source-preparation changes need repeat | **Software package passed at tested revision; physical desktop install open** |
+| Existing Python CI and Godot checks | Local current source: 335 passed/one optional SF2/libfluidsynth skip; Godot failure counters zero; architecture verifier passes. Last remote core baseline is 12f50e66/run 44736734032; new commits not pushed. | **Software verified locally** |
+| Embedded Python/GDExtension and authentic score | Full existing production workflow passes at 9654d2a3 with native registration and compiled authentic notation. | **Software verified; physical rendering unverified** |
+| Moonlight, Peace Piece, Chopin | All existing real-source native journeys pass; Moonlight includes Retry → Listen, decoded PCM readiness, return to practice, lesson/tempo changes and saved reopen. | **Automated native journeys verified** |
+| Moving windows and Right → Left → Together | Original repertoire generation confirms measure-first/backward expansion, max 4, preserved source notes, independent window identities, available hand order and separate final. Existing engine flow/publication checks pass. | **Source/software verified; physical windows unverified** |
+| Listen → Free → Tempo and automatic continuation | Existing flow-machine and real-engine source-publication checks pass through Free and repeated Tempo takes; native Listen and Retry journeys pass. | **Existing automated coverage verified; real playing unverified** |
+| Count-in, Pause, Resume, Retry | Existing metrical core/Godot checks and actual production control journeys pass; immutable exposed source survives Resume/Retry. | **Software verified; audible/physical timing unverified** |
+| Pathétique near 52%, cross-bar holds, sparse/changing-meter/slow/long scores | Existing source/count-in/transport coverage and long repertoire checks pass; exact owner reproductions are not observed on a physical piano. | **Manual acceptance unverified** |
+| Auto recovery, preloaded handoff, interruption/close/reopen, progress migration | Existing core transactions, source identity/ACK, native lesson navigation and Moonlight saved reopen pass; storage-failure diagnostics confirm same-decision retries. | **Existing software coverage verified; physical/crash acceptance open** |
+| Clean relocated standalone package | Strict full build, archive extraction and bundled entrypoint boot under empty environment/clean HOME pass at 9654d2a3. | **Same-host software verified; clean-machine desktop open** |
+| Physical CA49 USB/Bluetooth, speakers, latency, real performance | No hardware session or measured audiovisual witness performed. | **Unverified; prevents Phase 6 closure** |
 
 **Existing acceptance commands** (do not add new tests):
 
@@ -695,7 +715,7 @@ bash scripts/verify-embedded-production-local.sh --without-package
 bash scripts/verify-embedded-production-local.sh
 ```
 
-The native runner requires Godot 4.7.2, Python 3.14 dependencies and a compiled matching GDExtension. Running the existing native scripts on a configured Linux machine and physically testing the Kawai are still required. All incomplete items stay open; CI success by itself must not close them.
+The native runner requires Godot 4.7.2, Python 3.14 dependencies and a compiled matching GDExtension. The existing native scripts passed on this configured Linux host at the source recorded above. Physical Kawai and clean-machine desktop checks are still required. All incomplete manual items stay open; software success cannot close them.
 
 #### Physical acceptance protocol — not executed in CI
 
@@ -716,7 +736,7 @@ These are manual owner observations, not new automated tests. Record the app com
 
 No item above has been checked on physical hardware in this environment. The owner must record pass/fail and any corresponding corrections before Phase 6 is closed.
 
-## Executive findings
+## Executive findings (historical baseline)
 
 | ID | Severity | Problem | Evidence |
 | --- | --- | --- | --- |
