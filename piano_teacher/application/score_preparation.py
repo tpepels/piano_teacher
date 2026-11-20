@@ -15,19 +15,20 @@ def _failed(stage: str, exc: Exception) -> NativeScorePreparationError:
 
 
 def assemble_layout(source_score, *,
-                    native_model: dict,
+                    notation_model: dict,
                     notation_xml: str,
                     cache=None, cache_key: str = "",
                     revision: int | None = None) -> dict:
-    if native_model is None or not notation_xml:
+    if notation_model is None or not notation_xml:
         raise ValueError("Score preparation requires selected notation and semantic model")
     from ..notation.assets.glyphs import native_glyphs, preparation_symbols
     layout = {**source_score.layout, "symbols": preparation_symbols(),
               "native_glyphs": native_glyphs()}
     if revision is not None:
         layout["revision"] = revision
-    # Build the identity-preserving model once for all fragment
-    # extractors, rather than reparsing the lesson four times.
+    # Every extractor sees the complete original notation inventory. Active
+    # grading and bounded display grids cannot omit context chord templates
+    # or change the structural ordinal used to identify genuine XML rests.
     from ..notation.assets.notes import note_templates
     from ..notation.assets.ties import tie_templates
     from ..notation.assets.chords import chord_templates
@@ -47,10 +48,10 @@ def assemble_layout(source_score, *,
         from ..notation.assets.beams import (
             beam_fragments, expected_beam_groups)
         layout["native_required_beam_groups"] = expected_beam_groups(
-            source_score.pages,native_model)
+            source_score.pages,notation_model)
         layout["native_beams_complete"] = True
         layout["native_beam_fragments"] = beam_fragments(
-            source_score.pages, native_model, cache,
+            source_score.pages, notation_model, cache,
             cache_key)
         if layout["native_beam_fragments"]:
             print("VEROVIO_NATIVE_BEAMS:",
@@ -64,14 +65,14 @@ def assemble_layout(source_score, *,
         # Every chord is engraved at its own position with the stem Verovio
         # gave it on these pages; heads bind to events by template note id.
         layout["native_chord_templates"] = chord_templates(
-            native_model, cache, stem_directions=directions,
+            notation_model, cache, stem_directions=directions,
             pages=source_score.pages)
     except Exception as exc:
         raise _failed("chord templates", exc) from exc
     try:
         from ..notation.assets.tuplets import tuplet_fragments
         layout["native_tuplet_fragments"] = tuplet_fragments(
-            source_score.pages, native_model,
+            source_score.pages, notation_model,
             cache, cache_key, notation_xml=notation_xml)
     except Exception as exc:
         raise _failed("tuplet fragments", exc) from exc
@@ -80,7 +81,7 @@ def assemble_layout(source_score, *,
             slur_fragments, slur_pairs_from_xml)
         expected = slur_pairs_from_xml(notation_xml)
         available = {str(e["id"]) for e in
-                     native_model.get("notation_events",[])
+                     notation_model.get("notation_events",[])
                      if e.get("kind")=="note" and e.get("id")}
         layout["native_required_slur_pairs"] = [
             list(pair) for pair in expected
@@ -88,7 +89,7 @@ def assemble_layout(source_score, *,
         layout["native_slurs_complete"] = True
         layout["native_slur_fragments"] = slur_fragments(
             source_score.pages,notation_xml,
-            native_model,cache,
+            notation_model,cache,
             cache_key)
     except Exception as exc:
         raise _failed("slur fragments", exc) from exc

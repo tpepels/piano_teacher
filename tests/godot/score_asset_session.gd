@@ -37,6 +37,8 @@ class Renderer:
         return model_ok
     func retained_ready() -> bool:
         return retained_ok
+    func retained_generation() -> int:
+        return 0
     func clear_score() -> bool:
         clears += 1
         native_ready = false

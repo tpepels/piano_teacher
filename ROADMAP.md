@@ -59,6 +59,28 @@ New commits are local on main. No push or new remote CI result is claimed.
 
 ## Phase status and remaining acceptance
 
+### Production rerun and correction record
+
+At `75ae738e`, the full embedded workflow passed native registration and the
+strict relocated standalone build/clean-HOME boot, but failed four real-scene
+checks: stale preparation overlay, missing Retry leading rest, and incomplete
+Peace Piece/Chopin context chord atlases. These were actual implementation
+failures; their acceptance checks were retained.
+
+The asset correction compiles every authentic atlas from the same complete
+notation model before bounded display projection. Source/active IDs and one
+renderer are preserved; incomplete cached atlases are invalidated. Retained
+command-buffer generations now republish readiness after admission-time crops,
+so readiness cannot precede its matching status notification. The five existing
+asset-session scenarios pass, the exact Peace/Chopin native assets compile,
+and the actual production Play/Pause/Resume journey passes.
+
+The current Python suite passes **335 tests, one optional audio dependency
+skip**. Final native checks and the complete production/package rerun are in
+progress. The first failed run is retained in
+`debug-sessions/practice-completion/embedded-production.log`; this record does
+not substitute focused diagnostics for the required complete rerun.
+
 | Phase | State |
 | --- | --- |
 | Phase 5 — ownership decomposition | Source ownership transfers integrated; existing core/native checks pass. New feedback work removes the remaining independent preview matcher and release pairing. |

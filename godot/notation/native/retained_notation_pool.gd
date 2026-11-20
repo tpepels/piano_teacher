@@ -22,9 +22,13 @@ var repeat_segments: Array = []
 var rest_segments: Array = []
 var all_segments: Array = []
 var annotations: Node2D
-var ink_published := false
+var generation := 0
+
+func _invalidate_publication() -> void:
+    generation += 1
 
 func clear(view: Control) -> void:
+    _invalidate_publication()
     for segment in [first_once,annotations] + \
             repeat_segments + rest_segments:
         if segment != null and is_instance_valid(segment):
@@ -33,12 +37,12 @@ func clear(view: Control) -> void:
             segment.queue_free()
     first_once = null
     annotations = null
-    ink_published = false
     repeat_segments.clear()
     rest_segments.clear()
     all_segments.clear()
 
 func _new_segment(view: Control, kind: String):
+    _invalidate_publication()
     _canvas_ref = weakref(view)
     var segment = RetainedSegment.new()
     view.add_child(segment)
@@ -64,11 +68,15 @@ func resize(view: Control, windows: Array[Vector2]) -> void:
     # Pre-engrave one authentic source interval per measure, then retain
     # additional source and silent rest strips for future immutable takes.
     if not windows.is_empty():
+        if first_once.source_floor != windows[0].x or first_once.source_ceiling != windows[0].y:
+            _invalidate_publication()
         first_once.set_source_window(windows[0].x,windows[0].y)
     var required: int = maxi(4,windows.size()-1)
     while repeat_segments.size() < required:
         repeat_segments.append(_new_segment(view,"source"))
     for index in range(1,windows.size()):
+        if repeat_segments[index-1].source_floor != windows[index].x or repeat_segments[index-1].source_ceiling != windows[index].y:
+            _invalidate_publication()
         repeat_segments[index-1].set_source_window(
             windows[index].x,windows[index].y)
     while rest_segments.size() < 5:
@@ -85,11 +93,12 @@ func ready(native_ready: bool, viewport: Vector2) -> bool:
             return false
     return true
 
-func mark_published(ready_now: bool) -> bool:
-    if not ready_now or ink_published:
-        return false
-    ink_published = true
-    return true
+func record_compilation(ready_now: bool) -> bool:
+    # A transport binding can crop and recompile an existing source strip
+    # without reallocating this pool. Every completed command buffer changes
+    # the published generation, including such admission-time recompiles.
+    generation += 1
+    return ready_now
 
 func attach_compiled(online: Array) -> void:
     # Source and semantic rest CanvasItems belong to the same retained
@@ -98,7 +107,7 @@ func attach_compiled(online: Array) -> void:
 
 
 func invalidate(view: Control, online: Array) -> void:
-    ink_published = false
+    _invalidate_publication()
     # Unstage before recompilation: Godot cannot rebuild draw commands
     # beneath an invisible clipping parent.
     StreamLifecycle.prepare_recompile(view,online)

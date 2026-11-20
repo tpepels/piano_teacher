@@ -51,6 +51,7 @@ var _last_native_failure := ""
 var _retry_attempted := false
 var _identical_failure_repeats := 0
 var _retained_started_ms := -1
+var _published_retained_generation := -1
 var _preparing_since_ms := -1
 var _next_request_id := 0
 # Exactly two in-process command slots: native layout and semantic model.
@@ -152,6 +153,7 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     requested_layout_revision = revision
     timeline_model_revision = revision
     rendered_revision = revision
+    _published_retained_generation = _renderer.retained_generation()
     native_score_piece_fingerprint = _fingerprint
     _model_failures = 0
     _retained_started_ms = -1
@@ -182,7 +184,8 @@ func is_ready() -> bool:
     return score_error.is_empty() and _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
         (not _renderer.has_method("retained_ready") or _renderer.retained_ready()) and \
         layout_revision == revision and timeline_model_revision == revision and \
-        rendered_revision == revision
+        rendered_revision == revision and \
+        _published_retained_generation == _renderer.retained_generation()
 
 func status() -> Dictionary:
     var ready: bool = is_ready()
@@ -371,6 +374,10 @@ func _finish_native_score() -> void:
     # source and silence segments must exist before score_ready is sent.
     if _renderer.has_method("retained_ready") and not _renderer.retained_ready():
         return
+    # Compilation completes in draw, while readiness publication is deferred.
+    # Only this acknowledgement can expose a ready generation to the UI and
+    # admission; a getter must not outrun its matching status notification.
+    _published_retained_generation = _renderer.retained_generation()
     if rendered_revision == revision:
         # A resize or staff focus recompiled this revision's strips. Status
         # published while they compiled said "Compiling"; clear it.
@@ -415,6 +422,7 @@ func _reset_assets() -> bool:
     layout_revision = -1
     timeline_model_revision = -1
     rendered_revision = -1
+    _published_retained_generation = -1
     timeline_model_retry_after_ms = 0
     native_score_piece_fingerprint = ""
     score_error = ""

@@ -66,6 +66,7 @@ class ScoreArtifacts:
         with self._engraving_lock, self._model_lock:
             self._notation_identity: tuple | None = None
             self._notation: LessonScore | None = None
+            self._notation_model: dict | None = None
             self._model: dict | None = None
             self._projected_model: dict | None = None
             self._prepared_layout_identity: tuple | None = None
@@ -98,6 +99,7 @@ class ScoreArtifacts:
                 fingering_sources=authored_projection_sources(piece.fingering_plan))
             self._notation = notation
             self._notation_identity = selected.identity
+            self._notation_model = None
             self._model = None
             self._projected_model = None
         return self._notation
@@ -114,9 +116,11 @@ class ScoreArtifacts:
             if self._model is None:
                 envelope = display_envelope(selected.piece, selected.phrase,
                     transformed=selected.transformed_rhythm)
-                self._model = project_display_model(build_score_model(notation,
+                self._notation_model = build_score_model(notation,
                     boundaries=selected.piece.bar_boundaries,
-                    hand=selected.hand, revision=selected.revision), envelope, selected.hand)
+                    hand=selected.hand, revision=selected.revision)
+                self._model = project_display_model(
+                    self._notation_model, envelope, selected.hand)
             return self._model
 
     def semantic_score(self, selected: ScoreSelection) -> dict:
@@ -167,7 +171,7 @@ class ScoreArtifacts:
         fingering_key = ((("fingering_sources", tuple(sorted(fingering_sources))),)
                          if fingering_sources else ())
         key = self.preprocessing.key(
-            "engraving", "authentic-display-envelope-v1",
+            "engraving", "complete-display-atlas-v2",
             hashlib.sha256(notation.musicxml.encode("utf-8")).hexdigest(),
             selected.fingerprint, selected.stage_key,
             phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
@@ -220,13 +224,18 @@ class ScoreArtifacts:
                   round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
         checkpoint = time.perf_counter()
         notation = self._selected_notation(selected)
-        model = self.semantic_score(selected)
+        # Atlas extraction is structural correspondence with the COMPLETE
+        # original XML/pages, including support bars for carried ties. The
+        # bounded display projection is not a complete document inventory.
+        with self._model_lock:
+            self.source_model(selected)
+            notation_model = self._notation_model
         if diagnostics:
             print("SCORE_GEOMETRY_STAGE: semantic",
                   round((time.perf_counter()-checkpoint)*1000, 1), "ms", flush=True)
         checkpoint = time.perf_counter()
         prepared = score_preparation.assemble_layout(score,
-            native_model=model, notation_xml=notation.musicxml,
+            notation_model=notation_model, notation_xml=notation.musicxml,
             cache=self.preprocessing, cache_key=self.engraving_cache_key or "",
             revision=selected.revision)
         if diagnostics:

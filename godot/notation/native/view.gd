@@ -359,8 +359,11 @@ func _resize_retained_pool(install: bool = false) -> void:
 func retained_ready() -> bool:
     return _retained_pool.ready(native_ready,size)
 
+func retained_generation() -> int:
+    return _retained_pool.generation
+
 func retained_segment_compiled() -> void:
-    if _retained_pool.mark_published(retained_ready()):
+    if _retained_pool.record_compilation(retained_ready()):
         # The score-ready signal must never re-enter layout publication
         # from inside a CanvasItem's draw notification.
         call_deferred("emit_signal","retained_ink_compiled")
