@@ -3,7 +3,9 @@ extends Node2D
 ## Godot records _draw once per score/viewport/hand revision. The practice view
 ## subsequently changes position/visibility, never queue_redraw on each beat.
 const NoteStatusLayer := preload("res://notation/native/note_status_layer.gd")
-var owner_view
+var painter
+var _canvas_ref: WeakRef
+var _compiled_callback: Callable
 var kind := "source"
 # A retained source CanvasItem owns one immutable source interval. Its draw
 # commands are never the whole piece when only one measure is visible.
@@ -20,8 +22,11 @@ var symbols_drawn := 0
 var beam_groups_drawn := 0
 var compiled := false
 
-func configure(view: Control, segment_kind: String) -> void:
-    owner_view = view
+func configure(canvas: Control, source_painter, compiled_callback: Callable,
+        segment_kind: String) -> void:
+    _canvas_ref = weakref(canvas)
+    painter = source_painter
+    _compiled_callback = compiled_callback
     kind = segment_kind
     compiled = false
     if kind == "source" and status_layer == null:
@@ -55,11 +60,11 @@ func _draw() -> void:
     note_instances.clear()
     instances_by_event.clear()
     compile_generation += 1
-    if owner_view == null or not owner_view.native_ready or \
-            owner_view.size.x < 100.0 or owner_view.size.y < 100.0:
+    if painter == null or not painter.native_ready or \
+            painter.size.x < 100.0 or painter.size.y < 100.0:
         return
     if kind == "source":
-        var frame = owner_view.paint_retained_source(self)
+        var frame = painter.paint_retained_source(self)
         if frame == null:
             return
         note_instances = frame.drawn_note_instances.duplicate(true)
@@ -75,9 +80,11 @@ func _draw() -> void:
         symbols_drawn = frame.visible_symbols
         beam_groups_drawn = frame.visible_beam_groups
     else:
-        owner_view.paint_retained_rest(self)
+        painter.paint_retained_rest(self)
     compiled = true
     # The parent may already have projected this frame before our first draw.
     # Update notehead hit regions on the next frame, once, without rebuilding ink.
-    owner_view.queue_redraw()
-    owner_view.retained_segment_compiled()
+    var canvas = _canvas_ref.get_ref()
+    if canvas != null:
+        canvas.queue_redraw()
+        _compiled_callback.call()

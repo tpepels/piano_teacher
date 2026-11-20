@@ -37,10 +37,11 @@ class Renderer:
         return model_ok
     func retained_ready() -> bool:
         return retained_ok
-    func clear_score() -> void:
+    func clear_score() -> bool:
         clears += 1
         native_ready = false
         glyphs.loaded = false
+        return true
     func queue_redraw() -> void:
         redraws += 1
 

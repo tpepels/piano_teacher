@@ -10,33 +10,31 @@ static func _refuse(reason: String) -> Dictionary:
 
 static func plan(renderer, action: String, world: float,
         source_opening: float, count_in_beats: float) -> Dictionary:
-    # count_in_beats is the engine's published next_count_in_beats: the one
-    # count-in bar this Play/Resume gets before its first source beat.
+    if not renderer.has_method("transport_preflight_facts"):
+        return _refuse("missing_physical_preflight_port")
+    var facts: Dictionary = renderer.transport_preflight_facts(world,source_opening)
+    return plan_facts(facts,action,world,source_opening,count_in_beats)
+
+static func plan_facts(facts: Dictionary, action: String, world: float,
+        source_opening: float, count_in_beats: float) -> Dictionary:
     if action not in ["start","resume","restart"]:
         return _refuse("unsupported_action")
     if not is_finite(world) or not is_finite(source_opening):
         return _refuse("invalid_transport_coordinate")
-    if not bool(renderer.native_ready) or not renderer.retained_ready():
+    if not bool(facts.get("ready",false)):
         return _refuse("notation_not_compiled")
-    var duration: float = float(renderer.timeline.duration_beats)
-    if duration <= 0.0 or source_opening < 0.0 or             source_opening >= duration:
+    var duration: float = float(facts.get("duration",0.0))
+    if duration <= 0.0 or source_opening < 0.0 or source_opening >= duration:
         return _refuse("invalid_source_interval")
-    # Every caller, including isolated production fixtures, must provide
-    # the identical identity-bound frozen preflight model. No code path
-    # may read a renderer's mutable private queue or recalculate placement.
-    if not renderer.has_method("transport_preflight_facts"):
-        return _refuse("missing_physical_preflight_port")
-    var facts: Dictionary = renderer.transport_preflight_facts(
-        world,source_opening)
     for field in ["source_exists","online","right","header",
             "preview_world","withdrawn","peer_floor"]:
         if not facts.has(field):
             return _refuse("incomplete_physical_preflight_facts")
     if not bool(facts["source_exists"]):
         return _refuse("no_source_measures")
-    var density: float = float(renderer.timeline.pixels_per_beat)
-    var staff_gap: float = float(renderer.staff_gap())
-    var width: float = float(renderer.size.x)
+    var density: float = float(facts["density"])
+    var staff_gap: float = float(facts["gap"])
+    var width: float = float(facts["width"])
     if density <= 0.0 or staff_gap <= 0.0 or width < 100.0:
         return _refuse("score_viewport_not_ready")
     var online: Array = facts["online"]
@@ -88,9 +86,6 @@ static func plan(renderer, action: String, world: float,
                             onset >= preview_world+Admission.PAUSED_REUSE_EPSILON_BEATS:
                         reusable = index
                         break
-        if reusable < 0:
-            reusable = Admission.select(online,"automatic",
-                source_opening,preview_world,right,header)
     if reusable >= 0 and float(online[reusable]["world_origin"]) + \
             source_opening < preview_world+count_in_beats-.0001:
         reusable = -1
@@ -105,7 +100,7 @@ static func plan(renderer, action: String, world: float,
         return {"ok":true,"mode":"append","action":action,
             "opening":source_opening,"start_world":near_onset,
             "empty_strip":true,
-            "first_pixel_x":width*renderer.PLAYHEAD_FRACTION +
+            "first_pixel_x":float(facts["playhead"]) +
                 (near_onset-header-preview_world)*density,
             "first_ink_delay_seconds":0.0,
             "remaining_count":survivors.size(),
@@ -116,8 +111,7 @@ static func plan(renderer, action: String, world: float,
         density,staff_gap,duration)
     if action == "restart":
         onset = Admission.retry_start(survivors,preview_world,right,header,
-            float(renderer.practice_timeline.get("gap",{}).get(
-                "duration_beats",0.0)),density,staff_gap,duration)
+            float(facts["rest_gap"]),density,staff_gap,duration)
     if is_finite(peer_floor):
         onset = maxf(onset,peer_floor+header+Admission.REST_GAP_BEATS)
     if is_finite(count_in_beats) and count_in_beats > 0.0:
@@ -128,7 +122,7 @@ static func plan(renderer, action: String, world: float,
         onset = maxf(onset,preview_world+count_in_beats)
     if not is_finite(onset):
         return _refuse("no_finite_future_slot")
-    var first_pixel_x: float = width*renderer.PLAYHEAD_FRACTION +         (onset-header-preview_world)*density
+    var first_pixel_x: float = float(facts["playhead"]) +         (onset-header-preview_world)*density
     if first_pixel_x <= width:
         return _refuse("not_fully_offscreen")
     return {"ok":true,"mode":"append","action":action,
@@ -136,7 +130,7 @@ static func plan(renderer, action: String, world: float,
         "first_pixel_x":first_pixel_x,
         "first_ink_delay_seconds":
             Admission.lead_seconds(maxf(0.0,(first_pixel_x-width)/density),0.0,
-                maxf(1.0,float(renderer.bpm))),
+                maxf(1.0,float(facts["bpm"]))),
         "remaining_count":survivors.size(),
         "withdraw_owners":withdrawn["owners"].duplicate(),
         "reason":"new_immutable_future_slot"}

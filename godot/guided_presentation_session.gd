@@ -61,7 +61,8 @@ func publish_authorized_target(parsed: Dictionary, renderer,
     if not admitted:
         return
     var key: String = str(guided["plan_id"])
-    if renderer.scheduled_plan_openings.has(key):
-        world = float(renderer.scheduled_plan_openings[key])
+    var admitted_world: float = renderer.scheduled_plan_opening(key)
+    if is_finite(admitted_world):
+        world = admitted_world
         source_from_beat = float(guided["source_from_beat"])
         plan_id = key

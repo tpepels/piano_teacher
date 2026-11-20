@@ -65,8 +65,8 @@ func status_of_instance(instance_id: String) -> String:
 
 func _paint(layer: Node2D, pass_name: String) -> void:
     paint_count += 1
-    if _colored.is_empty() or segment.owner_view == null:
+    if _colored.is_empty() or segment.painter == null:
         return
-    var glyphs = segment.owner_view.glyphs
+    var glyphs = segment.painter.glyphs
     for entry in _colored:
         Ink.paint(layer,glyphs,entry["instance"],str(entry["status"]),pass_name)

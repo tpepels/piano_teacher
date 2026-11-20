@@ -21,8 +21,8 @@ const PAUSED_REUSE_EPSILON_BEATS := .001
 # slot computed here (empty_strip_start) matches the engine's first-note
 # deadline to within this many beats: one display frame of clock jitter,
 # never a fraction of a note (0.025 beat is 2.4 px at 96 px/beat). It is not
-# used for automatic practice continuations, which are bound by their
-# backend plan identity (NativeView._planned_owner), not by comparing onsets.
+# used for coordinator-authored guided targets, which retain their exact
+# plan identity in StreamRecoveryPlanner. Guided ink cannot bind a graded take.
 const EMPTY_STRIP_DEADLINE_EPSILON_BEATS := .025
 # Conservative source clip extents in staff-space units. NativeView replaces
 # the first-header fallback with its measured Verovio clef/key ink when ready.
@@ -54,7 +54,6 @@ static func clip_bounds(item: Dictionary, density: float,
         float(item["source_floor"]),float(item["source_ceiling"]),
         density,gap,score_duration)
 
-
 static func _occupied_end(passes: Array, world: float,
         density: float, gap: float, score_duration: float) -> float:
     var last := -INF
@@ -65,7 +64,6 @@ static func _occupied_end(passes: Array, world: float,
         if finish > world:
             last = maxf(last,finish)
     return last
-
 
 static func _future_start(passes: Array, world: float,
         right_beats: float, header_beats: float,
@@ -78,13 +76,13 @@ static func _future_start(passes: Array, world: float,
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
     return start
 
-# All reservation claims (ready, paused, automatic and active) use one
+# All graded reservation claims (ready, paused and active) use one
 # identity-checked traversal. Type-specific callers must not scan
 # stream_passes or calculate a different on-screen placement policy.
 static func select(passes: Array, purpose: String, opening: float,
         world: float, right_beats: float = 0.0,
         header_beats: float = 0.0, identity: String = "") -> int:
-    assert(purpose in ["ready","idle","paused","automatic","bound"])
+    assert(purpose in ["ready","idle","paused","bound"])
     var earliest: float = world + maxf(MIN_READING_BEATS,
         right_beats+header_beats+OFFSCREEN_MARGIN_BEATS)
     if purpose == "paused":
@@ -112,9 +110,6 @@ static func select(passes: Array, purpose: String, opening: float,
             "paused":
                 matches = key == identity and not pending and \
                     absf(float(item.get("source_floor",-INF))-opening)<.00001
-            "automatic":
-                matches = pending and not armed and key == "autopending" and \
-                    absf(float(item.get("source_floor",-INF))-opening)<.00001
             "bound":
                 matches = key == identity and not pending
         if not matches:
@@ -130,7 +125,6 @@ static func select(passes: Array, purpose: String, opening: float,
             closest = onset
             chosen = index
     return chosen
-
 
 static func ink_ahead_of(passes: Array, world: float, density: float,
         gap: float, score_duration: float, except_take: int = -1) -> bool:
@@ -156,7 +150,6 @@ static func ink_ahead_of(passes: Array, world: float, density: float,
         if float(item["world_origin"]) + music_end > world+.00001:
             return true
     return false
-
 
 static func empty_strip_start(passes: Array, world: float,
         count_in_beats: float, header_beats: float, peer_floor: float,
@@ -200,7 +193,6 @@ static func empty_strip_start(passes: Array, world: float,
         start = maxf(start,peer_rest_floor + header_beats)
     return start
 
-
 static func announced_empty_strip_start(passes: Array, world: float,
         count_in_beats: float, header_beats: float, deadline: float,
         peer_floor: float, density: float, gap: float,
@@ -235,7 +227,6 @@ static func announced_empty_strip_start(passes: Array, world: float,
     return deadline if is_finite(safe_slot) and \
         deadline >= safe_slot-.0001 else NAN
 
-
 static func position(passes: Array, world: float, right_beats: float,
         header_beats: float, intended: float = NAN,
         travel_beats: float = 0.0, density: float = Spacing.DEFAULT_PIXELS_PER_BEAT,
@@ -248,7 +239,6 @@ static func position(passes: Array, world: float, right_beats: float,
     if is_finite(intended):
         return intended if intended >= minimum-.0001 else NAN
     return minimum
-
 
 static func retry_start(passes: Array, world: float, right_beats: float,
         header_beats: float, rest_beats: float, density: float = Spacing.DEFAULT_PIXELS_PER_BEAT,
@@ -265,22 +255,6 @@ static func retry_start(passes: Array, world: float, right_beats: float,
         start = maxf(start,occupied + header_beats)
     return start
 
-
-static func automatic_horizon(rest_beats: float,
-        right_beats: float, header_beats: float) -> float:
-    # This precise value is passed to the backend at Start AND used to place
-    # speculative automatic/preview ink. The backend's repeat deadline
-    # already includes the printed rest, so it adds only (horizon-rest).
-    # Never push a visual repeat later without moving the grading deadline.
-    # The repeat is announced as the take ends, so it must clear the
-    # printed rest by the same offscreen margin as any appended source:
-    # with no margin the deadline sat exactly on the admission boundary and
-    # a sub-millisecond projection error refused the repeat's ink.
-    return maxf(4.0,maxf(
-        right_beats+header_beats+1.5,
-        rest_beats+REST_GAP_BEATS+header_beats+OFFSCREEN_MARGIN_BEATS))
-
-
 static func command_lead_bpm(action: String, flow_bpm: float,
         selected_bpm: float) -> float:
     # World beats to seconds at the rate the axis moves at AFTER a command:
@@ -288,7 +262,6 @@ static func command_lead_bpm(action: String, flow_bpm: float,
     # mapped take, e.g. a slowdown stage, ran at its own rate until now); a
     # mid-take Resume continues inside the take's map.
     return flow_bpm if action == "resume" else selected_bpm
-
 
 static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
     return TempoTimeline.seconds_from_beats(

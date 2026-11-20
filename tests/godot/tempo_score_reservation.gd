@@ -56,6 +56,12 @@ class IncomingLayer:
         var width: float = size.x
         var at_world: float = maxf(world,stream_world_beat)
         return {
+            "ready":native_ready and retained_ready(),
+            "duration":timeline.duration_beats,"density":density,
+            "gap":staff_gap(),"width":width,
+            "playhead":width*PLAYHEAD_FRACTION,
+            "rest_gap":float(practice_timeline["gap"]["duration_beats"]),
+            "bpm":bpm,
             "source_exists":not _stream_source_windows(opening).is_empty(),
             "online":_stream_queue.online.duplicate(true),
             "withdrawn":_stream_queue.preview_tail_withdrawal(

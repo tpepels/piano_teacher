@@ -40,7 +40,7 @@ func _init() -> void:
     focus_mode = Control.FOCUS_NONE
     set_process(false)
 
-func clear_score() -> void:
+func clear_score() -> bool:
     density_locked = false
     var density: float = timeline.pixels_per_beat
     timeline = Timeline.new()
@@ -51,6 +51,7 @@ func clear_score() -> void:
     practice_preparation.clear()
     practice_contract_error = ""
     queue_redraw()
+    return true
 
 func load_score(candidate: Dictionary) -> bool:
     if not timeline.load_model(candidate):

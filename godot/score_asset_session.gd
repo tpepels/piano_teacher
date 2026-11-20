@@ -127,13 +127,14 @@ func update_context(state: Dictionary, now_ms: int) -> void:
         _identical_failure_repeats = 0
         revision = next_revision
         _generation += 1
-        _reset_assets()
+        if not _reset_assets():
+            return
         _preparing_since_ms = now_ms if _loaded else -1
         if _loaded:
             request_layout()
     if str(_state.get("phase","")) == "loading" and is_ready():
         # A busy action port may drop an intent. The next backend loading poll
-        # repeats it, just as Main's current _on_state path does.
+        # repeats it, just as the accepted snapshot presentation path does.
         action_requested.emit({"action":"score_ready","revision":revision})
 
 func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dictionary) -> void:
@@ -178,7 +179,7 @@ func layout_snapshot() -> Dictionary:
     return _layout.duplicate(true)
 
 func is_ready() -> bool:
-    return _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
+    return score_error.is_empty() and _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
         (not _renderer.has_method("retained_ready") or _renderer.retained_ready()) and \
         layout_revision == revision and timeline_model_revision == revision and \
         rendered_revision == revision
@@ -224,7 +225,7 @@ func finish_native_score() -> void:
     _finish_native_score()
 
 func request_layout() -> bool:
-    if layout_pending or not _loaded:
+    if layout_pending or not _loaded or not score_error.is_empty():
         return false
     requested_layout_revision = revision
     _begin_request("layout","score.native_layout",90.0)
@@ -247,7 +248,8 @@ func retry(now_ms: int) -> bool:
     # comparison, but never carry it into a different score revision.
     _retry_attempted = true
     _generation += 1
-    _reset_assets()
+    if not _reset_assets():
+        return false
     _preparing_since_ms = now_ms
     return request_layout()
 
@@ -398,10 +400,15 @@ func _retry_model(now_ms: int, notice: String) -> void:
         _renderer.queue_redraw()
     _publish_status()
 
-func _reset_assets() -> void:
+func _reset_assets() -> bool:
     # Supersede both in-flight operations immediately on score change or Retry.
     # The queue cancels the old adapter when its replacement is dispatched.
     _requests.clear()
+    if not _hide_renderer():
+        # Keep exposed native ink and its feedback binding alive. No new
+        # atlas/model may overwrite the source whose journal could not close.
+        _fail(str(_renderer.failure_reason),false)
+        return false
     _model_failures = 0
     _retained_started_ms = -1
     _layout.clear()
@@ -411,19 +418,21 @@ func _reset_assets() -> void:
     timeline_model_retry_after_ms = 0
     native_score_piece_fingerprint = ""
     score_error = ""
-    _hide_renderer()
     assets_invalidated.emit(revision)
     _publish_status()
+    return true
 
-func _hide_renderer() -> void:
+func _hide_renderer() -> bool:
     if is_instance_valid(_renderer):
-        _renderer.clear_score()
+        if not _renderer.clear_score():
+            return false
         # Loading/failure revokes score ink, not the endless empty staff.
         _renderer.visible = true
         if is_instance_valid(_feedback):
             _feedback.bind_score(_renderer,-1)
+    return true
 
-func _fail(message: String) -> void:
+func _fail(message: String, release_renderer: bool = true) -> void:
     push_error("SCORE_ASSET_FAILURE: " + message)
     var repeated: bool = _retry_attempted and \
         message == _last_native_failure and not message.is_empty()
@@ -440,7 +449,10 @@ func _fail(message: String) -> void:
     _retained_started_ms = -1
     rendered_revision = -1
     timeline_model_revision = -1
-    _hide_renderer()
+    if release_renderer and not _hide_renderer():
+        var preservation: String = str(_renderer.failure_reason)
+        if not preservation.is_empty() and not score_error.contains(preservation):
+            score_error += "\n"+preservation
     score_failed.emit(score_error)
     _publish_status()
 

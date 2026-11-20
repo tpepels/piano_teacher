@@ -6,6 +6,17 @@ const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 
+var _canvas_ref: WeakRef
+var _painter
+var _compiled_callback: Callable
+
+func bind_painter(painter, compiled_callback: Callable) -> void:
+    _painter = painter
+    _compiled_callback = compiled_callback
+
+func allocate(kind: String):
+    return _new_segment(_canvas_ref.get_ref(),kind)
+
 var first_once
 var repeat_segments: Array = []
 var rest_segments: Array = []
@@ -28,10 +39,11 @@ func clear(view: Control) -> void:
     all_segments.clear()
 
 func _new_segment(view: Control, kind: String):
+    _canvas_ref = weakref(view)
     var segment = RetainedSegment.new()
     view.add_child(segment)
     all_segments.append(segment)
-    segment.configure(view,kind)
+    segment.configure(view,_painter,_compiled_callback,kind)
     return segment
 
 func install(view: Control, windows: Array[Vector2]) -> void:
@@ -41,7 +53,7 @@ func install(view: Control, windows: Array[Vector2]) -> void:
     first_once = _new_segment(view,"source")
     resize(view,windows)
     annotations = RetainedAnnotationOverlay.new()
-    annotations.set("owner_view",view)
+    annotations.set("painter",_painter)
     annotations.z_index = 5
     view.add_child(annotations)
     StreamLifecycle.present_pool(all_segments)

@@ -74,9 +74,9 @@ static func validate_batch(passes: Array, specs: Array) -> bool:
             return false
     return true
 
-
-static func _admit(owner: Control, passes: Array, specs: Array,
-        source_pool: Array, rest_pool: Array, first_source: Node2D) -> bool:
+static func admit(owner: Control, passes: Array, specs: Array,
+        source_pool: Array, rest_pool: Array, first_source: Node2D,
+        create_segment: Callable) -> bool:
     if not validate_batch(passes,specs):
         return false
     var used: Dictionary = {}
@@ -99,7 +99,9 @@ static func _admit(owner: Control, passes: Array, specs: Array,
         if choice == null:
             # Overflow always uses the same lifecycle and pre-compilation
             # contract, regardless of whether the content is notes or rests.
-            choice = owner._new_retained_segment(role)
+            if not create_segment.is_valid():
+                return false
+            choice = create_segment.call(role)
             pool.append(choice)
         # Reusing a source CanvasItem for a different measure must first
         # replace its recorded drawing commands with that measure's actual
@@ -128,7 +130,6 @@ static func _admit(owner: Control, passes: Array, specs: Array,
         passes.append(placed)
     return true
 
-
 static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
     # Snapshot the entire logical take, including all measure strips.
     # A rejected Play must never leave a later strip armed.
@@ -142,7 +143,6 @@ static func snapshot_owner(passes: Array, owner_serial: int) -> Dictionary:
             "armed":item.get("armed",false),
             "hidden_until_armed":item.get("hidden_until_armed",false)}
     return result
-
 
 static func restore_owner(passes: Array, owner_serial: int,
         snapshot: Dictionary) -> bool:
@@ -164,7 +164,6 @@ static func restore_owner(passes: Array, owner_serial: int,
         for field in original:
             item[field] = original[field]
     return true
-
 
 static func activate(passes: Array, owner_serial: int, key: String,
         armed: bool) -> bool:
@@ -199,12 +198,10 @@ static func activate(passes: Array, owner_serial: int, key: String,
             item["armed"] = armed
     return true
 
-
 static func screen_bounds(item: Dictionary, density: float,
         gap: float, score_duration: float) -> Vector2:
     # Admission and retirement use this same canonical printed geometry.
     return Admission.clip_bounds(item,density,gap,score_duration)
-
 
 static func _create(owner: Control, segment: Node2D, kind: String,
         world_origin: float, source_floor: float, source_ceiling: float,
@@ -251,7 +248,6 @@ static func present_pool(segments: Array, used: Dictionary = {}) -> void:
             segment.visible = should_show
         if not bool(segment.get("compiled")):
             _offstage(segment)
-
 
 static func prepare_recompile(owner: Control, passes: Array) -> void:
     # A viewport/hand change invalidates both source and printed rest ink.

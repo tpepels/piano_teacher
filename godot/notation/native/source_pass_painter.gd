@@ -20,16 +20,16 @@ static func _measure_index_at_or_after(measures: Array, beat: float) -> int:
     return lo
 
 
-static func paint(view, canvas: CanvasItem) -> RenderPass:
+static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
+        play_from_beat: float, active_hand: String) -> RenderPass:
     # Every source copy is identical immutable native score ink. Source
     # context is not rebuilt on Play, Retry, Pause or the arrival of a note.
     var target: CanvasItem = canvas
-    var layout = view.layout
-    var timeline = view.timeline
-    var context_painter = view.context_painter
-    var symbols = view.symbols
-    var play_from_beat: float = view.play_from_beat
-    var gap: float = view.staff_gap()
+    var layout = engraving.layout
+    var timeline = engraving.timeline
+    var context_painter = engraving.context_painter
+    var symbols = engraving.symbols
+    var gap: float = engraving.gap()
     var camera_clock: float = -play_from_beat
     var playhead_x := 0.0
     var first_value: Variant = canvas.get("source_floor")
@@ -47,13 +47,13 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
     # than one entire-piece command list for EVERY measure strip.
     var left: float = maxf(0.0,source_first-.25)
     var right: float = minf(timeline.duration_beats,source_last+.25)
-    var retained_width: float = maxf(view.size.x,
-        (right+1.0)*timeline.pixels_per_beat+view.size.x)
-    var frame: RenderPass = view._new_paint_frame(
-        camera_clock,playhead_x,gap,0,0.0)
+    var retained_width: float = maxf(viewport.x,
+        (right+1.0)*timeline.pixels_per_beat+viewport.x)
+    var frame: RenderPass = engraving.new_frame(
+        camera_clock,playhead_x,gap,play_from_beat,active_hand)
     frame.source_floor = source_first
     frame.source_ceiling = source_last
-    layout.set_viewport(Vector2(retained_width,view.size.y))
+    layout.set_viewport(Vector2(retained_width,viewport.y))
     var font: Font = ThemeDB.fallback_font
     var measure_index: int = _measure_index_at_or_after(
         timeline.measures,left-.00001)
@@ -96,11 +96,10 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
     # glyph spacing during a scroll is forbidden: it stalls the musical UI.
     if layout.cached_offsets_gap < 0.0 or absf(layout.cached_offsets_gap-gap) > .001:
         push_error("Static engraving cache is stale; reprepare before playback")
-        layout.set_viewport(view.size)
+        layout.set_viewport(viewport)
         return frame
     var head_offsets: Dictionary = layout.cached_head_offsets
-    var beam_data: Dictionary = view.beam_plan(gap, camera_clock,
-        playhead_x, head_offsets,frame)
+    var beam_data: Dictionary = engraving.beam_plan(frame,head_offsets)
     var beam_stems: Dictionary = beam_data.get("stems", {})
     var compound_ids: Dictionary = {}
     for event in EventWindow.visible(layout.ordered_events,left,right,frame):
@@ -134,6 +133,6 @@ static func paint(view, canvas: CanvasItem) -> RenderPass:
     context_painter.paint_expressions(target,frame,left,right,camera_clock,playhead_x,gap)
     context_painter.paint_hairpins(target,frame,left,right,camera_clock,playhead_x,gap)
     symbols.paint_grace_notes(target,frame,gap)
-    layout.set_viewport(view.size)
+    layout.set_viewport(viewport)
     return frame
 

@@ -635,6 +635,15 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Existing Godot checks passed after integration, including all Practice UI scenarios and source-marker assertions. The existing Python suite also passed (335 passed, one skipped). No tests were added; physical display/input behavior remains unverified.
 - Remaining gates: renderer/stream, root scene and backend ownership commits; fix the fresh-review Free→Tempo authority and failed-journal teardown findings; full embedded production and package run.
 
+### Implementation checkpoint CD — native source, drawing, binding and journal ownership
+
+- `9c493ec1` implements checkpoint CC. NativeScoreView now composes ScoreEngraving (authentic source assembly/fit), ScorePainter (canvas/retained presentation), ScoreStreamController (the one FIFO/serial transaction owner), StreamTakeBinding (arm/ACK/Pause/compensation) and StreamRecoveryPlanner (identity-bound untimed placement). StreamGeometry carries frozen physical facts; no downstream admission executor receives the whole view.
+- GlyphAssets owns authentic catalogs/images; GlyphHeadMasks owns derived status-mask caches; Glyphs only composes ink on a canvas. Retained CanvasItems bind their painter directly; no raw view or private method access is required.
+- Removed dead announced-copy/automatic-horizon APIs and the old graded automatic claim of guided ink. Free publication remains explicitly tagged by its guided plan identity and cannot start a graded take. Fixed the actual guided consumer's nonexistent renderer property with scheduled_plan_opening(identity).
+- Fresh review found failed-journal teardown could keep queue records while freeing their CanvasItems. Reset now journals every owner before retiring any clip and returns success through controller/view/asset lifecycle. On failure it preserves ink, binding, compiled assets and feedback, blocks replacement requests and reports the failure.
+- Existing Godot checks passed against this integrated source (`GODOT_STARTUP_SYNTAX_OK`, every existing failure counter zero). Existing fixtures were migrated only from retired private queue/geometry/void-clear interfaces; assertions retained, no new tests.
+- Full native production/repertoire/package execution remains due. Physical engraving/display, audio and MIDI acceptance remains unverified.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

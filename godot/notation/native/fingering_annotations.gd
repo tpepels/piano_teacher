@@ -96,7 +96,6 @@ func layout_fingerings(gap: float, play_from_beat: float = 0.0) -> void:
         widest_fingering = maxf(widest_fingering,float(item["rect"].size.x))
     fingering_placement_issues = packed["issues"]
 
-
 func metrics(font_size: int) -> Dictionary:
     if fingering_metrics_cache.has(font_size):
         return fingering_metrics_cache[font_size]
@@ -122,7 +121,6 @@ func metrics(font_size: int) -> Dictionary:
         "digit_ink":digits}
     fingering_metrics_cache[font_size] = value
     return value
-
 
 ## Context: active_hand, play_from_beat, future-only stream_floor/ceiling.
 ## The canvas is used only for drawing; no canvas/view reference is retained.
@@ -175,7 +173,6 @@ func paint(canvas, clock: float, playhead_x: float, gap: float,
         shown["ink_rect"] = Rect2(item["ink_rect"].position+translation,item["ink_rect"].size)
         drawn_fingerings.append(shown)
 
-
 func fill_menu(menu: PopupMenu, event: Dictionary) -> void:
     var assignment: Dictionary = FingeringPlacement.assignment(event)
     menu.add_item(score_layout.performing_hand(event).capitalize()+" hand · fingering", 100)
@@ -188,7 +185,6 @@ func fill_menu(menu: PopupMenu, event: Dictionary) -> void:
     menu.id_pressed.connect(func(finger: int):
         fingering_change_requested.emit(FingeringPlacement.source(event),null if finger == 0 else finger)
         fingering_popup.hide())
-
 
 func open_editor(canvas, point: Vector2, gap: float, drawn_note_instances: Array) -> bool:
     if not fingering_annotations_enabled:
@@ -234,3 +230,18 @@ func open_editor(canvas, point: Vector2, gap: float, drawn_note_instances: Array
     var screen: Vector2 = canvas.get_screen_transform()*point
     fingering_popup.popup(Rect2i(Vector2i(screen),Vector2i.ZERO))
     return true
+
+func handle_input(owner: Control, event: InputEvent, gap: float,
+        instances: Array) -> void:
+    if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+        if open_editor(owner,event.position,gap,instances):
+            owner.accept_event()
+    elif event is InputEventScreenTouch and event.pressed:
+        if open_editor(owner,event.position,gap,instances):
+            owner.accept_event()
+    elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+        for item in drawn_fingerings:
+            if item["rect"].grow(5.0).has_point(event.position):
+                if open_editor(owner,event.position,gap,instances):
+                    owner.accept_event()
+                break

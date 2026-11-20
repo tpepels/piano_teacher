@@ -1,4 +1,12 @@
 extends SceneTree
+# This UI-only scenario consumes a reserved source origin through the same
+# public query as production; it does not forge native queue internals.
+class MarkerRenderer:
+    extends Control
+    var timeline = preload("res://notation/shared/timeline.gd").new()
+    func first_strip_origin_after(from_world: float) -> float:
+        return 20.0 if from_world <= 20.0 else INF
+
 var failures: Array[String] = []
 func _initialize() -> void: call_deferred("run")
 func check(ok: bool, message: String) -> void:
@@ -167,15 +175,11 @@ func run() -> void:
                     "measures":[{"start_beat":0.0,"end_beat":4.0},
                                 {"start_beat":4.0,"end_beat":8.0}]
                 }
-                check(view.stage.renderer.timeline.load_model(model),
+                var marker_renderer := MarkerRenderer.new()
+                view.stage.add_child(marker_renderer)
+                view.stage.renderer = marker_renderer
+                check(marker_renderer.timeline.load_model(model),
                     "Native marker fixture uses an authentic contiguous source beat axis")
-                # This fixture injects an explicit already-queued score
-                # owner; production admission is exercised in queue tests.
-                view.stage.renderer._stream_queue.online.append({
-                    "world_origin":20.0,"source_floor":0.0,
-                    "source_ceiling":8.0,"pending":true,"serial":1,
-                    "owner_serial":1,"kind":"source"
-                })
                 var heading := state()
                 heading.hand = "right"
                 view.stage.present_runway_steps(heading,20.0)

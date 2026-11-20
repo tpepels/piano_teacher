@@ -250,7 +250,7 @@ func paint_beams(canvas, frame: RenderPass, data: Dictionary, gap: float) -> voi
         canvas.draw_set_transform(Vector2(float(group.get("source_shift_x",0.0)),0.0))
         var ink: Color = frame.event_ink(score_layout,group)
         for region in regions:
-            VerovioGlyphs._draw_fit_region(canvas,beam_texture,region["dest"],
+            VerovioGlyphs.draw_fit_region(canvas,beam_texture,region["dest"],
                 region["source"],ink)
         canvas.draw_set_transform(Vector2.ZERO)
 
@@ -278,7 +278,7 @@ func paint_ties(canvas, frame: RenderPass, playhead_x: float, clock: float, gap:
         var texture: Texture2D = score_layout.glyphs.tie_textures.get(
             str(cached["direction"]))
         if texture != null:
-            VerovioGlyphs._draw_fit(canvas,texture,cached["rect"],false,
+            VerovioGlyphs.draw_fit(canvas,texture,cached["rect"],false,
                 frame.event_ink(score_layout,event))
 
 

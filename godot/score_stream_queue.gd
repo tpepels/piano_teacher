@@ -144,7 +144,7 @@ func bind_score(score_key: String, directory: String = Archive.DEFAULT_DIR,
 static func owner_id(item: Dictionary) -> int:
     return int(item.get("owner_serial",abs(int(item.get("serial",0)))))
 
-static func _record(item: Dictionary) -> Dictionary:
+static func source_record(item: Dictionary) -> Dictionary:
     # A source plan is plain JSON-compatible metadata; never archive Nodes,
     # clipping controls, CanvasItem resources or mutable draw buffers.
     var stored: Dictionary = {
@@ -172,7 +172,7 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         rest_pool: Array, first_source: Node2D, world: float,
         viewport_width: float, playhead_x: float,
         density: float, gap: float, source_duration: float,
-        empty_strip: bool = false) -> bool:
+        empty_strip: bool = false, create_segment: Callable = Callable()) -> bool:
     # Validate the caller's ORIGINAL musical request before considering
     # an offline template. A malformed rest or overlapping source cannot be
     # silently repaired by a compatible archived passage.
@@ -216,12 +216,12 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         if prepared.is_empty():
             return false
     var before: int = online.size()
-    if not Lifecycle._admit(owner,online,prepared,
-            source_pool,rest_pool,first_source):
+    if not Lifecycle.admit(owner,online,prepared,
+            source_pool,rest_pool,first_source,create_segment):
         return false
     var plan: Array = []
     for item in prepared:
-        plan.append(_record(item))
+        plan.append(source_record(item))
     for index in range(prepared.size()):
         online[before+index]["piece_duration"] = float(
             prepared[index].get("piece_duration",source_duration))
@@ -319,7 +319,7 @@ func withdraw_tail(owner: Control, world: float, density: float,
         for i in range(online.size()-1,-1,-1):
             if owner_id(online[i]) != int(serial):
                 break
-            snapshot.push_front(_record(online[i]))
+            snapshot.push_front(source_record(online[i]))
         if not _archive.record("withdrawn",int(serial),snapshot,reason,0,
                 _writer_id):
             break
@@ -372,7 +372,7 @@ func expire_front(owner: Control, world: float, density: float,
         var last_of_owner: bool = (online.size() == 1 or
             owner_id(online[1]) != owner_id(item))
         if last_of_owner and not _archive.record("completed",
-                owner_id(item),[_record(item)],
+                owner_id(item),[source_record(item)],
                 "invalid" if invalid else "expired",0,
                 _writer_id):
             break
@@ -381,31 +381,31 @@ func expire_front(owner: Control, world: float, density: float,
         online.pop_front()
     return removed
 
-func reset(owner: Control) -> void:
-    # Score teardown archives each complete owner BEFORE freeing its clips.
-    # The offline FIFO remains available when this source is reopened.
-    while not online.is_empty():
-        var first_owner: int = owner_id(online[0])
+func reset(owner: Control) -> bool:
+    # Journal every complete owner before releasing ANY scene resources.
+    # A failed append leaves the entire online score and its binding intact.
+    # The archive latches write failures, so no archived prefix can be reused
+    # while its original physical source remains online after that failure.
+    var batches: Array = []
+    var cursor := 0
+    while cursor < online.size():
+        var first_owner: int = owner_id(online[cursor])
         var specs: Array = []
-        for item in online:
-            if owner_id(item) != first_owner:
-                break
-            specs.append(_record(item))
-        # The archived ORIGINAL batch can contain more slots than remain
-        # online (e.g. the source has expired but its rest is still visible).
-        # Preserve the complete batch without popping non-existent entries
-        # or consuming the first slot of the NEXT owner.
-        var remaining_count: int = specs.size()
-        var complete: Array = _archive.original_plan(
-            first_owner,_writer_id)
-        if not complete.is_empty():
-            specs = complete
-        if not _archive.record("score_reset",first_owner,specs,
+        while cursor < online.size() and owner_id(online[cursor]) == first_owner:
+            specs.append(source_record(online[cursor]))
+            cursor += 1
+        # A remaining written rest still preserves its original source batch.
+        var complete: Array = _archive.original_plan(first_owner,_writer_id)
+        batches.append({"owner":first_owner,
+            "plan":complete if not complete.is_empty() else specs})
+    for batch in batches:
+        if not _archive.record("score_reset",int(batch["owner"]),batch["plan"],
                 "score_unload",0,_writer_id):
             push_error("Score plan preservation failed: "+last_error)
-            return
-        for i in range(remaining_count):
-            Lifecycle.retire(owner,online.pop_front())
+            return false
+    while not online.is_empty():
+        Lifecycle.retire(owner,online.pop_front())
+    return true
 
 func has_take(take_serial: int) -> bool:
     for item in online:
@@ -418,3 +418,16 @@ func exposed_owner(owner_serial: int) -> bool:
         if owner_id(item) == owner_serial and bool(item.get("ever_visible",false)):
             return true
     return false
+
+static func source_identity(candidate: Dictionary) -> String:
+    # The journal is keyed by immutable MUSICAL SOURCE, not transient
+    # backend revision or transport ID. Reopening the same actual score
+    # can therefore recover its withdrawn material without mixing songs.
+    var source: Dictionary = {}
+    for key in ["schema","duration_beats","notes","notation_events",
+            "measures","time_signatures","key_signatures","clefs",
+            "beam_groups","tie_groups","slur_pairs","tuplets",
+            "tempo_changes","hand"]:
+        if candidate.has(key):
+            source[key] = candidate[key]
+    return JSON.stringify(source).sha256_text()
