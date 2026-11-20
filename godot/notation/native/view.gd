@@ -75,7 +75,8 @@ const ContextPainter := preload("res://notation/native/context_painter.gd")
 const RetainedNotationPool := preload("res://notation/native/retained_notation_pool.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
-const MovingMeterGrid := preload("res://moving_meter_grid.gd")
+const AmbientMeterGeometry := preload("res://notation/native/ambient_meter_geometry.gd")
+const CursorInkClearance := preload("res://notation/native/cursor_ink_clearance.gd")
 const ScoreStreamWindowCuts := preload("res://score_stream_window_cuts.gd")
 const NotationClipPlanner := preload("res://notation/native/notation_clip_planner.gd")
 const TransportReservation := preload("res://score_transport_reservation.gd")
@@ -940,50 +941,10 @@ func playhead_region() -> Rect2:
 
 
 func _cursor_ink_clearances(gap: float) -> Array:
-    # Only a tiny beat window around the fixed cursor is inspected. The
-    # already sorted canonical MusicXML event index is binary searched; no
-    # full-score traversal, renderer variant, or new camera exists.
-    var exclusions: Array = []
-    var density: float = maxf(1.0,timeline.pixels_per_beat)
-    var events: Array = _cursor_engraved_events
-    if events.is_empty():
-        return exclusions
-    var guard: float = gap*1.7/density
-    for item in _stream_queue.online:
-        if str(item.get("kind","source")) != "source":
-            continue
-        var source_at_line: float = stream_world_beat - float(item["world_origin"])
-        if source_at_line+guard < float(item["source_floor"]) or \
-                source_at_line-guard > float(item["source_ceiling"]):
-            continue
-        var lo := 0
-        var hi: int = events.size()
-        while lo < hi:
-            var mid: int = (lo+hi)>>1
-            if float(events[mid].get("beat",0.0)) < source_at_line-guard:
-                lo = mid+1
-            else:
-                hi = mid
-        for idx in range(lo,events.size()):
-            var event: Dictionary = events[idx]
-            var at: float = float(event.get("beat",0.0))
-            if at > source_at_line+guard:
-                break
-            if absf((at-source_at_line)*density) > gap*1.5:
-                continue
-            var kind: String = str(event.get("kind",""))
-            if kind not in ["note","rest"]:
-                continue
-            var staff: String = str(event.get("staff","right"))
-            if active_hand not in ["both",staff]:
-                continue
-            var y: float = (layout.rest_y(event,gap) if kind=="rest"
-                else layout.event_y(event,gap))
-            var half_height: float = gap*(1.8 if kind=="rest" else 1.1)
-            exclusions.append(Vector2(y-half_height,y+half_height))
-    exclusions.sort_custom(func(a: Vector2,b: Vector2) -> bool:
-        return a.x < b.x)
-    return exclusions
+    return CursorInkClearance.exclusions(
+        stream_world_beat,gap,maxf(1.0,timeline.pixels_per_beat),
+        _cursor_engraved_events,_stream_controller.online_snapshot(),
+        layout,active_hand)
 
 
 func _paint_cursor_behind_ink(x: float, top: float, bottom: float,
@@ -1077,31 +1038,17 @@ func _draw() -> void:
         # Blank measures follow the actual MusicXML meter changes and the
         # same source world origin as the notation. The old fixed 4/4
         # modulo grid drifted through 3/4, 6/8 and pickup passages.
-        for item in _stream_queue.online:
-            if str(item.get("kind","")) == "source":
-                _ambient_anchor_world = float(item["world_origin"])
-                break
         var barline_top_y: float = layout.barline_top(gap)
         var barline_bottom_y: float = layout.barline_bottom(gap)
-        var world_bars: Array[float] = MovingMeterGrid.visible_lines(
-            stream_world_beat,size.x,playhead_x,density,
-            _ambient_anchor_world,timeline.measures)
-        for bar_world in world_bars:
-            var x: float = playhead_x+(bar_world-stream_world_beat)*density
-            var inside_printed_strip := false
-            for item in _stream_queue.online:
-                var source_left: float = playhead_x+(
-                    float(item["world_origin"])-stream_world_beat)*density
-                var bounds: Vector2 = StreamAdmission.clip_bounds(
-                    item,density,gap,timeline.duration_beats)
-                if x >= source_left+bounds.x-.01 and \
-                        x <= source_left+bounds.y+.01:
-                    inside_printed_strip = true
-                    break
-            if not inside_printed_strip:
-                draw_line(Vector2(x,barline_top_y),
-                    Vector2(x,barline_bottom_y),
-                    Color(NOTE_INK,.20),1.0,true)
+        var exposed: Dictionary = AmbientMeterGeometry.exposed_lines(
+            stream_world_beat,size.x,playhead_x,density,gap,
+            timeline.duration_beats,timeline.measures,_ambient_anchor_world,
+            _stream_controller.online_snapshot())
+        _ambient_anchor_world = float(exposed["anchor"])
+        for x in exposed["positions"]:
+            draw_line(Vector2(x,barline_top_y),
+                Vector2(x,barline_bottom_y),
+                Color(NOTE_INK,.20),1.0,true)
     # Keep the fixed playhead visible but BEHIND source ink. At exact
     # onset a foreground cursor previously covered small eighth-rest dots,
     # flagged stems and noteheads, preventing independent contour recovery.

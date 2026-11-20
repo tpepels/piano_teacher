@@ -443,6 +443,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - The Practice Flow course session now owns the stage-key-on-completion rule and the single projection from an already-decided typed flow outcome to stage, hands, BPM and user-facing status. PracticeEngine no longer reads the old/current FlowState to select another stage key after durable teaching settlement.
 - This moves an actual overlapping course progression decision out of the engine while keeping LearningPlan the only source of the selected exposure. No tests added. The existing software suite still validates the exact one/two/three/four-bar moving windows.
 
+### Implementation checkpoint BJ — source-clearance geometry leaves native CanvasItem
+
+- Moved all ambient moving-meter barline coverage checks and source/rest clip exclusion into the stateless `AmbientMeterGeometry.exposed_lines` helper, consuming a read-only snapshot of the actual StreamController's queue. The native view only paints returned X positions; neither the view nor the helper changes a source's identity, deadline or immutable geometry.
+- Moved the fixed cursor's binary-searched engraved-note/rest contour exclusions into `CursorInkClearance.exclusions`, also consuming the same immutable source snapshot and authored layout. The fixed playhead and glyph painter now share one native geometry result without `NativeScoreView` directly inspecting the live mutable strip FIFO.
+- This reduces mixed queue/paint responsibility and leaves `NativeScoreView` closer to a rendering facade. No tests added; the existing native graphics and real repertoire journeys must verify the extracted drawing helpers.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
