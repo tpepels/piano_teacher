@@ -798,8 +798,7 @@ class PracticeEngine:
                 now=self.now(),flush=True)
         self.attempt_settlement.cancel(reason=reason, now=self.now())
         self.midi_ingress.deferred.clear()
-        self.midi_ingress.resume_grading_after = 0.0
-        self.midi_ingress.resume_ignored_pitches.clear()
+        self.midi_ingress.clear_resume_gate()
         self._pause_floor = None
         # Stopping/restarting a take does not invalidate precompiled next
         # notation. Its stage-key + score revision remain authoritative:
@@ -1400,8 +1399,7 @@ class PracticeEngine:
                 return
             if self.measurement.attempt_id is not None:
                 self.attempt_settlement.interrupt_current(reason="restart",played=self.attempt.recorder.presses if self.attempt.recorder else ())
-            self.midi_ingress.resume_grading_after = 0.0
-            self.midi_ingress.resume_ignored_pitches.clear()
+            self.midi_ingress.clear_resume_gate()
             self._pause_floor = None
             self.mode = mode
             self.teaching = None
@@ -2129,8 +2127,7 @@ class PracticeEngine:
             self.teaching_continuation.cancel()
             self.visual_transport.set_retry_previous_pass(False)
             self.attempt.guided_recovery_pending = False
-            self.midi_ingress.resume_grading_after = 0.0
-            self.midi_ingress.resume_ignored_pitches.clear()
+            self.midi_ingress.clear_resume_gate()
             self._pause_floor = None
             self._schedule_preparation(target, now=sampled, from_visual=position,
                                        reverse_seconds=reverse_seconds,
@@ -2208,7 +2205,7 @@ class PracticeEngine:
             self.teaching.resume(now=now)
         self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
         if had_reading_lead:
-            self.midi_ingress.resume_grading_after += max(0.0, now-paused_at)
+            self.midi_ingress.shift_resume_gate(max(0.0, now-paused_at))
         self._reannounce_after_rest_pause(now, presentation_lead_seconds,
                                           reuse=reuse_announced_score)
         pending = self.attempt_settlement.pending
@@ -2236,7 +2233,7 @@ class PracticeEngine:
                     already_waiting=max(0.,self.midi_ingress.resume_grading_after-now),
                     reuse=reuse_pending_score)
                 self.visual_transport.run_at = deadline
-                self.midi_ingress.resume_grading_after = grading_after
+                self.midi_ingress.authorize_grading_after(grading_after)
                 self.count_in_beats = count_in
             elif (self.midi.connected and not self.preview_only
                   and self.pause_context == "playing"
@@ -2247,7 +2244,7 @@ class PracticeEngine:
                 lead_beats = max(1.0,min(4.0,self.count_in_bar_beats))
                 lead_seconds = SCHEDULER.beats_seconds(lead_beats,self.plan.bpm)
                 self.visual_transport.run_at += lead_seconds
-                self.midi_ingress.resume_grading_after = now+lead_seconds
+                self.midi_ingress.authorize_grading_after(now+lead_seconds)
                 self.count_in_beats = lead_beats
         if scheduled_deadline is not None and shift_run_at and self.running:
             # A resumed take preserves the frozen graded musical position:
@@ -2257,7 +2254,7 @@ class PracticeEngine:
                       else max(0.0, paused_at - previous_origin))
             self.visual_transport.run_at = (scheduled_deadline
                 - max(0.0, frozen))
-            self.midi_ingress.resume_grading_after = scheduled_deadline
+            self.midi_ingress.authorize_grading_after(scheduled_deadline)
         self.measurement.event("timeline_resume", {
             "scheduled_origin_before": previous_origin-self.measurement.origin,
             "scheduled_origin_after": self.visual_transport.run_at-self.measurement.origin,

@@ -582,6 +582,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Replaced two manual `paused=False; paused_at=0` pairs with `clear_pause_for_restart`. This is intentionally distinct from normal `resume()`, which must shift the authoritative run epoch; an explicit Restart instead abandons the paused clock without retiming old graded evidence.
 - No deadline recomputation, second clock, or new tests. The remaining clock/assessment coordination inside PracticeEngine is not yet a thin facade; current core/native tests remain the integration gate.
 
+### Implementation checkpoint BV — one physical MIDI grading resume gate
+
+- Consolidated all three duplicate `resume_grading_after=0` / `resume_ignored_pitches.clear()` engine mutations in `MidiIngress.clear_resume_gate`. Starting a fresh take, stopping, or restarting cannot retain only half of a previous key-release suppression interval.
+- MIDI Resume calls the ingress owner's `shift_resume_gate` and `authorize_grading_after` operations for its exact already-authorized deadlines, validating finite nonnegative times. Previously the engine could write the deadline directly while the MIDI callback separately owned its ignored held-key set.
+- The frozen transport facts and existing musical clock remain authoritative; MIDI ingress only suppresses ungradable attacks/releases until its selected grading epoch. No new tests. Existing physical/journey CI remains the gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

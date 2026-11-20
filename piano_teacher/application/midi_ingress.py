@@ -6,6 +6,7 @@ No handler receives an engine or discovers collaborators through a root.
 """
 from collections import deque
 from dataclasses import dataclass
+import math
 from .musical_scheduler import SCHEDULER
 
 
@@ -61,6 +62,24 @@ class MidiIngress:
         self.resume_grading_after = 0.
         self.resume_ignored_pitches = set()
         self.deferred = deque()
+
+    def clear_resume_gate(self) -> None:
+        """Remove both suppression deadline and held-key release history."""
+        self.resume_grading_after = 0.0
+        self.resume_ignored_pitches.clear()
+
+    def authorize_grading_after(self, deadline: float) -> None:
+        """One ingress-owned gate for the newly admitted MIDI source epoch."""
+        if not math.isfinite(deadline) or deadline < 0.0:
+            raise ValueError("Resume grading deadline must be finite and nonnegative")
+        self.resume_grading_after = float(deadline)
+
+    def shift_resume_gate(self, paused_seconds: float) -> None:
+        """Preserve held-key suppression across a paused reading lead."""
+        if not math.isfinite(paused_seconds) or paused_seconds < 0.0:
+            raise ValueError("Paused duration must be finite and nonnegative")
+        self.authorize_grading_after(
+            self.resume_grading_after+paused_seconds)
 
     def dispatch(self, message, *, facts: MidiInputFacts,
                  received_at: float, corrected_at: float | None,
