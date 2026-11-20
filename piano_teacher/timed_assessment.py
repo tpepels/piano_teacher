@@ -6,8 +6,6 @@ This adapter deliberately reuses the normal scorer and feedback projector.
 """
 from __future__ import annotations
 
-from bisect import bisect_right
-from collections import deque
 from typing import Sequence
 
 from .exercise_contracts import TempoMap
@@ -17,7 +15,7 @@ from .live_feedback import live_assessment
 from .measure_grid import chunk_start_at_end
 from .music import Phrase
 from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
-from .recovery import RecoveryDecision
+from .recovery import RecoveryDecision, rolling_recovery_verdict
 
 
 def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
@@ -86,27 +84,6 @@ def timed_rolling_recovery(phrase: Phrase, hand: str, tempo: TempoMap,
         phrase, hand, tempo, played, from_beat=from_beat,
         start_beat=start, end_beat=end_beat, grade_note_holds=grade_note_holds)
 
-    def location(beat: float) -> float:
-        bar = min(len(grid)-2, max(0, bisect_right(grid, beat)-1))
-        return bar + (beat-grid[bar])/(grid[bar+1]-grid[bar])
-
-    window = deque()
-    wrong = missed = 0
-    best = None
-    for entry in sorted(assessed.notes, key=lambda item: item.note.start):
-        if entry.status not in ("wrong", "missed"):
-            continue
-        beat = entry.note.start - phrase.start
-        position = location(beat)
-        while window and position-window[0][0] >= 2-1e-7:
-            _, prior = window.popleft()
-            wrong -= prior == "wrong"
-            missed -= prior == "missed"
-        window.append((position, entry.status))
-        wrong += entry.status == "wrong"
-        missed += entry.status == "missed"
-        if beat >= chunk-1e-7 and len(window) >= threshold and (
-                best is None or len(window) >= best.errors):
-            best = RecoveryDecision(end_beat, max(from_beat, chunk),
-                                    len(window), wrong, missed)
-    return best
+    return rolling_recovery_verdict(
+        assessed, phrase, grid=grid, from_beat=from_beat,
+        end_beat=end_beat, threshold=threshold)

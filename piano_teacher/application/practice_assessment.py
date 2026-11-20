@@ -12,10 +12,10 @@ from typing import Protocol, Sequence
 from ..assessment_service import AssessmentService
 from ..exercise_contracts import TempoMap
 from ..feedback import project_assessment
-from ..measure_grid import chunk_start_at_end, phrase_grid
+from ..measure_grid import phrase_grid
 from ..music import Phrase
 from ..practice import Assessment, PlayedNote, evaluate
-from ..recovery import RecoveryDecision, check_rolling_two_bar_window, check_two_bar_window
+from ..recovery import RecoveryDecision, fixed_rolling_recovery
 from ..timed_assessment import assess_timed_window, timed_live_marks, timed_rolling_recovery
 
 
@@ -58,15 +58,10 @@ class FixedTimingPolicy:
 
     def recover(self, phrase, *, hand, bpm, played, from_beat,
                 end_beat, grid, threshold, warmup, tempo):
-        if warmup:
-            return check_two_bar_window(
-                phrase, hand, bpm, list(played), from_beat=from_beat,
-                end_beat=end_beat, beats_per_bar=grid[1]-grid[0],
-                threshold=threshold,
-                window_start_beat=chunk_start_at_end(grid, end_beat))
-        return check_rolling_two_bar_window(
-            phrase, hand, bpm, list(played), from_beat=from_beat,
-            end_beat=end_beat, grid=grid, threshold=threshold)
+        return fixed_rolling_recovery(
+            phrase, hand, bpm, played, from_beat=from_beat,
+            end_beat=end_beat, grid=grid, threshold=threshold,
+            warmup=warmup, grade_note_holds=self.grade_note_holds)
 
 
 @dataclass(frozen=True)
