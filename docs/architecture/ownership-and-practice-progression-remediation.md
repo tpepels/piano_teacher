@@ -348,6 +348,12 @@
 - `PracticeEngine.load` now retains the outer fingering/correction serialization and the single atomic state-locked source commit. The preparer receives current explicit dependencies rather than a mutable engine pointer, preserving injectable preprocessors and code-owned score revisions. MIDI timestamps, lesson selection and transport admission are unchanged.
 - Reduced the backend application's source-import/parallel-preparation implementation substantially. No new tests; the existing Python and full native score-load checks remain required.
 
+### Implementation checkpoint AT — retained CanvasItem lifecycle leaves NativeScoreView
+
+- Introduced `RetainedNotationPool` as the sole allocator, precompile-pool owner, invalidation manager and releaser of the authentic first source, reusable measure strips, rest strips and annotation overlay. `NativeScoreView` now exposes read-only rendering handles and delegates retained readiness/compilation publication and pool resizing; it does not allocate or free those nodes.
+- The existing `ScoreStreamController` retains sole queue/serial/transport ownership. The view continues to own glyph measurement and CanvasItem painting, the pool owns retained resources, and Godot's only `retained_ink_compiled` signal is emitted by the view outside draw notifications.
+- The old pool fields cannot be independently assigned by a renderer consumer. No new tests; the real native rendering/glyph and package checks remain the verification gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

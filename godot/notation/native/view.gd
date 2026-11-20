@@ -72,7 +72,7 @@ var annotations = FingeringAnnotations.new(layout,connector_geometry)
 const RenderPass := preload("res://notation/native/render_pass.gd")
 const SymbolPainter := preload("res://notation/native/symbol_painter.gd")
 const ContextPainter := preload("res://notation/native/context_painter.gd")
-const RetainedSegment := preload("res://notation/native/retained_segment.gd")
+const RetainedNotationPool := preload("res://notation/native/retained_notation_pool.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const StreamAdmission := preload("res://score_stream_admission.gd")
 const MovingMeterGrid := preload("res://moving_meter_grid.gd")
@@ -84,7 +84,6 @@ const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
 const ScoreStreamController := preload("res://notation/native/score_stream_controller.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
-const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 var symbols = SymbolPainter.new(layout,connector_geometry)
 var context_painter = ContextPainter.new(layout,symbols)
 
@@ -228,12 +227,17 @@ var frame_visible_beam_groups := 0
 # The small reusable source/silence CanvasItems retain Godot's actual
 # draw command buffers. A transport frame translates them; it never repaints
 # MusicXML structures.
-var retained_first_once
-var retained_repeat_segments: Array = []
-var retained_rest_segments: Array = []
-var retained_all_segments: Array = []
-var retained_annotations: Node2D
-var retained_ink_published := false
+var _retained_pool = RetainedNotationPool.new()
+var retained_first_once:
+    get: return _retained_pool.first_once
+var retained_repeat_segments: Array:
+    get: return _retained_pool.repeat_segments
+var retained_rest_segments: Array:
+    get: return _retained_pool.rest_segments
+var retained_all_segments: Array:
+    get: return _retained_pool.all_segments
+var retained_annotations: Node2D:
+    get: return _retained_pool.annotations
 # Repeat copies are sized to the visible musical horizon, never a fixed five.
 
 func _init() -> void:
@@ -500,89 +504,31 @@ func _stream_release_all() -> void:
 
 func _clear_retained_segments() -> void:
     _stream_release_all()
-    for segment in [retained_first_once,retained_annotations] + \
-            retained_repeat_segments + retained_rest_segments:
-        if segment != null and is_instance_valid(segment):
-            if segment.get_parent() == self:
-                remove_child(segment)
-            segment.queue_free()
-    retained_first_once = null
-    retained_annotations = null
-    retained_ink_published = false
-    retained_repeat_segments.clear()
-    retained_rest_segments.clear()
-    retained_all_segments.clear()
-
-func _new_retained_segment(kind: String):
-    var segment = RetainedSegment.new()
-    add_child(segment)
-    retained_all_segments.append(segment)
-    segment.configure(self,kind)
-    return segment
+    _retained_pool.clear(self)
 
 func _install_retained_segments() -> void:
     _clear_retained_segments()
-    clip_contents = true
-    retained_ink_published = false
-    retained_first_once = _new_retained_segment("source")
-    _resize_retained_pool()
-    retained_annotations = RetainedAnnotationOverlay.new()
-    retained_annotations.set("owner_view",self)
-    retained_annotations.z_index = 5
-    add_child(retained_annotations)
-    StreamLifecycle.present_pool(retained_all_segments)
+    _resize_retained_pool(true)
 
-func _resize_retained_pool() -> void:
-    if retained_first_once == null:
-        return
-    # Precompile one bounded authored interval per score measure, not one
-    # WHOLE-PIECE buffer per measure. Initial admission can now attach
-    # already engraved measure strips without consuming a frame to rebuild.
-    # Extra reusable buffers are available for future overlapping takes.
-    var windows: Array[Vector2] = NotationClipPlanner.source_windows(timeline,
-        maxf(0.0,play_from_beat),_source_ink_intervals)
-    if not windows.is_empty():
-        retained_first_once.set_source_window(windows[0].x,windows[0].y)
-    var required: int = maxi(4,windows.size()-1)
-    while retained_repeat_segments.size() < required:
-        retained_repeat_segments.append(_new_retained_segment("source"))
-    for index in range(1,windows.size()):
-        retained_repeat_segments[index-1].set_source_window(
-            windows[index].x,windows[index].y)
-    while retained_rest_segments.size() < 5:
-        retained_rest_segments.append(_new_retained_segment("rest"))
+func _resize_retained_pool(install: bool = false) -> void:
+    var windows: Array[Vector2] = NotationClipPlanner.source_windows(
+        timeline,maxf(0.0,play_from_beat),_source_ink_intervals)
+    if install:
+        _retained_pool.install(self,windows)
+    else:
+        _retained_pool.resize(self,windows)
 
 func retained_ready() -> bool:
-    if not native_ready or size.x < 100.0 or size.y < 100.0 or \
-            retained_first_once == null or retained_annotations == null:
-        return false
-    for segment in [retained_first_once]:
-        if not segment.compiled:
-            return false
-    for segment in retained_repeat_segments + retained_rest_segments:
-        if not segment.compiled:
-            return false
-    return true
+    return _retained_pool.ready(native_ready,size)
 
 func retained_segment_compiled() -> void:
-    if retained_ready() and not retained_ink_published:
-        retained_ink_published = true
-        # Do not re-enter score publication or the UI hierarchy from
-        # inside a CanvasItem draw notification.
+    if _retained_pool.mark_published(retained_ready()):
+        # The score-ready signal must never re-enter layout publication
+        # from inside a CanvasItem's draw notification.
         call_deferred("emit_signal","retained_ink_compiled")
 
 func _invalidate_retained_segments() -> void:
-    retained_ink_published = false
-    # Every source/rest pass is owned by StreamLifecycle, including those
-    # currently clipped. Unstage BEFORE invalidation: a CanvasItem cannot
-    # rebuild its command buffer under an invisible clipping parent.
-    StreamLifecycle.prepare_recompile(self,_stream_queue.online)
-    for segment in [retained_first_once] + \
-            retained_repeat_segments + retained_rest_segments:
-        if segment != null and is_instance_valid(segment):
-            segment.compiled = false
-            segment.queue_redraw()
-    StreamLifecycle.present_pool(retained_all_segments)
+    _retained_pool.invalidate(self,_stream_queue.online)
 
 func paint_retained_source(canvas: CanvasItem) -> RenderPass:
     return SourcePassPainter.paint(self,canvas)
