@@ -540,6 +540,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Eliminated the accidental local `selected` shadowing of the immutable teaching exposure in the rewind branch. No second scheduler or musical clock was created: `MusicalScheduler.reserved_retry_reverse` still computes the actual deadline.
 - This is especially relevant to pickup measures and changing time signatures. No new tests; existing end-to-end mixed-meter/glyph and native Retry acceptance remain required.
 
+### Implementation checkpoint BO — atomic source adoption lives with future-stage reservation
+
+- Moved `PracticeEngine._commit_pending`'s direct read/validation of preloaded reservation and manual `FutureScore.adopt`, `prepared_published` and reservation cleanup into `TeachingContinuation.reserved_asset` and `consume_committed_asset`.
+- The first operation validates the exact source/revision/identity **before** durable `AttemptSettlement.settle` without consuming the prepared source; the second promotes or invalidates the reusable asset only after a successful settlement, clearing the reservation exactly once. PracticeEngine now only installs the returned authoritative asset and advances its existing score revision/visual offset.
+- This removes another duplicate future-score writer. No new tests; existing core/native settlement and prepared-handoff tests remain the acceptance gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

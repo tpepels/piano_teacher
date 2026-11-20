@@ -237,6 +237,46 @@ class TeachingContinuation:
     def restore_state(self, snapshot):
         self.acknowledged,self.reservation,self.schedule,self.generation = snapshot
 
+    def reserved_asset(self, pending, *, changed: bool,
+                       revision: int, fingerprint: str):
+        """Check the exact decided successor before durable settlement.
+
+        No score or reservation is consumed while the SQLite transaction
+        can still fail and leave the original source active.
+        """
+        if not changed or self.reservation is None:
+            return None
+        planned = self.selection(pending,revision=revision,fingerprint=fingerprint)
+        if planned is None:
+            raise UnpreparedNextStage(
+                "The decided lesson no longer has a preloaded next source")
+        selection,_ = planned
+        if (self.acknowledged != (selection.stage_key,selection.revision)
+                or self.reservation[0] != selection.identity):
+            raise UnpreparedNextStage(
+                "The decided lesson selected a different next score")
+        prepared = self.reservation[1]
+        if prepared is None:
+            raise UnpreparedNextStage(
+                "The next lesson score changed after preloading")
+        return prepared
+
+    def consume_committed_asset(self, prepared, *, changed: bool,
+                                auto: bool, selection):
+        """One post-transaction owner for adopted/preloaded score identity."""
+        self.prepared_published = False
+        try:
+            if not changed:
+                return None
+            if (prepared is None and auto and selection is not None
+                    and self.acknowledged ==
+                        (selection.stage_key,selection.revision)):
+                prepared = self.future_score.adopt(selection)
+            self.prepared_published = prepared is not None
+            return prepared
+        finally:
+            self.reservation = None
+
     def validate_reservation(self, pending):
         if self.reservation is None:
             return

@@ -1330,14 +1330,9 @@ class PracticeEngine:
         chosen = replace(pending.state.course, definition=decision.definition_after,
                          progress=decision.progress_after)
         changed = chosen.key != p.identity
-        prebuilt = None
-        if changed and self.teaching_continuation.reservation is not None:
-            selection, _ = self._decided_stage_selection()
-            if self.teaching_continuation.acknowledged != (selection.stage_key, selection.revision) or self.teaching_continuation.reservation[0] != selection.identity:
-                raise UnpreparedNextStage("The decided lesson selected a different next score")
-            prebuilt = self.teaching_continuation.reservation[1]
-            if prebuilt is None:
-                raise UnpreparedNextStage("The next lesson score changed after preloading")
+        prebuilt = self.teaching_continuation.reserved_asset(
+            pending,changed=changed,revision=self.score_revision,
+            fingerprint=self.fingerprint)
         previous_duration = p.active_phrase.end-p.active_phrase.start
         try:
             outcome = self.attempt_settlement.settle(pending, plan=p,
@@ -1346,7 +1341,6 @@ class PracticeEngine:
             self.attempt.settlement_failed = True
             raise
         # Mechanical publication occurs only after the shared transaction commits.
-        self.teaching_continuation.prepared_published = False
         self.attempt.retry_range = None
         if decision.verdict is not None and decision.verdict.clears_trouble:
             self._reset_trouble()
@@ -1361,21 +1355,23 @@ class PracticeEngine:
             self.attempt.performance_summary = self.attempt.review_stage_identity = None
             self.score_revision += 1
             self.awaiting_score_revision = None
-            if prebuilt is None and self.auto and self.teaching_continuation.acknowledged == (p.identity, self.score_revision):
-                prebuilt = self.teaching_continuation.future_score.adopt(self._score_selection())
+            prebuilt = self.teaching_continuation.consume_committed_asset(
+                prebuilt,changed=True,auto=self.auto,
+                selection=self._score_selection())
             if prebuilt is not None:
                 self.score_artifacts = prebuilt
-                self.teaching_continuation.prepared_published = True
                 self.visual_transport.visual_offset_beats += (
                     previous_duration+
                     SCHEDULER.seconds_beats(SETTLEMENT_SECONDS,outcome.previous_bpm))
             else:
                 self.score_artifacts.invalidate()
                 self.visual_transport.visual_offset_beats = 0.0
+        else:
+            self.teaching_continuation.consume_committed_asset(
+                None,changed=False,auto=self.auto,selection=None)
         self.attempt.pending_result = None
         self.attempt.pending_assessed_bpm = None
         self.attempt.settlement_failed = False
-        self.teaching_continuation.reservation = None
         return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
