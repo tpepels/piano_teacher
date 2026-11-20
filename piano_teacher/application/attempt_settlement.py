@@ -175,6 +175,42 @@ class AttemptSettlement:
         self.capture.finish()
         return receipt
 
+    def seal_guided_preparation(self, pending, *, guidance: dict,
+                                plan, binding, now, policy) -> None:
+        """Atomically finish a completed guided attempt and its decision.
+
+        The capture seal precedes the single idempotent settlement, matching
+        the source-constrained evidence schema. On storage failure the engine
+        preserves the same active exposure and may retry the same decision.
+        """
+        self.capture.seal(
+            self.capture.guided.presses,state="completed",
+            reason="guided_preparation",extra={"guidance":guidance})
+        self.settle(pending,plan=plan,binding=binding,now=now,policy=policy)
+
+    def seal_completed_take(self, pending, *, played, route: str,
+                            mode: str, at_target: bool, assessed_end_beat: float,
+                            result, plan, binding, now, policy,
+                            performance_summary=None) -> bool:
+        """Single owner of end-of-take sealing and focused settlement.
+
+        A full-passage decision deliberately remains pending until its
+        announced next-stage boundary. A focused or performance review is
+        settled immediately, against the same exact captured source/verdict.
+        """
+        self.capture.seal(
+            played,state="completed",reason=route,result=result,
+            verdict=pending.decision.verdict,
+            eligible=(route=="full_passage" and mode=="practice"
+                      and at_target),
+            extra={"assessed_end_beat":assessed_end_beat})
+        if route == "full_passage":
+            return False
+        self.settle(pending,plan=plan,binding=binding,now=now,
+                    policy=policy,performance_summary=(
+                        performance_summary if route == "perform" else None))
+        return True
+
     def cancel(self, pending=None, *, reason, now):
         if pending is not None and pending is not self.pending:
             return

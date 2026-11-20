@@ -415,6 +415,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Corrected the moved `manual_progress` import to its original `teaching_course` owner. The new TeachingContinuation asset selector must use the same existing manual course projection as PracticeEngine previously did; importing it from `teaching_manual` was invalid.
 - No test or lesson policy changed. Latest core CI must validate the integrated relocation before native acceptance.
 
+### Implementation checkpoint BE — all guided and graded completion seals belong to AttemptSettlement
+
+- Moved guided-completion capture sealing plus its typed decision commit into `AttemptSettlement.seal_guided_preparation`. PracticeEngine retains the error handling that preserves/resumes the same teaching exposure when a durable write fails, and still accepts the single result returned by that owner.
+- Moved full-passage and focused/performance evidence sealing, immutable verdict capture, mastery-eligibility annotation and immediate focused settlement into `AttemptSettlement.seal_completed_take`. The method returns only whether a decision was settled now; the full-passage teaching decision stays pending for its already-announced transition, preserving the existing atomic staged handoff.
+- This removes a second durable evidence writer from the engine without creating a parallel settlement transaction or changing grader selection, source identity or saved progress. No new tests.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

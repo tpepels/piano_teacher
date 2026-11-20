@@ -876,11 +876,12 @@ class PracticeEngine:
         if pending is None or pending.event.attempt_id != self.measurement.attempt_id:
             pending = self._prepare_teaching("guided_completed", completed=True,
                 assisted_count=guidance.get("assisted_count",0))
-        self.measurement.seal(self.measurement.guided.presses,state="completed",
-            reason="guided_preparation",extra={"guidance":guidance})
         try:
-            self.attempt_settlement.settle(pending,plan=self.plan,binding=self._teaching_binding(),now=self.now(),
-                policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
+            self.attempt_settlement.seal_guided_preparation(
+                pending,guidance=guidance,plan=self.plan,
+                binding=self._teaching_binding(),now=self.now(),
+                policy=resolve_mistake_policy(
+                    self.library.settings["mistake_response_strategy"]))
         except Exception:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=self.now())
@@ -2752,17 +2753,17 @@ class PracticeEngine:
             pending = self._prepare_teaching(
                 "focused_result", result, end_beat=ending)
             response = pending.decision.response
-        self.measurement.seal(self.attempt.recorder.presses if self.attempt.recorder else (),
-            state="completed", reason=route, result=result,
-            verdict=pending.decision.verdict,
-            eligible=(route == "full_passage" and self.mode == "practice"
-                      and self.plan.bpm >= self.plan.target_bpm),
-            extra={"assessed_end_beat": ending})
-        if route != "full_passage":
-            self.attempt_settlement.settle(pending, plan=self.plan,
-                binding=self._teaching_binding(), now=now,
-                policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
-                performance_summary=summary if route == "perform" else None)
+        settled = self.attempt_settlement.seal_completed_take(
+            pending,played=(self.attempt.recorder.presses
+                            if self.attempt.recorder else ()),
+            route=route,mode=self.mode,
+            at_target=self.plan.bpm >= self.plan.target_bpm,
+            assessed_end_beat=ending,result=result,
+            plan=self.plan,binding=self._teaching_binding(),now=now,
+            policy=resolve_mistake_policy(
+                self.library.settings["mistake_response_strategy"]),
+            performance_summary=summary)
+        if settled:
             self._note_tempo(now)
         self.attempt.publish_completion(
             marks=assessed.marks,unmapped=assessed.unmapped)
