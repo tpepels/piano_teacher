@@ -195,6 +195,12 @@ and superseded plans live in Git; they do not establish current acceptance.
 
 The owner checks a physical Kawai CA49 over USB and Bluetooth separately:
 
+- Test **Grade how long I hold notes** both off (default) and on. With it off,
+  correct note attacks must remain green/clean despite early, late or missing
+  releases, while measured releases remain available in local history. With it
+  on, release errors must affect grading with fixed and variable tempos. Check
+  persistence across restart and cancellation when switching during a take.
+
 - Open a new MIDI file; verify the first window, Listen → Free → Tempo,
   right/left/both progression and complete sustained notes.
 - Hear Listen, clicks/spoken count-in and actual speaker output. Check MIDI

@@ -39,11 +39,14 @@ class PracticeTimingPolicy(Protocol):
 @dataclass(frozen=True)
 class FixedTimingPolicy:
     assessment: AssessmentService
+    grade_note_holds: bool = False
 
     def grade(self, phrase, *, hand, bpm, played, from_beat, end_beat, tempo):
         return self.assessment.assess_take(
             phrase, hand=hand, bpm=bpm, played=list(played),
-            from_beat=from_beat, end_beat=end_beat, evaluator=evaluate)
+            from_beat=from_beat, end_beat=end_beat,
+            evaluator=lambda source, hand, bpm, events: evaluate(
+                source, hand, bpm, events, grade_note_holds=self.grade_note_holds))
 
     def live(self, phrase, *, hand, bpm, played, from_beat,
              elapsed_seconds, bar_boundaries, layout, tempo):
@@ -51,7 +54,7 @@ class FixedTimingPolicy:
             phrase=phrase, hand=hand, bpm=bpm, played=list(played),
             played_from_beat=from_beat, elapsed_seconds=elapsed_seconds,
             bar_boundaries=bar_boundaries, layout=layout,
-            projector=project_assessment)
+            projector=project_assessment, grade_note_holds=self.grade_note_holds)
 
     def recover(self, phrase, *, hand, bpm, played, from_beat,
                 end_beat, grid, threshold, warmup, tempo):
@@ -68,6 +71,8 @@ class FixedTimingPolicy:
 
 @dataclass(frozen=True)
 class MappedTimingPolicy:
+    grade_note_holds: bool = False
+
     def _require(self, tempo: TempoMap | None) -> TempoMap:
         if tempo is None:
             raise ValueError("Mapped timing requires a tempo map")
@@ -76,20 +81,23 @@ class MappedTimingPolicy:
     def grade(self, phrase, *, hand, bpm, played, from_beat, end_beat, tempo):
         return assess_timed_window(
             phrase, hand, self._require(tempo), played,
-            from_beat=from_beat, end_beat=end_beat)
+            from_beat=from_beat, end_beat=end_beat,
+            grade_note_holds=self.grade_note_holds)
 
     def live(self, phrase, *, hand, bpm, played, from_beat,
              elapsed_seconds, bar_boundaries, layout, tempo):
         return timed_live_marks(
             phrase, hand, self._require(tempo), played, from_beat=from_beat,
             elapsed_seconds=elapsed_seconds,
-            grid=phrase_grid(phrase, bar_boundaries), layout=layout)
+            grid=phrase_grid(phrase, bar_boundaries), layout=layout,
+            grade_note_holds=self.grade_note_holds)
 
     def recover(self, phrase, *, hand, bpm, played, from_beat,
                 end_beat, grid, threshold, warmup, tempo):
         return timed_rolling_recovery(
             phrase, hand, self._require(tempo), played, from_beat=from_beat,
-            end_beat=end_beat, grid=grid, threshold=threshold)
+            end_beat=end_beat, grid=grid, threshold=threshold,
+            grade_note_holds=self.grade_note_holds)
 
 
 @dataclass(frozen=True)
@@ -99,8 +107,10 @@ class PracticeAssessmentPolicies:
     mapped: PracticeTimingPolicy
 
     @classmethod
-    def defaults(cls, assessment: AssessmentService) -> "PracticeAssessmentPolicies":
-        return cls(FixedTimingPolicy(assessment), MappedTimingPolicy())
+    def defaults(cls, assessment: AssessmentService, *,
+                 grade_note_holds: bool = False) -> "PracticeAssessmentPolicies":
+        return cls(FixedTimingPolicy(assessment, grade_note_holds),
+                   MappedTimingPolicy(grade_note_holds))
 
     def select(self, tempo: TempoMap | None) -> PracticeTimingPolicy:
         return self.fixed if tempo is None else self.mapped

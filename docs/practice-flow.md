@@ -72,7 +72,8 @@ bar; do not make the learner sit through it.
 
 A slower success is practice, not target-tempo mastery. A failed attempt breaks
 the target clean streak. A clean flow attempt has all required pitches and
-accepted onsets with no extra keys; key-release precision does not fail it.
+accepted onsets with no extra keys. In Settings, **Grade how long I hold notes**
+is off by default; when enabled, release errors also fail a take.
 After an attempt, the next follows directly with one
 count-in bar and no added feedback break. The staff keeps moving forward; the
 repeat comes from the right and never jumps back.
@@ -147,8 +148,9 @@ A slightly early/late attack remains green. An onset error counts only outside
 the greater of **150 ms** and **one sixteenth note at the current local tempo**.
 This is an owner-selected tolerance, not a validated universal teaching constant.
 Detailed timing/hold observations remain distinct in local evidence even though
-the display uses two feedback colours. Key-release timing is recorded without
-adding another failure rule or feedback colour to normal Practice Flow.
+the display uses two feedback colours. Key-release timing is always recorded. With hold grading off, short, long
+and unreleased keys remain green when the attack is correct. When enabled,
+release errors affect both feedback and progression.
 
 ### Transitions
 

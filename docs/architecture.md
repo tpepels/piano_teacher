@@ -272,11 +272,14 @@ tied heads inherit the attack colour only when the canonical source beat reaches
 their continuation. Free feedback uses the same canonical physical take key;
 it cannot colour an unrelated future copy of the passage.
 
-The backend carries the selected `release_advisory` display policy on feedback
-events. Normal Practice Flow keeps correctly pitched/on-time notes green for
-short, long or unreleased keys while preserving those measurements in the
-ledger and durable evidence. Other selected grading policies retain their
-release judgments. Signed wrong-key ghosts use their real musical beat and
+The backend carries the persisted `grade_note_holds` choice through the
+fixed and tempo-mapped assessment policies into live grading and final settlement.
+Feedback events use `release_advisory` as its inverse. With the default off,
+correct pitch and onset earn green ink and clean passes regardless of the
+physical key release; measurements are still retained. With the setting on,
+short, long or unreleased keys are errors and prevent clean Practice Flow passes.
+Captured rule identity includes the preference, and switching it cancels the
+active attempt rather than reinterpreting existing evidence. Signed wrong-key ghosts use their real musical beat and
 the same physical strip/header clip; they cannot enlarge exposed score bounds.
 
 ## Native protocol and workers

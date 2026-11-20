@@ -23,7 +23,8 @@ from .recovery import RecoveryDecision
 def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
                         played: Sequence[PlayedNote], *, from_beat: float = 0.0,
                         start_beat: float | None = None,
-                        end_beat: float | None = None) -> Assessment:
+                        end_beat: float | None = None,
+                        grade_note_holds: bool = False) -> Assessment:
     """Grade a selected source interval against the piecewise clock.
 
     Original Note objects reach the grader and feedback mapper unchanged,
@@ -49,24 +50,27 @@ def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
     scoped = (list(played) if full_take else
               [note for note in played
                if since-.15 <= note.onset < until+.15])
-    return evaluate(selected, hand, 60, scoped, expected_seconds=times)
+    return evaluate(selected, hand, 60, scoped, expected_seconds=times,
+                    grade_note_holds=grade_note_holds)
 
 
 def timed_live_marks(phrase: Phrase, hand: str, tempo: TempoMap,
                      played: Sequence[PlayedNote], *, from_beat: float,
                      elapsed_seconds: float, grid: Sequence[float],
-                     layout: dict) -> list[dict]:
+                     layout: dict, grade_note_holds: bool = False) -> list[dict]:
     """Project the same canonical observation stream using the tempo map."""
     result = live_assessment(
         phrase, hand, 60, list(played), from_beat=from_beat,
-        elapsed_seconds=elapsed_seconds, tempo=tempo)
+        elapsed_seconds=elapsed_seconds, tempo=tempo,
+        grade_note_holds=grade_note_holds)
     return project_assessment(result, phrase, 60, layout)["marks"]
 
 
 def timed_rolling_recovery(phrase: Phrase, hand: str, tempo: TempoMap,
                            played: Sequence[PlayedNote], *, from_beat: float,
                            end_beat: float, grid: tuple[float, ...],
-                           threshold: int = 5) -> RecoveryDecision | None:
+                           threshold: int = 5,
+                           grade_note_holds: bool = False) -> RecoveryDecision | None:
     """Original two-measure sliding error rule, scored in warped seconds."""
     if threshold <= 0:
         raise ValueError("A positive failure threshold is required")
@@ -80,7 +84,7 @@ def timed_rolling_recovery(phrase: Phrase, hand: str, tempo: TempoMap,
         return None
     assessed = assess_timed_window(
         phrase, hand, tempo, played, from_beat=from_beat,
-        start_beat=start, end_beat=end_beat)
+        start_beat=start, end_beat=end_beat, grade_note_holds=grade_note_holds)
 
     def location(beat: float) -> float:
         bar = min(len(grid)-2, max(0, bisect_right(grid, beat)-1))

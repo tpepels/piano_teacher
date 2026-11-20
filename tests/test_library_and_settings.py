@@ -74,17 +74,20 @@ def test_actual_library_open_and_bad_commands_leave_next_open_usable(library, tm
 def test_folder_change_resets_recent_and_persists_selected_preferences(library, tmp_path):
     lib, _ = library
     lib.mark_opened("Prelude.mid")
-    lib.update(fullscreen=False, metronome=False, midi_device="USB Piano")
+    lib.update(fullscreen=False, metronome=False, midi_device="USB Piano",
+               grade_note_holds=True)
     reopened = ScoreLibrary(lib.settings_path.parent)
     assert reopened.scan()["last_piece"] == "Prelude.mid"
     assert reopened.public_settings()["midi_device"] == "USB Piano"
     assert reopened.public_settings()["fullscreen"] is False
+    assert reopened.public_settings()["grade_note_holds"] is True
     empty = tmp_path / "empty"
     empty.mkdir()
     reopened.update(music_dir=str(empty))
     again = ScoreLibrary(lib.settings_path.parent)
     assert again.scan()["last_piece"] == "" and again.scan()["count"] == 0
     assert again.public_settings()["metronome"] is False
+    assert again.public_settings()["grade_note_holds"] is True
 
 
 def test_malformed_saved_values_and_retired_course_migrate_without_losing_preferences(tmp_path):
@@ -98,6 +101,7 @@ def test_malformed_saved_values_and_retired_course_migrate_without_losing_prefer
     assert settings["music_dir"] == str(default_music_dir().resolve())
     assert settings["midi_offset_ms"] == 0 and settings["metronome"] is False
     assert settings["exercise_strategy"] == "practice-flow"
+    assert settings["grade_note_holds"] is False
     assert lib.scan()["last_piece"] == ""
     saved = json.loads(lib.settings_path.read_text())
     assert saved["exercise_strategy"] == "practice-flow"

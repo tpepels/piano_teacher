@@ -98,7 +98,7 @@ def test_first_attack_can_arrive_early_but_count_in_keys_earn_no_credit(bpm, tol
     assert (event["status"], event["source_id"]) == ("count_in", "")
 
 
-@pytest.mark.parametrize("release,status", [(.1, "short"), (2, "long"), (None, "short")])
+@pytest.mark.parametrize("release,status", [(.1, "short"), (2, "long"), (None, "long")])
 def test_release_precision_is_recorded_but_does_not_fail_practice_flow(release, status):
     take = NoteTake(phrase(note("held", end=2)), bpm=120)
     take.receive(60, 0)
@@ -106,11 +106,14 @@ def test_release_precision_is_recorded_but_does_not_fail_practice_flow(release, 
         take.receive(60, release, down=False)
     result = take.finish()
     entry = result.notes[0]
-    assert result.flow_passed and not result.passed
-    assert entry.status == status
+    assert result.flow_passed and result.clean and result.passed
+    assert entry.status == "correct"
     assert entry.observation.actual_release == release
     assert entry.observation.unreleased is (release is None)
     assert entry.observation.hold_error == (None if release is None else status)
+    strict = evaluate(take.facts.phrase, take.facts.hand, take.facts.bpm,
+                      take.recorder.presses, grade_note_holds=True)
+    assert strict.notes[0].status == status and not strict.flow_passed
     releases = [e for e in take.events.after(0)["events"] if e["kind"] == "release"]
     if release is None:
         assert not releases
@@ -178,7 +181,7 @@ def test_future_heads_wait_and_a_miss_appears_only_after_the_matching_window():
 @pytest.mark.parametrize("input_notes,status,extras", [
     ([], "missed", 0),
     ([(61, 0)], "wrong", 0),
-    ([(60, 0), (70, 1)], "short", 1),
+    ([(60, 0), (70, 1)], "correct", 1),
 ])
 def test_missing_wrong_and_extra_keys_each_fail_the_take(input_notes, status, extras):
     take = NoteTake(phrase(note("target")))

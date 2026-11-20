@@ -59,8 +59,8 @@ class NoteAssessment:
 def note_dimensions(entry: NoteAssessment) -> dict[str, str | None]:
     """Independent pitch, onset and release observations for one graded note.
 
-    ``status`` collapses these into one grading category (onset first, then
-    release), which drives pass/fail and progression and is unchanged here.
+    ``status`` combines onset, then optional release assessment, into
+    one verdict that drives pass/fail and progression.
     The display needs all three: a note can be both early and released early.
 
     pitch:   ``correct`` | ``wrong`` | ``missed``
@@ -124,11 +124,11 @@ class Assessment:
         """Practice flow: wrong, missed and extra notes fail; timing fails
         only when an attack is clearly off, i.e. outside the onset tolerance
         (150 ms or a sixteenth at the local tempo) shown in red. Key-release
-        timing never fails a take."""
+        timing fails a take only when hold grading is enabled."""
         if not self.notes or self.extra_notes:
             return False
         for entry in self.notes:
-            if entry.status in ("missed", "wrong", "early", "late"):
+            if entry.status in ("missed", "wrong", "early", "late", "short", "long"):
                 return False
         return True
 
@@ -149,11 +149,12 @@ class Assessment:
 
 def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
              expected_seconds: Callable[[Note], tuple[float, float, float]] | None = None,
-             observation_window: tuple[float, float] | None = None) -> Assessment:
+             observation_window: tuple[float, float] | None = None,
+             grade_note_holds: bool = False) -> Assessment:
     """Score pitch, start timing, and held duration independently.
 
     Matching uses the nearest unused same-pitch onset in a generous window;
-    the stricter onset/release tolerances decide whether it was correct.
+    onset tolerance determines correctness; release tolerance counts only when enabled.
     """
     if bpm <= 0:
         raise ValueError("Practice BPM must be positive")
@@ -254,8 +255,10 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
             assessments.append(NoteAssessment(note, "missed", observation=observation_for(note_index)))
             continue
         observation = observation_for(note_index, matched[note_index])
+        hold_grade = (("long" if observation.unreleased else observation.hold_error)
+                      if grade_note_holds else None)
         status = ("wrong" if observation.pitch_error else observation.timing_error or
-                  ("short" if observation.unreleased else observation.hold_error) or "correct")
+                  hold_grade or "correct")
         assessments.append(NoteAssessment(note, status,
             observation.actual_pitch if observation.pitch_error else None, observation))
     leftovers = tuple(played[i] for i in sorted(unused))

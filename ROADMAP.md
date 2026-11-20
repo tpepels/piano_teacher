@@ -33,6 +33,7 @@ The separate final examination uses the whole original piece.
 | 2026-11-20 | Exactly one count-in bar between automatic repeats takes priority over showing both dim neighbours. Messages overlay the handoff without adding delay. |
 | 2026-11-20 | Rebuild CI around player behaviour; remove architecture/implementation-shape checks and report coverage without percentage gates. |
 | 2026-11-20 | Consolidate docs recursively into four Markdown files and make README learner-facing. |
+| 2026-11-20 | Hold-duration grading is opt-in from Settings (off by default); key releases remain measured in both modes. |
 
 ## Implementation and verification record
 
@@ -43,9 +44,12 @@ identity and isolated standalone stdlib staging. At that source, the existing
 core/native checks, embedded repertoire/control journeys and strict relocated
 package build/boot passed. Physical acceptance remained open.
 
-The latest cited remote baseline is
-[`12f50e66`, CI run 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032).
-New commits are local on main. No push or new remote CI result is claimed.
+The remote baseline at [`c11517f9`](https://github.com/tpepels/piano_teacher/commit/c11517f9976f23d228629c4701c4f11615c5ef0a)
+passed [core CI run 44781461686](https://github.com/tpepels/piano_teacher/actions/runs/44781461686).
+Native-production was skipped by the opt-in workflow policy. All six architecture
+fixes A1–A6 are already on main, but their combined embedded/package and
+physical acceptance was not established by that CI. Historical local records
+below refer to their explicitly stated revisions.
 
 | Current step | Implementation and evidence |
 | --- | --- |
@@ -137,6 +141,23 @@ runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Evidence:
 `debug-sessions/practice-completion/coverage-extension-embedded.log`.
 No push or new remote CI result is claimed. Physical and clean-machine
 acceptance remain unverified.
+
+## Hold grading and architectural verification — 2026-11-20
+
+**Grade how long I hold notes**, off by default, persists in desktop Settings.
+The single preference controls fixed and tempo-mapped live/final scoring,
+feedback event ink, clean progression and captured assessment-rule identity.
+Key releases are measured in both modes. Changing the setting stops the active
+attempt after the preference saves. Existing player-focused tests have been
+updated; no new test modules or architecture-shape tests are introduced.
+
+The six architecture defects originally reported at `82bf06bb` already have
+implementation commits: A1 sustained-note admission (`96c895e7`); A2 bound
+resize (`0d959470`); A3 lifecycle writes (`e7b10962`); A4 read-only
+snapshots (`1507b427`); A5 dependency cycles (`f8daff77`); and A6
+request encapsulation and obsolete native ports (`c11517f9`).
+The next source commit requests the native-production GitHub workflow in
+addition to normal CI. Real piano and clean-machine acceptance remain separate.
 
 ## Phase status and remaining acceptance
 
@@ -249,8 +270,8 @@ above; it remains historical evidence for that source.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | Reopened: A1–A6 and obsolete internal mutation-port cleanup remain after the source audit at `640a77f5`. Earlier extraction and settlement ownership are retained. |
-| Phase 6 — software and physical verification | Expanded core/native CI and all seven full embedded/repertoire/relocated-package cases passed on `70f7b459`; the re-audit identifies unverified cross-layer scenarios needing correction and targeted reruns. Physical and clean-machine acceptance remain open; Phase 6 is not fully complete. |
+| Phase 5 — ownership decomposition | A1–A6 and obsolete native-port cleanup implemented in commits `96c895e7` through `c11517f9`. Core CI passed on `c11517f9`; combined embedded/package and physical verification remain open. |
+| Phase 6 — software and physical verification | The seven embedded/repertoire/relocated-package cases last passed on `70f7b459`. Combined architecture and hold-grading source requires a fresh full native/package CI result. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen

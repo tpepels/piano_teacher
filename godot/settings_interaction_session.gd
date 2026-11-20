@@ -42,6 +42,8 @@ func configure(view, statistics) -> void:
         command_requested.emit("settings.update",{"mistake_response_strategy":strategy}))
     view.metronome_requested.connect(func(enabled: bool):
         command_requested.emit("settings.update",{"metronome":enabled}))
+    view.hold_grading_requested.connect(func(enabled: bool):
+        command_requested.emit("settings.update",{"grade_note_holds":enabled}))
     view.retention_save_requested.connect(func(days: int, budget_mib: int):
         command_requested.emit("settings.update",{
             "evidence_retention_days":days,"evidence_budget_mib":budget_mib}))

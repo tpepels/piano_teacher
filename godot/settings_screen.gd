@@ -17,6 +17,7 @@ signal diagnosis_strategy_requested(strategy: String)
 signal learner_strategy_requested(strategy: String)
 signal mistake_response_requested(strategy: String)
 signal metronome_requested(enabled: bool)
+signal hold_grading_requested(enabled: bool)
 signal calibration_requested(action: String)
 signal midi_range_requested(action: String)
 signal volume_changed(db: float)
@@ -52,6 +53,7 @@ var folder_edit: LineEdit
 var tempo_setting: SpinBox
 var apply_tempo_button: Button
 var metronome_toggle: CheckButton
+var hold_grading_toggle: CheckButton
 var strategy_picker: OptionButton
 var diagnosis_strategy_picker: OptionButton
 var learner_strategy_picker: OptionButton
@@ -284,6 +286,18 @@ func _ready() -> void:
     metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
     metronome_toggle.toggled.connect(func(enabled: bool): metronome_requested.emit(enabled))
     practice.add_child(metronome_toggle)
+    hold_grading_toggle = CheckButton.new()
+    hold_grading_toggle.text = "Grade how long I hold notes"
+    hold_grading_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    hold_grading_toggle.tooltip_text = (
+        "Off: pitch and note attacks determine success; key-release data is saved. "
+        + "On: early, late and missing key releases affect grading. Sustain pedal "
+        + "may extend sound beyond the physical key release.")
+    hold_grading_toggle.toggled.connect(func(enabled: bool):
+        hold_grading_requested.emit(enabled))
+    practice.add_child(hold_grading_toggle)
+    practice.add_child(_label(
+        "Off by default. Rhythm and correct notes come first.", 12, MUTED))
     practice_strategy_body = _stack(10)
     practice_strategy_toggle = _disclosure(practice,"Advanced exercise settings",practice_strategy_body)
     practice_strategy_body.add_child(_label("Exercise generation", 14, MUTED))
@@ -597,6 +611,7 @@ func present_preferences(values: Dictionary) -> void:
     evidence_budget_setting.set_value_no_signal(float(values.get("evidence_budget_mib", 256)))
     present_window_mode(bool(values.get("fullscreen", true)))
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
+    hold_grading_toggle.set_pressed_no_signal(bool(values.get("grade_note_holds", false)))
     _present_strategy_picker(strategy_picker,
         values.get("available_exercise_strategies", []),
         str(values.get("exercise_strategy", "practice-flow")))

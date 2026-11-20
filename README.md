@@ -35,7 +35,10 @@ all moving windows, the final test brings the whole original piece together.
 3. Listen to the first measure, then play its notes when Free begins.
 
 The flow advances automatically. **Pause/Resume** and **Listen again** stay on
-screen, and the metronome can be switched on or off. Keyboard and configured
+screen, and the metronome can be switched on or off. **Grade how long I hold notes**
+is available in Settings and is off by default. Correct pitches and note attacks
+determine clean passes; actual key releases are still recorded. Turn it on to
+include release duration in grading. Keyboard and configured
 piano shortcuts remain available. The keyboard hint appears after a wrong note
 in Free.
 

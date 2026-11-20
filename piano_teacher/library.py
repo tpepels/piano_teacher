@@ -47,6 +47,7 @@ class ScoreLibrary:
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
                          'last_piece': '', 'midi_device': '', 'midi_key_ranges': {}, 'metronome': True,
                          'midi_offset_ms': 0,
+                         'grade_note_holds': False,
                          'exercise_strategy': DEFAULT_STRATEGY,
                          'diagnosis_strategy': 'error-family',
                          'learner_strategy': 'repeated-error',
@@ -174,7 +175,7 @@ class ScoreLibrary:
         Lesson preparation can now fail before a strategy switch commits
         settings or changes the active transport.
         """
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'midi_key_ranges', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'midi_key_ranges', 'metronome', 'midi_offset_ms', 'grade_note_holds', 'exercise_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
         allowed.update(EVIDENCE_PREFERENCES)
         unknown = set(changes) - allowed
         if unknown:
@@ -199,6 +200,10 @@ class ScoreLibrary:
             if not isinstance(changes['metronome'], bool):
                 raise ValueError('Metronome must be true or false')
             new['metronome'] = changes['metronome']
+        if 'grade_note_holds' in changes:
+            if type(changes['grade_note_holds']) is not bool:
+                raise ValueError('Grade note holds must be true or false')
+            new['grade_note_holds'] = changes['grade_note_holds']
         if 'midi_offset_ms' in changes:
             new['midi_offset_ms'] = self._validate_midi_offset(
                 changes['midi_offset_ms'])

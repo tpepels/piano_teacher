@@ -211,8 +211,9 @@ class PracticeEngine:
         self.midi = MidiConnection(enabled=enable_midi, clock=self.now)
         self.live_input = LiveInputView()
         self.assessment = AssessmentService()
-        self.assessment_policies = PracticeAssessmentPolicies.defaults(self.assessment)
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
+        self.assessment_policies = PracticeAssessmentPolicies.defaults(
+            self.assessment, grade_note_holds=self.library.settings["grade_note_holds"])
         self.midi_key_shortcuts = MidiKeyShortcuts(self.library.settings["midi_key_ranges"])
         self.library_health = LibraryHealth(self.library)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
@@ -564,7 +565,16 @@ class PracticeEngine:
                 self._stop(reason="policy_changed")
                 self.feedback = "Retry strategy changed"
                 self.next_action = "Press Play to start a new attempt."
+            prior_hold_grading = self.library.settings["grade_note_holds"]
             updated = self.library.update(**changes)
+            if updated["grade_note_holds"] != prior_hold_grading:
+                # A setting change must not rescore an active take.
+                # Failed persistence leaves the take and policy intact.
+                self._stop(reason="grading_rule_changed")
+                self.assessment_policies = PracticeAssessmentPolicies.defaults(
+                    self.assessment, grade_note_holds=updated["grade_note_holds"])
+                self.feedback = "Note-hold grading changed"
+                self.next_action = "Press Play to start a new attempt."
             if "midi_key_ranges" in changes:
                 self.midi_key_shortcuts.configure(updated["midi_key_ranges"])
             self.measurement.event("settings_applied", {"intent_id": intent, "changes": changes})
@@ -2429,7 +2439,7 @@ class PracticeEngine:
         return {"piece_fingerprint": self.fingerprint or "",
                 "revision": int(self.score_revision),
                 "transport_id": int(self.playback_session.transport_id), "mode": self.playback_session.mode,
-                "release_advisory": self._flow_active(),
+                "release_advisory": not self.library.settings["grade_note_holds"],
                 "graded": (not self.playback_session.preview_only
                            and self.playback_session.mode in ("practice", "perform"))}
 

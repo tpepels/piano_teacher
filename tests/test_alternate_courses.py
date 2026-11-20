@@ -55,7 +55,8 @@ def test_generic_source_progression_records_short_release_as_a_failed_take():
         onset = (note.start - phrase.start) * 60 / piece.bpm
         recorder.add(note.pitch, True, onset)
         recorder.add(note.pitch, False, onset + .01)
-    result = evaluate(phrase, plan.hand, piece.bpm, recorder.presses)
+    result = evaluate(phrase, plan.hand, piece.bpm, recorder.presses,
+                      grade_note_holds=True)
     assert not result.passed
     assert all(note_dimensions(n)["onset"] == "on_time" for n in result.notes)
     assert any(note_dimensions(n)["release"] == "short" for n in result.notes)
