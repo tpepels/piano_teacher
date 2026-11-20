@@ -305,6 +305,12 @@
 - Corrected the existing native Retry witness: a future rest after the newly admitted source cannot count as its preceding silence. The acceptance now selects the nearest real rest that ends at or before the retry's source onset. The invariant still rejects a retry with no predecessor rest.
 - The clipping calculation uses a single class-level admission import. No new tests or product policy changes.
 
+### Implementation checkpoint AM — transfer all keyboard event routing out of Main
+
+- Created `ApplicationInputSession` as the single semantic keyboard dispatcher. It owns modal-first source-picker capture, library search focus, press/release consumption and the key-to-intent routing via the existing pure `ApplicationEventRouter`. It emits typed navigation, Play/Pause/Retry/Listen/Stop and fullscreen/exit signals; the root scene only connects those ports to the same handlers used by visible controls.
+- Main's `_input` and `_unhandled_key_input` now delegate to this session and only mark accepted events as handled. Source-picker pointer events remain available for normal GUI delivery. No other musical timing or backend action is independently decided in Main.
+- No test additions. Existing core CI and the production keyboard/physical MIDI acceptance matrix remain the verification gates.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

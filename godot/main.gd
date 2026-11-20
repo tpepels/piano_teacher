@@ -45,12 +45,13 @@ const CountInVoicePlayer := preload("res://countin_voice_player.gd")
 const CountInAudioSession := preload("res://countin_audio_session.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationSession := preload("res://navigation_session.gd")
-const ApplicationEventRouter := preload("res://application_event_router.gd")
+const ApplicationInputSession := preload("res://application_input_session.gd")
 const PracticeFeedbackSession := preload("res://practice_feedback_session.gd")
 const ApplicationStateInbox := preload("res://application_state_inbox.gd")
 
 var navigation_session = NavigationSession.new()
 var state_inbox = ApplicationStateInbox.new()
+var input_session = ApplicationInputSession.new()
 var status_head_preloader = StatusHeadPreloader.new()
 var current_screen: String:
     get: return navigation_session.current_screen
@@ -216,6 +217,16 @@ func _ready() -> void:
     # because the navigation session did not exist yet.
     _navigate("practice")
     feedback_session.configure(inprocess_bus,practice_view.stage,visual_transport_clock)
+    input_session.configure(practice_view,library_view)
+    input_session.exit_requested.connect(_exit_app)
+    input_session.fullscreen_requested.connect(_toggle_fullscreen)
+    input_session.navigation_requested.connect(_navigate)
+    input_session.advanced_pause_requested.connect(practice_view.open_advanced_pause)
+    input_session.primary_requested.connect(_toggle_playing)
+    input_session.pause_requested.connect(_toggle_pause)
+    input_session.retry_requested.connect(_restart_practice)
+    input_session.listen_requested.connect(_listen_or_return_to_practice)
+    input_session.command_requested.connect(_send_action)
     # Audio has one root-owned lifetime, including score revisions, Pause,
     # source selection and renderer replacement. The visual countdown merely
     # delegates speech to this service.
@@ -1039,52 +1050,10 @@ func _choose_device(name: String) -> void:
 
 
 func _input(event: InputEvent) -> void:
-    # The source picker gets first refusal; it owns its local edit keys.
-    if practice_view.handle_source_input(event):
-        return
-    var key: InputEventKey = event if event is InputEventKey else null
-    var capture: String = ApplicationEventRouter.capture_action(
-        event,current_screen,
-        practice_view.retains_modal_navigation(key.keycode) if key != null else false,
-        get_viewport().gui_get_focus_owner() is LineEdit,
-        library_view.is_search_focused())
-    if capture == "focus_library_search":
-        library_view.focus_search(true)
-        get_viewport().set_input_as_handled()
-    elif capture == "keyboard":
-        # Consume both press and release so a focused UI button never
-        # receives an extra accept on keyboard release.
-        _unhandled_key_input(event)
+    if input_session.capture(event,current_screen,get_viewport()):
         get_viewport().set_input_as_handled()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-    var key: InputEventKey = event if event is InputEventKey else null
-    var effect: Dictionary = ApplicationEventRouter.command(
-        event,current_screen,practice_view.is_source_picker_open(),
-        practice_view.retains_modal_navigation(key.keycode) if key != null else false,
-        get_viewport().gui_get_focus_owner() is LineEdit)
-    if effect.is_empty():
-        return
-    match str(effect.get("kind","")):
-        "exit":
-            _exit_app()
-        "fullscreen":
-            _toggle_fullscreen()
-        "navigate":
-            _navigate(str(effect["target"]))
-        "advanced_pause":
-            practice_view.open_advanced_pause()
-        "primary":
-            _toggle_playing()
-        "pause":
-            _toggle_pause()
-        "retry":
-            _restart_practice()
-        "listen":
-            _listen_or_return_to_practice()
-        "command":
-            _send_action({"action":str(effect["action"])})
-        _:
-            return
-    get_viewport().set_input_as_handled()
+    if input_session.dispatch(event,current_screen,get_viewport()):
+        get_viewport().set_input_as_handled()
