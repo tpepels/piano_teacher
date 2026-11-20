@@ -10,11 +10,16 @@ static func active_transport(state: Dictionary) -> bool:
     return bool(state.get("running",false)) or \
         str(state.get("phase","")) in ACTIVE_PHASES
 
+static func flow_active(state: Dictionary) -> bool:
+    return state.get("flow") is Dictionary and not state["flow"].is_empty()
+
 static func primary(state: Dictionary, score_ready: bool,
         score_error: String) -> Dictionary:
     var paused: bool = bool(state.get("paused",false))
     if paused and not score_error.is_empty():
         return {"message":score_error}
+    if flow_active(state):
+        return {"action":"resume" if paused else "pause"}
     var mode: String = str(state.get("mode","practice"))
     if mode == "listen" and not active_transport(state):
         return {"action":"practice" if bool(state.get("warmup",false)) else "listen"}
@@ -44,6 +49,8 @@ static func primary(state: Dictionary, score_ready: bool,
 static func pause_toggle(state: Dictionary, score_error: String) -> Dictionary:
     if bool(state.get("paused",false)) and not score_error.is_empty():
         return {"message":score_error}
+    if flow_active(state):
+        return {"action":"resume" if bool(state.get("paused",false)) else "pause"}
     if (active_transport(state) or
             (str(state.get("mode","practice")) == "learn"
             and str(state.get("phase","")) in ["guided_wait","paused"])):
@@ -57,6 +64,8 @@ static func retry(state: Dictionary, score_ready: bool) -> Dictionary:
             else "restart"}
 
 static func listen_toggle(state: Dictionary) -> Dictionary:
+    if flow_active(state):
+        return {} if str(state.get("mode","")) == "listen" else {"action":"listen"}
     if str(state.get("mode","")) == "listen":
         return {"action":"practice","wait_for_player":true}
     return {"action":"listen"}

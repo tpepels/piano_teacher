@@ -301,13 +301,18 @@ func present(state: Dictionary, busy: bool) -> void:
     # Mapped feedback belongs on actual native noteheads; never overlay it.
     practice_note_feedback_panel.visible = false
     keyboard.set_key_fifths(int(state.get("key_fifths", 0)))
+    var flow_active: bool = state.get("flow") is Dictionary and not state["flow"].is_empty()
     if str(state.get("mode","practice")) == "learn":
-        keyboard.update_state(state.get("teaching",{}) if state.get("teaching") is Dictionary else {})
+        var teaching: Dictionary = state.get("teaching",{}) if state.get("teaching") is Dictionary else {}
+        if flow_active and str(teaching.get("hint_reason","")) != "wrong_note":
+            teaching = teaching.duplicate()
+            teaching["hint_visible"] = false
+        keyboard.update_state(teaching)
     else:
         keyboard.update_live(state.get("midi_next_pitches",[]),state.get("midi_held_pitches",[]),state.get("midi_recent_keys",[]),
             not str(state.get("device","")).is_empty() and str(state.get("mode","")) in ["practice","perform"]
             # Practice flow: the keyboard only appears as a hint in Free.
-            and not state.has("flow"))
+            and not flow_active)
 
 var _flow_message_id := -1
 
@@ -327,7 +332,7 @@ func _present_flow_message(flow: Dictionary) -> void:
     hand_cue_panel.modulate.a = 0.0
     _hand_cue_tween = create_tween()
     _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",1.0,.18)
-    _hand_cue_tween.tween_interval(1.8)
+    _hand_cue_tween.tween_interval(1.4)
     _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",0.0,.42)
     _hand_cue_tween.tween_callback(func(): hand_cue_panel.visible = false)
 

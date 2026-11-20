@@ -10,6 +10,40 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 
 ## Implementation progress
 
+### Practice-flow completion and feedback correction — 20 November 2026
+
+Owner-approved decisions: onset allowance is the larger of 150 ms and one
+sixteenth at local tempo; after the second return to Free for the same
+window/hand, announce one source-bound Coda/Fukuda aid and return to original
+Free without awarding mastery; saved final examination resumes through
+whole-piece Free then Tempo 50%; one count-in bar takes priority over
+retaining both dim neighbours on tightly repeated score copies. Messages
+overlay the handoff instead of adding a pause.
+
+Implementation is in progress, not newly accepted by the previous software
+results below. Source inspection reproduced duplicate live matching assigning
+a current wrong key to a later source attack, and native tied-note expansion
+colouring all future continuations immediately. The correction removes the
+live match/used/release ledger in favour of Recorder identities and the same
+grader observations used at settlement; one native take ledger gates future
+tie ink by the canonical source beat. Existing grading fixtures are updated
+only for the approved tolerance, intact release tails and retired preview
+matcher interface. No tests are added. Current focused grading verification:
+35 existing tests pass; complete integrated software verification is pending.
+
+The documentation consolidation retains the normative practice-flow path and
+moves lasting contracts into four documents; old chronology remains in Git.
+Commit IDs and integrated verification will be recorded before completion.
+
+Completed UI step: the default course keeps Pause/Resume and Listen again
+through caption refresh and keyboard dispatch; the keyboard hint is visible
+only for a wrong note in Free, and messages fade within two seconds without
+owning a progression delay. Existing native/UI checks pass with
+`GODOT_STARTUP_SYNTAX_OK` and zero reported failures (the integrated native log
+is `debug-sessions/native-owners/godot-display-final.log`). The first full
+Python run is 333 passed, one optional system-audio skip, and two obsolete
+tolerance/hand-rendering assertions being migrated to the approved contract.
+
 **Implementation branch:** `main`. **Tests:** No new tests introduced. Existing
 fixtures changed only when removing obsolete interfaces. Current local source
 passed 335 Python tests (one existing optional system SF2/libfluidsynth check

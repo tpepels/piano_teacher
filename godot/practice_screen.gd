@@ -160,8 +160,8 @@ func present_metronome(enabled: bool) -> void:
     if metronome_switch != null and metronome_switch.button_pressed != enabled:
         metronome_switch.set_pressed_no_signal(enabled)
 
-func _present_flow(parsed: Dictionary) -> void:
-    # Practice flow: everything advances by itself; only Pause/Play and
+func _present_flow(parsed: Dictionary) -> bool:
+    # Practice flow: everything advances by itself; only Pause/Resume and
     # "Listen again" stay (docs/practice-flow.md, On screen > Controls).
     var flow: Dictionary = parsed.get("flow", {}) if parsed.get("flow") is Dictionary else {}
     var active := not flow.is_empty()
@@ -182,6 +182,7 @@ func _present_flow(parsed: Dictionary) -> void:
             _chrome.style_transport(listen_button)
         listen_button.tooltip_text = "Hear this passage again at the target tempo · L"
         listen_button.disabled = str(parsed.get("mode", "")) == "listen"
+    return active
 
 func present(parsed: Dictionary, ready: bool, busy := false, audio_error := false) -> void:
     _previous_state = _state
@@ -309,7 +310,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         _chrome.style_transport(listen_button)
     practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
         or not _score_ready or phase in ["admitting","loading"])
-    _present_flow(parsed)
+    var flow_active := _present_flow(parsed)
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
     performance_review.present(summary)
     var selected_retry: Variant = parsed.get("review_range")
@@ -465,7 +466,9 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     # One short verb belongs on the central game control. Shortcuts and
     # explanations live in the tooltip instead of making every button a menu.
     var start_text := "Resume" if bool(parsed.get("paused", false)) else "Pause" if active_transport else "Play"
-    if learning:
+    if flow_active:
+        start_text = "Resume" if bool(parsed.get("paused", false)) else "Pause"
+    elif learning:
         start_text = "Resume" if phase == "paused" else "Try rhythm" if phase in ["guided_complete", "disconnected"] else "Pause" if phase in ["guided_wait", "loading"] else "Learn"
         if phase == "guided_complete" and bool(parsed.get("guided_recovery", false)):
             start_text = "Retry rhythm"
@@ -474,11 +477,12 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     elif str(parsed.get("mode", "")) == "listen" and not active_transport:
         start_text = "Back to warm-up" if bool(parsed.get("warmup", false)) else "Listen again"
     start_button.text = start_text
-    start_button.tooltip_text = "Play, pause or resume · Space · Play any piano key when ready"
+    start_button.tooltip_text = ("Pause or resume · Space" if flow_active
+        else "Play, pause or resume · Space · Play any piano key when ready")
     start_button.disabled = not active_transport and (not _score_ready)
     start_button.call("configure", "pause" if start_button.text == "Pause" else "play",
         active_transport and not bool(parsed.get("paused", false)))
-    listen_button.call("configure", "practice" if str(parsed.get("mode", "")) == "listen" else "listen",
+    listen_button.call("configure", "practice" if not flow_active and str(parsed.get("mode", "")) == "listen" else "listen",
         str(parsed.get("mode", "")) == "listen")
 
 func present_busy(busy: bool) -> void:
