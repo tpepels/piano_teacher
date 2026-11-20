@@ -94,7 +94,7 @@ runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Evidence:
 This is local software verification; no new remote GitHub result or physical
 acceptance is claimed. The correction record below is historical evidence.
 
-### Coverage extension requested 2026-11-20
+### Coverage extension 2026-11-20
 
 The owner requested additional CI coverage while retaining the compact,
 behaviour-focused policy. The extension exercises real-take statistics,
@@ -106,8 +106,8 @@ warm-ups, native chord/tie/tuplet/meter fidelity and stale preload rejection.
 The new mastery-report scenario exposed a real defect: the completed default
 course uses two target successes, but the state snapshot and captured history
 advertised the old generic three-pass rule. Commit `873f1b43` exposes the actual
-required count to snapshots, transition messages, evidence and validation; statistics prefer that
-captured rule while retaining the legacy recorded-settings fallback. The
+required count to snapshots, transition messages, evidence and validation.
+Statistics prefer that captured rule while retaining the legacy recorded-settings fallback. The
 grading/progression rule itself is unchanged. Both failures were reproduced
 before the fix in `debug-sessions/practice-completion/coverage-mastery-red.log`
 and `coverage-mastery-snapshot-red.log` in the same directory. All 30 focused
@@ -120,15 +120,23 @@ combined rule/history/desktop/course/resume/alternate checks pass in
 important regressions; whole-source notation parity was narrowed to the actual
 opening chord and held ending.
 
-The expanded Python suite has twelve feature modules and 108 cases (23 added):
+Commit `70f7b459` completes the remaining control/source scenarios and coverage
+guide. The expanded Python suite has twelve feature modules and 108 cases (23 added):
 **107 tests pass, one optional system-SF2 check skips**.
 Informational coverage rises from **58.9% to 69.5% lines** and **38.3% to
 49.4% branches**, with the same source scope and no exclusions or percentage
 gate. The common CI command also passes Godot parsing and all four native
 behaviour groups, with zero failure counters. Evidence:
 `debug-sessions/practice-completion/coverage-extension-ci-final.log`.
-The full production/package rerun for the reporting correction is pending;
-results will be recorded here after completion.
+The **full production/package workflow passes all seven cases on `70f7b459`**:
+embedded registration/real score, the default Practice Flow scene/control
+journey, Moonlight Retry/Listen/navigation, Peace Piece, Chopin and the actual
+strict relocated standalone build/clean-HOME/cleared-environment boot, plus
+fixture creation. Both content audits report `PACKAGE_CONTENTS_OK`; the full
+runner exits zero with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. Evidence:
+`debug-sessions/practice-completion/coverage-extension-embedded.log`.
+No push or new remote CI result is claimed. Physical and clean-machine
+acceptance remain unverified.
 
 ## Phase status and remaining acceptance
 
@@ -196,7 +204,7 @@ above; it remains historical evidence for that source.
 | Phase | State |
 | --- | --- |
 | Phase 5 — ownership decomposition | Complete in source, with reconciled owner contracts; historical architecture audit passed. CI now verifies behaviour rather than module shape. Feedback work removes the independent preview matcher and release pairing. |
-| Phase 6 — software and physical verification | Expanded core/native CI passes; full production/package rerun for the mastery-report correction is pending. The prior complete workflow passed on `5477aa74`. Physical and clean-machine acceptance remain open. |
+| Phase 6 — software and physical verification | Expanded core/native CI and all seven full embedded/repertoire/relocated-package cases pass on `70f7b459`. Physical and clean-machine acceptance remain open; Phase 6 is not fully complete. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen

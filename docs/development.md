@@ -78,12 +78,12 @@ banning historical module names.
 | [Resume](../tests/test_practice_resume.py) | Reopened windows/final, interrupted input, progress migration, genuine persisted second-return aid and return to original Free without mastery. |
 | [Timeline](../tests/test_practice_timeline.py) | Authored/first-attack count-in, exact repeat deadlines, full held endings, Pause/Resume, Listen again, published feedback and disconnect before completion. |
 | [Note feedback](../tests/test_note_feedback.py) | Real MIDI ingress and Recorder, shared live/final grading, onset boundaries, repeated pitches, chords, wrong/extra/missing notes, releases and neutral future notes. |
-| [Score import](../tests/test_score_import.py) | Hands, attacks, velocity, overlapping unisons, intact tails, meter, tuplets and rejected non-piano input. |
-| [Library/settings](../tests/test_library_and_settings.py) | Scoped imports, persistence/migration, malformed settings and failed-save recovery without cancelling practice. |
-| [MIDI devices](../tests/test_midi_devices.py) | Unplug/reconnect, explicit disconnect, failed-open recovery, fresh attacks and calibration timestamps. |
+| [Score import](../tests/test_score_import.py) | Hands, attacks, velocity, overlapping unisons, native chords/tied tails/tuplets, meter, stale preloads and rejected non-piano input. |
+| [Library/settings](../tests/test_library_and_settings.py) | Scoped imports, persistence/migration, malformed settings, health-check recovery and failed saves without cancelling practice. |
+| [MIDI devices](../tests/test_midi_devices.py) | Unplug/reconnect, explicit disconnect, failed-open recovery, fresh attacks, calibration and configured physical-key shortcuts. |
 | [Listen audio](../tests/test_listen_audio.py) | Real PCM timing/pitch/chords/tails, audio/score readiness, cancelled stale workers, failure recovery, fallback and count-in assets. |
 | [Fingering](../tests/test_fingering.py) | Real installed model inference, impossible/unavailable results, manual corrections and corrupt derived-cache recovery. |
-| [Alternate courses](../tests/test_alternate_courses.py) | Explicit source-progression/Coda selection, source-safe aids, manual controls and their distinct generic release policy. |
+| [Alternate courses](../tests/test_alternate_courses.py) | Explicit source-progression/Coda selection, source-safe aids, manual controls, distinct generic release policy and every built-in warm-up. |
 | [Learning history](../tests/test_learning_history.py) | Actual outcomes/signed timing, unknown detail, stable paging, redacted atomic export, scoped deletion, preserved reset history and captured mastery criteria. |
 | [Desktop playback](../tests/test_desktop_playback.py) | Public reserve/present authorization, expired/stale admission, display failure, Retry, Pause/Resume, ungraded Listen and exact repeats through the target ladder. |
 
@@ -120,16 +120,16 @@ exercise built application routes, separately from the fast suite. Serialize
 Godot imports/checks against a shared project and retain source revision and
 logs. Parsing a production fixture does not establish that its journey ran.
 
-The rebuilt suite and all seven full production/package cases pass on source
-`5477aa74`. [ROADMAP](../ROADMAP.md#ci-suite-rebuilt-2026-11-20) records the logs,
-manual final-Learn correction, optional skip and outstanding physical acceptance.
+The expanded suite and all seven full production/package cases pass on source
+`70f7b459`. [ROADMAP](../ROADMAP.md#coverage-extension-2026-11-20) records the
+logs, reporting correction, optional skip and outstanding physical acceptance.
 
 ### Coverage extension 2026-11-20
 
-Continue the approved behaviour-focused approach using the uncovered-line
-report to choose useful scenarios, without changing the coverage denominator
-or adding a percentage gate. Extend existing musical/device scenarios and add
-one history feature group; do not restore architecture or object-shape tests.
+The extension uses the uncovered-line report to choose useful scenarios,
+keeping the same source scope and no percentage gate. Existing musical/device
+scenarios are extended, with focused history and desktop-playback groups;
+architecture and object-shape tests remain absent.
 
 The 23 added scenarios cover real-take statistics, bounded reads, explicit
 exports and scoped reset/deletion; desktop admission, stale/failing presentation
