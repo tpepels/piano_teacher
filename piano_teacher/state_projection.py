@@ -134,7 +134,7 @@ class LessonSnapshot(_Snapshot):
     stage_label: str = "Original notes and rhythm"
     stage_change: str = "unchanged source"
     stage_meaningful: bool = False
-    exercise_strategy: str = "legacy"
+    exercise_strategy: str = ""
     level_number: int = 1
     level_count: int = 1
     required_notes: int = 0

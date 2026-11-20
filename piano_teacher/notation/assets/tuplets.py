@@ -4,8 +4,8 @@ Musical positions belong to Piano Teacher's fixed beat axis. The two masks
 retain their original Verovio staff-space Y/height, while the bracket's two
 halves may span the source group's independently positioned endpoints. The
 number remains at native scale, never stretched as part of a page strip.
-Singletons retain the original masks at their sole source event; their span
-is artwork width. The legacy ``note_ids`` field also accepts source rest IDs.
+Singletons retain original masks at their sole source event; their span
+is artwork width. The ``note_ids`` field also accepts source rest IDs.
 """
 from __future__ import annotations
 

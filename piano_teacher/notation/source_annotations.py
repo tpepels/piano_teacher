@@ -2,8 +2,8 @@
 
 The lesson's note set and cursor are authoritative. Source markup must never
 introduce omitted notes, change performance timing, or create orphan slurs.
-Native supports source slur fragments; other expression classes deliberately
-request complete Verovio-page fallback until matching native ink exists.
+Native supports source slur fragments. Unsupported expression classes are
+reported as unrendered; the desktop has no page-renderer fallback.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from xml.etree import ElementTree as ET
 
 
 # Native Godot uses original Verovio font contours for these precisely
-# specified marks. Anything else stays on original Verovio-page fallback.
+# specified marks. Other marks are explicitly recorded as unrendered.
 NATIVE_ARTICULATIONS = frozenset({"staccato", "tenuto", "accent"})
 NATIVE_DYNAMICS = frozenset({"p", "pp", "ppp", "mp", "mf", "f", "ff", "fff"})
 NATIVE_PEDAL_TYPES = frozenset({"start", "stop"})
@@ -340,7 +340,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 if item.tag == 'technical' and sid in fingering_sources:
                     # The durable original-piece plan supplies this ink in
                     # the native view, including manual replacements. Preserve
-                    # every other technical mark and its fallback obligation.
+                    # every other technical mark and its unsupported-ink diagnostic.
                     item = deepcopy(item)
                     for finger in item.findall('fingering'):
                         item.remove(finger)
@@ -522,8 +522,8 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                                       if not _native_direction(type_) or
                                       child.get("placement", "below") != "below")
     # A partial hairpin must never appear as an arbitrary open wedge. An
-    # excerpt, shortened variant, or unpaired source mark is still faithfully
-    # handled by the original Verovio page instead of guessed native ink.
+    # excerpt, shortened variant, or unpaired source mark is explicitly
+    # unrendered rather than guessed or drawn by a second page renderer.
     hairpins = defaultdict(list)
     for (hand, number), measure in generated.items():
         for ordinal, direction in enumerate(measure.findall("direction")):

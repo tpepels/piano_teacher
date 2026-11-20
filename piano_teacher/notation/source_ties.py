@@ -4,7 +4,7 @@ The imported piano note merges sounding tie chains, while the lesson engraver
 recreates their written note segments. Match a source endpoint only when its
 original source attack identity, source clock and generated tie role agree.
 Do not invent a tie, change a note or attach an attribute to another chord
-tone. Complex styling stays an explicit native-rendering fallback obligation.
+tone. Complex styling is reported as unsupported, without a substitute renderer.
 """
 from __future__ import annotations
 

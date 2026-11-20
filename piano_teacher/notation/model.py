@@ -326,7 +326,7 @@ def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
                     continue
                 # Only simple, unslashed, isolated grace notes use the
                 # already genuine Verovio note-template atlas. More complex
-                # source marks trigger complete-page fallback at projection.
+                # unsupported source marks remain explicitly unrendered.
                 if len(group) != 1:
                     continue
                 item = group[0]
@@ -438,7 +438,7 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
         "expressions": native_expressions(score, grid),
         "grace_notes": _grace_notes(score, grid),
         # Native only paints authentic supported glyphs. Expression classes
-        # without native Verovio fragments request full-page legacy ink.
+        # without native Verovio fragments remain explicit unrendered evidence.
         "unrendered_expressions": list(score.unrendered_expressions),
     }
     return model

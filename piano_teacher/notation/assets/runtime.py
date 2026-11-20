@@ -1,4 +1,4 @@
-"""Verovio runtime and bundled font resources shared by native and legacy paths."""
+"""One Verovio runtime and bundled music fonts for native engraving."""
 from __future__ import annotations
 import json
 from pathlib import Path

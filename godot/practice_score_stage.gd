@@ -10,7 +10,6 @@ const ScoreViewBase := preload("res://notation/shared/view_base.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const GlowField := preload("res://mint_glow_field.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
-const GameImpactCallout := preload("res://game_impact_callout.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const StepTimeline := preload("res://score_step_timeline.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
@@ -34,7 +33,6 @@ var hand_cue_label: Label
 var _hand_cue_tween: Tween
 var _hand_cue_identity := ""
 var _hand_cue_previous_phase := ""
-var impact_callout: Control
 var count_in: Control
 var keyboard: Control
 var score_status_panel: CenterContainer
@@ -195,18 +193,6 @@ func _ready() -> void:
     hand_cue_panel.add_child(hand_cue_label)
     hand_cue_panel.visible = false
     score_frame.add_child(hand_cue_panel)
-    # Short earned-judgment coaching, placed below the notes on the right.
-    # No preview note may create one of these success/correction labels.
-    impact_callout = GameImpactCallout.new()
-    # Native reactions stay on exact noteheads. The legacy coaching card
-    # can cover low staff ink when the contextual keyboard reduces height.
-    impact_callout.visible = false
-    impact_callout.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-    impact_callout.offset_left = -264.0
-    impact_callout.offset_right = -14.0
-    impact_callout.offset_top = -116.0
-    impact_callout.offset_bottom = -54.0
-    score_frame.add_child(impact_callout)
     count_in = GameCountIn.new()
     count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
     # Four large beat pulses sit above the staff, without a modal overlay.

@@ -333,6 +333,5 @@ func observe_state(facts: StreamGeometry, state: Dictionary, graded_beat: float,
                  bound_segment() != expected_segment):
         if unscored_take != key:
             unscored_take = key
-            push_error("TAKE_WITHOUT_SCORE: %s (queue=%s)" % [key,
-                str(state.get("score_queue_next",{}).get("plan_id","none")
-                    if state.get("score_queue_next") is Dictionary else "none")])
+            push_error("TAKE_WITHOUT_SCORE: %s expected_segment=%s bound_segment=%s" % [
+                key, expected_segment, bound_segment()])

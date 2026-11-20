@@ -59,12 +59,12 @@ class VisualTransport:
     visual_gap_beats: float = UNLOADED_GAP_BEATS
     # The one announced automatic continuation: (source_from_beat, graded
     # run_at, start BPM). Set when the engine schedules the next take of the
-    # same stage, published unchanged as score_queue_next while the rest
-    # runs, and started with exactly this run_at and BPM. Nothing adds a
-    # lead or recomputes the tempo later.
+    # same stage, published as an exact graphical playback intent (or as
+    # the explicit headless score_queue_next fixture projection), and started
+    # at exactly that run_at/BPM. Nothing adds a new lead or tempo decision.
     announced_continuation: PassagePlan | None = None
-    # Identity of the announcement (part of score_queue_next.plan_id). A new
-    # announcement is new ink; a re-timed one keeps its admitted ink.
+    # Identity of the selected continuation. A new announcement is new ink;
+    # a re-timed one keeps its admitted ink.
     announce_serial: int = 0
     _tempo_key: tuple | None = None
     _tempo_epoch: float | None = None

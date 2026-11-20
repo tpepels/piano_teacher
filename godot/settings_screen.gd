@@ -1,6 +1,6 @@
 extends ScrollContainer
 # Standalone settings view. It owns its controls and visual hierarchy;
-# the application coordinates HTTP, MIDI and platform actions via signals.
+# the application coordinates in-process commands, MIDI and platform actions via signals.
 const Design := preload("res://practice_theme.gd")
 const ActionButton := preload("res://action_button.gd")
 const INK := Design.STONE

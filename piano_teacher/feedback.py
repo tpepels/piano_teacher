@@ -17,58 +17,39 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
                        elapsed_to_beat: Callable[[float], float] | None = None) -> dict:
     """Return positioned note errors and leftover played notes for one attempt.
 
-    Production exercises map canonical source IDs directly to their attack
-    glyphs. Anonymous hand-built legacy layouts retain a limited pitch/onset
-    compatibility path; imported notes cannot enter that fallback.
+    Production feedback requires exact engraved source identity. It cannot
+    assign a grade to a nearby glyph by pitch or onset.
     """
     glyphs = list(layout.get("notes", []))
-    strict = layout.get('mapping_schema') == 'source-note-v1'
-    if strict:
-        from .lesson_validation import require_lesson_alignment
-        require_lesson_alignment(phrase,layout,'both')
-        by_id = {glyph.get('id'): glyph for glyph in glyphs}
-        by_source = {source: by_id[identifier]
-                     for source, identifier in layout['attack_map'].items()}
-        # Canonical notes already carry their source ID. Only anonymous
-        # callers need the phrase's stable fallback index, including a
-        # value-equivalent copied Note accepted by the existing API.
-        anonymous_identity = {}
-        anonymous_value = {}
-        for index, note in enumerate(phrase.notes):
-            if not note.source_id:
-                source = source_note_id(note, index)
-                anonymous_identity[id(note)] = source
-                anonymous_value.setdefault(note, source)
-    elif any(entry.note.source_id for entry in assessment.notes):
-        raise ValueError('Canonical source feedback requires explicit engraved identity mapping')
-    unused = set() if strict else set(range(len(glyphs)))
+    if layout.get("mapping_schema") != "source-note-v1":
+        raise ValueError("Note feedback requires a canonical source-note-v1 engraving")
+    from .lesson_validation import require_lesson_alignment
+    require_lesson_alignment(phrase,layout,'both')
+    by_id = {glyph.get('id'): glyph for glyph in glyphs}
+    by_source = {source: by_id[identifier]
+                 for source, identifier in layout['attack_map'].items()}
+    # Hand-built fixtures may omit a source ID; their deterministic source
+    # index is still authoritative, never a guessed pitch/onset match.
+    anonymous_identity = {}
+    anonymous_value = {}
+    for index, note in enumerate(phrase.notes):
+        if not note.source_id:
+            source = source_note_id(note, index)
+            anonymous_identity[id(note)] = source
+            anonymous_value.setdefault(note, source)
     result = []
     unmapped = 0
     for entry in assessment.notes:
         beat = entry.note.start - phrase.start
-        if strict:
-            source = entry.note.source_id
-            if not source:
-                source = anonymous_identity.get(id(entry.note))
-                if source is None:
-                    source = anonymous_value.get(entry.note)
-            glyph = by_source.get(source)
-            if glyph is None:
-                unmapped += 1
-                continue
-        else:
-            options = [
-                (abs(float(glyphs[i]["beat"]) - beat), i)
-                for i in unused
-                if glyphs[i].get("pitch") == entry.note.pitch
-                and abs(float(glyphs[i]["beat"]) - beat) <= 0.125
-            ]
-            if not options:
-                unmapped += 1
-                continue
-            _, index = min(options)
-            unused.remove(index)
-            glyph = glyphs[index]
+        source = entry.note.source_id
+        if not source:
+            source = anonymous_identity.get(id(entry.note))
+            if source is None:
+                source = anonymous_value.get(entry.note)
+        glyph = by_source.get(source)
+        if glyph is None:
+            unmapped += 1
+            continue
         observation = entry.observation
         held = (observation is not None and observation.unreleased
                 and observation.actual_onset is not None)
@@ -82,7 +63,7 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             "y": float(glyph["y"]),
             "pitch": entry.note.pitch,
             "note_id": glyph["id"],
-            **({'source_id':glyph['source_id']} if strict else {}),
+            "source_id": glyph["source_id"],
             "beat": beat,
             # Attempt-seconds deadline until which a still-held key is within
             # the grader's own hold tolerance. Live display only (see
