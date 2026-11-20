@@ -366,6 +366,11 @@
 - The Python MIDI grading clock remains authoritative and unchanged, and the global visual world position still comes from one forward-only presentation timeline. No additional tests.
 - Physical count-in and timing acceptance remains open.
 
+### Implementation checkpoint AW — freeze current software candidate for full acceptance
+
+- This checkpoint fixes the software candidate for one complete opt-in native run covering the newly extracted SourcePreparationSession, RetainedNotationPool, single presentation/beat projector, queue-owned preflight/receipt/continuation, all existing musical repertoire journeys and the clean extracted package launcher. Run all independent cases, collect their actual results, and leave any failed cases explicitly open.
+- No new automated tests or hidden compatibility transport were introduced. Hardware-specific CA49, USB, Bluetooth, nonheadless speaker output and precise audiovisual drift remain manual-only and unverified in this environment.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
