@@ -31,6 +31,7 @@ from .application.source_preparation_session import SourcePreparationSession
 from .application.score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
 from .application.attempt_settlement import AttemptSettlement
 from .application.attempt_runtime import AttemptRuntime
+from .application.recovery_streak import RecoveryStreak
 from .application.session_commands import SessionCommands
 from .application.teaching_continuation import TeachingContinuation, ContinuationReadiness, UnpreparedNextStage
 from .application.musical_scheduler import (
@@ -143,6 +144,7 @@ class PracticeEngine:
         self._piece_generation = 0
         self.guided_session = GuidedSession(clock=self.now)
         self.attempt = AttemptRuntime()
+        self.recovery_streak = RecoveryStreak()
         self.plan: LearningPlan | None = None
         self.score = None
         self.source = None
@@ -1041,7 +1043,7 @@ class PracticeEngine:
                 start=start, end=end, errors=errors)
 
     def _reset_trouble(self):
-        self.attempt.clear_trouble()
+        self.recovery_streak.clear()
 
     def display_phrase(self) -> Phrase:
         """One source-derived fragment in Learn; the exact full variant in time."""
@@ -1337,7 +1339,7 @@ class PracticeEngine:
                 course_guided=self.course_guided, guided_return=self._guided_return,
                 guided_range=self.guided_range, review_end_beat=self.attempt.review_end_beat,
                 remediation_active=self._remediation_active is not None,
-                trouble_key=self.attempt.trouble_key, trouble_count=self.attempt.trouble_count,
+                trouble_key=self.recovery_streak.key, trouble_count=self.recovery_streak.count,
                 parent_decision_id=self.measurement.parent_decision),
             self.practice_policy.diagnosis, self.practice_policy.learner,
             getattr(p.lesson_generator, "catalog", None),
@@ -2682,8 +2684,8 @@ class PracticeEngine:
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds,
             short_deadline=short_deadline)
-        self.attempt.trouble_key = transition.trouble_key
-        self.attempt.trouble_count = transition.trouble_count
+        self.recovery_streak.record(
+            transition.trouble_key,transition.trouble_count)
         self.attempt.guided_recovery_pending = transition.guided
         if transition.guided:
             # The next step is note-by-note learning, not a timed take.

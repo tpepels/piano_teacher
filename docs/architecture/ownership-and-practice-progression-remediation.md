@@ -398,6 +398,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Existing tests that intentionally inspect or inject a live recorder/pending result were migrated to `engine.attempt` without changing assertions. No new tests, compatibility shadow fields or replacement of the shared LearningCapture.
 - Settlement still owns durable progress/evidence; the attempt object owns only the lifetime of transient grading/retry state. Remaining `PracticeEngine` orchestration must continue to move before L01 closes.
 
+### Implementation checkpoint BB — preserve cross-attempt recovery streak and repair old assertion
+
+- Core run [44715763141](https://github.com/tpepels/piano_teacher/actions/runs/44715763141) reported 318 passed, 17 skipped and one obsolete direct `second.recorder` assertion. Migrated that existing assertion to `second.attempt.recorder`; no test was added or disabled.
+- Corrected the attempt-domain boundary discovered during review: the consecutive two-take trouble key/count must **survive** Stop/Retry. Moved them from `AttemptRuntime` into `RecoveryStreak`, whose explicit `record` and `clear` operations are driven only by the teaching transition or stage change. `AttemptRuntime.reset_for_stop` now clears only genuinely take-scoped recorder/evidence/review state.
+- Existing CI must confirm the full retry/reconnect behavior; headless CI still does not certify the CA49 physical note path.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

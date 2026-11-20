@@ -27,8 +27,6 @@ class AttemptRuntime:
     automatic_remedial_review: bool = False
     retry_range: dict | None = None
     recovery_notice: dict | None = None
-    trouble_key: tuple | None = None
-    trouble_count: int = 0
     guided_recovery_pending: bool = False
 
     def begin_take(self, *, recording: bool) -> None:
@@ -38,10 +36,6 @@ class AttemptRuntime:
         self.pending_assessed_bpm = None
         self.feedback_marks = []
         self.feedback_unmapped = 0
-
-    def clear_trouble(self) -> None:
-        self.trouble_key = None
-        self.trouble_count = 0
 
     def publish_completion(self, *, marks: list[dict], unmapped: int) -> None:
         self.feedback_marks = marks
@@ -68,5 +62,4 @@ class AttemptRuntime:
         self.automatic_remedial_review = False
         self.retry_range = None
         self.recovery_notice = None
-        self.clear_trouble()
         self.guided_recovery_pending = False

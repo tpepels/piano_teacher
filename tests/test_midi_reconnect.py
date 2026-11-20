@@ -210,7 +210,7 @@ def test_previously_selected_piano_auto_connects_without_restarting_practice(
         assert state["device"] == "USB Piano"
         assert second.midi.port is not None
         assert not second.running
-        assert second.recorder is None
+        assert second.attempt.recorder is None
         assert not second.preview_only
         assert second.transport_id == 0
     finally:
