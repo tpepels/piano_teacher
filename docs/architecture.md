@@ -6,8 +6,10 @@ This document is the current technical overview; [development](development.md)
 covers operation and acceptance, and [reference](reference.md) covers fingering,
 learning evidence, privacy and research limitations.
 The ownership descriptions are the required contracts. The
-[current source audit](#remaining-work--source-audit-2026-11-20) records
-remaining deviations; the earlier Phase 5 completion claim is superseded.
+[2026-11-20 source audit](#remaining-work--source-audit-2026-11-20)
+retains the original six findings as historical evidence. The corresponding
+correction commits and software verification are recorded below; physical
+MIDI, audio and visual acceptance remain separate.
 
 ## One desktop runtime
 
@@ -304,6 +306,9 @@ install effect; a late correction cannot replace another source.
 
 ## Remaining work — source audit 2026-11-20
 
+Historical discovery findings and original source evidence follow. A1–A6 now
+have production-code corrections; the table is not a list of unimplemented work.
+
 Implementation ledger (main, starting at `82bf06bb`):
 
 - A1 implemented: admission compares the prepared model with both canonical
@@ -356,7 +361,34 @@ Implementation ledger (main, starting at `82bf06bb`):
   Production admission still uses the existing two-phase executor. Full CI
   passes: 107 Python checks, one optional system-SF2 skip; parser and four
   native groups pass; coverage is 69.6% lines / 49.4% branches
-  (`architecture-final-ci.log`). Full embedded/package verification pending.
+  (`architecture-final-ci.log`). The first full run on `982d3fee` exposed acceptance scripts that still read
+  the removed renderer `stream_passes` property. Commit `ad1055ac` uses
+  a deep diagnostic snapshot from the canonical stream owner instead.
+  Remote core and full native-production CI then passed on `ad1055ac`,
+  run 44796955201, including real-score journeys and relocated package
+  boot. Physical output acceptance remains unverified.
+
+### Ownership and dependency follow-up — 2026-11-20
+
+The follow-up review inspected engine snapshot construction, PlaybackSession,
+VisualTransport, AttemptRuntime, AttemptSettlement, Godot admission, the retained
+notation pool and its single queue. The engine delegates take and transport
+lifecycle mutations, and snapshot reads do not execute the worker transition
+loop. The native diagnostic returns a deep copy of the sole stream ledger and
+does not restore mutable queue access.
+
+A further dependency cleanup makes shared lesson focus, hand selection and
+hybrid passage segmentation explicit public module ports. It moves bounded
+authentic vector rasterization from tuplet extraction to
+`notation/assets/vector_art.py`, consumed independently by beam and tuplet
+extractors. Runtime/font resource initialization is similarly exposed through
+public functions, instead of other extractors importing private helpers.
+These changes preserve the existing algorithms; no new architecture, pixel
+or infrastructure tests were introduced.
+
+The review covers the critical production owners and the known dependency
+clusters. It cannot prove absence of every possible defect. The refactored
+source requires a new full CI run and physical acceptance remains separate.
 
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic

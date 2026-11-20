@@ -210,9 +210,9 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             # practice, leaving gray antialias gaps and false beam levels.
             # Recording the vector paths locally keeps complete authentic
             # beam ink without allocating a 24k-wide whole-page surface.
-            from .tuplets import _local_vector_art
+            from .vector_art import local_vector_art
             space = lines[1]-lines[0]
-            art = _local_vector_art(
+            art = local_vector_art(
                 filtered,space,(x0,y0),"verovio-engraved-beam")
             if art is None:
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":

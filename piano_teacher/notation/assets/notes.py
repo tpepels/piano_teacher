@@ -215,11 +215,11 @@ def _validate(items: dict) -> bool:
 @lru_cache(maxsize=2)
 def _generate(font: str) -> dict:
     import verovio
-    from .runtime import _create_verovio_toolkit
+    from .runtime import create_verovio_toolkit
     from .glyphs import native_glyphs
 
     atlas = native_glyphs()
-    toolkit = _create_verovio_toolkit(verovio)
+    toolkit = create_verovio_toolkit(verovio)
     if not toolkit.setOptions({
         "inputFrom": "xml", "scale": 48, "pageWidth": 900,
         "pageHeight": 650, "adjustPageHeight": True,

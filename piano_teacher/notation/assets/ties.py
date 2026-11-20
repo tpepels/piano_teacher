@@ -131,8 +131,8 @@ def _render(toolkit, direction: str, *, first_kind="half", last_kind="half",
 @lru_cache(maxsize=2)
 def _generate(font: str) -> dict:
     import verovio
-    from .runtime import _create_verovio_toolkit
-    toolkit = _create_verovio_toolkit(verovio)
+    from .runtime import create_verovio_toolkit
+    toolkit = create_verovio_toolkit(verovio)
     if not toolkit.setOptions({"inputFrom":"xml","scale":48,
             "pageWidth":900,"pageHeight":650,"adjustPageHeight":True,
             "svgViewBox":True,"svgBoundingBoxes":True,

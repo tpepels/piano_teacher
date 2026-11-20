@@ -75,7 +75,7 @@ def _course_phrases(piece: Piece) -> tuple[Phrase, ...]:
     return tuple(groups)
 
 
-def _focus_phrases(piece: Piece, *, adaptive: bool = True,
+def focus_phrases(piece: Piece, *, adaptive: bool = True,
                    grouping: MusicalGrouping | None = None) -> tuple[Phrase, ...]:
     """Keep a short focus by default; extend it when attacks are very sparse.
 
@@ -202,7 +202,7 @@ def build_exercises(piece: Piece, *, consolidate: bool = True,
     if not consolidate and adaptive_focus and grouping is None:
         grouping = grouping_for_piece(piece)
     phrases = (_course_phrases(piece) if consolidate
-               else _focus_phrases(piece, adaptive=adaptive_focus,
+               else focus_phrases(piece, adaptive=adaptive_focus,
                                    grouping=grouping))
     exercises: list[Exercise] = []
     for index, phrase in enumerate(phrases):
@@ -310,7 +310,7 @@ def _dense_single_measure_variants(phrase: Phrase, hand: str, *,
     return tuple(variants)
 
 
-def _hands_for_learning(exercise: Exercise) -> tuple[str, ...]:
+def hands_for_learning(exercise: Exercise) -> tuple[str, ...]:
     """Omit unproductive solo-hand drills, never omit their source notes.
 
     For two-hand passages, a hand needs the configured minimum number of

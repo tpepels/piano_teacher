@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-def _verovio_resources(verovio_module) -> Path:
+def verovio_resources(verovio_module) -> Path:
     """Resolve fonts next to the installed Python module, not a build-time path.
 
     The Verovio Python wheel includes Bravura and Leipzig in verovio/data.
@@ -22,9 +22,9 @@ def _verovio_resources(verovio_module) -> Path:
     return path
 
 
-def _create_verovio_toolkit(verovio_module):
+def create_verovio_toolkit(verovio_module):
     """Load the bundled fonts explicitly before importing or engraving music."""
-    resources = _verovio_resources(verovio_module)
+    resources = verovio_resources(verovio_module)
     # Avoid the default font path baked into some wheels at build time.
     toolkit = verovio_module.toolkit(False)
     if not toolkit.setResourcePath(str(resources)):

@@ -17,13 +17,13 @@ from .exercise_generator import ExerciseVariant
 from .exercise_pipeline import ExerciseStage
 from .fukuda_midi import as_fukuda_stage
 from .lesson_settings import SETTINGS
-from .lesson_source_planner import Exercise, _focus_phrases, _hands_for_learning
+from .lesson_source_planner import Exercise, focus_phrases
 from .music import Phrase, Piece
 from .source_attack_index import SourceAttackIndex
 from .lesson_contracts import LessonPlanDefinition, lesson_hands
 
 
-def _segments(piece: Piece, *, source: SourceAttackIndex | None = None) -> tuple[Phrase, ...]:
+def adaptive_segments(piece: Piece, *, source: SourceAttackIndex | None = None) -> tuple[Phrase, ...]:
     """Focus in two-bar units; join sections if a note sustains over the cut.
 
     The segmentation respects original measure boundaries and never crops or
@@ -31,7 +31,7 @@ def _segments(piece: Piece, *, source: SourceAttackIndex | None = None) -> tuple
     for the last full-score performance.
     """
     source = source if source is not None else SourceAttackIndex(piece)
-    base = _focus_phrases(piece)
+    base = focus_phrases(piece)
     if not base:
         raise ValueError("Hybrid curriculum needs at least one playable passage")
     grid = piece.bar_boundaries
@@ -71,7 +71,7 @@ def _segments(piece: Piece, *, source: SourceAttackIndex | None = None) -> tuple
 
 def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
     source = SourceAttackIndex(piece)
-    passages = _segments(piece, source=source)
+    passages = adaptive_segments(piece, source=source)
     out = []
     for i, phrase in enumerate(passages):
         ex = Exercise("learn", phrase,

@@ -17,7 +17,7 @@ from .lesson_contracts import (LessonPlanDefinition, LessonGenerator, lesson_han
 from .music import Piece,Phrase
 from .musical_groups import MusicalGrouping
 from .lesson_source_planner import (
-    Exercise,build_exercises,_hands_for_learning,source_variants,
+    Exercise,build_exercises,source_variants,
 )
 
 @dataclass(frozen=True)
@@ -143,8 +143,8 @@ class CodaLessonGenerator:
         if self.teaching_passages:
             if self.first_measure != 1 or self.last_measure is not None:
                 raise ValueError("Bounded Coda teaching and explicit excerpts cannot be combined")
-            from .adaptive_hybrid_curriculum import _segments
-            passages = _segments(piece)
+            from .adaptive_hybrid_curriculum import adaptive_segments
+            passages = adaptive_segments(piece)
             exercises = []
             for phrase in passages:
                 present = {n.hand for n in phrase.notes}

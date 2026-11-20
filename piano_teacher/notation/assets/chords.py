@@ -645,8 +645,8 @@ def chord_templates(model: dict, cache=None, *, pages,
         else:
             missing[key] = spec
     if missing:
-        from .runtime import _create_verovio_toolkit
-        toolkit = _create_verovio_toolkit(verovio)
+        from .runtime import create_verovio_toolkit
+        toolkit = create_verovio_toolkit(verovio)
         if not toolkit.setOptions(_OPTIONS):
             raise RuntimeError("Verovio rejected chord engraving options")
         rendered = _render_batch(toolkit, missing)

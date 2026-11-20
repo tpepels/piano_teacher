@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping, Protocol
 from .exercise_pipeline import ExerciseStage
-from .lesson_source_planner import Exercise, _hands_for_learning
+from .lesson_source_planner import Exercise, hands_for_learning
 from .music import Piece
 
 DEFAULT_STRATEGY = "practice-flow"
@@ -90,6 +90,6 @@ def lesson_hands(exercise: Exercise) -> tuple[str,...]:
         return ("right","left","both")
     if exercise.kind!="learn":
         return ("both",)
-    return _hands_for_learning(exercise)
+    return hands_for_learning(exercise)
 
 

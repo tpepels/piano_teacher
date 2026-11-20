@@ -105,14 +105,14 @@ def recover_missing_tuplets(notation_xml: str, model: dict,
     # Lazy import ensures ordinary cached native scores do not initialize
     # a second Verovio toolkit.
     import verovio
-    from .runtime import _create_verovio_toolkit
+    from .runtime import create_verovio_toolkit
 
     source, divisions = _source_notes(notation_xml)
     if not divisions:
         return {}
     all_events = {str(e["id"]): e for e in model.get("notation_events", [])
                   if e.get("id") and e.get("kind") in {"note", "rest"}}
-    toolkit = _create_verovio_toolkit(verovio)
+    toolkit = create_verovio_toolkit(verovio)
     if not toolkit.setOptions({"inputFrom": "xml", "scale": 48,
                                "pageWidth": 900, "pageHeight": 650,
                                "svgViewBox": True,

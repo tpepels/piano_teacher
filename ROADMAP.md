@@ -156,8 +156,15 @@ implementation commits: A1 sustained-note admission (`96c895e7`); A2 bound
 resize (`0d959470`); A3 lifecycle writes (`e7b10962`); A4 read-only
 snapshots (`1507b427`); A5 dependency cycles (`f8daff77`); and A6
 request encapsulation and obsolete native ports (`c11517f9`).
-The next source commit requests the native-production GitHub workflow in
-addition to normal CI. Real piano and clean-machine acceptance remain separate.
+Commit `ad1055ac` repaired the acceptance readers exposed by removal of
+the renderer's private `stream_passes` property. Both remote core and
+native-production CI then passed
+([run 44796955201](https://github.com/tpepels/piano_teacher/actions/runs/44796955201)),
+including embedded real-score journeys and relocated package boot.
+A follow-up dependency cleanup gives curriculum helpers explicit public ports
+and moves shared authentic SVG rasterization into its own module. That new
+refactor needs its own complete CI result. Physical and clean-machine acceptance
+remain separate.
 
 ## Phase status and remaining acceptance
 
@@ -270,8 +277,8 @@ above; it remains historical evidence for that source.
 
 | Phase | State |
 | --- | --- |
-| Phase 5 — ownership decomposition | A1–A6 and obsolete native-port cleanup implemented in commits `96c895e7` through `c11517f9`. Core CI passed on `c11517f9`; combined embedded/package and physical verification remain open. |
-| Phase 6 — software and physical verification | The seven embedded/repertoire/relocated-package cases last passed on `70f7b459`. Combined architecture and hold-grading source requires a fresh full native/package CI result. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
+| Phase 5 — ownership decomposition | A1–A6 implemented in `96c895e7` through `c11517f9`; `ad1055ac` corrected obsolete acceptance diagnostics. Combined core/native/package workflow passed at `ad1055ac`. A follow-up helper-ownership cleanup requires a new full CI result. Physical acceptance remains open. |
+| Phase 6 — software and physical verification | Full embedded/native and relocated standalone software workflow passed on `ad1055ac` ([run 44796955201](https://github.com/tpepels/piano_teacher/actions/runs/44796955201)). Helper-ownership follow-up needs a fresh full CI run. Physical MIDI/audio, rendering and clean-machine acceptance remain open. |
 
 Unverified acceptance: Kawai CA49 USB and Bluetooth MIDI, physical press/release
 latency, speakers and audible count-in, real-performance grading, on-screen

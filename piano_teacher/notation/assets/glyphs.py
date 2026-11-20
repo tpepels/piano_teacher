@@ -10,10 +10,10 @@ import xml.etree.ElementTree as ET
 @lru_cache(maxsize=1)
 def preparation_symbols() -> dict:
     import verovio
-    from .runtime import _create_verovio_toolkit, _verovio_resources
+    from .runtime import create_verovio_toolkit, verovio_resources
 
-    resources = _verovio_resources(verovio)
-    toolkit = _create_verovio_toolkit(verovio)
+    resources = verovio_resources(verovio)
+    toolkit = create_verovio_toolkit(verovio)
     font = toolkit.getOptions().get("font", "Leipzig")
     metrics = ET.parse(resources / f"{font}.xml").getroot()
     result = {}
@@ -84,10 +84,10 @@ def native_glyphs() -> dict:
     """
     import copy
     import verovio
-    from .runtime import _create_verovio_toolkit, _verovio_resources
+    from .runtime import create_verovio_toolkit, verovio_resources
 
-    resources = _verovio_resources(verovio)
-    font = _create_verovio_toolkit(verovio).getOptions().get("font", "Leipzig")
+    resources = verovio_resources(verovio)
+    font = create_verovio_toolkit(verovio).getOptions().get("font", "Leipzig")
     metrics = ET.parse(resources / f"{font}.xml").getroot()
     assets = {}
     for name, code in _NATIVE_CODES.items():
