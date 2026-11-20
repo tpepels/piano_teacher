@@ -529,6 +529,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Removed the writable `_guided_return` and `_guided_prepared` property forwarding descriptors from `PracticeEngine`. Every transition now reads and writes `GuidedSession.return_context` and `GuidedSession.prepared` on the sole existing guided owner, including retry reintegration, selected Free completion, source reset and snapshot capture.
 - Public guided controls and source notation handling remain unchanged. This eliminates two more transitional engine properties and redundant mutation entrypoints. No new tests; existing guided/recovery CI must validate source behavior.
 
+### Implementation checkpoint BM — full embedded/product audit on current architecture
+
+- The existing core CI passed on `ea6f9432` ([run 44732402194](https://github.com/tpepels/piano_teacher/actions/runs/44732402194)), including the corrected static-decorator binding and the immutable continuation preview. The private guided-session alias removal is undergoing core verification.
+- Trigger the existing **unmodified production native matrix** using the workflow's `[native]` release-check opt-in: GDExtension compilation, embedded CPython/Verovio/MIDI, graphical playback/pause/retry, Moonlight/Peace Piece/Chopin and relocated package startup. No new tests. Physical USB/Bluetooth and acoustic-latency observations remain a separate manual gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
