@@ -62,7 +62,7 @@ func _fail(message: String) -> void:
     if app != null and app.practice_view != null:
         var renderer = app.practice_view.stage.renderer
         var passages: Array = []
-        for item in renderer.stream_passes:
+        for item in renderer.diagnostic_stream_snapshot():
             passages.append({"serial":item.get("serial"),
                 "take":item.get("take_key"),"kind":item.get("kind"),
                 "origin":item.get("world_origin"),
@@ -191,7 +191,7 @@ func _process(_delta: float) -> bool:
             if view.stream_world_beat+0.0001 < retry_world_start:
                 _fail("Retry moved the perpetual score world backwards")
                 return true
-            for item in view.stream_passes:
+            for item in view.diagnostic_stream_snapshot():
                 if str(item.get("kind","")) == "rest" and \
                         float(item.get("world_origin",-INF)) >= retry_world_start-5.0:
                     retry_rest_seen = true
@@ -234,7 +234,7 @@ func _process(_delta: float) -> bool:
                 initial_revision,restarted_transport]
             var reserved_match := false
             var wrong_side := false
-            for item in view.stream_passes:
+            for item in view.diagnostic_stream_snapshot():
                 if str(item.get("kind","source")) != "source" or \
                         str(item.get("take_key","")) != expected or \
                         bool(item.get("pending",false)):
@@ -264,7 +264,7 @@ func _process(_delta: float) -> bool:
                 # its preceding gap. Locate the nearest genuine rest ending
                 # at/before this source, which may itself already be moving.
                 var prior_rest_end := -INF
-                for rest in view.stream_passes:
+                for rest in view.diagnostic_stream_snapshot():
                     if str(rest.get("kind","")) != "rest":
                         continue
                     var rest_end: float = float(rest.get("world_origin",0.0)) + \

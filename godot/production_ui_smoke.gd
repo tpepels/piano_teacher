@@ -135,7 +135,7 @@ func _process(_delta: float) -> bool:
         if renderer.stream_world_beat <= ready_world_beat:
             _fail("Ready stopped the perpetual world clock")
             return true
-        for item in renderer.stream_passes:
+        for item in renderer.diagnostic_stream_snapshot():
             if str(item.get("kind","source")) == "source" and \
                     bool(item.get("ever_visible",false)):
                 _fail("Pre-authorization score source appeared onscreen")
@@ -175,7 +175,7 @@ func _process(_delta: float) -> bool:
             # The first legitimate source can be bound only after physical
             # score admission and the backend ACK. Inspect that source's
             # immutable admission time, not a speculative READY placeholder.
-            for item in renderer.stream_passes:
+            for item in renderer.diagnostic_stream_snapshot():
                 if str(item.get("kind","source")) != "source" or \
                         str(item.get("take_key","")) != active_key or \
                         bool(item.get("pending",false)):
@@ -231,7 +231,7 @@ func _process(_delta: float) -> bool:
         var new_ink_offscreen := true
         # The authorized take owns the original immutable source position.
         # No speculative READY copy is promoted or silently repositioned.
-        for item in renderer.stream_passes:
+        for item in renderer.diagnostic_stream_snapshot():
             if int(item["serial"]) == ready_pass_serial:
                 original_survived = is_equal_approx(
                     float(item["world_origin"]),ready_world_origin)
@@ -250,7 +250,7 @@ func _process(_delta: float) -> bool:
                 new_ink_offscreen = new_ink_offscreen and left > renderer.size.x
         if not original_survived or not new_ink_offscreen:
             var diagnostic: Array = []
-            for item in renderer.stream_passes:
+            for item in renderer.diagnostic_stream_snapshot():
                 diagnostic.append({
                     "serial":int(item.get("serial",-1)),
                     "kind":str(item.get("kind","")),
@@ -303,7 +303,7 @@ func _process(_delta: float) -> bool:
             _fail("Pause spawned another exercise instead of letting previous notes leave")
             return true
         var paused_original_preserved := false
-        for item in renderer.stream_passes:
+        for item in renderer.diagnostic_stream_snapshot():
             if str(item.get("kind","source")) == "source" and \
                     int(item.get("take_owner",item["serial"])) == ready_take_owner:
                 paused_original_preserved = paused_original_preserved or \
@@ -348,7 +348,7 @@ func _process(_delta: float) -> bool:
         int(app.current_state().get("revision",-1)),
         initial_transport,str(app.current_state().get("mode","practice"))]
     var diagnostics: Array = []
-    for item in renderer.stream_passes:
+    for item in renderer.diagnostic_stream_snapshot():
         if str(item.get("kind","source")) != "source":
             continue
         var serial: int = int(item["serial"])

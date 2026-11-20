@@ -404,6 +404,11 @@ func stream_owner_status() -> Dictionary:
     # live serial, armed state or queue through renderer properties.
     return _stream_controller.owner_status()
 
+func diagnostic_stream_snapshot() -> Array:
+    # Deliberately explicit acceptance/diagnostic port. Never expose the
+    # mutable FIFO as a renderer property or use this copy during painting.
+    return _stream_controller.online_snapshot()
+
 func stream_has_take(owner_serial: int) -> bool:
     return _stream_controller.has_take(owner_serial)
 
