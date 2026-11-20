@@ -49,9 +49,11 @@ const ApplicationInputSession := preload("res://application_input_session.gd")
 const SettingsInteractionSession := preload("res://settings_interaction_session.gd")
 const PracticeFeedbackSession := preload("res://practice_feedback_session.gd")
 const ApplicationStateInbox := preload("res://application_state_inbox.gd")
+const ApplicationPollSession := preload("res://application_poll_session.gd")
 
 var navigation_session = NavigationSession.new()
 var state_inbox = ApplicationStateInbox.new()
+var poll_session = ApplicationPollSession.new()
 var input_session = ApplicationInputSession.new()
 var settings_interactions = SettingsInteractionSession.new()
 var status_head_preloader = StatusHeadPreloader.new()
@@ -177,7 +179,6 @@ var ui_scale := 1.0
 var practice_backdrop: ColorRect
 # One acknowledged channel delivers every note-feedback event exactly once.
 var feedback_session = PracticeFeedbackSession.new()
-var state_poll_timer: Timer
 var inprocess_bus: Node
 var score_runway
 var score_admission
@@ -274,40 +275,21 @@ func _ready() -> void:
     learning_status_request = _new_request(_on_learning_status)
     statistics_coordinator.configure(_new_request(statistics_coordinator.on_report), settings_view.statistics_view)
     lesson_request = _new_request(_on_lesson)
-    state_poll_timer = Timer.new()
-    state_poll_timer.wait_time = 0.15
-    state_poll_timer.autostart = true
-    state_poll_timer.timeout.connect(_poll)
-    add_child(state_poll_timer)
-    var scan_timer := Timer.new()
-    scan_timer.wait_time = 5.0
-    scan_timer.autostart = true
-    scan_timer.timeout.connect(func():
-        if current_screen == "home" or current_screen == "library":
-            _request_library()
-        # The backend independently checks the chosen MIDI port every
-        # MIDI_SCAN_SECONDS and reconnects the saved piano if needed. Repeating
-        # ALSA enumeration in the Practice UI adds device-probe warnings and
-        # lock contention without improving hotplug detection. Only discover
-        # a new device while none is connected, in Settings, or on explicit tap.
-        if current_screen == "settings" or (current_screen == "practice"
-                and str(state_inbox.current.get("device", "")).is_empty()):
-            _request_devices()
-    )
-    add_child(scan_timer)
-    var health_timer := Timer.new()
-    health_timer.wait_time = 1.2
-    health_timer.autostart = true
-    health_timer.timeout.connect(func():
-        if current_screen == "library" and library_catalog.health_running:
-            _request_library_health())
-    add_child(health_timer)
+    poll_session.state_requested.connect(_poll)
+    poll_session.library_requested.connect(_request_library)
+    poll_session.devices_requested.connect(_request_devices)
+    poll_session.library_health_requested.connect(_request_library_health)
+    add_child(poll_session)
+    poll_session.configure(
+        func() -> String: return current_screen,
+        func() -> String: return str(state_inbox.current.get("device","")),
+        func() -> bool: return library_catalog.health_running)
     frame_coordinator = PracticeFrameCoordinator.new(
         practice_view,settings_view,lesson_view,lesson_session,
         demo_player,frame_meter)
     state_presenter = PracticeStatePresenter.new(
         practice_view,settings_view,lesson_view,lesson_session,
-        state_poll_timer)
+        poll_session.state_timer)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(

@@ -606,6 +606,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - `LearningCapture.observe_phase` now owns that evidence projection, including precise closure of a running count-in at the scheduled activation timestamp (instead of the potentially late worker poll). The MIDI grading clock and musical scheduler are untouched.
 - All existing intervals and source/attempt identities use the one existing capture ledger. No new tests; core timing/ledger and native playback checks remain required.
 
+### Implementation checkpoint BZ — polling cadence and sparse discovery leave Main
+
+- Created `ApplicationPollSession` as the sole owner of the 150 ms state poll, five-second context-dependent library/ALSA discovery, and 1.2-second library-health refresh. It consumes explicit read-only screen/device/health facts through narrow Callables and emits semantic request signals; it cannot change musical playback or an engine snapshot.
+- Removed all three Timer creations, timer callbacks and their discovery rules from `Main._ready`. Main only connects existing backend request handlers and supplies the selected `state_timer` to `PracticeStatePresenter`.
+- Preserved all exact intervals and the prior device-discovery suppression during an already-connected practice session. No new tests; Godot parse/native UI and package CI remain required.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
