@@ -142,6 +142,11 @@ acceptance remain unverified.
 
 ### Architecture re-audit 2026-11-20
 
+Remediation execution: A1 now validates authored and sounding bounds from the
+existing semantic source contract. Targeted Python and all native checks pass;
+the direct gateway diagnostic accepts a full held ending and rejects different
+prepared coverage. A2–A6 and obsolete-port cleanup remain open.
+
 Implementation audited at `640a77f5`. The prior Phase 5 completion assessment
 was too broad and is reopened. The [active audit](docs/architecture.md#remaining-work--source-audit-2026-11-20)
 records six concrete remaining items, priorities and intended owners:

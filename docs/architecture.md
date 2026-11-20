@@ -301,6 +301,16 @@ install effect; a late correction cannot replace another source.
 
 ## Remaining work — source audit 2026-11-20
 
+Implementation ledger (main, starting at `82bf06bb`):
+
+- A1 implemented: admission compares the prepared model with both canonical
+  `practice_timeline` bounds, then compares the intent with its sounding bound.
+  No second duration field, truncated release or changed authored API.
+  Existing desktop/timeline Python checks and all native checks pass
+  (`architecture-a1-ci.log`); a direct Godot gateway diagnostic accepts the
+  4-authored/6-sounding range and rejects mismatched prepared assets.
+  Physical rendering remains unverified. Commit: recorded by the next step.
+
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic
 found the following remaining work. No production code or tests were changed
