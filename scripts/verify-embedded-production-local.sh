@@ -185,7 +185,12 @@ audit_package() {
     [[ -f "$python_library" ]] || continue
     cp -L "$python_library" "$bundled/lib/$(basename "$python_library")"
   done
-  cp -a "$stdlib" "$bundled/lib/python$python_version"
+  # A distribution's stdlib directory can also contain globally installed
+  # packages, including certificate symlinks outside the Python prefix.
+  # Stage only the interpreter's stdlib, then the exact application venv.
+  mkdir -p "$bundled/lib/python$python_version"
+  tar -C "$stdlib" --exclude='./site-packages' -cf - . | \
+    tar -C "$bundled/lib/python$python_version" -xf -
   mkdir -p "$bundled/lib/python$python_version/site-packages"
   cp -a "$PY_SITE/." "$bundled/lib/python$python_version/site-packages/"
   # Copy only tracked source files from the *current working tree* (not a

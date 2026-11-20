@@ -333,16 +333,31 @@ func _request_if_needed(state: Dictionary, now_ms: int) -> void:
     if _fetch.request("score.next_stage") != OK:
         _next_poll_ms = now_ms + 1000
 
+func _matches_prepared_identity(identity: Dictionary) -> bool:
+    # Both asset readiness and admission use this one exact source check.
+    # Revisions are local sequence numbers: Listen can independently select
+    # the same next revision/fingerprint as a different preloaded lesson.
+    if (_future == null or not is_instance_valid(_future) or
+            not _acknowledged or not _future.retained_ready() or
+            str(identity.get("mode","")) != "practice"):
+        return false
+    if (int(_bundle.get("revision",-1)) != int(identity.get("revision",-2))
+            or str(_bundle.get("fingerprint","")) != str(identity.get("fingerprint",""))
+            or str(_bundle.get("hand","")) != str(identity.get("hand",""))):
+        return false
+    var key: String = str(identity.get("stage_key",""))
+    if not key.is_empty():
+        return key == str(_bundle.get("stage_key",""))
+    # A state awaiting score readiness has no playback intent yet. Its
+    # authored lesson ordinal and hand identify the selected course source
+    # within this same fingerprint/revision; never decode a textual label.
+    var step: int = int(identity.get("step_number",-1))
+    return step > 0 and step == int(_bundle.get("step_number",-2))
+
 func prepared_renderer(intent: Dictionary):
-    # Public provider port: exact prepared identity, and all live peers
-    # registered before the admission gateway performs geometry preflight.
-    if _future == null or not is_instance_valid(_future) or \
-            not _acknowledged or not _future.retained_ready():
-        return null
-    if (int(_bundle.get("revision",-1)) != int(intent.get("revision",-2))
-            or str(_bundle.get("fingerprint","")) != str(intent.get("fingerprint",""))
-            or str(_bundle.get("stage_key","")) != str(intent.get("stage_key",""))
-            or str(_bundle.get("hand","")) != str(intent.get("hand",""))):
+    # Every prepared admission supplies the canonical backend stage key.
+    if (str(intent.get("stage_key","")).is_empty() or
+            not _matches_prepared_identity(intent)):
         return null
     _link_existing_layers(_future)
     return _future
@@ -353,10 +368,22 @@ func owns_prepared_renderer(candidate) -> bool:
 
 
 func has_prepared_destination(state: Dictionary) -> bool:
-    return _future != null and is_instance_valid(_future) and \
-        _acknowledged and _future.retained_ready() and \
-        int(_bundle.get("revision",-2)) == int(state.get("revision",-1)) and \
-        str(_bundle.get("fingerprint","")) == str(state.get("piece_fingerprint",""))
+    if not bool(state.get("loaded",false)):
+        return false
+    var identity: Dictionary = {
+        "mode":str(state.get("mode","")),
+        "revision":int(state.get("revision",-1)),
+        "fingerprint":str(state.get("piece_fingerprint","")),
+        "hand":str(state.get("hand","")),
+        "step_number":int(state.get("lesson_step",-1))}
+    var intent: Variant = state.get("playback_intent")
+    if intent is Dictionary:
+        # A stale intent cannot make another selected state look ready.
+        for field in ["mode","revision","fingerprint","hand"]:
+            if intent.get(field) != identity[field]:
+                return false
+        identity["stage_key"] = str(intent.get("stage_key",""))
+    return _matches_prepared_identity(identity)
 
 func preserve_unprepared_revision(state: Dictionary) -> bool:
     if has_prepared_destination(state):

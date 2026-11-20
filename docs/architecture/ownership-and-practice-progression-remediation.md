@@ -667,6 +667,13 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Reconciled the active system owner map, runtime, playback coordinator, practice state machine, ADR-0001, roadmap and index. Archived the old system inventory rather than presenting it as a current contract. The engine audit retains its original baseline separately from its current resolution table. All 125 local links in the revised active documents and archived inventory resolve.
 - Full core suite and structural verifier passed at the integrated source. The existing full embedded production script is now running against `25aab6e0`; its source, control, repertoire and relocated-package results will be recorded in the next checkpoint. No tests added, no commits pushed. Phase closure awaits that result; hardware acceptance remains unverified.
 
+### Implementation checkpoint CH — diagnose full production failures
+
+- `fa8da2fa` records checkpoint CG. The first full production run at `25aab6e0` passed embedded registration/authentic score, fixture Play/Pause/Resume, Peace Piece and Chopin, but failed Moonlight after Retry → Listen and failed standalone staging. Both failures were diagnosed without weakening or skipping an acceptance check.
+- Moonlight's Listen revision collided with a different preloaded lesson's revision/fingerprint. ScoreRunway's incomplete readiness check suppressed source loading forever. Readiness and admission now share one exact check of mode, revision, fingerprint, hand and canonical stage identity (or the selected authored lesson ordinal before an intent exists). Listen follows the existing unprepared-source installation route; the exposed outgoing tail remains preserved.
+- The host Python stdlib contains globally installed site-packages with an absolute certificate symlink. Copying the application venv over that directory tried to overwrite the host certificate through the staged symlink. The existing verifier now stages stdlib excluding host site-packages, then copies the exact venv dependencies. This fixes staging and keeps the strict relocated package boot check intact.
+- Existing Godot checks pass after the source fix (`GODOT_STARTUP_SYNTAX_OK`, all failure counters zero); shell syntax and diff checks pass. Full production/package verification must now be repeated. No tests added or changed. Physical acceptance remains unverified.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
