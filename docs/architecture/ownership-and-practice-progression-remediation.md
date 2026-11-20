@@ -513,6 +513,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Moved the remaining `PracticeEngine._teaching_instruction` decision-to-text logic and full-passage Retry/slowdown/mastery recommendations into `application.passage_outcome_presenter`. Its functions consume only the already-selected immutable `PendingTeachingDecision` and explicit numeric source facts, and cannot alter the plan, select another policy or schedule transport.
 - `PracticeEngine._finish_full_passage` now applies one output string. Recovery timing and graded settlement are unchanged. No tests added; existing core CI is the regression gate.
 
+### Implementation checkpoint BJ — preview-repeat musical rest owned by VisualTransport
+
+- Moved the ungraded/no-MIDI preview repeat's complete authored-rest deadline calculation and continuation announcement out of `PracticeEngine._complete_attempt` into `VisualTransport.schedule_preview_repeat`. The owner uses the existing sole `MusicalScheduler` with the same measured-rest fallback and immutable next-source announcement; the engine supplies its measured source duration, BPM and reading horizon.
+- `AttemptSettlement.finish_preview` remains the only evidence writer, so this path cannot earn a graded press, clean pass or mastery. Source playback and UI notices are unchanged. No extra clocks or new tests.
+- Core and native acceptance will verify that repeated preview admission remains strictly future-only.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

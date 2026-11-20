@@ -61,6 +61,28 @@ class VisualTransport:
         """Only VisualTransport owns the pending rest/preparation epoch."""
         return self._preparation_at
 
+    def schedule_preview_repeat(self, *, source_seconds: float,
+                                source_bpm: float,presentation_bpm: float,
+                                rest_measurement,now: float,
+                                reading_horizon_beats: float) -> float:
+        """Own the next ungraded preview's rest and its forward deadline.
+
+        An absent MIDI device may repeat source audio/ink but cannot create
+        graded presses, settle progress, or choose another musical timeline.
+        """
+        self.queue_preview_repetition()
+        short = SCHEDULER.measured_rest(
+            rest_measurement,now=now,bpm=presentation_bpm)
+        deadline = short if short is not None else SCHEDULER.missing_horizon(
+            deadline=SCHEDULER.repeat(
+                run_at=self.run_at,source_seconds=source_seconds,
+                gap_beats=self.visual_gap_beats,bpm=source_bpm),
+            rest_beats=self.visual_gap_beats,
+            reading_horizon_beats=reading_horizon_beats,
+            bpm=presentation_bpm)
+        self.announce_continuation(0.0,deadline,source_bpm)
+        return deadline
+
     def queue_preview_repetition(self) -> None:
         """A preview may repeat, but no graded attempt is awarded."""
         self._preview_loop_pending = True

@@ -2647,19 +2647,13 @@ class PracticeEngine:
             # fake notes, misses, accepted passes or mastery.
             self.attempt_settlement.finish_preview()
             self.running = False
-            self.visual_transport.queue_preview_repetition()
-            short = SCHEDULER.measured_rest(
-                self._collect_rest_measurement(from_beat=0.0,source_end=self.visual_transport.run_at + duration),
-                now=self.now(),bpm=self._presentation_bpm)
-            self.visual_transport.announce_continuation(0.0, short if short is not None else
-                SCHEDULER.missing_horizon(
-                    deadline=SCHEDULER.repeat(
-                        run_at=self.visual_transport.run_at,source_seconds=duration,
-                        gap_beats=self.visual_transport.visual_gap_beats,
-                        bpm=self.plan.bpm),
-                    rest_beats=self.visual_transport.visual_gap_beats,
-                    reading_horizon_beats=self._continuous_horizon_beats,
-                    bpm=self._presentation_bpm), self.plan.bpm)
+            self.visual_transport.schedule_preview_repeat(
+                source_seconds=duration,source_bpm=self.plan.bpm,
+                presentation_bpm=self._presentation_bpm,
+                rest_measurement=self._collect_rest_measurement(
+                    from_beat=0.0,
+                    source_end=self.visual_transport.run_at+duration),
+                now=now,reading_horizon_beats=self._continuous_horizon_beats)
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn progress."
             if self.playback.presentation_required:
