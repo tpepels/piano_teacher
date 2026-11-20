@@ -63,10 +63,12 @@ check() {
   CASE_COUNT=$((CASE_COUNT+1))
   local case_log="$WORK/native-case-$CASE_COUNT.log"
   printf '\n=== %s ===\n' "$label" >> "$LOG"
-  # Run each existing acceptance case in its own strict Bash process.
-  # A failed command inside audit_package must not be accidentally ignored
-  # because the parent is evaluating this check in an "if" expression.
-  if bash -Eeuo pipefail -c '"$@"' _ "$@" > "$case_log" 2>&1; then
+  # Every case is bounded and its actual output streams to CI, rather
+  # than silently sitting inside one opaque script step until completion.
+  # The underlying Godot/package commands retain their stricter timeouts.
+  printf 'RUN   %s\n' "$label"
+  if timeout --signal=TERM --kill-after=5s 600s \
+      bash -Eeuo pipefail -c '"$@"' _ "$@" 2>&1 | tee "$case_log"; then
     cat "$case_log" >> "$LOG"
     printf 'PASS  %s\n' "$label"
     return 0
@@ -74,7 +76,6 @@ check() {
     local status=$?
     cat "$case_log" >> "$LOG"
     printf 'FAIL  %s (exit %d)\n' "$label" "$status"
-    tail -n 45 "$case_log"
     FAILED_CASES+=("$label (exit $status)")
     return "$status"
   fi

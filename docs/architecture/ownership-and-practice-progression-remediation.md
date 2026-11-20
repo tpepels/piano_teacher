@@ -485,6 +485,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - `_state_snapshot` now reads the already-reconciled playback status without mutating its owner mid-serialization. Existing compatibility state polling still calls `_update`, so it uses the same transition ordering and continues to advance time when no dedicated timer exists.
 - This removes a mixed-epoch state-publication bug without adding a clock, changing source deadlines, or writing tests. Existing backend/native CountIn/Play/Pause/Retry integration must verify.
 
+### Implementation checkpoint BQ — bounded and observable full native verification
+
+- The existing full native/package runner now announces `RUN` for every case and streams the actual subprocess output into GitHub Actions while retaining each isolated case log and the complete combined debug log. It no longer hides all progress until a case returns, which made long-running native and packaging work impossible to distinguish from a stall.
+- Every case is additionally bounded by a 600-second outer `timeout` with termination and kill-after; individual authentic Godot, repertoire, package and relocated-boot deadlines remain stricter. A timeout records `FAIL` and runs the remaining independent scenarios rather than consuming the entire 55-minute CI budget.
+- No case, assertion or acceptance path was skipped or added. This improves the existing Phase 6 verification procedure, not the application behavior.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
