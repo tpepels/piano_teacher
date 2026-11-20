@@ -167,6 +167,9 @@ class LearningCapture:
         self.decisions = []
         self.guidance_state = None
 
+    def use_assistance(self) -> None:
+        self.assistance_used = True
+
     def observe_guidance(self, snapshot: dict) -> None:
         if self.attempt_id is None:
             return

@@ -149,6 +149,8 @@ prepared coverage (`96c895e7`). A2 now preserves bound crops and committed
 horizontal spacing on resize; targeted Python/native checks and the existing
 controller journey with a resize diagnostic pass. A3–A6 and obsolete-port
 cleanup remain open. Physical resize acceptance remains unverified.
+A3 lifecycle transfers now pass all 107 Python behaviour checks (one optional
+system-SF2 skip); remaining work is A4–A6 and obsolete internal ports.
 
 Implementation audited at `640a77f5`. The prior Phase 5 completion assessment
 was too broad and is reopened. The [active audit](docs/architecture.md#remaining-work--source-audit-2026-11-20)

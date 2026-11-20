@@ -19,6 +19,19 @@ from .application.playback_facts import RestResumeFacts
 
 @dataclass
 class VisualTransport:
+    def select_opening(self, from_beat: float) -> None:
+        self.play_from_beat = from_beat
+
+    def prepare_rewind(self, from_beat: float) -> None:
+        self.pending_rewind = from_beat
+
+    def finish_rewind(self) -> None:
+        self.pending_rewind = None
+
+    def enter_preparation_phase(self, phase: str) -> None:
+        if self.practice_preparation is not None:
+            self.practice_preparation["phase"] = phase
+
     def install_timed_origin(self, *, from_beat: float, run_at: float,
                              gap_beats: float) -> None:
         """Install the already selected onset shared by score and grading."""

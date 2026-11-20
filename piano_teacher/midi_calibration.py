@@ -44,6 +44,10 @@ class MidiTapCalibration:
     def cancel(self) -> None:
         self.active = False
 
+    def reset(self) -> None:
+        self.cancel()
+        self.result = None
+
     def observe(self, at: float) -> bool:
         if not self.active:
             return False

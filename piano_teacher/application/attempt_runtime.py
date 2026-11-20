@@ -36,6 +36,33 @@ class AttemptRuntime:
         self.feedback_marks = []
         self.feedback_unmapped = 0
 
+    def suspend_recording(self) -> None:
+        self.recorder = None
+
+    def leave_guided_recovery(self) -> None:
+        self.guided_recovery_pending = False
+
+    def restore_retry(self, selected) -> None:
+        self.retry_range = dict(selected) if selected is not None else None
+
+    def prepare_timed_exposure(self, prepared) -> None:
+        self.review_end_beat = prepared.end_beat
+        if prepared.return_context is not None:
+            self.restore_retry(prepared.retry_range)
+
+    def prepare_section(self, *, start: float, end: float,
+                        first_bar=None, last_bar=None) -> None:
+        self.review_end_beat = end
+        self.retry_range = {"start_beat": start, "end_beat": end}
+        if first_bar is not None:
+            self.retry_range.update(first_bar=first_bar, last_bar=last_bar)
+
+    def publication_failed(self) -> None:
+        self.settlement_failed = True
+
+    def publication_finished(self) -> None:
+        self.settlement_failed = False
+
     def reset_source_presentation(self) -> None:
         self.clear_feedback()
 

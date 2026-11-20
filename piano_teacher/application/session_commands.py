@@ -31,6 +31,9 @@ class SessionCommands:
         finally:
             self.active = previous
 
+    def prepare_exposure(self, selected) -> None:
+        self.prepared = selected
+
     def prepare(self, *, event, state, generator):
         decision = generator.decide_teaching(event, state)
         validate_teaching_decision(decision, event=event, state=state)

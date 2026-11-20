@@ -81,6 +81,16 @@ class GuidedSession:
         self.fragment = None
         self._stage_key = ""
 
+    def discard_return(self) -> None:
+        self.return_context = None
+
+    def select_timed_return(self, context) -> None:
+        self.clear_selection()
+        self.return_context = context
+
+    def finish_preparation(self, *, remediation_active: bool) -> None:
+        self.prepared = not remediation_active
+
     @property
     def beat_range(self) -> tuple[float, float] | None:
         return self.fragment.beat_range if self.fragment is not None else None

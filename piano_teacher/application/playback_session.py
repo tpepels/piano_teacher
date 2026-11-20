@@ -284,7 +284,7 @@ class PlaybackSession:
         else:
             self._transport.withdraw_announcement()
         self.running = False
-        self._attempt.recorder = None
+        self._attempt.suspend_recording()
         self.count_in_beats = 0.0
         self._measurement.phase_changed("preparation",request.now)
 
@@ -308,7 +308,7 @@ class PlaybackSession:
         self._settlement.cancel(reason="restart",now=request.now)
         self._continuation.cancel()
         self._transport.set_retry_previous_pass(False)
-        self._attempt.guided_recovery_pending = False
+        self._attempt.leave_guided_recovery()
         self._midi.clear_resume_gate()
         self._transport.clear_grading_floor()
         self.schedule_preparation(request)

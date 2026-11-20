@@ -317,6 +317,14 @@ Implementation ledger (main, starting at `82bf06bb`):
   and 14 desktop/timeline tests pass (`architecture-a2-ci.log`); the actual
   controller/Resume/pool diagnostic preserves each bound source crop during
   pool growth. Physical resize appearance remains unverified.
+- A2 commit: `0d959470`.
+- A3 implemented: exposure/review/retry, settlement publication, guided return,
+  recording suspension and preparation transitions use their existing owners.
+  Manual command scopes use SessionCommands' context manager; obsolete Engine
+  teaching/hint setters and redundant stop resets are removed. Calibration
+  reset and assistance capture also mutate inside their owners. All existing
+  Python behaviour checks pass: 107 passed, one optional system-SF2 skip
+  (`architecture-a3-ci.log`).
 
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic
