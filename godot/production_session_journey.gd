@@ -4,6 +4,7 @@ extends SceneTree
 ## Runs against a saved copy of midi/Moonlight_Sonata_I.midi in an isolated home.
 const MAX_MS := 170000
 const EXPECTED_PIECE := "Moonlight_Sonata_I.midi"
+const Admission := preload("res://score_stream_admission.gd")
 var app
 var started_ms := 0
 var phase_ms := 0
@@ -233,14 +234,6 @@ func _process(_delta: float) -> bool:
                 initial_revision,restarted_transport]
             var reserved_match := false
             var wrong_side := false
-            var last_rest_end := -INF
-            for item in view.stream_passes:
-                if str(item.get("kind","")) != "rest":
-                    continue
-                var rest_end: float = float(item.get("world_origin",0.0)) + \
-                    float(item.get("source_ceiling",0.0))
-                if rest_end <= view.stream_world_beat+8.0:
-                    last_rest_end = maxf(last_rest_end,rest_end)
             for item in view.stream_passes:
                 if str(item.get("kind","source")) != "source" or \
                         str(item.get("take_key","")) != expected or \
@@ -260,16 +253,25 @@ func _process(_delta: float) -> bool:
                         is_finite(playhead) and is_finite(viewport_width)):
                     wrong_side = true
                     continue
-                var clip: Vector2 = \
-                    preload("res://score_stream_admission.gd").clip_bounds(
+                var clip: Vector2 = Admission.clip_bounds(
                         item,density,gap,view.timeline.duration_beats)
                 var admitted_left: float = playhead + \
                     (float(item["world_origin"])-world_at)*density + clip.x
                 wrong_side = wrong_side or \
                     (admitted_left <= viewport_width and \
                     not bool(item.get("admitted_on_empty_strip",false)))
-                if last_rest_end > -INF:
-                    wrong_side = wrong_side or source_at < last_rest_end-0.001
+                # A rest AFTER the retry source must never be mistaken for
+                # its preceding gap. Locate the nearest genuine rest ending
+                # at/before this source, which may itself already be moving.
+                var prior_rest_end := -INF
+                for rest in view.stream_passes:
+                    if str(rest.get("kind","")) != "rest":
+                        continue
+                    var rest_end: float = float(rest.get("world_origin",0.0)) + \
+                        float(rest.get("source_ceiling",0.0))
+                    if rest_end <= source_at+0.001:
+                        prior_rest_end = maxf(prior_rest_end,rest_end)
+                wrong_side = wrong_side or prior_rest_end == -INF
             if not _ready_score() or not reserved_match or wrong_side or \
                     not retry_rest_seen:
                 _fail("Retry lacks a bounded future source and full rest " + \

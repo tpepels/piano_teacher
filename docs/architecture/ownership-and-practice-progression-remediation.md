@@ -300,6 +300,11 @@
 - Removed the second snapshot-time `present_flow` invocation from `PracticePresentationSession.accept`. Stream reconciliation now happens once in `present_frame`; unloaded/reloading states continue projecting old clips until their natural expiry, preserving the continuous bar. No new test files were added.
 - Re-run the existing native journey and package audit. No physical CA49/audio measurement has been conducted.
 
+### Implementation checkpoint AL — distinguish the preceding gap from the following gap
+
+- Corrected the existing native Retry witness: a future rest after the newly admitted source cannot count as its preceding silence. The acceptance now selects the nearest real rest that ends at or before the retry's source onset. The invariant still rejects a retry with no predecessor rest.
+- The clipping calculation uses a single class-level admission import. No new tests or product policy changes.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
