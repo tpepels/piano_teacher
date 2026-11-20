@@ -594,6 +594,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Updated only that fixture's monkeypatch import to the canonical notation module. All assertions of selected source bar, following meter, exact deadline, pending rewind and preparation geometry are unchanged; no test was added or skipped.
 - Full core CI and current native acceptance still required.
 
+### Implementation checkpoint BX — finish stream identity writes and retained reparent ownership
+
+- `NativeScoreView.load_score` no longer invokes the private `ScoreStreamQueue.bind_score` or reads its private `last_error`; `ScoreStreamController.bind_source_identity` and `source_identity_error` are the sole bounded port for restoring offline source material across score reloads.
+- The final direct `StreamLifecycle.attach_compiled` call in the renderer now belongs to `RetainedNotationPool.attach_compiled`, alongside the pool's already-owned CanvasItem allocation, precompile, invalidation and retirement. The native view only requests the prepared pool be attached before its visual projection.
+- This removes two remaining non-painting writes from the view without changing clip source, world position, pause or retry. The renderer still reads the internal online source for efficient paint projection; it does not mutate queue membership. No new tests. Native compile/repertoire/package CI remains the acceptance gate.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

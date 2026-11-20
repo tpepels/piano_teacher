@@ -79,6 +79,12 @@ func mark_published(ready_now: bool) -> bool:
     ink_published = true
     return true
 
+func attach_compiled(online: Array) -> void:
+    # Source and semantic rest CanvasItems belong to the same retained
+    # resource lifetime. Never reparent from the renderer's draw callback.
+    StreamLifecycle.attach_compiled(online)
+
+
 func invalidate(view: Control, online: Array) -> void:
     ink_published = false
     # Unstage before recompilation: Godot cannot rebuild draw commands

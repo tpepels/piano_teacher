@@ -50,6 +50,15 @@ func online_snapshot() -> Array:
     # Admission PREPARE reads a frozen copy, never the live FIFO array.
     return queue.online.duplicate(true)
 
+func bind_source_identity(identity: String) -> bool:
+    # Offline/history continuity is owned by the sole immutable FIFO.
+    return queue.bind_score(identity)
+
+
+func source_identity_error() -> String:
+    return queue.last_error
+
+
 func online_size() -> int:
     return queue.online.size()
 

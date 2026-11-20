@@ -368,9 +368,10 @@ func load_score(candidate: Dictionary) -> bool:
     if not super.load_score(candidate):
         failure_reason = notice
         return false
-    if not _stream_queue.bind_score(_archive_source_identity(candidate)):
+    if not _stream_controller.bind_source_identity(
+            _archive_source_identity(candidate)):
         failure_reason = "Cannot recover offline score material: " + \
-            _stream_queue.last_error
+            _stream_controller.source_identity_error()
         notice = failure_reason
         return false
     # The actual native glyph solver below is the only authority for
@@ -814,7 +815,7 @@ func present_flow(world_beat: float, state: Dictionary,
     # Retained compilation may have finished since the previous frame.
     # Clip attachment happens here, before CanvasItem._draw() projects
     # positions. No scene-tree modification is permitted in _draw().
-    StreamLifecycle.attach_compiled(_stream_queue.online)
+    _retained_pool.attach_compiled(_stream_queue.online)
     queue_redraw()
 
 
