@@ -98,6 +98,11 @@ def _pcm_chunks(voices: tuple[_Voice, ...], frames: int, sample_rate: int,
     # where one note sounds alone (owner: Listen "really soft"). Samples are
     # clamped below, so a rare full-voice peak cannot wrap around.
     gain = .72 / max(1.0, math.sqrt(peak))
+    sample_seconds = 1.0/sample_rate
+    attack_per_frame = sample_seconds/.006
+    release_per_frame = sample_seconds/.025
+    decay_step = math.exp(-1.1*sample_seconds)
+    nyquist = sample_rate/2
     active = []
     next_voice = 0
     for first in range(0, frames, chunk_frames):
@@ -113,16 +118,33 @@ def _pcm_chunks(voices: tuple[_Voice, ...], frames: int, sample_rate: int,
             continue
         mixed = [0.0]*(last-first)
         for voice in active:
-            duration = (voice.last-voice.first)/sample_rate
-            harmonics = [(h, weight) for h, weight in ((1, .8), (2, .15), (3, .05))
-                         if voice.frequency*h < sample_rate/2]
-            weights = sum(weight for _, weight in harmonics)
-            omega = math.tau*voice.frequency
-            for frame in range(max(first, voice.first), min(last, voice.last)):
-                elapsed = (frame-voice.first)/sample_rate
-                envelope = min(1.0, elapsed/.006, (duration-elapsed)/.025)*math.exp(-1.1*elapsed)
-                signal = sum(weight*math.sin(omega*h*elapsed) for h, weight in harmonics)/weights
-                mixed[frame-first] += gain*envelope*signal
+            start = max(first, voice.first)
+            stop = min(last, voice.last)
+            # Use the same three authentic pitch harmonics with one bounded
+            # oscillator. Restart the phase each chunk to bound drift on
+            # long sustained notes instead of computing sine three times
+            # for each sample of every voice.
+            elapsed = (start-voice.first)*sample_seconds
+            phase = math.tau*voice.frequency*elapsed
+            sine, cosine = math.sin(phase), math.cos(phase)
+            step = math.tau*voice.frequency*sample_seconds
+            sin_step, cos_step = math.sin(step), math.cos(step)
+            second = .15 if voice.frequency*2 < nyquist else 0.0
+            third = .05 if voice.frequency*3 < nyquist else 0.0
+            inverse_weight = 1.0/(.8+second+third)
+            decay = math.exp(-1.1*elapsed)
+            for frame in range(start, stop):
+                held = frame-voice.first
+                remaining = voice.last-frame
+                envelope = min(1.0, held*attack_per_frame,
+                               remaining*release_per_frame)*decay
+                harmonic = (.8*sine + second*(2*sine*cosine)
+                            + third*(3*sine-4*sine*sine*sine))*inverse_weight
+                mixed[frame-first] += gain*envelope*harmonic
+                old_sine = sine
+                sine = old_sine*cos_step + cosine*sin_step
+                cosine = cosine*cos_step - old_sine*sin_step
+                decay *= decay_step
         samples = array('h', (round(max(-1.0, min(1.0, value))*32767) for value in mixed))
         if sys.byteorder != 'little':
             samples.byteswap()
@@ -218,7 +240,7 @@ class DemoAudioCache:
             raise RuntimeError("The sampled piano is installed, but libfluidsynth is missing. Install fluidsynth.")
         content = {
             # Bumped when the rendered level changes (3/4: normalised loudness).
-            "synth": 3 if soundfont is not None else 4,
+            "synth": 3 if soundfont is not None else 5,
             "bank": soundfont.identity if soundfont else None,
             "sample_rate": self.sample_rate, "bpm": float(bpm),
             "level": variant.level, "range": [phrase.start, phrase.end],

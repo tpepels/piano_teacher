@@ -161,10 +161,18 @@ the renderer's private `stream_passes` property. Both remote core and
 native-production CI then passed
 ([run 44796955201](https://github.com/tpepels/piano_teacher/actions/runs/44796955201)),
 including embedded real-score journeys and relocated package boot.
-A follow-up dependency cleanup gives curriculum helpers explicit public ports
-and moves shared authentic SVG rasterization into its own module. That new
-refactor needs its own complete CI result. Physical and clean-machine acceptance
-remain separate.
+The follow-up commits `0028157d` and `44398729` remove remaining
+private-helper imports in the source-planning, notation, engraving, MIDI
+import and research modules; the bounded authentic SVG rasterizer is shared
+without a reverse tuplet-to-beam import. Native-production passed at `44398729`
+but its core CI hit real audio-readiness timeouts under concurrent fixture
+rendering (101 passed, 4 skipped; three timeouts and two worker teardown errors).
+Fallback PCM is now synthesized with a bounded fundamental-phase recurrence,
+preserving the original overtone weights, attack/release shape and output
+format while avoiding redundant per-sample transcendental calls. Its cache
+revision changes to invalidate old synthetic WAVs. A fresh complete CI
+result is required before accepting this correction. Physical and clean-machine
+acceptance remain separate.
 
 ## Phase status and remaining acceptance
 
