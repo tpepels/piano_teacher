@@ -309,7 +309,14 @@ Implementation ledger (main, starting at `82bf06bb`):
   Existing desktop/timeline Python checks and all native checks pass
   (`architecture-a1-ci.log`); a direct Godot gateway diagnostic accepts the
   4-authored/6-sounding range and rejects mismatched prepared assets.
-  Physical rendering remains unverified. Commit: recorded by the next step.
+  Physical rendering remains unverified. Commit: `96c895e7`.
+- A2 implemented: pool reseeding is allowed only before stream binding;
+  growth initializes new capacity without rewriting admitted crops. Once ink
+  is committed, engraving preserves its gap and safe horizontal boundaries
+  through resize while rebuilding vertical placement. Existing native checks
+  and 14 desktop/timeline tests pass (`architecture-a2-ci.log`); the actual
+  controller/Resume/pool diagnostic preserves each bound source crop during
+  pool growth. Physical resize appearance remains unverified.
 
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic

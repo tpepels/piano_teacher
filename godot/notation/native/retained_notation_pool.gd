@@ -55,26 +55,32 @@ func install(view: Control, windows: Array[Vector2]) -> void:
     clear(view)
     view.clip_contents = true
     first_once = _new_segment(view,"source")
-    resize(view,windows)
+    resize(view,windows,true)
     annotations = RetainedAnnotationOverlay.new()
     annotations.set("painter",_painter)
     annotations.z_index = 5
     view.add_child(annotations)
     StreamLifecycle.present_pool(all_segments)
 
-func resize(view: Control, windows: Array[Vector2]) -> void:
+func resize(view: Control, windows: Array[Vector2], reseed: bool = false) -> void:
     if first_once == null:
         return
     # Pre-engrave one authentic source interval per measure, then retain
     # additional source and silent rest strips for future immutable takes.
-    if not windows.is_empty():
+    # Only an unbound pool may be reseeded. Admission owns every bound
+    # segment's context/Resume crop, regardless of its pool-array position.
+    if reseed and not windows.is_empty():
         if first_once.source_floor != windows[0].x or first_once.source_ceiling != windows[0].y:
             _invalidate_publication()
         first_once.set_source_window(windows[0].x,windows[0].y)
     var required: int = maxi(4,windows.size()-1)
     while repeat_segments.size() < required:
-        repeat_segments.append(_new_segment(view,"source"))
-    for index in range(1,windows.size()):
+        var index: int = repeat_segments.size()+1
+        var segment = _new_segment(view,"source")
+        if index < windows.size():
+            segment.set_source_window(windows[index].x,windows[index].y)
+        repeat_segments.append(segment)
+    for index in range(1,windows.size()) if reseed else []:
         if repeat_segments[index-1].source_floor != windows[index].x or repeat_segments[index-1].source_ceiling != windows[index].y:
             _invalidate_publication()
         repeat_segments[index-1].set_source_window(

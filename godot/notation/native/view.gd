@@ -211,6 +211,8 @@ func _init() -> void:
     _stream_controller.bind_surface(self,_retained_pool,engraving.source_windows)
     _retained_pool.bind_painter(painter,retained_segment_compiled)
     resized.connect(func():
+        if _stream_controller.online_size() > 0:
+            engraving.preserve_spacing()
         layout.set_viewport(size)
         if native_ready and size.y >= 100.0:
             _prepare_static_geometry()
@@ -354,7 +356,7 @@ func _resize_retained_pool(install: bool = false) -> void:
     if install:
         _retained_pool.install(self,windows)
     else:
-        _retained_pool.resize(self,windows)
+        _retained_pool.resize(self,windows,_stream_controller.online_size() == 0)
 
 func retained_ready() -> bool:
     return _retained_pool.ready(native_ready,size)

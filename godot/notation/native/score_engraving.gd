@@ -50,6 +50,7 @@ var beam_extraction_complete := true
 var source_ink_intervals: Array[Vector2] = []
 var cursor_engraved_events: Array = []
 var failure_reason := ""
+var _committed_gap := 0.0
 
 func _init(axis) -> void:
     timeline = axis
@@ -67,6 +68,7 @@ func clear(axis) -> void:
     cursor_engraved_events.clear()
     source_ink_intervals.clear()
     staff_gap_limit = MAX_STAFF_GAP
+    _committed_gap = 0.0
     failure_reason = ""
     layout.clear()
 
@@ -74,7 +76,14 @@ func set_viewport(viewport: Vector2) -> void:
     layout.set_viewport(viewport)
 
 func gap() -> float:
-    return layout.staff_gap(staff_gap_limit)
+    return _committed_gap if _committed_gap > 0.0 else layout.staff_gap(staff_gap_limit)
+
+func preserve_spacing() -> void:
+    # Horizontal glyph offsets and safe crop edges belong to this source
+    # revision once exposed. A taller/shorter viewport may move staff centres
+    # vertically but cannot change these printed widths under the ledger.
+    if _committed_gap <= 0.0:
+        _committed_gap = gap()
 
 func load_assets(items: Dictionary, note_items: Dictionary = {},
         tie_items: Dictionary = {}, chord_items: Dictionary = {},
@@ -133,8 +142,9 @@ func prepare_geometry() -> void:
     connector_geometry.prewarm_tie_clearances(prepared_gap)
     connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
     connector_geometry.prewarm_slur_geometry(prepared_gap)
-    source_ink_intervals = NotationClipPlanner.ink_safe_boundaries(
-        layout,timeline,prepared_gap)
+    if _committed_gap <= 0.0:
+        source_ink_intervals = NotationClipPlanner.ink_safe_boundaries(
+            layout,timeline,prepared_gap)
 
 func first_header_spaces() -> float:
     # The actual opening's authentic Verovio glyphs are positioned by

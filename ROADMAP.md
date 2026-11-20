@@ -145,7 +145,10 @@ acceptance remain unverified.
 Remediation execution: A1 now validates authored and sounding bounds from the
 existing semantic source contract. Targeted Python and all native checks pass;
 the direct gateway diagnostic accepts a full held ending and rejects different
-prepared coverage. A2–A6 and obsolete-port cleanup remain open.
+prepared coverage (`96c895e7`). A2 now preserves bound crops and committed
+horizontal spacing on resize; targeted Python/native checks and the existing
+controller journey with a resize diagnostic pass. A3–A6 and obsolete-port
+cleanup remain open. Physical resize acceptance remains unverified.
 
 Implementation audited at `640a77f5`. The prior Phase 5 completion assessment
 was too broad and is reopened. The [active audit](docs/architecture.md#remaining-work--source-audit-2026-11-20)
