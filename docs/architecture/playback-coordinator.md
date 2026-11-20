@@ -15,7 +15,17 @@ protocol has authorized the same source, segment identity and downbeat.
   validates source revisions, owns the reserve/present/cancel lifecycle,
   authorizes takes and publishes `playback_intent` and
   `playback_timeline`. The coordinator alone commits a graphical timed
-  transport through `PracticeEngine._commit_playback_intent`.
+  transport through the application's explicit authorization commit port.
+- **PlaybackSession / VisualTransport / MidiIngress:** one attempt lifetime,
+  one musical source epoch and one graded-input gate respectively.
+  PlaybackSession executes the original selected transition under the
+  coordinator's authorization; Pause/Resume cannot create another deadline
+  chooser or replace its recorder. The application facade supplies source
+  facts and dispatches typed effects under its lock.
+- **AttemptSettlement:** one pending assessment/decision, original performed
+  tempo, durable evidence/progress transaction and cached publication receipt.
+  A post-commit retry reuses the source revision and offset; it cannot regrade
+  the result or award progress twice.
 - **MusicalScheduler (pure Python):** resolves absolute deadlines from
   count-in, tempo, physical clearance, requested earliest time and latency.
 - **ScoreAdmissionGateway (Godot main thread):** chooses the exact prepared
@@ -23,12 +33,17 @@ protocol has authorized the same source, segment identity and downbeat.
   physical reservation and sends its receipt to Python. It never grades or
   decides a lesson.
 - **ScoreStreamController / ScoreStreamQueue:** one mutable stream FIFO,
-  arm/rollback identity, archival and suffix withdrawal ledger for each
-  native renderer revision. NativeView currently exposes compatibility
-  properties while these ledger algorithms are moved out; external
-  stage controllers must use published capabilities, not the queue itself.
+  archival and suffix withdrawal ledger for each native renderer revision.
+  StreamTakeBinding owns arm/ACK/Pause/compensation identities;
+  StreamRecoveryPlanner owns identity-bound untimed Free placement.
+  NativeView supplies immutable geometry and controlled public operations;
+  external stage controllers cannot mutate the queue.
   A failed reservation restores the safe withdrawn suffix if physical
-  time still permits it.
+  time still permits it. A failed journal reset preserves every live clip,
+  its binding and retained CanvasItems, and blocks source replacement.
+- **ScoreEngraving / ScorePainter / GlyphAssets / GlyphHeadMasks:** authentic
+  source assembly, canvas composition, original image catalogs and derived
+  status-mask caches respectively. None selects grading or teaching.
 - **NotationClipPlanner / StreamAdmissionExecutor:** pure source-safe
   clipping and a single physical transaction executor respectively.
 - **ScoreSceneController:** the only authority that replaces the active

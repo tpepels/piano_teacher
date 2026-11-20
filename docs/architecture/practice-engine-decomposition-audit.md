@@ -4,24 +4,43 @@
 **Scope:** Every application method and state group, existing domain collaborators, and the next safe ownership transfers. This is the **baseline audit** before the subsequent extraction checkpoints; the implementation-status section immediately below is current. The original L01 discussion in the remediation tracker records historical baseline source locations.  
 **Method scan:** 158 `def` definitions including property accessors, with approximately 99 fields assigned during `PracticeEngine.__init__` and a 148-line constructor. High line count is a symptom; multiple writable owners, hidden re-entrancy and ordering dependencies are the actual risks.
 
-## Resolution and remaining ownership audit — `c65679ce`
+## Current resolution — integrated 20 November source
 
-The baseline below deliberately preserves the observed pre-extraction violations. These are **not all outstanding**. The latest source still contains approximately 3,366 lines of `PracticeEngine`, but most former domain mutation policies are now owned by dedicated objects. At this revision, [core CI 44733911571](https://github.com/tpepels/piano_teacher/actions/runs/44733911571) passed through the AttemptRuntime update. The [full native/product/package suite 44732784904](https://github.com/tpepels/piano_teacher/actions/runs/44732784904) passed at `dedc7bd5`; latest changes are being rechecked separately.
+The sections beginning **Concrete responsibilities** below preserve the baseline
+observations and source ranges. They are historical audit evidence, not a list
+of current defects. Checkpoints CA onward in the
+[remediation tracker](ownership-and-practice-progression-remediation.md) record
+this integration and its source-specific verification. The last remote baseline
+is `12f50e66` ([core run 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032));
+new local commits have not been pushed.
 
-| Original violation | Resolution implemented | Still required before Phase 5 closure |
+| Baseline violation | Authoritative implementation now | Verification / remaining gate |
 | --- | --- | --- |
-| Entire `PracticeEngine` passed to PlaybackCoordinator | **Resolved:** frozen `PlaybackSourceFacts` and `PlaybackRuntimeFacts`, one explicit commit/capture/abort port; coordinator no longer reads `engine.*` | Inspect every exceptional Retry and Listen rollback against real source during native revalidation |
-| Multiple writers of take state | **Substantially resolved:** `AttemptRuntime` now owns recorder, pending result, assessed BPM, review and feedback; `RecoveryStreak` owns across-attempt trouble; `AttemptSettlement` owns durable evidence | Finish separation of `_advance_pending_feedback`, `_finish_full_passage` and rollback after persisted-but-not-published steps |
-| Private VisualTransport lifecycle access | **Resolved for preview/retry/preparation flags:** semantic public ports and transport-owned preview rest scheduling | Eliminate remaining command-level writes of `run_at`, `paused`, `next_at` and direct MIDI grading epoch outside their owners |
-| Future-score readiness/state duplicated in engine | **Substantially resolved:** `TeachingContinuation` selects/preloads/acknowledges, validates reservations and adopts assets only after durable commit; dead readiness poll fixed | Exact acknowledgement/failure interleavings and stage asset propagation require native/physical verification |
-| Lesson/flow verdict message parsing | **Resolved:** one typed `Outcome`, `PracticeFlowCourseSession.settle_decided`, pure `PassageOutcomePresenter` | Consolidate remaining UI text updates so asynchronous failures cannot overwrite fresher selected decisions |
-| Incorrect or repeated source facts | **Substantially resolved:** notation owns source-metrical retry silence; `ListenSession` validates CountInPlan before starting; GuidedSession owns source-bound fragment; SourcePreparation handles MIDI+fingering import | Atomic retargeting of a fingering correction while a score revision changes |
-| Native/renderer state exposure | **Substantially resolved:** stream admission/recovery and immutable ledger in ScoreStreamController, retained compiled pool in RetainedNotationPool, online/offline external queues deep-snapshotted; root input/feedback handlers extracted | Native view and Main remain large UI composition/painter facades; inspect residual cross-owner property mutation and draw lifecycle |
-| Version-specific software product verification | **Passed at previous source:** native bridge, graphical Play/Pause/Resume/Retry, Listen, Moonlight/Peace Piece/Chopin and clean extracted package boot at `dedc7bd5` | Full native rerun at current source and physical CA49/USB/Bluetooth/speaker latency and mastery checks (not available here) |
+| Whole Engine passed to PlaybackCoordinator | Frozen source/runtime facts, one authorization protocol; PlaybackSession executes the exact original admitted transition | Existing core suite passes; current production journey running |
+| Several take-state writers and mixed start/resume/stop logic | PlaybackSession owns mode, running/automatic/preview flags, take epoch, count-in, score wait, suspended intent and deferred ACK. Engine captures facts and applies returned effects. | Independent final source review cleared the implemented fixes |
+| Duplicate pending assessment and incomplete completion transaction | AttemptSettlement owns the exact event assessment, selected completion, rolling recovery and committed receipt. Original source revision, visual offset, performed BPM and asset identity survive storage/publication retries. AttemptRuntime holds recorder/review projections only. | Checkpoint and guided publication retries reviewed; existing core suite passes |
+| Feedback/recovery policy in Engine | CompletionEffect, exposure preparation, AttemptProgression and TeachingContinuation select typed routes. Engine dispatches source effects; it does not choose another grade, window, outcome or tempo. Flow display consumes the selected decision ID once. | Existing core suite passes after the failure-order fixes |
+| Private transport mutations and duplicate source epochs | VisualTransport owns musical source epochs, held-note pause floor, tempo epoch, rest-resume announcement and preview/preparation state. MidiIngress alone owns the input grading gate. PlaybackSession applies metrical effects through those owners. | No foreign private-field access remains in the three facades; current native verification due |
+| Preloader supplies timing or several future-asset policies | TeachingContinuation owns exact future selection, reservation, readiness and source-stamped post-settlement publication. Its retry-poll timestamp cannot retime an announced musical deadline. MusicalScheduler remains the single deadline calculator. | Final native stage-handoff journey due |
+| Fingering correction identity checks in Engine | SourcePreparationSession owns source mutation serialization, generation and original-note identity validation, then returns an exact Piece/revision install effect. Engine applies it under its existing short state lock. | Existing correction/concurrency tests pass |
+| Snapshot traversal writes musical state | SnapshotReadPorts now contains reads only. The timed source installation installs the authentic source gap through VisualTransport; serialization cannot alter rest scheduling. | Existing core suite passes with the write port removed |
+| Native view combines engraving, paint and queue mutations | NativeScoreView composes ScoreEngraving, ScorePainter, ScoreStreamController, StreamTakeBinding, StreamRecoveryPlanner and RetainedNotationPool. Only ScoreStreamQueue mutates FIFO membership; no executor receives the entire renderer. GlyphAssets, GlyphHeadMasks and Glyphs separate artwork, masks and drawing. | Existing Godot checks pass; full current embedded/native run due |
+| Root scene owns callback/event policy | Main wires scenes and application lifetime. Inbox, presentation, polling, command, library, settings, MIDI, navigation, lesson and audio sessions own their respective replies/effects. PracticeChrome separates construction/layout from PracticeScreen interaction. | Existing Godot syntax/UI/schema checks pass |
+| Replacement modules grow into another monolith | PlaybackSession is a cohesive take-lifecycle executor; pure scheduling remains in AttemptProgression, immutable DTOs in playback_facts. TeachingContinuation owns source readiness/publication, with no generator or Engine reference. ScoreStreamController coordinates one transaction queue; binding/recovery, painting and resource lifetime have distinct owners. | Independent review found no second grader, FIFO or world clock |
 
-**Open structural blocker:** `PracticeEngine` still has lengthy, mixed side-effect control methods (`start`, `_start_or_restart`, `_resume_current_session`, `_advance_pending_feedback`, `_complete_attempt`, `_finish_full_passage`). They legitimately coordinate several existing owners, but combine event authorization, mutable session state, UI text, clock changes and next-source handoff. Future extraction must reduce direct mutations via explicit effect application without introducing a second deadline chooser or passing the full engine to a new facade.
+The final independent source review cleared the corrected storage-failure
+ordering holes, snapshot write port, source-correction generation and failed
+native-journal teardown. It found no remaining concrete structural or
+correctness blocker and no second grader, FIFO or world clock. The existing
+core suite passes after these fixes (335 passed, one skipped, all Godot checks);
+the structural verifier reports `PHASE5_ARCHITECTURE_AUDIT_OK`.
+**Phase 5 source review is complete; closure awaits the running integrated
+production verification. Phase 6 remains incomplete:** current embedded/
+repertoire/relocated-package results must be recorded, and physical
+CA49 USB/Bluetooth MIDI, speakers, latency, performance and clean-machine
+desktop acceptance cannot be inferred from headless checks. No tests were added.
 
-**Phase 5 state:** incomplete. **Phase 6 state:** earlier software suite passed; current suite in progress; physical acceptance incomplete. No new tests have been authored.
+## Historical baseline audit
 
 ## Concrete responsibilities and existing authorities
 

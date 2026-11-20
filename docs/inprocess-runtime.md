@@ -1,6 +1,7 @@
 # Embedded runtime
 
-Technical contract only. The sole active development plan is [ROADMAP.md](../ROADMAP.md).
+Technical contract only. The [current owner map](architecture/system.md)
+describes source responsibilities; [ROADMAP.md](../ROADMAP.md) records phases.
 
 Piano Teacher is a **single Godot process** using a CPython interpreter
 inside a C++ Godot 4.7 GDExtension. There is no alternate application
@@ -20,9 +21,13 @@ runtime, HTTP service, UDP listener or port binding.
   until all ordinary retained source/rest buffers have compiled. Current
   segments cover whole passages, so unusually long scores may still need
   finer spatial tiling and GPU/frame-time benchmarking.
-  `source_pass_painter.gd` owns one-time authored composition;
-  `retained_note_projection.gd` owns visible notehead indexing, and
-  `view.gd` owns scene lifecycle and camera transforms. The source-copy pool
+  [SourcePassPainter](../godot/notation/native/source_pass_painter.gd) owns
+  one-time authored composition; [RetainedNoteProjection](../godot/notation/native/retained_note_projection.gd)
+  owns visible notehead indexing. [ScoreEngraving](../godot/notation/native/score_engraving.gd)
+  owns layout/asset preparation and [ScorePainter](../godot/notation/native/score_painter.gd)
+  owns native canvas composition. [NativeScoreView](../godot/notation/native/view.gd)
+  supplies the canvas/lifecycle boundary; [ScoreStreamController](../godot/notation/native/score_stream_controller.gd)
+  owns its mutable source/rest ledger and take/recovery collaborators. The source-copy pool
   is sized from the viewport and semantic stride rather than a fixed clone
   count. Fingering labels are sorted during layout and binary-searched by
   their visible source-space interval each frame.
@@ -33,9 +38,14 @@ runtime, HTTP service, UDP listener or port binding.
   other musical deadlines even when the UI does not request `state.snapshot`.
   Writes re-evaluate the wakeup cadence immediately. No second clock or
   Python scheduler thread is created.
-- `piano_teacher.inprocess.EngineCommands` dispatches typed engine
-  operations. `PracticeEngine` remains authoritative for musical time,
-  grading, adaptive lessons, library state and MIDI input.
+- [EngineCommands](../piano_teacher/inprocess.py) dispatches typed operations.
+  [PracticeEngine](../piano_teacher/server.py) is the locked application/API
+  boundary. The selected lesson generator owns progression and tempo decisions;
+  [PlaybackSession](../piano_teacher/application/playback_session.py) owns transport
+  lifetime, [PlaybackCoordinator](../piano_teacher/application/playback_coordinator.py)
+  owns authorization, and existing assessment, MIDI, source and persistence
+  services retain their domain state. No helper receives the engine to make
+  a second teaching decision.
 - Note feedback travels through one acknowledged `FeedbackEventLog`
   (`feedback.events`): provisional key-down/key-up events appended during the
   hardware callback and authoritative per-note assessments published on every
@@ -47,8 +57,9 @@ runtime, HTTP service, UDP listener or port binding.
   command/tick worker it used to delay every musical tick and state read.
   `ScoreArtifacts` serializes itself (engraving lock, then model lock) and is
   called outside the engine lock; the snapshot needs only the model lock, and
-  the tick reads the published layout without locking. Measured on the real
-  bridge: about 170 state reads answered during a 2.4 s cold engraving.
+  the tick reads the published layout without locking. Current-source timing
+  and bridge behavior require the existing native checks; an earlier benchmark
+  is not a latency guarantee for a later build.
 - The Python GIL is held only while invoking Python; the C++ queues
   use condition variables rather than polling threads.
 
@@ -62,15 +73,41 @@ method, URL, socket, network adapter or compatibility route exists.
 
 ## Presentation and progression boundaries
 
-- `AttemptProgression` accepts immutable `AttemptTick` inputs and authored meter/source-boundary facts, and returns `AttemptStart` or `AttemptStep` scheduling decisions. `practice_transitions.py` now selects pre-assessment phase and absolute-deadline actions from `TransitionContext` without receiving the engine. `PracticeEngine` applies these choices under its existing lock, including Learn/Listen/preview/feedback/recovery effects; no second clock or transport owner is created.
-- `session_snapshot_builder.py` receives `SnapshotValues` (explicit capture facts) and `SnapshotReadPorts` (named clock, learner, source, Listen, and guided services). It never receives `PracticeEngine`, `MidiConnection`, the library, or a renderer. `PracticeEngine` assembles these values under its existing lock; one explicitly named write port synchronizes the source-derived preparation gap.
-- `practice_frame_coordinator.gd` and `practice_state_presenter.gd` receive only their visual collaborators at construction rather than the entire application. `main.gd` owns request sequencing, accepted-state transport updates and clock sampling; the frame coordinator receives the sampled beat and returns ungraded onset cues.
-- `assessment_settlement.py` grades completed takes and projects score ink using explicit assessment policies and a lazy layout lookup. Projection failures preserve the graded result and report unmapped notes. `teaching_decisions.py` builds the graded `AssessmentEvidence` for the selected teacher; `attempt_settlement.py` persists the capture and applies results to the selected `LearningPlan`, then returns the stage/tempo/remediation outcome. Only the engine changes transport, revision, feedback duration or session persistence.
-- `feedback_route.py` chooses remediation, guided continuation, score-revision wait, repeat or stop using immutable facts; the engine applies the decision. `guided_fragment.py` selects complete source-measure teaching units and skips silent opening units. `GuidedSession` owns the teaching controller, source fragment, prepared flag and guided return context; the engine remains the authoritative transaction boundary for score and MIDI operations. `LearnerProgress` selects unfinished guided ideas and persists completed guided preparation without receiving the engine.
-- `control_dispatch.py` classifies commands; `score_ack.py` and `transport_commands.py` select acknowledgment, start/restart, pause and deadline-shift decisions from explicit facts. `VisualTransport` owns both source-derived preparation-rest selection and the absolute reverse/forward deadline. Under its existing RLock, `PracticeEngine` applies transport effects. `stage_change.py` changes only `LearningPlan` selection/tempo and determines how guided teaching reenters after stage/tempo changes; `course_navigation.py` validates source-measure opening, and `AssessmentService` validates assessed review intervals. `GuidedSession` now supplies the same source-selected fragment used for controller binding and visible notation. `LearnerProgress` owns guided resume, rolling trouble, original placement and skip persistence.
-- `practice_control_policy.gd` chooses Play/Pause/Retry/Listen commands without view access, while `metronome_frame_coordinator.gd` retains audio-click counters and presents count-in/calibration/retry phases using the same visual transport clock. `main.gd` only invokes these owners with sampled state and callback ports.
-- `command_failure_presenter.gd` publishes failed command messages to injected views. `command_success_policy.gd` classifies accepted replies and `command_success_presenter.gd` publishes view effects. `navigation_policy.gd` decides pause-on-leave and Settings return behavior from explicit screen/transport facts. `command_request_state.gd` owns in-flight command metadata, queued Pause/Stop, deferred library selections, JSON serialization, bounded dispatch timeouts and immediate send-error resets. It accepts an injected request adapter per send, retaining no scene or application reference. `command_success_effects.gd` applies accepted-response effects in their original order via narrowly injected callbacks, without an application-root reference. `main.gd` retains response classification, state acceptance, actual screen navigation and request error presentation.
-- `live_midi_feedback.gd` builds one note-ID lookup at layout publication. It consumes live MIDI events without deep-copying the score layout or scanning every note. Grading stays with the backend.
+- [PracticeFlowLessonGenerator](../piano_teacher/practice_flow_course.py) commits
+  Free → Tempo at 50% in both the selected progress and exact next exposure.
+  Listen/Free use the target tempo. [Exposure preparation](../piano_teacher/application/exposure_preparation.py)
+  materializes the chosen source and score gate; [GuidedSession](../piano_teacher/application/guided_session.py)
+  owns its single fragment/beat interval and controller. The display flow does
+  not choose a replacement BPM after a teaching decision is committed.
+- [PlaybackSession](../piano_teacher/application/playback_session.py) applies
+  start, pause/resume, score/audio readiness and take-completion lifetime
+  effects through the existing transport/input/evidence services.
+  [AttemptProgression](../piano_teacher/application/attempt_progression.py) and
+  [MusicalScheduler](../piano_teacher/application/musical_scheduler.py) use authored
+  meter/source facts. [PlaybackTransition and CountInPlan](../piano_teacher/application/playback_transitions.py)
+  retain the authorized source, tempo and deadline across admission.
+- [AttemptSettlement](../piano_teacher/application/attempt_settlement.py)
+  retains the selected assessment/decision and commits evidence and course
+  progress together. A failed publication retries the same receipt; it does
+  not select another successor or grade the take again.
+- [Session snapshot builder](../piano_teacher/application/session_snapshot_builder.py)
+  receives explicit capture facts and named read ports. Its detached payload
+  cannot mutate the live course, capture, renderer or clock.
+- [Main](../godot/main.gd) composes services and signal connections.
+  [PracticeCommandCoordinator](../godot/practice_command_coordinator.gd) owns
+  request sequencing/results; [ApplicationStateInbox](../godot/application_state_inbox.gd)
+  accepts state, [ApplicationPollSession](../godot/application_poll_session.gd)
+  owns polling, and [PracticePresentationSession](../godot/practice_presentation_session.gd)
+  reconciles state, clock sampling and renderer readiness. Navigation, input,
+  settings and audio lifetimes have dedicated sessions.
+- [PresentationTimeline](../godot/presentation_timeline.gd) owns forward visual
+  projection/rate epochs. [ScoreAdmissionGateway](../godot/score_admission_gateway.gd)
+  admits an exact source/revision/deadline; [ScoreSceneController](../godot/score_scene_controller.gd)
+  promotes renderers. Retained note/rest ink stays on one world axis, while
+  the backend musical timeline remains authoritative for MIDI grading.
+- [PracticeFeedbackSession](../godot/practice_feedback_session.gd) consumes
+  the acknowledged note-event channel; [LiveMidiFeedback](../godot/live_midi_feedback.gd)
+  uses the layout's note-ID lookup. Provisional feedback cannot award mastery.
 
 ## Hot-path optimization
 
@@ -136,3 +173,12 @@ a portable release or physical Bluetooth latency.
 
 Run `bash scripts/test.sh` (core tests and Godot check). The native
 bridge smoke runs with `bash scripts/verify-native-bridge.sh`.
+
+These checks have different meanings: core/Godot checks cover their existing
+software contracts; the native smoke exercises embedded startup/typed IPC;
+the production and relocated-package scripts exercise the built application
+and assembled runtime. Results apply to their recorded source revision.
+Phase 5 awaits final ownership review and Phase 6 remains incomplete until
+current-source production/package checks and owner hardware acceptance are
+recorded. Headless results do not certify audible output, physical MIDI,
+Bluetooth latency or visual acceptance at the piano.

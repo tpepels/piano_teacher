@@ -1,10 +1,11 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-19 • MIDI input only**
+**Updated 2026-11-20 • MIDI input only**
 
 The development record before this date (phase logs, CI and audit history) is
 in git history. [Documentation index](docs/README.md) lists the technical
-contracts.
+contracts; the [current owner map](docs/architecture/system.md) describes the
+application architecture.
 
 ## Product
 
@@ -53,20 +54,29 @@ substitutes simplified notes.
 |---|---|
 | Foundation: MIDI import, library, native start, one process | Done |
 | Practice flow, backend (authored moving windows, hands, Listen/Free/Tempo, tempo/error rules, separate final test, resume) | Source integrated 2026-11-19; physical piano acceptance open |
-| Playback coordination (all timed routes, physical score admission, shared deadline, cancellation/reconciliation) | Integrated 2026-11-19; existing CI passes, physical session acceptance outstanding |
+| Playback coordination (all timed routes, physical score admission, shared deadline, cancellation/reconciliation) | Source integrated; current-source production and physical session acceptance outstanding |
 | Practice flow, screen (status line, messages, Pause + Listen again, metronome switch, two colours, count-in numbers) | Built 2026-11-18; owner testing at the piano |
 | Notation (native Verovio ink, display-scale glyphs) | Working; judged on screen |
 | MIDI calibration | Built; USB/Bluetooth accuracy not measured on hardware |
 | Packaging (`scripts/package-inprocess.sh`) | Staged runtime audit exists; clean-machine release not done |
+| Phase 5: ownership decomposition | Engraving/painting/stream, Godot application sessions and backend playback/exposure owners integrated; final source authority review pending |
+| Phase 6: software and product acceptance | Current-source full production/package verification pending; physical Kawai/USB/Bluetooth and clean-machine acceptance incomplete |
+
+The latest cited remote baseline is
+[`12f50e66`, run 44736734032](https://github.com/tpepels/piano_teacher/actions/runs/44736734032).
+Earlier local checkpoints reported 335 core tests passed/1 skipped and passing
+existing Godot checks. Those results apply to the checked source and do not
+certify subsequent edits, the current production package or physical piano
+behavior. The implementation tracker records final verification outcomes.
 
 ## Open work
 
-0. Complete the remaining Phase 5 ownership decomposition in the
+0. Complete the final Phase 5 source ownership review in the
    [implementation tracker](docs/architecture/ownership-and-practice-progression-remediation.md):
-   PracticeEngine still coordinates mutable lifecycle decisions; NativeScoreView
-   retains append/recovery admission and property forwarding; Main still
-   combines composition and command/state callbacks. Do not close a phase
-   while a second owner or fallback remains.
+   verify the extracted generator, playback/exposure, application-session and
+   native engraving/stream boundaries against their actual readers, writers
+   and effects. Do not close a phase while a second decision authority,
+   duplicate mutable ledger or private forwarding path remains.
 1. Owner verification of the integrated playback coordinator
    ([contract](docs/architecture/playback-coordinator.md)): real
    Listen → Free → Tempo, automatic repeats, Pause/Resume, physical-key

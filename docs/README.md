@@ -3,16 +3,18 @@
 [ROADMAP.md](../ROADMAP.md) records development phases and decisions. The
 learner-facing behaviour is specified in [Practice flow](practice-flow.md);
 where another document disagrees, the practice flow wins.
+The [current application architecture](architecture/system.md) is the single
+overview of actual owners; the tracker records review and acceptance gaps.
 
 ## Current technical contracts (reference, not roadmaps)
 
 | Area | Canonical document |
 | --- | --- |
 | Practice flow for one piece (owner decisions) | [Practice flow](practice-flow.md) |
-| Practice state machine and timeline (plan, steps 1-3) | [Practice state machine](architecture/practice-state-machine.md) |
+| Current application owner map | [Application architecture](architecture/system.md) |
+| Practice state machine and authorized timeline | [Practice state machine](architecture/practice-state-machine.md) |
 | Active playback authorization and ownership | [Playback coordinator](architecture/playback-coordinator.md) and [ADR-0001](architecture/decisions/ADR-0001-single-authority.md) |
 | Architectural remediation and incomplete gates | [Ownership and progression tracker](architecture/ownership-and-practice-progression-remediation.md) |
-| Historical subsystem inventory (superseded) | [System architecture, 4 November](architecture/system.md) |
 | Typed embedded protocol, startup and packaging | [Native runtime](inprocess-runtime.md) |
 | Generator interface, Coda/Fukuda adaptive composition | [Composed MIDI generators](architecture/composed-midi-generators.md) |
 | Fingering data and inference | [Piano fingering](piano-fingering.md) |
@@ -20,10 +22,17 @@ where another document disagrees, the practice flow wins.
 | Fixed retry contracts, adaptive proposal and evaluation | [Mistake-response policies](mistake-response-policies.md) |
 | Durable measurement and read-only analytics | [Local learning evidence contract](learning-measurement.md) |
 
-The superseded transport/voice and November 4 ownership descriptions are
-historical only. Older reports, audits, screenshots and plans remain
-available in git history. Neither historical document overrides the
-current playback/score ownership or moving-window teaching contracts.
+## Historical references
+
+The [4 November subsystem inventory](architecture/historical/system-2026-11-04.md)
+and superseded [transport/voice contract](architecture/transport-and-voice-contract.md)
+preserve earlier implementations. They do not override the current owner map,
+playback/score ownership or moving-window teaching contracts. Older reports,
+screenshots and plans remain available in git history.
+
+Phase 5 remains pending final ownership review. Phase 6 includes current-source
+embedded production/package checks and physical acceptance; core tests and
+headless Godot checks alone cannot certify those gates.
 
 ## Rules
 

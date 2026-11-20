@@ -6,14 +6,17 @@ decisions remain [docs/practice-flow.md](../practice-flow.md).
 
 ## Two independent decisions
 
-**Lesson/teaching:** `application/practice_flow.py` and the selected registered
-lesson generator choose the next passage, hand, lesson step, tempo, adaptive
+**Lesson/teaching:** the selected registered lesson generator and teaching
+reducer choose the next source window, hand, lesson step, tempo, adaptive
 aid and mastery decision. They never admit score ink or authorize a timed
-transport.
+transport. The committed guided-completion decision selects the 50% Tempo
+entry BPM and resets its counters; FlowSession presents that exact selection.
 
 **Playback:** `application/playback_coordinator.py` owns the take identity,
-score admission transaction, count-in authorization, running/paused/settling
-lifecycle, cancellation and explicit failure states. Every timed origin
+score admission transaction, count-in authorization, cancellation and explicit
+failure states. PlaybackSession owns running/paused-attempt lifetime and
+executes the authorized start through VisualTransport and MidiIngress.
+Every timed origin
 (including physical MIDI controls and automatic continuation) uses the same
 transaction. The coordinator publishes `playback_intent` and
 `playback_timeline`; Godot draws the exact authorized segment identity.
@@ -25,17 +28,21 @@ next target at the playhead. It has no timed grading deadline.
 
 | Learner event | Flow transition |
 | --- | --- |
-| Open a new piece | First phrase, right hand, Listen |
-| Open saved progress | Saved phrase, Free warm-up |
+| Open a new piece | First authored measure window, right hand, Listen |
+| Open saved progress | Saved measure window, Free warm-up |
 | Listen completes | Free |
 | Every correct Free target found | Tempo at 50% |
 | Clean graded passage below target | Next attempt, +10% of target tempo |
 | First failed graded passage | Repeat at the same tempo |
 | Second failed graded passage above 50% | Lower tempo by 10% |
 | Second failure at 50% | Return to Free (except final test) |
-| Two clean target-tempo passes | Next hand, phrase, link, or completed piece |
-| Repeated failure after Free | Explicitly announced Coda/Fukuda aid |
+| Two clean target-tempo passes | Next hand/window, or completed piece |
+| Repeated failure after Free | Continue the selected policy; automatic Coda/Fukuda aid remains a product TODO |
 | Final whole-piece test | Tempo from 50% to original; no Free |
+
+For each authored measure n, ordinary practice selects n alone, then
+n−1…n, n−2…n and n−3…n where available, with a maximum four-bar window.
+The whole-piece final examination is separate.
 
 Course decisions are independent of whether the physical score can be
 admitted at a particular instant. Once the decision is final,

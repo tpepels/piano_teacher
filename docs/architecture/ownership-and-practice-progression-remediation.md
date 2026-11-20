@@ -661,6 +661,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Independent review found and corrected three real failures: failed-streak persistence before a deadline existed now retains PendingFullCompletion and retries on Resume; guided resume/progress is persisted before destructive stop and publication remains pending until dispatch succeeds; guided capture-start failure retains its original context and retries before resuming. Existing fault injection reproduced both recovery paths without adding test files.
 - Full existing `bash scripts/test.sh` passed after these changes (335 Python tests passed, one skipped; Godot checks ended `GODOT_STARTUP_SYNTAX_OK`, all failure counters zero). The architecture verifier reports `PHASE5_ARCHITECTURE_AUDIT_OK`. Final source review is running. No tests added. Full embedded/repertoire/relocated-package verification is the next gate; physical acceptance remains unverified.
 
+### Implementation checkpoint CG — current contracts and final source review
+
+- `25aab6e0` implements checkpoint CF. The final independent recheck cleared the completion, guided-publication, snapshot-write, fingering-generation and native journal findings. It found no further concrete structural/correctness blocker and no second grader, FIFO or world clock. Review clearance is source evidence, not physical acceptance.
+- Reconciled the active system owner map, runtime, playback coordinator, practice state machine, ADR-0001, roadmap and index. Archived the old system inventory rather than presenting it as a current contract. The engine audit retains its original baseline separately from its current resolution table. All 125 local links in the revised active documents and archived inventory resolve.
+- Full core suite and structural verifier passed at the integrated source. The existing full embedded production script is now running against `25aab6e0`; its source, control, repertoire and relocated-package results will be recorded in the next checkpoint. No tests added, no commits pushed. Phase closure awaits that result; hardware acceptance remains unverified.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
