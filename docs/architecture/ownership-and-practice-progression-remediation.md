@@ -410,6 +410,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - Removed the writable `_future_stage_ready` and `future_score` forwarding properties. Native preload failures and the prepared-published flag are now stored on `TeachingContinuation`, alongside its reservation and acknowledged identity. The engine retains only the already-authorized settlement timing effect after the expected asset becomes ready; no independent preloader deadline was introduced.
 - This shrinks the `server.py` stage/preloading section while keeping selected source metadata, failure messages and future handoff behavior. No tests added.
 
+### Implementation checkpoint BD — preserve original curriculum projection import
+
+- Corrected the moved `manual_progress` import to its original `teaching_course` owner. The new TeachingContinuation asset selector must use the same existing manual course projection as PracticeEngine previously did; importing it from `teaching_manual` was invalid.
+- No test or lesson policy changed. Latest core CI must validate the integrated relocation before native acceptance.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

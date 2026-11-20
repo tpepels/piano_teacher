@@ -4,8 +4,7 @@ This collaborator owns mechanical continuation. It never calls a generator,
 LearningPlan navigation, or the engine; mode/session owners execute its effects.
 """
 from dataclasses import dataclass, replace
-from ..teaching_course import steps
-from ..teaching_manual import manual_progress
+from ..teaching_course import steps, manual_progress
 from .score_artifacts import ScoreSelection
 
 
