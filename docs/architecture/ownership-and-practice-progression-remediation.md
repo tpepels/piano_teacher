@@ -317,6 +317,13 @@
 - Moved the full admission receipt computation (earliest printed ink, actual first-ink lead, source onset, online strip count and diagnostic publication) into `ScoreStreamController.receipt`. `NativeScoreView._transport_admission_receipt` is now a renderer-geometry delegation port and no longer reads the live queue.
 - Removed a remaining independent view-level admission computation; no new tests. CI and native admission checks are still required on this revision.
 
+### Implementation checkpoint AO — continuation and rest placement owned by the one stream ledger
+
+- Removed the remaining musical placement/queue-peer decision algorithms from `NativeScoreView`: `earliest_continuation_world`, `empty_strip_onset`, `short_rest_geometry` and `announced_copy_onset` are now bounded delegations that supply measured pixels/clef header/rest duration to `ScoreStreamController`.
+- The controller alone computes physical continuation starts, safe-tail previews, peer SOURCE/REST floors, preparation margins and the reuse onset of an already announced copy. Its Play/Resume/Retry/recovery paths call its own empty-strip implementation rather than routing another queue decision back through the renderer.
+- All existing entrance geometry, rest-gap rules and offscreen margins are preserved. The view retains canvas painting and source-glyph measurement. No new tests.
+- Phase 5 remains open because the renderer's retained-painter lifecycle, PracticeEngine orchestration and Main composition still need decomposition.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

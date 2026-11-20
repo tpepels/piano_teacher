@@ -120,6 +120,72 @@ func peer_clearance_facts(density: float, gap: float,
     return {"queue_id":queue.get_instance_id(),"density":density,
         "playhead_x":playhead_x,"ends":ends}
 
+## All continuation decisions read the same mutable queue and peer floor;
+## the renderer supplies only source glyph dimensions and world geometry.
+func earliest_continuation(world: float, count_in_beats: float,
+        right: float, header: float, density: float, gap: float,
+        duration: float, width: float, playhead: float) -> float:
+    var preview: Dictionary = queue.preview_tail_withdrawal(
+        world,density,gap,duration,width,playhead)
+    var remaining: Array = preview["remaining"]
+    var start: float = Admission.position(
+        remaining,world,right,header,NAN,0.0,density,gap,duration)
+    var peer: float = queue.minimum_peer_opening(
+        density,width,playhead)
+    if is_finite(peer):
+        start = maxf(start,peer+header)
+    if count_in_beats > 0.0:
+        var empty: float = empty_strip_onset(
+            remaining,world,count_in_beats,header,
+            density,gap,duration,width,playhead)
+        if is_finite(empty) and (not is_finite(start) or empty < start):
+            start = empty
+    return start
+
+
+func empty_strip_onset(passes: Array, world: float, count_in_beats: float,
+        header: float, density: float, gap: float,
+        duration: float, width: float, playhead: float) -> float:
+    return Admission.empty_strip_start(
+        passes,world,count_in_beats,header,
+        queue.minimum_peer_opening(density,width,playhead,true,"source"),
+        density,gap,duration,
+        queue.minimum_peer_opening(density,width,playhead,true,"rest"))
+
+
+func rest_geometry(rest: float, density: float, gap: float,
+        header: float) -> Dictionary:
+    # Preserve the source's full authored rest; long final barline ink
+    # requires peer raster clearance beyond that physical silence.
+    var trailing: float = 2.2*gap/density
+    var after: float = rest if rest >= trailing else \
+        trailing+Admission.REST_GAP_BEATS
+    var margin: float = (
+        StreamQueue.PEER_REST_MARGIN_PX if rest >= trailing
+        else StreamQueue.PEER_MARGIN_PX)
+    return {
+        "continuation_clear_beats":after+margin/density+ \
+            Admission.OFFSCREEN_MARGIN_BEATS,
+        "continuation_header_beats":header+Admission.OFFSCREEN_MARGIN_BEATS,
+    }
+
+
+func announced_copy_onset(world: float) -> float:
+    var newest := -1
+    for owner_serial in planned_ids.values():
+        newest = maxi(newest,int(owner_serial))
+    for item in queue.online:
+        if str(item.get("kind","")) != "source" or \
+                int(item.get("take_owner",-1)) != newest or \
+                str(item.get("take_key","")) != "autopending":
+            continue
+        var onset: float = float(item["world_origin"])+ \
+            float(item.get("source_floor",0.0))
+        return onset if onset > world+ \
+            Admission.PAUSED_REUSE_EPSILON_BEATS else NAN
+    return NAN
+
+
 ## The queue retires the earliest expired source/rest strips.  The same
 ## ledger owns the resulting live and armed take identities; the drawing
 ## view must not repair those identities from retired serials.
@@ -570,9 +636,11 @@ func arm_take(view, world: float, opening: float, right: float,
         if not is_finite(checked) and empty_strip_count_in > 0.0:
             # The preflight chose the empty-strip count-in bar slot; the
             # live queue must still permit exactly that deadline.
-            var earliest: float = view.empty_strip_onset(
+            var earliest: float = empty_strip_onset(
                 queue.online,view.stream_world_beat,empty_strip_count_in,
-                header)
+                header,maxf(1.0,view.timeline.pixels_per_beat),
+                view.staff_gap(),view.timeline.duration_beats,
+                view.size.x,view.size.x*view.PLAYHEAD_FRACTION)
             onto_empty_strip = is_finite(earliest) and \
                 planned_start_world >= earliest-.0001
             checked = planned_start_world if onto_empty_strip else NAN
@@ -690,9 +758,11 @@ func schedule_recovery(view, world: float, source_opening: float,
         else:
             # Listen/Perform/Learn use one initial full count-in slot, with
             # the original tight timestamp-to-slot equality requirement.
-            var onset: float = view.empty_strip_onset(
+            var onset: float = empty_strip_onset(
                 remaining,view.stream_world_beat,count_in_beats,
-                header)
+                header,maxf(1.0,view.timeline.pixels_per_beat),
+                view.staff_gap(),view.timeline.duration_beats,
+                view.size.x,view.size.x*view.PLAYHEAD_FRACTION)
             if is_finite(onset) and absf(onset-graded_deadline_world) <= \
                     Admission.EMPTY_STRIP_DEADLINE_EPSILON_BEATS:
                 checked = graded_deadline_world

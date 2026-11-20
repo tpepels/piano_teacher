@@ -727,91 +727,33 @@ func reserve_transport_action(action: String, world: float,
 
 func earliest_continuation_world(world: float, opening: float,
         count_in_beats: float = 0.0) -> float:
-    # Pure: the earliest world position where an automatic continuation's
-    # source can still be admitted once every unseen strip is withdrawn
-    # (exposed ink stays): offscreen, or on an empty strip one count-in bar
-    # ahead (P5). Resume in a rest sends this as its lead so the engine
-    # re-announces a deadline that fits.
     if not native_ready or not retained_ready():
         return NAN
-    world = maxf(world,stream_world_beat)
-    var density: float = maxf(1.0,timeline.pixels_per_beat)
-    var preview: Dictionary = _stream_queue.preview_tail_withdrawal(
-        world,density,staff_gap(),timeline.duration_beats,size.x,
-        size.x*PLAYHEAD_FRACTION)
-    var header: float = _stream_header_beats(opening)
-    var start: float = StreamAdmission.position(preview["remaining"],world,
-        _stream_right_beats(),header,NAN,0.0,density,staff_gap(),
-        timeline.duration_beats)
-    var peer: float = _stream_queue.minimum_peer_opening(
-        density,size.x,size.x*PLAYHEAD_FRACTION)
-    if is_finite(peer):
-        start = maxf(start,peer+header)
-    if count_in_beats > 0.0:
-        var empty: float = empty_strip_onset(
-            preview["remaining"],world,count_in_beats,header)
-        if is_finite(empty) and (not is_finite(start) or empty < start):
-            start = empty
-    return start
+    return _stream_controller.earliest_continuation(
+        maxf(world,stream_world_beat),count_in_beats,
+        _stream_right_beats(),_stream_header_beats(opening),
+        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
+        timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
 
 
 func empty_strip_onset(passes: Array, world: float, count_in_beats: float,
         header: float) -> float:
-    # The one empty-strip slot (StreamAdmission.empty_strip_start): live
-    # peer SOURCE ink blocks it; a peer's written rest bar only moves the
-    # opening past that rest, by the same pop-in rule (owner, round 4).
-    var density: float = maxf(1.0,timeline.pixels_per_beat)
-    var playhead: float = size.x*PLAYHEAD_FRACTION
-    return StreamAdmission.empty_strip_start(passes,world,count_in_beats,
-        header,_stream_queue.minimum_peer_opening(density,size.x,playhead,
-            true,"source"),density,staff_gap(),timeline.duration_beats,
-        _stream_queue.minimum_peer_opening(density,size.x,playhead,true,"rest"))
+    return _stream_controller.empty_strip_onset(
+        passes,world,count_in_beats,header,
+        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
+        timeline.duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
 
 
 func short_rest_geometry() -> Dictionary:
-    # What the engine needs to time the take after a written rest bar
-    # (owner, round 4): clear = that rest bar (it starts at the take's last
-    # source beat) plus the pop-in margin a peer layer keeps from it;
-    # header = the next opening's header plus a frame margin. The next
-    # source opens straight after the rest (empty_strip_start).
-    var density: float = maxf(1.0,timeline.pixels_per_beat)
-    # The timeline's gap is always one full measure (practice_timeline
-    # raises otherwise). Its source strip's final barline margin can reach
-    # past it when the last window ends in a short measure: then that margin
-    # plus the usual rest gap is what the next opening must clear.
-    var rest: float = float(practice_timeline.get("gap",{}).get(
-        "duration_beats",0.0))
-    var trailing: float = 2.2*staff_gap()/density
-    var after: float = rest if rest >= trailing else \
-        trailing+StreamAdmission.REST_GAP_BEATS
-    # A complete rest already separates the score copies. Its final barline
-    # needs only the small raster clearance used by live peer admission.
-    # A source whose final glyph extends beyond the rest retains 60 px.
-    var margin: float = (StreamQueue.PEER_REST_MARGIN_PX if rest >= trailing
-        else StreamQueue.PEER_MARGIN_PX)
-    return {"continuation_clear_beats":
-            after+margin/density+
-            StreamAdmission.OFFSCREEN_MARGIN_BEATS,
-        "continuation_header_beats":
-            _stream_header_beats(0.0)+StreamAdmission.OFFSCREEN_MARGIN_BEATS}
+    return _stream_controller.rest_geometry(
+        float(practice_timeline.get("gap",{}).get("duration_beats",0.0)),
+        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
+        _stream_header_beats(0.0))
 
 
 func announced_copy_onset(world: float) -> float:
-    # The world onset of the most recently announced continuation's
-    # admitted, still unbound copy if it is still ahead of the playhead (a
-    # Resume in the rest reuses it, like a paused take); otherwise NAN.
-    var newest := -1
-    for owner_serial in _stream_controller.planned_ids.values():
-        newest = maxi(newest,int(owner_serial))
-    for item in _stream_queue.online:
-        if str(item.get("kind","")) == "source" and \
-                int(item.get("take_owner",-1)) == newest and \
-                str(item.get("take_key","")) == "autopending":
-            var onset: float = float(item["world_origin"])+ \
-                float(item.get("source_floor",0.0))
-            return onset if onset > maxf(world,stream_world_beat)+ \
-                StreamAdmission.PAUSED_REUSE_EPSILON_BEATS else NAN
-    return NAN
+    return _stream_controller.announced_copy_onset(
+        maxf(world,stream_world_beat))
 
 
 func arm_stream_take(world: float, opening: float,
