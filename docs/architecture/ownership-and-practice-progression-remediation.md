@@ -438,6 +438,11 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - `AttemptRuntime.hold_full_result` records the one pending source-tempo result *before* its teaching decision is prepared. The original `PracticeEngine._complete_attempt` now requests this transaction and applies the one returned presentation/recovery effect; `_finish_full_passage` no longer reinitializes the pending result. No second grader or evidence writer has been introduced.
 - No new tests. The same existing CI and native Play/Retry/automatic continuation tests must verify this integration before software acceptance is claimed.
 
+### Implementation checkpoint BI — one course-owner settlement projection
+
+- The Practice Flow course session now owns the stage-key-on-completion rule and the single projection from an already-decided typed flow outcome to stage, hands, BPM and user-facing status. PracticeEngine no longer reads the old/current FlowState to select another stage key after durable teaching settlement.
+- This moves an actual overlapping course progression decision out of the engine while keeping LearningPlan the only source of the selected exposure. No tests added. The existing software suite still validates the exact one/two/three/four-bar moving windows.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |

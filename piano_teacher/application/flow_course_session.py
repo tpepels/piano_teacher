@@ -80,6 +80,25 @@ class PracticeFlowCourseSession:
             raise ValueError("No selected Practice Flow course")
         return self.apply(practice_flow.free_completed(self._state))
 
+    def settle_decided(self, outcome: practice_flow.Outcome, *,
+                       plan, message: str) -> practice_flow.FlowState:
+        """Only the course session may resolve the continuing stage label.
+
+        A completed stage retains its previous identity until a new
+        Listen/Free/Tempo entry is actually selected; a current-stage result
+        follows the already-committed LearningPlan progression.
+        """
+        progress = plan.teaching_progress()
+        done = outcome in (practice_flow.Outcome.STAGE_DONE,
+                           practice_flow.Outcome.PIECE_DONE)
+        stage_key = (self._state.stage_key
+                     if done and self._state is not None else plan.identity)
+        return self.settle(
+            outcome,stage_key=stage_key,
+            final=plan.exercise.kind == "perform",
+            bpm=int(plan.bpm),target_bpm=int(plan.target_bpm),
+            failures=progress.failures,clean=progress.streak,message=message)
+
     def settle(self, outcome: practice_flow.Outcome, *, stage_key: str,
                final: bool, bpm: int, target_bpm: int, failures: int,
                clean: int, message: str) -> practice_flow.FlowState:

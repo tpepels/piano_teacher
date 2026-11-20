@@ -2443,18 +2443,8 @@ class PracticeEngine:
             outcome = (selected.flow_outcome
                        if self._flow_active() else None)
             if outcome is not None:
-                progress = self.plan.teaching_progress()
-                done = outcome in (practice_flow.Outcome.STAGE_DONE,
-                                   practice_flow.Outcome.PIECE_DONE)
-                # A finished stage keeps its own key: the course has already
-                # moved on, and the next stage must start with its own entry.
-                self.flow_session.settle(outcome,
-                    stage_key=(self.flow.stage_key if done and self.flow is not None
-                               else self.plan.identity),
-                    final=self.plan.exercise.kind == "perform",
-                    bpm=int(self.plan.bpm), target_bpm=int(self.plan.target_bpm),
-                    failures=progress.failures, clean=progress.streak,
-                    message=selected.message)
+                self.flow_session.settle_decided(
+                    outcome,plan=self.plan,message=selected.message)
             effect = self.teaching_continuation.after_settlement(selected,
                 score_changed=self.score_revision != previous_revision,
                 prepared=self.teaching_continuation.prepared_published and self.teaching_continuation.acknowledged == (self.plan.identity,self.score_revision))
