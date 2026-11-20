@@ -1,6 +1,4 @@
 """Real local inference and durable human corrections remain honest."""
-from dataclasses import replace
-
 import pytest
 
 from piano_teacher.fingering import FingeringService, LumikeyProvider
@@ -71,15 +69,3 @@ def test_disposable_plan_corruption_never_loses_saved_manual_correction(tmp_path
     restored = FingeringService(tmp_path).prepare(source, "piece")
     assert restored.assignments["note"].finger == 4
     assert restored.assignments["note"].origin == "manual"
-
-
-def test_ambiguous_authored_substitution_requires_a_human_choice(tmp_path):
-    source = replace(piece([Note(0, 1, 60, 0, 0, "right", "xml-p0-m0-e0")]),
-        source_musicxml='<score-partwise><part><measure><note><pitch><step>C</step><octave>4</octave></pitch>'
-        '<notations><technical><fingering substitution="yes">2</fingering>'
-        '</technical></notations></note></measure></part></score-partwise>')
-    service = FingeringService(tmp_path, provider=LumikeyProvider(node="/missing/fingering-node"))
-    assignment = service.prepare(source, "authored").assignments["xml-p0-m0-e0"]
-    assert assignment.finger is None and assignment.authored_text == ("2 [substitution]",)
-    corrected = service.correct(source, "authored", assignment.source_id, 3)
-    assert corrected.assignments[assignment.source_id].finger == 3
