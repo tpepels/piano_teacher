@@ -26,6 +26,7 @@ from .application import practice_flow
 from .application.playback_coordinator import PlaybackCoordinator
 from .application.flow_course_session import PracticeFlowCourseSession
 from .application.learning_evidence_session import LearningEvidenceSession
+from .application.source_preparation_session import SourcePreparationSession
 from .application.score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
 from .application.attempt_settlement import AttemptSettlement
 from .application.session_commands import SessionCommands
@@ -274,6 +275,7 @@ class PracticeEngine:
         self.learning_evidence = LearningEvidenceSession(
             self.progress, self.library, self.measurement, self.midi,
             self.midi_calibration)
+        self.source_preparation = SourcePreparationSession()
 
     @property
     def _future_stage_ready(self):
@@ -662,87 +664,48 @@ class PracticeEngine:
                 feedback_take=self._feedback_take())
 
     def load(self, path: str, *, warmup: bool = False):
+        """Commit one source only after its MIDI, curriculum and fingering exist."""
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
-        began = checkpoint = time.perf_counter()
+        began = time.perf_counter()
+        # Correction and replacement serialize over the entire preparation
+        # and commit; the musical state lock covers only short snapshots.
         with self._fingering_lock:
-            source = Path(path).expanduser().resolve()
-            fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
-            piece, score = self.preprocessing.load_import(
-                source, fingerprint, importer=import_piece)
-            if diagnostics:
-                now = time.perf_counter()
-                print("SCORE_LOAD_STAGE: import", round((now-checkpoint)*1000, 1),
-                      "ms", source.name, flush=True)
-                checkpoint = now
-            # Original MIDI fingering inference runs in a separate ONNX/Node
-            # process. Independent Coda/Fukuda course compilation consumes
-            # only notes, source IDs and meter, never predicted fingers.
-            # Compile them simultaneously without holding the engine state
-            # lock across either expensive operation. Publish only AFTER
-            # both candidates succeed; a failed load preserves the old take.
-            def prepare_fingering():
-                started = time.perf_counter()
-                plan = self.fingering.prepare(piece, fingerprint)
-                return plan, (time.perf_counter()-started)*1000.0
-
-            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="piano-fingering") as worker:
-                predicted = worker.submit(prepare_fingering)
-                # Snapshot database-backed facts under the state lock. Course
-                # compilation and the external fingering worker may both take
-                # seconds; neither may block state polling or live MIDI.
-                with self.lock:
-                    strategy = self.library.settings["exercise_strategy"]
-                    mistakes = self.fukuda_mistakes.problematic(fingerprint)
-                    evidence = self.fukuda_mistakes.evidence(fingerprint)
-                started_course = time.perf_counter()
-                candidate = LearningPlan(piece, warmup=warmup,
-                    exercise_strategy=strategy,
-                    fukuda_mistakes=mistakes, feedback=evidence)
-                with self.lock:
-                    self.progress.restore(candidate, fingerprint)
-                course_ms = (time.perf_counter()-started_course)*1000.0
-                # Never await inference while holding the engine state lock.
-                # The separate fingering mutex still serializes loads and edits.
-                fingering_plan, infer_ms = predicted.result()
-                # Publish only once both candidates succeeded. Until then the
-                # previous score, transport and snapshot remain authoritative.
-                candidate.piece = replace(piece, fingering_plan=fingering_plan)
-                if diagnostics:
-                    print("SCORE_LOAD_STAGE: fingering", round(infer_ms,1),
-                          "ms status", fingering_plan.status,flush=True)
-                    print("SCORE_LOAD_STAGE: curriculum", round(course_ms,1),
-                          "ms", candidate.lesson_generator.name,flush=True)
-                    print("SCORE_LOAD_STAGE: parallel_prepare",round((time.perf_counter()-checkpoint)*1000,1),
-                          "ms wall",source.name,flush=True)
-                with self.lock:
-                    # A new plan: no previous take's written rest applies (M6).
-                    self._rest_take_end = None
-                    self._stop(reason="source_changed")
-                    self._reset_trouble()
-                    self.course_guided = False
-                    self.source = str(source)
-                    self.is_builtin_warmup = warmup
-                    self.open_from_beat = 0.0
-                    self.fingerprint = fingerprint
-                    self._piece_generation += 1
-                    self.score_artifacts.invalidate()
-                    self.plan = candidate
-                    self.mode = "practice"
-                    self.teaching = None
-                    self.guided_range = None
-                    self.score = score
-                    self.feedback = "Press Start to practice"
-                    self.next_action = "Press Start to practice."
-                    self.score_revision += 1
-                    self.pending_result = None
-                    self._pending_assessed_bpm = None
-                    self.feedback_marks = []
-                    self.feedback_unmapped = 0
-                    if self._flow_active():
-                        self._flow_open()
-            if diagnostics:
-                print("SCORE_LOAD_STAGE: ready", round((time.perf_counter()-began)*1000, 1),
-                      "ms total", source.name, flush=True)
+            prepared = self.source_preparation.prepare(
+                Path(path).expanduser().resolve(), warmup=warmup,
+                preprocessing=self.preprocessing, fingering=self.fingering,
+                progress=self.progress, fukuda_mistakes=self.fukuda_mistakes,
+                library=self.library, state_lock=self.lock,
+                importer=import_piece, plan_type=LearningPlan,
+                diagnostics=diagnostics)
+            with self.lock:
+                self._rest_take_end = None
+                self._stop(reason="source_changed")
+                self._reset_trouble()
+                self.course_guided = False
+                self.source = str(prepared.path)
+                self.is_builtin_warmup = warmup
+                self.open_from_beat = 0.0
+                self.fingerprint = prepared.fingerprint
+                self._piece_generation += 1
+                self.score_artifacts.invalidate()
+                self.plan = prepared.plan
+                self.mode = "practice"
+                self.teaching = None
+                self.guided_range = None
+                self.score = prepared.score
+                self.feedback = "Press Start to practice"
+                self.next_action = "Press Start to practice."
+                self.score_revision += 1
+                self.pending_result = None
+                self._pending_assessed_bpm = None
+                self.feedback_marks = []
+                self.feedback_unmapped = 0
+                if self._flow_active():
+                    self._flow_open()
+        if diagnostics:
+            print("SCORE_LOAD_STAGE: ready",
+                  round((time.perf_counter()-began)*1000,1),
+                  "ms total",prepared.path.name,flush=True)
 
     def fingering_status(self) -> dict:
         """Return the complete original-piece assignments, independent of stage."""

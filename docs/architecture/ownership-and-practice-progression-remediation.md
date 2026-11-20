@@ -342,6 +342,12 @@
 - No alternative grader was created. The same fixed/tempo-mapped policy and hold tolerance are used; `LiveAssessmentPublisher` still alone emits changed per-note feedback events, and final verdict/mastery remains with assessment settlement.
 - This reduces another backend policy responsibility inside the application facade. No tests added; existing core and native checks remain required.
 
+### Implementation checkpoint AS — source preparation and concurrent fingering leave PracticeEngine
+
+- Added `SourcePreparationSession` as the source/curriculum/fingering preparation owner. It reads and imports MIDI, fingerprints the exact bytes, runs the original Node/ONNX fingering inference concurrently with course compilation, reads Fukuda learning evidence and restores saved progress under the existing short state lock. Only a fully prepared `PreparedSource` can be published; neither an importer failure nor a fingering failure replaces an active score.
+- `PracticeEngine.load` now retains the outer fingering/correction serialization and the single atomic state-locked source commit. The preparer receives current explicit dependencies rather than a mutable engine pointer, preserving injectable preprocessors and code-owned score revisions. MIDI timestamps, lesson selection and transport admission are unchanged.
+- Reduced the backend application's source-import/parallel-preparation implementation substantially. No new tests; the existing Python and full native score-load checks remain required.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
