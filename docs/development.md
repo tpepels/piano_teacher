@@ -63,7 +63,9 @@ They measure Python execution, not Godot or physical acceptance.
 
 The owner approved rebuilding the suite on 2026-11-20 around player behaviour.
 The previous 35 Python modules/336 collected cases and 26 native scenario
-invocations are replaced by ten Python modules/85 cases and four native groups.
+invocations were initially replaced by ten Python modules/85 cases and four
+native groups. The requested coverage extension brings Python to twelve modules
+and 108 cases; the four native behaviour groups remain.
 Git retains the old suite. Architecture/source-text checks, contract parity,
 private aliases, exhaustive reducer combinations, exact captions, container
 hierarchy, shader choices and pixel/layout assertions were removed. Package
@@ -82,6 +84,8 @@ banning historical module names.
 | [Listen audio](../tests/test_listen_audio.py) | Real PCM timing/pitch/chords/tails, audio/score readiness, cancelled stale workers, failure recovery, fallback and count-in assets. |
 | [Fingering](../tests/test_fingering.py) | Real installed model inference, impossible/unavailable results, manual corrections and corrupt derived-cache recovery. |
 | [Alternate courses](../tests/test_alternate_courses.py) | Explicit source-progression/Coda selection, source-safe aids, manual controls and their distinct generic release policy. |
+| [Learning history](../tests/test_learning_history.py) | Actual outcomes/signed timing, unknown detail, stable paging, redacted atomic export, scoped deletion, preserved reset history and captured mastery criteria. |
+| [Desktop playback](../tests/test_desktop_playback.py) | Public reserve/present authorization, expired/stale admission, display failure, Retry, Pause/Resume, ungraded Listen and exact repeats through the target ladder. |
 
 [Test inputs](../tests/session_inputs.py) supply small actual MIDI files, one
 injected input clock and external ports; the production engine decides grading
@@ -99,8 +103,8 @@ and wrapper exit status still determine success.
 
 Only genuinely absent optional audio/model runtimes skip, with a stated
 reason; installed-but-broken runtimes fail. Required CI dependencies do not
-become optional. The latest measured run has 84 passed/one absent-system-SF2
-skip, 58.9% Python line coverage and 38.3% branch coverage. These percentages
+become optional. The expanded run has 107 passed/one absent-system-SF2
+skip, 69.5% Python line coverage and 49.4% branch coverage. These percentages
 are an inventory of execution, not a completeness claim.
 
 Future regression additions follow the [repository policy](../AGENTS.md):
@@ -119,6 +123,26 @@ logs. Parsing a production fixture does not establish that its journey ran.
 The rebuilt suite and all seven full production/package cases pass on source
 `5477aa74`. [ROADMAP](../ROADMAP.md#ci-suite-rebuilt-2026-11-20) records the logs,
 manual final-Learn correction, optional skip and outstanding physical acceptance.
+
+### Coverage extension 2026-11-20
+
+Continue the approved behaviour-focused approach using the uncovered-line
+report to choose useful scenarios, without changing the coverage denominator
+or adding a percentage gate. Extend existing musical/device scenarios and add
+one history feature group; do not restore architecture or object-shape tests.
+
+The 23 added scenarios cover real-take statistics, bounded reads, explicit
+exports and scoped reset/deletion; desktop admission, stale/failing presentation
+and continuation through public commands; configured piano keys, library-health
+recovery, all built-in warm-ups and richer imported notation. The count-in and
+source/take checks use musical facts rather than visual layout or source parity.
+
+The mastery scenarios exposed an outdated three-pass count in snapshots,
+statistics and transition messages. Those projections now consume the active
+course's actual rule and record it with new attempts. Practice Flow stays at
+two target successes; warm-ups and other courses retain their configured rule.
+Older history retains its recorded criteria. The owner explicitly requested
+these additional CI tests; physical acceptance remains separate.
 
 ## Standalone Linux package
 

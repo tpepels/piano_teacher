@@ -105,7 +105,7 @@ warm-ups, native chord/tie/tuplet/meter fidelity and stale preload rejection.
 
 The new mastery-report scenario exposed a real defect: the completed default
 course uses two target successes, but the state snapshot and captured history
-advertised the old generic three-pass rule. The course now exposes its actual
+advertised the old generic three-pass rule. Commit `873f1b43` exposes the actual
 required count to snapshots, transition messages, evidence and validation; statistics prefer that
 captured rule while retaining the legacy recorded-settings fallback. The
 grading/progression rule itself is unchanged. Both failures were reproduced
@@ -120,7 +120,8 @@ combined rule/history/desktop/course/resume/alternate checks pass in
 important regressions; whole-source notation parity was narrowed to the actual
 opening chord and held ending.
 
-The expanded Python suite passes **107 tests, one optional system-SF2 skip**.
+The expanded Python suite has twelve feature modules and 108 cases (23 added):
+**107 tests pass, one optional system-SF2 check skips**.
 Informational coverage rises from **58.9% to 69.5% lines** and **38.3% to
 49.4% branches**, with the same source scope and no exclusions or percentage
 gate. The common CI command also passes Godot parsing and all four native

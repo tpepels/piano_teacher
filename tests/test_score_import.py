@@ -1,5 +1,7 @@
 """Imported MIDI remains the music the player opened, including repairs."""
 from pathlib import Path
+import shutil
+import time
 
 import mido
 import pytest
@@ -118,3 +120,107 @@ def test_percussion_only_file_cannot_be_opened_as_piano_music(tmp_path):
     ])])
     with pytest.raises(ValueError, match="No pitched"):
         import_piece(path)
+
+
+def test_native_score_preserves_chord_attacks_and_full_tied_ending(practice_session):
+    session = practice_session(bars=2, chords=True, held_tail=2)
+    session.select(1, 2, hand="both")
+    source = session.ask("score.semantic")
+    layout = session.ask("score.native_layout")
+    heads = {note["id"]: note for note in layout["notes"]}
+    chord = [note for note in source["notes"] if note["hand"] == "right" and note["onset_beats"] == 0]
+    assert {note["midi_pitch"] for note in chord} == {72,76,79}
+    chord_heads = [heads[layout["attack_map"][note["id"]]] for note in chord]
+    assert {head["pitch"] for head in chord_heads} == {72,76,79}
+    assert all(head["is_attack"] and head["hand"] == "right" and head["beat"] == 0
+               for head in chord_heads)
+    ending = next(note for note in source["notes"] if note["onset_beats"] == 7)
+    assert ending["duration_beats"] == 3
+    attack = heads[layout["attack_map"][ending["id"]]]
+    assert attack["is_attack"] and attack["pitch"] == 80 and attack["beat"] == 7
+    continuations = [heads[head] for head in layout["continuation_map"][ending["id"]]]
+    assert continuations and all(not head["is_attack"] for head in continuations)
+    assert all(head["source_id"] == ending["id"] and head["pitch"] == ending["midi_pitch"]
+               and 7 < head["beat"] < 10 for head in continuations)
+    assert source["practice_timeline"]["sounding_duration_beats"] == 10
+
+
+def test_midi_triplets_reach_native_notation_with_their_beam_and_number(practice_session):
+    session = practice_session(bars=1)
+    target = session.music/"triplets.mid"
+    shutil.copyfile(FIXTURES/"midi_triplets.mid", target)
+    session.ask("library.open", id=target.name)
+    session.select(hand="both", final=True)
+    source = session.ask("score.semantic")
+    layout = session.ask("score.native_layout")
+    triplet = source["notes"][:3]
+    assert [note["onset_beats"] for note in triplet] == pytest.approx([0,1/3,2/3])
+    heads = {layout["attack_map"][note["id"]] for note in triplet}
+    assert any(set(fragment["note_ids"]) == heads
+               for fragment in layout["native_tuplet_fragments"].values())
+    assert layout["native_beams_complete"] and layout["native_beam_fragments"]
+    assert any(mark["type"] == "start" for event in source["notation_events"]
+               for mark in event.get("tuplet_marks", []))
+
+
+def test_authored_meter_change_survives_source_selection_and_native_engraving(practice_session):
+    session = practice_session(bars=1)
+    target = session.music/"mixed.mid"
+    shutil.copyfile(FIXTURES/"midi_mixed_meter.mid", target)
+    session.ask("library.open", id=target.name)
+    session.select(2,2)
+    source = session.ask("score.semantic")
+    layout = session.ask("score.native_layout")
+    assert source["duration_beats"] == 4
+    assert source["practice_timeline"]["gap"]["meter"] == [4,4]
+    active = set(source["active_note_ids"])
+    assert active and active <= set(layout["attack_map"])
+    session.command("listen")
+    session.finish_listen()
+    session.finish_free()
+    state = session.ready_score()
+    assert state["count_in_meter"] == [4,4] and state["count_in_beats"] == 4
+
+
+def test_preloaded_score_stays_bound_to_its_source_after_opening_another_piece(practice_session):
+    from piano_teacher.inprocess import INVALID
+    from session_inputs import write_midi
+    import json
+
+    session = practice_session(bars=2)
+    session.finish_listen()
+    session.finish_free()
+    before = session.ready_score()
+
+    def next_score():
+        deadline = time.monotonic()+8
+        while time.monotonic() < deadline:
+            prepared = session.ask("score.next_stage")
+            if prepared["status"] != "preparing":
+                assert prepared["status"] == "ready", prepared
+                return prepared
+            time.sleep(.005)
+        raise AssertionError("Real next-stage notation did not prepare")
+
+    first = next_score()
+    assert first["hand"] == "left" and first["step_number"] == 2
+    assert first["layout"]["attack_map"]
+    assert all(note["hand"] == "left" for note in first["model"]["notes"])
+    assert session.snapshot()["hand"] == before["hand"]
+    assert session.snapshot()["transport_id"] == before["transport_id"]
+    assert session.ask("score.stage_ready", stage_key=first["stage_key"],
+                       revision=first["revision"])["accepted"]
+    second_path = write_midi(session.music/"new.mid", bars=2, bpm=100)
+    session.ask("library.open", id=second_path.name)
+    session.finish_listen()
+    session.finish_free()
+    session.ready_score()
+    status, _ = session.commands.request("score.stage_ready", json.dumps({
+        "stage_key": first["stage_key"], "revision": first["revision"]}))
+    assert status == INVALID
+    assert not session.ask("score.stage_failed", fingerprint=first["fingerprint"],
+                           step_number=first["step_number"], revision=first["revision"],
+                           error="Late failure from the previous piece")["accepted"]
+    second = next_score()
+    assert second["fingerprint"] != first["fingerprint"]
+    assert second["fingerprint"] == session.ask("learning.status")["current_fingerprint"]

@@ -1,5 +1,6 @@
 """Choosing music and saving settings must preserve a usable lesson."""
 import json
+import time
 
 import mido
 import pytest
@@ -167,3 +168,37 @@ def test_invalid_command_or_failed_preference_save_preserves_running_lesson(libr
             engine.listen.thread.join(timeout=10)
             assert not engine.listen.thread.is_alive()
         engine.close()
+
+
+def test_library_health_finds_bad_music_then_recovers_without_changing_the_lesson(practice_session):
+    session = practice_session(bars=1)
+    damaged = session.music/"broken.mid"
+    damaged.write_bytes(b"not a MIDI file")
+    original = session.path.read_bytes()
+    selected = session.snapshot()
+
+    def health():
+        session.ask("library.health.start")
+        deadline = time.monotonic()+5
+        while time.monotonic() < deadline:
+            result = session.ask("library.health_status")
+            if not result["running"]:
+                return result
+            time.sleep(.005)
+        raise AssertionError("Library health did not finish")
+
+    checked = health()
+    assert checked["checked"] == checked["total"] == 2
+    assert checked["ok"] == 1 and checked["error"] == 1
+    assert checked["items"][damaged.name]["status"] == "error"
+    assert checked["items"][damaged.name]["message"]
+    assert session.snapshot()["revision"] == selected["revision"]
+    assert session.path.read_bytes() == original
+    damaged.write_bytes(original)
+    repaired = health()
+    assert repaired["ok"] == 2 and repaired["error"] == 0
+    empty = session.music/"empty"
+    empty.mkdir()
+    session.ask("settings.update", music_dir=str(empty))
+    assert session.ask("library.health_status")["checked"] == 0
+    assert health()["total"] == 0

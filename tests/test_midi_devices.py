@@ -218,3 +218,65 @@ def test_calibration_excludes_one_outlying_round_but_rejects_disagreement(offset
         assert result["estimate_ms"] == pytest.approx(80, abs=1)
     else:
         assert result["error"]
+
+
+def test_teaching_the_physical_key_range_does_not_record_notes_and_survives_reopen(practice_session):
+    session = practice_session(bars=1)
+    session.finish_listen()
+    session.finish_free()
+    session.ready_score()
+    before = session.snapshot()["midi_input_count"]
+    assert session.command("midi_range_start")["paused"]
+    session.strike(21)
+    session.strike(20)  # The second endpoint must be above the first.
+    assert session.snapshot()["midi_key_range"]["step"] == "highest"
+    session.strike(108)
+    status = session.snapshot()
+    assert not status["midi_key_range"]["active"]
+    assert (status["midi_key_range"]["low"], status["midi_key_range"]["high"]) == (21,108)
+    assert status["midi_input_count"] == before and status["midi_notes"] == 0
+    assert session.open()["midi_key_range"]["configured"]
+    assert session.ask("settings.snapshot")["midi_key_ranges"]["Test piano"] == [21,108]
+    session.command("midi_range_start")
+    session.strike(30)
+    session.command("midi_range_cancel")
+    assert session.snapshot()["midi_key_range"]["low"] == 21
+
+
+def test_configured_end_keys_pause_resume_and_retry_without_becoming_wrong_notes(practice_session):
+    session = practice_session(bars=1)
+    session.ask("settings.update", midi_key_ranges={"Test piano": [21,108]})
+    session.finish_listen()
+    session.finish_free()
+    initial = session.ready_score()
+    start = initial["score_queue_next"]["deadline_at_ms"]/1000
+    session.clock.at = start+.5
+    session.strike(21)
+    assert session.snapshot()["paused"]
+    session.strike(21)
+    resumed = session.snapshot()
+    assert not resumed["paused"] and resumed["transport_id"] == initial["transport_id"]
+    session.clock.at += 10
+    session.strike(108)
+    retry = session.ready_score()
+    incoming = retry["score_queue_next"]
+    assert incoming["transport_id"] != initial["transport_id"]
+    session.clock.at = incoming["deadline_at_ms"]/1000
+    retry = session.tick()
+    assert retry["transport_id"] == incoming["transport_id"] and retry["running"]
+    assert retry["midi_notes"] == 0 and retry["mastered"] == 0
+    assert not any(event.get("played_pitch") in (21,108)
+                   for event in session.ask("feedback.events")["events"])
+
+
+def test_a_configured_end_key_in_the_exercise_remains_a_musical_note(practice_session):
+    session = practice_session(bars=1)
+    session.ask("settings.update", midi_key_ranges={"Test piano": [72,79]})
+    state = session.finish_listen()
+    assert state["teaching"]["target_index"] == 0
+    session.strike(72)
+    assert session.snapshot()["teaching"]["target_index"] == 1
+    session.strike(79)
+    state = session.ready_score()
+    assert state["flow"]["step"] == "tempo" and not state["paused"]
+    assert state["bpm"] == 40
