@@ -121,7 +121,7 @@ def test_retry_epochs_are_absolute_and_shift_together_on_resume():
 
 
 def test_source_preparation_uses_nearest_authored_measure_and_absolute_deadline(monkeypatch):
-    import piano_teacher.visual_transport as module
+    import piano_teacher.notation.practice_timeline as module
     calls = []
     def descriptor(context, start, staves, *, following_measure):
         calls.append((context["start_beat"], start, staves,

@@ -588,6 +588,12 @@ See also the current source-based [PracticeEngine responsibility/dependency audi
 - MIDI Resume calls the ingress owner's `shift_resume_gate` and `authorize_grading_after` operations for its exact already-authorized deadlines, validating finite nonnegative times. Previously the engine could write the deadline directly while the MIDI callback separately owned its ignored held-key set.
 - The frozen transport facts and existing musical clock remain authoritative; MIDI ingress only suppresses ungradable attacks/releases until its selected grading epoch. No new tests. Existing physical/journey CI remains the gate.
 
+### Implementation checkpoint BW — migrate the original pure source-preparation mock to its owner
+
+- Core CI on `ed372688` and `b266ceba` found one existing fixture `test_source_preparation_uses_nearest_authored_measure_and_absolute_deadline` monkeypatching `visual_transport.preparation_measure_descriptor`. The production path now correctly resolves the source meter through `notation.practice_timeline.source_preparation_measure`, which calls that module's descriptor.
+- Updated only that fixture's monkeypatch import to the canonical notation module. All assertions of selected source bar, following meter, exact deadline, pending rewind and preparation geometry are unchanged; no test was added or skipped.
+- Full core CI and current native acceptance still required.
+
 #### Phase 6 acceptance matrix
 
 | Required acceptance | Current evidence | Status |
