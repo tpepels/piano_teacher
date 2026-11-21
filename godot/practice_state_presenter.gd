@@ -40,4 +40,3 @@ func present(parsed: Dictionary, screen: String, busy: bool,
         last_smoke_phase = phase
         print("PHASE0_PHASE:",phase)
     practice_view.present_busy(busy)
-    practice_view.consider_piano_start(sampled_state,screen == "practice")

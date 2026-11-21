@@ -12,6 +12,7 @@ const INK := Design.STONE
 var _chrome := Chrome.new()
 signal navigation_requested(destination: String)
 signal command_requested(command: Dictionary)
+signal midi_start_suppression_requested(input_count: int)
 signal play_requested
 signal retry_requested
 signal listen_requested
@@ -124,8 +125,6 @@ var _audio_banner_active := false
 var _active := true
 var _hand_unlock_message := ""
 var _hand_unlock_until_ms := 0
-var _last_input_count := -1
-var _fresh_piano_key := false
 
 func _ready() -> void:
     name = "PracticeScreen"
@@ -196,9 +195,6 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     performance_metrics.present(parsed)
     _score_ready = ready
     _audio_error = audio_error
-    var count: int = int(parsed.get("midi_input_count",0))
-    _fresh_piano_key = _last_input_count >= 0 and count > _last_input_count
-    _last_input_count = count
     var unlocked: String = ChallengeFlow.newly_unlocked(_previous_state,parsed)
     if not unlocked.is_empty():
         _hand_unlock_message = unlocked
@@ -581,7 +577,7 @@ func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
             show_source_picker(state)
         return
     navigation_requested.emit("practice")
-    suppress_piano_input(state)
+    midi_start_suppression_requested.emit(int(state.get("midi_input_count",0)))
     _resume_open_state = state.duplicate(true)
     resume_measure_button.visible = allow_measure
     resume_banner_message.text = "Continue at step %d?" % step
@@ -605,7 +601,7 @@ func _resume_choose_measure() -> void:
 
 func show_source_picker(state: Dictionary) -> void:
     navigation_requested.emit("practice")
-    suppress_piano_input(state)
+    midi_start_suppression_requested.emit(int(state.get("midi_input_count",0)))
     _dismiss_resume_hint()
     open_picker.show_piece(state)
 
@@ -620,23 +616,6 @@ func confirm_source_picker() -> void:
     open_picker.visible = false
     navigation_requested.emit("practice")
     command_requested.emit({"action":"open_at","bar":bar,"mode":mode})
-
-func suppress_piano_input(state: Dictionary) -> void:
-    _last_input_count = int(state.get("midi_input_count",0))
-    _fresh_piano_key = false
-
-func consider_piano_start(polled: bool, active: bool) -> void:
-    var fresh := _fresh_piano_key
-    _fresh_piano_key = false
-    var phase: String = str(_state.get("phase",""))
-    if (not fresh or not polled or not active or _busy or not _score_ready or
-            is_source_picker_open()
-            or int(_previous_state.get("revision",-1)) != int(_state.get("revision",-1))
-            or str(_previous_state.get("phase","")) != phase or str(_state.get("device","")).is_empty()): return
-    if phase in ["ready","performance_complete","guided_complete"] or (phase == "feedback" and str(_state.get("mode","")) == "practice" and not bool(_state.get("auto",false))):
-        if str(_state.get("mode","")) == "learn": play_requested.emit()
-        elif phase == "feedback": command_requested.emit({"action":"restart"})
-        elif str(_state.get("mode","")) in ["practice","perform"]: command_requested.emit({"action":"start"})
 
 func handle_source_input(event: InputEvent) -> bool:
     if not is_source_picker_open(): return false

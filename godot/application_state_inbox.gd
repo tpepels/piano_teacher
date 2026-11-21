@@ -16,9 +16,10 @@ var _presenter
 var _statistics
 var _logger
 var _navigation
+var _input
 
 func configure(commands, practice, presentation, presenter, statistics,
-        logger, navigation) -> void:
+        logger, navigation, input_session) -> void:
     _commands = commands
     _practice = practice
     _presentation = presentation
@@ -26,6 +27,7 @@ func configure(commands, practice, presentation, presenter, statistics,
     _statistics = statistics
     _logger = logger
     _navigation = navigation
+    _input = input_session
 
 func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     var accepted: Dictionary = accept(code,body,sample_started_ms,
@@ -44,7 +46,7 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
         assets.is_ready(),assets.layout_pending,assets.timeline_model_pending,
         _presentation.frame_diagnostics)
     if _practice.is_source_picker_open():
-        _practice.suppress_piano_input(parsed)
+        _input.suppress_midi_start(int(parsed.get("midi_input_count",0)))
         return
     # Only a published snapshot can drive commands and presentation.
     # Both poll and acknowledged-control responses pass this same gate.
@@ -57,6 +59,10 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
         assets.is_ready(),_commands.fingering_save_error,
         _presentation.demo_player != null and bool(_presentation.demo_player.get("audio_error")),
         sample_started_ms < 0,received_ms,_presentation.smoke)
+    # Input policy consumes the accepted source snapshot AFTER presentation,
+    # never from inside PracticeScreen.render or a stale pre-command poll.
+    _input.observe_midi_state(parsed,sample_started_ms < 0,
+        _navigation.current_screen,_commands.state.pending,assets.is_ready())
     _presentation.refresh_status()
     _logger.record(parsed,received_ms,_practice.stage.renderer,
         _practice.stage.keyboard.visible,_presentation.guided.world,

@@ -238,7 +238,8 @@ func _ready() -> void:
     presentation_session.bind_frames(feedback_session,metronome_frame,frame_coordinator,
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     state_inbox.configure(command_coordinator,practice_view,presentation_session,
-        state_presenter,statistics_coordinator,debug_session_logger,navigation_session)
+        state_presenter,statistics_coordinator,debug_session_logger,
+        navigation_session,input_session)
     command_success_effects.refresh_score.connect(presentation_session.refresh_status)
     practice_view.score_retry_requested.connect(presentation_session.retry_score)
     presentation_session.refresh_status()
