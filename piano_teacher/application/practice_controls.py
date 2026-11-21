@@ -54,7 +54,7 @@ class PracticeControls:
                         or type(score_revision) is not int
                         or type(score_fingerprint) is not str):
                     raise ValueError("UI control requires source-bound renderer readiness")
-                current = self.read_models.snapshot()
+                current = self.read_models.control_snapshot()
                 if ready and (score_revision != current.get("revision")
                               or score_fingerprint != current.get("piece_fingerprint")):
                     raise ValueError("Displayed score belongs to an earlier source revision")

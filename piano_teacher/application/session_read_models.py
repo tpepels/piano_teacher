@@ -83,6 +83,20 @@ class SessionReadModels:
         self.score_state_publisher.prepare_guided(
             state,self.score_facts(pending,timeline),now=now)
 
+    def control_snapshot(self) -> dict:
+        """Read command facts without publishing or preparing visual scores.
+
+        This runs inside the same application lock as command execution.
+        It samples canonical session ports without invoking the graphical
+        score projection, headless score fixture or readiness transitions.
+        UI labels and actual actions subsequently use the same policy.
+        """
+        now = self.clock()
+        state = project_session_state(self.capture_snapshot(sampled_at=now))
+        if self.lesson_execution.flow_active():
+            state["flow"] = self.lesson_execution.flow_state()
+        return state
+
     def snapshot(self) -> dict:
         with self.lock:
             now = self.clock()

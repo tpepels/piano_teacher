@@ -156,6 +156,15 @@ current Python control projection enables/disables these actions and
 The native coordinator attaches renderer revision/fingerprint/readiness
 to every `ui_*` command, including events emitted from `PracticeScreen`.
 The existing command-success navigation handles the new intent names.
+A further command/read boundary prevents UI gestures from invoking the
+heavy per-frame score presentation projection. `SessionReadModels`
+now exposes a read-only `control_snapshot()` using the canonical
+session facts and active flow, without calling `score_state_publisher`
+or the headless graphical fixture. The locked `PracticeControls`
+command transaction uses this read port. The normal `snapshot()`
+continues to publish the full score state independently, sharing the
+same `project_controls` policy.
+
 The original direct API command forms remain available to external tools,
 and the transport/admission redesign remains open.
 
