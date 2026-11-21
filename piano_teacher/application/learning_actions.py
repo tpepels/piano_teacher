@@ -109,11 +109,13 @@ class LearningActions:
         p=self.source_identity.plan
         if not p:
             raise ValueError("Open a piece first")
-        change = prepare_stage_change(
-            p, action, kwargs, warmup=self.source_identity.warmup)
+        queued = self.session_commands.active
+        change = (queued.event.manual
+                  if queued is not None and queued.event.action == action
+                  and queued.event.manual is not None
+                  else prepare_stage_change(
+                      p, action, kwargs, warmup=self.source_identity.warmup))
         was_guided = self.playback_session.mode == "learn"
-        guided_start = (self.guided_session.beat_range[0]
-                        if self.guided_session.beat_range is not None else 0.0)
         guided_return = self.guided_session.return_context
         guided_retry_range = self.attempt.retry_range
         self.lifecycle.stop(reason=self.session_commands.action_reason)
@@ -121,7 +123,9 @@ class LearningActions:
         # Preserve the original ordering of the source opening reset.
         if action in ("select_step", "next", "previous"):
             self.lesson_cursor.select_opening(0.0)
-        effect = self.session_commands.active or self.teaching_decisions.prepare("manual", manual=change, action=action, store=False)
+        effect = (queued if queued is not None and queued.event.action == action
+                  else self.teaching_decisions.prepare(
+                      "manual", manual=change, action=action, store=False))
         self.session_commands.apply_progress(effect, plan=p)
         self.attempt_settlement.command_applied()
         if action == "hand":

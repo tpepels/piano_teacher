@@ -46,17 +46,17 @@ class PracticeControls:
         with self.lock:
             previous_reason = self.session_commands.action_reason
             self.session_commands.action_reason = action
-            before = {"fingerprint": self.source_identity.fingerprint,
-                      "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                      "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
-            effect = self.session_commands.active
-            route = ControlDispatcher.route(action)
-            if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
-                change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
-                          if route == "stage" else None)
-                effect = self.teaching_decisions.prepare("manual", manual=change,
-                    action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
             try:
+                before = {"fingerprint": self.source_identity.fingerprint,
+                          "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                          "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
+                effect = self.session_commands.active
+                route = ControlDispatcher.route(action)
+                if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
+                    change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
+                              if route == "stage" else None)
+                    effect = self.teaching_decisions.prepare("manual", manual=change,
+                        action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
                 with self.session_commands.executing(effect):
                     result = self.dispatch_control(action, **kwargs)
                     self.read_models.prepare_score_presentation()

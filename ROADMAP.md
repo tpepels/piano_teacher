@@ -670,6 +670,14 @@ directly, with the prior action reason restored in `finally`. No new
 grading clock, source decision or admission gate is introduced.
 These changes require core and full native/package verification.
 
+**S7 command transaction hardening:** `PracticeControls.control` now
+restores `SessionCommands.action_reason` even if route validation or
+teaching-decision preparation raises before dispatch. Lesson-stage commands
+reuse the generator's accepted `StageChange` from their active command
+effect rather than silently preparing a second stage change, and ignore
+mismatched active command effects. An unused guided-start local is removed.
+Existing command, failure and persistence journeys must confirm these changes.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public
