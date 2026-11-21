@@ -542,8 +542,11 @@ plus native and package verification.
 source-bound score selection, native geometry/engraving, guided marks,
 completed-take cached-layout lookup and lesson overview. Score source
 selection and asset compilation are separate; the original public commands
-remain intact. The session snapshot/feedback/next-stage read models and
-integrated CI gates remain to be completed.
+remain intact. The source/transport state snapshot, score projection and explicit headless
+fixture serialization now use `SessionReadModels`. The facade continues
+to own public read timing, while named read ports provide the immutable
+projection dependencies. Live feedback and next-stage acknowledgments
+remain; this commit requires core/native CI.
 
 ### Phase S6 — Read models, feedback and score projection
 

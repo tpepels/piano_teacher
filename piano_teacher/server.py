@@ -55,6 +55,7 @@ from .application.exposure_installer import ExposureInstaller
 from .application.exposure_workflows import ExposureWorkflows
 from .application.lesson_execution import LessonExecution
 from .application.score_read_services import ScoreReadServices
+from .application.session_read_models import SessionReadModels
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -423,6 +424,26 @@ class PracticeEngine:
             guided_session=self.guided_session,
             score_artifact_registry=self.score_artifact_registry,
             learner_progress=self.learner_progress, lock=self.lock)
+
+        self.read_models = SessionReadModels(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, attempt=self.attempt,
+            guided_session=self.guided_session, playback_session=self.playback_session,
+            visual_transport=self.visual_transport, playback=self.playback,
+            attempt_settlement=self.attempt_settlement, library=self.library,
+            midi=self.midi, midi_ingress=self.midi_ingress,
+            midi_key_shortcuts=self.midi_key_shortcuts, midi_calibration=self.midi_calibration,
+            attempt_progression=self.attempt_progression,
+            score_state_publisher=self.score_state_publisher,
+            lesson_execution=self.lesson_execution, score_read=self.score_read,
+            listen=self.listen, live_input=self.live_input,
+            live_assessment=self.live_assessment, lock=self.lock, clock=self.now,
+            phase=self._phase, elapsed_beat=self._elapsed_beat,
+            visual_motion=self._visual_motion, tempo_map=self._active_tempo_map,
+            next_count_in_beats=self._next_count_in_beats,
+            next_count_in_meter=self._next_count_in_meter,
+            start_rate_bpm=self._start_rate_bpm,
+            presentation_bpm=lambda: self._presentation_bpm)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -1027,7 +1048,7 @@ class PracticeEngine:
             try:
                 with self.session_commands.executing(effect):
                     result = self._dispatch_control(action, **kwargs)
-                    self._prepare_score_presentation()
+                    self.read_models.prepare_score_presentation()
                     if action not in ("score_ready", "demo_ready", "reset_path"):
                         self.measurement.event("manual_action", {"action": action,
                             "fingerprint": before["fingerprint"] or None,
@@ -1873,7 +1894,7 @@ class PracticeEngine:
         # transition, never by a later serializer's snapshot traversal.
         # Only worker/command execution advances the accepted lifecycle.
         self.playback.advance(self._playback_facts())
-        self._prepare_score_presentation()
+        self.read_models.prepare_score_presentation()
         # Display publication must never pause the take or alter feedback text.
         try:
             self._publish_live_assessment()
@@ -2042,7 +2063,7 @@ class PracticeEngine:
         """Full snapshot, including static values; returned by commands."""
         began = time.perf_counter()
         try:
-            state = self._state_snapshot()
+            state = self.read_models.snapshot()
             state["schema_version"] = state_contract.VERSION
             return state
         finally:
@@ -2055,178 +2076,6 @@ class PracticeEngine:
         for key in state_contract.STATIC_KEYS:
             state.pop(key, None)
         return state
-
-    def _score_projection_facts(self, pending, timeline) -> ScoreProjectionFacts:
-        announced = self.visual_transport.announced_continuation
-        plan = self.plan
-        return ScoreProjectionFacts(
-            fingerprint=self.fingerprint,
-            stage_key=plan.identity if plan is not None else "",
-            revision=self.score_revision,
-            transport_id=self.playback_session.transport_id,
-            mode=self.playback_session.mode,
-            running=self.playback_session.running,
-            paused=self.visual_transport.paused,
-            awaiting_score=self.playback_session.awaiting_score_revision is not None,
-            bpm=float(plan.bpm) if plan is not None else 0.0,
-            presentation_bpm=float(self._presentation_bpm),
-            run_at=self.visual_transport.run_at,
-            play_from_beat=self.visual_transport.play_from_beat,
-            announced=announced,
-            announced_deadline=(self.visual_transport.announced_deadline(
-                announced[0]) if announced is not None else None),
-            announcement_serial=self.visual_transport.announce_serial,
-            scheduled_start=self.visual_transport.scheduled_start,
-            timeline=({"intent":pending,"current":timeline}
-                      if self.playback.presentation_required else {}),
-            next_count_in_beats=self._next_count_in_beats(),
-            next_count_in_meter=tuple(self._next_count_in_meter()),
-            continuous_horizon_beats=self.visual_transport.continuous_horizon_beats,
-            duration_beats=(self.display_phrase().end-self.display_phrase().start
-                            if plan is not None else 0.0),
-            has_source=plan is not None,
-        )
-
-    def _prepare_score_presentation(self) -> None:
-        if self.plan is None or self.playback_session.mode != "learn":
-            return
-        now = self.now()
-        state = project_session_state(self._capture_session_snapshot(sampled_at=now))
-        pending, timeline = self.playback.snapshot()
-        self.score_state_publisher.prepare_guided(
-            state,self._score_projection_facts(pending,timeline),now=now)
-
-    def _state_snapshot(self) -> dict:
-        with self.lock:
-            now = self.now()
-            state = project_session_state(self._capture_session_snapshot(sampled_at=now))
-            pending, timeline = self.playback.snapshot()
-            facts = self._score_projection_facts(pending,timeline)
-            plan = self.plan
-            guided_plan = self.score_state_publisher.publish(state, facts)
-            if not self.playback.presentation_required:
-                # Test/command fixture adapter; never entered by the desktop.
-                def count_in_source_at(from_beat, rate):
-                    _, bars, meter = self.attempt_progression.count_in_bar(
-                        phrase=plan.active_phrase,
-                        boundaries=plan.piece.bar_boundaries,
-                        time_signatures=plan.piece.time_signatures,
-                        position=from_beat)
-                    return bars,meter,self._start_rate_bpm(from_beat,rate)
-                project_headless_score_queue(
-                    state, facts, measure_at=count_in_source_at,
-                    guided=guided_plan)
-            if self.attempt_settlement.pending_result is not None:
-                state["bpm"] = self._presentation_bpm
-            state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
-            if self.lesson_execution.flow_active():
-                state["flow"] = self.lesson_execution.flow_state()
-            if self.plan is not None:
-                epoch = self.visual_transport.tempo_epoch_for(
-                    stage=self.plan.identity,bpm=self._presentation_bpm)
-                if epoch is not None:
-                    state["tempo_epoch_ms"] = epoch*1000.0
-            if self.plan is not None:
-                beat = self.plan.active_phrase.start + self.visual_transport.play_from_beat
-                if self.playback_session.running and now >= self.visual_transport.run_at:
-                    beat += self._elapsed_beat(now - self.visual_transport.run_at)
-                keys = [key for key in self.plan.piece.key_signatures
-                        if key.beat <= beat + 1e-7
-                        and key.hand in ("both", self.plan.hand)]
-                state["key_fifths"] = keys[-1].fifths if keys else 0
-            # A score-free Settings screen still needs an authoritative
-            # backend clock epoch for its MIDI tap calibration. Midpoint-only
-            # UI extrapolation drifts when score and device requests queue.
-            calibration_sample_at = now
-            state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
-            state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
-            state["next_count_in_beats"] = self._next_count_in_beats()
-            state["next_count_in_meter"] = self._next_count_in_meter()
-            state["short_rest_latency_seconds"] = SNAPSHOT_LATENCY_SECONDS
-            state["resume_count_in_beat"] = (
-                SCHEDULER.seconds_beats(
-                    calibration_sample_at-self.midi_ingress.resume_grading_after,
-                    self.plan.bpm)
-                if self.playback_session.running and not self.visual_transport.paused
-                and calibration_sample_at < self.midi_ingress.resume_grading_after
-                and self.plan is not None else None)
-            state["midi_key_range"] = self.midi_key_shortcuts.status(self.midi.device)
-            state["midi_calibration"] = self.midi_calibration.snapshot(
-                calibration_sample_at)
-            return state
-
-    def _capture_session_snapshot(self, *, sampled_at=None) -> SessionSnapshot:
-        """Sample named read ports under the existing application lock."""
-        values = SnapshotValues(
-            _guided_recovery_pending=self.attempt.guided_recovery_pending,
-            _guided_return=self.guided_session.return_context,
-            _remediation_active=self._remediation_active,
-            auto=self.playback_session.auto,
-            awaiting_score_revision=self.playback_session.awaiting_score_revision,
-            count_in_bar_beats=self.playback_session.count_in_bar_beats,
-            count_in_beats=self.playback_session.count_in_beats,
-            count_in_meter=self.playback_session.count_in_meter,
-            feedback=self.feedback,
-            feedback_marks=self.attempt.feedback_marks,
-            feedback_unmapped=self.attempt.feedback_unmapped,
-            fingerprint=self.fingerprint,
-            guided_range=self.guided_session.beat_range,
-            is_builtin_warmup=self.is_builtin_warmup,
-            metronome=self.library.settings["metronome"],
-            midi_input_count=self.midi.input_count,
-            midi_input_note=self.midi.input_note,
-            midi_input_at=self.midi.input_at,
-            midi_connected=self.midi.connected,
-            midi_device=self.midi.device,
-            midi_notes=len(self.attempt.recorder.presses) if self.attempt.recorder is not None else 0,
-            teaching_active=self.teaching is not None,
-            mode=self.playback_session.mode,
-            next_action=self.next_action,
-            next_at=self.visual_transport.next_at,
-            open_from_beat=self.open_from_beat,
-            pause_context=self.playback_session.pause_context,
-            paused=self.visual_transport.paused,
-            paused_at=self.visual_transport.paused_at,
-            pending_result=self.attempt_settlement.pending_result,
-            assessment_verdict=(
-                self.attempt_settlement.pending.decision.verdict
-                if self.attempt_settlement.pending is not None
-                and self.attempt_settlement.pending.assessment is self.attempt_settlement.pending_result
-                else None),
-            pending_rewind=self.visual_transport.pending_rewind,
-            performance_summary=self.attempt.performance_summary,
-            persistent_hints=self.persistent_hints,
-            plan=self.plan,
-            play_from_beat=self.visual_transport.play_from_beat,
-            practice_preparation=self.visual_transport.practice_preparation,
-            preview_only=self.playback_session.preview_only,
-            recovery_notice=self.attempt.recovery_notice,
-            retry_range=self.attempt.retry_range,
-            review_end_beat=self.attempt.review_end_beat,
-            run_at=self.visual_transport.run_at,
-            running=self.playback_session.running,
-            score_revision=self.score_revision,
-            transport_id=self.playback_session.transport_id,
-            visual_offset_beats=self.visual_transport.visual_offset_beats,
-        )
-        reads = SnapshotReadPorts(
-            seek_grid=self.lesson_execution.seek_grid,
-            learner_snapshot=self.lesson_execution.learner_snapshot,
-            elapsed_beat=self._elapsed_beat,
-            phase=self._phase,
-            source_model=self.score_read.source_model,
-            live_feedback=self._live_marks_for_snapshot,
-            visual_motion=self._visual_motion,
-            active_tempo_map=self._active_tempo_map,
-            display_phrase=self.display_phrase,
-            guided_marks=self.score_read.guided_marks,
-            listen_snapshot=self.listen.snapshot,
-            live_input_snapshot=self.live_input.snapshot,
-            preparation_schedule=self.visual_transport.preparation_schedule,
-            teaching_snapshot=self.teaching.snapshot if self.teaching is not None else None,
-            clock=self.now if sampled_at is None else lambda: sampled_at,
-        )
-        return capture_session_snapshot(values, reads)
 
     def _next_stage_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:
         if self.plan is None or self.is_builtin_warmup or self.playback_session.mode != "practice":
