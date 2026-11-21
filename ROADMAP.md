@@ -529,11 +529,13 @@ is authorized, releasing the hold spatially rebases the future epochs
 of that authorized segment while retaining their fixed deadlines.
 Invalid inverse forecasts are refused rather than silently accepted.
 
-**Unclosed:** The gateway still inverts native world positions to a
-musical deadline: V3 must move final deadline selection to the Python
-transaction owner. No new unit tests were added as instructed.
-CI/Godot syntax, full embedded production and physical MIDI acceptance
-have not been executed or claimed for this revision.
+**Current status:** The gateway's deadline-search loop has since been
+removed. Native physical clearance is measured through the read-only
+timeline inverse; the sole musical deadline is selected and bound by
+Python's playback transaction. The V4 hold/forecast integration is
+still unverified in native Godot, and the complete MIDI/score/sound
+transition matrix and physical acceptance remain open. No new unit
+tests were added as instructed.
 
 ### Phase V4 - Make visual time obey authorized state
 

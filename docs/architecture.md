@@ -189,27 +189,23 @@ The backend command-success routing recognizes the new navigation
 intents. Native business-state inference remains elsewhere, notably
 in admission, presentation hold and remaining advanced controls.
 
-**V3/V4 conflict identified:** `ScoreAdmissionGateway._deadline_at_world`
-calculates a graded deadline by inverting a Godot visual timeline,
-while `GuidedPresentationSession.update_hold` releases the visible
-Pause hold for a *pending* Resume intent to make that inversion
-possible. The current `PresentationTimeline.forecast_authored`
-uses held `project()` for an empty tempo segment map, blocking
-future forecasting while Pause stays frozen. The replacement needs
-two distinct read operations on the *same* canonical projection:
-painted world (held until authorized) and pure candidate future
-geometry (never mutates painted world), with the final deadline
-chosen and validated by the backend owner. This is a source audit
-finding, not an implementation claim.
+**Original V3/V4 conflict (resolved in source, unverified in runtime):**
+The old `ScoreAdmissionGateway._deadline_at_world` selected a
+musical deadline by binary-searching the Godot visual clock.
+The native Pause/Resume implementation also released a painted hold
+for an unconfirmed intent. Both paths have been replaced. The native
+timeline now exposes separate held painting and pure physical-travel
+measurement, and the only final deadline is bound by the Python
+playback coordinator from authenticated score evidence. Native
+execution and physical acceptance of the replacement remain open.
 
-This is **not** completion of V0 or V2. Native admission and deadline
-selection still span `ScoreAdmissionGateway` and Python; the visual
-`PresentationTimeline` still has native hold/rate logic, and the old
-`practice_control_policy.gd` is retained pending a complete consumer
-sweep. The complete event/transition graph, defect witnesses and
-deterministic simulated-MIDI/real-Godot tests are not yet implemented.
-New unit tests are deferred at the owner's request, and no physical
-or CI acceptance is inferred.
+This does **not** complete V0 or V2. The renderer still owns
+physical admission and score presentation while Python owns musical
+deadlines, transport authorization and controls. The independent
+`practice_control_policy.gd` has been deleted. The complete
+transition graph, simulated-MIDI/native scenarios and physical
+acceptance have not yet been executed. No new unit tests have been
+added at the owner's request.
 
 ### V4 native hold and forecast boundary (2026-11-21)
 
@@ -220,8 +216,9 @@ independent hypothetical future from the same tempo projector even when
 the displayed world is held. Only an authorized backend playback segment
 may release the visual hold; its future tempo epochs retain exact time
 coordinates through the release and are rebased spatially from the held
-world. The gateway still computes the final deadline by native inverse
-projection, an outstanding V3 ownership violation. The full MIDI/renderer
+world. Later commits replaced the gateway's binary-search deadline
+inversion with a direct, read-only physical travel measurement;
+Python chooses the only admissible downbeat. The full MIDI/renderer
 transition graph and physical acceptance remain unverified.
 
 ### V3 admission boundary: typed physical evidence, authoritative scheduling
@@ -507,9 +504,14 @@ resume uses one transaction:
 2. Godot requires compiled authentic assets for that revision and preflights
    the source against the viewport and all live predecessor layers.
 3. Godot physically reserves immutable strips and sends `playback.reserve`
-   with the same identity, world origin, queue generation and exact deadline.
-4. Godot binds the returned segment and calls `playback.present`. Python
-   validates the remaining count-in and authorizes that exact deadline.
+   with the source identity, world origin, stream generation and a
+   sampled **physical travel** witness. It never supplies a chosen
+   musical deadline. Python validates source, timing and count-in
+   constraints and returns its exact bound reservation receipt.
+4. Godot verifies that receipt against its immutable physical arm,
+   binds the returned segment and calls `playback.present`. Python
+   authorizes the exact musical deadline, with lost replies reconciled
+   from its read-only ledger instead of guessed or re-scheduled.
 5. Notation, MIDI input, metronome, voice and Listen sound consume the same
    authorized take/segment. A preloaded renderer is promoted after authorization.
 
