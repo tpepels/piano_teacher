@@ -1,6 +1,6 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-20 · MIDI input only**
+**Updated 2026-11-21 · MIDI input only**
 
 [Practice flow](docs/practice-flow.md) is the learner-visible contract.
 [Architecture](docs/architecture.md), [development](docs/development.md) and
@@ -34,6 +34,7 @@ The separate final examination uses the whole original piece.
 | 2026-11-20 | Rebuild CI around player behaviour; remove architecture/implementation-shape checks and report coverage without percentage gates. |
 | 2026-11-20 | Consolidate docs recursively into four Markdown files and make README learner-facing. |
 | 2026-11-20 | Hold-duration grading is opt-in from Settings (off by default); key releases remain measured in both modes. |
+| 2026-11-21 | The PracticeEngine redesign may introduce or replace architectural layers, boundaries and interfaces. File-size limits are diagnostic goals, not mandatory constraints. |
 
 ## Implementation and verification record
 
@@ -286,9 +287,239 @@ the automatic-repeat scenario never requested `score.native_layout` before
 simulating admission. The old tick-time engraving masked the omission. The
 existing test now requests the real native asset layout before the initial
 and each successive reservation, as the production Godot asset worker does.
-No test modules or substitute renderers were added. Both core and the embedded
-native/package checks require a green tagged rerun; physical acceptance
-still requires the instrument.
+No test modules or substitute renderers were added. Both core and native-production/package checks passed on `f8bd9cd`
+([run 44895386721](https://github.com/tpepels/piano_teacher/actions/runs/44895386721)).
+Physical acceptance still requires the instrument.
+
+## Active plan — PracticeEngine architecture replacement (2026-11-21)
+
+**Status: planned, not implemented.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
+has **2,783 nonblank/trailing-newline-adjusted source lines, 151,578 bytes and
+168 methods**. The [baseline core and native-production CI run
+44895386721](https://github.com/tpepels/piano_teacher/actions/runs/44895386721)
+passed. Existing A1–A6 repairs and the MIDI/headless and feedback-boundary
+work above are complete at the code level; the new decomposition is separate.
+
+**Owner decision (2026-11-21):** New architectural layers, boundaries,
+interfaces, modules, coordinators and services are explicitly **permitted**.
+Do not treat current classes or the previous flat application structure as
+constraints. Prefer replacement or consolidation when an existing boundary
+has the wrong responsibilities. No arbitrary new-layer limit, no compulsory
+reuse of an existing owner and no imposed module-length range. Preserve the
+product's single authoritative lesson selection, playable source identity,
+grading verdict, admitted timeline, retained score stream and durable
+settlement; additional *layers* must not accidentally introduce additional
+*authorities* for those facts.
+
+**Goal:** Make `PracticeEngine` a small comprehensible public application
+boundary/composition point, provisionally **about 300–450 lines**, without
+treating that number as a pass/fail criterion. The result is judged by coherent
+responsibility ownership, acyclic dependencies, source-to-display consistency,
+correct transactions and full behaviour/packaging integration—not by moving
+lines into thin forwarding wrappers. Existing large collaborators must also
+be reviewed and may be split or replaced; do not turn `PlaybackSession`,
+`AttemptSettlement` or a new shared context into the next monolith.
+
+### Target architecture — to validate and finalize in Phase S0
+
+A proposed dependency direction, subject to evidence from the S0 inventory:
+
+1. **Embedded entry/transport:** existing Godot and `EngineCommands` expose
+   typed public operations and schedule command, musical-tick and asset work.
+2. **Application boundary:** `PracticeEngine` supplies the stable public
+   command/query surface, session transaction/lock boundary, composition and
+   lifecycle cleanup. Read-only query execution cannot advance the workflow.
+3. **Application use cases / workflow layer (new where justified):** explicit
+   source/history, lesson/exposure, playback/command, attempt/outcome and
+   projection operations coordinate several domain owners. Define narrow
+   input/output facts and effect contracts; avoid passing the whole engine.
+4. **Domain state and policies:** the authoritative selection, source,
+   playback, assessment, progression and evidence owners make their own
+   decisions. A coordinator applies a decision; it does not independently
+   choose tempo, stage, grade or deadline.
+5. **Ports and infrastructure:** persistence, MIDI, audio, engraving,
+   workers and clocks are reached through explicit, replaceable interfaces
+   where a real dependency seam needs one. Do not create ports solely to
+   satisfy a pattern. Strict musical-tick, asset-worker and native-thread
+   boundaries remain enforced.
+
+Allow new boundaries such as a session-transaction service, a workflow
+executor, a domain event/effect dispatcher or immutable session snapshot
+where justified by ownership and lifecycle. Reject cyclic dependencies,
+indirect `PracticeEngine` backreferences, global service locators, a
+universal mutable `EngineContext`, duplicated transport/grading clocks,
+shadow selection state and transitional alternate runtime paths. Cross-layer
+events/effects must declare identity, generation and ordering when relevant.
+
+### Phase S0 — Full responsibility and dependency design
+
+- Inventory **all 168 methods**, engine fields and assignment sites; map
+  callers, public native operations, read-only queries, update/tick paths,
+  import/deferred-import edges and state transitions. Include the large
+  neighboring `application/` modules rather than assuming their current
+  responsibilities are correct.
+- Trace the high-fanout paths: `_stop` (22 callers), `feedback` (45
+  writes), `next_action` (34 writes), `open_from_beat` (16 writes),
+  `course_guided` (13 writes) and `score_revision` (11 writes).
+  Determine authoritative, derived, transient and duplicated state.
+- Specify a concrete target module/dependency graph, command/query and
+  worker boundaries, atomic transaction model, state owners, public
+  compatibility surface, proposed interface types and migration order.
+  Use new layers where they solve demonstrated coupling.
+- Record current exact file/method sizes and software gates; preserve a
+  full baseline inventory for no-legacy audit.
+
+**Exit gate:** Every method and mutable fact has an intended destination;
+each cross-owner operation has a stated authority and transaction boundary.
+The proposed graph is documented in `docs/architecture.md`, with explicit
+reasons for significant new/replaced abstractions. No implementation is
+declared complete in S0.
+
+### Phase S1 — State authority and transactional foundations
+
+- Establish explicit ownership and semantic updates for `feedback`,
+  `next_action`, selection/window position, source generation/revision,
+  guided state, pending preparation, recovery and transport deadlines.
+  Remove redundant stored fields when a read-only derivation suffices.
+- Introduce narrowly scoped transaction/effect and state-snapshot boundaries
+  if the audit shows they are needed. Preserve the existing lock, durable
+  savepoints, command/tick ordering, cancellation and failure recovery.
+- Convert all relevant writers/callers **in the same integrated phase**.
+  Do not leave duplicate mutable fields or temporary bidirectional shims.
+
+**Exit gate:** One writer/decision authority per state fact, explicit
+cross-owner operations, no engine-wide mutable dependency bag; all existing
+affected behaviours and core CI pass.
+
+### Phase S2 — Source, device, configuration and history workflows
+
+- Move the full implementations of source loading/install and source
+  revision invalidation, library loading/health, fingering correction,
+  preferences, device connection/disconnect/calibration, learning-history
+  status/statistics/export/delete, and persistence restore/save.
+- Evaluate and reorganize existing `SourcePreparationSession`,
+  `MidiConnection`, `LearningEvidenceSession`, repositories and ports.
+  Create a source-lifecycle use case/boundary when it is cleaner than
+  fragmented direct calls; do not automatically preserve existing shapes.
+- Handle in-flight stale source installs, affected take cancellation,
+  worker/read-only snapshots, user data migrations and error propagation.
+
+**Exit gate:** No device/source/history workflows implemented inside the
+facade; native operations and persistence behaviour remain compatible;
+cancellation and exact source generation are intact; required CI passes.
+
+### Phase S3 — Lesson selection and exposure workflow
+
+- Extract the complete `_flow_*`, `_begin_learn`,
+  `_enter_selected_exposure`, `_apply_exposure_preparation`,
+  `_prepare_practice`, `_prepare_listen`, `_prepare_teaching`,
+  `_commit_pending`, stage navigation and guided-return workflows.
+- Separate *selection* from *execution*. Preserve the one authoritative
+  generator/lesson decision, `SessionCommands`, the exposure source,
+  Practice Flow windows and alternatives including Coda/Fukuda.
+- Permit a new lesson workflow/application layer; remove duplicate
+  decision branches and obsolete access paths instead of routing them
+  through a second class.
+
+**Exit gate:** Listen → Free → Tempo, each authored measure and its
+backward-growing four-bar windows, Right/Left/Together, resumes, return aids,
+alternate courses and full-original examination follow a single
+selection/execution contract with passing existing behaviour CI.
+
+### Phase S4 — Command dispatch and authorized playback
+
+- Extract public `start`/`control`, command classification, musical
+  ticks, `_control_transport`, `_start_or_restart`, Pause/Resume/Retry,
+  count-in, fixed-deadline repeat, automatic continuation, MIDI shortcuts,
+  scheduling/rest measurements and `_stop` orchestration.
+- Design an explicit command/use-case execution boundary (new permitted);
+  reassess `PlaybackSession`, `PlaybackCoordinator`,
+  `VisualTransport` and scheduler responsibilities rather than simply
+  moving every method into `PlaybackSession`.
+- Preserve exact graphical reserve → present authorization, single
+  admission/take identity, immutable ink, source-bound audio/MIDI timing,
+  frozen pause time, count-in and forward continuous scroll. No cold asset
+  compilation or blocking worker action inside a musical tick.
+
+**Exit gate:** Every timed route uses the same authorized transaction,
+including Listen, stage handoff, Retry, resume and shortcut; rejected/stale
+receipts do not grade or sound. Core, native behaviour, embedded runtime and
+relevant package checks pass on the integrated phase.
+
+### Phase S5 — Attempt result, recovery and durable continuation
+
+- Extract `_complete_attempt`, `_apply_rolling_recovery`,
+  `_assess_rolling_boundary`, `_advance_pending_feedback`,
+  `_run_pre_assessment_transition`, `_finish_*`, remedial
+  assignments and continuation-effect execution.
+- Reassess `AttemptRuntime`, `AttemptSettlement`,
+  `AssessmentService`, `AttemptProgression` and
+  `TeachingContinuation`. Use a new outcome workflow/transaction
+  boundary if needed, while keeping one grader and one durable result.
+- Preserve original completed-take BPM, sealed evidence, atomic generator
+  feedback/progress save, retry idempotence, interrupted-take handling,
+  source-bound note feedback and full-tail release timing.
+
+**Exit gate:** No double mastery, duplicate settlement, second grading
+policy, incompatible retry or retroactive ink mutation. Existing recovery,
+long-note, rolling-window, alternate-course and failure/retry behaviours pass,
+plus native and package verification.
+
+### Phase S6 — Read models, feedback and score projection
+
+- Extract `_state_snapshot`, `_capture_session_snapshot`,
+  `_score_projection_facts`, feedback/readiness projections, live
+  assessment and preload acknowledgement. Read-side code consumes stable
+  domain facts and never writes transition state.
+- Reassess and, where helpful, restructure `SessionSnapshotBuilder`,
+  `ScoreStatePublisher`, `LiveAssessmentPublisher`,
+  `ScoreArtifacts` and their interface ports.
+- Retain the non-graphical `headless_score_projection` only for explicitly
+  headless fixtures; desktop must use real native admission and revision
+  identities. Cold engraving remains outside the locked musical worker.
+
+**Exit gate:** Queries are side-effect-free; projected generation,
+source-note identity and authorized playback match; pending feedback is
+acknowledged exactly once; core, Godot/native and packaged read paths pass.
+
+### Phase S7 — Final facade, dependency and legacy elimination
+
+- Reduce `PracticeEngine` to justified composition, transaction/public
+  entry, clock/worker dispatch and cleanup. Eliminate unnecessary facade
+  delegates; retain direct ports only when that is the clean public seam.
+- Remove every superseded implementation, old state copy, compatibility
+  shim, unused module and caller; audit Python and Godot import/reference
+  closure and native/package entry points. Preserve *necessary historical
+  persisted-data migrations and explicit headless test fixtures*.
+- Check all new/existing services for cohesion, methods/LOC, cycles,
+  hidden policy duplication and excessive dependency fanout. Split or
+  redesign oversized collaborators as required; do not merely relocate
+  the monolith. Update `docs/architecture.md` from the final code.
+- Run the entire existing core CI, native behaviour groups, embedded
+  production/repertoire journeys and strict relocated package boot on the
+  final source. Record SHA, counts, failures, skips and the largest files.
+  A real piano and a clean target machine are separate unverified gates
+  until the owner actually performs those observations.
+
+**Exit gate:** Every public command/query route and worker path is
+accounted for, the dependency graph has no production cycles or accidental
+second authorities, no required old architecture remains, and full
+software acceptance passes. A ~300–450-line facade is desirable, not
+evidence of architectural correctness by itself.
+
+### Implementation discipline and phase reporting
+
+A phase is finished **only** when all its scope is implemented, every affected
+caller and documentation reference is migrated, obsolete paths are removed,
+and its specified integration/CI checks pass. Phase entries must record
+source SHA, module/ownership changes, measured file sizes, observed tests,
+failures/skips and any genuine unverified acceptance. Work on `main` with
+coherent commits; no branches or worktrees. Do not add architecture-shape,
+pixel, parity or infrastructure tests; use the current player-visible
+behaviour suite and the existing native/packaging acceptance scripts.
+New regression tests require the owner's separately stated approval.
+Physical MIDI, audible output and visual acceptance are never inferred
+from headless or Dummy-audio CI.
 
 ## Phase status and remaining acceptance
 

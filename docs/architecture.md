@@ -304,6 +304,65 @@ plan, recorder, renderer or clock. Source/fingering installation similarly uses
 an immutable generation/fingerprint/original-notes identity and a validated
 install effect; a late correction cannot replace another source.
 
+## Planned PracticeEngine decomposition — 2026-11-21
+
+The active [S0–S7 plan](../ROADMAP.md#active-plan--practiceengine-architecture-replacement-2026-11-21)
+supersedes treating the oversized `server.py` facade as mere deferred
+file cleanup. At the `f8bd9cd` baseline it contains 2,783 lines, 168
+methods and 151,578 bytes. This section describes an **intended**
+architecture, not an implementation already present in `main`.
+
+**New architectural layers and boundaries are allowed and may replace
+existing ones.** The only architectural constraints are those needed for
+correct product behaviour and clear dependency ownership: one actual
+lesson/tempo selection, source identity, musical grading clock, admitted
+playback authority, canonical notation stream and durable assessment result.
+These constraints do not prohibit a new application-service layer, explicit
+workflow engines, interface/port layers, an effect-dispatch boundary,
+transaction coordinator or immutable snapshot types. Determine their value
+from the responsibility inventory and dependency direction, not from the
+current class inventory.
+
+The target dependency direction is:
+
+```text
+Godot / EngineCommands / native workers
+                |
+       PracticeEngine entry boundary
+                |
+        application use cases
+    / source  lesson  playback  outcome  read /
+                |
+    domain state, decisions and policies
+                |
+       explicit ports / infrastructure
+```
+
+The illustration is provisional. Phase S0 must confirm all method and state
+ownership and decide the concrete type/module graph. A command coordinator
+may orchestrate multiple owners under a documented transaction; it may not
+acquire its own competing score queue, MIDI grader, transport clock or
+lesson-decision policy. Pure domain modules must not import the facade;
+services must not hold a universal mutable `PracticeEngine` reference.
+New interfaces should correspond to real dependency seams, not merely
+increase layer count.
+
+Identified high-risk state: `feedback`, `next_action`, selected source
+window, `course_guided`, `score_revision`, scheduled starts, paused
+source time, recovery and `_stop` lifecycle sequencing. Their concrete
+writers, authoritative owners, derivations and explicit effects are S0/S1
+deliverables. Later phases move complete source/history, lesson/exposure,
+command/transport, settlement/recovery, read-model and score-presentation
+workflows; each phase deletes the old implementation and migrates all callers.
+
+The facade's approximate 300–450-line target is a **diagnostic goal, not
+an architectural invariant**. Larger well-separated services or additional
+layers are acceptable when coherent, whereas a 300-line facade that simply
+forwards into another 2,000-line god object fails the goal. The present
+ownership table above is an inventory of the *current* architecture and
+can change as the S0–S7 plan is implemented. Existing graphical-admission,
+read-only snapshot and musical-tick asset requirements remain binding.
+
 ## Remaining work — source audit 2026-11-20
 
 Historical discovery findings and original source evidence follow. A1–A6 now
