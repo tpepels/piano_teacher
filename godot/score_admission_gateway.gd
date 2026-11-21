@@ -234,10 +234,19 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         _cancel_provisional()
         return
     current["world_origin"] = start_world
-    current["reservation_action"] = "auto" if fixed != null else reservation_action
     current["reused_count_in"] = (
         action == "resume" and partial > 0.0
         and str(planned.get("mode","")) == "reuse")
+    # A paused take whose immutable old owner cannot be reused must
+    # allocate a fresh future strip. Running the physical "resume" route
+    # for that fallback can rediscover the paused old source and falsely
+    # claim partial count-in reuse after Python already selected a FULL
+    # new count-in. Its backend action remains "resume"; only the native
+    # physical queue admission mode is "start" in that case.
+    current["reservation_action"] = (
+        "auto" if fixed != null else
+        "start" if action == "resume" and
+            not bool(current["reused_count_in"]) else reservation_action)
     current["projection_bpm"] = tempo
     current["projection_segments"] = authored.duplicate(true)
     current["projection_source_beat"] = float(state.get("clock_beat",0.0))
