@@ -153,6 +153,56 @@ func authorize_source_epoch(deadline_ms: float, opening: float,
             _install(deadline_ms+mapped*1000.0,
                 float(entry.get("bpm",nominal_bpm)),segment_id)
 
+func physical_travel_ms_to(target_world: float, sampled_ms: int,
+        source_beat: float, nominal_bpm: float,
+        authored_segments: Array) -> float:
+    # Pure inverse of the SAME displayed epochs and authored tempo map.
+    # No speculative clock, trial timeline objects or binary-search frame
+    # rounding. Source time and world position are distinct observations.
+    if (epochs.is_empty() or not is_finite(target_world)
+            or not is_finite(nominal_bpm) or nominal_bpm <= 0.0):
+        return NAN
+    var position: float = project(sampled_ms)
+    if not is_finite(position):
+        return NAN
+    if target_world <= position:
+        return 0.0
+    if not is_finite(hold_world) and not active_segment.is_empty():
+        # An already committed source has known, possibly changing tempo
+        # epochs. Use those timestamps directly, never a possibly stale
+        # source_beat from the last backend snapshot.
+        var elapsed_ms := 0.0
+        var cursor_ms := float(sampled_ms)
+        var cursor_world := position
+        var rate: float = _rate_at(cursor_ms)
+        for epoch in epochs:
+            var next_ms: float = float(epoch["at_ms"])
+            if next_ms <= cursor_ms:
+                continue
+            var ahead: float = (next_ms-cursor_ms)*rate/60000.0
+            if target_world <= cursor_world+ahead:
+                return elapsed_ms+(target_world-cursor_world)*60000.0/rate
+            cursor_world += ahead
+            elapsed_ms += next_ms-cursor_ms
+            cursor_ms = next_ms
+            rate = float(epoch["bpm"])
+        return elapsed_ms+(target_world-cursor_world)*60000.0/rate
+    # No committed, unheld source determines this future. A frozen Pause,
+    # Free target or newly loaded stage requires a *hypothetical* trajectory
+    # from the held world and the current authenticated tempo map.
+    if not is_finite(source_beat):
+        return NAN
+    var target_beat: float = source_beat+target_world-position
+    if not is_finite(target_beat):
+        return NAN
+    var first_seconds: float = TempoTimeline.seconds_at_beat(
+        source_beat,nominal_bpm,authored_segments)
+    var last_seconds: float = TempoTimeline.seconds_at_beat(
+        target_beat,nominal_bpm,authored_segments)
+    var elapsed: float = (last_seconds-first_seconds)*1000.0
+    return maxf(0.0,elapsed) if is_finite(elapsed) else NAN
+
+
 func forecast_authored(at_ms: int, sampled_ms: int,
         source_beat: float, nominal_bpm: float,
         authored_segments: Array) -> float:

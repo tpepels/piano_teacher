@@ -99,34 +99,6 @@ func _matching_renderer(intent: Dictionary):
     return runway.prepared_renderer(intent) if runway != null else null
 
 
-func _physical_travel_ms(target_world: float, local_ms: int, beat: float,
-        bpm: float, segments: Array) -> float:
-    # Invert the very same forward source/world projection the renderer
-    # uses. A fixed nominal-BPM conversion fails across tempo-map changes.
-    var low := 0.0
-    var high := 1000.0
-    for i in range(22):
-        var candidate: float = flow.project_authored_future(
-            local_ms + roundi(high),local_ms,beat,bpm,segments)
-        if not is_finite(candidate):
-            return NAN
-        if candidate >= target_world:
-            break
-        high *= 2.0
-    if high >= 4194304000.0:
-        return NAN
-    for i in range(38):
-        var mid: float = 0.5 * (low + high)
-        var candidate: float = flow.project_authored_future(
-            local_ms + roundi(mid),local_ms,beat,bpm,segments)
-        if not is_finite(candidate):
-            return NAN
-        if candidate < target_world:
-            low = mid
-        else:
-            high = mid
-    return high
-
 func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> void:
     var view = _matching_renderer(intent)
     if view == null or not is_instance_valid(view):
@@ -239,7 +211,7 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
     current = intent.duplicate(true)
     started_ms = frame_ms
     var start_world: float = float(planned.get("start_world", NAN))
-    var physical_travel_ms: float = _physical_travel_ms(
+    var physical_travel_ms: float = flow.physical_travel_ms_to(
         start_world,frame_ms,float(state.get("clock_beat",0.0)),
         tempo,authored)
     if not is_finite(physical_travel_ms):

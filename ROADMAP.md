@@ -384,6 +384,27 @@ receipt. Native `playback.present` replies still require the full
 intent/attempt/take/segment identity. This preserves authorization
 after a lost present ACK without accepting an unrelated take.
 
+### V3 physical travel measured by one tempo/epoch model - 2026-11-21
+
+Removed `ScoreAdmissionGateway._physical_travel_ms` and its
+repeated binary-search projections. The native presentation ledger
+now computes physical travel as a *direct, read-only inverse* of
+its own monotonic authorized tempo epochs while unheld, or as an
+exact authored source-tempo integration from the frozen world
+during Pause/Free/initial admission. The gateway receives only
+the resulting physical witness. No provisional source can move the
+painted score, no second tempo clock is created, and no frame
+rounding loop attempts to choose an application deadline.
+
+The final musical downbeat remains the Python
+`PhysicalAdmissionEvidence`/`MusicalScheduler` decision, bound
+to the same immutable source and queue generation. The Godot
+direct inverse is purely renderer geometry, not grading policy.
+
+**Open:** Native Godot parse/runtime, mixed-meter/tempo, pause
+and physical MIDI acceptance of this replacement. No new tests
+were introduced.
+
 ### V3 source-bound physical admission contract - 2026-11-21
 
 The production `playback.reserve` contract has been replaced rather than

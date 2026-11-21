@@ -333,6 +333,21 @@ against the current locked session and computes the lesson index
 itself. An obsolete prompt is rejected instead of navigating an
 unrelated reopened or revised source.
 
+### Physical timing measurement is the inverse of the canonical visual epochs
+
+`PresentationTimeline.physical_travel_ms_to` provides a pure
+renderer-domain read port for the time required for an immutable
+source slot to reach the playhead. When an authorized source is
+already scrolling, it integrates the ledger's committed
+wall-clock tempo epochs. When the display is held, it integrates
+the existing authored source-time map from the current held
+world, without releasing the visual hold. The former iterative
+trial projector in `ScoreAdmissionGateway` has been deleted.
+
+The result is only physical timing evidence. Python remains the
+sole authority for whether a count-in, repeat or resume may use
+the proposed slot and for the eventual downbeat.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

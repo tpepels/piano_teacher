@@ -41,6 +41,11 @@ func release_hold() -> void:
         timeline.set_hold(INF,maxi(0,timeline.last_ms))
     hold_world = timeline.hold_world
 
+func physical_travel_ms_to(target_world: float, sampled_ms: int,
+        source_beat: float, nominal_bpm: float, authored_segments: Array) -> float:
+    return timeline.physical_travel_ms_to(
+        target_world,sampled_ms,source_beat,nominal_bpm,authored_segments)
+
 func project_authored_future(at_ms: int, sampled_ms: int,
         source_beat: float, nominal_bpm: float,
         authored_segments: Array) -> float:
