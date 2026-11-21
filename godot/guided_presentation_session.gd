@@ -12,6 +12,12 @@ func _init(flow) -> void:
     score_flow = flow
 
 func update_hold(state: Dictionary) -> void:
+    if bool(state.get("paused",false)):
+        # The backend freezes MIDI/teaching here. Freeze the one visual
+        # world at the last painted position too; otherwise an idle/Free
+        # hold is released and notation keeps passing the playhead.
+        score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
+        return
     var guided: bool = str(state.get("mode","")) == "learn" and \
         str(state.get("phase","")).begins_with("guided") and is_finite(world)
     if not guided:

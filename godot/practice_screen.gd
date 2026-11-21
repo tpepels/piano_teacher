@@ -2,6 +2,7 @@ extends VBoxContainer
 # Practice interaction and snapshot presentation. Chrome owns widget/layout
 # construction; this owner keeps backend snapshots and command/input policy.
 const Chrome := preload("res://practice_chrome.gd")
+const ControlPolicy := preload("res://practice_control_policy.gd")
 const Design := preload("res://practice_theme.gd")
 const TempoVocabulary := preload("res://tempo_vocabulary.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
@@ -467,7 +468,10 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     # explanations live in the tooltip instead of making every button a menu.
     var start_text := "Resume" if bool(parsed.get("paused", false)) else "Pause" if active_transport else "Play"
     if flow_active:
-        start_text = "Resume" if bool(parsed.get("paused", false)) else "Pause"
+        start_text = ("Resume" if bool(parsed.get("paused", false))
+            else "Pause" if active_transport
+            else "Listen" if str(parsed.get("mode","")) == "listen"
+            else "Play")
     elif learning:
         start_text = "Resume" if phase == "paused" else "Try rhythm" if phase in ["guided_complete", "disconnected"] else "Pause" if phase in ["guided_wait", "loading"] else "Learn"
         if phase == "guided_complete" and bool(parsed.get("guided_recovery", false)):
@@ -479,7 +483,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     start_button.text = start_text
     start_button.tooltip_text = ("Pause or resume · Space" if flow_active
         else "Play, pause or resume · Space · Play any piano key when ready")
-    start_button.disabled = not active_transport and (not _score_ready)
+    start_button.disabled = (not active_transport and not _score_ready) or \
+        (flow_active and learning and not active_transport)
     start_button.call("configure", "pause" if start_button.text == "Pause" else "play",
         active_transport and not bool(parsed.get("paused", false)))
     listen_button.call("configure", "practice" if not flow_active and str(parsed.get("mode", "")) == "listen" else "listen",
@@ -497,7 +502,9 @@ func present_score(status: Dictionary) -> void:
     _score_status = status.duplicate(true)
     _score_ready = bool(status.get("ready",false))
     stage.present_score_status(status)
-    start_button.disabled = not _active_transport(_state) and not _score_ready
+    start_button.disabled = (not _active_transport(_state) and not _score_ready) or \
+        (ControlPolicy.flow_active(_state) and str(_state.get("mode","")) == "learn"
+        and not _active_transport(_state))
     practice_retry_button.disabled = not bool(_state.get("loaded",false)) or not _score_ready
 
 func present_message(message: String, reveal := false) -> void:
@@ -525,7 +532,7 @@ func finish_action() -> void:
     stage.practice_playback_banner.visible = false
 
 func _active_transport(state: Dictionary) -> bool:
-    return bool(state.get("running",false)) or str(state.get("phase","")) in ["count_in","playing","paused","feedback","recovering","loading","preview_gap"]
+    return ControlPolicy.active_transport(state)
 
 func set_active(active: bool) -> void:
     _active = active

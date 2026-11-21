@@ -277,10 +277,12 @@ func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: fl
     var gap_pixels: float = facts.gap
     var duration: float = facts.duration
     var width: float = facts.width
-    # Only the opening exhibition and untimed Free carry neighboring bars.
-    # Timed repeats retain their one-bar preparation slot and never wait
-    # for contextual attacks or rewrite ink already exposed.
-    var context: bool = display_context or guided
+    # Limit every visible strip to the selected practice window. The
+    # pre-engraved atlas may include neighboring bars for authentic clefs,
+    # ties and safe cut geometry; those bars are not part of this lesson.
+    # Previous/next exercises must enter only through their own admitted
+    # source strips, never through an expanded context crop.
+    var context: bool = false
     var added := 0
     for index in range(windows.size()):
         var bounds: Vector2 = windows[index]

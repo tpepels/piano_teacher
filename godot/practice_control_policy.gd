@@ -3,7 +3,7 @@ extends RefCounted
 ## PracticeCommandCoordinator applies the result; backend remains authoritative.
 const ACTIVE_PHASES := [
     "count_in", "playing", "paused", "feedback", "recovering",
-    "loading", "preview_gap", "admitting"]
+    "loading", "preview_gap", "admitting", "guided_wait"]
 const NOTATION_WAIT := "Preparing sheet music - wait for the notes before starting"
 
 static func active_transport(state: Dictionary) -> bool:
@@ -19,7 +19,20 @@ static func primary(state: Dictionary, score_ready: bool,
     if paused and not score_error.is_empty():
         return {"message":score_error}
     if flow_active(state):
-        return {"action":"resume" if paused else "pause"}
+        if paused:
+            return {"action":"resume"}
+        if active_transport(state):
+            return {"action":"pause"}
+        # A selected Listen can be ready before its first audio admission,
+        # and Free can be completing an automatic transition. Neither
+        # state is an active passage that can be paused.
+        if not score_ready:
+            return {"message":NOTATION_WAIT}
+        if str(state.get("mode","")) == "listen":
+            return {"action":"listen"}
+        if str(state.get("mode","")) == "practice":
+            return {"action":"start"}
+        return {}
     var mode: String = str(state.get("mode","practice"))
     if mode == "listen" and not active_transport(state):
         return {"action":"practice" if bool(state.get("warmup",false)) else "listen"}
@@ -50,7 +63,8 @@ static func pause_toggle(state: Dictionary, score_error: String) -> Dictionary:
     if bool(state.get("paused",false)) and not score_error.is_empty():
         return {"message":score_error}
     if flow_active(state):
-        return {"action":"resume" if bool(state.get("paused",false)) else "pause"}
+        return {"action":"resume" if bool(state.get("paused",false)) else "pause"} \
+            if bool(state.get("paused",false)) or active_transport(state) else {}
     if (active_transport(state) or
             (str(state.get("mode","practice")) == "learn"
             and str(state.get("phase","")) in ["guided_wait","paused"])):
