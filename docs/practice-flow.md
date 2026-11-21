@@ -120,13 +120,18 @@ The music is the focus:
 
 - One staff stream scrolls right to left past a fixed playhead in Listen and
   Tempo. Free holds the next target at that same playhead.
-- Show the bar before and bar after the active phrase dimmed for context, when
-  that does not obstruct the immediate one-bar repeat.
+- Display only the currently selected authored practice window (one to four
+  measures), with its full authentic held-note tails. Neighbouring measures
+  may be used internally to engrave ties, clefs and safe clip boundaries,
+  but must not appear as additional exercise measures.
 - Keep the hand not being practised visible but dimmed.
 - Show finger numbers wherever known. Never invent an unavailable assignment.
 - Space fast notes generously: about **3.3 staff spaces per sixteenth** at least.
 - Use one small status label indicating the current window, hand and step.
 - Hide the piano keyboard except for a wrong-note hint in Free.
+- **Pause** freezes both the visible score and the graded/untimed exercise.
+  Resume continues the selected passage without presenting new notes during
+  the pause. In Free, the next target holds still until the correct key.
 - Keep **Pause/Resume** and **Listen again** as the practice controls. Everything
   else progresses automatically. This controls the visible normal flow;
   configured physical MIDI shortcuts and existing keyboard/API tools remain.

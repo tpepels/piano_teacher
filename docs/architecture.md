@@ -106,6 +106,20 @@ visual-mode path was not cleanly accepted. The corrected strict full run is
 [44909630866](https://github.com/tpepels/piano_teacher/actions/runs/44909630866)
 (pending as of this audit); no physical acceptance is inferred.
 
+### Pause and selected-window projection — 2026-11-21
+
+`GuidedPresentationSession` now freezes the same
+`ContinuousScoreFlow`/`PresentationTimeline` world coordinate on an
+acknowledged Pause and preserves Free holds across introducing, disconnected,
+and guided-complete phases. It does not introduce a second musical clock or
+rewrite already admitted immutable strips. `PracticeControlPolicy` and the
+backend pausable-phase contract agree on these Free states, and the Play/Pause
+label follows the same active-state predicate. The native stream still
+pre-engraves authentic neighboring context for clefs, ties and safe cuts,
+but visible source-strip crops expose only the selected exercise window and
+full sounding tails. Source SHA `098ff955`; native software acceptance
+and physical observation are pending at the time of this record.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

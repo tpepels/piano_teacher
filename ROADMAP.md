@@ -35,6 +35,7 @@ The separate final examination uses the whole original piece.
 | 2026-11-20 | Consolidate docs recursively into four Markdown files and make README learner-facing. |
 | 2026-11-20 | Hold-duration grading is opt-in from Settings (off by default); key releases remain measured in both modes. |
 | 2026-11-21 | The PracticeEngine redesign may introduce or replace architectural layers, boundaries and interfaces. File-size limits are diagnostic goals, not mandatory constraints. |
+| 2026-11-21 | Pause freezes the visible score even in Free/Listen/count-in; render only the selected practice measure window, retaining full sounding tails but no visible neighboring bars. |
 
 ## Implementation and verification record
 
@@ -876,6 +877,29 @@ test scenarios were added. [The corrected full gate](https://github.com/tpepels/
 was started on that source; a final green outcome with zero script exceptions
 is required before closing this correction. Physical rendering and MIDI/audio
 acceptance remain unverified.
+
+## Pause and current-window display correction — 2026-11-21
+
+Following physical-use feedback that Pause did not stop the moving staff,
+that Free continued scrolling without tempo, and that extra measures appeared,
+the renderer/control paths were corrected on main:
+
+- [`d1ba66e5`](https://github.com/tpepels/piano_teacher/commit/d1ba66e5fee8e2c941f5b465d60a5952642ced4a)
+  freezes the canonical visual projection on an acknowledged Pause, aligns the
+  visible Play/Pause decision with backend-pausable phases, and clips each
+  admitted score strip to the **selected** authored window. Context remains
+  available to the pre-engraving source but not as additional visible bars.
+- [`098ff955`](https://github.com/tpepels/piano_teacher/commit/098ff95519695a5227f682f59501d5f09ca4b7ac)
+  also maintains the Free target hold throughout `introducing`,
+  `disconnected` and completion transitions; these untimed phases can be
+  paused through the same backend transport authority.
+
+No new tests were introduced. [The full existing core and native/embedded/
+package acceptance run](https://github.com/tpepels/piano_teacher/actions/runs/44921228447)
+is running on `098ff955` and is **not yet evidence of acceptance**.
+A real piano is still needed to verify immediate Pause/Resume feel, whether
+Free remains stationary while thinking, and that source cropping shows exactly
+the selected window on screen. No physical, audible or visual success is claimed.
 
 ## Phase status and remaining acceptance
 
