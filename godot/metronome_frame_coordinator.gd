@@ -45,6 +45,7 @@ func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
             return
     _reserved = {"deadline_ms":deadline_ms,"bpm":bpm,"bar":bar_beats,
         "meter":meter,"count_in":count_in_beats,"action":action,
+        "take_id":take_id,
         "plan":plan,"token":"authorized:"+take_id if not take_id.is_empty()
             else "countin:%d" % roundi(deadline_ms),"acked_ms":NAN}
 
@@ -112,6 +113,15 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
     if is_finite(acked) and sampled_ms >= acked:
         # One check, on the first snapshot after the engine accepted it.
         _reserved["acked_ms"] = NAN
+        var playback: Variant = state.get("playback_timeline")
+        var active: Variant = playback.get("current") if playback is Dictionary else null
+        if (not active is Dictionary or str(active.get("take_id","")) !=
+                str(_reserved.get("take_id",""))):
+            # A subsequent source replaced this authorization before
+            # the first confirming snapshot. Equal BPM/deadline numbers
+            # cannot give the old take permission to speak again.
+            _reserved.clear()
+            return false
         var engine: float = engine_count_in_deadline_ms(state,
             str(_reserved["action"]),float(clock.backend_offset_ms))
         if not is_finite(engine):

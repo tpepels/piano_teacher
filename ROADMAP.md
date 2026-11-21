@@ -469,6 +469,17 @@ Exactly the selected one-to-four authored measures remain visible, with
 original closing barline, dim opposite hand and complete sounding tails;
 the final exam intentionally shows its full selected piece.
 
+### V5 sound ownership tied to authorized take - 2026-11-21
+
+The metronome's reserved spoken count-in now stores the authorized
+`take_id` and requires the first confirming backend state to match
+that exact take. Numeric deadline/BPM agreement alone no longer
+permits a superseded source to speak its old countdown.
+An explicit user Stop still silences pending local audio immediately
+as a physical safety effect; this does not schedule, grade or decide
+a transport transition. All other command completion/failure
+cancellations remain exclusively state-driven.
+
 ### V5 eliminate speculative command effects - 2026-11-21
 
 `PracticeCommandCoordinator` no longer uses the last published

@@ -111,6 +111,10 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
     # Provide physical facts for any raw gesture that *may* start, retry
     # or resume. Python chooses the concrete action under its lock.
     # The metronome consumes only an authorized playback segment.
+    if action == "stop":
+        # Immediate audible safety effect of an explicit user Stop.
+        # No musical deadline or accepted transport is inferred here.
+        metronome_frame.cancel_reserved_count_in()
     if action in ["ui_primary","ui_pause","ui_retry",
             "start","restart","resume","score_ready"]:
         var clearance: Dictionary = score_session.continuation_geometry()
