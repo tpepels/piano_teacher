@@ -65,6 +65,7 @@ from .application.completion_continuations import CompletionContinuations
 from .application.practice_timeline import PracticeTimeline
 from .application.practice_controls import PracticeControls
 from .application.midi_application_input import MidiApplicationInput
+from .application.score_preload_workflow import ScorePreloadWorkflow
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -498,6 +499,14 @@ class PracticeEngine:
             recovery_workflows=self.recovery_workflows,
             timed_playback=self.timed_playback, outcome_effects=self.outcome_effects)
 
+        self.score_preload = ScorePreloadWorkflow(
+            source_identity=self.source_identity, lock=self.lock,
+            playback_session=self.playback_session,
+            teaching_continuation=self.teaching_continuation,
+            attempt_settlement=self.attempt_settlement,
+            transport_timing=self.transport_timing,
+            completion_continuations=self.completion_continuations)
+
         self.read_models = SessionReadModels(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
             notices=self.notices, attempt=self.attempt,
@@ -791,12 +800,6 @@ class PracticeEngine:
     def control(self, action: str, **kwargs) -> None:
         return self.practice_controls.control(action, **kwargs)
 
-    def _decided_stage_selection(self):
-        if not self.playback_session.auto:
-            return None
-        return self.teaching_continuation.selection(self.attempt_settlement.pending,
-            revision=self.score_revision,fingerprint=self.fingerprint)
-
     def _phase(self, now: float) -> str:
         teaching_phase = None
         if not self.visual_transport.paused and self.playback_session.mode == "learn" and self.teaching is not None:
@@ -863,41 +866,18 @@ class PracticeEngine:
             state.pop(key, None)
         return state
 
-    def _next_stage_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:
-        if self.plan is None or self.is_builtin_warmup or self.playback_session.mode != "practice":
-            return None
-        decided = self._decided_stage_selection() if offset == 1 else None
-        return self.teaching_continuation.choose_ahead(
-            self.plan,fingerprint=self.fingerprint,revision=self.score_revision,
-            offset=offset,decided=decided)
-
     def next_stage_score(self) -> bytes:
-        with self.lock:
-            return self.teaching_continuation.ensure_next(
-                self._next_stage_selection())
+        return self.score_preload.next_stage_score()
 
     def report_preload_failure(self, *, fingerprint: str, step_number: int,
                                revision: int, error: str) -> dict:
-        with self.lock:
-            return self.teaching_continuation.report_native_failure(
-                self._next_stage_selection(),fingerprint=fingerprint,
-                step_number=step_number,revision=revision,error=error)
+        return self.score_preload.report_preload_failure(
+            fingerprint=fingerprint, step_number=step_number,
+            revision=revision, error=error)
 
-    def acknowledge_preloaded_stage(self, *, stage_key: str,
-                                    revision: int) -> dict:
-        with self.lock:
-            accepted = self.teaching_continuation.acknowledge_stage(
-                self._next_stage_selection(),stage_key=stage_key,revision=revision)
-            source = (PreloadedFeedbackSource(
-                self.plan.active_phrase.sounding_end-self.plan.active_phrase.start,
-                self.plan.bpm,self.transport_timing.active_tempo_map()) if self.plan is not None else None)
-            released_at = self.playback_session.activate_preloaded_feedback(source,
-                revision=self.score_revision,fingerprint=self.fingerprint)
-            if released_at is not None:
-                self.completion_continuations.advance_pending_feedback(released_at)
-            self.teaching_continuation.warm_more(
-                self._next_stage_selection(offset=2))
-            return accepted
+    def acknowledge_preloaded_stage(self, *, stage_key: str, revision: int) -> dict:
+        return self.score_preload.acknowledge_preloaded_stage(
+            stage_key=stage_key, revision=revision)
 
     def semantic_score(self) -> dict:
         return self.score_read.semantic_score()

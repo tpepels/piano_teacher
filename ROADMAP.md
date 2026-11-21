@@ -580,8 +580,12 @@ channel and the current feedback event identity now use
 `LiveFeedbackWorkflows`. The former engine methods and duplicate
 snapshot marks port were removed; the existing `AssessmentService`
 and `LiveAssessmentPublisher` remain the only grader/publisher.
-Next-stage acknowledgment and remaining read ports need integration;
-core/native CI must confirm.
+Preloaded stage selection, exact revision acknowledgment, native
+preload failure and subsequent automatic score preparation now use
+`ScorePreloadWorkflow`, consuming `TeachingContinuation` decisions.
+Remaining S6 integration is read-only snapshot/feedback ownership
+verification and removal of obsolete facade read delegates; core/native
+CI must confirm.
 
 ### Phase S6 — Read models, feedback and score projection
 

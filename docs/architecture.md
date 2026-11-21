@@ -356,6 +356,11 @@ the visual transport owns scheduling/rest metadata, and SessionCommands
 owns its command reason. The full workflow and transaction decomposition is
 still open; these new owners do not establish phase completion.
 
+Native future-stage preload selection and exact-revision acknowledgment
+now live in `application/score_preload_workflow.py`. A feedback release
+uses only the preloaded source selected by TeachingContinuation, and a
+failing next asset stays source-bound.
+
 Source-bound live note observations and acknowledgement identity now use
 `application/live_feedback_workflows.py`. It invokes the sole configured
 assessment policy and the existing live publisher; it contains no
