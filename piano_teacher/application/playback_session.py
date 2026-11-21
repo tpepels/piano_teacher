@@ -104,9 +104,7 @@ class PlaybackSession:
         self._midi.clear_resume_gate()
         self._transport.clear_grading_floor()
         self.mode = request.mode
-        self._attempt.performance_summary = None
-        self._attempt.review_stage_identity = None
-        self._attempt.review_session_complete = False
+        self._attempt.begin_timed_review()
         self.preview_only = not request.connected
         self._transport.begin_take(loop_continuation=request.loop_continuation)
         self.open_take(phrase=source.phrase,recording=True)
@@ -146,7 +144,7 @@ class PlaybackSession:
             self._measurement.begin(context)
         except Exception:
             self.running = False
-            self._attempt.recorder = None
+            self._attempt.suspend_recording()
             self.auto = False
             raise
         self._measurement.phase_changed(
@@ -363,7 +361,7 @@ class PlaybackSession:
     def prepare_admitted_continuation(self) -> None:
         self._transport.cancel_continuation()
         self._transport.finish_preparation_gate()
-        self._transport.pending_rewind = None
+        self._transport.finish_rewind()
 
     def retain_announced_count_in(self, *, bpm: float) -> None:
         lead = SCHEDULER.seconds_beats(self._transport.run_at-self._clock(),bpm)

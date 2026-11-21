@@ -33,6 +33,12 @@ class AttemptRuntime:
     def assign_remediation(self, remediation: RemedialAssignment | None) -> None:
         self.remediation_active = remediation
 
+    def begin_timed_review(self) -> None:
+        """Clear the previous review when a new graded/preview take begins."""
+        self.performance_summary = None
+        self.review_stage_identity = None
+        self.review_session_complete = False
+
     def begin_take(self, *, recording: bool) -> None:
         """Open one recorder and discard only per-take grading output."""
         self.recorder = Recorder() if recording else None

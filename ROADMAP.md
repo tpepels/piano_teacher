@@ -477,6 +477,16 @@ services no longer assign directly to that state. This removes the last
 independent reason-writer/restore pattern without adding another command
 router. Core and full embedded/native/package acceptance are required.
 
+**S1 further owner-source audit:** `PlaybackSession` still directly
+cleared three `AttemptRuntime` review flags, assigned its Recorder on a
+failed capture start and wrote `VisualTransport.pending_rewind`.
+Those remaining mutations now use `AttemptRuntime.begin_timed_review()`,
+the existing `suspend_recording()`, and
+`VisualTransport.finish_rewind()`. The caller's existing order and
+exception handling remain intact. No other direct
+`self._attempt`/`self._transport` field writers remain in
+`PlaybackSession`. Integrated native/package verification must rerun.
+
 ### Phase S1 — State authority and transactional foundations
 
 - Establish explicit ownership and semantic updates for `feedback`,
