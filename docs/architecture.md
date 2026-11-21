@@ -356,6 +356,13 @@ the visual transport owns scheduling/rest metadata, and SessionCommands
 owns its command reason. The full workflow and transaction decomposition is
 still open; these new owners do not establish phase completion.
 
+History-management transactions now reside in
+`application/history_management.py`: scoped evidence reset, learner deletion,
+lesson reset, history reads and export. It consumes the installed
+source/plan identity and `SessionLifecycle` rather than holding a
+`PracticeEngine` reference. The external public methods remain locked
+entry points. Source and device workflows still require migration.
+
 The active-take stop transaction now resides in
 `application/session_lifecycle.py`. The stop workflow owns ordered
 authorization invalidation, evidence interruption, cancellation and

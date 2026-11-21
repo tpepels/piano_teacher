@@ -425,6 +425,14 @@ is complete.
 cross-owner operations, no engine-wide mutable dependency bag; all existing
 affected behaviours and core CI pass.
 
+**S2 implementation underway:** Durable learner-history status, statistics,
+export, scoped deletion, full deletion and current-lesson reset are now
+centralized in `HistoryManagement`. It has explicit dependencies and uses
+the same lifecycle, settled evidence and plan identity owners; no second
+LearningPlan store is introduced. Source loading, device and configuration
+workflows remain in `server.py`, so S2 is **not complete**. Verify this
+commit in core CI before accepting its source mutation paths.
+
 ### Phase S2 — Source, device, configuration and history workflows
 
 - Move the full implementations of source loading/install and source

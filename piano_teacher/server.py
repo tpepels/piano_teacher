@@ -44,6 +44,7 @@ from .application.source_identity import SourceIdentity
 from .application.lesson_cursor import LessonCursor
 from .application.session_notices import SessionNotices
 from .application.session_lifecycle import SessionLifecycle
+from .application.history_management import HistoryManagement
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -56,6 +57,7 @@ from .application.musical_scheduler import (
 
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
+from .application.score_artifact_registry import ScoreArtifactRegistry
 from .application.future_score import FutureScore
 from .application.midi_connection import MidiConnection, MidiNotice
 from .application.midi_key_shortcuts import MidiKeyShortcuts
@@ -116,6 +118,10 @@ class PracticeEngine:
     @property
     def plan(self) -> LearningPlan | None:
         return self.source_identity.plan
+
+    @property
+    def score_artifacts(self) -> ScoreArtifacts:
+        return self.score_artifact_registry.current
 
     @property
     def source(self):
@@ -267,7 +273,7 @@ class PracticeEngine:
         self.listen = ListenSession(data_dir / "demo-audio", lock=self.lock)
         self.fingering = FingeringService(data_dir / "fingering")
         self.preprocessing = PreprocessingCache(data_dir / "preprocessed")
-        self.score_artifacts = ScoreArtifacts(self.preprocessing)
+        self.score_artifact_registry = ScoreArtifactRegistry(ScoreArtifacts(self.preprocessing))
         future_score = FutureScore(data_dir / "preprocessed", clock=self.now)
         self.teaching_continuation = TeachingContinuation(future_score,self.visual_transport)
         # The untimed guided engine owns repeat presentation epochs; no
@@ -317,6 +323,15 @@ class PracticeEngine:
             continuation=self.teaching_continuation,
             guided_session=self.guided_session, live_input=self.live_input,
             listen=self.listen, measurement=self.measurement, clock=self.now)
+        self.history_management = HistoryManagement(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, progress=self.progress, measurement=self.measurement,
+            recovery_streak=self.recovery_streak, lifecycle=self.session_lifecycle,
+            attempt_settlement=self.attempt_settlement, attempt=self.attempt,
+            playback_session=self.playback_session, guided_session=self.guided_session,
+            score_artifact_registry=self.score_artifact_registry,
+            learning_evidence=self.learning_evidence, clock=self.now,
+            data_dir=self._data_dir)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -488,12 +503,10 @@ class PracticeEngine:
 
     def learning_history_status(self) -> dict:
         with self.lock:
-            return self.learning_evidence.history_status(
-                fingerprint=self.fingerprint,data_dir=self._data_dir)
+            return self.history_management.status()
 
     def learning_statistics(self, fingerprint: str | None = None, *, query=None) -> dict:
-        # A separate read-only WAL connection; never hold the musical lock.
-        return self.learning_evidence.statistics(fingerprint,query=query)
+        return self.history_management.statistics(fingerprint, query=query)
 
     def _retry_context(self, result, *, end_beat=None):
         return self.learning_evidence.adaptive_context(
@@ -528,60 +541,16 @@ class PracticeEngine:
         self.next_action = prepared.next_action
 
     def export_learning_history(self, path: str, include_detail: bool = False) -> dict:
-        if not isinstance(path, str) or not path.strip() or type(include_detail) is not bool:
-            raise ValueError("Choose an export file and detail preference")
         with self.lock:
-            return self.progress.ledger.export(Path(path).expanduser(), include_detail=include_detail)
+            return self.history_management.export(path, include_detail=include_detail)
 
     def delete_piece_history(self, fingerprint: str, confirm: bool = False) -> dict:
         with self.lock:
-            if confirm is not True or not self.plan or fingerprint != self.fingerprint:
-                raise ValueError("Confirm deletion for the currently loaded piece")
-            replacement = LearningPlan(self.plan.piece, warmup=self.is_builtin_warmup,
-                exercise_strategy=self.plan.exercise_strategy.name,
-                fukuda_mistakes=frozenset(), feedback={})
-            with self.measurement.atomic():
-                self.progress.ledger.delete_piece(fingerprint)
-            self.measurement.discard_deleted()
-            self._stop(reason="delete_piece_history", persist_evidence=False)
-            self.source_identity.replace_plan(replacement)
-            self._reset_trouble()
-            self.lesson_cursor.select_opening(0.0)
-            self.playback_session.select_source()
-            self.guided_session.clear_selection()
-            self.score_artifacts.invalidate()
-            self.source_identity.advance_revision()
-            self.feedback = "Piece history and learning progress deleted"
-            self.lesson_cursor.set_course_guided(False)
-            self.guided_session.set_hints(False,now=self.now())
-            return self.learning_history_status()
+            return self.history_management.delete_piece(fingerprint, confirm=confirm)
 
     def delete_learner_history(self, confirm: bool = False) -> dict:
         with self.lock:
-            if confirm is not True:
-                raise ValueError("Confirm deletion of all learning history and progress")
-            replacement = (LearningPlan(self.plan.piece, warmup=self.is_builtin_warmup,
-                exercise_strategy=self.plan.exercise_strategy.name,
-                fukuda_mistakes=frozenset(), feedback={}) if self.plan else None)
-            with self.measurement.atomic():
-                self.progress.ledger.delete_learner()
-            self.measurement.discard_deleted()
-            self._stop(reason="delete_learner_history", persist_evidence=False)
-            # The capture is shared with MIDI ingress, assessment settlement
-            # and evidence preparation. A new object would leave those
-            # collaborators writing into the deleted learner's old session.
-            self.measurement.begin_fresh_learner_session()
-            self.source_identity.replace_plan(replacement)
-            self._reset_trouble()
-            self.lesson_cursor.select_opening(0.0)
-            self.playback_session.select_source()
-            self.guided_session.clear_selection()
-            self.score_artifacts.invalidate()
-            self.source_identity.advance_revision()
-            self.feedback = "All learning history and progress deleted"
-            self.lesson_cursor.set_course_guided(False)
-            self.guided_session.set_hints(False,now=self.now())
-            return self.learning_history_status()
+            return self.history_management.delete_learner(confirm=confirm)
 
     def close(self) -> None:
         with self.lock:
@@ -818,42 +787,8 @@ class PracticeEngine:
         self.progress.save(self.plan, self.fingerprint)
 
     def _reset_current_path(self, *, fingerprint: str, confirm: bool) -> None:
-        """Forget only the loaded piece's learning path and restart at step 1.
-
-        A caller must identify the currently loaded source so a stale UI
-        confirmation cannot erase a different piece after a library switch.
-        Music files, shared preferences and other pieces remain untouched.
-        """
-        if self.plan is None or not self.fingerprint:
-            raise ValueError("Open a piece before resetting its lesson path")
-        if confirm is not True or fingerprint != self.fingerprint:
-            raise ValueError("Confirm the reset for the currently loaded piece")
-        piece = self.plan.piece
-        warmup = self.is_builtin_warmup
-        # Validate the reset course against cleared source feedback while the
-        # current take and durable records are still intact. A reset rebuilds
-        # the same course (the active plan's generator), never another one.
-        replacement = LearningPlan(piece, warmup=warmup,
-                    exercise_strategy=self.plan.exercise_strategy.name,
-                    fukuda_mistakes=frozenset(), feedback={})
-        # Publish all replacement records before stopping the current take.
-        self.attempt_settlement.reset_piece_path(
-            fingerprint=fingerprint,replacement=replacement,
-            played=(self.attempt.recorder.presses if self.attempt.recorder
-                    else self.measurement.guided.presses),
-            now=self.now())
-        self._stop(reason="lesson_reset", persist_evidence=False)
-        self._reset_trouble()
-        self.source_identity.replace_plan(replacement)
-        self.lesson_cursor.select_opening(0.0)
-        self.lesson_cursor.set_course_guided(False)
-        self.playback_session.select_source()
-        self.guided_session.clear_selection()
-        self.score_artifacts.invalidate()
-        self.source_identity.advance_revision()
-        self.playback_session.wait_for_player()
-        self.feedback = "Lesson path reset to its first step"
-        self.next_action = "Press Play when you are ready."
+        return self.history_management.reset_current_path(
+            fingerprint=fingerprint, confirm=confirm)
 
     def _stop(self, *, reason: str | None = None, preserve_episode: bool = False,
               persist_evidence: bool = True):
@@ -1306,7 +1241,7 @@ class PracticeEngine:
                     committed.prepared,changed=True,auto=self.playback_session.auto,
                     selection=committed.selection)
                 if prebuilt is not None:
-                    self.score_artifacts = prebuilt
+                    self.score_artifact_registry.adopt(prebuilt)
                 else:
                     self.score_artifacts.invalidate()
                 self.visual_transport.adopt_committed_stage(
