@@ -529,9 +529,15 @@ func _present_pause() -> void:
 func open_advanced_pause() -> void:
     navigation_requested.emit("practice")
     advanced_pause_open = true
-    if bool(_state.get("paused",false)): _present_pause()
-    elif _active_transport(_state): command_requested.emit({"action":"pause"})
-    else: advanced_pause_open = false
+    if bool(_state.get("paused",false)):
+        _present_pause()
+    elif bool(_control("pause").get("enabled",false)):
+        # An advanced Pause is the same raw gesture as the on-screen and
+        # physical shortcut. Python resolves it from the latest locked
+        # session state; the modal never bypasses transport policy.
+        command_requested.emit({"action":"ui_pause"})
+    else:
+        advanced_pause_open = false
 
 func _previous_lesson() -> void:
     if not _busy and bool(_control("previous").get("enabled",false)):

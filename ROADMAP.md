@@ -853,6 +853,18 @@ of compiling the obsolete policy. No duplicate fallback remains.
 V5 remains open for the native effect-coordination audit, production
 integration and physical acceptance. No new unit tests were added.
 
+### V5 advanced Pause uses the same authenticated raw gesture - 2026-11-21
+
+The advanced Pause sheet formerly emitted the explicit
+`practice.command(action="pause")` based on a UI snapshot.
+It now checks the backend-published Pause availability and
+emits the same `ui_pause` gesture used by the main button and
+keyboard shortcut. Python resolves that gesture under its
+session lock. The sheet retains only UI visibility, not
+application transport authority; a disabled/stale source
+cannot bypass the canonical control policy through the
+advanced menu. Native UI acceptance remains required.
+
 ### V5 accepted command result is owned by the backend - 2026-11-21
 
 `practice.command` now returns a typed version-1 envelope
