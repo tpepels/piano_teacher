@@ -176,8 +176,9 @@ authorization. Explicit legacy public commands continue to work during
 the migration.
 
 **Follow-up in-progress migration:** The `controls` projection
-now includes eight user gestures: primary, Pause, Retry, Listen,
-Previous lesson, Skip, tempo increase and tempo decrease. Native
+now includes nine user gestures: primary, Pause, Retry, Listen,
+Previous lesson, source-bound Review previous, Skip, tempo increase and
+tempo decrease. Native
 `PracticeScreen` consumes the projected visibility/enablement and
 caption facts; the clicked navigation/tempo actions are routed as
 uninterpreted `ui_*` intents, resolved from the fresh Python

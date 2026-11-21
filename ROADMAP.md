@@ -110,7 +110,7 @@ continuation or partial grading.
 | --- | --- | --- |
 | V0 | Full transition/ownership audit and reproducible failure witnesses | In progress; UI control handoff traced, complete graph and defect witnesses pending |
 | V1 | Deterministic end-to-end MIDI/Godot simulation harness | Not started; new unit tests deferred by owner |
-| V2 | Canonical transition, action and presentation contracts | In progress; eight UI gestures, control presentation and exact ready-source identity migrated; cross-language admission contract pending |
+| V2 | Canonical transition, action and presentation contracts | In progress; nine UI gestures, backend-owned control presentation and exact source identity integrated; transaction/physical acceptance outstanding |
 | V3 | Unify graphical admission and playback transaction decisions | In progress; evidence-based physical reservation, Python deadline selection and committed-map projection implemented; integration acceptance outstanding |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress: hold remains until Resume authorization, Free pre-target hold and candidate forecast implemented; acceptance open |
 | V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; practice screen controls, tempo and navigation migrated, other UI policy and native effect coordination pending |
