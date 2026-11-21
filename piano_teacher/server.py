@@ -2223,8 +2223,8 @@ class PracticeEngine:
             visual_offset_beats=self.visual_transport.visual_offset_beats,
         )
         reads = SnapshotReadPorts(
-            seek_grid=self._seek_grid,
-            learner_snapshot=self._learner_snapshot,
+            seek_grid=self.lesson_execution.seek_grid,
+            learner_snapshot=self.lesson_execution.learner_snapshot,
             elapsed_beat=self._elapsed_beat,
             phase=self._phase,
             source_model=self._source_model,

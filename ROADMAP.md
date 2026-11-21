@@ -474,8 +474,12 @@ transport and learning capture facts without entering a second clock.
 The source-bound lesson execution, guided completion, course entry, manual
 navigation, lesson review and seek are now in `LessonExecution`, with all
 23 identified methods moved and the facade retaining the public display
-phrase method. S3 still needs integrated player-behaviour verification and
-a check of the remaining command-dispatch course transitions.
+phrase method. The initial commit `7ec9b0a4` failed core CI (56 failures) because two
+snapshot read ports still held removed engine method references. The
+`SnapshotReadPorts` bindings now resolve the migrated
+`LessonExecution.seek_grid` and `learner_snapshot` operations.
+S3 still needs a passing core CI run and remaining command-dispatch
+course transitions before completion.
 
 ### Phase S3 — Lesson selection and exposure workflow
 
