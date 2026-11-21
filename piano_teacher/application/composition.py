@@ -27,69 +27,69 @@ from ..teaching_decisions import (TeachingBinding, TeachingState, TeachingRouteF
     source_safe_response)
 from ..diagnosis_policies import LearnerSnapshot
 from . import practice_flow
-from ..playback_coordinator import PlaybackCoordinator
-from ..playback_session import PlaybackSession
-from ..playback_transitions import CountInPlan
-from ..playback_facts import (
+from .playback_coordinator import PlaybackCoordinator
+from .playback_session import PlaybackSession
+from .playback_transitions import CountInPlan
+from .playback_facts import (
     PlaybackSourceFacts, PlaybackRuntimeFacts, TimedTakeSource, TimedStartRequest,
     PreparationRequest, ResumeRequest, FullPassageFacts, RestResumeFacts, PreloadedFeedbackSource,
 )
-from ..flow_course_session import PracticeFlowCourseSession
-from ..passage_outcome_presenter import performance_next_action
-from ..learning_evidence_session import LearningEvidenceSession
-from ..source_preparation_session import SourcePreparationSession
-from ..score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
-from ..headless_score_projection import project_headless_score_queue
-from ..attempt_settlement import AttemptSettlement
-from ..attempt_runtime import AttemptRuntime
-from ..recovery_streak import RecoveryStreak
-from ..session_commands import SessionCommands
-from ..source_identity import SourceIdentity
-from ..lesson_cursor import LessonCursor
-from ..session_notices import SessionNotices
-from ..session_lifecycle import SessionLifecycle
-from ..history_management import HistoryManagement
-from ..source_workflows import SourceWorkflows
-from ..policy_registry import PolicyRegistry
-from ..settings_workflows import SettingsWorkflows
-from ..device_workflows import DeviceWorkflows
-from ..teaching_workflows import TeachingDecisions
-from ..session_evidence_context import SessionEvidenceContext
-from ..exposure_installer import ExposureInstaller
-from ..exposure_workflows import ExposureWorkflows
-from ..lesson_execution import LessonExecution
-from ..score_read_services import ScoreReadServices
-from ..session_read_models import SessionReadModels
-from ..transport_timing import TransportTiming
-from ..timed_playback import TimedPlayback
-from ..live_feedback_workflows import LiveFeedbackWorkflows
-from ..post_assessment_effects import PostAssessmentEffects
-from ..recovery_workflows import RecoveryWorkflows
-from ..completion_continuations import CompletionContinuations
-from ..practice_timeline import PracticeTimeline
-from ..practice_controls import PracticeControls
-from ..midi_application_input import MidiApplicationInput
-from ..score_preload_workflow import ScorePreloadWorkflow
-from ..session_phase import SessionPhase
-from ..teaching_continuation import (
+from .flow_course_session import PracticeFlowCourseSession
+from .passage_outcome_presenter import performance_next_action
+from .learning_evidence_session import LearningEvidenceSession
+from .source_preparation_session import SourcePreparationSession
+from .score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
+from .headless_score_projection import project_headless_score_queue
+from .attempt_settlement import AttemptSettlement
+from .attempt_runtime import AttemptRuntime
+from .recovery_streak import RecoveryStreak
+from .session_commands import SessionCommands
+from .source_identity import SourceIdentity
+from .lesson_cursor import LessonCursor
+from .session_notices import SessionNotices
+from .session_lifecycle import SessionLifecycle
+from .history_management import HistoryManagement
+from .source_workflows import SourceWorkflows
+from .policy_registry import PolicyRegistry
+from .settings_workflows import SettingsWorkflows
+from .device_workflows import DeviceWorkflows
+from .teaching_workflows import TeachingDecisions
+from .session_evidence_context import SessionEvidenceContext
+from .exposure_installer import ExposureInstaller
+from .exposure_workflows import ExposureWorkflows
+from .lesson_execution import LessonExecution
+from .score_read_services import ScoreReadServices
+from .session_read_models import SessionReadModels
+from .transport_timing import TransportTiming
+from .timed_playback import TimedPlayback
+from .live_feedback_workflows import LiveFeedbackWorkflows
+from .post_assessment_effects import PostAssessmentEffects
+from .recovery_workflows import RecoveryWorkflows
+from .completion_continuations import CompletionContinuations
+from .practice_timeline import PracticeTimeline
+from .practice_controls import PracticeControls
+from .midi_application_input import MidiApplicationInput
+from .score_preload_workflow import ScorePreloadWorkflow
+from .session_phase import SessionPhase
+from .teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
     EnterSelectedRemediation, ContinueSelectedScore,
 )
-from ..musical_scheduler import (
+from .musical_scheduler import (
     SCHEDULER, SNAPSHOT_LATENCY_SECONDS,
     RestMeasurement, ContinuationMeasurement,
 )
 
 from ..sqlite_transaction import sqlite_atomic
-from ..score_artifacts import ScoreArtifacts, ScoreSelection
-from ..score_artifact_registry import ScoreArtifactRegistry
-from ..future_score import FutureScore
-from ..midi_connection import MidiConnection, MidiNotice
-from ..midi_key_shortcuts import MidiKeyShortcuts
-from ..midi_ingress import MidiIngress, MidiInputFacts, InputTransportFacts
-from ..listen_session import ListenSession
-from ..exposure_preparation import (
+from .score_artifacts import ScoreArtifacts, ScoreSelection
+from .score_artifact_registry import ScoreArtifactRegistry
+from .future_score import FutureScore
+from .midi_connection import MidiConnection, MidiNotice
+from .midi_key_shortcuts import MidiKeyShortcuts
+from .midi_ingress import MidiIngress, MidiInputFacts, InputTransportFacts
+from .listen_session import ListenSession
+from .exposure_preparation import (
     ExposureSource, GuidedPreparation, TimedPreparation, ListenPreparation,
     prepare_guided, prepare_timed, prepare_listen, prepare_response, prepare_remedial,
 )
@@ -100,7 +100,7 @@ from ..library import ScoreLibrary
 from ..preprocessing_cache import PreprocessingCache
 from ..library_health import LibraryHealth
 from ..warmups import is_warmup
-from ..mistake_responses import resolve_mistake_policy
+from .mistake_responses import resolve_mistake_policy
 from ..music import Phrase
 from ..measure_grid import phrase_grid
 from ..course_navigation import choose_source_opening
@@ -108,14 +108,14 @@ from ..state_projection import (
     PhaseSnapshot, SessionSnapshot, project_phase, project_session_state,
 )
 from ..assessment_service import AssessmentService
-from ..practice_assessment import PracticeAssessmentPolicies
-from ..control_dispatch import ControlDispatcher
-from ..stage_change import prepare_stage_change
-from ..practice_transitions import TransitionContext, decide_transition
-from ..attempt_progression import AttemptProgression, AttemptTick
-from ..guided_session import GuidedSession
-from ..tempo_map_cache import TempoMapCache
-from ..session_snapshot_builder import (
+from .practice_assessment import PracticeAssessmentPolicies
+from .control_dispatch import ControlDispatcher
+from .stage_change import prepare_stage_change
+from .practice_transitions import TransitionContext, decide_transition
+from .attempt_progression import AttemptProgression, AttemptTick
+from .guided_session import GuidedSession
+from .tempo_map_cache import TempoMapCache
+from .session_snapshot_builder import (
     SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot,
 )
 from ..completion_route import completion_route
@@ -130,9 +130,9 @@ from ..runtime_timings import RuntimeTimings
 from ..live_input_view import LiveInputView
 from ..learner_state import guided_units
 from ..progress_repository import ProgressRepository
-from ..learner_progress import LearnerProgress
+from .learner_progress import LearnerProgress
 from ..lesson_settings import SETTINGS
-from ..learning_capture import LearningCapture, CapturePhaseFacts, identifier
+from .learning_capture import LearningCapture, CapturePhaseFacts, identifier
 
 from ..practice_history import PracticePolicyService
 from ..fukuda_mistake_store import FukudaMistakeStore
@@ -424,7 +424,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         next_count_in_beats=r.transport_timing.next_count_in_beats,
         next_count_in_meter=r.transport_timing.next_count_in_meter,
         start_rate_bpm=r.transport_timing.start_rate_bpm,
-        presentation_bpm=lambda: r.transport_timing.presentation_bpm())
+        presentation_bpm=r.transport_timing.presentation_bpm)
 
     r.practice_controls = PracticeControls(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
@@ -479,4 +479,13 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         exposure_workflows=r.exposure_workflows,
         clock=r.now, poll_midi=r.midi_application_input.poll_midi_connection,
         feedback_seconds=r.feedback_seconds)
+    r.application_worker = ApplicationWorker(
+        lock=r.lock, timeline=r.practice_timeline,
+        midi_ingress=r.midi_ingress,
+        midi_application_input=r.midi_application_input,
+        source_identity=r.source_identity,
+        visual_transport=r.visual_transport,
+        playback_session=r.playback_session,
+        attempt_settlement=r.attempt_settlement,
+        runtime_timings=r.runtime_timings)
     return vars(r).copy()

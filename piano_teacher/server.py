@@ -475,33 +475,8 @@ class PracticeEngine:
         return self.practice_controls.control(action, **kwargs)
 
     def advance_clock(self) -> int:
-        """Advance scheduled transitions without waiting for a UI state request.
-
-        Called by the existing native command worker on its monotonic wakeup.
-        The UI can poll rarely or stop polling altogether; no second engine,
-        clock, thread, or unsynchronized state writer is introduced.
-        Returns the next wakeup interval in milliseconds.
-        """
-        began = time.perf_counter()
-        try:
-            with self.lock:
-                self.practice_timeline.update()
-                while self.midi_ingress.deferred:
-                    message, received_at, corrected_at, _transport = self.midi_ingress.deferred.popleft()
-                    self.midi_application_input.receive_message(message, received_at=received_at,
-                                          corrected_at=corrected_at, deferred=True)
-                if self.plan is None or self.visual_transport.paused:
-                    return 250
-                if (self.playback_session.running or self.visual_transport.preview_loop_pending or self.visual_transport.preparation_pending
-                        or self.attempt_settlement.pending_result is not None or self.visual_transport.pending_rewind is not None
-                        or self.playback_session.mode == "listen"):
-                    # Responsive automatic transitions, recovery, and practice.
-                    # The musical deadline is still the absolute monotonic epoch.
-                    return 20
-                return 100
-        finally:
-            self.runtime_timings.tick_ms.append(
-                (time.perf_counter() - began) * 1000.0)
+        """Advance the embedded native worker's monotonic application tick."""
+        return self.application_worker.advance()
 
     def state(self) -> dict:
         """Full snapshot, including static values; returned by commands."""
