@@ -398,6 +398,12 @@ forward visual motion and playback admission facts now live in
 `application/transport_timing.py`, which holds no extra clock
 epoch and makes no curriculum decision.
 
+The selected musical worker's tick, evidence finalization, take completion
+and non-grading course handoffs now execute through
+`application/practice_timeline.py`. It calls the existing playback,
+graded assessment and source owners rather than implementing a competing
+clock, selection or scorer. Bounded re-entry remains to be audited.
+
 Exact post-settlement feedback and typed continuation dispatch now
 belong to `application/completion_continuations.py`. The selected
 next source and admission deadline come from existing authoritative

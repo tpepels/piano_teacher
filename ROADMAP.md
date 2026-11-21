@@ -541,8 +541,12 @@ mid-take recovery execution and recorded boundary assessment now use
 `AttemptSettlement` retains the exact evidence transaction. The sealed feedback transition now runs through
 `CompletionContinuations`, which commits the single pending receipt and
 dispatches the selected exposure/response/remediation/automatic passage.
-Attempt completion and non-grading tick transitions remain; S5 is
-**not complete**. The integrated software checks remain mandatory.
+The locked worker transitions, complete-take result routing,
+full-passage progress effects and non-grading course events now
+execute in `PracticeTimeline`. It orchestrates the single existing
+clock, assessment and selection owners. Command dispatch and the
+bounded tick re-entry review remain; S4/S5 are **not complete**.
+The new workflow requires core and native CI. The integrated software checks remain mandatory.
 This code requires full core/native verification.
 
 ### Phase S5 — Attempt result, recovery and durable continuation
