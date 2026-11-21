@@ -388,6 +388,12 @@ captured at service construction. Device connection lifecycle and calibration no
 rather than calling the engine or mutating configured policies itself.
 The short facade entry preserves source interruption ordering and locking.
 
+Public native/user commands, course-stage controls, state acknowledgement
+and committed playback receipts now use `application/practice_controls.py`.
+The facade retains the public `control` operation; the command router
+uses source-bound services and keeps the existing application lock.
+It does not acquire an independent take-admission policy.
+
 Authorized timed take execution, continuation, Pause/Resume and Listen
 readiness now use `application/timed_playback.py`. Its return from
 Resume carries deferred score readiness to the command boundary, so

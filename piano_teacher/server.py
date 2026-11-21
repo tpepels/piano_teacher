@@ -63,6 +63,7 @@ from .application.post_assessment_effects import PostAssessmentEffects
 from .application.recovery_workflows import RecoveryWorkflows
 from .application.completion_continuations import CompletionContinuations
 from .application.practice_timeline import PracticeTimeline
+from .application.practice_controls import PracticeControls
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -538,6 +539,26 @@ class PracticeEngine:
             clock=self.now, poll_midi=self._poll_midi_connection,
             feedback_seconds=self.feedback_seconds)
 
+        self.practice_controls = PracticeControls(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, lock=self.lock, session_commands=self.session_commands,
+            playback_session=self.playback_session, playback=self.playback,
+            attempt=self.attempt, attempt_settlement=self.attempt_settlement,
+            timed_playback=self.timed_playback, transport_timing=self.transport_timing,
+            score_read=self.score_read, score_artifact_registry=self.score_artifact_registry,
+            guided_session=self.guided_session, flow_session=self.flow_session,
+            listen=self.listen, midi=self.midi, midi_key_shortcuts=self.midi_key_shortcuts,
+            teaching_decisions=self.teaching_decisions,
+            exposure_workflows=self.exposure_workflows, lesson_execution=self.lesson_execution,
+            outcome_effects=self.outcome_effects, recovery_workflows=self.recovery_workflows,
+            completion_continuations=self.completion_continuations,
+            history_management=self.history_management,
+            device_workflows=self.device_workflows, settings_workflows=self.settings_workflows,
+            measurement=self.measurement, visual_transport=self.visual_transport,
+            progress=self.progress, lifecycle=self.session_lifecycle,
+            read_models=self.read_models, clock=self.now,
+            feedback_seconds=self.feedback_seconds)
+
     def require_presentation(self) -> None:
         with self.lock:
             self.playback.enable_presentation(self.transport_timing.playback_facts())
@@ -553,8 +574,8 @@ class PracticeEngine:
     def present_playback(self, **values) -> dict:
         with self.lock:
             return self.playback.present(self.transport_timing.playback_facts(),
-                commit=self._commit_playback_intent,capture=self.transport_timing.playback_facts,
-                abort=self._abort_playback,**values)
+                commit=self.practice_controls.commit_playback_intent,capture=self.transport_timing.playback_facts,
+                abort=self.practice_controls.abort_playback,**values)
 
     def withdraw_playback(self, **values) -> dict:
         with self.lock:
@@ -562,17 +583,8 @@ class PracticeEngine:
 
     def report_playback_failure(self, **values) -> dict:
         with self.lock:
-            self.playback.fail(notify_failure=self._on_playback_failure,**values)
+            self.playback.fail(notify_failure=self.practice_controls.on_playback_failure,**values)
             return {"accepted":True}
-
-    def _abort_playback(self, reason: str) -> None:
-        self._stop(reason=reason)
-
-    def _on_playback_failure(self, reason: str) -> None:
-        if self.playback_session.running:
-            self._stop(reason=reason)
-        self.feedback = "The score stopped displaying correctly"
-        self.next_action = "Select this lesson again after checking the score."
 
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
         if self.plan is not None:
@@ -709,7 +721,7 @@ class PracticeEngine:
             ranges[self.midi.device] = list(effect.completed_range)
             self.set_preferences(midi_key_ranges=ranges)
         if effect.action:
-            self.control(effect.action)
+            self.practice_controls.control(effect.action)
 
     def _receive_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
         now = self.now() if received_at is None else received_at
@@ -831,379 +843,8 @@ class PracticeEngine:
             presentation_lead_seconds=presentation_lead_seconds,
             decided=decided, count_in_plan=count_in_plan)
 
-    def _resume_current_session(self, *, presentation_lead_seconds=0.0,
-                                reuse_pending_score=False,
-                                reuse_announced_score=False,
-                                scheduled_deadline=None):
-        completed = self.timed_playback.resume(
-            presentation_lead_seconds=presentation_lead_seconds,
-            reuse_pending_score=reuse_pending_score,
-            reuse_announced_score=reuse_announced_score,
-            scheduled_deadline=scheduled_deadline)
-        if completed.deferred_score_revision is not None:
-            self.control("score_ready", revision=completed.deferred_score_revision)
-        self.timed_playback.begin_listen_if_ready()
-
-    def _commit_playback_intent(self, intent, receipt) -> None:
-        """Apply source effects at the coordinator's single authorization gate."""
-        with self.playback_session.authorization(intent,receipt) as authorized:
-            if authorized.action in ("start","restart"):
-                selected = self._install_command(authorized.transition.effect)
-                authorized.validate_installed(selected,intent)
-                with self.session_commands.executing(authorized.transition.effect):
-                    self.start(mode=selected.mode,from_beat=selected.from_beat,
-                        scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in)
-            elif authorized.action == "resume":
-                self._resume_current_session(
-                    presentation_lead_seconds=max(0.0,authorized.deadline-self.now()),
-                    reuse_pending_score=receipt.reused_count_in,
-                    scheduled_deadline=authorized.deadline)
-            elif authorized.action in ("auto","score_ready"):
-                with self.session_commands.executing(None):
-                    self.start(from_beat=intent.from_beat,mode=intent.mode,
-                        loop_continuation=authorized.action == "auto",
-                        decided=False,scheduled_deadline=authorized.deadline,
-                        count_in_plan=intent.count_in)
-                self.visual_transport.scheduled_start = (
-                    self.playback_session.transport_id,self.visual_transport.play_from_beat,
-                    self.visual_transport.run_at,self.plan.identity,self.score_revision,None)
-            elif authorized.action == "listen":
-                self.playback_session.start_listen(revision=self.score_revision,
-                    count_in=intent.count_in,deadline=authorized.deadline)
-                self.feedback = "Count in, then listen"
-
     def control(self, action: str, **kwargs) -> None:
-        with self.lock:
-            previous_reason = self.session_commands.action_reason
-            self.session_commands.action_reason = action
-            before = {"fingerprint": self.fingerprint,
-                      "stage_key": self.plan.identity if self.plan else None,
-                      "bpm": self.plan.bpm if self.plan else None, "mode": self.playback_session.mode}
-            effect = self.session_commands.active
-            route = ControlDispatcher.route(action)
-            if self.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
-                change = (prepare_stage_change(self.plan, action, kwargs, warmup=self.is_builtin_warmup)
-                          if route == "stage" else None)
-                effect = self._prepare_teaching("manual", manual=change,
-                    action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
-            try:
-                with self.session_commands.executing(effect):
-                    result = self._dispatch_control(action, **kwargs)
-                    self.read_models.prepare_score_presentation()
-                    if action not in ("score_ready", "demo_ready", "reset_path"):
-                        self.measurement.event("manual_action", {"action": action,
-                            "fingerprint": before["fingerprint"] or None,
-                            "parameters": kwargs, "before": before,
-                            "after": {"fingerprint": self.fingerprint,
-                                      "stage_key": self.plan.identity if self.plan else None,
-                                      "bpm": self.plan.bpm if self.plan else None, "mode": self.playback_session.mode}})
-                    return result
-            finally:
-                self.session_commands.action_reason = previous_reason
-
-    def _dispatch_control(self, action: str, **kwargs) -> None:
-        """Single locked command entry; dispatch owns no engine state."""
-        with self.lock:
-            self._apply_listen_failure()
-            route = ControlDispatcher.route(action)
-            if route == "calibration":
-                return self.midi_calibration_action(action)
-            if route == "device_range":
-                if action == "midi_range_cancel":
-                    self.midi_key_shortcuts.cancel_capture()
-                else:
-                    if not self.midi.connected:
-                        raise ValueError("Connect a MIDI piano before setting its key range")
-                    if self.playback_session.running and not self.visual_transport.paused:
-                        self.timed_playback.pause()
-                    self.midi_key_shortcuts.begin_capture(self.midi.device)
-                return
-            if route == "reset":
-                return self._reset_current_path(
-                    fingerprint=kwargs.get("fingerprint"),
-                    confirm=kwargs.get("confirm") is True)
-            if route == "acknowledgement":
-                return self._control_acknowledgement(action, kwargs)
-            if route == "listening":
-                return self._control_listening(action, kwargs)
-            if route == "learning":
-                return self._control_learning(action, kwargs)
-            if route == "transport":
-                return self._control_transport(action, kwargs)
-            return self._change_stage(action, kwargs)
-
-    def _control_acknowledgement(self, action: str, kwargs: dict) -> None:
-        if action == "score_ready":
-            revision = int(kwargs.get("revision",-1))
-            decision = self.playback_session.score_acknowledged(revision,
-                current_revision=self.score_revision,teaching_bound=self.teaching is not None)
-            if decision == "listen":
-                self.timed_playback.begin_listen_if_ready()
-            elif decision == "learn":
-                self.teaching.start(now=self.now())
-            elif decision == "practice":
-                position = (self.visual_transport.pending_rewind
-                    if self.visual_transport.pending_rewind is not None else self.open_from_beat)
-                mode = "perform" if self.playback_session.mode == "perform" else "practice"
-                if self.playback.presentation_required:
-                    self.transport_timing.request_playback(action="score_ready",mode=mode,from_beat=position)
-                    return
-                announce = self.visual_transport.short_rest is not None or self.lesson_execution.flow_active()
-                timing = self.playback_session.headless_ready_timing(
-                    reserved_ms=kwargs.get("presentation_deadline_ms"),
-                    count_in_beats=self.transport_timing.next_count_in_beats(),bpm=self.plan.bpm,
-                    announce=announce,rest=(self.transport_timing.collect_rest_measurement(
-                        from_beat=self.open_from_beat) if announce and
-                        kwargs.get("presentation_deadline_ms") is None else None),
-                    presentation_bpm=self.transport_timing.presentation_bpm())
-                self.start(from_beat=position,mode=mode,scheduled_deadline=timing.deadline,
-                    presentation_lead_seconds=timing.lead_seconds,decided=True)
-                if announce:
-                    self.visual_transport.scheduled_start = (
-                        self.playback_session.transport_id,self.visual_transport.play_from_beat,
-                        self.visual_transport.run_at,self.plan.identity,self.score_revision,None)
-        elif self.playback_session.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
-            self.timed_playback.begin_listen_if_ready()
-
-    def _control_listening(self, action: str, kwargs: dict) -> None:
-        if action == "listen":
-            if (self.lesson_execution.flow_active() and self.flow is not None
-                    and self.flow.stage_key == self.plan.identity
-                    and self.playback_session.mode != "listen"):
-                # Listen again: the state machine plays it, then Free.
-                self.lesson_execution.flow_execute(self.flow_session.listen_again())
-            else:
-                self._prepare_listen()
-        elif action == "perform":
-            self._prepare_perform(scope=str(kwargs.get("scope", "current")))
-        elif action == "practice_weak":
-            self.lesson_execution.practice_weak()
-        elif action == "review_retry":
-            self.lesson_execution.review_retry(kwargs.get("first_bar"), kwargs.get("last_bar"))
-        elif action == "seek":
-            self.lesson_execution.seek(kwargs.get("bar"))
-
-    def _control_learning(self, action: str, kwargs: dict) -> None:
-        if action == "learn_next":
-            if (self.playback_session.mode != "learn" or self.teaching is None
-                    or not self.teaching.snapshot(now=self.now())["completed"]):
-                raise ValueError("Find the current notes before continuing to the next idea")
-            self.lesson_execution.save_guided_preparation()
-            if self.guided_session.return_context is not None:
-                self._prepare_practice()
-            else:
-                self.lesson_execution.begin_course_stage()
-        elif action == "skip_stage":
-            if self.is_builtin_warmup:
-                raise ValueError("Warm-up stages unlock after three clean runs, not skips")
-            self.lesson_execution.skip_stage(kwargs.get("reason"))
-        elif action == "place_original":
-            if self.is_builtin_warmup:
-                raise ValueError("Warm-up stages unlock after three clean runs")
-            self.lesson_execution.place_original()
-        elif action == "revisit_trouble":
-            self.lesson_execution.revisit_trouble(kwargs.get("stage_key"), kwargs.get("start_beat"))
-        elif action in ("learn", "learn_retry"):
-            if action == "learn":
-                self.lesson_cursor.set_course_guided(True)
-                if "from_beat" not in kwargs:
-                    self.lesson_execution.begin_course_stage(explicit_learn=True)
-                    return
-            previous_start = (self.guided_session.beat_range[0]
-                              if self.guided_session.beat_range else 0.0)
-            self.lesson_execution.begin_learn(
-                from_beat=float(kwargs.get(
-                    "from_beat",
-                    previous_start if action == "learn_retry" else 0.0)),
-                recovery=self.guided_session.return_context is not None and action == "learn_retry")
-        elif action == "open_at":
-            self._open_selected_measure(kwargs)
-        elif action == "hints":
-            self.guided_session.set_hints(
-                bool(kwargs.get("enabled", False)), now=self.now())
-            if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
-                self.measurement.use_assistance()
-
-    def _control_transport(self, action: str, kwargs: dict) -> None:
-        if action == "practice":
-            self._prepare_practice()
-            if kwargs.get("wait_for_player", False):
-                # Listen returns to a ready score without an auto count-in.
-                self.playback_session.wait_for_player()
-                self.feedback = "Ready to play"
-                self.next_action = "Play one piano key to begin, or press Play."
-        elif action == "stop":
-            self._stop(reason="stop")
-            # A stopped session has no take a later rest could follow (M6).
-            self.visual_transport.rest_take_end = None
-            self.feedback = "Stopped"
-            self.next_action = "Start when you are ready."
-        elif action in ("start", "restart"):
-            self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self.transport_timing.update_short_rest(kwargs)
-            if self.playback.presentation_required:
-                if self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None:
-                    self._start_or_restart(action)
-                    return
-                effect = self.session_commands.active or self._manual_effect(action)
-                transition = self.session_commands.transition(
-                    effect,action=action,source_changed=(
-                        self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)
-                        if self.playback_session.mode not in ("listen", "learn") else False))
-                if transition.route in ("listen", "prepare_practice",
-                                        "reload_score", "learn"):
-                    # These routes change assets or enter untimed teaching.
-                    # The resulting timed source, if any, is requested only
-                    # after its exact selected score revision is prepared.
-                    self._start_or_restart(action)
-                else:
-                    selected = transition.exposure
-                    self.transport_timing.request_playback( action=action,
-                        mode=selected.mode, from_beat=selected.from_beat,
-                        transition=transition)
-            else:
-                self._start_or_restart(
-                    action, presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs))
-        elif action == "pause":
-            self.timed_playback.pause(
-                pending_admission=self.playback_session.suspend_admission(self.playback))
-        elif action == "resume":
-            self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self.transport_timing.update_short_rest(kwargs)
-            if self.playback.presentation_required:
-                suspended = self.playback_session.take_suspended_admission()
-                if suspended is not None:
-                    self.transport_timing.request_playback(action=suspended.action,
-                        mode=suspended.mode,from_beat=suspended.from_beat,
-                        transition=suspended.transition)
-                    return
-                if not self.playback_session.running:
-                    # Resume inside a rest resumes the pending teaching
-                    # decision; it is not a new timed take. Its next take
-                    # will independently enter the admission transaction.
-                    self._resume_current_session()
-                    return
-                from_beat = self.visual_transport.play_from_beat
-                if self.playback_session.running:
-                    from_beat += max(0.0, self.transport_timing.elapsed_beat(
-                        self.visual_transport.paused_at
-                        - self.visual_transport.run_at))
-                self.transport_timing.request_playback( action="resume",
-                    mode=self.playback_session.mode, from_beat=from_beat)
-            else:
-                self._resume_current_session(presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs),
-                    reuse_pending_score=kwargs.get("reuse_pending_score",False) is True,
-                    reuse_announced_score=kwargs.get("reuse_announced_score",False) is True)
-
-    def _open_selected_measure(self, kwargs: dict):
-        effect = self._manual_effect("open_at",values=kwargs)
-        self._stop()
-        selected = self._install_command(effect)
-        self.lesson_execution.reset_trouble()
-        self.lesson_cursor.set_course_guided(selected.mode == "learn")
-        self.lesson_cursor.select_opening(selected.from_beat)
-        if selected.mode == "learn":
-            self.lesson_execution.begin_learn(from_beat=selected.from_beat,exposure=selected)
-        else:
-            self._prepare_practice(exposure=selected)
-            self.playback_session.wait_for_player()
-            self.feedback = f"Ready to practise from measure {kwargs.get('bar')}"
-            self.next_action = "Press Start to play from the selected measure."
-
-    def _start_or_restart(self, action: str, *,
-                          presentation_lead_seconds: float = 0.0,
-                          scheduled_deadline: float | None = None):
-        """Start a take or schedule a seamless retry under the control lock."""
-        if self.attempt.settlement_failed:
-            revision = self.score_revision
-            self.feedback = self.outcome_effects.commit_pending() or "Assessment saved"
-            if self.score_revision != revision:
-                self.playback_session.await_score(self.score_revision)
-            self.next_action = "Press Play when the score is ready."
-            return
-        if self.attempt_settlement.pending_rolling is not None:
-            decision, phrase, grid, score_beat, _old_now = self.attempt_settlement.pending_rolling
-            self.recovery_workflows.apply_rolling_recovery(decision, phrase, grid, score_beat, self.now())
-            self.visual_transport.clear_pause_for_restart()
-            return
-        p = self.plan
-        if p is None:
-            raise ValueError("Open a piece first")
-        effect = self._manual_effect(action)
-        selected = self._install_command(effect)
-        route = self.session_commands.start_route(effect,source_changed=(
-            self.score_artifacts.source_bpm_changed(p.piece.bpm)
-            if self.playback_session.mode not in ("listen","learn") else False))
-        if route == "listen":
-            self._prepare_listen()
-            return
-        if route == "prepare_practice":
-            self._prepare_practice(exposure=selected)
-            return
-        if route == "learn":
-            self.lesson_execution.begin_learn(exposure=selected)
-            return
-        if route == "reload_score":
-            self._stop()
-            self.source_identity.advance_revision()
-            self.playback_session.await_score(self.score_revision)
-            self.feedback = "Preparing sheet music"
-            return
-        if route == "rewind":
-            sampled = self.now()
-            visual_now = self.visual_transport.paused_at if self.visual_transport.paused else sampled
-            position,_,_ = self.transport_timing.visual_motion(visual_now)
-            self.playback_session.prepare_retry(PreparationRequest(
-                self.score_read.source_model(),selected.from_beat,sampled,position,self.feedback_seconds,
-                self.transport_timing.presentation_bpm(),self.visual_transport.continuous_horizon_beats,
-                reading_lead_included=presentation_lead_seconds > 0,
-                short_deadline=scheduled_deadline),
-                presentation_lead_seconds=presentation_lead_seconds,source_bpm=p.bpm)
-            self.feedback = "Get ready to retry"
-            return
-        self.start(mode=selected.mode,from_beat=selected.from_beat,decided=True,
-                   scheduled_deadline=scheduled_deadline,
-                   presentation_lead_seconds=presentation_lead_seconds)
-        return
-
-    def _change_stage(self, action: str, kwargs: dict):
-        """Change the active lesson or tempo while preserving scoring state."""
-        p=self.plan
-        if not p:
-            raise ValueError("Open a piece first")
-        change = prepare_stage_change(
-            p, action, kwargs, warmup=self.is_builtin_warmup)
-        was_guided = self.playback_session.mode == "learn"
-        guided_start = (self.guided_session.beat_range[0]
-                        if self.guided_session.beat_range is not None else 0.0)
-        guided_return = self.guided_session.return_context
-        guided_retry_range = self.attempt.retry_range
-        self._stop()
-        self.lesson_execution.reset_trouble()
-        # Preserve the original ordering of the source opening reset.
-        if action in ("select_step", "next", "previous"):
-            self.lesson_cursor.select_opening(0.0)
-        effect = self.session_commands.active or self._prepare_teaching("manual", manual=change, action=action, store=False)
-        self.session_commands.apply_progress(effect, plan=p)
-        self.attempt_settlement.command_applied()
-        if action == "hand":
-            self.lesson_cursor.select_opening(0.0)
-        # Native notation is engraved in source coordinates: changing
-        # only playback BPM must not invalidate the score/reload Godot.
-        if not change.tempo_only:
-            self.source_identity.advance_revision()
-        self.feedback="Ready"
-        self.next_action="Start when you are ready."
-        if was_guided:
-            selected = effect.decision.next_exposure
-            if selected is not None and selected.mode == "learn":
-                recovery = change.tempo_only and guided_return is not None and guided_return[0] == p.identity
-                if recovery:
-                    self.attempt.restore_retry(guided_retry_range)
-                self.lesson_execution.begin_learn(from_beat=selected.from_beat,bump_revision=False,recovery=recovery,exposure=selected)
-            elif selected is not None:
-                self.lesson_execution.enter_selected_exposure(selected)
-        self._save()
+        return self.practice_controls.control(action, **kwargs)
 
     def _poll_midi_connection(self):
         if self.midi.closed:
