@@ -77,6 +77,14 @@ check() {
       FAILED_CASES+=("$label (Godot script error)")
       return 1
     fi
+    # Source-queue refusal is a fatal production-journey defect even when
+    # Godot keeps its event loop alive and the outer script exits zero.
+    # Do not let the physical Pathétique admission failure turn CI green.
+    if grep -Eq 'ERROR: (Refused immutable score strip|SCORE_TRANSPORT_(PREFLIGHT|COMMIT):|Queue tail changed|Cannot safely roll back incomplete)' "$case_log"; then
+      printf 'FAIL  %s (physical source admission error)\n' "$label"
+      FAILED_CASES+=("$label (physical source admission error)")
+      return 1
+    fi
     printf 'PASS  %s\n' "$label"
     return 0
   else
