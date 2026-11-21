@@ -192,15 +192,15 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         var exact_world: float = flow.project_authored_future(
             frame_ms+roundi(float(fixed)-backend_now),frame_ms,
             float(state.get("clock_beat",0.0)),tempo,authored)
-        planned = view.reserve_continuation_at(world,opening,exact_world,count_in)
-        if planned.is_empty():
+        planned = TransportReservation.plan(view,"auto",world,opening,
+            count_in,exact_world)
+        if not bool(planned.get("ok",false)):
             _reject_fixed_intent(intent,
                 "Cannot admit the direct repeat at its one-bar deadline")
             return
-    if action == "resume" and partial > 0.0:
-        # Reuse an already-spoken count-in only when the ORIGINAL unexposed
-        # source is still ahead of the playhead. The pure preflight avoids
-        # appending a short-count-in source that would restart the music.
+    elif action == "resume" and partial > 0.0:
+        # Pure feasibility only. Never touch the paused or future queue
+        # until Python has reserved its one admissible downbeat.
         var partial_floor: float = backend_now + \
             TempoTimeline.seconds_from_beats(partial,tempo)*1000.0+420.0
         var partial_world: float = flow.project_authored_future(
@@ -211,23 +211,17 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
             view,"resume",world,opening,partial_slot)
         if bool(preview.get("ok",false)) and \
                 str(preview.get("mode","")) == "reuse":
-            planned = view.reserve_transport_action(
-                "resume",world,opening,partial_slot)
-            if not planned.is_empty() and \
-                    not bool(planned.get("reused_unplayed_count_in",false)):
-                view.cancel_stream_arm()
-                planned.clear()
+            planned = preview
     if planned.is_empty():
-        # Every newly inserted source gets its own complete bar. Reuse is
-        # the sole exception; the count-in is never silently shortened.
-        planned = view.reserve_transport_action(
-            reservation_action,world,opening,required_slot,
+        planned = TransportReservation.plan(
+            view,reservation_action,world,opening,required_slot,NAN,
             str(intent.get("mode","")) == "listen")
-    if planned.is_empty():
-        _report_problem("Cannot reserve source notation for this playback")
+    if not bool(planned.get("ok",false)):
+        _report_problem("Cannot preflight authentic source notation for playback")
         return
-    # From here the gateway owns only provisional physical ink. Python
-    # decides the musical deadline from this source-bound placement witness.
+    # No physical strip is armed yet. Python chooses the exact musical
+    # deadline from this read-only earliest-feasible renderer witness.
+    # Only its accepted reply may authorize the native queue to arm ink.
     renderer = view
     admission_state = state.duplicate(true)
     current = intent.duplicate(true)
@@ -240,8 +234,13 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         _cancel_provisional()
         return
     current["world_origin"] = start_world
-    current["reused_count_in"] = bool(
-        planned.get("reused_unplayed_count_in",false))
+    current["reservation_action"] = "auto" if fixed != null else reservation_action
+    current["reused_count_in"] = (
+        action == "resume" and partial > 0.0
+        and str(planned.get("mode","")) == "reuse")
+    current["projection_bpm"] = tempo
+    current["projection_segments"] = authored.duplicate(true)
+    current["projection_source_beat"] = float(state.get("clock_beat",0.0))
     var payload: Dictionary = {
         "intent_id": str(intent["intent_id"]),
         "attempt": int(intent["attempt"]),
@@ -384,17 +383,72 @@ func _matches_reservation(reply: Dictionary) -> bool:
 
 func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
     if not _matches_reservation(authorized_offer):
-        _report_problem("Backend reserved different physical score source")
+        _report_problem("Backend reserved different source feasibility witness")
         _cancel_provisional()
         return
+    if renderer == null or not is_instance_valid(renderer):
+        _cancel_provisional()
+        return
+    # This is the ONLY physical-arm boundary. The backend has already
+    # selected its downbeat; the native projector merely maps that
+    # absolute time to an exact future world location, then the sole
+    # immutable queue owner verifies the final geometry and commits it.
+    var at_ms: int = Time.get_ticks_msec()
+    var backend_now: float = _backend_ms()
+    var deadline: float = float(authorized_offer.get("deadline_ms",NAN))
+    if not is_finite(backend_now) or not is_finite(deadline) or deadline <= backend_now:
+        _cancel_provisional()
+        return
+    var at_world: float = flow.project(at_ms)
+    var nominal: float = float(current.get("projection_bpm",NAN))
+    var segments: Array = current.get("projection_segments",[])
+    var source_beat: float = float(current.get("projection_source_beat",NAN))
+    var exact_world: float = flow.project_authored_future(
+        at_ms+roundi(deadline-backend_now),at_ms,source_beat,nominal,segments)
+    if not is_finite(exact_world) or exact_world <= at_world:
+        _cancel_provisional()
+        return
+    var opening: float = float(current.get("from_beat",0.0))
+    var count_in: float = float(current.get("count_in_beats",0.0))
+    var exact_action: String = str(current.get("reservation_action","start"))
+    var committed: Dictionary
+    if exact_action == "auto":
+        committed = renderer.reserve_continuation_at(
+            at_world,opening,exact_world,count_in)
+    else:
+        var slot_beats: float = (
+            float(current.get("resume_remaining_beats",0.0))
+            if bool(current.get("reused_count_in",false)) else count_in)
+        committed = renderer.reserve_transport_action(
+            exact_action,at_world,opening,slot_beats,
+            str(current.get("mode","")) == "listen",exact_world)
+    if committed.is_empty() or not is_finite(float(committed.get("start_world",NAN))) or \
+            absf(float(committed["start_world"])-exact_world) > .0001 or \
+            bool(committed.get("reused_unplayed_count_in",false)) != \
+                bool(current.get("reused_count_in",false)):
+        _cancel_provisional()
+        return
+    var physical_world: float = float(committed["start_world"])
+    var physical_travel: float = flow.physical_travel_ms_to(
+        physical_world,at_ms,source_beat,nominal,segments)
+    if not is_finite(physical_travel) or \
+            absf(backend_now+physical_travel-deadline) > 5.0:
+        _cancel_provisional()
+        return
+    current["physical_attestation"] = {
+        "physical_world_origin": physical_world,
+        "physical_sampled_at_ms": backend_now,
+        "physical_travel_ms": physical_travel,
+        "physical_queue_generation": renderer.admission_queue_generation(),
+        "physical_renderer_generation": int(current.get("revision",-1)),
+    }
     receipt = authorized_offer.duplicate(true)
-    if renderer == null or not is_instance_valid(renderer) or \
-            not renderer.bind_stream_segment(str(receipt["segment_id"])) or \
+    if not renderer.bind_stream_segment(str(receipt["segment_id"])) or \
             not renderer.acknowledge_stream_arm():
         _cancel_provisional()
         return
-    # A recovered reservation follows the exact same two-phase commit:
-    # the prepared score is still provisional until playback.present.
+    # Reservation and arm are complete, but no grading or sound exists
+    # until the backend validates this exact physical attestation.
     pending_reconciliation = false
     _send_presentation()
 
@@ -420,10 +474,15 @@ func _reserved(code: int, body: PackedByteArray) -> void:
 func _send_presentation() -> void:
     if receipt.is_empty():
         return
+    var attestation: Variant = current.get("physical_attestation")
+    if not attestation is Dictionary:
+        _cancel_provisional()
+        return
     var payload: Dictionary = {
         "intent_id":str(receipt["intent_id"]),
         "attempt":int(receipt["attempt"]),
         "segment_id":str(receipt["segment_id"])}
+    payload.merge(attestation,true)
     if present_request.request("playback.present",payload) != OK:
         pending_reconciliation = true
 
