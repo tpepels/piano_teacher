@@ -626,9 +626,12 @@ entry points and live state remain the same. The native-worker entry now uses
 `ApplicationWorker` and carries delayed MIDI under the original lock
 without another clock or thread. The read-model composition callback
 uses the bound TransportTiming method rather than closing over the
-temporary wiring namespace. Remaining S7 tasks: eliminate obsolete
-facade delegates and imports, audit genuine cycles/re-entry and test
-the full product + package. No size-only completion claim.
+temporary wiring namespace. The remaining unreferenced private
+forwarding methods (16 delegates) and the unused remediation shim are
+removed from the facade. Its imports now reflect only the public boundary,
+with module dependencies owned by the separate composition root.
+Remaining S7 tasks: dependency-cycle/re-entry audit and full native/package
+acceptance on the completed source. No size-only completion claim.
 
 **CI correction:** The first composition run `504ccc13` failed
 because the application-local imports still used parent paths. The follow-up
