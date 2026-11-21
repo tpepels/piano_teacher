@@ -66,6 +66,19 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
         if at > right+.00001:
             break
         if not frame.event_visible(measure):
+            # The first context measure begins at the selected window's
+            # ending barline. Preserve that authentic boundary (including
+            # an authored right repeat), but never draw its clef, key,
+            # meter, number or notes as an additional practiced measure.
+            if (str(measure.get("display_role","")) == "context"
+                    and absf(at-timeline.duration_beats) < .00001
+                    and source_last >= timeline.duration_beats-.00001):
+                var closing: Dictionary = layout.barline_geometry(
+                    measure,camera_clock,playhead_x,gap,play_from_beat)
+                if not closing.is_empty() and float(closing["x"]) >= \
+                        source_first*timeline.pixels_per_beat-gap*2.0 and \
+                        float(closing["x"]) <= retained_width+gap*2.0:
+                    context_painter.paint_barline(target,frame,closing,gap)
             previous_measure = measure
             continue
         var x: float = timeline.screen_x(at,camera_clock,playhead_x,play_from_beat)
