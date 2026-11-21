@@ -319,6 +319,14 @@ class PlaybackCoordinator:
                 abort: Callable[[str], None]) -> dict:
         for past_id, result in self._completed:
             if past_id == segment_id and result["intent_id"] == intent_id:
+                # Idempotence applies only while the same authorization
+                # remains the active source. A stale present retry must
+                # never re-authorize notation from an earlier lesson/take.
+                if (result["attempt"] != attempt
+                        or self.active_segment_id != segment_id
+                        or self.active_take_id != result["take_id"]
+                        or self.state == PlaybackState.FAILED):
+                    raise ValueError("Playback authorization has been superseded")
                 return dict(result)
         intent = self._require_intent(facts, intent_id, attempt)
         receipt = self.receipt

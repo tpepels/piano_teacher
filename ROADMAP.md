@@ -286,6 +286,27 @@ resulting action projection, demonstrable through the V1 runner.
 Read/poll does not execute transitions. No Godot component independently
 infers an enabled musical action, target tempo or next lesson decision.
 
+### V3/V4 source-and-receipt identity hardening - 2026-11-21
+
+`PlaybackCoordinator.present` now replays an earlier successful
+receipt only if its exact segment, take and attempt remain active and
+not failed. Old completed authorizations cannot be replayed to revive
+superseded source/take visuals. Godot's state/status reconciliation
+does not treat a failed or idle playback ledger as authorization merely
+because it retains an active-segment identifier.
+
+The native Free target cache is bound to the selected score
+fingerprint and revision. Switching windows while still in Free clears
+the cached target/plan before it can hold or enqueue the next score.
+Identical guided plan IDs are not re-enqueued every frame; expired
+or nonfinite guided targets are refused instead of entering the
+physical score queue. These are physical source invariants, not a
+parallel lesson decision engine.
+
+**Gates:** Source changes during a pending or paused take, lost ACKs,
+slow engraving and MIDI/renderer acceptance still require running the
+existing native/embedded scenarios. No new tests added.
+
 ### V3 lost-ACK state reconciliation correction - 2026-11-21
 
 A prior callback identity hardening incorrectly passed the compact

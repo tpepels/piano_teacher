@@ -256,7 +256,8 @@ func observe(state: Dictionary, frame_ms: int) -> void:
     # A worker can authorize a take before its in-process reply is delivered.
     # The resulting running-state poll is AUTHORITATIVE; never roll back the
     # source just because this poll no longer contains the pending intent.
-    if not pending_segment.is_empty() and active_segment == pending_segment:
+    if (not pending_segment.is_empty() and active_segment == pending_segment
+            and str(timeline.get("state","")) not in ["failed","idle"]):
         # The published active timeline intentionally has no request ID
         # or attempt. The segment matched our previously verified receipt,
         # so confirm with that immutable receipt, never with the reduced
@@ -401,7 +402,8 @@ func _status_received(code: int, body: PackedByteArray) -> void:
     if not status is Dictionary:
         return
     var expected: String = str(receipt.get("segment_id",""))
-    if str(status.get("active_segment_id","")) == expected:
+    if (str(status.get("active_segment_id","")) == expected
+            and str(status.get("state","")) not in ["failed","idle"]):
         _confirm_authorized(receipt)
         return
     if str(status.get("reserved_segment_id","")) == expected and \

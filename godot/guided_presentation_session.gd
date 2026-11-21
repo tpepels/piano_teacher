@@ -7,11 +7,25 @@ var score_flow
 var world := NAN
 var source_from_beat := 0.0
 var plan_id := ""
+var source_fingerprint := ""
+var source_revision := -1
 
 func _init(flow) -> void:
     score_flow = flow
 
 func update_hold(state: Dictionary) -> void:
+    # This is a renderer cache for ONE immutable source revision. A new
+    # practice window can enter Free directly without passing through a
+    # timed/idle mode; retaining its old plan would hold wrong notes.
+    var next_fingerprint: String = str(state.get("piece_fingerprint",""))
+    var next_revision: int = int(state.get("revision",-1))
+    if (source_fingerprint != next_fingerprint
+            or source_revision != next_revision):
+        source_fingerprint = next_fingerprint
+        source_revision = next_revision
+        world = NAN
+        source_from_beat = 0.0
+        plan_id = ""
     if bool(state.get("paused",false)):
         # A pending Resume intent is not authorization. Physical future
         # geometry may be forecast without releasing the visible hold.
@@ -70,9 +84,16 @@ func publish_authorized_target(parsed: Dictionary, renderer,
     if not is_finite(backend_offset_ms):
         return
     var deadline: int = roundi(float(guided["deadline_at_ms"])+backend_offset_ms)
+    var key: String = str(guided["plan_id"])
+    if key.is_empty() or (key == plan_id and is_finite(world)):
+        return
     var target_world: float = score_flow.project_authored_future(
         deadline,received_ms,clock_beat,
         float(parsed.get("bpm",40.0)),[])
+    if not is_finite(target_world) or target_world <= visual_world:
+        # Free notes must be admitted strictly ahead of the playhead.
+        # An expired target cannot be made visible by shifting ink.
+        return
     var admitted: bool = renderer.enqueue_recovery_queue(
         visual_world,float(guided["source_from_beat"]),
         target_world,str(guided["plan_id"]),true,
@@ -80,7 +101,6 @@ func publish_authorized_target(parsed: Dictionary, renderer,
         false,true,preload("res://note_status_registry.gd").take_key(parsed))
     if not admitted:
         return
-    var key: String = str(guided["plan_id"])
     var admitted_world: float = renderer.scheduled_plan_opening(key)
     if is_finite(admitted_world):
         world = admitted_world

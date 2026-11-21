@@ -264,6 +264,21 @@ gate now compiles the production coordinators for the actual playback
 admission and visual timeline instead of the dead policy. Other
 native domain-like responsibilities still require V5 audit and tests.
 
+### Additional source/receipt invariants (2026-11-21)
+
+A replayed `playback.present` receipt is valid only while its
+original segment, take and attempt are still active and have not
+failed. Native state/status reconciliation requires a non-failed
+playback ledger before promoting its already matched receipt.
+The Free/Godot target cache is source-revision-scoped and resets on
+a different practice window without waiting for an intermediate
+mode change. Only unexpired, strictly future guided target plans
+may enter the renderer queue; repeated presentation frames cannot
+reinsert the same plan.
+
+These invariants are enforced by existing owners instead of
+introducing a second application state machine in Godot.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
