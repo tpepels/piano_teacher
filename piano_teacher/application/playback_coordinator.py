@@ -326,9 +326,27 @@ class PlaybackCoordinator:
 
     @staticmethod
     def _receipt_response(receipt: ScoreReceipt) -> dict:
-        return {"intent_id": receipt.intent_id, "attempt": receipt.attempt,
-                "segment_id": receipt.segment_id, "take_id": receipt.take_id,
-                "deadline_ms": receipt.deadline_ms, "reserved": True}
+        """Immutable reservation identity and physical witness.
+
+        Both the direct reserve reply and the read-only transaction ledger
+        expose this same payload. A native client recovering a lost reply
+        must prove it still holds exactly the source the backend reserved,
+        including its physical queue generation and original measurement.
+        """
+        return {
+            "intent_id": receipt.intent_id,
+            "attempt": receipt.attempt,
+            "segment_id": receipt.segment_id,
+            "take_id": receipt.take_id,
+            "deadline_ms": receipt.deadline_ms,
+            "world_origin": receipt.world_origin,
+            "queue_generation": receipt.queue_generation,
+            "renderer_generation": receipt.renderer_generation,
+            "sampled_at_ms": receipt.evidence_sampled_at_ms,
+            "travel_ms": receipt.evidence_travel_ms,
+            "reused_count_in": receipt.reused_count_in,
+            "reserved": True,
+        }
 
     def present(self, facts: PlaybackRuntimeFacts, *, intent_id: str,
                 attempt: int, segment_id: str, commit: Callable,
@@ -496,6 +514,9 @@ class PlaybackCoordinator:
             "intent_id": intent.intent_id if intent else "",
             "attempt": intent.attempt if intent else -1,
             "reserved_segment_id": receipt.segment_id if receipt else "",
+            # Read-only recovery from a lost playback.reserve response.
+            # Do not issue a second admission offer or infer one from state.
+            "reservation": self._receipt_response(receipt) if receipt else None,
             "active_segment_id": self.active_segment_id,
             "active_take_id": self.active_take_id,
             "active_deadline_ms": self.active_deadline_ms,
