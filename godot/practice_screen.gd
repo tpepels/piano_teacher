@@ -534,13 +534,12 @@ func open_advanced_pause() -> void:
     else: advanced_pause_open = false
 
 func _previous_lesson() -> void:
-    var current: int = int(_state.get("lesson_step",1))
     if not _busy and bool(_control("previous").get("enabled",false)):
-        command_requested.emit({"action":"select_step","number":current - 1})
+        command_requested.emit({"action":"ui_previous"})
 
 func _skip_lesson() -> void:
     if not _busy and bool(_control("skip").get("enabled",false)):
-        command_requested.emit({"action":"skip_stage","reason":"Learner skipped to the next lesson from the practice screen"})
+        command_requested.emit({"action":"ui_skip"})
 
 ## Bind the persistent audio service once, after PracticeScreen _ready().
 ## The status stays in More; no new warning strip overlaps the moving score.

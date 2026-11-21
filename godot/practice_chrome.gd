@@ -239,11 +239,11 @@ func build() -> void:
     challenge_bar.add_child(progress_label)
     # Keep navigation separate from both notation ink and the progress/tempo
     # row, whose combined minimum width would clip an 800x600 practice window.
-    tempo_down_button = _button("−", func(): command_requested.emit({"action":"tempo_down"}),
+    tempo_down_button = _button("−", func(): command_requested.emit({"action":"ui_tempo_down"}),
         false, "secondary")
     tempo_down_button.tooltip_text = "Decrease tempo · Keeps the song target"
     tempo_actions.add_child(tempo_down_button)
-    tempo_up_button = _button("+", func(): command_requested.emit({"action":"tempo_up"}),
+    tempo_up_button = _button("+", func(): command_requested.emit({"action":"ui_tempo_up"}),
         false, "secondary")
     tempo_up_button.tooltip_text = "Increase tempo · No mastery credit"
     tempo_up_button.size_flags_horizontal = Control.SIZE_SHRINK_END

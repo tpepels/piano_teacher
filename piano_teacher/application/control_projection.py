@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from .transport_commands import PAUSABLE_PHASES
 
-UI_INTENTS = frozenset(("ui_primary", "ui_pause", "ui_retry", "ui_listen"))
+UI_INTENTS = frozenset((
+    "ui_primary", "ui_pause", "ui_retry", "ui_listen",
+    "ui_previous", "ui_skip", "ui_tempo_up", "ui_tempo_down"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
 
 
@@ -88,10 +90,14 @@ def project_controls(s: Mapping) -> dict:
                   "requires_score": True, "visible": not course},
         "listen": {"action": listen or "", "enabled": listen is not None,
                    "label": "Listen again" if course else "Practice" if s.get("mode") == "listen" else "Listen"},
-        "previous": {"enabled": previous_enabled, "visible": previous_visible},
-        "skip": {"enabled": skip_enabled, "visible": previous_visible},
-        "tempo_up": {"enabled": tempo_allowed and bool(s.get("can_increase_tempo"))},
-        "tempo_down": {"enabled": tempo_allowed and bool(s.get("can_decrease_tempo"))},
+        "previous": {"action": "select_step" if previous_enabled else "",
+                     "enabled": previous_enabled, "visible": previous_visible},
+        "skip": {"action": "skip_stage" if skip_enabled else "",
+                 "enabled": skip_enabled, "visible": previous_visible},
+        "tempo_up": {"action": "tempo_up" if tempo_allowed and s.get("can_increase_tempo") else "",
+                     "enabled": tempo_allowed and bool(s.get("can_increase_tempo"))},
+        "tempo_down": {"action": "tempo_down" if tempo_allowed and s.get("can_decrease_tempo") else "",
+                       "enabled": tempo_allowed and bool(s.get("can_decrease_tempo"))},
     }
 
 
@@ -103,10 +109,17 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
     choice = project_controls(state)[intent.removeprefix("ui_")]
     action = choice["action"]
     if not action or not choice.get("enabled", False):
+        if intent in ("ui_previous", "ui_skip", "ui_tempo_up", "ui_tempo_down"):
+            raise ValueError("This control is no longer available in the current lesson")
         return None, {}
     if action == "resume" and score_error:
         raise ValueError(score_error)
     if choice.get("requires_score") and not score_ready:
         raise ValueError(SCORE_WAIT)
-    return action, ({"wait_for_player": True} if (
-        intent == "ui_listen" and action == "practice" and not flow(state)) else {})
+    if intent == "ui_previous":
+        return action, {"number": int(state["lesson_step"]) - 1}
+    if intent == "ui_skip":
+        return action, {"reason": "Learner skipped to the next lesson from the practice screen"}
+    if intent == "ui_listen" and action == "practice" and not flow(state):
+        return action, {"wait_for_player": True}
+    return action, {}

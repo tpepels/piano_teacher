@@ -148,6 +148,17 @@ from an earlier piece or engraving generation cannot authorize the
 new selection. This protects the control boundary while the full V3
 admission and deadline refactor remains open.
 
+**Additional V2/V5 migration:** Previous lesson, Skip and tempo +/- clicks
+now emit `ui_previous`, `ui_skip` and `ui_tempo_*` without deriving
+the next stage, lesson number or tempo permission in Godot. The
+current Python control projection enables/disables these actions and
+`PracticeControls` resolves them against the current locked state.
+The native coordinator attaches renderer revision/fingerprint/readiness
+to every `ui_*` command, including events emitted from `PracticeScreen`.
+The existing command-success navigation handles the new intent names.
+The original direct API command forms remain available to external tools,
+and the transport/admission redesign remains open.
+
 The old policy file is still retained pending a complete caller sweep,
 and all native/software gates remain unverified.
 
