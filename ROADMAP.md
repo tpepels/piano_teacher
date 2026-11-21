@@ -605,7 +605,8 @@ S4 is **not complete**. The migration must pass core and native CI.
   moving every method into `PlaybackSession`.
 - Preserve exact graphical reserve → present authorization, single
   admission/take identity, immutable ink, source-bound audio/MIDI timing,
-  frozen pause time, count-in and forward continuous scroll. No cold asset
+  frozen pause time and score, count-in, and forward continuous scroll while
+  unpaused. No cold asset
   compilation or blocking worker action inside a musical tick.
 
 **Exit gate:** Every timed route uses the same authorized transaction,
@@ -910,6 +911,16 @@ relocated-package CI](https://github.com/tpepels/piano_teacher/actions/runs/4492
 runs against `b37e7693`. **Core CI passed: 103 Python tests,
 four skips, Godot startup and four native behaviour groups with zero
 failures.** Full embedded/standalone acceptance remains under verification.
+[Full native acceptance run 44922019745](https://github.com/tpepels/piano_teacher/actions/runs/44922019745)
+failed in four scenarios because the **existing acceptance scripts** still
+required the bar to scroll during Pause. The backend acknowledged Pause and
+held the score, which these obsolete assertions treated as failure.
+[`1948651a`](https://github.com/tpepels/piano_teacher/commit/1948651ac82c3d536b2e723d2749f41914b1c17b)
+updates the two **existing** production/repertoire journey scripts to require
+the bar to remain stationary, with no new strip admission while paused. The
+full check was rerun against that source; the rerun result is recorded by CI,
+not assumed from the corrected assertion.
+
 A real piano is still needed to verify immediate Pause/Resume feel, whether
 Free remains stationary while thinking, and that source cropping shows exactly
 the selected window on screen. No physical, audible or visual success is claimed.

@@ -94,7 +94,8 @@ reopening. External I/O failures are controlled without duplicating application
 rules. Engines, workers and ports are released after each session.
 
 Native groups in [tests/godot/](../tests/godot/) exercise actual controls,
-immutable score admission and forward movement through Pause/Resume/Retry,
+immutable score admission, a stationary score during Pause, and forward
+movement after Resume/Retry,
 source/take-bound note feedback including future ties, and score readiness/
 failure/retry. [Syntax checking](../scripts/check-godot-syntax.sh) and
 [executed behaviour](../scripts/test-godot-behavior.sh) have separate log markers.

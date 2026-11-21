@@ -122,8 +122,11 @@ lifetime in introducing/disconnected states (`9eec8103`). Native
 `RenderPass.event_visible` excludes context-role bars and notes
 (`fc65791f`) while `SourcePassPainter` retains the selected window's
 authentic ending barline and repeat mark (`b37e7693`). Full
-native/embedded/package CI is being verified on `b37e7693`; physical
-observation remains outstanding.
+native/embedded/package CI on `b37e7693` failed because two old acceptance
+scripts expected scrolling during Pause. Those **existing** scripts now verify
+stationary notation and unchanged admission on Pause (`1948651a`).
+The corrected full source is under verification; physical observation remains
+outstanding.
 
 ## Current embedded Python application boundaries (2026-11-21)
 
