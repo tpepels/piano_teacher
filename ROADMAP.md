@@ -648,6 +648,17 @@ creating another clock/worker; pathological handoff loops fail
 explicitly. The existing player-behaviour suite and embedded native
 acceptance must verify this change.
 
+**S7 dependency cleanup (2026-11-21):** The composition root's
+swept-over imports from the old monolithic engine have been reduced to
+symbols actually used for wiring. Old comments about state fields that
+were already moved were deleted. The `PracticeControls`,
+`PracticeTimeline`, `TransportTiming` and `SourceWorkflows`
+constructors no longer request unused dependencies, and the composition
+call sites no longer provide them. Core CI on `ce6dd8d5` passed; this
+change requires its own core and opt-in native-production verification.
+Removing these ports does not by itself close the S7 dependency-cycle,
+hardware or clean-target-machine acceptance gates.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public

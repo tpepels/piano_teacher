@@ -17,7 +17,7 @@ class PracticeControls:
                  score_read, score_artifact_registry, guided_session,
                  flow_session, listen, midi, midi_key_shortcuts,
                  teaching_decisions, exposure_workflows, lesson_execution,
-                 outcome_effects, recovery_workflows, completion_continuations,
+                 outcome_effects, recovery_workflows,
                  history_management, device_workflows, settings_workflows,
                  measurement, visual_transport, progress, lifecycle,
                  read_models, clock, feedback_seconds):
@@ -31,7 +31,7 @@ class PracticeControls:
         self.midi_key_shortcuts, self.teaching_decisions = midi_key_shortcuts, teaching_decisions
         self.exposure_workflows, self.lesson_execution = exposure_workflows, lesson_execution
         self.outcome_effects, self.recovery_workflows = outcome_effects, recovery_workflows
-        self.completion_continuations, self.history_management = completion_continuations, history_management
+        self.history_management = history_management
         self.device_workflows, self.settings_workflows = device_workflows, settings_workflows
         self.measurement, self.visual_transport, self.progress = measurement, visual_transport, progress
         self.lifecycle, self.read_models, self.clock = lifecycle, read_models, clock

@@ -17,7 +17,7 @@ class SourceWorkflows:
                  playback_session, guided_session, score_artifact_registry,
                  attempt, listen, preprocessing, fingering, progress,
                  fukuda_mistakes, library, library_health, flow_session,
-                 lock, clock):
+                 lock):
         self.source_identity = source_identity
         self.lesson_cursor = lesson_cursor
         self.notices = notices
@@ -38,7 +38,6 @@ class SourceWorkflows:
         self.library_health = library_health
         self.flow_session = flow_session
         self.lock = lock
-        self.clock = clock
 
     def prepare(self, path: str, *, warmup: bool, diagnostics: bool):
         return self.source_preparation.prepare(

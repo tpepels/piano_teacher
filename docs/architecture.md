@@ -11,6 +11,18 @@ retains the original six findings as historical evidence. The corresponding
 correction commits and software verification are recorded below; physical
 MIDI, audio and visual acceptance remain separate.
 
+### Composition closure audit — 2026-11-21
+
+The pre-audit composition file retained many direct imports from the
+former 2,783-line facade despite constructing no objects from those
+imports. It now imports the concrete current application owners only,
+and the four unused constructor ports discovered in the extracted
+services have been removed at both ends. `PracticeEngine` remains a
+343-line public facade and constructs its services through
+`application/composition.py`, without injecting a facade or
+global service locator into the application services. Full dependency
+closure and packaged/native acceptance remain separate requirements.
+
 ## One desktop runtime
 
 The product is one Godot 4.7 desktop process with embedded CPython, authentic

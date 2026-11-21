@@ -11,12 +11,11 @@ from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasureme
 
 
 class TransportTiming:
-    def __init__(self, *, source_identity, lesson_cursor, notices,
+    def __init__(self, *, source_identity, lesson_cursor,
                  playback_session, visual_transport, tempo_map_cache,
                  attempt_progression, attempt_settlement, score_read,
                  midi_ingress, playback, clock):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
-        self.notices = notices
         self.playback_session, self.visual_transport = playback_session, visual_transport
         self.tempo_map_cache, self.attempt_progression = tempo_map_cache, attempt_progression
         self.attempt_settlement, self.score_read = attempt_settlement, score_read

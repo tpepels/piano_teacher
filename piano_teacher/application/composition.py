@@ -6,138 +6,82 @@ injected into a domain, playback, engraving or grading service: each service
 continues receiving its own explicit constructor dependencies.
 """
 from __future__ import annotations
-from types import SimpleNamespace
 
-from dataclasses import asdict, replace
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor
-import logging
-import hashlib
-import json
-import os
 from pathlib import Path
+from types import SimpleNamespace
+import os
 import threading
 import time
-import math
 
-from ..learning import LearningPlan
-from ..teaching_course import steps as teaching_steps, manual_progress
-from ..teaching_manual import ManualFacts
-from ..teaching_decisions import (TeachingBinding, TeachingState, TeachingRouteFacts, TeachingEvent,
-    source_safe_response)
-from ..diagnosis_policies import LearnerSnapshot
-from . import practice_flow
-from .playback_coordinator import PlaybackCoordinator
-from .playback_session import PlaybackSession
-from .playback_transitions import CountInPlan
-from .playback_facts import (
-    PlaybackSourceFacts, PlaybackRuntimeFacts, TimedTakeSource, TimedStartRequest,
-    PreparationRequest, ResumeRequest, FullPassageFacts, RestResumeFacts, PreloadedFeedbackSource,
-)
-from .flow_course_session import PracticeFlowCourseSession
-from .passage_outcome_presenter import performance_next_action
-from .learning_evidence_session import LearningEvidenceSession
-from .source_preparation_session import SourcePreparationSession
-from .score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
-from .headless_score_projection import project_headless_score_queue
-from .attempt_settlement import AttemptSettlement
+from ..assessment_service import AssessmentService
+from ..clock import Clock
+from ..clock import monotonic
+from ..feedback_events import FeedbackEventLog
+from ..fingering import FingeringService
+from ..fukuda_mistake_store import FukudaMistakeStore
+from ..lesson_settings import SETTINGS
+from ..library import ScoreLibrary
+from ..library_health import LibraryHealth
+from ..live_assessment_publisher import LiveAssessmentPublisher
+from ..live_input_view import LiveInputView
+from ..midi_calibration import MidiTapCalibration
+from ..preprocessing_cache import PreprocessingCache
+from ..progress_repository import ProgressRepository
+from ..runtime_timings import RuntimeTimings
+from ..visual_transport import VisualTransport
+
+from .application_worker import ApplicationWorker
+from .attempt_progression import AttemptProgression
 from .attempt_runtime import AttemptRuntime
-from .recovery_streak import RecoveryStreak
-from .session_commands import SessionCommands
-from .source_identity import SourceIdentity
-from .lesson_cursor import LessonCursor
-from .session_notices import SessionNotices
-from .session_lifecycle import SessionLifecycle
-from .history_management import HistoryManagement
-from .source_workflows import SourceWorkflows
-from .policy_registry import PolicyRegistry
-from .settings_workflows import SettingsWorkflows
+from .attempt_settlement import AttemptSettlement
+from .completion_continuations import CompletionContinuations
 from .device_workflows import DeviceWorkflows
-from .teaching_workflows import TeachingDecisions
-from .session_evidence_context import SessionEvidenceContext
 from .exposure_installer import ExposureInstaller
 from .exposure_workflows import ExposureWorkflows
-from .lesson_execution import LessonExecution
-from .score_read_services import ScoreReadServices
-from .session_read_models import SessionReadModels
-from .transport_timing import TransportTiming
-from .timed_playback import TimedPlayback
-from .live_feedback_workflows import LiveFeedbackWorkflows
-from .post_assessment_effects import PostAssessmentEffects
-from .recovery_workflows import RecoveryWorkflows
-from .completion_continuations import CompletionContinuations
-from .practice_timeline import PracticeTimeline
-from .application_worker import ApplicationWorker
-from .practice_controls import PracticeControls
-from .midi_application_input import MidiApplicationInput
-from .score_preload_workflow import ScorePreloadWorkflow
-from .session_phase import SessionPhase
-from .teaching_continuation import (
-    TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
-    SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
-    EnterSelectedRemediation, ContinueSelectedScore,
-)
-from .musical_scheduler import (
-    SCHEDULER, SNAPSHOT_LATENCY_SECONDS,
-    RestMeasurement, ContinuationMeasurement,
-)
-
-from ..sqlite_transaction import sqlite_atomic
-from .score_artifacts import ScoreArtifacts, ScoreSelection
-from .score_artifact_registry import ScoreArtifactRegistry
+from .flow_course_session import PracticeFlowCourseSession
 from .future_score import FutureScore
-from .midi_connection import MidiConnection, MidiNotice
-from .midi_key_shortcuts import MidiKeyShortcuts
-from .midi_ingress import MidiIngress, MidiInputFacts, InputTransportFacts
-from .listen_session import ListenSession
-from .exposure_preparation import (
-    ExposureSource, GuidedPreparation, TimedPreparation, ListenPreparation,
-    prepare_guided, prepare_timed, prepare_listen, prepare_response, prepare_remedial,
-)
-from ..importing.pieces import import_piece
-from ..engraving.engraving import EngravedScore
-from ..fingering import FingeringService
-from ..library import ScoreLibrary
-from ..preprocessing_cache import PreprocessingCache
-from ..library_health import LibraryHealth
-from ..warmups import is_warmup
-from .mistake_responses import resolve_mistake_policy
-from ..music import Phrase
-from ..measure_grid import phrase_grid
-from ..course_navigation import choose_source_opening
-from ..state_projection import (
-    PhaseSnapshot, SessionSnapshot, project_phase, project_session_state,
-)
-from ..assessment_service import AssessmentService
-from .practice_assessment import PracticeAssessmentPolicies
-from .control_dispatch import ControlDispatcher
-from .stage_change import prepare_stage_change
-from .practice_transitions import TransitionContext, decide_transition
-from .attempt_progression import AttemptProgression, AttemptTick
 from .guided_session import GuidedSession
-from .tempo_map_cache import TempoMapCache
-from .session_snapshot_builder import (
-    SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot,
-)
-from ..completion_route import completion_route
-from ..visual_transport import VisualTransport
-from ..midi_calibration import MidiTapCalibration
-from .. import state_contract
-from ..clock import Clock, monotonic
-from ..feedback_events import FeedbackEventLog
-from ..live_assessment_publisher import LiveAssessmentPublisher
-from ..live_feedback import live_scope
-from ..runtime_timings import RuntimeTimings
-from ..live_input_view import LiveInputView
-from ..learner_state import guided_units
-from ..progress_repository import ProgressRepository
+from .history_management import HistoryManagement
 from .learner_progress import LearnerProgress
-from ..lesson_settings import SETTINGS
-from .learning_capture import LearningCapture, CapturePhaseFacts, identifier
+from .learning_capture import LearningCapture
+from .learning_evidence_session import LearningEvidenceSession
+from .lesson_cursor import LessonCursor
+from .lesson_execution import LessonExecution
+from .listen_session import ListenSession
+from .live_feedback_workflows import LiveFeedbackWorkflows
+from .midi_application_input import MidiApplicationInput
+from .midi_connection import MidiConnection
+from .midi_ingress import MidiIngress
+from .midi_key_shortcuts import MidiKeyShortcuts
+from .playback_coordinator import PlaybackCoordinator
+from .playback_session import PlaybackSession
+from .policy_registry import PolicyRegistry
+from .post_assessment_effects import PostAssessmentEffects
+from .practice_controls import PracticeControls
+from .practice_timeline import PracticeTimeline
+from .recovery_streak import RecoveryStreak
+from .recovery_workflows import RecoveryWorkflows
+from .score_artifact_registry import ScoreArtifactRegistry
+from .score_artifacts import ScoreArtifacts
+from .score_preload_workflow import ScorePreloadWorkflow
+from .score_read_services import ScoreReadServices
+from .score_state_publisher import ScoreStatePublisher
+from .session_commands import SessionCommands
+from .session_evidence_context import SessionEvidenceContext
+from .session_lifecycle import SessionLifecycle
+from .session_notices import SessionNotices
+from .session_phase import SessionPhase
+from .session_read_models import SessionReadModels
+from .settings_workflows import SettingsWorkflows
+from .source_identity import SourceIdentity
+from .source_preparation_session import SourcePreparationSession
+from .source_workflows import SourceWorkflows
+from .teaching_continuation import TeachingContinuation
+from .teaching_workflows import TeachingDecisions
+from .tempo_map_cache import TempoMapCache
+from .timed_playback import TimedPlayback
+from .transport_timing import TransportTiming
 
-from ..practice_history import PracticePolicyService
-from ..fukuda_mistake_store import FukudaMistakeStore
-from ..remediation import RemedialAssignment
 
 def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
                         feedback_events: FeedbackEventLog | None = None,
@@ -166,18 +110,6 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
                             else FeedbackEventLog())
     r.live_assessment = LiveAssessmentPublisher(r.feedback_events)
     r.runtime_timings = RuntimeTimings()
-    # Musical clock resumes at its previous beat after a reading lead-in.
-    # No MIDI attack during that lead-in can alter a graded attempt.
-    # Graded musical position (seconds since run_at) at the Pause moment.
-    # The graded timeline stands still there until grading resumes after
-    # Resume's lead; see _musical_seconds (R1 F2).
-    # Persistent trouble means two boundary failures in consecutive takes
-    # at the same stage and source two-bar chunk. Only a clean full take
-    # or explicit stage navigation resets the history.
-    # Automatic remedial sections are timed source reviews, never an
-    # input-blocking lesson. A partial review never awards mastery.
-    # Practice flow lesson state: changed only through the transitions
-    # of application/practice_flow.py (see _flow_execute).
     r.flow_session = PracticeFlowCourseSession(r.now)
     # One short on-screen message at a time: (serial, text, engine time).
     r.guided_session.clear_selection()
@@ -200,15 +132,6 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
     # The untimed guided engine owns repeat presentation epochs; no
     # Godot-side guess about missed notes or lesson progression.
     r.score_state_publisher = ScoreStatePublisher()
-    # Explicit backend-selected next take. Renderer may only enqueue this
-    # source identity at this exact monotonic graded deadline.
-    # Godot's empty-strip geometry (clear, header beats); None = no
-    # renderer has reported it, keep the offscreen reading horizon.
-    # (seconds, bpm) of the last finished take's end: the written rest
-    # bar that follows it is printed from there at that tempo.
-    # Global musical origin of a delayed, pre-engraved next stage.
-    # Pin the renderer-acknowledged source assets through settlement.
-    # Final native renderer failures are tied to one exact future step.
     r.progress = ProgressRepository(data_dir / "progress.db")
     # Keep the public db handle for LearnerStateStore and existing clients.
     r.db = r.progress.db
@@ -264,7 +187,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         preprocessing=r.preprocessing, fingering=r.fingering,
         progress=r.progress, fukuda_mistakes=r.fukuda_mistakes,
         library=r.library, library_health=r.library_health,
-        flow_session=r.flow_session, lock=r.lock, clock=r.now)
+        flow_session=r.flow_session, lock=r.lock)
     r.settings_workflows = SettingsWorkflows(
         library=r.library, measurement=r.measurement,
         lifecycle=r.session_lifecycle, notices=r.notices,
@@ -331,7 +254,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
 
     r.transport_timing = TransportTiming(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
-        notices=r.notices, playback_session=r.playback_session,
+        playback_session=r.playback_session,
         visual_transport=r.visual_transport, tempo_map_cache=r.tempo_map_cache,
         attempt_progression=r.attempt_progression,
         attempt_settlement=r.attempt_settlement, score_read=r.score_read,
@@ -439,7 +362,6 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         teaching_decisions=r.teaching_decisions,
         exposure_workflows=r.exposure_workflows, lesson_execution=r.lesson_execution,
         outcome_effects=r.outcome_effects, recovery_workflows=r.recovery_workflows,
-        completion_continuations=r.completion_continuations,
         history_management=r.history_management,
         device_workflows=r.device_workflows, settings_workflows=r.settings_workflows,
         measurement=r.measurement, visual_transport=r.visual_transport,
@@ -460,8 +382,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         timed_playback=r.timed_playback, clock=r.now)
 
     r.practice_timeline = PracticeTimeline(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
-        notices=r.notices, visual_transport=r.visual_transport,
+        source_identity=r.source_identity, notices=r.notices, visual_transport=r.visual_transport,
         playback_session=r.playback_session, playback=r.playback,
         attempt_settlement=r.attempt_settlement, attempt=r.attempt,
         transport_timing=r.transport_timing, timed_playback=r.timed_playback,

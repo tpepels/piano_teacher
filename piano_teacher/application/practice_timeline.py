@@ -17,7 +17,7 @@ from . import practice_flow
 
 
 class PracticeTimeline:
-    def __init__(self, *, source_identity, lesson_cursor, notices,
+    def __init__(self, *, source_identity, notices,
                  visual_transport, playback_session, playback,
                  attempt_settlement, attempt, transport_timing, timed_playback,
                  score_read, outcome_effects, lesson_execution,
@@ -28,7 +28,7 @@ class PracticeTimeline:
                  midi_calibration, attempt_progression, read_models,
                  teaching_continuation, exposure_workflows,
                  clock, poll_midi, feedback_seconds):
-        self.source_identity, self.lesson_cursor, self.notices = source_identity, lesson_cursor, notices
+        self.source_identity, self.notices = source_identity, notices
         self.visual_transport, self.playback_session, self.playback = visual_transport, playback_session, playback
         self.attempt_settlement, self.attempt = attempt_settlement, attempt
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
