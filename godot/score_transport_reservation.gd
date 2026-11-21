@@ -9,11 +9,14 @@ static func _refuse(reason: String) -> Dictionary:
     return {"ok":false,"reason":reason}
 
 static func plan(renderer, action: String, world: float,
-        source_opening: float, count_in_beats: float) -> Dictionary:
+        source_opening: float, count_in_beats: float,
+        exact_start_world: float = NAN, display_context: bool = false) -> Dictionary:
     if not renderer.has_method("transport_preflight_facts"):
         return _refuse("missing_physical_preflight_port")
     var facts: Dictionary = renderer.transport_preflight_facts(world,source_opening)
-    return plan_facts(facts,action,world,source_opening,count_in_beats)
+    facts["display_context_required"] = display_context
+    return plan_facts(
+        facts,action,world,source_opening,count_in_beats,exact_start_world)
 
 static func plan_facts(facts: Dictionary, action: String, world: float,
         source_opening: float, count_in_beats: float,
@@ -137,18 +140,25 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
             source_opening < preview_world+count_in_beats-.0001:
         reusable = -1
     if reusable >= 0:
+        var reused_world: float = float(online[reusable]["world_origin"]) + source_opening
+        if is_finite(exact_start_world) and absf(exact_start_world-reused_world) > .0001:
+            # Existing musical ink cannot be shifted to meet a proposed
+            # later backend deadline, even if it has not been exposed yet.
+            return _refuse("immutable_reuse_differs_from_backend_deadline")
         return {"ok":true,"mode":"reuse","action":action,
             "opening":source_opening,
             "protected_take":int(online[reusable].get("take_owner",
                 online[reusable]["serial"])),
-            "start_world":float(online[reusable]["world_origin"]) +
-                source_opening,"reason":"existing_future_owner"}
+            "start_world":reused_world,"reason":"existing_future_owner"}
     if is_finite(near_onset):
+        if is_finite(exact_start_world) and exact_start_world < near_onset-.0001:
+            return _refuse("backend_deadline_precedes_empty_strip_clearance")
+        var chosen: float = exact_start_world if is_finite(exact_start_world) else near_onset
         return {"ok":true,"mode":"append","action":action,
-            "opening":source_opening,"start_world":near_onset,
+            "opening":source_opening,"start_world":chosen,
             "empty_strip":true,
             "first_pixel_x":float(facts["playhead"]) +
-                (near_onset-header-preview_world)*density,
+                (chosen-header-preview_world)*density,
             "first_ink_delay_seconds":0.0,
             "remaining_count":survivors.size(),
             "protected_strip":protected_strip,
@@ -182,6 +192,10 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
         onset = maxf(onset,preview_world+count_in_beats)
     if not is_finite(onset):
         return _refuse("no_finite_future_slot")
+    if is_finite(exact_start_world):
+        if exact_start_world < onset-.0001:
+            return _refuse("backend_deadline_precedes_native_preflight")
+        onset = exact_start_world
     var first_pixel_x: float = float(facts["playhead"]) +         (onset-header-preview_world)*density
     if first_pixel_x <= width:
         return _refuse("not_fully_offscreen")

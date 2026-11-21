@@ -376,12 +376,13 @@ func _stream_header_beats(opening: float) -> float:
         staff_gap()/maxf(1.0,timeline.pixels_per_beat)
 
 func reserve_transport_action(action: String, world: float,
-        opening: float, count_in_beats: float, display_context: bool = false) -> Dictionary:
+        opening: float, count_in_beats: float, display_context: bool = false,
+        exact_start_world: float = NAN) -> Dictionary:
     stream_world_beat = maxf(stream_world_beat,world)
     return StreamAdmissionExecutor.reserve_action(_stream_controller,
         _stream_facts(stream_world_beat),transport_preflight_facts(world,opening),
         action,world,opening,count_in_beats,_stream_right_beats(),
-        _stream_header_beats(opening),bpm,NAN,display_context)
+        _stream_header_beats(opening),bpm,exact_start_world,display_context)
 
 ## Consume the coordinator's exact deadline through the same physical
 ## preflight and immutable commit used for user transport actions.
