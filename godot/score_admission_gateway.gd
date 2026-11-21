@@ -86,16 +86,22 @@ func _deadline_at_world(target_world: float, local_ms: int, beat: float,
     var low := 0.0
     var high := 1000.0
     for i in range(22):
-        if flow.project_authored_future(local_ms + roundi(high),
-                local_ms, beat, bpm, segments) >= target_world:
+        var candidate: float = flow.project_authored_future(
+            local_ms + roundi(high),local_ms,beat,bpm,segments)
+        if not is_finite(candidate):
+            return NAN
+        if candidate >= target_world:
             break
         high *= 2.0
     if high >= 4194304000.0:
         return NAN
     for i in range(38):
         var mid: float = 0.5 * (low + high)
-        if flow.project_authored_future(local_ms + roundi(mid),
-                local_ms, beat, bpm, segments) < target_world:
+        var candidate: float = flow.project_authored_future(
+            local_ms + roundi(mid),local_ms,beat,bpm,segments)
+        if not is_finite(candidate):
+            return NAN
+        if candidate < target_world:
             low = mid
         else:
             high = mid

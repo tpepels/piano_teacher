@@ -163,9 +163,10 @@ func forecast_authored(at_ms: int, sampled_ms: int,
     var origin: float = project(sampled_ms)
     if at_ms <= sampled_ms:
         return origin
-    if authored_segments.is_empty() or not is_finite(source_beat) or \
-            not is_finite(nominal_bpm) or nominal_bpm <= 0.0:
-        return project(at_ms)
+    if not is_finite(source_beat) or not is_finite(nominal_bpm) or nominal_bpm <= 0.0:
+        return NAN
+    # A constant-tempo forecast must also be hypothetical. Calling
+    # project() would obey a painted Pause/Free hold and return no future.
     var candidate = get_script().new()
     var starting_bpm: float = TempoTimeline.bpm_at_beat(
         source_beat,nominal_bpm,authored_segments)
@@ -192,11 +193,26 @@ func set_hold(world: float, at_ms: int) -> void:
     if hold_world == next_hold:
         return
     var observed := last_world
+    # The backend can authorize a future Resume downbeat while Pause is
+    # still painted. Releasing that hold must not erase its deadline/rate
+    # epochs; an unconfirmed speculative segment is never preserved.
+    var preserve_authorized: bool = is_finite(hold_world) and \
+        not is_finite(next_hold) and not active_segment.is_empty()
     hold_world = next_hold
+    var authorized_future: Array[Dictionary] = []
+    if preserve_authorized:
+        for epoch in epochs:
+            if float(epoch["at_ms"]) > float(at_ms) and \
+                    str(epoch.get("segment","")) == active_segment:
+                authorized_future.append(epoch.duplicate(true))
     _trim_after(float(at_ms))
-    # New Free target or release resumes forward from the actual held
-    # position at this instant, without catching up via a sudden jump.
+    # Resume begins from the actual frozen world. Future epochs retain
+    # their authorized wall-clock timestamps and are spatially rebased.
     _install(float(at_ms),_rate_at(float(at_ms)),"guided")
     epochs[-1]["world"] = observed
     epochs[-1]["locked_origin"] = true
+    if not authorized_future.is_empty():
+        for epoch in authorized_future:
+            epochs.append(epoch)
+        _rebase_future()
     version += 1

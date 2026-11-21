@@ -12,15 +12,9 @@ func _init(flow) -> void:
     score_flow = flow
 
 func update_hold(state: Dictionary) -> void:
-    var pending: Variant = state.get("playback_intent")
-    var resuming: bool = pending is Dictionary and \
-        str(pending.get("action","")) == "resume"
-    if bool(state.get("paused",false)) and not resuming:
-        # An acknowledged Pause freezes the sole world projection.
-        # During physical Resume admission the backend remains paused
-        # until the receipt is authorized, but the player has requested
-        # forward movement. Release the visual hold for that intent so
-        # the inverse future-deadline calculation can reach the source.
+    if bool(state.get("paused",false)):
+        # A pending Resume intent is not authorization. Physical future
+        # geometry may be forecast without releasing the visible hold.
         score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
         return
     # These are all states of the same untimed Free exposure; losing MIDI
@@ -28,12 +22,17 @@ func update_hold(state: Dictionary) -> void:
     var guided: bool = str(state.get("mode","")) == "learn" and \
         str(state.get("phase","")) in [
             "guided_wait", "introducing", "disconnected", "guided_complete"
-        ] and is_finite(world)
+        ]
     if not guided:
         if str(state.get("mode","")) != "learn":
             world = NAN
             plan_id = ""
         score_flow.release_hold()
+        return
+    if not is_finite(world):
+        # Free must remain stationary before its first target or MIDI
+        # event, even while pre-engraving/readiness is outstanding.
+        score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
         return
     var teaching: Variant = state.get("teaching")
     var expected: Array = teaching.get("expected_notes",[]) \

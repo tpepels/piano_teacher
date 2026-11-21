@@ -47,7 +47,10 @@ func project_authored_future(at_ms: int, sampled_ms: int,
     # Use the same versioned epoch projector for both actual committed
     # music and candidate authored tempo maps. The candidate remains
     # entirely hypothetical until ScoreAdmissionGateway authorizes it.
-    if not timeline.active_segment.is_empty():
+    # Only an unheld displayed world can be used for an existing
+    # segment. Pause and Free need a pure hypothetical future so the
+    # admission preflight cannot release their painted hold.
+    if not timeline.active_segment.is_empty() and not is_finite(timeline.hold_world):
         return project(at_ms)
     return timeline.forecast_authored(
         at_ms,sampled_ms,source_beat,nominal_bpm,authored_segments)

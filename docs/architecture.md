@@ -210,6 +210,18 @@ deterministic simulated-MIDI/real-Godot tests are not yet implemented.
 New unit tests are deferred at the owner's request, and no physical
 or CI acceptance is inferred.
 
+### V4 native hold and forecast boundary (2026-11-21)
+
+The painter's held score position now remains frozen during a pending
+Resume and before the first Free target. Native admission can read an
+independent hypothetical future from the same tempo projector even when
+the displayed world is held. Only an authorized backend playback segment
+may release the visual hold; its future tempo epochs retain exact time
+coordinates through the release and are rebased spatially from the held
+world. The gateway still computes the final deadline by native inverse
+projection, an outstanding V3 ownership violation. The full MIDI/renderer
+transition graph and physical acceptance remain unverified.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
