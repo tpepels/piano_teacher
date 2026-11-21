@@ -163,24 +163,19 @@ func _present_flow(parsed: Dictionary) -> bool:
     # Practice flow: everything advances by itself; only Pause/Resume and
     # "Listen again" stay (docs/practice-flow.md, On screen > Controls).
     var flow: Dictionary = parsed.get("flow", {}) if parsed.get("flow") is Dictionary else {}
-    var active := not flow.is_empty()
+    var active: bool = bool(parsed.get("controls",{}).get("flow_active",false))
     flow_status_label.visible = active
     if active:
         var status := str(flow.get("status", ""))
         if flow_status_label.text != status:
             flow_status_label.text = status
-    practice_retry_button.visible = not active
+    practice_retry_button.visible = bool(_control("retry").get("visible",false))
+    practice_previous_button.visible = bool(_control("previous").get("visible",false))
+    practice_skip_button.visible = bool(_control("skip").get("visible",false))
     speed_label.visible = not active
     practice_details_button.visible = not active
     if active:
-        practice_previous_button.visible = false
-        practice_skip_button.visible = false
-        if listen_button.text != "Listen again":
-            listen_button.text = "Listen again"
-            listen_button.call("configure", "listen")
-            _chrome.style_transport(listen_button)
         listen_button.tooltip_text = "Hear this passage again at the target tempo · L"
-        listen_button.disabled = str(parsed.get("mode", "")) == "listen"
     return active
 
 func present(parsed: Dictionary, ready: bool, busy := false, audio_error := false) -> void:
@@ -244,13 +239,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     if tempo_down_button != null:
         tempo_down_button.text = "−"
         tempo_down_button.tooltip_text = "Decrease by %d BPM · Keeps the song target" % int(parsed.get("manual_tempo_step_bpm", 5))
-        tempo_down_button.disabled = (_busy or not bool(parsed.get("can_decrease_tempo", false))
-            or str(parsed.get("phase", "")) in ["count_in", "playing", "loading", "admitting"])
+        tempo_down_button.disabled = _busy or not bool(_control("tempo_down").get("enabled",false))
     if tempo_up_button != null:
         tempo_up_button.text = "+"
         tempo_up_button.tooltip_text = "Increase by %d BPM · No mastery credit" % int(parsed.get("manual_tempo_step_bpm", 5))
-        tempo_up_button.disabled = (_busy or not bool(parsed.get("can_increase_tempo",false))
-            or str(parsed.get("phase","")) in ["count_in","playing","loading","admitting"])
+        tempo_up_button.disabled = _busy or not bool(_control("tempo_up").get("enabled",false))
     var selected_bpm: float = float(parsed.get("bpm", 0))
     var effective_bpm: float = float(parsed.get("effective_bpm", selected_bpm))
     speed_label.text = TempoVocabulary.display(selected_bpm) + " ▾"
@@ -280,10 +273,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
     var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
-    practice_previous_button.visible = bool(parsed.get("loaded", false))
-    practice_previous_button.disabled = _busy or int(parsed.get("lesson_step",1)) <= 1
-    practice_skip_button.visible = bool(parsed.get("loaded", false))
-    practice_skip_button.disabled = not bool(parsed.get("skip_available", false)) or _busy
+    practice_previous_button.disabled = _busy or not bool(_control("previous").get("enabled",false))
+    practice_skip_button.disabled = _busy or not bool(_control("skip").get("enabled",false))
     var progress_text := ""
     var progress_tone: Color = progress_label.get_theme_color("font_color")
     if learning:
@@ -298,14 +289,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     if not bool(parsed.get("paused",false)): advanced_pause_open = false
     _present_pause()
     start_button.visible = true
-    listen_button.disabled = not bool(parsed.get("loaded", false))
-    listen_button.text = "Practice" if str(parsed.get("mode", "")) == "listen" else "Listen"
-    var listen_kind := "practice" if listen_button.text == "Practice" else "listen"
-    if str(listen_button.get("action_kind")) != listen_kind:
-        listen_button.call("configure", listen_kind)
-        _chrome.style_transport(listen_button)
-    practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
-        or not _score_ready or phase in ["admitting","loading"])
+    practice_retry_button.disabled = _retry_blocked()
     var flow_active := _present_flow(parsed)
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
     performance_review.present(summary)
@@ -469,24 +453,25 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     start_button.disabled = _primary_blocked()
     start_button.call("configure", "pause" if str(primary_control.get("action","")) == "pause" else "play",
         active_transport and not bool(parsed.get("paused", false)))
+    listen_button.text = str(listen_control.get("label","Listen"))
     listen_button.disabled = not bool(listen_control.get("enabled",false))
-    listen_button.call("configure", "practice" if str(listen_control.get("action","")) == "practice" else "listen",
+    var listen_kind := "practice" if str(listen_control.get("action","")) == "practice" else "listen"
+    listen_button.call("configure", listen_kind,
         str(parsed.get("mode", "")) == "listen")
 
 func present_busy(busy: bool) -> void:
     _busy = busy
-    var blocked: bool = busy or not bool(_state.get("loaded",false)) or str(_state.get("phase","")) in ["count_in","playing","loading","admitting"]
-    tempo_down_button.disabled = blocked or not bool(_state.get("can_decrease_tempo",false))
-    tempo_up_button.disabled = blocked or not bool(_state.get("can_increase_tempo",false))
-    practice_skip_button.disabled = busy or not bool(_state.get("skip_available",false))
-    practice_previous_button.disabled = busy or int(_state.get("lesson_step",1)) <= 1
+    tempo_down_button.disabled = busy or not bool(_control("tempo_down").get("enabled",false))
+    tempo_up_button.disabled = busy or not bool(_control("tempo_up").get("enabled",false))
+    practice_skip_button.disabled = busy or not bool(_control("skip").get("enabled",false))
+    practice_previous_button.disabled = busy or not bool(_control("previous").get("enabled",false))
 
 func present_score(status: Dictionary) -> void:
     _score_status = status.duplicate(true)
     _score_ready = bool(status.get("ready",false))
     stage.present_score_status(status)
     start_button.disabled = _primary_blocked()
-    practice_retry_button.disabled = not bool(_state.get("loaded",false)) or not _score_ready
+    practice_retry_button.disabled = _retry_blocked()
 
 func present_message(message: String, reveal := false) -> void:
     feedback_label.text = message
@@ -522,6 +507,11 @@ func _primary_blocked() -> bool:
     return (not bool(primary.get("enabled",false)) or
         (bool(primary.get("requires_score",false)) and not _score_ready))
 
+func _retry_blocked() -> bool:
+    var retry: Dictionary = _control("retry")
+    return not bool(retry.get("enabled",false)) or (
+        bool(retry.get("requires_score",false)) and not _score_ready)
+
 func _active_transport(state: Dictionary) -> bool:
     var controls: Dictionary = state.get("controls",{})
     return bool(controls.get("transport_active",false))
@@ -545,11 +535,11 @@ func open_advanced_pause() -> void:
 
 func _previous_lesson() -> void:
     var current: int = int(_state.get("lesson_step",1))
-    if not _busy and bool(_state.get("loaded",false)) and current > 1:
+    if not _busy and bool(_control("previous").get("enabled",false)):
         command_requested.emit({"action":"select_step","number":current - 1})
 
 func _skip_lesson() -> void:
-    if not _busy and bool(_state.get("skip_available",false)):
+    if not _busy and bool(_control("skip").get("enabled",false)):
         command_requested.emit({"action":"skip_stage","reason":"Learner skipped to the next lesson from the practice screen"})
 
 ## Bind the persistent audio service once, after PracticeScreen _ready().

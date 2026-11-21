@@ -133,6 +133,17 @@ primary action/label/availability rather than deciding these locally.
 `CommandRequestState` keeps the pending Pause behavior using the
 backend-published action without authorizing playback in Godot.
 
+**Follow-up ownership migration:** The same Python `controls`
+projection now also publishes Retry visibility/readiness, Listen captions,
+previous/skip availability and the permitted manual-tempo controls.
+`PracticeScreen` consumes those fields instead of re-evaluating
+practice phases to enable or disable buttons. The existing
+`tests/godot/practice_controls.gd` presentation fixture was adjusted to
+supply a published `controls` model rather than consult the superseded
+Godot policy. This updates an existing test; no new tests were added.
+The old policy file is still retained pending a complete caller sweep,
+and all native/software gates remain unverified.
+
 **Open:** `practice_control_policy.gd` remains until all consumers
 and legacy tests are migrated; additional buttons and physical shortcuts
 still have legacy client-side interpretation; score admission/deadline

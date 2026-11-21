@@ -64,6 +64,12 @@ def project_controls(s: Mapping) -> dict:
     if course and not moving and not s.get("paused"):
         pause = None
     retry = ("learn_retry" if s.get("mode") == "learn" else "restart") if s.get("loaded") else None
+    retry_allowed = retry is not None and s.get("phase") not in ("admitting", "loading")
+    tempo_allowed = bool(s.get("loaded")) and s.get("phase") not in (
+        "count_in", "playing", "loading", "admitting")
+    previous_visible = bool(s.get("loaded")) and not course
+    previous_enabled = previous_visible and int(s.get("lesson_step", 1)) > 1
+    skip_enabled = previous_visible and bool(s.get("skip_available"))
     listen = None
     if s.get("loaded"):
         listen = (None if s.get("mode") == "listen" else "listen") if course else (
@@ -78,8 +84,14 @@ def project_controls(s: Mapping) -> dict:
                     "enabled": main is not None,
                     "requires_score": needs_score},
         "pause": {"action": pause or "", "enabled": pause is not None},
-        "retry": {"action": retry or "", "enabled": retry is not None, "requires_score": True},
-        "listen": {"action": listen or "", "enabled": listen is not None},
+        "retry": {"action": retry or "", "enabled": retry_allowed,
+                  "requires_score": True, "visible": not course},
+        "listen": {"action": listen or "", "enabled": listen is not None,
+                   "label": "Listen again" if course else "Practice" if s.get("mode") == "listen" else "Listen"},
+        "previous": {"enabled": previous_enabled, "visible": previous_visible},
+        "skip": {"enabled": skip_enabled, "visible": previous_visible},
+        "tempo_up": {"enabled": tempo_allowed and bool(s.get("can_increase_tempo"))},
+        "tempo_down": {"enabled": tempo_allowed and bool(s.get("can_decrease_tempo"))},
     }
 
 
@@ -90,7 +102,7 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
         raise ValueError(f"Unknown UI intent: {intent}")
     choice = project_controls(state)[intent.removeprefix("ui_")]
     action = choice["action"]
-    if not action:
+    if not action or not choice.get("enabled", False):
         return None, {}
     if action == "resume" and score_error:
         raise ValueError(score_error)

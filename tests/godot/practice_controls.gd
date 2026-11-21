@@ -1,7 +1,6 @@
 extends SceneTree
 ## Snapshot presentation only; MIDI/audio/physical layout need piano acceptance.
 const Screen := preload("res://practice_screen.gd")
-const Policy := preload("res://practice_control_policy.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -10,7 +9,23 @@ func check(ok: bool, message: String) -> void:
         printerr("PRACTICE_CONTROLS_FAIL: ",message)
 
 func state(mode: String, phase: String) -> Dictionary:
-    return {"loaded":true,"revision":1,"piece_fingerprint":"piece",
+    # A presentation fixture supplies the state contract published by Python.
+    # It cannot invoke a duplicate Godot application policy.
+    var paused := phase == "paused"
+    var available_listen := mode != "listen"
+    var controls := {
+        "flow_active":true,"transport_active":true,
+        "primary":{"action":"resume" if paused else "pause",
+            "label":"Resume" if paused else "Pause",
+            "enabled":true,"requires_score":false},
+        "listen":{"action":"listen" if available_listen else "",
+            "enabled":available_listen,"label":"Listen again"},
+        "retry":{"enabled":false,"visible":false,"requires_score":true},
+        "previous":{"enabled":false,"visible":false},
+        "skip":{"enabled":false,"visible":false},
+        "tempo_up":{"enabled":false},"tempo_down":{"enabled":false},
+    }
+    return {"loaded":true,"controls":controls,"revision":1,"piece_fingerprint":"piece",
         "title":"Piece","mode":mode,"phase":phase,"hand":"right",
         "bpm":40,"target_bpm":80,"first_bar":2,"last_bar":3,
         "running":phase in ["playing","count_in"],"paused":phase == "paused",
@@ -56,13 +71,15 @@ func run() -> void:
         playing.teaching.hint_reason = "wrong_note"
         view.present(playing,true)
         check(not view.stage.keyboard.visible,"The hint stays hidden outside Free: "+mode)
-        check(view.start_button.text == "Pause" and Policy.primary(playing,true,"") == {"action":"pause"},
+        check(view.start_button.text == "Pause" and playing.controls.primary.action == "pause",
             "The same control pauses "+mode)
         check(view.listen_button.disabled == (mode == "listen"),"Listen again cannot compete with an active Listen")
         playing.paused = true
         playing.phase = "paused"
+        playing.controls.primary.action = "resume"
+        playing.controls.primary.label = "Resume"
         view.present(playing,true)
-        check(view.start_button.text == "Resume" and Policy.primary(playing,true,"") == {"action":"resume"},
+        check(view.start_button.text == "Resume" and playing.controls.primary.action == "resume",
             "The same control resumes "+mode)
     view.present(free,true)
     view.start_button.pressed.emit()
@@ -71,7 +88,7 @@ func run() -> void:
     check(actions == ["transport","listen"],"Presenting metronome preference sends no user command")
     view.metronome_switch.button_pressed = true
     check(actions == ["transport","listen",true],"Practice controls dispatch one intent per user action")
-    check(Policy.listen_toggle(free) == {"action":"listen"},"Listen again requests the current passage")
+    check(free.controls.listen.action == "listen","Listen again is a published action")
     view.free()
     print("PRACTICE_CONTROLS_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
