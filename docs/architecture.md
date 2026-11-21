@@ -369,7 +369,10 @@ remain in the facade transaction until S3. Settings and current-policy selection
 `application/policy_registry.py`. A saved preference change updates the
 one current grading/diagnosis instance, while source/transport and read
 consumers resolve that same instance; no stale policy reference is
-captured at service construction. Device workflows still require migration.
+captured at service construction. Device connection lifecycle and calibration now live in
+`application/device_workflows.py`, which emits explicit setting changes
+rather than calling the engine or mutating configured policies itself.
+The short facade entry preserves source interruption ordering and locking.
 
 The active-take stop transaction now resides in
 `application/session_lifecycle.py`. The stop workflow owns ordered

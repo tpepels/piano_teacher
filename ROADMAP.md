@@ -436,9 +436,11 @@ source-mutation guard and application lock retained around installation.
 the source service receives no engine backreference. Settings validation, persistence, assessment/diagnosis policy replacement,
 evidence-retention controls and exercise diagnostics now use
 `SettingsWorkflows` and a single `PolicyRegistry` that every other
-consumer resolves dynamically. Device and shutdown workflows are still
-pending; S2 is
-**not complete**. Verify this
+consumer resolves dynamically. MIDI connection loss, preferred restoration, selection and calibration now
+run through `DeviceWorkflows`, which returns settings effects for the
+existing ordered settings transaction. The boundary retains the lock and
+the teaching-interruption precondition. Shutdown and the remaining
+source/device diagnostics must still be audited; S2 is **not complete**. Verify this
 commit in core CI before accepting its source mutation paths.
 
 ### Phase S2 — Source, device, configuration and history workflows

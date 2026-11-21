@@ -48,6 +48,7 @@ from .application.history_management import HistoryManagement
 from .application.source_workflows import SourceWorkflows
 from .application.policy_registry import PolicyRegistry
 from .application.settings_workflows import SettingsWorkflows
+from .application.device_workflows import DeviceWorkflows
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -361,6 +362,13 @@ class PracticeEngine:
             playback_session=self.playback_session,
             visual_transport=self.visual_transport, progress=self.progress,
             library_health=self.library_health, source_identity=self.source_identity)
+        self.device_workflows = DeviceWorkflows(
+            midi=self.midi, shortcuts=self.midi_key_shortcuts,
+            live_input=self.live_input, lifecycle=self.session_lifecycle,
+            guided_session=self.guided_session, notices=self.notices,
+            playback_session=self.playback_session,
+            calibration=self.midi_calibration, library=self.library,
+            clock=self.now)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -425,61 +433,34 @@ class PracticeEngine:
         self.next_action = "Select this lesson again after checking the score."
 
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
-        """Cancel session state after detachment and before closing the input."""
         if self.plan is not None:
             self._prepare_teaching("interrupted", action=reason, store=False)
-        with self.midi.disconnected(reason) as notice:
-            self.midi_key_shortcuts.cancel_capture()
-            self.live_input.clear_device()
-            self._stop(reason=reason)
-            if self.teaching is not None:
-                self.teaching.set_connected(False, now=self.now())
-        self.feedback = notice.feedback
-        self.next_action = notice.next_action
-
-    def _present_midi_notice(self, notice: MidiNotice | None) -> None:
-        if notice is None:
-            return
-        if notice.connected is not None and self.teaching is not None:
-            self.teaching.set_connected(notice.connected, now=(notice.sampled_at
-                if notice.sampled_at is not None else self.now()))
-        self.feedback = notice.feedback
-        self.next_action = notice.next_action
+        self.device_workflows.disconnect(reason)
 
     def ports(self) -> list[str]:
         if not self.midi.enabled:
             return []
         with self.lock:
-            scan = self.midi.scan()
+            scan = self.device_workflows.scan()
             if scan.lost:
                 self._midi_lost()
-            if scan.error is not None:
-                self.feedback = scan.feedback
-                raise RuntimeError(self.feedback) from scan.error
-            self._present_midi_notice(self.midi.restore_preferred(
-                scan.names, self.library.settings.get("midi_device", ""), callback=self._receive))
+            self.device_workflows.handle_scan_error(scan)
+            self.device_workflows.restore_preferred(
+                scan.names, callback=self._receive)
             return list(scan.names)
 
     def connect(self, name: str):
         with self.lock:
-            try:
-                with self.midi.selecting(name, callback=self._receive) as selected:
-                    self.midi_key_shortcuts.cancel_capture()
-                    self.live_input.clear_device()
-                    self._stop(reason="device_changed")
-            except RuntimeError as exc:
-                self.feedback = str(exc)
-                raise
-            self._present_midi_notice(selected.notice)
+            self.device_workflows.select(name, callback=self._receive)
             self.set_preferences(midi_device=name)
 
     def hardware_diagnostics(self) -> dict:
         with self.lock:
-            return self.midi.diagnostics_snapshot()
+            return self.device_workflows.hardware_diagnostics()
 
     def hardware_diagnostics_action(self, action: str) -> dict:
         with self.lock:
-            return self.midi.diagnostics_action(action, running=self.playback_session.running)
+            return self.device_workflows.hardware_action(action)
 
     def library_listing(self) -> dict:
         with self.lock:
@@ -493,25 +474,10 @@ class PracticeEngine:
 
     def midi_calibration_action(self, action: str) -> None:
         with self.lock:
-            if action == "calibration_start":
-                if not self.midi.connected:
-                    raise ValueError("Connect the MIDI keyboard before calibrating")
-                self._stop()
-                self.midi_calibration.start(self.now())
-                self.feedback = "Tap one key per click through five continuous rounds"
-            elif action == "calibration_cancel":
-                self.midi_calibration.cancel()
-            elif action == "calibration_apply":
-                self.midi_calibration.advance(self.now())
-                result = self.midi_calibration.snapshot(self.now())["result"]
-                if not result or not result.get("reliable"):
-                    raise ValueError("Finish a consistent calibration before applying it")
-                self.set_preferences(midi_offset_ms=max(0, min(250, result["estimate_ms"])))
-            elif action == "calibration_reset":
-                self.midi_calibration.reset()
-                self.set_preferences(midi_offset_ms=0)
-            else:
-                raise ValueError("Unsupported calibration command")
+            changes = self.device_workflows.calibrate(
+                action, stop_reason=self.session_commands.action_reason)
+            if changes is not None:
+                self.set_preferences(**changes)
 
     def preferences(self) -> dict:
         with self.lock:
@@ -1802,7 +1768,7 @@ class PracticeEngine:
     def _poll_midi_connection(self):
         if self.midi.closed:
             self._midi_lost()
-        if self.midi.scan_due(self.library.settings.get("midi_device", "")):
+        if self.device_workflows.connection_due():
             try:
                 self.ports()
             except RuntimeError:
