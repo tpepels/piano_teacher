@@ -44,6 +44,9 @@ class PracticeTimeline:
         self.read_models, self.clock, self.poll_midi = read_models, clock, poll_midi
         self.teaching_continuation, self.exposure_workflows = teaching_continuation, exposure_workflows
         self.feedback_seconds = feedback_seconds
+        # An accepted continuation can request another transition in this
+        # same locked tick, never another nested worker/tick invocation.
+        self._pending_immediate_transitions = 0
 
     def complete_attempt(self, phrase: Phrase, ending: float,
                           total_beats: float, duration: float, now: float) -> None:
@@ -73,7 +76,7 @@ class PracticeTimeline:
                 self.timed_playback.continue_at(self.visual_transport.next_at,
                     from_beat=0.0)
             elif now >= self.visual_transport.next_at:
-                self.update()
+                self._request_immediate_transition()
             return
         completed_visual = self.transport_timing.visual_motion(now)[0]
         completed = self.attempt_settlement.complete_take(
@@ -158,7 +161,7 @@ class PracticeTimeline:
             self.completion_continuations.advance_pending_feedback(now,force_early=completion.force_early)
         elif completion.update_clock:
             self.attempt_settlement.finish_full_completion(publication)
-            self.update()
+            self._request_immediate_transition()
             return
         self.attempt_settlement.finish_full_completion(publication)
 
@@ -220,26 +223,46 @@ class PracticeTimeline:
                     from_beat=target)
         return decision.consumed
 
+    def _request_immediate_transition(self) -> None:
+        """Defer a nested completion/preview update to this worker's loop."""
+        self._pending_immediate_transitions += 1
+
     def update(self) -> None:
+        # Two continuation cases used to recursively call update() while the
+        # single native musical tick was already executing. Drain those
+        # requests before publishing, preserving their deepest-first publish
+        # order. Bound anomalous cycles instead of growing the Python stack.
+        nested = 0
         try:
-            self.update_transition()
+            while True:
+                self._pending_immediate_transitions = 0
+                self.update_transition()
+                requests = self._pending_immediate_transitions
+                if requests == 0:
+                    break
+                nested += requests
+                if nested > 16:
+                    raise RuntimeError(
+                        "Practice transitions exceeded the bounded same-tick handoff")
         except Exception:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=self.clock())
             self.notices.feedback = "Could not save or finish the practice transition"
-            self.notices.next_action = "Check storage or the reported error, then Resume to retry this same take."
+            self.notices.next_action = (
+                "Check storage or the reported error, then Resume to retry this same take.")
             raise
-        # A playback intent is reconciled by the actual monotonic worker
-        # transition, never by a later serializer's snapshot traversal.
-        # Only worker/command execution advances the accepted lifecycle.
-        self.playback.advance(self.transport_timing.playback_facts())
-        self.read_models.prepare_score_presentation()
-        # Display publication must never pause the take or alter feedback text.
-        try:
-            self.live_feedback_workflows.publish_live()
-        except Exception:
-            logging.getLogger(__name__).exception(
-                "Live assessment publication failed; skipping this tick")
+
+        # Previously each recursively entered update published on the way out,
+        # then its caller published again. Apply that same number of outer
+        # publications without re-running a command/tick or another clock.
+        for _ in range(nested + 1):
+            self.playback.advance(self.transport_timing.playback_facts())
+            self.read_models.prepare_score_presentation()
+            try:
+                self.live_feedback_workflows.publish_live()
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Live assessment publication failed; skipping this tick")
 
     def update_transition(self) -> None:
         """Advance the backend clock under its existing session lock."""

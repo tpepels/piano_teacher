@@ -640,6 +640,14 @@ core CI then exposed a missing `ApplicationWorker` import in the
 composition file. The import is now explicit. No tests or alternate
 runtime were introduced.
 
+**S7 re-entry correction:** `PracticeTimeline` no longer recursively
+re-enters its own musical worker tick during preview/retry or
+full-completion handoff. An explicit bounded same-tick transition drain
+preserves the previous deepest-first publication count without
+creating another clock/worker; pathological handoff loops fail
+explicitly. The existing player-behaviour suite and embedded native
+acceptance must verify this change.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public
