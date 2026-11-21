@@ -11,6 +11,8 @@ var udp := PacketPeerUDP.new()
 var first_pitch := -1
 var initial_transport := -1
 var first_midi_input := -1
+var wrong_free_world := NAN
+var wrong_free_at_ms := -1
 var paused_world := NAN
 var paused_at_ms := -1
 var paused_target := -1
@@ -138,6 +140,19 @@ func _process(_delta: float) -> bool:
                     int(state.get("midi_input_count",0)) <= first_midi_input:
                 _fail("Wrong synthetic note gained Free credit or was not received")
                 return true
+            if wrong_free_at_ms < 0:
+                # The backend already registered the wrong note, so
+                # subsequent frames without MIDI must stay on its held
+                # Free target. A target/error hint cannot start the bar.
+                wrong_free_at_ms = Time.get_ticks_msec()
+                wrong_free_world = renderer.stream_world_beat
+                return false
+            if Time.get_ticks_msec()-wrong_free_at_ms < 350:
+                return false
+            if absf(renderer.stream_world_beat-wrong_free_world) > .02:
+                _fail("Wrong MIDI or silence advanced the stationary Free score")
+                return true
+            print("FULL_SCENE_FREE_WRONG_HOLD_OK world=",wrong_free_world)
             if _press_primary():
                 _advance("pause_free")
         "pause_free":

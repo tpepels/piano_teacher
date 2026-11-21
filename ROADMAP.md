@@ -656,6 +656,19 @@ verify the authored plan becomes visible strictly ahead of the
 playhead, and that wrong input/no input cannot move it. No physical
 acceptance has run.
 
+### V4 full-scene Free failure/silence hold assertion - 2026-11-21
+
+The existing `production_fake_midi_journey.gd` now observes
+the actual retained native score world for 350 ms after a
+wrong synthetic MIDI input has been recognized by the teaching
+controller. During those frames, both the wrong input and
+silence must leave the Free target stationary; a diagnostic
+`FULL_SCENE_FREE_WRONG_HOLD_OK` marker records the held world.
+The following existing Pause and Resume checks still verify
+that paused MIDI does not earn credit. This tests real
+embedded scene behavior, not a second simulated lesson state
+machine. A fresh native-production run is required to accept it.
+
 ### V4 idle admission is frozen until an authorized clock - 2026-11-21
 
 The backend presentation projection no longer authorizes running
