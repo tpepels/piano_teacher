@@ -569,6 +569,23 @@ still unverified in native Godot, and the complete MIDI/score/sound
 transition matrix and physical acceptance remain open. No new unit
 tests were added as instructed.
 
+### V1/V4 authored native-frame acceptance gate - 2026-11-21
+
+Added `tests/godot/authorized_timeline.gd` to the existing
+`scripts/test-godot-behavior.sh` gate. It advances the real
+`ContinuousScoreFlow`, `PresentationTimeline` and
+`GuidedPresentationSession` over simulated frame times, asserting
+a frozen Pause/Free canvas, side-effect-free constant/mixed-tempo
+physical forecasts, monotonic Resume, committed source tempo-map
+inversion, and stale Free target reset on a new score revision.
+The existing Godot syntax gate now compiles the actual native
+score owner and reservation modules instead of relying only on
+transitive preloads. This checks invariant behavior without
+implementing a shadow piano lesson or grading model.
+
+**Unverified:** The checkout lacks a Godot 4.7.2 binary; the
+native gate is committed but has not run in this environment.
+
 ### V4 source-scoped untimed Free scheduling - 2026-11-21
 
 `ScoreStatePublisher` now binds its persistent guided target deadline
