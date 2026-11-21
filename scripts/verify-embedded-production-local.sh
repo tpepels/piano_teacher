@@ -183,6 +183,13 @@ verify_fixture_ui() {
 verify_fake_midi_ui() {
   set_case fake-midi
   seed ci_state_journey.mid practice-flow
+  # Restore the synthetic device as a persisted preference during normal
+  # startup discovery. Selecting a new device mid-Listen would correctly
+  # interrupt the real passage and invalidate this journey's state graph.
+  "$PYTHON" - <<'PY'
+from piano_teacher.library import ScoreLibrary
+ScoreLibrary().update(midi_device="CI Synthetic Keyboard")
+PY
   local port
   port="$("$PYTHON" -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
   # sitecustomize exists only on this test's PYTHONPATH. The real embedded

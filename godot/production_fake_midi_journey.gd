@@ -101,7 +101,8 @@ func _process(_delta: float) -> bool:
     var renderer = app.practice_view.stage.renderer
     match phase:
         "connect":
-            if app.command_coordinator.state.pending or not app.score_session.is_ready():
+            if app.command_coordinator.state.pending or not app.score_session.is_ready() or \
+                    state.get("device") != "CI Synthetic Keyboard":
                 return false
             if (str(state.get("exercise_strategy","")) != "practice-flow" or
                     int(state.get("first_bar",0)) != 1 or
@@ -113,8 +114,9 @@ func _process(_delta: float) -> bool:
                     renderer.timeline.notes.is_empty():
                 _fail("First practice score was not visibly compiled")
                 return true
-            app.command_coordinator.request_command(
-                "midi.device.select",{"name":"CI Synthetic Keyboard"})
+            # The ordinary persisted-device scan connected the fake input.
+            # Do not issue a mid-Lesson device.select, which intentionally
+            # stops an active musical attempt in the real application.
             _advance("free")
         "free":
             if state.get("device") != "CI Synthetic Keyboard" or \
