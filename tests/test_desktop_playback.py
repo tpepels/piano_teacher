@@ -89,12 +89,18 @@ def test_expired_admission_can_retry_without_starting_a_partial_count_in(practic
     intent = desktop_tempo(session)
     receipt = reserve(session, intent)
     session.clock.at = receipt["deadline_ms"]/1000-1
+    # The physically armed score is valid, but the original musical
+    # count-in has already passed. This must expire the attempt (rather
+    # than only rejecting an absent new physical attestation).
     rejected(session, "playback.present", intent_id=intent["intent_id"],
-             attempt=intent["attempt"], segment_id=receipt["segment_id"])
+             attempt=intent["attempt"], segment_id=receipt["segment_id"],
+             **physical_attestation(session,intent,receipt))
     assert not session.snapshot()["running"]
     retry = session.snapshot()["playback_intent"]
+    assert retry["attempt"] == intent["attempt"]+1
     rejected(session, "playback.present", intent_id=intent["intent_id"],
-             attempt=intent["attempt"], segment_id=receipt["segment_id"])
+             attempt=intent["attempt"], segment_id=receipt["segment_id"],
+             **physical_attestation(session,intent,receipt))
     fresh = reserve(session, retry, travel_ms=20000.0)
     present(session, retry, fresh)
     assert session.snapshot()["running"]
