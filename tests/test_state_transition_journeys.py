@@ -173,14 +173,15 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
     counts = dict(progress.free_returns)
     assert counts.get(session.engine.source_identity.plan.identity,0) == 2, (
         counts, progress, aid["flow"])
-    assert aid["lesson_level"] != "original" and "Simplified:" in aid["flow"]["message"], (
-        "returns="+str(counts),
-        "message="+str(aid["flow"].get("message")),
-        "lesson_level="+str(aid["lesson_level"]),
-        "recovery="+str(aid.get("guided_recovery")),
-        "active_remediation="+repr(session.engine.attempt.remediation_active),
-        "lesson_generator="+type(session.engine.source_identity.plan.lesson_generator).__name__)
-    assert len(session.ask("score.semantic")["notes"]) < len(original["notes"])
+    assert aid["lesson_level"] == "original"
+    assert "Simplified:" in aid["flow"]["message"]
+    assert aid["guided_recovery"] and session.engine.attempt.remediation_active is not None
+    # The curriculum still identifies the original source and grants no
+    # mastery. The active SCORE, not the source label, must contain a real
+    # reduced set of attacks from the selected Coda/Fukuda contribution.
+    simplified = session.ask("score.semantic")
+    assert len(simplified["notes"]) < len(original["notes"])
+    assert {n["id"] for n in simplified["notes"]} < {n["id"] for n in original["notes"]}
     assert aid["mastered"] == 0
     session.finish_free()
     restored = state_at(session, step="free", mode="learn")
