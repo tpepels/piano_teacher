@@ -114,6 +114,21 @@ func _process(_delta: float) -> bool:
                 _submit("practice.command",{"action":"score_ready","revision":revision})
                 operation = "practice.ack"
             "practice.ack":
+                # The in-process practice.command protocol separates its
+                # accepted action from the canonical state. A direct
+                # native-bridge smoke consumes that exact envelope just as
+                # PracticeCommandCoordinator does, rather than assuming
+                # the old flat response shape.
+                var accepted_state: Variant = values.get("state")
+                var accepted_outcome: Variant = values.get("outcome")
+                if (not accepted_state is Dictionary or
+                        not accepted_outcome is Dictionary or
+                        int(accepted_outcome.get("version",-1)) != 1 or
+                        str(accepted_outcome.get("action","")) != "score_ready" or
+                        not bool(accepted_outcome.get("executed",false))):
+                    _fail("Score-ready command did not publish its accepted action and state")
+                    return true
+                values = accepted_state
                 # A fresh Practice Flow piece starts with Listen and may
                 # still be preparing audio. Transport remains in 'admitting'
                 # until the *Godot scene* commits physical score geometry.

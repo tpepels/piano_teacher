@@ -234,6 +234,33 @@ No runtime behavior or prior acceptance claim is changed in this design
 phase. Source inspection and existing tests must still run without a new
 failure. The baseline source and test result are recorded here.
 
+### V7 native failure triage and source-accurate Free acceptance - 2026-11-21
+
+Full native-production run
+[`44956142119`](https://github.com/tpepels/piano_teacher/actions/runs/44956142119)
+failed two distinct scenarios after the semantic-motion and
+typed-command migration. Embedded Python registration itself,
+the real-score semantic geometry and package all worked;
+the direct `native_bridge_smoke.gd` consumer still expected a
+flat `practice.command` response when `score_ready` now returns
+the explicit `{state, outcome}` protocol. The smoke now
+verifies that outcome, then tests the unmodified state snapshot.
+
+The full-scene fake MIDI scenario also found that the initial
+*authorized travel* of newly admitted Free notation was still
+in progress when wrong-input/silence hold measurement began.
+It now waits for the canonical target deadline, the genuinely
+held presentation world, and at least 250 ms of stationary
+**painted score** before delivering its wrong MIDI signal.
+The post-error 350 ms stationary assertion is unchanged; no
+additional lesson credit, tolerance for MIDI-driven movement
+or Free-target behavior was weakened. The stage is still
+required to produce and hold its real native target; missing
+one produces a bounded journey timeout, not a skipped test.
+
+The two fixes are integrated together and requested through a
+new full `[native]` gate; this is not yet physical acceptance.
+
 ### Native-production full-source rerun after timing and UI contract changes - 2026-11-21
 
 The previous native-production run showed that native compiler,

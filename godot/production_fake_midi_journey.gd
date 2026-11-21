@@ -11,6 +11,8 @@ var udp := PacketPeerUDP.new()
 var first_pitch := -1
 var initial_transport := -1
 var first_midi_input := -1
+var free_hold_world := NAN
+var free_hold_since_ms := -1
 var wrong_free_world := NAN
 var wrong_free_at_ms := -1
 var paused_world := NAN
@@ -128,6 +130,32 @@ func _process(_delta: float) -> bool:
             var targets: Array = state.get("teaching",{}).get("expected_notes",[])
             if targets.is_empty():
                 return false
+            # The first authored Free source is admitted in the FUTURE
+            # and travels to its fixed target before it becomes a held
+            # practice prompt. Waiting for the actual printed target to
+            # reach the playhead prevents a false failure that interprets
+            # this authorized initial travel as progress from wrong MIDI.
+            var free_owner = app.presentation_session.guided
+            var source_flow = app.presentation_session.score_flow
+            var now_ms: int = Time.get_ticks_msec()
+            if (not is_finite(free_owner.world) or
+                    not is_finite(source_flow.hold_world) or
+                    absf(source_flow.project(now_ms)-source_flow.hold_world) > .02):
+                free_hold_since_ms = -1
+                return false
+            if free_hold_since_ms < 0:
+                free_hold_since_ms = now_ms
+                free_hold_world = renderer.stream_world_beat
+                return false
+            if (absf(renderer.stream_world_beat-free_hold_world) > .02):
+                # Native score painting can still finish its frame after
+                # the world timeline reaches the held target. Require a
+                # stable displayed staff, not just a backend clock fact.
+                free_hold_since_ms = -1
+                return false
+            if now_ms-free_hold_since_ms < 250:
+                return false
+            print("FULL_SCENE_FREE_TARGET_HELD world=",free_hold_world)
             first_pitch = int(targets[0]["pitch"])
             first_midi_input = int(state.get("midi_input_count",0))
             _strike(61)
