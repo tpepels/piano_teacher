@@ -439,8 +439,11 @@ evidence-retention controls and exercise diagnostics now use
 consumer resolves dynamically. MIDI connection loss, preferred restoration, selection and calibration now
 run through `DeviceWorkflows`, which returns settings effects for the
 existing ordered settings transaction. The boundary retains the lock and
-the teaching-interruption precondition. Shutdown and the remaining
-source/device diagnostics must still be audited; S2 is **not complete**. Verify this
+the teaching-interruption precondition. The final shutdown ordering now belongs to `SessionLifecycle.shutdown`.
+The S2 operations are extracted; S2 remains **in verification** until
+core CI confirms all source, device, settings, history and shutdown paths.
+The public application boundary still applies the lock and source/course
+installation effects. Verify this
 commit in core CI before accepting its source mutation paths.
 
 ### Phase S2 — Source, device, configuration and history workflows

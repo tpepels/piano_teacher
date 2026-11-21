@@ -549,13 +549,8 @@ class PracticeEngine:
 
     def close(self) -> None:
         with self.lock:
-            if self.measurement.closed:
-                return
-            self._stop(reason="shutdown")
-            self.measurement.close()
-            with self.midi.selecting("", callback=self._receive):
-                pass
-            self.progress.close()
+            self.session_lifecycle.shutdown(
+                midi=self.midi, progress=self.progress, receive=self._receive)
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:

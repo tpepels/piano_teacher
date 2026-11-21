@@ -374,6 +374,10 @@ captured at service construction. Device connection lifecycle and calibration no
 rather than calling the engine or mutating configured policies itself.
 The short facade entry preserves source interruption ordering and locking.
 
+The final shutdown path shares `SessionLifecycle` and retains the
+evidence-close, MIDI-select-close and database-close ordering exactly.
+No shutdown workflow calls back into the engine.
+
 The active-take stop transaction now resides in
 `application/session_lifecycle.py`. The stop workflow owns ordered
 authorization invalidation, evidence interruption, cancellation and

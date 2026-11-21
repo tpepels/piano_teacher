@@ -55,3 +55,13 @@ class SessionLifecycle:
         self.attempt.reset_for_stop()
         self.live_input.reset_attempt()
         self.listen.cancel()
+
+    def shutdown(self, *, midi, progress, receive) -> None:
+        """Close the active evidence/device/database once, in established order."""
+        if self.measurement.closed:
+            return
+        self.stop(reason="shutdown")
+        self.measurement.close()
+        with midi.selecting("", callback=receive):
+            pass
+        progress.close()
