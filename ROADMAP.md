@@ -406,6 +406,19 @@ Exactly the selected one-to-four authored measures remain visible, with
 original closing barline, dim opposite hand and complete sounding tails;
 the final exam intentionally shows its full selected piece.
 
+### V5 retired control-policy owner - 2026-11-21
+
+The superseded Godot `practice_control_policy.gd` is removed. Its
+production consumers and the existing Godot control presentation
+fixture have been migrated to the backend-published `controls`
+contract and `ui_*` intent dispatch. The existing Godot syntax gate
+checks the actual command coordinator, physical admission gateway,
+presentation timeline, guided hold and presentation session instead
+of compiling the obsolete policy. No duplicate fallback remains.
+
+V5 remains open for the native effect-coordination audit, production
+integration and physical acceptance. No new unit tests were added.
+
 ### Phase V5 - Reduce Godot screens to presentation and raw intents
 
 **Implement:** Change `PracticeScreen` and `PracticeChrome` to render the

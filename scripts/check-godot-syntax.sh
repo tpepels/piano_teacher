@@ -28,7 +28,11 @@ for script in \
   res://command_success_policy.gd \
   res://command_success_presenter.gd \
   res://command_success_effects.gd \
-  res://practice_control_policy.gd \
+  res://practice_command_coordinator.gd \
+  res://score_admission_gateway.gd \
+  res://presentation_timeline.gd \
+  res://guided_presentation_session.gd \
+  res://practice_presentation_session.gd \
   res://metronome_frame_coordinator.gd \
   res://command_request_state.gd \
   res://navigation_policy.gd \

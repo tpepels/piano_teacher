@@ -255,6 +255,15 @@ segment cannot authorize local notation or count-in. Uncertain or
 mismatched authorization is reconciled against the backend ledger,
 not inferred from an asynchronous callback arriving successfully.
 
+### V5 obsolete native control policy retired
+
+The independent `PracticeControlPolicy` is removed. Raw UI gestures
+and controls are owned by the Python application projection, while
+`PracticeScreen` paints the backend facts. The existing native syntax
+gate now compiles the production coordinators for the actual playback
+admission and visual timeline instead of the dead policy. Other
+native domain-like responsibilities still require V5 audit and tests.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
