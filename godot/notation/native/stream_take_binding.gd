@@ -215,7 +215,11 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
             facts.world,right,
             header,planned_start_world,0.0,
             facts.density,facts.gap,facts.duration)
-        var onto_empty_strip := false
+        # An exact automatic continuation may be preflighted as an
+        # announced empty-strip opening. Do not reinterpret the one fixed
+        # deadline as an offscreen append after that physical proof.
+        var onto_empty_strip: bool = exact_authorized and \
+            empty_strip_count_in > 0.0
         if not is_finite(checked) and retry_placement:
             # A Retry is placed by Admission.retry_start (right edge at
             # once, after exposed ink, no REST_GAP/READY travel): the commit

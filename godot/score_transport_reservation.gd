@@ -54,27 +54,42 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     var survivors: Array = withdrawn["remaining"]
     var peer_floor: float = float(facts["peer_floor"])
     if action == "auto":
-        # The backend's direct repeat already began its one count-in bar at
-        # the preceding sounding end. Physical admission may consume that
-        # lead; it cannot choose a second musical deadline or extra runway.
+        # A fixed backend deadline never moves. Its first printed pixel
+        # must clear BOTH the outgoing source AND its authored rest.
+        # The previous preflight skipped rest ink, then Queue.enqueue
+        # correctly rejected the exact same deadline indefinitely.
         if not is_finite(exact_start_world) or exact_start_world <= world:
             return _refuse("expired_direct_repeat")
-        if not facts.has("peer_source_floor"):
-            return _refuse("missing_direct_repeat_peer_clearance")
+        if not facts.has("peer_source_floor") or \
+                not facts.has("peer_rest_floor") or not facts.has("playhead"):
+            return _refuse("missing_direct_repeat_physical_clearance")
         var incoming_left: float = exact_start_world-header
         for item in survivors:
-            if str(item.get("kind","source")) != "source":
-                continue
-            var ink: Vector2 = Admission.clip_bounds(item,density,staff_gap,duration)
+            var ink: Vector2 = Admission.clip_bounds(
+                item,density,staff_gap,duration)
             var ink_right: float = float(item["world_origin"])+ink.y/density
             if ink_right > incoming_left+.0001:
-                return _refuse("direct_repeat_overlaps_exposed_source")
-        var peer_source: float = float(facts["peer_source_floor"])
-        if is_finite(peer_source) and peer_source > incoming_left+.0001:
-            return _refuse("direct_repeat_overlaps_peer_source")
+                return _refuse("direct_repeat_overlaps_existing_ink")
+        var inside: bool = float(facts["playhead"])+ \
+            (incoming_left-preview_world)*density <= width
+        var empty: bool = false
+        if inside:
+            # The count-in can already have started before the state
+            # receipt. The canonical queue permits the fixed opening on
+            # an empty staff with no earlier source/peer ink ahead; the
+            # shared announced-slot policy proves this is a future onset.
+            var safe: float = Admission.announced_empty_strip_start(
+                survivors,preview_world,count_in_beats,header,
+                exact_start_world,float(facts["peer_source_floor"]),
+                density,staff_gap,duration,float(facts["peer_rest_floor"]))
+            if not is_finite(safe):
+                return _refuse("direct_repeat_cannot_open_on_empty_staff")
+            empty = true
+        elif incoming_left < peer_floor-.0001:
+            return _refuse("direct_repeat_overlaps_peer_ink")
         return {"ok":true,"mode":"append","action":action,
             "opening":source_opening,"start_world":exact_start_world,
-            "empty_strip":false,"remaining_count":survivors.size(),
+            "empty_strip":empty,"remaining_count":survivors.size(),
             "withdraw_owners":withdrawn["owners"].duplicate(),
             "reason":"authoritative_one_bar_repeat"}
     var was_paused: bool = bool(facts.get("was_paused",false))
