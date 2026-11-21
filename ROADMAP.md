@@ -796,6 +796,25 @@ of compiling the obsolete policy. No duplicate fallback remains.
 V5 remains open for the native effect-coordination audit, production
 integration and physical acceptance. No new unit tests were added.
 
+### V5 accepted command result is owned by the backend - 2026-11-21
+
+`practice.command` now returns a typed version-1 envelope
+`{state, outcome}`. The outcome identifies the actual action
+dispatched under Python's session lock, whether it executed,
+and its view-side navigation/settings/lesson-invalidation
+effects. Godot validates that outcome, uses the accepted effects,
+then forwards only the unchanged state body to the versioned
+application state inbox. It no longer reconstructs action
+semantics from a potentially stale displayed button label.
+`CommandSuccessPolicy` has deleted its separate guided navigation
+and calibration action sets. The Python fixture unwraps state
+for existing tests, and additional regression cases verify
+a real resolved `ui_pause` action plus the pure effects policy.
+
+This is a cross-language contract replacement, not a relocation
+of the native navigation branch. Core and native acceptance on
+this revision remain outstanding.
+
 ### Phase V5 - Reduce Godot screens to presentation and raw intents
 
 **Implement:** Change `PracticeScreen` and `PracticeChrome` to render the

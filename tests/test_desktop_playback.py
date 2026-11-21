@@ -407,3 +407,38 @@ def test_real_state_contract_includes_authoritative_motion_directive(practice_se
     assert result["presentation_directive"]["kind"] in (
         "hold", "target", "retain", "run")
     assert not problems(result), problems(result)
+
+
+def test_command_reply_carries_backend_resolved_action_outside_state(practice_session):
+    import json
+    from piano_teacher.state_contract import problems
+    session = practice_session(bars=1)
+    session.finish_listen()
+    session.finish_free()
+    current = session.ready_score()
+    payload = {"action":"ui_pause", "score_ready":True,
+               "score_revision":current["revision"],
+               "score_fingerprint":current["piece_fingerprint"]}
+    status, body = session.commands.request(
+        "practice.command", json.dumps(payload))
+    assert status == 0, body.decode()
+    reply = json.loads(body)
+    assert reply["outcome"] == {
+        "version":1, "executed":True, "action":"pause",
+        "effects":{"navigate_practice":False,
+                   "refresh_settings":False,"invalidate_lesson":False}}
+    assert reply["state"]["paused"]
+    assert "outcome" not in reply["state"]
+    assert not problems(reply["state"]), problems(reply["state"])
+    assert session.snapshot()["paused"]
+
+
+def test_command_navigation_effects_are_projected_only_in_backend():
+    from piano_teacher.application.control_projection import project_command_outcome
+    assert project_command_outcome("select_step")["effects"]["navigate_practice"]
+    assert project_command_outcome("learn_next")["effects"]["navigate_practice"]
+    assert project_command_outcome("skip_stage")["effects"]["navigate_practice"]
+    assert project_command_outcome("calibration_apply")["effects"]["refresh_settings"]
+    assert project_command_outcome("reset_path")["effects"]["invalidate_lesson"]
+    assert not project_command_outcome(None)["executed"]
+    assert not project_command_outcome(None)["effects"]["navigate_practice"]

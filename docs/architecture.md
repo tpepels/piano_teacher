@@ -404,6 +404,21 @@ projection until the next transaction commits. The production
 smoke gate now distinguishes those two cases, instead of requiring
 idle movement without musical permission.
 
+### A practice command returns an accepted action, not a second policy
+
+The in-process `practice.command` protocol has a versioned
+`{state, outcome}` result. Python resolves the raw gesture and
+projects the effects from the action it actually executed under
+the session lock. The native command coordinator validates the
+result before forwarding only the original state to
+`ApplicationStateInbox` and forwarding only the accepted
+effects to its UI presenters. The former Godot
+`GUIDED_NAVIGATION` and `CALIBRATION_ACTIONS` maps have been
+removed. Disabled gestures have an explicit nonexecuted
+outcome, so stale button labels cannot initiate navigation.
+No transient command outcome is inserted into persistent state
+or the source-bound playback timeline.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
