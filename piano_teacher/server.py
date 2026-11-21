@@ -46,6 +46,8 @@ from .application.session_notices import SessionNotices
 from .application.session_lifecycle import SessionLifecycle
 from .application.history_management import HistoryManagement
 from .application.source_workflows import SourceWorkflows
+from .application.policy_registry import PolicyRegistry
+from .application.settings_workflows import SettingsWorkflows
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -119,6 +121,14 @@ class PracticeEngine:
     @property
     def plan(self) -> LearningPlan | None:
         return self.source_identity.plan
+
+    @property
+    def assessment_policies(self) -> PracticeAssessmentPolicies:
+        return self.policy_registry.grading
+
+    @property
+    def practice_policy(self) -> PracticePolicyService:
+        return self.policy_registry.learning
 
     @property
     def score_artifacts(self) -> ScoreArtifacts:
@@ -264,8 +274,6 @@ class PracticeEngine:
         self.live_input = LiveInputView()
         self.assessment = AssessmentService()
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
-        self.assessment_policies = PracticeAssessmentPolicies.defaults(
-            self.assessment, grade_note_holds=self.library.settings["grade_note_holds"])
         self.midi_key_shortcuts = MidiKeyShortcuts(self.library.settings["midi_key_ranges"])
         self.library_health = LibraryHealth(self.library)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
@@ -298,10 +306,9 @@ class PracticeEngine:
         self.fukuda_mistakes = FukudaMistakeStore(self.db)
         self.learner_store = self.progress.learner_store
         self.learner_progress = LearnerProgress(self.learner_store)
-        self.practice_policy = PracticePolicyService(
-            self.progress.ledger,
-            diagnosis=self.library.settings["diagnosis_strategy"],
-            learner=self.library.settings["learner_strategy"])
+        self.policy_registry = PolicyRegistry(
+            assessment=self.assessment, ledger=self.progress.ledger,
+            settings=self.library.settings)
         self.midi_ingress = MidiIngress(self.midi,self.midi_calibration,self.midi_key_shortcuts,
             self.live_input,self.measurement,self.feedback_events)
         self.session_commands = SessionCommands()
@@ -346,6 +353,14 @@ class PracticeEngine:
             progress=self.progress, fukuda_mistakes=self.fukuda_mistakes,
             library=self.library, library_health=self.library_health,
             flow_session=self.flow_session, lock=self.lock, clock=self.now)
+        self.settings_workflows = SettingsWorkflows(
+            library=self.library, measurement=self.measurement,
+            lifecycle=self.session_lifecycle, notices=self.notices,
+            policy_registry=self.policy_registry,
+            midi_key_shortcuts=self.midi_key_shortcuts,
+            playback_session=self.playback_session,
+            visual_transport=self.visual_transport, progress=self.progress,
+            library_health=self.library_health, source_identity=self.source_identity)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -500,7 +515,7 @@ class PracticeEngine:
 
     def preferences(self) -> dict:
         with self.lock:
-            return self.library.public_settings()
+            return self.settings_workflows.preferences()
 
     def _learning_context(self, *, scope: str, start: float, end: float,
                           run_at: float | None = None) -> dict:
@@ -578,48 +593,8 @@ class PracticeEngine:
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
-            # Validate the complete configuration before anything changes.
-            # The one selectable exercise strategy never swaps the course.
-            proposed = self.library.propose_update(**changes)
-            before = self.library.settings["music_dir"]
-            intent = identifier()
-            self.measurement.event("settings_intent", {
-                "intent_id": intent, "before": {key: self.library.settings[key] for key in changes},
-                "after": {key: proposed[key] for key in changes}})
-            if proposed["midi_offset_ms"] != self.library.settings["midi_offset_ms"]:
-                self._stop(reason="calibration_changed")
-                self.feedback = "MIDI timing correction changed"
-                self.next_action = "Press Play to start a new attempt."
-            if proposed["mistake_response_strategy"] != self.library.settings["mistake_response_strategy"]:
-                self._stop(reason="policy_changed")
-                self.feedback = "Retry strategy changed"
-                self.next_action = "Press Play to start a new attempt."
-            prior_hold_grading = self.library.settings["grade_note_holds"]
-            updated = self.library.update(**changes)
-            if updated["grade_note_holds"] != prior_hold_grading:
-                # A setting change must not rescore an active take.
-                # Failed persistence leaves the take and policy intact.
-                self._stop(reason="grading_rule_changed")
-                self.assessment_policies = PracticeAssessmentPolicies.defaults(
-                    self.assessment, grade_note_holds=updated["grade_note_holds"])
-                self.feedback = "Note-hold grading changed"
-                self.next_action = "Press Play to start a new attempt."
-            if "midi_key_ranges" in changes:
-                self.midi_key_shortcuts.configure(updated["midi_key_ranges"])
-            self.measurement.event("settings_applied", {"intent_id": intent, "changes": changes})
-            if {"evidence_retention_days", "evidence_budget_mib"} & changes.keys():
-                if self.playback_session.running and not self.visual_transport.paused:
-                    self._pause_current_session()
-                self.progress.ledger.prune(days=proposed["evidence_retention_days"],
-                                           budget_mib=proposed["evidence_budget_mib"])
-            if {"diagnosis_strategy", "learner_strategy"} & changes.keys():
-                self.practice_policy = PracticePolicyService(
-                    self.progress.ledger,
-                    diagnosis=self.library.settings["diagnosis_strategy"],
-                    learner=self.library.settings["learner_strategy"])
-            if before != self.library.settings["music_dir"]:
-                self.library_health.reset()
-            return updated
+            return self.settings_workflows.update(
+                changes, pause_current=self._pause_current_session)
 
     def _active_tempo_map(self):
         """Reuse an immutable authored tempo map until stage or BPM changes.
@@ -643,14 +618,8 @@ class PracticeEngine:
 
     def exercise_diagnostics(self) -> dict:
         with self.lock:
-            if self.plan is None:
-                return {"loaded": False,
-                        "exercise_strategy": self.library.settings['exercise_strategy']}
-            return {"loaded": True, "exercise_strategy": self.plan.exercise_strategy.name,
-                    "tempo_segments": (self._active_tempo_map().as_segments()
-                                       if self._active_tempo_map() is not None else ()),
-                    "stage_key": self.plan.identity,
-                    **self.practice_policy.inspect(self.fingerprint, self.plan.identity)}
+            return self.settings_workflows.exercise_diagnostics(
+                tempo_map=self._active_tempo_map())
 
     def load_library(self, identifier: str) -> None:
         with self.lock:

@@ -364,8 +364,12 @@ source/plan identity and `SessionLifecycle` rather than holding a
 entry points. Source installation and fingering correction now live in
 `application/source_workflows.py`. Preparation is outside the short
 application lock, installation is inside it, and course-entry effects
-remain in the facade transaction until S3. Device/configuration
-workflows still require migration.
+remain in the facade transaction until S3. Settings and current-policy selection now live in
+`application/settings_workflows.py` and
+`application/policy_registry.py`. A saved preference change updates the
+one current grading/diagnosis instance, while source/transport and read
+consumers resolve that same instance; no stale policy reference is
+captured at service construction. Device workflows still require migration.
 
 The active-take stop transaction now resides in
 `application/session_lifecycle.py`. The stop workflow owns ordered

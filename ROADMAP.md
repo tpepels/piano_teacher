@@ -433,8 +433,11 @@ LearningPlan store is introduced. MIDI loading, validated installation, fingerin
 listing/open/health now execute through `SourceWorkflows`, with the
 source-mutation guard and application lock retained around installation.
 `PracticeEngine.load` composes the atomic installation with course entry;
-the source service receives no engine backreference. Device, configuration,
-shutdown and remaining diagnostics workflows are still pending; S2 is
+the source service receives no engine backreference. Settings validation, persistence, assessment/diagnosis policy replacement,
+evidence-retention controls and exercise diagnostics now use
+`SettingsWorkflows` and a single `PolicyRegistry` that every other
+consumer resolves dynamically. Device and shutdown workflows are still
+pending; S2 is
 **not complete**. Verify this
 commit in core CI before accepting its source mutation paths.
 
