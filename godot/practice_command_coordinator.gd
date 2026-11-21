@@ -98,14 +98,11 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
     practice_view.begin_action(action)
     if action not in ["start","restart","resume","score_ready"]:
         metronome_frame.cancel_reserved_count_in()
-    # The selected renderer already owns the exact ink clearance. The
-    # backend needs these measured beats BEFORE publishing an automatic
-    # continuation, including an auto-start after score_ready or Free.
-    # Preserve the command's musical selection; this is only presentation
-    # geometry from its matching, ready source.
-    if action in ["start","restart","resume","score_ready"] and \
-            score_session.is_ready():
-        var clearance: Dictionary = practice_view.stage.continuation_geometry()
+    # Send only the readiness owner's source-bound physical measurement;
+    # the command handler must never select a renderer or infer the score's
+    # geometry from the view tree.
+    if action in ["start","restart","resume","score_ready"]:
+        var clearance: Dictionary = score_session.continuation_geometry()
         if not clearance.is_empty():
             command = command.duplicate()
             command.merge(clearance,true)

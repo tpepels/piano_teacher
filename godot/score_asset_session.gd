@@ -187,6 +187,16 @@ func is_ready() -> bool:
         rendered_revision == revision and \
         _published_retained_generation == _renderer.retained_generation()
 
+## Source-bound measurement port. Only the owner that publishes the ready
+## native engraving may supply its physical rest/header clearance to the
+## musical scheduling contract. Presentation controls never inspect a
+## mutable stage tree or a half-compiled layout.
+func continuation_geometry() -> Dictionary:
+    if not is_ready() or not _renderer.has_method("short_rest_geometry"):
+        return {}
+    return _renderer.short_rest_geometry()
+
+
 func status() -> Dictionary:
     var ready: bool = is_ready()
     var stalled: bool = _loaded and _preparing_since_ms != -1 and \
