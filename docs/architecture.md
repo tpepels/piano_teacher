@@ -135,6 +135,22 @@ introduced. [Full core/native/repertoire/relocated-package acceptance
 passed on `81ae006f` with zero Godot script errors. Physical piano,
 audible and visual acceptance remain outstanding.
 
+### Physical MIDI error and exact-repeat geometry — 2026-11-21
+
+The actual Pathétique keyboard run on `9312b83c` exposed a removed
+`impact_callout` UI dependency and a fixed repeat rejected by the immutable
+source queue. `LiveMidiFeedback` now uses the existing effects owner only.
+`PracticeScoreStage.continuation_geometry` supplies native measured
+rest/header clearance through `PracticeCommandCoordinator` and
+`TransportActions`, including the `score_ready` handoff before the backend
+plans automatic deadlines. `ScoreTransportReservation` uses the same
+source/rest obstruction rules as `ScoreStreamQueue` and the existing
+`announced_empty_strip_start` proof for a late fixed source. Neither
+component may retime an authorized take or move already admitted ink.
+Queue failures expose the rejecting physical guard, and the existing
+native-production verifier fails on those errors. Source through
+`584f017a`; physical confirmation is outstanding.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

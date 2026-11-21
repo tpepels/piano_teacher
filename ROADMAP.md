@@ -937,6 +937,38 @@ A real piano is still needed to verify immediate Pause/Resume feel, whether
 Free remains stationary while thinking, and that source cropping shows exactly
 the selected window on screen. No physical, audible or visual success is claimed.
 
+## Physical MIDI session incident — 2026-11-21
+
+The player's Arch Linux / Godot 4.7.2 session on source `9312b83c`
+(pre-`81ae006f`) opened Beethoven's *Pathétique* II with a connected piano.
+The supplied runtime log contains **10** graded-MIDI `SCRIPT ERROR` exceptions
+caused by the removed `PracticeScoreStage.impact_callout` property, and **78**
+refused immutable score admissions paired with **78** preflighted
+`SCORE_TRANSPORT_COMMIT` failures on an automatic exact repeat. This is a
+real production failure despite green automated CI on other music.
+
+Corrective commits on `main`:
+
+- `fc299322`: remove the removed `impact_callout` call from
+  `LiveMidiFeedback`; retain `effects.react` and ledger-owned ink.
+- `5b6fb3b3`: read printed rest/header geometry from the matching ready
+  renderer and forward it in `score_ready`, Play, Retry and Resume commands;
+  Python installs it before automatic future deadlines are selected.
+- `907f29ad`: make fixed-repeat preflight account for physical printed
+  rests and use the existing safe announced-empty-strip policy; committed
+  notation and the backend deadline remain immutable.
+- `3b3b5a25`, `73adfb7e`: report the actual queue refusal and source
+  coordinates; correct the diagnostic's initial Godot syntax error.
+- `87a41370`: correct an obsolete assertion in the **existing**
+  score-stream checks that allowed an overlap with committed rest ink.
+- `584f017a`: fail the **existing** full-native positive journeys on
+  score-queue/preflight/commit runtime errors even if Godot exits zero.
+
+No new tests or fixtures. Fast/core CI passed on `584f017a`.
+[Full embedded/relocated-package verification](https://github.com/tpepels/piano_teacher/actions/runs/44927279888)
+was still running when recorded. **Physical Pathétique/MIDI acceptance and
+auditory/visual confirmation remain unverified.**
+
 ## Phase status and remaining acceptance
 
 ### Historical architecture re-audit — pre-correction log
