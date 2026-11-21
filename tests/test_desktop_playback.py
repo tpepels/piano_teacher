@@ -310,3 +310,40 @@ def test_wrong_and_missing_fake_midi_do_not_complete_a_clean_take(practice_sessi
     session.strike(60)
     session.tick(5.0*60.0/intent["bpm"])
     assert session.snapshot()["mastered"] == previous
+
+
+def test_guided_plan_deadline_changes_only_with_authenticated_source():
+    """No Free window inherits a prior source's possibly expired deadline."""
+    from dataclasses import replace
+    from piano_teacher.application.score_state_publisher import (
+        ScoreProjectionFacts, ScoreStatePublisher)
+
+    publisher = ScoreStatePublisher()
+    template = ScoreProjectionFacts(
+        fingerprint="piece", stage_key="window:1", revision=1,
+        transport_id=10, mode="learn", running=False, paused=False,
+        awaiting_score=False, bpm=40.0, presentation_bpm=40.0,
+        run_at=0.0, play_from_beat=0.0, announced=None,
+        announced_deadline=None, announcement_serial=0,
+        scheduled_start=None, timeline={}, next_count_in_beats=4.0,
+        next_count_in_meter=(4, 4), continuous_horizon_beats=4.0,
+        duration_beats=4.0, has_source=True)
+    state = {"phase": "guided_wait"}
+    publisher.prepare_guided(state, template, now=100.0)
+    initial = publisher.publish(dict(state), template)
+    assert initial and initial["deadline_at_ms"] > 100_000
+    # Re-polling the same source cannot create another guided plan.
+    publisher.prepare_guided(state, template, now=101.0)
+    assert publisher.publish(dict(state), template) == initial
+
+    # The next Free window starts directly, without returning through
+    # a timed/idle stage. It must obtain a fresh future authoring epoch.
+    next_source = replace(template, stage_key="window:2", revision=2)
+    assert publisher.publish(dict(state), next_source) is None
+    publisher.prepare_guided(state, next_source, now=200.0)
+    next_plan = publisher.publish(dict(state), next_source)
+    assert next_plan and next_plan["deadline_at_ms"] > 200_000
+    assert next_plan["plan_id"] != initial["plan_id"]
+    # Any later handoff also invalidates the old Free plan.
+    another_transport = replace(next_source, transport_id=11)
+    assert publisher.publish(dict(state), another_transport) is None

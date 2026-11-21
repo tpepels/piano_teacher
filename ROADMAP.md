@@ -569,6 +569,17 @@ still unverified in native Godot, and the complete MIDI/score/sound
 transition matrix and physical acceptance remain open. No new unit
 tests were added as instructed.
 
+### V4 backend source-identity regression witness - 2026-11-21
+
+The real `ScoreStatePublisher` is now exercised for a repeated
+same-source poll, a direct Free-to-Free window revision change,
+and a transport identity change. The source-keyed guided deadline
+must remain stable within one window, refuse publication for an
+unprepared new source, then generate a new strictly future
+`MusicalScheduler.guided` plan. This regression is integrated in
+the same Python CI playback module and complements the native
+frame-stepped target-cache check. It does not fake teaching policy.
+
 ### V1/V4 authored native-frame acceptance gate - 2026-11-21
 
 Added `tests/godot/authorized_timeline.gd` to the existing
