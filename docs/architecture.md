@@ -53,6 +53,28 @@ reading-horizon validation. The source identity, grading clock, displayed
 score and immutable admission ledger remain unchanged. This audit covers
 the migrated Python caller modules, not physical instrument acceptance.
 
+### Final runtime and dependency closure — 2026-11-21
+
+A full targeted scan across all 193 Python source modules and 146
+production Godot scripts found no old HTTP/socket bridge, alternate
+score renderer or abandoned practice-engine implementation in the
+active runtime. The native in-process adapter intentionally imports
+`PracticeEngine`; the headless `score_queue_next` entry remains
+an explicit test/command fixture contract; generated MusicXML is
+internal engraving/research data, and historical migration/coverage
+labels are not active alternate architecture. The developer MCP addon
+is not autoloaded and is removed by standalone packaging.
+
+All 77 `application/*.py` modules were separately checked for direct
+cross-owner state assignments; the remaining review/Recorder/rewind,
+scheduled strip and command context writers were moved to their
+authoritative owners by `daf466e6`. These are bounded source audits;
+unknown runtime reflection and physical behavior are not guaranteed.
+[Full core/native/relocated-package CI 44907200749](https://github.com/tpepels/piano_teacher/actions/runs/44907200749)
+passed on the final code source `daf466e6`. The only subsequent
+changes are documentation. Physical hardware/visual acceptance and
+a truly separate clean target machine have not been performed.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

@@ -144,6 +144,21 @@ two target successes; warm-ups and other courses retain their configured rule.
 Older history retains its recorded criteria. The owner explicitly requested
 these additional CI tests; physical acceptance remains separate.
 
+### Final architecture software acceptance — 2026-11-21
+
+The exact code revision `daf466e6` passed GitHub
+[run 44907200749](https://github.com/tpepels/piano_teacher/actions/runs/44907200749),
+including core and opt-in native-production jobs. Python reports **103
+passed, four optional skips**, coverage 73.6% lines / 53.3% branches;
+Godot parsing and four executed behaviour groups report no failures.
+Embedded CPython 3.14 registration, native source preparation, repertoire
+journeys and strict relocated standalone package build/boot also passed.
+Two checkout/package-content inspections reported
+`PACKAGE_CONTENTS_OK` and the verifier ended with
+`PASS LOCAL EMBEDDED PRODUCTION CONTROL`. No tests were added during
+this architectural extraction. A separate physical instrument, visual/audio
+judgment and independent clean machine are still required.
+
 ### Architecture refactor core acceptance — 2026-11-21
 
 At source `55e31dd2`, GitHub [core run 44906137747](https://github.com/tpepels/piano_teacher/actions/runs/44906137747)

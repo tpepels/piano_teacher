@@ -293,7 +293,7 @@ Physical acceptance still requires the instrument.
 
 ## PracticeEngine architecture replacement: implementation and acceptance (2026-11-21)
 
-**Status: source decomposition integrated and core verified; final software acceptance is still open.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
+**Status: S0–S7 source migration complete and existing core/native/package software gates passed on `daf466e6`; physical and independent clean-machine acceptance remain open.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
 has **2,783 nonblank/trailing-newline-adjusted source lines, 151,578 bytes and
 168 methods**. The [baseline core and native-production CI run
 44895386721](https://github.com/tpepels/piano_teacher/actions/runs/44895386721)
@@ -322,17 +322,20 @@ be reviewed and may be split or replaced; do not turn `PlaybackSession`,
 
 ### Current integrated implementation — 2026-11-21
 
-**Source:** `55e31dd2` on `main`; [core CI 44906137747](https://github.com/tpepels/piano_teacher/actions/runs/44906137747)
-passed **103 Python scenarios, 4 skips**, Python coverage **73.5% lines /
-53.3% branches**, Godot syntax OK and all four native-source behaviour
-groups with zero failures. Native embedded production/repertoire and strict
-relocated package verification on this source are **not yet accepted**;
-physical instrument/graphics/audio and an independent clean machine remain
-unverified. The full embedded/native/repertoire and relocated-package verifier
-**passed on `9fef7780`** ([run 44905418627](https://github.com/tpepels/piano_teacher/actions/runs/44905418627)):
-native registration, real-score loading, two `PACKAGE_CONTENTS_OK`
-checks and `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. That source
-predates the final command split and **does not certify `55e31dd2`**.
+**Accepted software source:** `daf466e6` on `main`;
+[core and full native/package run 44907200749](https://github.com/tpepels/piano_teacher/actions/runs/44907200749)
+passed both jobs. Core: **103 passed, 4 skipped**, informational
+Python coverage **73.6% lines / 53.3% branches**, Godot syntax OK,
+all four executed Godot behaviour groups with zero failures. Full
+production acceptance includes embedded Python/native registration,
+authentic score loading, default and repertoire/control journeys,
+two `PACKAGE_CONTENTS_OK` checks, and the strict relocated standalone
+package boot ending with `PASS LOCAL EMBEDDED PRODUCTION CONTROL`.
+Commits since `daf466e6` modify only documentation and do not
+change the runtime source. Physical instrument/graphics/audio inspection
+and installation on a distinct clean machine remain unverified.
+The earlier full gate on `9fef7780` passed as recorded in run 44905418627
+but is superseded by this final exact-source verification.
 
 | Phase | Implemented ownership and remaining exit gate |
 | --- | --- |
@@ -760,6 +763,21 @@ reuse the generator's accepted `StageChange` from their active command
 effect rather than silently preparing a second stage change, and ignore
 mismatched active command effects. An unused guided-start local is removed.
 Existing command, failure and persistence journeys must confirm these changes.
+
+**S7 complete runtime dependency scan (2026-11-21):**
+All **193 production Python modules** were checked for obsolete server,
+HTTP/socket, parallel renderer, headless-fixture and MusicXML source
+indicators, and all **146 production Godot scripts** (excluding the
+dev-only MCP addon) were scanned for the same obsolete native/transport
+patterns. The only relevant matches are the intentional
+`inprocess.py` import of the public facade, the explicit headless
+`score_queue_next` schema (not desktop admission), internal
+MusicXML/research expression handling and historical-data coverage
+labels/comments. No unintended alternative active runtime route was
+identified in this scan. The project config has no developer MCP autoload,
+and packaging removes the editor-only addon. This is a targeted source
+pattern and import audit, not proof against arbitrary dynamic behavior.
+Core and native/package gates passed at `daf466e6`.
 
 **S7 comprehensive application direct-writer audit (2026-11-21):**
 All **77** current `piano_teacher/application/*.py` production modules
