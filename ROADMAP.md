@@ -227,6 +227,24 @@ No runtime behavior or prior acceptance claim is changed in this design
 phase. Source inspection and existing tests must still run without a new
 failure. The baseline source and test result are recorded here.
 
+### V1/V3 real worker integration matrix - 2026-11-21
+
+The existing `tests/test_desktop_playback.py` was extended using
+its established `EngineCommands`, `PracticeEngine`, generated
+score and fake MIDI input port. Cases now cover exact lost-ACK
+reservation recovery, source/geometry/time witness conflicts,
+stale measurement refusal, bounded three-attempt failure, the
+120-second asset-unready timeout, failure-authorized receipt replay
+refusal, and incorrect/missing MIDI. These tests exercise the
+real backend transaction and teaching/transport machinery; no
+second transition/grading policy or fixture transport was introduced.
+
+**Verification open:** The environment can fetch and commit through
+the GitHub connector but lacks a checked-out project, Godot binary
+and configured MIDI device. The tests are committed but have not
+been executed here. Native scene-level presentation checks and
+connected-hardware acceptance are still required.
+
 ### Phase V1 - Build the deterministic real-path simulator
 
 **Implement:** A controllable monotonic time source and fake MIDI

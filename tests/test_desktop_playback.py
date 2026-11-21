@@ -17,7 +17,8 @@ def desktop_tempo(session):
     return session.ready_score()["playback_intent"]
 
 
-def reserve(session, intent, **changes):
+def physical_offer(session, intent, **changes):
+    """The native renderer's immutable physical witness, never a deadline."""
     values = {key: intent[key] for key in (
         "intent_id", "attempt", "take_id", "fingerprint", "stage_key", "revision", "hand")}
     sampled_ms = session.clock() * 1000.0
@@ -28,7 +29,11 @@ def reserve(session, intent, **changes):
                   world_origin=100.0, queue_generation=1,
                   renderer_generation=intent["revision"])
     values.update(changes)
-    return session.ask("playback.reserve", **values)
+    return values
+
+
+def reserve(session, intent, **changes):
+    return session.ask("playback.reserve", **physical_offer(session, intent, **changes))
 
 
 def present(session, intent, receipt):
@@ -191,3 +196,117 @@ def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(p
         assert result["transport_id"] != initial["transport_id"]
         assert session.snapshot()["bpm"] == next_bpm and session.snapshot()["running"]
         initial = result
+
+# V1/V3 real-path scenario coverage: actual in-process engine, canonical
+# lesson/session transition owners and fixture-injected MIDI note signals.
+
+
+def test_lost_reserve_ack_recovers_original_immutable_witness(practice_session):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    offer = physical_offer(session, intent)
+    original = session.ask("playback.reserve", **offer)
+    status = session.ask("playback.status")
+    assert status["state"] == "reserved"
+    assert status["reservation"] == original
+    assert not session.snapshot()["running"]
+    # An exact retransmission after the sample ages out is idempotent.
+    session.clock.at += 2.5
+    assert session.ask("playback.reserve", **offer) == original
+    assert session.ask("playback.status")["reservation"] == original
+    assert present(session, intent, original)["authorized"]
+    assert session.ask("playback.status")["reservation"] is None
+
+
+@pytest.mark.parametrize("mutate", [
+    {"world_origin": 101.0},
+    {"queue_generation": 2},
+    {"renderer_generation": -1},
+    {"travel_ms": 1.0},
+    {"sampled_at_ms": -1.0},
+])
+def test_recovered_reservation_rejects_changed_renderer_witness(practice_session, mutate):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    offer = physical_offer(session, intent)
+    receipt = session.ask("playback.reserve", **offer)
+    rejected(session, "playback.reserve", **{**offer, **mutate})
+    status = session.ask("playback.status")
+    assert status["reservation"] == receipt
+    assert status["reserved_segment_id"] == receipt["segment_id"]
+    assert not session.snapshot()["running"]
+    assert present(session, intent, receipt)["authorized"]
+
+
+def test_stale_physical_offer_never_creates_a_backend_receipt(practice_session):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    offer = physical_offer(session, intent)
+    session.clock.at += 2.5
+    rejected(session, "playback.reserve", **offer)
+    assert session.ask("playback.status")["reservation"] is None
+    assert session.snapshot()["playback_intent"]["intent_id"] == intent["intent_id"]
+    assert not session.snapshot()["running"]
+
+
+def test_three_failed_physical_attempts_end_admitting(practice_session):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    attempts = []
+    for _ in range(3):
+        attempts.append(intent["attempt"])
+        withdrawn = session.ask("playback.withdraw", intent_id=intent["intent_id"],
+                                attempt=intent["attempt"],
+                                reason="Simulated native queue could not reserve")
+        intent = session.snapshot().get("playback_intent")
+        if intent is None:
+            assert withdrawn["abandoned"]
+            break
+        assert not withdrawn["abandoned"]
+        assert withdrawn["next_attempt"] == intent["attempt"]
+    state = session.snapshot()
+    assert attempts == [0, 1, 2]
+    assert intent is None
+    assert state["playback_timeline"]["state"] == "failed"
+    assert state["phase"] != "admitting"
+    assert "native queue" in state["feedback"]
+    assert not state["running"]
+
+
+def test_unready_score_timeout_does_not_leave_endless_admitting(practice_session):
+    session = practice_session(bars=1)
+    desktop_tempo(session)
+    assert session.snapshot()["phase"] == "admitting"
+    state = session.tick(121.0)
+    assert state["playback_intent"] is None
+    assert state["playback_timeline"]["state"] == "failed"
+    assert state["phase"] != "admitting"
+    assert not state["running"]
+    assert state["next_action"]
+
+
+def test_failed_authorized_take_cannot_replay_its_old_receipt(practice_session):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    receipt = reserve(session, intent)
+    present(session, intent, receipt)
+    session.ask("playback.failure", take_id=intent["take_id"],
+                segment_id=receipt["segment_id"],
+                reason="Simulated authorized renderer disappeared")
+    rejected(session, "playback.present", intent_id=intent["intent_id"],
+             attempt=intent["attempt"], segment_id=receipt["segment_id"])
+    assert not session.snapshot()["running"]
+    assert session.snapshot()["playback_timeline"]["state"] == "failed"
+
+
+def test_wrong_and_missing_fake_midi_do_not_complete_a_clean_take(practice_session):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    receipt = reserve(session, intent)
+    present(session, intent, receipt)
+    previous = session.snapshot()["mastered"]
+    # This fixture's authentic right-hand pitches are 72 and 79.
+    session.clock.at = receipt["deadline_ms"]/1000.0
+    session.strike(60)
+    session.tick(5.0*60.0/intent["bpm"])
+    assert session.snapshot()["mastered"] == previous
