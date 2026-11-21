@@ -241,6 +241,20 @@ idle score hold and stronger wrong-Free/window assertions.
 This phase remains **unaccepted** until that run is green and
 local physical MIDI/audio remains an explicit manual gate.
 
+### V6 restored core timing assertion after outgoing-rest correction - 2026-11-21
+
+Core CI run
+[`44956108397`](https://github.com/tpepels/piano_teacher/actions/runs/44956108397)
+found one remaining OLD test fixture expecting a faster 48 BPM
+count-in gap within the preceding 40 BPM source. The engine
+correctly scheduled a full one-bar 40 BPM outgoing rest; the
+test still expected the former shortening and failed by one
+second. The desktop admission journey's fixed-deadline
+assertion is now aligned with the corrected musical contract,
+while still checking that the incoming take uses its selected
+new BPM. No compatibility fallback or rest-overlap exception
+was introduced. Fresh core CI is required to accept this edit.
+
 ### V3/V7 fixed one-bar faster-repeat clock defect - 2026-11-21
 
 Native-production GitHub Actions run

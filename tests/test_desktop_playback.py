@@ -182,7 +182,11 @@ def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(p
         state = session.tick(.001)
         incoming = state["playback_intent"]
         assert incoming["action"] == "auto" and incoming["bpm"] == next_bpm
-        assert incoming["fixed_deadline_ms"]/1000 == pytest.approx(start+4*60/bpm+4*60/next_bpm)
+        # The written rest remains on the outgoing source's clock. A
+        # faster next tempo begins only at the accepted new downbeat;
+        # using next_bpm here caused an actual native ink collision.
+        assert incoming["fixed_deadline_ms"]/1000 == pytest.approx(
+            start+4*60/bpm+4*60/bpm)
         if bpm == 80:
             assert state["streak"] == 1 and "1/2" in state["next_action"]
         final = [event for event in session.ask("feedback.events")["events"]
