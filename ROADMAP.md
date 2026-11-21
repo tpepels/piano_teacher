@@ -761,6 +761,20 @@ effect rather than silently preparing a second stage change, and ignore
 mismatched active command effects. An unused guided-start local is removed.
 Existing command, failure and persistence journeys must confirm these changes.
 
+**S7 comprehensive application direct-writer audit (2026-11-21):**
+All **77** current `piano_teacher/application/*.py` production modules
+were inspected for cross-owner direct writes to the visual transport,
+attempt, settlement, playback, selected source/lesson and scored MIDI
+state (including private `_attempt` / `_transport` references).
+The last actual offenders were repaired in `9df6a1ae`,
+`0a688d5b` and `daf466e6`; the final 77-module scan found zero
+remaining direct assignments matching those owner-write patterns.
+This covers explicit Python attribute assignments, not arbitrary
+dynamic introspection or physically observed graphics. On
+`daf466e6` core CI passed; the complete native/embedded/repertoire
+and relocated-package software gate is being verified separately.
+No new tests or alternate renderer or source policy were introduced.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public

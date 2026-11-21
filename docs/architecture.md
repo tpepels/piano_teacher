@@ -36,6 +36,15 @@ respective choices and receipts. This change must pass integration gates.
 
 ### Final VisualTransport state-writer audit — 2026-11-21
 
+The full 77-module application scan found no remaining direct writes
+to another owner's recognized attempt, playback, transport, source or
+lesson fields (including private owner references). The prior explicit
+writers in `PlaybackSession` were migrated in `daf466e6` to
+`AttemptRuntime.begin_timed_review`, `suspend_recording` and
+`VisualTransport.finish_rewind`; `SessionCommands` owns nested
+command-reason scopes in `0a688d5b`. This is an attribute-assignment
+audit; dynamic behavior and all physical acceptance remain separate.
+
 The application services no longer assign directly to the visual transport's
 `scheduled_start`, `rest_take_end`, `short_rest`,
 `next_boundary_beat` or `continuous_horizon_beats`. The transport
