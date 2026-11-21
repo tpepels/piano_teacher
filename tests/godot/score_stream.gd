@@ -105,20 +105,22 @@ func run() -> void:
     automatic_pool.install(automatic_canvas,windows)
     automatic_controller.bind_surface(automatic_canvas,automatic_pool,
         func(_beat: float) -> Array[Vector2]: return windows)
-    automatic_controller.append_source(geometry(0.0),0.0,4.0,0.0,"prepared")
+    automatic_controller.append_source(geometry(0.0),0.0,4.0,0.0,"prepared",true)
     var rest_snapshot: Array = automatic_controller.online_snapshot()
     var authored_rest: Dictionary = rest_snapshot[-1]
     check(str(authored_rest.get("kind","")) == "rest" and
         float(authored_rest.get("source_ceiling",INF)) < 4.0,
         "Count-in rest reserves physical header space without changing the musical bar")
-    var auto_facts: Dictionary = facts(automatic_controller,5.0)
+    # Source sounds from world 4 through 8. Its one-bar count-in rest
+    # occupies the musical interval [8,12); the next attack is at 12.
+    var auto_facts: Dictionary = facts(automatic_controller,9.0)
     var auto_plan: Dictionary = Reservation.plan_facts(
-        auto_facts,"auto",5.0,0.0,4.0,8.0)
+        auto_facts,"auto",9.0,0.0,4.0,12.0)
     check(bool(auto_plan.get("ok",false)),
         "Fixed one-bar repeat clears real retained written-rest ink")
     if bool(auto_plan.get("ok",false)):
         var next_armed: Dictionary = automatic_controller.arm_take(
-            geometry(5.0),5.0,0.0,6.7,0.4,8.0,
+            geometry(9.0),9.0,0.0,6.7,0.4,12.0,
             false,false,4.0,true)
         check(not next_armed.is_empty(),
             "A fixed one-bar repeat that passes physical preflight commits")
