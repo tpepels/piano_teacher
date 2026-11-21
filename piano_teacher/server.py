@@ -57,6 +57,7 @@ from .application.lesson_execution import LessonExecution
 from .application.score_read_services import ScoreReadServices
 from .application.session_read_models import SessionReadModels
 from .application.transport_timing import TransportTiming
+from .application.timed_playback import TimedPlayback
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -434,6 +435,17 @@ class PracticeEngine:
             attempt_settlement=self.attempt_settlement, score_read=self.score_read,
             midi_ingress=self.midi_ingress, playback=self.playback, clock=self.now)
 
+        self.timed_playback = TimedPlayback(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, playback_session=self.playback_session,
+            playback=self.playback, attempt_settlement=self.attempt_settlement,
+            session_commands=self.session_commands, teaching_decisions=self.teaching_decisions,
+            exposure_workflows=self.exposure_workflows, guided_session=self.guided_session,
+            visual_transport=self.visual_transport, midi=self.midi,
+            score_read=self.score_read, evidence_context=self.evidence_context,
+            transport_timing=self.transport_timing, lesson_execution=self.lesson_execution,
+            clock=self.now, lock=self.lock, phase=self._phase)
+
         self.read_models = SessionReadModels(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
             notices=self.notices, attempt=self.attempt,
@@ -574,7 +586,7 @@ class PracticeEngine:
             self.lesson_execution.begin_learn(from_beat=prepared.start,recovery=True,
                 exposure=self.attempt_settlement.pending.decision.next_exposure)
         elif prepared.action == "continue":
-            self._continue_at(SCHEDULER.continuation(
+            self.timed_playback.continue_at(SCHEDULER.continuation(
                 self.transport_timing.collect_continuation_measurement(deadline,prepared.start),
                 now=self.now(),bpm=self.transport_timing.presentation_bpm()),from_beat=prepared.start)
         else:
@@ -603,7 +615,7 @@ class PracticeEngine:
     def set_preferences(self, **changes) -> dict:
         with self.lock:
             return self.settings_workflows.update(
-                changes, pause_current=self._pause_current_session)
+                changes, pause_current=self.timed_playback.pause)
 
     def exercise_diagnostics(self) -> dict:
         with self.lock:
@@ -742,16 +754,6 @@ class PracticeEngine:
         with self.lock:
             return self.listen.audio_path(token)
 
-    def _start_listen_if_ready(self):
-        self._apply_listen_failure()
-        activation = self.playback_session.begin_listen_if_ready(
-            revision=self.score_revision,presentation_required=self.playback.presentation_required)
-        if activation.requested_count_in is not None:
-            self.transport_timing.request_playback(action="listen",mode="listen",from_beat=activation.from_beat,
-                count_in_beats=activation.requested_count_in)
-        elif activation.started:
-            self.feedback = "Count in, then listen"
-
     def _prepare_perform(self, *, scope: str = "current", exposure=None):
         return self.exposure_workflows.prepare_perform(scope=scope, exposure=exposure)
 
@@ -827,54 +829,24 @@ class PracticeEngine:
               loop_continuation: bool = False, scheduled_deadline: float | None = None,
               presentation_lead_seconds: float = 0.0, decided: bool = False,
               count_in_plan=None):
-        with self.lock:
-            self.playback_session.require_authorized_start(self.playback.presentation_required)
-            if self.plan is None:
-                raise ValueError("Open a piece first")
-            effect = self.session_commands.active
-            selected = None
-            pending = self.attempt_settlement.pending
-            if loop_continuation and pending is not None and pending.receipt is not None:
-                selected = pending.decision.next_exposure
-            elif decided:
-                selected = self.session_commands.prepared
-            if effect is None and not decided and not loop_continuation and scheduled_deadline is None:
-                effect = self._prepare_teaching("manual",action="start",
-                    from_beat=from_beat,store=False,values={"mode":mode})
-            if effect is not None:
-                selected = effect.decision.next_exposure
-                if selected is None:
-                    return
-                self._install_command(effect)
-            if selected is not None and selected.stage_key == self.plan.identity:
-                from_beat,mode = selected.from_beat,selected.mode
-            if self.playback_session.mode == "learn":
-                self._prepare_practice(exposure=selected)
-                return
-            self.guided_session.clear_selection()
-            self.guided_session.discard_return()
-            p = self.plan
-            started = self.playback_session.begin_timed(
-                TimedTakeSource(p.active_phrase,p.piece.bar_boundaries,
-                    p.piece.time_signatures,p.bpm,
-                    self.score_read.source_model()["practice_timeline"]["gap"]["duration_beats"]),
-                TimedStartRequest(mode=mode,
-                    position=self.open_from_beat if from_beat is None else from_beat,
-                    automatic=selected.automatic if selected is not None else mode == "practice",
-                    connected=self.midi.connected,loop_continuation=loop_continuation,
-                    scheduled_deadline=scheduled_deadline,
-                    presentation_lead_seconds=presentation_lead_seconds,
-                    count_in_plan=count_in_plan))
-            self.visual_transport.next_boundary_beat = started.next_boundary_beat
-            try:
-                self.playback_session.capture_start(self._learning_context(
-                    scope=started.scope,start=started.from_beat,end=started.end_beat,
-                    run_at=started.run_at))
-            except Exception:
-                self.feedback = "Could not record the start of this attempt"
-                raise
-            self.feedback = "Count in, then play"
-            self.next_action = started.next_action
+        return self.timed_playback.start(
+            from_beat=from_beat, mode=mode, loop_continuation=loop_continuation,
+            scheduled_deadline=scheduled_deadline,
+            presentation_lead_seconds=presentation_lead_seconds,
+            decided=decided, count_in_plan=count_in_plan)
+
+    def _resume_current_session(self, *, presentation_lead_seconds=0.0,
+                                reuse_pending_score=False,
+                                reuse_announced_score=False,
+                                scheduled_deadline=None):
+        completed = self.timed_playback.resume(
+            presentation_lead_seconds=presentation_lead_seconds,
+            reuse_pending_score=reuse_pending_score,
+            reuse_announced_score=reuse_announced_score,
+            scheduled_deadline=scheduled_deadline)
+        if completed.deferred_score_revision is not None:
+            self.control("score_ready", revision=completed.deferred_score_revision)
+        self.timed_playback.begin_listen_if_ready()
 
     def _commit_playback_intent(self, intent, receipt) -> None:
         """Apply source effects at the coordinator's single authorization gate."""
@@ -903,31 +875,6 @@ class PracticeEngine:
                 self.playback_session.start_listen(revision=self.score_revision,
                     count_in=intent.count_in,deadline=authorized.deadline)
                 self.feedback = "Count in, then listen"
-
-    def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
-        """Continue only through the unified score-admission gate."""
-        if self.playback.presentation_required:
-            self.playback_session.prepare_admitted_continuation()
-            self.transport_timing.request_playback( action="auto", mode=self.playback_session.mode,
-                from_beat=from_beat, earliest_deadline=deadline,
-                fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
-            self.visual_transport.scheduled_start = None
-            self.feedback = "Preparing the next passage"
-            return
-        announced = self.visual_transport.announced_deadline(from_beat)
-        serial = (self.visual_transport.announce_serial
-                  if announced is not None and abs(announced - deadline) <= 1e-9 else None)
-        self.start(from_beat=from_beat, mode=self.playback_session.mode, loop_continuation=True,
-                   scheduled_deadline=deadline,
-                   count_in_plan=(CountInPlan.create(
-                       bar_beats=self.transport_timing.next_count_in_beats(),
-                       meter=tuple(self.transport_timing.next_count_in_meter()),bpm=self.plan.bpm,
-                       beats=self.transport_timing.next_count_in_beats()) if self.lesson_execution.flow_active() else None))
-        self.visual_transport.scheduled_start = (
-            self.playback_session.transport_id, self.visual_transport.play_from_beat,
-            self.visual_transport.run_at, self.plan.identity,
-            self.score_revision, serial)
-        self.playback_session.retain_announced_count_in(bpm=self.plan.bpm)
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:
@@ -972,7 +919,7 @@ class PracticeEngine:
                     if not self.midi.connected:
                         raise ValueError("Connect a MIDI piano before setting its key range")
                     if self.playback_session.running and not self.visual_transport.paused:
-                        self._pause_current_session()
+                        self.timed_playback.pause()
                     self.midi_key_shortcuts.begin_capture(self.midi.device)
                 return
             if route == "reset":
@@ -995,7 +942,7 @@ class PracticeEngine:
             decision = self.playback_session.score_acknowledged(revision,
                 current_revision=self.score_revision,teaching_bound=self.teaching is not None)
             if decision == "listen":
-                self._start_listen_if_ready()
+                self.timed_playback.begin_listen_if_ready()
             elif decision == "learn":
                 self.teaching.start(now=self.now())
             elif decision == "practice":
@@ -1020,7 +967,7 @@ class PracticeEngine:
                         self.playback_session.transport_id,self.visual_transport.play_from_beat,
                         self.visual_transport.run_at,self.plan.identity,self.score_revision,None)
         elif self.playback_session.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
-            self._start_listen_if_ready()
+            self.timed_playback.begin_listen_if_ready()
 
     def _control_listening(self, action: str, kwargs: dict) -> None:
         if action == "listen":
@@ -1122,7 +1069,7 @@ class PracticeEngine:
                 self._start_or_restart(
                     action, presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs))
         elif action == "pause":
-            self._pause_current_session(
+            self.timed_playback.pause(
                 pending_admission=self.playback_session.suspend_admission(self.playback))
         elif action == "resume":
             self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
@@ -1222,42 +1169,6 @@ class PracticeEngine:
                    scheduled_deadline=scheduled_deadline,
                    presentation_lead_seconds=presentation_lead_seconds)
         return
-
-    def _pause_current_session(self, *, pending_admission: bool = False):
-        now = self.now()
-        context = ("admitting" if pending_admission else self._phase(now)) \
-            if not self.visual_transport.paused else ""
-        self.playback_session.pause(context=context,now=now)
-        if self.playback_session.mode == "learn" and self.teaching is not None:
-            self.teaching.pause(now=now)
-
-    def _resume_current_session(self, *, presentation_lead_seconds: float = 0.0,
-                                reuse_pending_score: bool = False,
-                                reuse_announced_score: bool = False,
-                                scheduled_deadline: float | None = None):
-        resumed = self.playback_session.resume_timeline(ResumeRequest(
-            learning=self.playback_session.mode == "learn" and self.teaching is not None,
-            bpm=self.plan.bpm if self.plan is not None else None,
-            full_count_in_beats=self.transport_timing.next_count_in_beats(),
-            midi_connected=self.midi.connected,reading_lead_seconds=presentation_lead_seconds,
-            reuse_pending_score=reuse_pending_score,scheduled_deadline=scheduled_deadline))
-        if resumed.learning:
-            self.teaching.resume(now=resumed.now)
-        announced = self.visual_transport.announced_continuation
-        self.visual_transport.reannounce_after_rest_pause(RestResumeFacts(
-            now=resumed.now,reading_lead_seconds=presentation_lead_seconds,
-            running=self.playback_session.running,mode=self.playback_session.mode,
-            bpm=self.plan.bpm if self.plan is not None else None,
-            presentation_bpm=self.transport_timing.presentation_bpm(),horizon_beats=self.visual_transport.continuous_horizon_beats,
-            physical_rest_enabled=self.visual_transport.short_rest is not None,
-            rest=(self.transport_timing.collect_rest_measurement(from_beat=announced[0],source_end=0.0)
-                if announced is not None else None),reuse=reuse_announced_score))
-        completion = self.playback_session.finish_resume(resumed)
-        if completion.feedback is not None:
-            self.feedback = completion.feedback
-        if completion.deferred_score_revision is not None:
-            self.control("score_ready",revision=completion.deferred_score_revision)
-        self._start_listen_if_ready()
 
     def _change_stage(self, action: str, kwargs: dict):
         """Change the active lesson or tempo while preserving scoring state."""
@@ -1370,7 +1281,7 @@ class PracticeEngine:
             if applied.feedback is not None:
                 self.feedback = applied.feedback
             if applied.start is not None:
-                self._continue_at(applied.start.deadline,from_beat=applied.start.from_beat)
+                self.timed_playback.continue_at(applied.start.deadline,from_beat=applied.start.from_beat)
 
     def _start_remedial_assignment(self, assignment: RemedialAssignment,
                                    *, deadline: float | None = None, exposure=None) -> None:
@@ -1398,7 +1309,7 @@ class PracticeEngine:
         self.attempt.prepare_recovery(prepared)
         self.feedback,self.next_action = prepared.feedback,prepared.next_action
         if prepared.action == "continue":
-            self._continue_at(SCHEDULER.continuation(
+            self.timed_playback.continue_at(SCHEDULER.continuation(
                 self.transport_timing.collect_continuation_measurement(deadline,prepared.start),
                 now=self.now(),bpm=self.transport_timing.presentation_bpm()),from_beat=prepared.start)
 
@@ -1491,7 +1402,7 @@ class PracticeEngine:
             if self.playback.presentation_required:
                 # The next preview must be admitted during the rest, not at
                 # the previous retry deadline after its count-in is over.
-                self._continue_at(self.visual_transport.next_at,
+                self.timed_playback.continue_at(self.visual_transport.next_at,
                     from_beat=0.0)
             elif now >= self.visual_transport.next_at:
                 self._update()
@@ -1677,7 +1588,7 @@ class PracticeEngine:
             deadline = self.visual_transport.next_at
             self.visual_transport.advance_source_stride(self.score_read.source_model()[
                 "practice_timeline"]["stride_beats"])
-            self._continue_at(SCHEDULER.continuation(
+            self.timed_playback.continue_at(SCHEDULER.continuation(
                     self.transport_timing.collect_continuation_measurement(deadline, 0.0),
                     now=self.now(),bpm=self.transport_timing.presentation_bpm()))
         elif decision.action == "feedback":
@@ -1693,7 +1604,7 @@ class PracticeEngine:
                     exposure=self.attempt_settlement.pending.decision.next_exposure)
             else:
                 target = self.visual_transport.pending_rewind
-                self._continue_at(
+                self.timed_playback.continue_at(
                     SCHEDULER.continuation(
                     self.transport_timing.collect_continuation_measurement(self.visual_transport.next_at, target),
                     now=self.now(),bpm=self.transport_timing.presentation_bpm()),

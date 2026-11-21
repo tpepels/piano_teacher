@@ -503,9 +503,13 @@ selection/execution contract with passing existing behaviour CI.
 tempo-map cache read, authored elapsed conversion, count-in, exact
 source-bound playback facts, continuation/rest clearance, presentation
 lead and musical-seconds projections. It retains the existing
-PlaybackCoordinator/PlaybackSession/VisualTransport authority. Timed
-start/resume/Retry and control dispatch remain in the facade; S4 is
-**not complete**. The migration must pass core and native CI.
+PlaybackCoordinator/PlaybackSession/VisualTransport authority. Authorized timed starts, exact continuation scheduling, Listen readiness
+and Pause/Resume execution now use `TimedPlayback`. The engine's
+public `start` entry remains, and the sole deferred score-ready command
+is issued by the application boundary after Resume completes; the
+PlaybackSession service never calls an engine method. Control dispatch,
+automatic outcomes and tick processing still require extraction;
+S4 is **not complete**. The migration must pass core and native CI.
 
 ### Phase S4 — Command dispatch and authorized playback
 
