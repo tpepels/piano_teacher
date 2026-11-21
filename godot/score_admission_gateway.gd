@@ -33,6 +33,7 @@ var missing_score_frames := 0
 var reported_failure_segment := ""
 var _last_problem := ""
 var _last_problem_ms := -100000
+var last_rejected_fixed_intent := ""
 
 func _report_problem(message: String) -> void:
     var now_ms: int = Time.get_ticks_msec()
@@ -72,6 +73,25 @@ func _backend_ms() -> float:
     # supported Linux builds. No sampled UI/backend offset is used for the
     # transaction's graded deadline.
     return float(bus.native.call("monotonic_milliseconds"))
+
+func _reject_fixed_intent(intent: Dictionary, reason: String) -> void:
+    # An announced automatic repeat has only one immutable deadline.
+    # If that slot has expired or physically overlaps ink, waiting for
+    # another frame or inventing a later slot is incorrect. Ask the
+    # authoritative backend to retire that exact pending attempt.
+    var key: String = str(intent.get("intent_id","")) + ":" + \
+        str(intent.get("attempt",-1))
+    if key == last_rejected_fixed_intent or withdraw_request.is_pending():
+        return
+    var payload := {
+        "intent_id":str(intent.get("intent_id","")),
+        "attempt":int(intent.get("attempt",-1)),
+        "reason":reason,
+    }
+    if withdraw_request.request("playback.withdraw",payload) == OK:
+        last_rejected_fixed_intent = key
+        _report_problem(reason)
+
 
 func _matching_renderer(intent: Dictionary):
     if score_session != null and score_session.matches_ready_source(intent):
@@ -172,14 +192,16 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
     var fixed: Variant = intent.get("fixed_deadline_ms")
     if fixed != null:
         if action != "auto" or not is_finite(float(fixed)) or float(fixed) <= backend_now:
-            _report_problem("Direct repeat deadline expired before score admission")
+            _reject_fixed_intent(intent,
+                "Direct repeat deadline expired before score admission")
             return
         var exact_world: float = flow.project_authored_future(
             frame_ms+roundi(float(fixed)-backend_now),frame_ms,
             float(state.get("clock_beat",0.0)),tempo,authored)
         planned = view.reserve_continuation_at(world,opening,exact_world,count_in)
         if planned.is_empty():
-            _report_problem("Cannot admit the direct repeat at its one-bar deadline")
+            _reject_fixed_intent(intent,
+                "Cannot admit the direct repeat at its one-bar deadline")
             return
     if action == "resume" and partial > 0.0:
         # Reuse an already-spoken count-in only when the ORIGINAL unexposed
@@ -488,8 +510,13 @@ func _cancel_provisional() -> void:
     pending_reconciliation = false
     started_ms = -1
 
-func _withdrawn(_code: int, _body: PackedByteArray) -> void:
-    pass
+func _withdrawn(code: int, body: PackedByteArray) -> void:
+    # The backend may already have expired/superseded this attempt.
+    # No local retry creates a second deadline: the next authoritative
+    # state snapshot decides whether another attempt exists.
+    if code != 0:
+        _report_problem("Could not retire score reservation: " +
+            Request.failure_message(code,body))
 
 func _failure_reported(code: int, body: PackedByteArray) -> void:
     if code != 0:

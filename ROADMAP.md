@@ -286,6 +286,17 @@ resulting action projection, demonstrable through the V1 runner.
 Read/poll does not execute transitions. No Godot component independently
 infers an enabled musical action, target tempo or next lesson decision.
 
+### V3 fixed-repeat native rejection - 2026-11-21
+
+The native physical gateway now explicitly withdraws a fixed
+automatic-repeat intent as soon as its announced one-bar downbeat
+has expired or fails immutable-score preflight. It deduplicates the
+withdrawal by intent/attempt and lets the Python transaction owner
+mark the missed fixed deadline as terminal. No renderer-side retry
+can silently move that exact musical repeat later. The normal
+general-purpose 120-second admission wait remains available for
+legitimately slow source engraving and transient new-take readiness.
+
 ### V3 bounded admission lifecycle - 2026-11-21
 
 The Python playback transaction now owns the admission retry budget

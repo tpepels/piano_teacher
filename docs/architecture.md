@@ -279,6 +279,17 @@ reinsert the same plan.
 These invariants are enforced by existing owners instead of
 introducing a second application state machine in Godot.
 
+### Bounded failed-admission recovery
+
+The Python playback owner bounds failed physical offers (three
+attempts) and pending admission lifetime (120 seconds), retires
+expired fixed automatic repeats immediately, and projects terminal
+reasons into the practice feedback model. The Godot physical adapter
+explicitly withdraws a fixed repeat that cannot fit its immutable
+slot, deduplicating by intent/attempt without selecting a replacement
+musical deadline. A native failure can therefore leave `admitting`
+and restore manual retry instead of waiting indefinitely.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
