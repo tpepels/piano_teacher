@@ -102,6 +102,12 @@ func _matching_renderer(intent: Dictionary):
 func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> void:
     var view = _matching_renderer(intent)
     if view == null or not is_instance_valid(view):
+        var fixed: Variant = intent.get("fixed_deadline_ms")
+        if fixed != null:
+            var now: float = _backend_ms()
+            if is_finite(now) and is_finite(float(fixed)) and now >= float(fixed):
+                _reject_fixed_intent(intent,
+                    "Direct repeat expired while its score was not ready")
         return
     if (str(state.get("piece_fingerprint","")) != str(intent.get("fingerprint",""))
             or int(state.get("revision",-1)) != int(intent.get("revision",-2))):
@@ -452,7 +458,10 @@ func _status_received(code: int, body: PackedByteArray) -> void:
         # With no local receipt, we have not sent playback.present.
         # The backend therefore cannot have authorized THIS tentative
         # arm. A different/absent ledger reservation means rollback.
-        _cancel_provisional()
+        var same_pending: bool = (
+            str(status.get("intent_id","")) == str(current.get("intent_id",""))
+            and int(status.get("attempt",-1)) == int(current.get("attempt",-2)))
+        _cancel_provisional(same_pending)
         return
     var expected: String = str(receipt.get("segment_id",""))
     if (str(status.get("active_segment_id","")) == expected and
@@ -469,8 +478,12 @@ func _status_received(code: int, body: PackedByteArray) -> void:
         _send_presentation()
         return
     # The backend has no matching active or reserved segment.
-    # Withdraw only the local provisional ink, never the prior live take.
-    _cancel_provisional()
+    # Withdraw the attempt only while it is still the backend's pending
+    # intent. A newer/abandoned intent has already superseded it.
+    var same_pending: bool = (
+        str(status.get("intent_id","")) == str(current.get("intent_id",""))
+        and int(status.get("attempt",-1)) == int(current.get("attempt",-2)))
+    _cancel_provisional(same_pending)
 
 
 func _confirm_authorized(data: Dictionary) -> void:
@@ -550,10 +563,10 @@ func _clear_provisional() -> void:
     started_ms = -1
 
 
-func _cancel_provisional() -> void:
+func _cancel_provisional(withdraw_backend: bool = true) -> void:
     if renderer != null and is_instance_valid(renderer):
         renderer.cancel_stream_arm()
-    if not current.is_empty() and not withdraw_request.is_pending():
+    if withdraw_backend and not current.is_empty() and not withdraw_request.is_pending():
         withdraw_request.request("playback.withdraw",{
             "intent_id":str(current["intent_id"]),
             "attempt":int(current["attempt"]),
@@ -568,6 +581,10 @@ func _withdrawn(code: int, body: PackedByteArray) -> void:
     # No local retry creates a second deadline: the next authoritative
     # state snapshot decides whether another attempt exists.
     if code != 0:
+        # A denied withdrawal may reflect a source already superseded by
+        # the Python owner. A failed fixed-repeat withdrawal must be
+        # retryable rather than cached forever as a completed rejection.
+        last_rejected_fixed_intent = ""
         _report_problem("Could not retire score reservation: " +
             Request.failure_message(code,body))
 

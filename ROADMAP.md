@@ -384,6 +384,21 @@ receipt. Native `playback.present` replies still require the full
 intent/attempt/take/segment identity. This preserves authorization
 after a lost present ACK without accepting an unrelated take.
 
+### V3 missing renderer / authoritative-cancel race - 2026-11-21
+
+A fixed automatic repeat now expires immediately even when no
+matching/ready native renderer is present: the gateway explicitly
+withdraws the impossible deadline rather than silently waiting
+for the generic admission timeout. A failed fixed-repeat withdrawal
+remains retryable after its request completes.
+
+Native cancellation after `playback.status` now distinguishes
+a still-pending backend intent from one already replaced or removed.
+Only the former requires a `playback.withdraw` to advance the
+authoritative attempt; a verified superseded intent retracts local
+provisional ink without issuing a stale backend withdrawal. Prior
+live/authorized notation remains untouched.
+
 ### V3 local transaction cleanup and late-present idempotence - 2026-11-21
 
 A confirmed segment can appear in a backend state poll before its
