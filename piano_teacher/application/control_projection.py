@@ -68,11 +68,15 @@ def project_controls(s: Mapping) -> dict:
     if s.get("loaded"):
         listen = (None if s.get("mode") == "listen" else "listen") if course else (
             "practice" if s.get("mode") == "listen" else "listen")
+    # Returning from standalone Listen is a mode action, not score
+    # admission; the prior UI permitted it without ready notation.
+    needs_score = (main not in (None, "pause", "resume") and
+                   not (not course and s.get("mode") == "listen" and not moving))
     return {
         "transport_active": moving, "flow_active": course,
         "primary": {"action": main or "", "label": caption(s, main, moving, course),
                     "enabled": main is not None,
-                    "requires_score": main not in (None, "pause", "resume")},
+                    "requires_score": needs_score},
         "pause": {"action": pause or "", "enabled": pause is not None},
         "retry": {"action": retry or "", "enabled": retry is not None, "requires_score": True},
         "listen": {"action": listen or "", "enabled": listen is not None},

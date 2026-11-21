@@ -155,6 +155,35 @@ script errors or reported immutable admission refusals. The exact
 Pathétique II hardware session was not reproduced by CI and remains
 open for connected-piano, sound and visual acceptance.
 
+### V0/V2 migration in progress - Python-owned visible controls (2026-11-21)
+
+The active [V0-V7 roadmap](../ROADMAP.md#active-roadmap-ui-boundary-and-midi-transition-verification-v0-v7-2026-11-21)
+addresses the remaining cross-language behavior split after the S0-S7
+Python refactor. Previously `PracticeCommandCoordinator` interpreted
+primary/Pause/Retry/Listen through Godot's `PracticeControlPolicy` while
+`PracticeScreen` independently chose captions and disabled controls.
+Both could disagree with backend phase and visual/admission status.
+
+The first migrated production route is now: Godot button or shortcut emits
+a `ui_*` gesture with native score readiness -> `practice.command`
+-> `PracticeControls` resolves the gesture from its current snapshot
+under the session lock -> existing authoritative `TeachingDecisions` and
+`TransportActions` apply the command -> the read model publishes the
+`controls` projection consumed by the native screen. Pending Pause uses
+the last published backend action only to manage an outstanding native
+request. The score still must be physically ready for start/restart
+authorization. Explicit legacy public commands continue to work during
+the migration.
+
+This is **not** completion of V0 or V2. Native admission and deadline
+selection still span `ScoreAdmissionGateway` and Python; the visual
+`PresentationTimeline` still has native hold/rate logic, and the old
+`practice_control_policy.gd` is retained pending a complete consumer
+sweep. The complete event/transition graph, defect witnesses and
+deterministic simulated-MIDI/real-Godot tests are not yet implemented.
+New unit tests are deferred at the owner's request, and no physical
+or CI acceptance is inferred.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

@@ -39,7 +39,7 @@ The separate final examination uses the whole original piece.
 
 ## Active roadmap: UI boundary and MIDI transition verification (V0-V7, 2026-11-21)
 
-**Status: PLANNED. V0-V7 have not been implemented or accepted.** This is the
+**Status: IN PROGRESS. Initial V0 ownership tracing and a V2 control-intent migration have begun; no phase is complete or accepted.** This is the
 next architectural workstream. It does not undo the completed Python
 `PracticeEngine` S0-S7 decomposition; it addresses the remaining distribution
 of behavior between Python and Godot. Prior green CI and package runs are
@@ -108,14 +108,39 @@ continuation or partial grading.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| V0 | Full transition/ownership audit and reproducible failure witnesses | Not started |
-| V1 | Deterministic end-to-end MIDI/Godot simulation harness | Not started |
-| V2 | Canonical transition, action and presentation contracts | Not started |
+| V0 | Full transition/ownership audit and reproducible failure witnesses | In progress; UI control handoff traced, complete graph and defect witnesses pending |
+| V1 | Deterministic end-to-end MIDI/Godot simulation harness | Not started; new unit tests deferred by owner |
+| V2 | Canonical transition, action and presentation contracts | In progress; four UI control gestures migrated, remaining transition/admission contract pending |
 | V3 | Unify graphical admission and playback transaction decisions | Not started |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | Not started |
 | V5 | Strip application decisions out of Godot UI and effect coordinators | Not started |
 | V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Not started |
 | V7 | Integrated production/package verification and physical acceptance | Not started |
+
+### Initial implementation record - 2026-11-21
+
+**Source commit [`afb84e9`](https://github.com/tpepels/piano_teacher/commit/afb84e9eff5c580b3ff0ed238b5ef162ecbed52b):**
+`application/control_projection.py` now derives the primary,
+Pause/Resume, Retry and Listen action semantics and visible primary label
+from the same Python session state. `SessionReadModels.snapshot()`
+publishes a read-only `controls` model. `PracticeControls.control()`
+resolves `ui_primary`, `ui_pause`, `ui_retry` and `ui_listen`
+against the *current* backend state under the session lock, then uses
+the existing teaching/transport routing; existing explicit command
+operations are unchanged. The native coordinator forwards raw gestures
+with measured renderer readiness; `PracticeScreen` reads the published
+primary action/label/availability rather than deciding these locally.
+`CommandRequestState` keeps the pending Pause behavior using the
+backend-published action without authorizing playback in Godot.
+
+**Open:** `practice_control_policy.gd` remains until all consumers
+and legacy tests are migrated; additional buttons and physical shortcuts
+still have legacy client-side interpretation; score admission/deadline
+and visual-clock decisions have **not** moved. V0-V7 are not complete.
+No new unit tests were written, per the owner's latest instruction.
+Neither native build/CI nor physical piano acceptance is claimed for
+this revision. Existing CI and native journeys must be run before any
+acceptance claim; deterministic full-transition tests remain V1/V6 scope.
 
 ### Phase V0 - Trace the complete production state machine
 
