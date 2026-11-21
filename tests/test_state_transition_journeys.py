@@ -174,7 +174,12 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
     assert counts.get(session.engine.source_identity.plan.identity,0) == 2, (
         counts, progress, aid["flow"])
     assert aid["lesson_level"] != "original" and "Simplified:" in aid["flow"]["message"], (
-        counts, aid["flow"], aid.get("guided_recovery"))
+        "returns="+str(counts),
+        "message="+str(aid["flow"].get("message")),
+        "lesson_level="+str(aid["lesson_level"]),
+        "recovery="+str(aid.get("guided_recovery")),
+        "active_remediation="+repr(session.engine.attempt.remediation_active),
+        "lesson_generator="+type(session.engine.source_identity.plan.lesson_generator).__name__)
     assert len(session.ask("score.semantic")["notes"]) < len(original["notes"])
     assert aid["mastered"] == 0
     session.finish_free()
