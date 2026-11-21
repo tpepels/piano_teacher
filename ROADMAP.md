@@ -372,6 +372,12 @@ audit before its exit gate can be declared. The first state-owner commit
 This follow-up must pass CI separately; native production and physical
 acceptance have not been rerun on it.
 
+The active stop transaction has now been moved to
+`application/session_lifecycle.py` with individually injected lifecycle
+owners, not an Engine reference. The facade retains a short private command
+entry for its 22 callers. This is an S4 foundation, not completion of S4;
+public command handling and transport execution remain to be extracted.
+
 ### Phase S0 — Full responsibility and dependency design
 
 - Inventory **all 168 methods**, engine fields and assignment sites; map

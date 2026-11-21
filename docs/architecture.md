@@ -356,6 +356,13 @@ the visual transport owns scheduling/rest metadata, and SessionCommands
 owns its command reason. The full workflow and transaction decomposition is
 still open; these new owners do not establish phase completion.
 
+The active-take stop transaction now resides in
+`application/session_lifecycle.py`. The stop workflow owns ordered
+authorization invalidation, evidence interruption, cancellation and
+per-owner resets, with explicit dependencies rather than a facade
+backreference. The remaining command and source workflows are still
+coordinated by `PracticeEngine`.
+
 Identified high-risk state: `feedback`, `next_action`, selected source
 window, `course_guided`, `score_revision`, scheduled starts, paused
 source time, recovery and `_stop` lifecycle sequencing. Their concrete

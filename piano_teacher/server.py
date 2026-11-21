@@ -43,6 +43,7 @@ from .application.session_commands import SessionCommands
 from .application.source_identity import SourceIdentity
 from .application.lesson_cursor import LessonCursor
 from .application.session_notices import SessionNotices
+from .application.session_lifecycle import SessionLifecycle
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -309,6 +310,13 @@ class PracticeEngine:
             continuation=self.teaching_continuation,live_input=self.live_input,
             assessment=self.live_assessment,progression=self.attempt_progression,
             listen=self.listen,clock=self.now)
+        self.session_lifecycle = SessionLifecycle(
+            playback=self.playback, playback_session=self.playback_session,
+            attempt=self.attempt, settlement=self.attempt_settlement,
+            midi_ingress=self.midi_ingress, visual_transport=self.visual_transport,
+            continuation=self.teaching_continuation,
+            guided_session=self.guided_session, live_input=self.live_input,
+            listen=self.listen, measurement=self.measurement, clock=self.now)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -849,34 +857,9 @@ class PracticeEngine:
 
     def _stop(self, *, reason: str | None = None, preserve_episode: bool = False,
               persist_evidence: bool = True):
-        self.playback.invalidate(reason or self.session_commands.action_reason)
-        self.playback_session.cancel_suspended_admission()
-        reason = reason or self.session_commands.action_reason
-        played = (self.attempt.recorder.presses if self.attempt.recorder is not None else
-                  self.measurement.guided.presses)
-        if persist_evidence:
-            self.attempt_settlement.interrupt_current(
-                reason=reason,played=played,censor=not preserve_episode,
-                extra={"guidance": self.teaching.snapshot(now=self.now())}
-                      if self.playback_session.mode == "learn" and self.teaching is not None else None,
-                now=self.now(),flush=True)
-        self.attempt_settlement.cancel(reason=reason, now=self.now())
-        self.midi_ingress.deferred.clear()
-        self.midi_ingress.clear_resume_gate()
-        self.visual_transport.clear_grading_floor()
-        # Stopping/restarting a take does not invalidate precompiled next
-        # notation. Its stage-key + score revision remain authoritative:
-        # navigation, library changes and generation mismatches fail that
-        # identity check automatically at the next settlement.
-        self.teaching_continuation.stop()
-        self.guided_session.stop()
-        self.visual_transport.reset_for_stop(
-            rewind_seconds=SETTINGS.feedback_seconds)
-        self.playback_session.reset_for_stop()
-        self.attempt.reset_for_stop()
-        self.live_input.reset_attempt()
-        self.listen.cancel()
-
+        self.session_lifecycle.stop(
+            reason=reason or self.session_commands.action_reason,
+            preserve_episode=preserve_episode, persist_evidence=persist_evidence)
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
         return self.learner_progress.saved(
