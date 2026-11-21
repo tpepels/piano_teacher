@@ -108,14 +108,21 @@ continuation or partial grading.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| V0 | Full transition/ownership audit and reproducible failure witnesses | In progress; UI control handoff traced, complete graph and defect witnesses pending |
-| V1 | Deterministic end-to-end MIDI/Godot simulation harness | Not started; new unit tests deferred by owner |
-| V2 | Canonical transition, action and presentation contracts | In progress; nine UI gestures, backend-owned control presentation and exact source identity integrated; transaction/physical acceptance outstanding |
-| V3 | Unify graphical admission and playback transaction decisions | In progress; evidence-based physical reservation, Python deadline selection and committed-map projection implemented; integration acceptance outstanding |
-| V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress: hold remains until Resume authorization, Free pre-target hold and candidate forecast implemented; acceptance open |
-| V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; practice screen controls, tempo and navigation migrated, other UI policy and native effect coordination pending |
-| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Not started |
-| V7 | Integrated production/package verification and physical acceptance | Not started |
+| V0 | Full transition/ownership audit and reproducible failure witnesses | In progress; critical timing/UI/receipt owners traced and fixed, exhaustive remaining-native audit open |
+| V1 | Deterministic end-to-end MIDI/Godot simulation harness | In progress; real backend fake-MIDI matrix and production-scene synthetic MIDI integrated, final native gate pending |
+| V2 | Canonical transition, action and presentation contracts | In progress; nine source-bound UI gestures, schema v5 and typed accepted-command outcomes integrated, native acceptance pending |
+| V3 | Unify graphical admission and playback transaction decisions | In progress; immutable physical receipts, Python deadline authorization, retry/recovery and outgoing-tempo fixed rest; full native admission acceptance pending |
+| V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress; backend-owned hold/target directives, frozen idle and frame-stepped Godot checks pass core CI; connected native acceptance open |
+| V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; obsolete native control policy removed, backend owns motion and command effects; other screen/effect ownership and native gate open |
+| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | In progress; fake MIDI success/failure and source/receipt matrix in core CI, latest passing core run 44956379014; complete physical matrix open |
+| V7 | Integrated production/package verification and physical acceptance | In progress; embedded build, real-source scenes and relocated package passed earlier gate; fixed repeat native rerun 44956142119 pending, physical keyboard/audio open |
+
+### Verified gates and remaining hard constraints (2026-11-21)
+
+- **Core CI:** [`44956379014`](https://github.com/tpepels/piano_teacher/actions/runs/44956379014) passed Python source-level tests and Godot behavior/syntax checks after the V5 raw advanced-Pause change. The Python command-result, schema-v5 and guided-motion changes are covered by earlier successful runs. The assertions are real application and native timeline/score-owner checks, not mocks of lesson grading.
+- **Earlier full native:** [`44955009440`](https://github.com/tpepels/piano_teacher/actions/runs/44955009440) built embedded Python, ran the production UI, authentic Moonlight/Peace Piece/Chopin scores and relocated-package audit successfully. Its full-scene synthetic MIDI journey exposed the documented outgoing/rest tempo bug at the 40-to-48 BPM repeat. The scheduler and outdated tests have been fixed.
+- **Latest native rerun:** [`44956142119`](https://github.com/tpepels/piano_teacher/actions/runs/44956142119) exercises that corrected timing and the new V4/V5 protocol. Its core job used the subsequently corrected stale test assertion; treat only the independent native-production job as a candidate acceptance gate, and do not mark V7 complete until that job passes.
+- **Unclosed design/acceptance:** Formal end-to-end source/receipt fault injection at the actual Godot/embedded-worker boundary, exhaustive phase/meter/polyrhythm coverage, a complete native-effects authority sweep and physically connected MIDI and speaker acceptance are still required. These cannot be inferred from a virtual MIDI device or an isolated passing CI shard. No phase is marked complete on source inspection alone.
 
 ### Initial implementation record - 2026-11-21
 
