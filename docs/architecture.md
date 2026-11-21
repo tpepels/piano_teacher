@@ -223,6 +223,29 @@ world. The gateway still computes the final deadline by native inverse
 projection, an outstanding V3 ownership violation. The full MIDI/renderer
 transition graph and physical acceptance remain unverified.
 
+### V3 admission boundary: typed physical evidence, authoritative scheduling
+
+In-process `playback.reserve` no longer accepts an absolute deadline
+from the native renderer. `PhysicalAdmissionEvidence` contains a native
+backend-clock sample, measured travel to the physically armable source
+world, and stream/revision generations. `PlaybackCoordinator` verifies
+source/attempt identity and delegates the *only* deadline choice to
+`physical_admission.choose_admission_deadline`, which calls the
+authoritative `MusicalScheduler`. It rejects stale, impossible,
+source-mismatched or premature placements and does not retime an
+immutable strip after it was provisionally armed. Fixed announced
+repeats must fit the known exact deadline. The returned reservation
+receipt, never the input witness, defines audio, grading and visual
+source epoch timing at `playback.present`.
+
+Physical forecasting uses the map of
+`state.playback_timeline.current` (the already admitted source) until
+the successor is authorized, regardless of UI mode/phase. A pending
+source's different tempo map cannot change the outgoing physical clock;
+a paused existing variable-tempo source retains its actual segments.
+The new contract removes a duplicate musical-deadline decision,
+although native-to-engine transaction/lifecycle acceptance remains open.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

@@ -139,11 +139,18 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var backend_floor: float = float(intent.get("earliest_deadline_ms", NAN))
     if not is_finite(world) or not is_finite(backend_floor):
         return
-    var tempo: float = maxf(1.0, float(state.get("bpm", intent.get("bpm", 40.0))))
+    # Physical travel follows the *already authorized* source epochs
+    # until the successor is presented. A new intent may belong to
+    # another stage/BPM, and a paused active source still has its authored
+    # tempo map. Never infer the map from a UI phase or future intent.
+    var ledger: Variant = state.get("playback_timeline")
+    var committed: Variant = ledger.get("current") if ledger is Dictionary else null
+    var tempo: float = maxf(1.0,float(
+        committed.get("bpm",intent.get("bpm",40.0))
+        if committed is Dictionary else intent.get("bpm",40.0)))
     var authored: Array = (
-        state.get("tempo_segments", [])
-        if bool(state.get("running", false)) and \
-            str(state.get("phase", "")) == "playing" else [])
+        committed.get("tempo_segments",[])
+        if committed is Dictionary else [])
     var delay_ms: float = maxf(0.0, backend_floor-backend_now)+420.0
     var floor_world: float = flow.project_authored_future(
         frame_ms+roundi(delay_ms),frame_ms,

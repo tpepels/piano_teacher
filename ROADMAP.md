@@ -111,7 +111,7 @@ continuation or partial grading.
 | V0 | Full transition/ownership audit and reproducible failure witnesses | In progress; UI control handoff traced, complete graph and defect witnesses pending |
 | V1 | Deterministic end-to-end MIDI/Godot simulation harness | Not started; new unit tests deferred by owner |
 | V2 | Canonical transition, action and presentation contracts | In progress; eight UI gestures, control presentation and exact ready-source identity migrated; cross-language admission contract pending |
-| V3 | Unify graphical admission and playback transaction decisions | Not started |
+| V3 | Unify graphical admission and playback transaction decisions | In progress; evidence-based physical reservation, Python deadline selection and committed-map projection implemented; integration acceptance outstanding |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress: hold remains until Resume authorization, Free pre-target hold and candidate forecast implemented; acceptance open |
 | V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; practice screen controls, tempo and navigation migrated, other UI policy and native effect coordination pending |
 | V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Not started |
@@ -276,6 +276,36 @@ operations. Update the architectural contract and tests with the code.
 resulting action projection, demonstrable through the V1 runner.
 Read/poll does not execute transitions. No Godot component independently
 infers an enabled musical action, target tempo or next lesson decision.
+
+### V3 source-bound physical admission contract - 2026-11-21
+
+The production `playback.reserve` contract has been replaced rather than
+wrapped: the renderer now supplies a typed physical placement witness
+(`sampled_at_ms`, `travel_ms`, source world and renderer/queue
+generations), not `deadline_ms`. The Python
+`physical_admission.choose_admission_deadline` combines the witness
+with the immutable source intent, authoritative count-in and timing
+floor through `MusicalScheduler.resolve`. A placement that cannot
+satisfy the musical deadline is rejected; already-admitted ink is never
+shifted to accommodate a second scheduling decision. An automatic
+one-bar repeat must match its fixed downbeat within native time
+rounding tolerance. The single receipt is consumed by
+`playback.present`, whose existing commit verification binds MIDI,
+metronome and audio to that admitted source.
+
+The native physical forecast now reads the **currently authorized**
+`playback_timeline.current` tempo map even during Pause, rather than
+guessing from `phase == playing` or taking the new stage's tempo
+before the handoff. That distinction prevents a future stage or a
+paused source from accidentally changing the clearance calculation.
+The existing desktop playback test fixture now submits physical
+evidence; no new unit tests were added.
+
+**Remaining V3 gate:** Native syntax and integration runs, stale
+reserve/present responses, queue retraction and physical MIDI/audio
+acceptance must pass before this phase is marked complete. The
+Godot renderer still measures physical travel by inverting its visual
+projection; the Python application remains the final deadline owner.
 
 ### Phase V3 - Replace distributed playback/admission decisions
 
