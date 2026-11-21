@@ -214,8 +214,14 @@ def test_fake_keyboard_presentation_failure_and_resume_never_grade_unpresented_m
                   renderer_generation=intent["revision"])
     receipt = session.ask("playback.reserve", **values)
     assert not session.snapshot()["running"] and session.snapshot()["midi_notes"] == 0
+    sampled = session.clock()*1000.0
     session.ask("playback.present", intent_id=intent["intent_id"],
-                attempt=intent["attempt"],segment_id=receipt["segment_id"])
+                attempt=intent["attempt"],segment_id=receipt["segment_id"],
+                physical_world_origin=receipt["world_origin"],
+                physical_sampled_at_ms=sampled,
+                physical_travel_ms=receipt["deadline_ms"]-sampled,
+                physical_queue_generation=receipt["queue_generation"]+1,
+                physical_renderer_generation=intent["revision"])
     active = state_at(session, running=True)
     assert active["transport_id"] >= 1
     session.command("pause")
@@ -231,8 +237,14 @@ def test_fake_keyboard_presentation_failure_and_resume_never_grade_unpresented_m
                       renderer_generation=resumed["revision"],queue_generation=2,
                       take_id=resumed["take_id"])
     fresh = session.ask("playback.reserve", **new_values)
+    sampled = session.clock()*1000.0
     session.ask("playback.present",intent_id=resumed["intent_id"],
-                attempt=resumed["attempt"],segment_id=fresh["segment_id"])
+                attempt=resumed["attempt"],segment_id=fresh["segment_id"],
+                physical_world_origin=fresh["world_origin"],
+                physical_sampled_at_ms=sampled,
+                physical_travel_ms=fresh["deadline_ms"]-sampled,
+                physical_queue_generation=fresh["queue_generation"]+1,
+                physical_renderer_generation=resumed["revision"])
     session.strike(72)  # During the resumed count-in, still ungraded.
     assert session.snapshot()["midi_notes"] == 0
     session.clock.at = fresh["deadline_ms"]/1000

@@ -36,9 +36,24 @@ def reserve(session, intent, **changes):
     return session.ask("playback.reserve", **physical_offer(session, intent, **changes))
 
 
-def present(session, intent, receipt):
+def physical_attestation(session, intent, receipt, **changes):
+    """Test-only renderer fact, never a replacement musical scheduler."""
+    sampled = session.clock()*1000.0
+    values = {
+        "physical_world_origin":receipt["world_origin"],
+        "physical_sampled_at_ms":sampled,
+        "physical_travel_ms":receipt["deadline_ms"]-sampled,
+        "physical_queue_generation":receipt["queue_generation"]+1,
+        "physical_renderer_generation":intent["revision"],
+    }
+    values.update(changes)
+    return values
+
+
+def present(session, intent, receipt, **changes):
     return session.ask("playback.present", intent_id=intent["intent_id"],
-                       attempt=intent["attempt"], segment_id=receipt["segment_id"])
+                       attempt=intent["attempt"], segment_id=receipt["segment_id"],
+                       **physical_attestation(session,intent,receipt,**changes))
 
 
 def rejected(session, operation, **payload):
@@ -473,3 +488,33 @@ def test_backend_exclusively_decides_midi_start_gesture(
         action, options = resolve_ui_intent(
             "ui_midi_start",facts,score_ready=True)
         assert action == expected and options == {}
+
+
+@pytest.mark.parametrize("mutation", [
+    {"physical_world_origin": -1.0},
+    {"physical_queue_generation": -1},
+    {"physical_renderer_generation": -1},
+    {"physical_travel_ms": 0.0},
+])
+def test_uncommitted_or_wrong_physical_arm_does_not_start_take(practice_session, mutation):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    reserved = reserve(session, intent)
+    rejected(session, "playback.present",
+             intent_id=intent["intent_id"],
+             attempt=intent["attempt"], segment_id=reserved["segment_id"],
+             **physical_attestation(session,intent,reserved,**mutation))
+    assert not session.snapshot()["running"]
+    assert session.ask("playback.status")["reserved_segment_id"] == reserved["segment_id"]
+    assert present(session,intent,reserved)["authorized"]
+
+
+def test_python_chooses_later_deadline_than_earliest_physical_clearance(practice_session):
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    minimum = physical_offer(session,intent,travel_ms=100.0)
+    reserved = session.ask("playback.reserve",**minimum)
+    assert reserved["deadline_ms"] >= intent["earliest_deadline_ms"]-.01
+    assert reserved["deadline_ms"] > minimum["sampled_at_ms"]+minimum["travel_ms"]+1000
+    assert not session.snapshot()["running"]
+    assert present(session,intent,reserved,physical_world_origin=101.0)["authorized"]

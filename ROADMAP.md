@@ -640,6 +640,26 @@ acceptance must pass before this phase is marked complete. The
 Godot renderer still measures physical travel by inverting its visual
 projection; the Python application remains the final deadline owner.
 
+### V1/V3 real backend physical-arm attestation checks - 2026-11-21
+
+The real fake-MIDI backend integration suites now supply
+a separate physically committed score witness *only* for
+`playback.present`. A read-only `playback.reserve` offer
+can obtain Python's chosen deadline but cannot start sound
+or grading. Wrong queue revision, early world, mismatched
+clock travel or missing attestation is rejected without
+losing the valid original reservation. The source-bound
+Start and Resume journeys use the same two-stage backend
+contract. A new case supplies physical clearance **much
+earlier** than the required count-in to verify that Python,
+not Godot, chooses the later musical downbeat.
+
+The fixture stubs only the renderer measurement; full
+native Godot tests must demonstrate that the real queue
+performs the exact committed arm after this reply and
+that it passes the same attestation. These tests have not
+yet been accepted by CI on the rewritten production source.
+
 ### V3 backend musical proposal before physical arm - 2026-11-21
 
 The Python musical boundary now treats
