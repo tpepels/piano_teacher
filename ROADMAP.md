@@ -293,7 +293,7 @@ Physical acceptance still requires the instrument.
 
 ## Active plan — PracticeEngine architecture replacement (2026-11-21)
 
-**Status: implementation underway; the phases are not complete.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
+**Status: source decomposition integrated and core verified; final software acceptance is still open.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
 has **2,783 nonblank/trailing-newline-adjusted source lines, 151,578 bytes and
 168 methods**. The [baseline core and native-production CI run
 44895386721](https://github.com/tpepels/piano_teacher/actions/runs/44895386721)
@@ -319,6 +319,54 @@ correct transactions and full behaviour/packaging integration—not by moving
 lines into thin forwarding wrappers. Existing large collaborators must also
 be reviewed and may be split or replaced; do not turn `PlaybackSession`,
 `AttemptSettlement` or a new shared context into the next monolith.
+
+### Current integrated implementation — 2026-11-21
+
+**Source:** `55e31dd2` on `main`; [core CI 44906137747](https://github.com/tpepels/piano_teacher/actions/runs/44906137747)
+passed **103 Python scenarios, 4 skips**, Python coverage **73.5% lines /
+53.3% branches**, Godot syntax OK and all four native-source behaviour
+groups with zero failures. Native embedded production/repertoire and strict
+relocated package verification on this source are **not yet accepted**;
+physical instrument/graphics/audio and an independent clean machine remain
+unverified. The full embedded/native/repertoire and relocated-package verifier
+**passed on `9fef7780`** ([run 44905418627](https://github.com/tpepels/piano_teacher/actions/runs/44905418627)):
+native registration, real-score loading, two `PACKAGE_CONTENTS_OK`
+checks and `PASS LOCAL EMBEDDED PRODUCTION CONTROL`. That source
+predates the final command split and **does not certify `55e31dd2`**.
+
+| Phase | Implemented ownership and remaining exit gate |
+| --- | --- |
+| S0 design | All baseline engine methods and writer hotspots inventoried; owner, dependency-direction, transaction and re-entry map in `docs/architecture.md` |
+| S1 state | `SourceIdentity`, `LessonCursor`, `SessionNotices`, `AttemptRuntime`, `VisualTransport` and `SessionLifecycle` own current state and ordered cleanup. Final native acceptance outstanding |
+| S2 source/history/device | `SourceWorkflows`, `HistoryManagement`, `DeviceWorkflows`, `SettingsWorkflows` and `PolicyRegistry` implement the supported source, data and device workflows; no separate server or policy instance |
+| S3 lesson/exposure | `TeachingDecisions`, `ExposureWorkflows`, `ExposureInstaller`, `LessonExecution` and `LearningActions` apply one accepted generator decision |
+| S4 transport/commands | `TransportTiming`, `TimedPlayback`, `TransportActions`, `PracticeControls`, `MidiApplicationInput` and `ApplicationWorker` use one admission coordinator and worker clock |
+| S5 settlement/recovery | `PracticeTimeline`, `RecoveryWorkflows`, `PostAssessmentEffects` and `CompletionContinuations` consume the sole `AttemptSettlement` and configured grader. Same-tick follow-on is bounded, not recursive |
+| S6 read/presentation | `SessionReadModels`, `ScoreReadServices`, `ScorePreloadWorkflow` and `LiveFeedbackWorkflows` separate queries and single-revision presentation from grading and admission |
+| S7 facade and legacy | `PracticeEngine` contains 343 lines (12,131 bytes); `composition.py` wires owners without a facade backreference. 86 old unused imports, four unused owner ports, redundant command routing and nested Resume command invocation are removed. Full native/package and physical acceptance are outstanding |
+
+**File-size diagnostic** (source files, excluding the non-runtime editor
+MCP addon): `piano_teacher/learning_ledger.py` 45,611 bytes (733 lines);
+`piano_teacher/notation/lesson.py` 43,054 bytes (860 lines);
+`godot/settings_screen.gd` 36,961 bytes (722 lines).
+They do not contain a second practice engine. The ledger is the one
+durable evidence/schema/export/retention owner; the notation module is the
+one MIDI-to-authentic-notation builder; Settings is a UI screen. Those
+responsibilities are substantial, but splitting them solely by file size
+would risk duplicate persisted data, notation or screen authority.
+The remaining large core collaborators, `PlaybackSession` and
+`AttemptSettlement`, retain the one playback and durable grade authority.
+
+**Dependency and re-entry review:** 32 new/extracted application modules
+were examined for `PracticeEngine` imports; none import the facade.
+The production Godot main scene uses the single in-process native adapter.
+`inprocess.py` is the intentional embedded import of `PracticeEngine`.
+No HTTP/UDP runtime transport or second score/grade policy was identified
+in those inspected paths. The grouped command actions now share one outer
+RLock and one classification, restore command state even on failed
+preparation, and Resume performs its deferred acknowledgement in the
+existing transport transaction. A package import-closure check and
+full native/embedded use cases remain necessary to close software S7.
 
 ### Target architecture — to validate and finalize in Phase S0
 

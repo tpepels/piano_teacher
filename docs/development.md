@@ -144,6 +144,17 @@ two target successes; warm-ups and other courses retain their configured rule.
 Older history retains its recorded criteria. The owner explicitly requested
 these additional CI tests; physical acceptance remains separate.
 
+### Architecture refactor core acceptance — 2026-11-21
+
+At source `55e31dd2`, GitHub [core run 44906137747](https://github.com/tpepels/piano_teacher/actions/runs/44906137747)
+passed **103 Python tests (4 skipped)**, with 73.5% line/53.3%
+branch coverage. Godot syntax and all four executed existing behaviour
+groups passed, each with zero failures. These are source and native
+behaviour checks only. The opt-in full embedded Python 3.14, real Godot
+repertoire journeys, strict standalone bundle and relocated boot remain
+a **separate gate** for this revision. No new tests or simulated
+application engine were introduced.
+
 ## Standalone Linux package
 
 [package-inprocess.sh](../scripts/package-inprocess.sh) assembles Godot, the

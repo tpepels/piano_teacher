@@ -34,6 +34,32 @@ router. The existing `SessionCommands`, `PlaybackCoordinator`,
 `PlaybackSession`, and `TeachingDecisions` remain the only owners of their
 respective choices and receipts. This change must pass integration gates.
 
+## Current embedded Python application boundaries (2026-11-21)
+
+The facade at `55e31dd2` has **343 lines** and delegates to the explicit
+composition root. The following groups show where the earlier engine
+responsibilities execute; each uses the existing single source/clock and
+domain policy authorities.
+
+| Boundary | Modules and authority |
+| --- | --- |
+| Composition/public protocol | [PracticeEngine](../piano_teacher/server.py), [composition](../piano_teacher/application/composition.py), [native in-process commands](../piano_teacher/inprocess.py) |
+| Manual intent and navigation | [PracticeControls](../piano_teacher/application/practice_controls.py), [LearningActions](../piano_teacher/application/learning_actions.py), [LessonExecution](../piano_teacher/application/lesson_execution.py) |
+| Source and teaching choices | [SourceIdentity](../piano_teacher/application/source_identity.py), [TeachingDecisions](../piano_teacher/application/teaching_workflows.py), [ExposureWorkflows](../piano_teacher/application/exposure_workflows.py), [ExposureInstaller](../piano_teacher/application/exposure_installer.py) |
+| Playback and physical input | [TransportActions](../piano_teacher/application/transport_actions.py), [TimedPlayback](../piano_teacher/application/timed_playback.py), [TransportTiming](../piano_teacher/application/transport_timing.py), [MidiApplicationInput](../piano_teacher/application/midi_application_input.py), and the authoritative PlaybackCoordinator/PlaybackSession/MidiIngress |
+| Attempt and continuation | [ApplicationWorker](../piano_teacher/application/application_worker.py), [PracticeTimeline](../piano_teacher/application/practice_timeline.py), [RecoveryWorkflows](../piano_teacher/application/recovery_workflows.py), [PostAssessmentEffects](../piano_teacher/application/post_assessment_effects.py), [CompletionContinuations](../piano_teacher/application/completion_continuations.py), and the single AttemptSettlement |
+| State queries and ink facts | [SessionReadModels](../piano_teacher/application/session_read_models.py), [ScoreReadServices](../piano_teacher/application/score_read_services.py), [LiveFeedbackWorkflows](../piano_teacher/application/live_feedback_workflows.py), [ScorePreloadWorkflow](../piano_teacher/application/score_preload_workflow.py) |
+| Durable data and settings | [HistoryManagement](../piano_teacher/application/history_management.py), [SourceWorkflows](../piano_teacher/application/source_workflows.py), [DeviceWorkflows](../piano_teacher/application/device_workflows.py), [SettingsWorkflows](../piano_teacher/application/settings_workflows.py) and their existing repositories |
+
+The composition root injects explicit owner dependencies, **never an engine
+backreference or all-purpose mutable context**. Direct imports in 32
+new/extracted application modules were inspected; no facade import was found.
+The command router no longer recursively re-enters itself during Resume,
+the worker drains immediate continuations with a bound, and snapshots do
+not enter that worker. The core CI at `55e31dd2` passed; strict
+native/embedded/relocated package acceptance on this exact source remains
+a separate requirement.
+
 ## One desktop runtime
 
 The product is one Godot 4.7 desktop process with embedded CPython, authentic
