@@ -535,9 +535,12 @@ relevant package checks pass on the integrated phase.
 and its exact stage/asset effects now use `PostAssessmentEffects`.
 Performance-review construction, section review and partial-recovery
 return effects also moved. The original `AttemptSettlement` remains
-the sole assessment commit authority. Completion routing, rolling
-recovery and feedback continuation still require migration and
-full core/native verification; S5 is **not complete**.
+the sole assessment commit authority. Registered source-bound recovery preparation, remedial assignment,
+mid-take recovery execution and recorded boundary assessment now use
+`RecoveryWorkflows`. The policy still chooses every recovery and
+`AttemptSettlement` retains the exact evidence transaction. Completion
+routing and feedback continuation remain; S5 is **not complete**.
+This code requires full core/native verification.
 
 ### Phase S5 — Attempt result, recovery and durable continuation
 

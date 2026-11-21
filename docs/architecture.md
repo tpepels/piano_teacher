@@ -398,6 +398,11 @@ forward visual motion and playback admission facts now live in
 `application/transport_timing.py`, which holds no extra clock
 epoch and makes no curriculum decision.
 
+Recovery materialization, recorded boundary checks and automatic
+remedial effects now use `application/recovery_workflows.py`, which
+executes the existing configured assessment/recovery decisions and
+uses the canonical source clock.
+
 Committed full-passage assessment effects and bounded review return
 operations now reside in `application/post_assessment_effects.py`.
 It consumes the one sealed `AttemptSettlement` receipt, updates the
