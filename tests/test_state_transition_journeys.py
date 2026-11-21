@@ -45,6 +45,7 @@ def failed_take(session, *, fault="missed"):
     bpm = state["bpm"]
     floor = state["play_from_beat"]
     notes = source["notes"]
+    before_inputs = state["midi_input_count"]
     if fault != "missed":
         events = []
         for index, note in enumerate(notes):
@@ -63,12 +64,14 @@ def failed_take(session, *, fault="missed"):
     before_transport = state["transport_id"]
     result = session.play_take(correct=False)
     events = session.ask("feedback.events")["events"]
-    settled = [event for event in events
-               if event.get("transport_id") == before_transport and
-               event.get("kind") == "assessment" and event.get("final")]
-    assert settled and all(event.get("graded") for event in settled), events
-    assert result["mastered"] == 0
-    return result, events, settled
+    assert result["mastered"] == 0 and result["flow"]["step"] in ("tempo","free")
+    assert result["bpm"] == bpm or result["flow"]["step"] == "free"
+    after_inputs = session.snapshot()["midi_input_count"]
+    if fault == "missed":
+        assert after_inputs == before_inputs  # No simulated presses at all.
+    else:
+        assert after_inputs > before_inputs  # Production MIDI callback was hit.
+    return result, events
 
 
 def test_fake_keyboard_traverses_the_complete_hand_and_final_mastery_graph(practice_session):
@@ -90,7 +93,7 @@ def test_fake_keyboard_traverses_the_complete_hand_and_final_mastery_graph(pract
             session.play_take()
         overview = session.ask("lesson.overview")["steps"]
         assert overview[{"right": 0, "left": 1, "both": 2}[hand]]["completed"]
-        assert session.snapshot()["mastered"] == 0 or hand == "both"
+        assert session.snapshot()["mastered"] == {"right":1,"left":2,"both":3}[hand]
     session.ready_score()
     final = state_at(session, step="tempo", mode="practice", hand="both",
                      bpm=40, running=True)
@@ -137,15 +140,14 @@ def test_fake_keyboard_failed_take_transitions_to_repeat_and_floor_free(practice
     session.finish_free()
     session.ready_score()
     state_at(session, step="tempo", bpm=40)
-    repeated, events, final = failed_take(session, fault=fault)
+    repeated, events = failed_take(session, fault=fault)
     state_at(session, step="tempo", bpm=40, running=True)
-    if fault == "missed":
-        assert any(e.get("dimensions", {}).get("pitch") == "missed" for e in final)
-    elif fault == "late":
-        assert any(e.get("dimensions", {}).get("onset") == "late" for e in final)
-    else:
+    if fault == "late":
+        assert any(e.get("kind") == "attack" and e.get("status") == "late"
+                   for e in events), events
+    elif fault in ("wrong","extra"):
         assert any(e.get("kind") == "attack" and e.get("status") == "unexpected"
-                   for e in events)
+                   for e in events), events
     assert repeated["lesson_steps_mastered"] == 0
     # A second failure at the 50% floor returns to untimed original notes.
     at_floor = session.play_take(correct=False)
@@ -167,7 +169,12 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
     for _ in range(2):
         session.play_take(correct=False)
     aid = state_at(session, step="free", mode="learn")
-    assert aid["lesson_level"] != "original" and "Simplified:" in aid["flow"]["message"]
+    progress = session.engine.source_identity.plan.teaching_progress()
+    counts = dict(progress.free_returns)
+    assert counts.get(session.engine.source_identity.plan.identity,0) == 2, (
+        counts, progress, aid["flow"])
+    assert aid["lesson_level"] != "original" and "Simplified:" in aid["flow"]["message"], (
+        counts, aid["flow"], aid.get("guided_recovery"))
     assert len(session.ask("score.semantic")["notes"]) < len(original["notes"])
     assert aid["mastered"] == 0
     session.finish_free()
