@@ -857,6 +857,26 @@ Current three largest production source files by bytes after extraction:
 `godot/practice_screen.gd` (34,101). These remain diagnostic review targets;
 size alone does not authorize moving their responsibilities.
 
+### Native visual-effect runtime exception and gate correction
+
+Inspection of the nominally successful full native runs found **239** Godot
+`SCRIPT ERROR` lines in [run 44907200749](https://github.com/tpepels/piano_teacher/actions/runs/44907200749)
+and **229** in [run 44908940976](https://github.com/tpepels/piano_teacher/actions/runs/44908940976).
+All were an invalid access to `PracticeScoreStage.impact_callout` from
+`score_effects.gd:19`: the deleted callout was still referenced whenever
+ungraded Listen/preview mode was accepted. The processes returned zero and the
+old runner incorrectly marked those player journeys passed. Those green jobs
+are **not clean native UI acceptance evidence** for that error path.
+
+Source commit [`03de4498`](https://github.com/tpepels/piano_teacher/commit/03de44984438700ca70a38fe517121b487ab331c)
+removes the obsolete access. The same existing native acceptance script now
+fails each actual Godot journey if its log includes `SCRIPT ERROR:`, even when
+the process exits zero; independent cases still run and are reported. No new
+test scenarios were added. [The corrected full gate](https://github.com/tpepels/piano_teacher/actions/runs/44909630866)
+was started on that source; a final green outcome with zero script exceptions
+is required before closing this correction. Physical rendering and MIDI/audio
+acceptance remain unverified.
+
 ## Phase status and remaining acceptance
 
 ### Historical architecture re-audit — pre-correction log

@@ -92,6 +92,20 @@ Source: [`8eccd16e`](https://github.com/tpepels/piano_teacher/commit/8eccd16eb1b
 Core CI passes (103 Python passed, four skipped; Godot native behaviour zero
 failures); the full native-production/package gate is pending separately.
 
+### Native acceptance blind spot — corrected 2026-11-21
+
+Full-repertoire Godot runs that appeared green still emitted hundreds of
+runtime exceptions: `ScoreEffects.transition_mode` tried to clear the
+removed `PracticeScoreStage.impact_callout` member. The stage now owns only
+its actual `GameStage` transient energy, and the stale callout access was
+removed in [`03de4498`](https://github.com/tpepels/piano_teacher/commit/03de44984438700ca70a38fe517121b487ab331c).
+The existing `verify-embedded-production-local.sh` now treats every Godot
+`SCRIPT ERROR:` as a failed acceptance case even if Godot returns zero.
+Previously cited green native runs had 239 and 229 such exceptions, so their
+visual-mode path was not cleanly accepted. The corrected strict full run is
+[44909630866](https://github.com/tpepels/piano_teacher/actions/runs/44909630866)
+(pending as of this audit); no physical acceptance is inferred.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
