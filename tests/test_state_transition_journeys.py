@@ -37,6 +37,7 @@ def emit_at_beats(session, start, bpm, events):
 
 
 def failed_take(session, *, fault="missed"):
+    session.ready_score()
     state = state_at(session, step="tempo", mode="practice", running=True)
     source = session.ask("score.semantic")
     assert state["score_queue_next"]["transport_id"] == state["transport_id"]
@@ -79,6 +80,7 @@ def test_fake_keyboard_traverses_the_complete_hand_and_final_mastery_graph(pract
             session.finish_listen()
         state_at(session, step="free", mode="learn", hand=hand, running=False)
         session.finish_free()
+        session.ready_score()
         state_at(session, step="tempo", mode="practice", hand=hand, bpm=40, running=True)
         # 50%, +10% of target, then two clean target takes. Every attack
         # and release is sent through the test's real MIDI callback.
@@ -89,6 +91,7 @@ def test_fake_keyboard_traverses_the_complete_hand_and_final_mastery_graph(pract
         overview = session.ask("lesson.overview")["steps"]
         assert overview[{"right": 0, "left": 1, "both": 2}[hand]]["completed"]
         assert session.snapshot()["mastered"] == 0 or hand == "both"
+    session.ready_score()
     final = state_at(session, step="tempo", mode="practice", hand="both",
                      bpm=40, running=True)
     assert final["kind"] == "perform"
@@ -132,6 +135,7 @@ def test_fake_keyboard_failed_take_transitions_to_repeat_and_floor_free(practice
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
+    session.ready_score()
     state_at(session, step="tempo", bpm=40)
     repeated, events, final = failed_take(session, fault=fault)
     state_at(session, step="tempo", bpm=40, running=True)
@@ -182,6 +186,7 @@ def test_fake_keyboard_presentation_failure_and_resume_never_grade_unpresented_m
     session.finish_listen()
     session.commands.require_presentation()
     session.finish_free()
+    session.ready_score()
     intent = state_at(session, step="tempo", mode="practice", running=False)["playback_intent"]
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0
@@ -230,6 +235,7 @@ def test_fake_keyboard_disconnection_during_take_cannot_award_lesson_progress(pr
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
+    session.ready_score()
     state = state_at(session, step="tempo", running=True)
     start = state["score_queue_next"]["deadline_at_ms"]/1000
     session.clock.at = start
