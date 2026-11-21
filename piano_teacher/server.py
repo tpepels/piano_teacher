@@ -64,6 +64,7 @@ from .application.recovery_workflows import RecoveryWorkflows
 from .application.completion_continuations import CompletionContinuations
 from .application.practice_timeline import PracticeTimeline
 from .application.practice_controls import PracticeControls
+from .application.midi_application_input import MidiApplicationInput
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -517,6 +518,38 @@ class PracticeEngine:
             start_rate_bpm=self.transport_timing.start_rate_bpm,
             presentation_bpm=lambda: self.transport_timing.presentation_bpm())
 
+        self.practice_controls = PracticeControls(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, lock=self.lock, session_commands=self.session_commands,
+            playback_session=self.playback_session, playback=self.playback,
+            attempt=self.attempt, attempt_settlement=self.attempt_settlement,
+            timed_playback=self.timed_playback, transport_timing=self.transport_timing,
+            score_read=self.score_read, score_artifact_registry=self.score_artifact_registry,
+            guided_session=self.guided_session, flow_session=self.flow_session,
+            listen=self.listen, midi=self.midi, midi_key_shortcuts=self.midi_key_shortcuts,
+            teaching_decisions=self.teaching_decisions,
+            exposure_workflows=self.exposure_workflows, lesson_execution=self.lesson_execution,
+            outcome_effects=self.outcome_effects, recovery_workflows=self.recovery_workflows,
+            completion_continuations=self.completion_continuations,
+            history_management=self.history_management,
+            device_workflows=self.device_workflows, settings_workflows=self.settings_workflows,
+            measurement=self.measurement, visual_transport=self.visual_transport,
+            progress=self.progress, lifecycle=self.session_lifecycle,
+            read_models=self.read_models, clock=self.now,
+            feedback_seconds=self.feedback_seconds)
+
+        self.midi_application_input = MidiApplicationInput(
+            source_identity=self.source_identity, visual_transport=self.visual_transport,
+            playback_session=self.playback_session, attempt_settlement=self.attempt_settlement,
+            attempt=self.attempt, playback=self.playback, midi=self.midi, lock=self.lock,
+            runtime_timings=self.runtime_timings, device_workflows=self.device_workflows,
+            teaching_decisions=self.teaching_decisions,
+            settings_workflows=self.settings_workflows, library=self.library,
+            midi_ingress=self.midi_ingress, transport_timing=self.transport_timing,
+            live_feedback_workflows=self.live_feedback_workflows,
+            guided_session=self.guided_session, practice_controls=self.practice_controls,
+            timed_playback=self.timed_playback, clock=self.now)
+
         self.practice_timeline = PracticeTimeline(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
             notices=self.notices, visual_transport=self.visual_transport,
@@ -536,27 +569,7 @@ class PracticeEngine:
             attempt_progression=self.attempt_progression, read_models=self.read_models,
             teaching_continuation=self.teaching_continuation,
             exposure_workflows=self.exposure_workflows,
-            clock=self.now, poll_midi=self._poll_midi_connection,
-            feedback_seconds=self.feedback_seconds)
-
-        self.practice_controls = PracticeControls(
-            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
-            notices=self.notices, lock=self.lock, session_commands=self.session_commands,
-            playback_session=self.playback_session, playback=self.playback,
-            attempt=self.attempt, attempt_settlement=self.attempt_settlement,
-            timed_playback=self.timed_playback, transport_timing=self.transport_timing,
-            score_read=self.score_read, score_artifact_registry=self.score_artifact_registry,
-            guided_session=self.guided_session, flow_session=self.flow_session,
-            listen=self.listen, midi=self.midi, midi_key_shortcuts=self.midi_key_shortcuts,
-            teaching_decisions=self.teaching_decisions,
-            exposure_workflows=self.exposure_workflows, lesson_execution=self.lesson_execution,
-            outcome_effects=self.outcome_effects, recovery_workflows=self.recovery_workflows,
-            completion_continuations=self.completion_continuations,
-            history_management=self.history_management,
-            device_workflows=self.device_workflows, settings_workflows=self.settings_workflows,
-            measurement=self.measurement, visual_transport=self.visual_transport,
-            progress=self.progress, lifecycle=self.session_lifecycle,
-            read_models=self.read_models, clock=self.now,
+            clock=self.now, poll_midi=self.midi_application_input.poll_midi_connection,
             feedback_seconds=self.feedback_seconds)
 
     def require_presentation(self) -> None:
@@ -586,27 +599,11 @@ class PracticeEngine:
             self.playback.fail(notify_failure=self.practice_controls.on_playback_failure,**values)
             return {"accepted":True}
 
-    def _midi_lost(self, reason: str = "device_disconnected") -> None:
-        if self.plan is not None:
-            self._prepare_teaching("interrupted", action=reason, store=False)
-        self.device_workflows.disconnect(reason)
-
     def ports(self) -> list[str]:
-        if not self.midi.enabled:
-            return []
-        with self.lock:
-            scan = self.device_workflows.scan()
-            if scan.lost:
-                self._midi_lost()
-            self.device_workflows.handle_scan_error(scan)
-            self.device_workflows.restore_preferred(
-                scan.names, callback=self._receive)
-            return list(scan.names)
+        return self.midi_application_input.ports()
 
     def connect(self, name: str):
-        with self.lock:
-            self.device_workflows.select(name, callback=self._receive)
-            self.set_preferences(midi_device=name)
+        return self.midi_application_input.connect(name)
 
     def hardware_diagnostics(self) -> dict:
         with self.lock:
@@ -668,7 +665,7 @@ class PracticeEngine:
     def close(self) -> None:
         with self.lock:
             self.session_lifecycle.shutdown(
-                midi=self.midi, progress=self.progress, receive=self._receive)
+                midi=self.midi, progress=self.progress, receive=self.midi_application_input.receive)
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
@@ -690,58 +687,6 @@ class PracticeEngine:
 
     def performance_diagnostics(self) -> dict:
         return self.runtime_timings.snapshot()
-
-    def _receive(self, message):
-        began = time.perf_counter()
-        try:
-            self._receive_message(message)
-        finally:
-            self.runtime_timings.midi_ms.append(
-                (time.perf_counter()-began)*1000.0)
-
-    def _midi_transport_facts(self) -> InputTransportFacts:
-        """Snapshot only the transport gates needed by the one MIDI router."""
-        return InputTransportFacts(
-            next_at=self.visual_transport.next_at,
-            preview_loop_pending=self.visual_transport.preview_loop_pending,
-            pending_teaching_result=self.attempt_settlement.pending_result is not None,
-            pending_rewind=self.visual_transport.pending_rewind is not None,
-            automatic=self.playback_session.auto,preview_only=self.playback_session.preview_only,
-            visual_gap_beats=self.visual_transport.visual_gap_beats,
-            awaiting_score=self.playback_session.awaiting_score_revision is not None,
-            exercise_kind=(self.plan.exercise.kind if self.plan else ""),
-            review_end_beat=self.attempt.review_end_beat,
-            presentation_required=self.playback.presentation_required,
-            successor_action=(self.playback.intent.action
-                if self.playback.intent is not None else None))
-
-    def _apply_midi_shortcut(self, effect) -> None:
-        if effect.completed_range is not None:
-            ranges = self.library.settings["midi_key_ranges"].copy()
-            ranges[self.midi.device] = list(effect.completed_range)
-            self.set_preferences(midi_key_ranges=ranges)
-        if effect.action:
-            self.practice_controls.control(effect.action)
-
-    def _receive_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
-        now = self.now() if received_at is None else received_at
-        with self.lock:
-            facts = MidiInputFacts(self.fingerprint,self.score_revision,
-                self.plan.identity if self.plan else "",self.plan.active_phrase if self.plan else None,
-                self.plan.hand if self.plan else "both",self.plan.bpm if self.plan else 60.,
-                self.playback_session.mode,self.playback_session.running,self.visual_transport.paused,self.playback_session.preview_only,
-                self.visual_transport.play_from_beat,self.visual_transport.run_at,self.playback_session.transport_id,
-                self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.teaching is not None))
-            self.midi_ingress.dispatch(
-                message,facts=facts,received_at=now,
-                corrected_at=corrected_at,deferred=deferred,
-                midi_offset_seconds=self.library.settings["midi_offset_ms"]/1000.0,
-                apply_shortcut=self._apply_midi_shortcut,
-                transport_facts=self._midi_transport_facts,
-                musical_seconds=self.transport_timing.musical_seconds,
-                recorder=lambda: self.attempt.recorder,
-                teaching=lambda: self.teaching,
-                feedback_take=self.live_feedback_workflows.feedback_take)
 
     def load(self, path: str, *, warmup: bool = False):
         """Commit a prepared source under one mutation guard and short lock."""
@@ -846,16 +791,6 @@ class PracticeEngine:
     def control(self, action: str, **kwargs) -> None:
         return self.practice_controls.control(action, **kwargs)
 
-    def _poll_midi_connection(self):
-        if self.midi.closed:
-            self._midi_lost()
-        if self.device_workflows.connection_due():
-            try:
-                self.ports()
-            except RuntimeError:
-                # Keep actionable device feedback without failing /state.
-                pass
-
     def _decided_stage_selection(self):
         if not self.playback_session.auto:
             return None
@@ -895,7 +830,7 @@ class PracticeEngine:
                 self.practice_timeline.update()
                 while self.midi_ingress.deferred:
                     message, received_at, corrected_at, _transport = self.midi_ingress.deferred.popleft()
-                    self._receive_message(message, received_at=received_at,
+                    self.midi_application_input.receive_message(message, received_at=received_at,
                                           corrected_at=corrected_at, deferred=True)
                 if self.plan is None or self.visual_transport.paused:
                     return 250

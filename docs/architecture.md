@@ -388,6 +388,12 @@ captured at service construction. Device connection lifecycle and calibration no
 rather than calling the engine or mutating configured policies itself.
 The short facade entry preserves source interruption ordering and locking.
 
+Native MIDI callback handling, corrected source/transport facts,
+device hot-plug and keyboard shortcut dispatch now reside in
+`application/midi_application_input.py`. The existing MidiIngress
+continues to own physical observation admission and Recorder remains
+the one note pairing authority.
+
 Public native/user commands, course-stage controls, state acknowledgement
 and committed playback receipts now use `application/practice_controls.py`.
 The facade retains the public `control` operation; the command router
