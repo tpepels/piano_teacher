@@ -110,10 +110,10 @@ continuation or partial grading.
 | --- | --- | --- |
 | V0 | Full transition/ownership audit and reproducible failure witnesses | In progress; UI control handoff traced, complete graph and defect witnesses pending |
 | V1 | Deterministic end-to-end MIDI/Godot simulation harness | Not started; new unit tests deferred by owner |
-| V2 | Canonical transition, action and presentation contracts | In progress; four UI control gestures migrated, remaining transition/admission contract pending |
+| V2 | Canonical transition, action and presentation contracts | In progress; eight UI gestures, control presentation and exact ready-source identity migrated; cross-language admission contract pending |
 | V3 | Unify graphical admission and playback transaction decisions | Not started |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | Not started |
-| V5 | Strip application decisions out of Godot UI and effect coordinators | Not started |
+| V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; practice screen controls, tempo and navigation migrated, other UI policy and native effect coordination pending |
 | V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Not started |
 | V7 | Integrated production/package verification and physical acceptance | Not started |
 
@@ -158,6 +158,23 @@ to every `ui_*` command, including events emitted from `PracticeScreen`.
 The existing command-success navigation handles the new intent names.
 The original direct API command forms remain available to external tools,
 and the transport/admission redesign remains open.
+
+**V0 transport findings for V3/V4:** The native
+`ScoreAdmissionGateway._deadline_at_world` still inverts the
+`ContinuousScoreFlow` visual projector to pick a musical start
+deadline after the backend has already published its earliest admissible
+deadline. `GuidedPresentationSession.update_hold` releases an
+acknowledged Pause's visual hold when a pending Resume intent appears,
+even though `playback.present` may not yet have authorized it.
+`PresentationTimeline.forecast_authored` falls back to the held
+`project()` when no tempo segments are supplied, so keeping the hold
+can instead make a future Resume deadline unreachable. This is a
+specific ownership/design conflict, not a completed fix. V3 must move
+the final deadline choice to the backend using native physical
+measurements, and V4 must permit a purely hypothetical future
+projection while the displayed hold remains in force until the
+authorized receipt. Do not add a second transport clock, silently
+release Pause while reserving, or shift an already admitted source.
 
 The old policy file is still retained pending a complete caller sweep,
 and all native/software gates remain unverified.

@@ -175,6 +175,32 @@ request. The score still must be physically ready for start/restart
 authorization. Explicit legacy public commands continue to work during
 the migration.
 
+**Follow-up in-progress migration:** The `controls` projection
+now includes eight user gestures: primary, Pause, Retry, Listen,
+Previous lesson, Skip, tempo increase and tempo decrease. Native
+`PracticeScreen` consumes the projected visibility/enablement and
+caption facts; the clicked navigation/tempo actions are routed as
+uninterpreted `ui_*` intents, resolved from the fresh Python
+snapshot. All UI intents carry `score_ready`, renderer revision
+and source fingerprint. The application lock rejects a ready
+renderer belonging to a different source revision before it acts.
+The backend command-success routing recognizes the new navigation
+intents. Native business-state inference remains elsewhere, notably
+in admission, presentation hold and remaining advanced controls.
+
+**V3/V4 conflict identified:** `ScoreAdmissionGateway._deadline_at_world`
+calculates a graded deadline by inverting a Godot visual timeline,
+while `GuidedPresentationSession.update_hold` releases the visible
+Pause hold for a *pending* Resume intent to make that inversion
+possible. The current `PresentationTimeline.forecast_authored`
+uses held `project()` for an empty tempo segment map, blocking
+future forecasting while Pause stays frozen. The replacement needs
+two distinct read operations on the *same* canonical projection:
+painted world (held until authorized) and pure candidate future
+geometry (never mutates painted world), with the final deadline
+chosen and validated by the backend owner. This is a source audit
+finding, not an implementation claim.
+
 This is **not** completion of V0 or V2. Native admission and deadline
 selection still span `ScoreAdmissionGateway` and Python; the visual
 `PresentationTimeline` still has native hold/rate logic, and the old
