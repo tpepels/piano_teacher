@@ -291,7 +291,7 @@ No test modules or substitute renderers were added. Both core and native-product
 ([run 44895386721](https://github.com/tpepels/piano_teacher/actions/runs/44895386721)).
 Physical acceptance still requires the instrument.
 
-## Active plan — PracticeEngine architecture replacement (2026-11-21)
+## PracticeEngine architecture replacement: implementation and acceptance (2026-11-21)
 
 **Status: source decomposition integrated and core verified; final software acceptance is still open.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
 has **2,783 nonblank/trailing-newline-adjusted source lines, 151,578 bytes and

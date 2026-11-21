@@ -363,13 +363,16 @@ plan, recorder, renderer or clock. Source/fingering installation similarly uses
 an immutable generation/fingerprint/original-notes identity and a validated
 install effect; a late correction cannot replace another source.
 
-## Planned PracticeEngine decomposition — 2026-11-21
+## PracticeEngine decomposition: original design and implemented boundaries — 2026-11-21
 
-The active [S0–S7 plan](../ROADMAP.md#active-plan--practiceengine-architecture-replacement-2026-11-21)
+The active [S0–S7 plan](../ROADMAP.md#practiceengine-architecture-replacement-implementation-and-acceptance-2026-11-21)
 supersedes treating the oversized `server.py` facade as mere deferred
-file cleanup. At the `f8bd9cd` baseline it contains 2,783 lines, 168
-methods and 151,578 bytes. This section describes an **intended**
-architecture, not an implementation already present in `main`.
+file cleanup. At the historical `f8bd9cd` baseline the facade contained
+2,783 lines, 168 methods and 151,578 bytes. The initial target architecture
+below documents the **design rationale**; its implemented services and
+source evidence are mapped in
+[Current embedded Python application boundaries](#current-embedded-python-application-boundaries-2026-11-21).
+This is no longer an unimplemented proposal.
 
 **New architectural layers and boundaries are allowed and may replace
 existing ones.** The only architectural constraints are those needed for
@@ -756,10 +759,12 @@ excluded from standalone package assembly.
 
 This source audit, including the production Python/GDScript keyword and
 caller inspection, is evidence about known paths, not a formal proof against
-all dynamic interactions. The main `PracticeEngine` facade is still 2,783
-lines and declares 168 methods; it is the largest remaining maintainability
-risk. CI and instrument-level acceptance are reported independently in the
-roadmap. No new tests or parallel services were added.
+all dynamic interactions. At that historical audit revision, the main
+`PracticeEngine` facade was 2,783 lines and declared 168 methods.
+It was decomposed in the later S0–S7 work documented above; present sizes,
+software gates and outstanding physical acceptance are reported separately in
+the roadmap. No new tests or parallel services were added by the original
+read-only audit.
 
 Audited implementation: `640a77f5`. Read-only implementation review, a Python
 import-graph inspection and an existing real-MIDI/public-command diagnostic
