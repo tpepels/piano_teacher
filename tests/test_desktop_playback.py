@@ -160,6 +160,9 @@ def test_listen_audio_and_lighting_wait_for_the_presented_score(practice_session
 def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(practice_session):
     session = practice_session(bars=1)
     intent = desktop_tempo(session)
+    # Real desktop score assets are prepared before this admission receipt.
+    # Previously the musical-tick engraving fallback hid the omitted step.
+    session.ask("score.native_layout")
     receipt = reserve(session, intent)
     initial = present(session, intent, receipt)
     for bpm, next_bpm in ((40,48), (48,56), (56,64), (64,72), (72,80), (80,80)):
@@ -177,6 +180,8 @@ def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(p
                  if event.get("final") and event["kind"] == "assessment"
                  and event["transport_id"] == initial["transport_id"]]
         assert len(final) == 2
+        # A successor's source/revision must also be prepared off the clock.
+        session.ask("score.native_layout")
         receipt = reserve(session, incoming, deadline_ms=incoming["fixed_deadline_ms"])
         result = present(session, incoming, receipt)
         assert result["transport_id"] != initial["transport_id"]

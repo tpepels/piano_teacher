@@ -280,9 +280,15 @@ invoke Verovio. It now reads only the already-published layout and raises a
 recoverable `RuntimeError` when missing. `assess_completed_take` already
 catches that error after grading, preserves the canonical note assessment and
 reports unmapped feedback without compiling a replacement score in the tick.
-No second renderer or replacement grading path was introduced. The
-`[native]` tagged source commit requests both core CI and the full embedded
-package/repertoire gate; physical acceptance still requires the instrument.
+No second renderer or replacement grading path was introduced.
+The first tagged core CI uncovered a genuine desktop-command fixture omission:
+the automatic-repeat scenario never requested `score.native_layout` before
+simulating admission. The old tick-time engraving masked the omission. The
+existing test now requests the real native asset layout before the initial
+and each successive reservation, as the production Godot asset worker does.
+No test modules or substitute renderers were added. Both core and the embedded
+native/package checks require a green tagged rerun; physical acceptance
+still requires the instrument.
 
 ## Phase status and remaining acceptance
 
