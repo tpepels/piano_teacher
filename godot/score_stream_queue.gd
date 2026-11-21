@@ -13,6 +13,14 @@ const Archive := preload("res://score_stream_archive.gd")
 static var _shared_archives: Dictionary = {}
 
 var online: Array = []
+var admission_refusal := ""
+
+func _reject_admission(reason: String) -> bool:
+    # Keep the first physical reason on this queue; renderer diagnostics
+    # report it together with the immutable source and world coordinates.
+    admission_refusal = reason
+    return false
+
 # Source owner serials belong to ONE renderer; another renderer can also
 # have serial 1. A stable per-renderer journal scope prevents collisions.
 var _writer_id := ""
@@ -178,8 +186,9 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
     # Validate the caller's ORIGINAL musical request before considering
     # an offline template. A malformed rest or overlapping source cannot be
     # silently repaired by a compatible archived passage.
+    admission_refusal = ""
     if not Lifecycle.validate_batch(online,specs):
-        return false
+        return _reject_admission("invalid_or_duplicate_source_rest_batch")
     var planned: Dictionary = {}
     for spec in specs:
         if str(spec.get("kind","")) == "source":
@@ -200,17 +209,20 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
             "source") <= world+.00001
     var inside: bool = is_finite(opening_left) and \
         playhead_x + (opening_left-world)*density <= viewport_width
-    if not is_finite(opening_left) or (inside and not onto_empty_strip) or \
-            not clears_prior_layers(opening_left,density,
-                viewport_width,playhead_x,inside and onto_empty_strip):
-        return false
+    if not is_finite(opening_left):
+        return _reject_admission("nonfinite_first_printed_pixel")
+    if inside and not onto_empty_strip:
+        return _reject_admission("source_ink_inside_viewport_without_empty_strip")
+    if not clears_prior_layers(opening_left,density,
+            viewport_width,playhead_x,inside and onto_empty_strip):
+        return _reject_admission("source_ink_overlaps_previous_renderer_layer")
     var batch_left: float = opening_left
     for spec in specs:
         if str(spec.get("rest_position","after")) == "before":
             batch_left = minf(batch_left,float(spec["world_origin"]))
     if batch_left < opening_left-.00001 and not clears_prior_layers(
             batch_left,density,viewport_width,playhead_x):
-        return false
+        return _reject_admission("leading_rest_overlaps_previous_renderer_layer")
     if not online.is_empty():
         var end_beat := -INF
         for item in online:
@@ -218,7 +230,9 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
                 item,density,gap,source_duration)
             end_beat = maxf(end_beat,float(item["world_origin"])+bounds.y/density)
         if batch_left < end_beat-.00001:
-            return false
+            return _reject_admission(
+                "source_or_rest_overlap: incoming=%.6f previous_end=%.6f" % [
+                    batch_left,end_beat])
     var prepared: Array = specs
     var matching: Dictionary = _archive.compatible(specs)
     if not matching.is_empty():
@@ -226,11 +240,11 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         # boundary has already approved the new world-time location.
         prepared = _archive.materialize(matching,specs)
         if prepared.is_empty():
-            return false
+            return _reject_admission("archived_source_plan_unavailable")
     var before: int = online.size()
     if not Lifecycle.admit(owner,online,prepared,
             source_pool,rest_pool,first_source,create_segment):
-        return false
+        return _reject_admission("retained_canvas_allocation_failed")
     var plan: Array = []
     for item in prepared:
         plan.append(source_record(item))
@@ -254,7 +268,7 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         # preceding offline copy. Roll back its entire newly created suffix.
         while online.size() > before:
             Lifecycle.retire(owner,online.pop_back())
-        return false
+        return _reject_admission("source_journal_write_failed: "+_archive.last_error)
     return true
 
 func _is_safe_tail(passes: Array, owner_serial: int, world: float,
