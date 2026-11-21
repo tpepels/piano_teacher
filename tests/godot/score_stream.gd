@@ -67,7 +67,10 @@ func run() -> void:
     controller.observe_transport(geometry(2.5),2.5,0.0,0.0,"piece|7|10|practice","paused",true,false,true,"first",true)
     check(fixed_music(controller.online_snapshot()) == music,"Pause preserves every committed source and release boundary")
     Lifecycle.project(first,2.5,330.0,100.0,20.0,Vector2(1000,600),4.0)
-    check(first.clip.position.x+first.segment.position.x < before_x,"Exposed score continues left during Pause")
+    # This is a raw geometric projection at a later supplied world beat.
+    # The owning presentation session freezes that input beat on Pause.
+    check(first.clip.position.x+first.segment.position.x < before_x,
+        "Source projects forward for increasing world time without moving its binding")
     var resume: Dictionary = Reservation.plan_facts(facts(controller,2.5),"resume",2.5,0.0,4.0)
     check(bool(resume.get("ok",false)),"Resume can reserve new ink without moving exposed music")
     var resumed: Dictionary = controller.arm_take(geometry(2.5),2.5,0.0,6.7,0.4,
@@ -91,15 +94,16 @@ func run() -> void:
         "Retry preserves exposed original notes and their written rest")
     check(controller.visible_take_keys().has("piece|7|10|practice")
         and controller.visible_take_keys().has("piece|7|11|practice"),"Old and retried score copies keep separate results")
-    # A direct Tempo repeat uses the backend's deadline, even with a long
-    # decorative outgoing rest. It cannot schedule another runway delay.
+    # An already-printed rest is physical queue ink. A fixed Tempo repeat
+    # must refuse overlap at preflight instead of passing the backend's
+    # deadline to a queue that cannot commit it. The deadline cannot move.
     var repeat_facts := facts(controller,8.0)
     repeat_facts.online = [{"kind":"rest","world_origin":8.0,"source_floor":0.0,"source_ceiling":20.0}]
     repeat_facts.withdrawn = {"remaining":repeat_facts.online,"owners":[]}
     repeat_facts.peer_source_floor = -INF
     var repeat: Dictionary = Reservation.plan_facts(repeat_facts,"auto",8.0,0.0,4.0,12.0)
-    check(bool(repeat.get("ok",false)) and is_equal_approx(float(repeat.start_world),12.0),
-        "Decorative rest context cannot postpone an authorized one-bar Tempo repeat")
+    check(not bool(repeat.get("ok",false)),
+        "An exact Tempo repeat must refuse overlap with an admitted rest")
     repeat_facts.withdrawn.remaining = [{"kind":"source","world_origin":10.0,
         "source_floor":0.0,"source_ceiling":4.0}]
     check(not bool(Reservation.plan_facts(repeat_facts,"auto",8.0,0.0,4.0,12.0).get("ok",false)),
