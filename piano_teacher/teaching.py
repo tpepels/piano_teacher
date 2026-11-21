@@ -32,6 +32,7 @@ class TeachingController:
         self._pressed_at: dict[tuple[int, int], float] = {}
         self._event_floor = 0.0
         self._paused_at = 0.0
+        self._resume_phase = ""
         self._feedback: dict[str, dict] = {}
         self._candidates: dict[tuple[int, int], float] = {}
         self._persistent_hints = config.persistent_hints
@@ -62,6 +63,7 @@ class TeachingController:
         self._assisted_count = 0
         self._connected = connected
         self._phase = "introducing" if connected else "disconnected"
+        self._resume_phase = ""
         self._keys.clear()
         self._blocked_keys = held
         self._pressed_at = {key: at for key, at in self._pressed_at.items() if key in held}
@@ -85,9 +87,11 @@ class TeachingController:
             self._hint_used = self._persistent_hints
 
     def pause(self, *, now: float):
-        if self._phase != "guided_wait":
+        if self._phase not in ("guided_wait", "introducing", "disconnected"):
             return
-        self.tick(now=now)
+        if self._phase == "guided_wait":
+            self.tick(now=now)
+        self._resume_phase = self._phase
         self._paused_at = now
         self._event_floor = now
         self._phase = "paused"
@@ -96,13 +100,23 @@ class TeachingController:
         self._candidates.clear()
 
     def resume(self, *, now: float):
-        if self._phase == "paused" and self._connected:
-            self._waiting_since += max(0.0, now - self._paused_at)
-            self._event_floor = now
-            self._phase = "guided_wait"
+        if self._phase != "paused":
+            return
+        self._waiting_since += max(0.0, now - self._paused_at)
+        self._event_floor = now
+        # Restore the actual Free phase, not always guided_wait. A piano
+        # disconnected during Pause cannot make a stale target playable.
+        if not self._connected:
+            self._phase = "disconnected"
+        elif self._resume_phase == "disconnected":
+            self._phase = "introducing"
+        else:
+            self._phase = self._resume_phase or "introducing"
+        self._resume_phase = ""
 
     def stop(self):
         self._phase = "ready" if self._connected else "disconnected"
+        self._resume_phase = ""
         self._target_index = 0
         self._assisted_count = 0
         self._blocked_keys.update(self._keys)
@@ -116,7 +130,13 @@ class TeachingController:
         if bool(connected) == self._connected:
             return
         self._connected = bool(connected)
-        self._phase = "ready" if connected else "disconnected"
+        if self._phase == "paused":
+            # Connection changes may arrive during a held transport. Preserve
+            # the paused state; resume will present a valid new Free opening.
+            self._resume_phase = "introducing" if connected else "disconnected"
+        else:
+            self._phase = "ready" if connected else "disconnected"
+            self._resume_phase = ""
         self._keys.clear()
         self._blocked_keys.clear()
         self._pressed_at.clear()
