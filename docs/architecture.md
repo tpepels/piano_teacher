@@ -246,6 +246,15 @@ a paused existing variable-tempo source retains its actual segments.
 The new contract removes a duplicate musical-deadline decision,
 although native-to-engine transaction/lifecycle acceptance remains open.
 
+### V3 native receipt identity gate
+
+The native gateway checks the complete immutable intent/attempt/take
+identity before binding a physical source, accepting the presentation
+reply or promoting a prepared renderer. A reply without a matching
+segment cannot authorize local notation or count-in. Uncertain or
+mismatched authorization is reconciled against the backend ledger,
+not inferred from an asynchronous callback arriving successfully.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

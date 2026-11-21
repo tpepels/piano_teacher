@@ -326,6 +326,11 @@ func observe(state: Dictionary, frame_ms: int) -> void:
         return
     _admit(intent,state,frame_ms)
 
+func _matches_intent(reply: Dictionary, expected: Dictionary) -> bool:
+    return (str(reply.get("intent_id","")) == str(expected.get("intent_id",""))
+        and int(reply.get("attempt",-1)) == int(expected.get("attempt",-2))
+        and str(reply.get("take_id","")) == str(expected.get("take_id","")))
+
 func _reserved(code: int, body: PackedByteArray) -> void:
     if current.is_empty():
         return
@@ -335,6 +340,12 @@ func _reserved(code: int, body: PackedByteArray) -> void:
         _cancel_provisional()
         _report_problem("Backend rejected notation reservation: "+str(
             data.get("error","invalid receipt") if data is Dictionary else code))
+        return
+    if not _matches_intent(data,current) or \
+            str(data.get("segment_id","")).is_empty() or \
+            not is_finite(float(data.get("deadline_ms",NAN))):
+        _cancel_provisional()
+        _report_problem("Score reservation reply disagrees with the pending intent")
         return
     receipt = data
     if renderer == null or not is_instance_valid(renderer) or \
@@ -360,7 +371,9 @@ func _send_presentation() -> void:
 func _presented(code: int, body: PackedByteArray) -> void:
     var data: Variant = JSON.parse_string(body.get_string_from_utf8())
     if code == 0 and data is Dictionary and \
-            bool(data.get("authorized",false)):
+            bool(data.get("authorized",false)) and \
+            _matches_intent(data,receipt) and \
+            str(data.get("segment_id","")) == str(receipt.get("segment_id","")):
         pending_reconciliation = false
         _confirm_authorized(data)
     else:
@@ -401,7 +414,10 @@ func _confirm_authorized(data: Dictionary) -> void:
     if receipt.is_empty():
         return
     var expected: String = str(receipt.get("segment_id",""))
-    if str(data.get("segment_id","")) != expected:
+    if str(data.get("segment_id","")) != expected or \
+            not _matches_intent(data,receipt):
+        pending_reconciliation = true
+        _query_status()
         return
     if runway != null and renderer != null and \
             is_instance_valid(renderer) and runway.owns_prepared_renderer(renderer):

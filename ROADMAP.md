@@ -307,6 +307,13 @@ The native physical forecast now reads the **currently authorized**
 guessing from `phase == playing` or taking the new stage's tempo
 before the handoff. That distinction prevents a future stage or a
 paused source from accidentally changing the clearance calculation.
+The native `_reserved`, `_presented` and final authorized
+handoff now share one exact intent/attempt/take-id check, including
+segment identity where available. Delayed or misrouted results cannot
+bind a newer provisional renderer or start metronome/score epochs;
+an uncertain authorized reply reconciles with the backend transaction
+ledger rather than guessing acceptance.
+
 Reserve retry now compares the *entire original physical witness*
 with its stored receipt before checking measurement freshness.
 This makes identical lost-ACK retransmissions idempotent, while
