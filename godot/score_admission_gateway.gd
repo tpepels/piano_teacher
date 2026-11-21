@@ -265,6 +265,10 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         "renderer_generation": int(intent["revision"]),
         "reused_count_in": bool(current["reused_count_in"]),
     }
+    # This witness is immutable for the life of the provisional arm.
+    # A lost reserve response is recovered from the backend ledger only
+    # when all source and physical identity fields match this exact offer.
+    current["physical_offer"] = payload.duplicate(true)
     if reserve_request.request("playback.reserve",payload) != OK:
         _cancel_provisional()
 
@@ -314,13 +318,13 @@ func observe(state: Dictionary, frame_ms: int) -> void:
             if reserve_request.is_pending() or \
                     present_request.is_pending():
                 return
-            if not receipt.is_empty():
+            if not receipt.is_empty() or pending_reconciliation:
                 pending_reconciliation = true
                 if not status_request.is_pending() and \
                         Time.get_ticks_msec()-started_ms >= 400:
                     started_ms = Time.get_ticks_msec()
                     _query_status()
-            elif not pending_reconciliation:
+            else:
                 _cancel_provisional()
         return
     var identifier: String = str(intent.get("intent_id",""))
@@ -333,8 +337,7 @@ func observe(state: Dictionary, frame_ms: int) -> void:
             if pending_reconciliation and not present_request.is_pending() and \
                     not reserve_request.is_pending() and \
                     not status_request.is_pending() and \
-                    Time.get_ticks_msec()-started_ms > 800 and \
-                    not receipt.is_empty():
+                    Time.get_ticks_msec()-started_ms > 800:
                 started_ms = Time.get_ticks_msec()
                 _query_status()
             return
@@ -344,7 +347,7 @@ func observe(state: Dictionary, frame_ms: int) -> void:
                 present_request.is_pending() or \
                 status_request.is_pending():
             return
-        if not receipt.is_empty():
+        if not receipt.is_empty() or pending_reconciliation:
             pending_reconciliation = true
             _query_status()
             return
@@ -358,32 +361,68 @@ func _matches_intent(reply: Dictionary, expected: Dictionary) -> bool:
         and int(reply.get("attempt",-1)) == int(expected.get("attempt",-2))
         and str(reply.get("take_id","")) == str(expected.get("take_id","")))
 
+func _matches_reservation(reply: Dictionary) -> bool:
+    if current.is_empty() or not _matches_intent(reply,current) or \
+            not bool(reply.get("reserved",false)):
+        return false
+    var offer: Variant = current.get("physical_offer")
+    if not offer is Dictionary:
+        return false
+    # A segment name or take ID alone cannot attest ownership: an earlier
+    # arm for the same intent could have been withdrawn and replaced.
+    # The ledger receipt must describe this exact immutable stream arm.
+    return (not str(reply.get("segment_id","")).is_empty()
+        and is_finite(float(reply.get("deadline_ms",NAN)))
+        and float(reply.get("deadline_ms",NAN)) > 0.0
+        and is_finite(float(reply.get("world_origin",NAN)))
+        and absf(float(reply.get("world_origin",NAN)) -
+            float(offer.get("world_origin",NAN))) <= .00001
+        and int(reply.get("queue_generation",-1)) ==
+            int(offer.get("queue_generation",-2))
+        and int(reply.get("renderer_generation",-1)) ==
+            int(offer.get("renderer_generation",-2))
+        and absf(float(reply.get("sampled_at_ms",NAN)) -
+            float(offer.get("sampled_at_ms",NAN))) <= .001
+        and absf(float(reply.get("travel_ms",NAN)) -
+            float(offer.get("travel_ms",NAN))) <= .001
+        and bool(reply.get("reused_count_in",false)) ==
+            bool(offer.get("reused_count_in",false)))
+
+
+func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
+    if not _matches_reservation(authorized_offer):
+        _report_problem("Backend reserved different physical score source")
+        _cancel_provisional()
+        return
+    receipt = authorized_offer.duplicate(true)
+    if renderer == null or not is_instance_valid(renderer) or \
+            not renderer.bind_stream_segment(str(receipt["segment_id"])) or \
+            not renderer.acknowledge_stream_arm():
+        _cancel_provisional()
+        return
+    # A recovered reservation follows the exact same two-phase commit:
+    # the prepared score is still provisional until playback.present.
+    pending_reconciliation = false
+    _send_presentation()
+
+
 func _reserved(code: int, body: PackedByteArray) -> void:
     if current.is_empty():
         return
     var data: Variant = JSON.parse_string(body.get_string_from_utf8())
-    if code != 0 or not data is Dictionary or \
-            not bool(data.get("reserved",false)):
-        _cancel_provisional()
-        _report_problem("Backend rejected notation reservation: "+str(
-            data.get("error","invalid receipt") if data is Dictionary else code))
+    if code == 0 and data is Dictionary and _matches_reservation(data):
+        _bind_backend_reservation(data)
         return
-    if not _matches_intent(data,current) or \
-            str(data.get("segment_id","")).is_empty() or \
-            not is_finite(float(data.get("deadline_ms",NAN))):
-        _cancel_provisional()
-        _report_problem("Score reservation reply disagrees with the pending intent")
-        return
-    receipt = data
-    if renderer == null or not is_instance_valid(renderer) or \
-            not renderer.bind_stream_segment(str(data.get("segment_id",""))) or \
-            not renderer.acknowledge_stream_arm():
-        _cancel_provisional()
-        return
-    # Keep the preloaded renderer provisional until the backend confirms
-    # authorization. A failed/expired receipt must not replace the visible
-    # outgoing stage; promotion is the final local presentation commit.
-    _send_presentation()
+    # The worker may have COMMITTED reserve before its reply was dropped
+    # or timed out. Do not cancel that physical arm on callback status.
+    # Read the backend ledger first and accept only the original witness.
+    pending_reconciliation = true
+    if code != 0:
+        _report_problem("Score reservation reply uncertain; reconciling")
+    else:
+        _report_problem("Score reservation reply mismatched; checking ledger")
+    _query_status()
+
 
 func _send_presentation() -> void:
     if receipt.is_empty():
@@ -410,33 +449,51 @@ func _presented(code: int, body: PackedByteArray) -> void:
         _query_status()
 
 func _query_status() -> void:
-    if not status_request.is_pending() and not receipt.is_empty():
+    if not status_request.is_pending() and not current.is_empty():
         status_request.request("playback.status")
 
 func _status_received(code: int, body: PackedByteArray) -> void:
-    if not pending_reconciliation or receipt.is_empty():
+    if not pending_reconciliation or current.is_empty():
         return
     if code != 0:
-        # No rollback on an uncertain response: the old notation may
-        # already be grading. The next state poll retries reconciliation.
+        # No rollback on an uncertain status response; polling the active
+        # transaction will retry after the bounded interval.
         return
     var status: Variant = JSON.parse_string(body.get_string_from_utf8())
     if not status is Dictionary:
         return
+    var ledger_offer: Variant = status.get("reservation")
+    if receipt.is_empty():
+        if (ledger_offer is Dictionary and
+                _matches_reservation(ledger_offer) and
+                str(status.get("state","")) == "reserved"):
+            # The reserve reply was lost after commit. The backend ledger
+            # provides the same immutable receipt; bind and present once.
+            _bind_backend_reservation(ledger_offer)
+            return
+        # With no local receipt, we have not sent playback.present.
+        # The backend therefore cannot have authorized THIS tentative
+        # arm. A different/absent ledger reservation means rollback.
+        _cancel_provisional()
+        return
     var expected: String = str(receipt.get("segment_id",""))
-    if (str(status.get("active_segment_id","")) == expected
-            and str(status.get("state","")) not in ["failed","idle"]):
+    if (str(status.get("active_segment_id","")) == expected and
+            str(status.get("active_take_id","")) ==
+                str(receipt.get("take_id","")) and
+            str(status.get("state","")) not in ["failed","idle"]):
         _confirm_authorized(receipt)
         return
-    if str(status.get("reserved_segment_id","")) == expected and \
-            str(status.get("intent_id","")) == str(receipt.get("intent_id","")) and \
-            int(status.get("attempt",-2)) == int(receipt.get("attempt",-1)):
+    if (ledger_offer is Dictionary and
+            _matches_reservation(ledger_offer) and
+            str(status.get("reserved_segment_id","")) == expected and
+            str(status.get("state","")) == "reserved"):
         pending_reconciliation = false
         _send_presentation()
         return
-    # Definitively absent from both active and reserved state. The
-    # reservation expired or was superseded; its unseen ink can be removed.
+    # The backend has no matching active or reserved segment.
+    # Withdraw only the local provisional ink, never the prior live take.
     _cancel_provisional()
+
 
 func _confirm_authorized(data: Dictionary) -> void:
     if receipt.is_empty():
