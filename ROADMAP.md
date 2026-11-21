@@ -260,6 +260,17 @@ Peace Piece, Chopin Nocturne, and relocated standalone package boot
 all passed. This does not certify physical Kawai CA49 MIDI/audio,
 scrolling appearance, or clean-machine desktop use.
 
+### Headless projection boundary — 2026-11-21
+
+The non-graphical `score_queue_next` fixture projection was moved out of
+`ScoreStatePublisher` into `application/headless_score_projection.py`.
+Desktop publication now consumes only accepted `PlaybackCoordinator` intents
+and the guided presentation plan; it does not compute a simulated score queue.
+The engine calls the fixture adapter solely when presentation is not required.
+Existing tests retain their historical `score_queue_next` shape and no new
+tests or architecture-shape assertions were introduced. This change requires
+remote CI verification before acceptance; physical acceptance remains open.
+
 ## Phase status and remaining acceptance
 
 ### Historical architecture re-audit — pre-correction log

@@ -35,6 +35,7 @@ from .application.passage_outcome_presenter import performance_next_action
 from .application.learning_evidence_session import LearningEvidenceSession
 from .application.source_preparation_session import SourcePreparationSession
 from .application.score_state_publisher import ScoreStatePublisher, ScoreProjectionFacts
+from .application.headless_score_projection import project_headless_score_queue
 from .application.attempt_settlement import AttemptSettlement
 from .application.attempt_runtime import AttemptRuntime
 from .application.recovery_streak import RecoveryStreak
@@ -2575,15 +2576,19 @@ class PracticeEngine:
             pending, timeline = self.playback.snapshot()
             facts = self._score_projection_facts(pending,timeline)
             plan = self.plan
-            def count_in_source_at(from_beat, rate):
-                _, bars, meter = self.attempt_progression.count_in_bar(
-                    phrase=plan.active_phrase,
-                    boundaries=plan.piece.bar_boundaries,
-                    time_signatures=plan.piece.time_signatures,
-                    position=from_beat)
-                return bars,meter,self._start_rate_bpm(from_beat,rate)
-            self.score_state_publisher.publish(
-                state,facts,now=now,measure_at=count_in_source_at)
+            guided_plan = self.score_state_publisher.publish(state, facts)
+            if not self.playback.presentation_required:
+                # Test/command fixture adapter; never entered by the desktop.
+                def count_in_source_at(from_beat, rate):
+                    _, bars, meter = self.attempt_progression.count_in_bar(
+                        phrase=plan.active_phrase,
+                        boundaries=plan.piece.bar_boundaries,
+                        time_signatures=plan.piece.time_signatures,
+                        position=from_beat)
+                    return bars,meter,self._start_rate_bpm(from_beat,rate)
+                project_headless_score_queue(
+                    state, facts, measure_at=count_in_source_at,
+                    guided=guided_plan)
             if self.attempt_settlement.pending_result is not None:
                 state["bpm"] = self._presentation_bpm
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]

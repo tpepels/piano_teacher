@@ -401,10 +401,12 @@ epochs but cannot grade or admit MIDI.
 Source-level findings and changes:
 
 1. The old `score_queue_next` plan remains an explicit headless fixture
-   projection in Python. The Godot stream-binding runtime no longer reads
-   it: missing-score diagnostics now report the actual backend segment
-   identity. The shared snapshot schema can still describe the headless
-   value without choosing it for production admission.
+   projection in Python, now isolated in
+   `application/headless_score_projection.py` (2026-11-21). The product
+   `ScoreStatePublisher` publishes only admitted desktop intents and guided
+   plans. `PracticeEngine` calls the headless adapter only when presentation
+   is disabled. Godot diagnostics use the actual backend segment identity;
+   no graphical score stream reads the compatibility projection.
 2. Assessment ink rejects layouts without `source-note-v1` bindings.
    The former pitch/onset-nearest fallback has been removed; only the
    canonical note-to-head mapping can colour music.
