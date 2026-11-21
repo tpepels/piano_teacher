@@ -139,7 +139,13 @@ class EngineCommands:
                 return self._reply(OK, engine.hardware_diagnostics_action(
                     values.get("action", "")))
             elif operation == "practice.command":
-                engine.control(**values)
+                # The command result and authoritative state snapshot are
+                # separate protocols. Do not inject a transient user event
+                # into the persistent versioned state contract.
+                outcome = engine.control(**values)
+                return self._reply(OK, {
+                    "state": engine.state(), "outcome": outcome,
+                })
             else:
                 return self._reply(UNKNOWN, {"error": f"Unknown operation: {operation}"})
             return self._reply(

@@ -172,8 +172,29 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
         var result: Variant = Reply.decode_reply(body)
         learning_accepted.emit(operation,
             result if result is Dictionary else {})
+    var accepted_outcome: Dictionary = {}
+    var presentation_body: PackedByteArray = body
+    if operation == "practice.command":
+        var envelope: Variant = Reply.decode_reply(body)
+        if (not envelope is Dictionary or
+                not envelope.get("state") is Dictionary or
+                not envelope.get("outcome") is Dictionary):
+            command_failure_presenter.present(
+                "Practice command returned no accepted state/outcome",
+                operation,false)
+            _flush_transport_action()
+            return
+        accepted_outcome = envelope["outcome"]
+        if (int(accepted_outcome.get("version",-1)) != 1
+                or not accepted_outcome.get("effects") is Dictionary):
+            command_failure_presenter.present(
+                "Practice command outcome contract is obsolete",
+                operation,false)
+            _flush_transport_action()
+            return
+        presentation_body = JSON.stringify(envelope["state"]).to_utf8_buffer()
     var decision: Dictionary = CommandSuccessPolicy.decide(
-        operation,str(completed["action"]),bool(completed["resume_saved"]),opened)
+        operation,bool(completed["resume_saved"]),opened,accepted_outcome)
     if str(decision["kind"]) == "fingering":
         fingering_save_error = ""
         present_fingering_status()
@@ -182,7 +203,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
     if bool(decision.get("publish_state",false)):
         last_published_control_started_ms = maxi(
             last_published_control_started_ms,int(completed["started_ms"]))
-    succeeded.emit(decision,opened,code,body,int(completed["started_ms"]))
+    succeeded.emit(decision,opened,code,presentation_body,
+        int(completed["started_ms"]))
     _flush_transport_action()
     refresh_requested.emit()
     var deferred: Dictionary = state.take_library()

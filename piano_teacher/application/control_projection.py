@@ -107,6 +107,28 @@ def project_controls(s: Mapping) -> dict:
     }
 
 
+# View effects of the action ACTUALLY executed by the backend, never of a
+# stale raw gesture or a label reconstructed by the Godot screen.
+NAVIGATION_ACTIONS = frozenset((
+    "select_step", "skip_stage", "place_original",
+    "revisit_trouble", "learn_next", "open_at"))
+CALIBRATION_ACTIONS = frozenset(("calibration_apply", "calibration_reset"))
+
+
+def project_command_outcome(action: str | None) -> dict:
+    """Transient, versioned command result; never a persistent state field."""
+    return {
+        "version": 1,
+        "executed": action is not None,
+        "action": action or "",
+        "effects": {
+            "navigate_practice": action in NAVIGATION_ACTIONS,
+            "refresh_settings": action in CALIBRATION_ACTIONS,
+            "invalidate_lesson": action == "reset_path",
+        },
+    }
+
+
 def resolve_ui_intent(intent: str, state: Mapping, *,
                       score_ready: bool, score_error: str = "") -> tuple[str | None, dict]:
     """Resolve the raw gesture under the session lock; renderer supplies readiness."""

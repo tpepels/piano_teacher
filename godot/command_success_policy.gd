@@ -1,12 +1,8 @@
 extends RefCounted
 ## Success classification only. The command coordinator applies completion
 ## effects, score publication and deferred library selection.
-const GUIDED_NAVIGATION := ["skip_stage", "place_original", "revisit_trouble",
-    "ui_previous", "ui_review_previous", "ui_skip"]
-const CALIBRATION_ACTIONS := ["calibration_apply", "calibration_reset"]
-
-static func decide(path: String, action: String,
-        resume_saved: bool, opened: Variant = null) -> Dictionary:
+static func decide(path: String, resume_saved: bool,
+        opened: Variant = null, outcome: Dictionary = {}) -> Dictionary:
     var kind := "other"
     var open_mode := "none"
     if path == "fingering.correct":
@@ -27,13 +23,18 @@ static func decide(path: String, action: String,
         kind = "settings"
     elif path == "midi.device.select":
         kind = "device"
+    var effects: Dictionary = outcome.get("effects",{}) \
+        if kind == "control" else {}
     return {
         "kind": kind,
-        "invalidate_lesson": kind == "control" and action == "reset_path",
-        "refresh_settings": (kind == "control" and action in CALIBRATION_ACTIONS)
+        "invalidate_lesson": kind == "control" and
+            bool(effects.get("invalidate_lesson",false)),
+        "refresh_settings": (kind == "control" and
+            bool(effects.get("refresh_settings",false)))
             or kind in ["settings","device"],
         "refresh_library": kind == "settings",
-        "navigate_practice": (kind == "control" and action in GUIDED_NAVIGATION)
+        "navigate_practice": (kind == "control" and
+            bool(effects.get("navigate_practice",false)))
             or (kind == "library_open" and open_mode in ["practice","resume_choice"]),
         "publish_state": kind in ["fingering","control"] or
             (kind == "library_open" and

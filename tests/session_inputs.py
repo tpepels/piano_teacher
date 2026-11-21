@@ -98,7 +98,8 @@ class PracticeSession:
     def ask(self, operation, **payload):
         status, body = self.commands.request(operation, json.dumps(payload))
         assert status == 0, (operation, payload, body.decode())
-        return json.loads(body)
+        response = json.loads(body)
+        return response["state"] if operation == "practice.command" else response
 
     def command(self, action, **values):
         return self.ask("practice.command", action=action, **values)

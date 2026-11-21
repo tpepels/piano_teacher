@@ -5,7 +5,7 @@ are dispatched to their dedicated workflows, not decided a second time.
 """
 from __future__ import annotations
 from .control_dispatch import ControlDispatcher
-from .control_projection import UI_INTENTS, resolve_ui_intent
+from .control_projection import UI_INTENTS, resolve_ui_intent, project_command_outcome
 from .stage_change import prepare_stage_change
 
 
@@ -43,7 +43,7 @@ class PracticeControls:
             self.settings_workflows.update(
                 changes, pause_current=self.timed_playback.pause)
 
-    def control(self, action: str, **kwargs) -> None:
+    def control(self, action: str, **kwargs) -> dict:
         with self.lock:
             if action in UI_INTENTS:
                 ready = kwargs.pop("score_ready", None)
@@ -73,7 +73,7 @@ class PracticeControls:
                 resolved, options = resolve_ui_intent(
                     action, current, score_ready=ready, score_error=error)
                 if resolved is None:
-                    return
+                    return project_command_outcome(None)
                 action = resolved
                 kwargs.update(options)
             with self.session_commands.reason(action):
@@ -97,7 +97,7 @@ class PracticeControls:
                             "after": {"fingerprint": self.source_identity.fingerprint,
                                       "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
                                       "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
-                    return result
+                    return project_command_outcome(action)
 
     def _dispatch_control(self, action: str, route: str, **kwargs) -> None:
         """Dispatch within the existing outer command transaction and lock."""
