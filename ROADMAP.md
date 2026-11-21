@@ -659,6 +659,17 @@ change requires its own core and opt-in native-production verification.
 Removing these ports does not by itself close the S7 dependency-cycle,
 hardware or clean-target-machine acceptance gates.
 
+**S7 command-cohesion and re-entry correction (2026-11-21):**
+`PracticeControls` now handles the single command transaction, provenance
+capture and typed routing. Lesson/navigation effects live in
+`LearningActions`, and authorized playback, transport and score-ready
+acknowledgments live in `TransportActions`. The previous Resume path
+re-entered `control("score_ready")` inside its own command/receipt
+transaction; it now applies the exact infrastructure acknowledgment
+directly, with the prior action reason restored in `finally`. No new
+grading clock, source decision or admission gate is introduced.
+These changes require core and full native/package verification.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public

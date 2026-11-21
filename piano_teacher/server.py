@@ -152,8 +152,8 @@ class PracticeEngine:
     def present_playback(self, **values) -> dict:
         with self.lock:
             return self.playback.present(self.transport_timing.playback_facts(),
-                commit=self.practice_controls.commit_playback_intent,capture=self.transport_timing.playback_facts,
-                abort=self.practice_controls.abort_playback,**values)
+                commit=self.transport_commands.commit_playback_intent,capture=self.transport_timing.playback_facts,
+                abort=self.transport_commands.abort_playback,**values)
 
     def withdraw_playback(self, **values) -> dict:
         with self.lock:
@@ -161,7 +161,7 @@ class PracticeEngine:
 
     def report_playback_failure(self, **values) -> dict:
         with self.lock:
-            self.playback.fail(notify_failure=self.practice_controls.on_playback_failure,**values)
+            self.playback.fail(notify_failure=self.transport_commands.on_playback_failure,**values)
             return {"accepted":True}
 
     def ports(self) -> list[str]:

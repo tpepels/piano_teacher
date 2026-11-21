@@ -23,6 +23,17 @@ services have been removed at both ends. `PracticeEngine` remains a
 global service locator into the application services. Full dependency
 closure and packaged/native acceptance remain separate requirements.
 
+### Command execution boundary — 2026-11-21
+
+`PracticeControls` owns the locked public command scope, user-action evidence
+and typed dispatch. `LearningActions` applies generator-decided lesson
+navigation; `TransportActions` applies the selected playback and admission
+effects. Resume's deferred score-ready work is handled within the current
+transport transaction rather than recursively entering the full command
+router. The existing `SessionCommands`, `PlaybackCoordinator`,
+`PlaybackSession`, and `TeachingDecisions` remain the only owners of their
+respective choices and receipts. This change must pass integration gates.
+
 ## One desktop runtime
 
 The product is one Godot 4.7 desktop process with embedded CPython, authentic

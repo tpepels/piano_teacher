@@ -58,6 +58,8 @@ from .playback_session import PlaybackSession
 from .policy_registry import PolicyRegistry
 from .post_assessment_effects import PostAssessmentEffects
 from .practice_controls import PracticeControls
+from .transport_actions import TransportActions
+from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
 from .recovery_streak import RecoveryStreak
 from .recovery_workflows import RecoveryWorkflows
@@ -350,24 +352,32 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         start_rate_bpm=r.transport_timing.start_rate_bpm,
         presentation_bpm=r.transport_timing.presentation_bpm)
 
+    r.learning_commands = LearningActions(
+        attempt=r.attempt, attempt_settlement=r.attempt_settlement, clock=r.now,
+        exposure_workflows=r.exposure_workflows, flow_session=r.flow_session, guided_session=r.guided_session,
+        lesson_cursor=r.lesson_cursor, lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
+        measurement=r.measurement, notices=r.notices, playback_session=r.playback_session,
+        progress=r.progress, session_commands=r.session_commands, source_identity=r.source_identity,
+        teaching_decisions=r.teaching_decisions)
+
+    r.transport_commands = TransportActions(
+        attempt=r.attempt, attempt_settlement=r.attempt_settlement, clock=r.now,
+        exposure_workflows=r.exposure_workflows, feedback_seconds=r.feedback_seconds, guided_session=r.guided_session,
+        lesson_cursor=r.lesson_cursor, lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
+        listen=r.listen, notices=r.notices, outcome_effects=r.outcome_effects,
+        playback=r.playback, playback_session=r.playback_session, read_models=r.read_models,
+        recovery_workflows=r.recovery_workflows, score_artifact_registry=r.score_artifact_registry, score_read=r.score_read,
+        session_commands=r.session_commands, source_identity=r.source_identity, teaching_decisions=r.teaching_decisions,
+        timed_playback=r.timed_playback, transport_timing=r.transport_timing, visual_transport=r.visual_transport)
+
     r.practice_controls = PracticeControls(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
-        notices=r.notices, lock=r.lock, session_commands=r.session_commands,
-        playback_session=r.playback_session, playback=r.playback,
-        attempt=r.attempt, attempt_settlement=r.attempt_settlement,
-        timed_playback=r.timed_playback, transport_timing=r.transport_timing,
-        score_read=r.score_read, score_artifact_registry=r.score_artifact_registry,
-        guided_session=r.guided_session, flow_session=r.flow_session,
-        listen=r.listen, midi=r.midi, midi_key_shortcuts=r.midi_key_shortcuts,
-        teaching_decisions=r.teaching_decisions,
-        exposure_workflows=r.exposure_workflows, lesson_execution=r.lesson_execution,
-        outcome_effects=r.outcome_effects, recovery_workflows=r.recovery_workflows,
-        history_management=r.history_management,
-        device_workflows=r.device_workflows, settings_workflows=r.settings_workflows,
-        measurement=r.measurement, visual_transport=r.visual_transport,
-        progress=r.progress, lifecycle=r.session_lifecycle,
-        read_models=r.read_models, clock=r.now,
-        feedback_seconds=r.feedback_seconds)
+        attempt=r.attempt, attempt_settlement=r.attempt_settlement, device_workflows=r.device_workflows,
+        exposure_workflows=r.exposure_workflows, history_management=r.history_management, learning_commands=r.learning_commands,
+        lock=r.lock, measurement=r.measurement, midi=r.midi,
+        midi_key_shortcuts=r.midi_key_shortcuts, playback_session=r.playback_session, read_models=r.read_models,
+        session_commands=r.session_commands, settings_workflows=r.settings_workflows, source_identity=r.source_identity,
+        teaching_decisions=r.teaching_decisions, timed_playback=r.timed_playback, transport_commands=r.transport_commands,
+        visual_transport=r.visual_transport)
 
     r.midi_application_input = MidiApplicationInput(
         source_identity=r.source_identity, visual_transport=r.visual_transport,
