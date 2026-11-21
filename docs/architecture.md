@@ -1,6 +1,9 @@
 # Application architecture
 
 [Practice flow](practice-flow.md) defines learner-visible behaviour.
+[Production transition ownership ledger](practice-transition-boundaries.md) maps
+input, application, physical admission, acknowledgements and observables.
+
 [ROADMAP](../ROADMAP.md) records product decisions, phases and dated verification.
 This document is the current technical overview; [development](development.md)
 covers operation and acceptance, and [reference](reference.md) covers fingering,

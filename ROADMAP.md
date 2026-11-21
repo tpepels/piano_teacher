@@ -204,6 +204,23 @@ Neither native build/CI nor physical piano acceptance is claimed for
 this revision. Existing CI and native journeys must be run before any
 acceptance claim; deterministic full-transition tests remain V1/V6 scope.
 
+### V0 actual transition/ownership ledger - 2026-11-21
+
+Added `docs/practice-transition-boundaries.md` as a concrete
+end-to-end authority/observation matrix for the active production
+path: MIDI/file/controls → locked Python transitions → typed
+`practice.command` outcome and versioned state → source-bound
+physical score admission → reserve/present/status acknowledgements →
+visual epoch, metronome, feedback, grading, settlement and saved
+reopen. The ledger maps the owner and native reader of each
+decision, lists the expected and failing branches for 20 material
+transitions, and records actual runtime counterexamples from
+the CI-native and user-physical audits. It explicitly marks
+the *still incomplete* V3 backend-proposal ownership boundary
+and separate hardware acceptance. This is a source ownership
+audit, not a claim that all transition scenarios have already
+passed physically.
+
 ### Phase V0 - Trace the complete production state machine
 
 **Implement:** Inventory *all* active paths from MIDI/file load or button
