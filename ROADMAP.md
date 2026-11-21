@@ -569,6 +569,23 @@ still unverified in native Godot, and the complete MIDI/score/sound
 transition matrix and physical acceptance remain open. No new unit
 tests were added as instructed.
 
+### V4 source-scoped untimed Free scheduling - 2026-11-21
+
+`ScoreStatePublisher` now binds its persistent guided target deadline
+to the complete source identity (fingerprint, stage key, renderer
+revision and transport ID). Opening the next Free window directly
+no longer inherits a previous guided deadline from the old window.
+The scheduled plan is only published when its identity matches
+the source that generated it, so a delayed state snapshot cannot
+re-admit an expired prior target. Backend `MusicalScheduler.guided`
+remains the single author of the new Free deadline; native Godot
+only enqueues its previously authorized physical representation.
+
+**Gate:** The native Free target and connected fake-MIDI advance must
+verify the authored plan becomes visible strictly ahead of the
+playhead, and that wrong input/no input cannot move it. No physical
+acceptance has run.
+
 ### Phase V4 - Make visual time obey authorized state
 
 **Implement:** Convert the native `PresentationTimeline` into a projection

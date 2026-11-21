@@ -366,6 +366,17 @@ do not suppress a different failure, and a rejected report is
 retryable from subsequent active playback state. Godot never
 chooses a grading or musical retry policy as a consequence.
 
+### Untimed Free deadline lifetime follows its full source identity
+
+`ScoreStatePublisher` now owns the persistent guided deadline
+together with a (fingerprint, stage, revision, transport) key. A
+change of source, including a direct Free-to-Free practice-window
+change, clears the previous epoch before `MusicalScheduler.guided`
+selects another. Read projection refuses a guided target if its
+source key is stale. Godot's native target cache is already
+revision-bound, but it is never allowed to invent or reuse an
+application-level deadline independently.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

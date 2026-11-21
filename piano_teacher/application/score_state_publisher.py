@@ -42,12 +42,23 @@ class ScoreStatePublisher:
 
     def __init__(self):
         self.guided_deadline: float | None = None
+        self.guided_source: tuple[str, str, int, int] | None = None
 
     def reset_guided(self) -> None:
         self.guided_deadline = None
+        self.guided_source = None
 
     def prepare_guided(self, state: dict, facts: ScoreProjectionFacts,
                        *, now: float) -> None:
+        # The guided plan's deadline belongs to one precise authenticated
+        # musical source. A new window can enter Free without going through
+        # a mode change, so an old (possibly expired) deadline cannot be
+        # reused solely because a prior plan was already calculated.
+        source = (facts.fingerprint, facts.stage_key,
+                  facts.revision, facts.transport_id)
+        if source != self.guided_source:
+            self.guided_source = source
+            self.guided_deadline = None
         if (not facts.has_source or facts.mode != "learn" or facts.paused
                 or facts.awaiting_score or state.get("phase") not in
                     ("guided_wait", "introducing", "disconnected")):
@@ -62,6 +73,9 @@ class ScoreStatePublisher:
     def _guided_plan(self, state: dict, facts: ScoreProjectionFacts) -> dict | None:
         if (not facts.has_source or facts.mode != "learn" or facts.paused
                 or facts.awaiting_score or self.guided_deadline is None
+                or self.guided_source != (
+                    facts.fingerprint, facts.stage_key,
+                    facts.revision, facts.transport_id)
                 or state.get("phase") not in
                     ("guided_wait", "introducing", "disconnected")):
             return None
