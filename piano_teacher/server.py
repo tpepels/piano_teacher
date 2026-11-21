@@ -2416,18 +2416,16 @@ class PracticeEngine:
         ), mode=self.playback_session.mode, now=now)
 
     def _layout_for_completed_take(self) -> dict:
-        """Ink for the settled take: the layout the learner just played from.
+        """Read only the exact pre-engraved layout of the completed take.
 
-        The displayed score was engraved before the take started, so this is
-        the published cached layout. Engraving inside the clock tick happens
-        only if that invariant was broken, and is logged.
+        This runs inside the musical tick. Cold Verovio work belongs to the
+        asset worker, never the clock or MIDI lock. The assessment owner
+        explicitly handles a missing feedback layout without regrading.
         """
-        selection = self._score_selection()
-        cached = self.score_artifacts.cached_layout(selection)
-        if cached is not None:
-            return cached.layout
-        print("COMPLETED_TAKE_LAYOUT_COLD: engraving inside the clock tick", flush=True)
-        return self.score_artifacts.engraving(selection).layout
+        cached = self.score_artifacts.cached_layout(self._score_selection())
+        if cached is None:
+            raise RuntimeError("Admitted score layout is unavailable for completed feedback")
+        return cached.layout
 
     def _open_take(self, *, phrase: Phrase | None = None,
                    recording: bool = False) -> int:

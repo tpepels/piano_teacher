@@ -271,6 +271,19 @@ Existing tests retain their historical `score_queue_next` shape and no new
 tests or architecture-shape assertions were introduced. This change requires
 remote CI verification before acceptance; physical acceptance remains open.
 
+### Bounded completed-take feedback — 2026-11-21
+
+The remaining synchronous cold-engraving fallback in
+`PracticeEngine._layout_for_completed_take` violated the asset-worker/clock
+boundary: if its cached selection disappeared, the locked musical tick could
+invoke Verovio. It now reads only the already-published layout and raises a
+recoverable `RuntimeError` when missing. `assess_completed_take` already
+catches that error after grading, preserves the canonical note assessment and
+reports unmapped feedback without compiling a replacement score in the tick.
+No second renderer or replacement grading path was introduced. The
+`[native]` tagged source commit requests both core CI and the full embedded
+package/repertoire gate; physical acceptance still requires the instrument.
+
 ## Phase status and remaining acceptance
 
 ### Historical architecture re-audit — pre-correction log

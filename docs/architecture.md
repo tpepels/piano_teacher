@@ -390,6 +390,15 @@ The review covers the critical production owners and the known dependency
 clusters. It cannot prove absence of every possible defect. The refactored
 source requires a new full CI run and physical acceptance remains separate.
 
+### Musical-tick asset boundary — 2026-11-21
+
+Completed-take feedback consumes the selected `ScoreArtifacts.cached_layout`
+without cold engraving. If that layout is missing, the existing
+`assess_completed_take` error boundary retains its canonical grading result,
+reports the absent visual projection and skips unmapped ink. No Verovio
+compilation may run from the locked transport tick. Pre-engraving and publication
+remain owned by `ScoreArtifacts` and the asset worker.
+
 ### Legacy-dependency review — 2026-11-20
 
 The production paths were checked against the current ownership table above.
