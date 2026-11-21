@@ -1,0 +1,96 @@
+"""Backend-owned interpretation of visible piano transport controls."""
+from __future__ import annotations
+from collections.abc import Mapping
+from .transport_commands import PAUSABLE_PHASES
+
+UI_INTENTS = frozenset(("ui_primary", "ui_pause", "ui_retry", "ui_listen"))
+SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
+
+
+def active(s: Mapping) -> bool:
+    return bool(s.get("running")) or s.get("phase") in (PAUSABLE_PHASES | {"paused"})
+
+
+def flow(s: Mapping) -> bool:
+    return isinstance(s.get("flow"), dict) and bool(s["flow"])
+
+
+def primary(s: Mapping, moving: bool, course: bool) -> str | None:
+    if not s.get("loaded"):
+        return None
+    if s.get("paused"):
+        return "resume"
+    mode = s.get("mode")
+    if course:
+        return "pause" if moving else "listen" if mode == "listen" else "start" if mode == "practice" else None
+    if mode == "listen" and not moving:
+        return "practice" if s.get("warmup") else "listen"
+    if mode == "learn":
+        phase = s.get("phase")
+        teaching = s.get("teaching") or {}
+        if phase == "guided_complete" and teaching.get("has_more_units") and not s.get("guided_recovery"):
+            return "learn_next"
+        if phase in ("guided_complete", "disconnected"):
+            return "practice"
+        if phase in ("guided_wait", "loading"):
+            return "pause"
+        return "learn_retry"
+    return "pause" if moving else "start"
+
+
+def caption(s: Mapping, action: str | None, moving: bool, course: bool) -> str:
+    if s.get("paused"):
+        return "Resume"
+    if course:
+        return "Pause" if moving else "Listen" if s.get("mode") == "listen" else "Play"
+    if s.get("mode") == "learn":
+        if action == "learn_next":
+            return "Next idea"
+        if s.get("phase") == "guided_complete" and s.get("guided_recovery"):
+            return "Retry rhythm"
+        return {"practice": "Try rhythm", "pause": "Pause", "learn_retry": "Learn"}.get(action, "Learn")
+    if s.get("mode") == "listen" and not moving:
+        return "Back to warm-up" if s.get("warmup") else "Listen again"
+    return "Pause" if action == "pause" else "Play"
+
+
+def project_controls(s: Mapping) -> dict:
+    """Read-only control labels and available actions from authoritative state."""
+    moving, course = active(s), flow(s)
+    main = primary(s, moving, course)
+    pause = ("resume" if s.get("paused") else "pause") if (
+        s.get("loaded") and (moving or (s.get("mode") == "learn" and
+        s.get("phase") in ("guided_wait", "paused")))) else None
+    if course and not moving and not s.get("paused"):
+        pause = None
+    retry = ("learn_retry" if s.get("mode") == "learn" else "restart") if s.get("loaded") else None
+    listen = None
+    if s.get("loaded"):
+        listen = (None if s.get("mode") == "listen" else "listen") if course else (
+            "practice" if s.get("mode") == "listen" else "listen")
+    return {
+        "transport_active": moving, "flow_active": course,
+        "primary": {"action": main or "", "label": caption(s, main, moving, course),
+                    "enabled": main is not None,
+                    "requires_score": main not in (None, "pause", "resume")},
+        "pause": {"action": pause or "", "enabled": pause is not None},
+        "retry": {"action": retry or "", "enabled": retry is not None, "requires_score": True},
+        "listen": {"action": listen or "", "enabled": listen is not None},
+    }
+
+
+def resolve_ui_intent(intent: str, state: Mapping, *,
+                      score_ready: bool, score_error: str = "") -> tuple[str | None, dict]:
+    """Resolve the raw gesture under the session lock; renderer supplies readiness."""
+    if intent not in UI_INTENTS:
+        raise ValueError(f"Unknown UI intent: {intent}")
+    choice = project_controls(state)[intent.removeprefix("ui_")]
+    action = choice["action"]
+    if not action:
+        return None, {}
+    if action == "resume" and score_error:
+        raise ValueError(score_error)
+    if choice.get("requires_score") and not score_ready:
+        raise ValueError(SCORE_WAIT)
+    return action, ({"wait_for_player": True} if (
+        intent == "ui_listen" and action == "practice" and not flow(state)) else {})

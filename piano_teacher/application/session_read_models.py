@@ -7,6 +7,7 @@ from __future__ import annotations
 from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .score_state_publisher import ScoreProjectionFacts
 from .headless_score_projection import project_headless_score_queue
+from .control_projection import project_controls
 from .session_snapshot_builder import SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot
 from ..state_projection import project_session_state
 
@@ -139,6 +140,7 @@ class SessionReadModels:
             state["midi_key_range"] = self.midi_key_shortcuts.status(self.midi.device)
             state["midi_calibration"] = self.midi_calibration.snapshot(
                 calibration_sample_at)
+            state["controls"] = project_controls(state)
             return state
 
     def capture_snapshot(self, *, sampled_at=None) -> SessionSnapshot:

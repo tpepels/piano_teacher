@@ -2,7 +2,6 @@ extends VBoxContainer
 # Practice interaction and snapshot presentation. Chrome owns widget/layout
 # construction; this owner keeps backend snapshots and command/input policy.
 const Chrome := preload("res://practice_chrome.gd")
-const ControlPolicy := preload("res://practice_control_policy.gd")
 const Design := preload("res://practice_theme.gd")
 const TempoVocabulary := preload("res://tempo_vocabulary.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
@@ -462,28 +461,16 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     lesson_info_label.tooltip_text = lesson_info_label.text
     # One short verb belongs on the central game control. Shortcuts and
     # explanations live in the tooltip instead of making every button a menu.
-    var start_text := "Resume" if bool(parsed.get("paused", false)) else "Pause" if active_transport else "Play"
-    if flow_active:
-        start_text = ("Resume" if bool(parsed.get("paused", false))
-            else "Pause" if active_transport
-            else "Listen" if str(parsed.get("mode","")) == "listen"
-            else "Play")
-    elif learning:
-        start_text = "Resume" if phase == "paused" else "Try rhythm" if phase in ["guided_complete", "disconnected"] else "Pause" if phase in ["guided_wait", "loading"] else "Learn"
-        if phase == "guided_complete" and bool(parsed.get("guided_recovery", false)):
-            start_text = "Retry rhythm"
-        elif phase == "guided_complete" and bool(teaching.get("has_more_units", false)):
-            start_text = "Next idea"
-    elif str(parsed.get("mode", "")) == "listen" and not active_transport:
-        start_text = "Back to warm-up" if bool(parsed.get("warmup", false)) else "Listen again"
-    start_button.text = start_text
+    var primary_control: Dictionary = _control("primary")
+    var listen_control: Dictionary = _control("listen")
+    start_button.text = str(primary_control.get("label","Play"))
     start_button.tooltip_text = ("Pause or resume · Space" if flow_active
         else "Play, pause or resume · Space · Play any piano key when ready")
-    start_button.disabled = (not active_transport and not _score_ready) or \
-        (flow_active and learning and not active_transport)
-    start_button.call("configure", "pause" if start_button.text == "Pause" else "play",
+    start_button.disabled = _primary_blocked()
+    start_button.call("configure", "pause" if str(primary_control.get("action","")) == "pause" else "play",
         active_transport and not bool(parsed.get("paused", false)))
-    listen_button.call("configure", "practice" if not flow_active and str(parsed.get("mode", "")) == "listen" else "listen",
+    listen_button.disabled = not bool(listen_control.get("enabled",false))
+    listen_button.call("configure", "practice" if str(listen_control.get("action","")) == "practice" else "listen",
         str(parsed.get("mode", "")) == "listen")
 
 func present_busy(busy: bool) -> void:
@@ -498,9 +485,7 @@ func present_score(status: Dictionary) -> void:
     _score_status = status.duplicate(true)
     _score_ready = bool(status.get("ready",false))
     stage.present_score_status(status)
-    start_button.disabled = (not _active_transport(_state) and not _score_ready) or \
-        (ControlPolicy.flow_active(_state) and str(_state.get("mode","")) == "learn"
-        and not _active_transport(_state))
+    start_button.disabled = _primary_blocked()
     practice_retry_button.disabled = not bool(_state.get("loaded",false)) or not _score_ready
 
 func present_message(message: String, reveal := false) -> void:
@@ -527,8 +512,19 @@ func begin_action(requested: String, pending := "") -> void:
 func finish_action() -> void:
     stage.practice_playback_banner.visible = false
 
+func _control(name: String) -> Dictionary:
+    var controls: Dictionary = _state.get("controls",{})
+    var choice: Variant = controls.get(name,{})
+    return choice if choice is Dictionary else {}
+
+func _primary_blocked() -> bool:
+    var primary: Dictionary = _control("primary")
+    return (not bool(primary.get("enabled",false)) or
+        (bool(primary.get("requires_score",false)) and not _score_ready))
+
 func _active_transport(state: Dictionary) -> bool:
-    return ControlPolicy.active_transport(state)
+    var controls: Dictionary = state.get("controls",{})
+    return bool(controls.get("transport_active",false))
 
 func set_active(active: bool) -> void:
     _active = active

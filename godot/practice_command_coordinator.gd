@@ -4,7 +4,6 @@ extends RefCounted
 ## and the one ScoreAdmissionGateway.
 const CommandRequestState := preload("res://command_request_state.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
-const ControlPolicy := preload("res://practice_control_policy.gd")
 const Reply := preload("res://inprocess_request.gd")
 
 signal succeeded(decision: Dictionary, opened: Variant, code: int, body: PackedByteArray, started_ms: int)
@@ -38,23 +37,22 @@ func receive(code: int, body: PackedByteArray) -> void:
     accept_response(request_token,code,body)
 
 func primary() -> void:
-    _apply_control(ControlPolicy.primary(last_state,
-        score_session.is_ready(),score_session.score_error))
+    _ui_intent("ui_primary")
 
 func pause() -> void:
-    _apply_control(ControlPolicy.pause_toggle(last_state,score_session.score_error))
+    _ui_intent("ui_pause")
 
 func retry() -> void:
-    _apply_control(ControlPolicy.retry(last_state,score_session.is_ready()))
+    _ui_intent("ui_retry")
 
 func listen() -> void:
-    _apply_control(ControlPolicy.listen_toggle(last_state))
+    _ui_intent("ui_listen")
 
-func _apply_control(decision: Dictionary) -> void:
-    if decision.has("message"):
-        practice_view.present_message(str(decision["message"]))
-    elif decision.has("action"):
-        request_action(decision,last_state)
+func _ui_intent(intent: String) -> void:
+    var command := {"action":intent,"score_ready":score_session.is_ready()}
+    if not score_session.score_error.is_empty():
+        command["score_error"] = score_session.score_error
+    request_action(command,last_state)
 
 func open_library_piece(identifier: String, resume_saved := false) -> void:
     # Preserve the latest selection while navigation's asynchronous pause
@@ -91,17 +89,21 @@ func _flush_transport_action() -> void:
 func request_action(command: Dictionary, presentation_facts: Dictionary) -> void:
     last_state = presentation_facts
     var action: String = str(command.get("action",""))
+    # The backend-published action is used for local effects only.
+    # Python resolves the actual gesture again under its session lock.
+    var projected_action := action
+    if action.begins_with("ui_"):
+        var controls: Dictionary = last_state.get("controls",{})
+        var choice: Dictionary = controls.get(action.trim_prefix("ui_"),{})
+        projected_action = str(choice.get("action",""))
     var previous: String = state.control_action
-    if not state.action_requested(action):
-        practice_view.begin_action(action,previous)
+    if not state.action_requested(action,projected_action):
+        practice_view.begin_action(projected_action if not projected_action.is_empty() else action,previous)
         return
-    practice_view.begin_action(action)
-    if action not in ["start","restart","resume","score_ready"]:
+    practice_view.begin_action(projected_action if not projected_action.is_empty() else action)
+    if projected_action not in ["start","restart","resume","score_ready"]:
         metronome_frame.cancel_reserved_count_in()
-    # Send only the readiness owner's source-bound physical measurement;
-    # the command handler must never select a renderer or infer the score's
-    # geometry from the view tree.
-    if action in ["start","restart","resume","score_ready"]:
+    if projected_action in ["start","restart","resume","score_ready"]:
         var clearance: Dictionary = score_session.continuation_geometry()
         if not clearance.is_empty():
             command = command.duplicate()

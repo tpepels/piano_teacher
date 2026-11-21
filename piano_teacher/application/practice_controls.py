@@ -5,6 +5,7 @@ are dispatched to their dedicated workflows, not decided a second time.
 """
 from __future__ import annotations
 from .control_dispatch import ControlDispatcher
+from .control_projection import UI_INTENTS, resolve_ui_intent
 from .stage_change import prepare_stage_change
 
 
@@ -43,28 +44,41 @@ class PracticeControls:
                 changes, pause_current=self.timed_playback.pause)
 
     def control(self, action: str, **kwargs) -> None:
-        with self.lock, self.session_commands.reason(action):
-            before = {"fingerprint": self.source_identity.fingerprint,
-                      "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                      "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
-            effect = self.session_commands.active
-            route = ControlDispatcher.route(action)
-            if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
-                change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
-                          if route == "stage" else None)
-                effect = self.teaching_decisions.prepare("manual", manual=change,
-                    action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
-            with self.session_commands.executing(effect):
-                result = self._dispatch_control(action, route, **kwargs)
-                self.read_models.prepare_score_presentation()
-                if action not in ("score_ready", "demo_ready", "reset_path"):
-                    self.measurement.event("manual_action", {"action": action,
-                        "fingerprint": before["fingerprint"] or None,
-                        "parameters": kwargs, "before": before,
-                        "after": {"fingerprint": self.source_identity.fingerprint,
-                                  "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                                  "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
-                return result
+        with self.lock:
+            if action in UI_INTENTS:
+                ready = kwargs.pop("score_ready", None)
+                error = kwargs.pop("score_error", "")
+                if type(ready) is not bool or type(error) is not str:
+                    raise ValueError("UI control requires typed renderer readiness")
+                current = self.read_models.snapshot()
+                resolved, options = resolve_ui_intent(
+                    action, current, score_ready=ready, score_error=error)
+                if resolved is None:
+                    return
+                action = resolved
+                kwargs.update(options)
+            with self.session_commands.reason(action):
+                before = {"fingerprint": self.source_identity.fingerprint,
+                          "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                          "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
+                effect = self.session_commands.active
+                route = ControlDispatcher.route(action)
+                if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
+                    change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
+                              if route == "stage" else None)
+                    effect = self.teaching_decisions.prepare("manual", manual=change,
+                        action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
+                with self.session_commands.executing(effect):
+                    result = self._dispatch_control(action, route, **kwargs)
+                    self.read_models.prepare_score_presentation()
+                    if action not in ("score_ready", "demo_ready", "reset_path"):
+                        self.measurement.event("manual_action", {"action": action,
+                            "fingerprint": before["fingerprint"] or None,
+                            "parameters": kwargs, "before": before,
+                            "after": {"fingerprint": self.source_identity.fingerprint,
+                                      "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                                      "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
+                    return result
 
     def _dispatch_control(self, action: str, route: str, **kwargs) -> None:
         """Dispatch within the existing outer command transaction and lock."""

@@ -10,10 +10,10 @@ var queued_library_piece := ""
 var queued_library_resume := false
 var resume_requested := false
 
-func action_requested(action: String) -> bool:
+func action_requested(action: String, projected_action: String = "") -> bool:
     if pending:
-        if action in ["pause", "stop"]:
-            queued_transport = action
+        if action in ["pause", "stop"] or projected_action == "pause":
+            queued_transport = "pause" if projected_action == "pause" else action
         return false
     control_action = action
     return true
