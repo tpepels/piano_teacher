@@ -87,8 +87,12 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
         delta: float, busy: bool, screen: String) -> void:
     # One sampled frame instant, one source beat and one forward world
     # coordinate feed every consumer in this fixed presentation order.
-    var beat: float = transport_beat(state,now_ms)
+    # Hold/release is a projection operation, not a backend command.
+    # Apply it on EVERY displayed frame. A Resume intent can be admitted
+    # before the next state receipt; a one-time paused-state hold would
+    # otherwise trap the source world behind its old limit indefinitely.
     guided.update_hold(state)
+    var beat: float = transport_beat(state,now_ms)
     score_flow.sample(now_ms)
     var world: float = score_flow.project(now_ms)
     feedback.poll(now_ms,score_session.layout_revision
