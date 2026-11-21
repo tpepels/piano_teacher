@@ -23,6 +23,12 @@ func update_hold(state: Dictionary) -> void:
         str(state.get("phase","")) in [
             "guided_wait", "introducing", "disconnected", "guided_complete"
         ]
+    # The backend can select a timed mode while its source is still
+    # unadmitted. Keep the Free canvas held until physical authorization.
+    var pending: Variant = state.get("playback_intent")
+    if not guided and pending is Dictionary and \
+            not pending.is_empty() and is_finite(score_flow.hold_world):
+        return
     if not guided:
         if str(state.get("mode","")) != "learn":
             world = NAN

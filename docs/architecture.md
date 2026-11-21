@@ -213,7 +213,8 @@ or CI acceptance is inferred.
 ### V4 native hold and forecast boundary (2026-11-21)
 
 The painter's held score position now remains frozen during a pending
-Resume and before the first Free target. Native admission can read an
+Resume, before the first Free target, and through a pending Free-to-Tempo
+transition that has not yet been physically authorized. Native admission can read an
 independent hypothetical future from the same tempo projector even when
 the displayed world is held. Only an authorized backend playback segment
 may release the visual hold; its future tempo epochs retain exact time

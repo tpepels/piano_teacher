@@ -316,7 +316,9 @@ both constant and segmented tempo without mutating the live score or
 obeying its Pause hold. `ContinuousScoreFlow` uses that hypothetical
 forecast whenever a painted hold is active. Pause remains held while
 a Resume intent is merely pending; Free remains held even before its
-first guided target has been published. When the actual admitted source
+first guided target has been published. The hold also survives a
+pending transition from Free to timed practice, until physical
+playback authorization arrives. When the actual admitted source
 is authorized, releasing the hold spatially rebases the future epochs
 of that authorized segment while retaining their fixed deadlines.
 Invalid inverse forecasts are refused rather than silently accepted.
