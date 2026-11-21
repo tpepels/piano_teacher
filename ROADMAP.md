@@ -656,6 +656,21 @@ verify the authored plan becomes visible strictly ahead of the
 playhead, and that wrong input/no input cannot move it. No physical
 acceptance has run.
 
+### V4 idle admission is frozen until an authorized clock - 2026-11-21
+
+The backend presentation projection no longer authorizes running
+at the default 40 BPM merely because score assets are loaded.
+When neither an active authorized segment nor running transport
+exists, it emits `hold` during idle and initial pending admission.
+A later successor of a previously authorized take instead emits
+`retain`, preserving the preceding source's forward rest/ink
+without claiming new timing. The production UI smoke's old
+assertion that READY must always scroll was corrected: it now
+rejects visual movement only while there is no committed take.
+This is a semantic repair to the published authorization model,
+with Python fixture coverage for idle, pending and prior-source
+successor. The full native acceptance is still required.
+
 ### V4 backend-only motion and Free target decisions - 2026-11-21
 
 The authoritative `ScoreStatePublisher` now projects a source-bound

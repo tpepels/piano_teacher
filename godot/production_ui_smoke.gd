@@ -139,18 +139,22 @@ func _process(_delta: float) -> bool:
                 not bool(app.current_state().get("loaded",false)):
             _fail("Startup did not navigate to the loaded practice screen")
             return true
-        # One immutable admission authority now chooses ink only on a
-        # physically authorized Listen/Play. A READY screen may have no
-        # committed score strips; it must still keep moving and retain its
-        # complete native engraving while awaiting the authorized intent.
+        # Before the first authorized Listen/Play, there is no executable
+        # musical tempo. The published held directive must freeze the
+        # displayed score, despite its pre-engraved source atlas. An older
+        # authorized take may continue moving while its successor waits.
         if ready_visible_since_ms < 0:
             ready_visible_since_ms = Time.get_ticks_msec()
             ready_world_beat = renderer.stream_world_beat
             return false
         if Time.get_ticks_msec()-ready_visible_since_ms < 250:
             return false
-        if renderer.stream_world_beat <= ready_world_beat:
-            _fail("Ready stopped the perpetual world clock")
+        var playback: Variant = app.current_state().get("playback_timeline")
+        var accepted: Variant = playback.get("current") if playback is Dictionary else null
+        if (not bool(app.current_state().get("running",false))
+                and not accepted is Dictionary
+                and absf(renderer.stream_world_beat-ready_world_beat) > .02):
+            _fail("Unadmitted score moved without an authorized musical epoch")
             return true
         for item in renderer.diagnostic_stream_snapshot():
             if str(item.get("kind","source")) == "source" and \

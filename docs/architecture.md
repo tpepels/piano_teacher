@@ -393,6 +393,17 @@ target binding while the backend source projection creates the
 new target plan. This narrows cross-language responsibility
 without creating another timeline or clock.
 
+### No default-tempo scrolling before initial authorization
+
+The canonical backend motion directive freezes idle, unadmitted
+notation, even when engraving has finished. A pending first
+Listen/Play cannot cause a native 40 BPM fallback world clock to
+scroll. In contrast, a prepared successor of an *already
+authorized* source retains its predecessor's physical rest
+projection until the next transaction commits. The production
+smoke gate now distinguishes those two cases, instead of requiring
+idle movement without musical permission.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

@@ -114,8 +114,18 @@ class ScoreStatePublisher:
             beats = [beat for beat in beats if math.isfinite(beat)]
             return ({"kind": "target", "source_beat": min(beats)}
                     if beats else {"kind": "hold"})
-        if facts.timeline and facts.timeline.get("intent") is not None:
-            if not facts.running:
+        if facts.timeline:
+            transport = facts.timeline.get("current") or {}
+            authorized = transport.get("current")
+            # An initial loaded/ready source does not authorize a tempo
+            # clock. In particular, the first pending Start or Listen
+            # must not make the staff advance at a fallback 40 BPM.
+            if not facts.running and not isinstance(authorized, dict):
+                return {"kind": "hold"}
+            if facts.timeline.get("intent") is not None and not facts.running:
+                # Once an earlier take exists its already painted history
+                # may continue through a written rest. The successor has
+                # not yet obtained permission to change that clock.
                 return {"kind": "retain"}
         return {"kind": "run", "clear_target": facts.mode != "learn"}
 

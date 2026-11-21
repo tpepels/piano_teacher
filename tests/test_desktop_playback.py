@@ -383,9 +383,16 @@ def test_backend_publishes_hold_target_and_running_motion_without_ui_phase_polic
     assert motion(teaching, replace(facts, awaiting_score=True)) == {"kind":"hold"}
     pending = replace(facts, mode="practice", timeline={
         "intent":{"intent_id":"next"}, "current":{"state":"awaiting_admission"}})
-    assert motion({"phase":"admitting"}, pending) == {"kind":"retain"}
+    assert motion({"phase":"admitting"}, pending) == {"kind":"hold"}
+    authorized_predecessor = replace(pending,timeline={
+        "intent":{"intent_id":"next"},
+        "current":{"current":{"segment_id":"older"},"state":"playing"}})
+    assert motion({"phase":"admitting"}, authorized_predecessor) == {"kind":"retain"}
     running = replace(pending, running=True)
     assert motion({"phase":"playing"}, running) == {
         "kind":"run","clear_target":True}
     assert motion({"phase":"ready"}, replace(pending,timeline={},
         running=False)) == {"kind":"run","clear_target":True}
+    idle = replace(pending,timeline={
+        "intent":None, "current":{"current":None,"state":"idle"}})
+    assert motion({"phase":"ready"}, idle) == {"kind":"hold"}
