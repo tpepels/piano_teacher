@@ -538,6 +538,13 @@ policy, incompatible retry or retroactive ink mutation. Existing recovery,
 long-note, rolling-window, alternate-course and failure/retry behaviours pass,
 plus native and package verification.
 
+**S6 implementation underway:** `ScoreReadServices` now owns current
+source-bound score selection, native geometry/engraving, guided marks,
+completed-take cached-layout lookup and lesson overview. Score source
+selection and asset compilation are separate; the original public commands
+remain intact. The session snapshot/feedback/next-stage read models and
+integrated CI gates remain to be completed.
+
 ### Phase S6 — Read models, feedback and score projection
 
 - Extract `_state_snapshot`, `_capture_session_snapshot`,

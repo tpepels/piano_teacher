@@ -54,6 +54,7 @@ from .application.session_evidence_context import SessionEvidenceContext
 from .application.exposure_installer import ExposureInstaller
 from .application.exposure_workflows import ExposureWorkflows
 from .application.lesson_execution import LessonExecution
+from .application.score_read_services import ScoreReadServices
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -416,6 +417,13 @@ class PracticeEngine:
             attempt_settlement=self.attempt_settlement, measurement=self.measurement,
             library=self.library, clock=self.now, session_commands=self.session_commands)
 
+        self.score_read = ScoreReadServices(
+            source_identity=self.source_identity, attempt=self.attempt,
+            lesson_execution=self.lesson_execution,
+            guided_session=self.guided_session,
+            score_artifact_registry=self.score_artifact_registry,
+            learner_progress=self.learner_progress, lock=self.lock)
+
     def require_presentation(self) -> None:
         with self.lock:
             self.playback.enable_presentation(self._playback_facts())
@@ -737,15 +745,6 @@ class PracticeEngine:
     def display_phrase(self) -> Phrase:
         return self.lesson_execution.display_phrase()
 
-    def _guided_marks(self, snapshot: dict) -> list[dict]:
-        """Project current guided note identities through the owned fragment."""
-        if self.plan is None:
-            return []
-        engraving = self.score_artifacts.cached_layout(self._score_selection())
-        return (self.guided_session.marks(snapshot, engraving.layout)
-                if engraving is not None else [])
-
-
     def _prepare_practice(self, *, exposure=None):
         return self.exposure_workflows.prepare_practice(exposure=exposure)
 
@@ -880,7 +879,7 @@ class PracticeEngine:
             started = self.playback_session.begin_timed(
                 TimedTakeSource(p.active_phrase,p.piece.bar_boundaries,
                     p.piece.time_signatures,p.bpm,
-                    self._source_model()["practice_timeline"]["gap"]["duration_beats"]),
+                    self.score_read.source_model()["practice_timeline"]["gap"]["duration_beats"]),
                 TimedStartRequest(mode=mode,
                     position=self.open_from_beat if from_beat is None else from_beat,
                     automatic=selected.automatic if selected is not None else mode == "practice",
@@ -998,7 +997,7 @@ class PracticeEngine:
                               announce: bool = True,
                               short_deadline: float | None = None):
         self.playback_session.schedule_preparation(PreparationRequest(
-            self._source_model(),target,now,from_visual,reverse_seconds,
+            self.score_read.source_model(),target,now,from_visual,reverse_seconds,
             self._presentation_bpm,self.visual_transport.continuous_horizon_beats,
             reading_lead_included,announce,short_deadline))
 
@@ -1360,7 +1359,7 @@ class PracticeEngine:
             visual_now = self.visual_transport.paused_at if self.visual_transport.paused else sampled
             position,_,_ = self._visual_motion(visual_now)
             self.playback_session.prepare_retry(PreparationRequest(
-                self._source_model(),selected.from_beat,sampled,position,self.feedback_seconds,
+                self.score_read.source_model(),selected.from_beat,sampled,position,self.feedback_seconds,
                 self._presentation_bpm,self.visual_transport.continuous_horizon_beats,
                 reading_lead_included=presentation_lead_seconds > 0,
                 short_deadline=scheduled_deadline),
@@ -1525,7 +1524,7 @@ class PracticeEngine:
                 applied = self.playback_session.apply_continuation(effect,
                     measurement=self._collect_continuation_measurement(
                         effect.deadline,effect.exposure.from_beat),
-                    source_stride_beats=self._source_model()["practice_timeline"]["stride_beats"])
+                    source_stride_beats=self.score_read.source_model()["practice_timeline"]["stride_beats"])
             else:
                 applied = self.playback_session.apply_continuation(effect)
             if applied.feedback is not None:
@@ -1664,7 +1663,7 @@ class PracticeEngine:
                     if self.attempt.recorder else ()),
             from_beat=self.visual_transport.play_from_beat,end_beat=ending,
             tempo=self._active_tempo_map(),policies=self.assessment_policies,
-            layout_for_feedback=self._layout_for_completed_take,
+            layout_for_feedback=self.score_read.completed_take_layout,
             mode=self.playback_session.mode,review_end_beat=self.attempt.review_end_beat,
             automatic_remedial_review=self.attempt.automatic_remedial_review,
             performance_review=self._performance_review,
@@ -1756,7 +1755,7 @@ class PracticeEngine:
             assessed_bpm=self.attempt_settlement.pending_assessed_bpm,
             total_beats=total_beats,duration=duration,now=now,
             visual_from=self._visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
-            source_model=self._source_model(),presentation_bpm=self._presentation_bpm,
+            source_model=self.score_read.source_model(),presentation_bpm=self._presentation_bpm,
             horizon_beats=self.visual_transport.continuous_horizon_beats,warmup=self.is_builtin_warmup,
             presentation_required=self.playback.presentation_required,
             short_rest_enabled=self.visual_transport.short_rest is not None,
@@ -1836,7 +1835,7 @@ class PracticeEngine:
                     self.lesson_execution.flow_execute(self.flow_session.listen_finished())
         elif decision.action == "preview_due":
             deadline = self.visual_transport.next_at
-            self.visual_transport.advance_source_stride(self._source_model()[
+            self.visual_transport.advance_source_stride(self.score_read.source_model()[
                 "practice_timeline"]["stride_beats"])
             self._continue_at(SCHEDULER.continuation(
                     self._collect_continuation_measurement(deadline, 0.0),
@@ -1957,18 +1956,6 @@ class PracticeEngine:
             pending_rewind=self.visual_transport.pending_rewind is not None,
         ), mode=self.playback_session.mode, now=now)
 
-    def _layout_for_completed_take(self) -> dict:
-        """Read only the exact pre-engraved layout of the completed take.
-
-        This runs inside the musical tick. Cold Verovio work belongs to the
-        asset worker, never the clock or MIDI lock. The assessment owner
-        explicitly handles a missing feedback layout without regrading.
-        """
-        cached = self.score_artifacts.cached_layout(self._score_selection())
-        if cached is None:
-            raise RuntimeError("Admitted score layout is unavailable for completed feedback")
-        return cached.layout
-
     def _open_take(self, *, phrase: Phrase | None = None,
                    recording: bool = False) -> int:
         return self.playback_session.open_take(phrase=phrase,recording=recording)
@@ -2011,7 +1998,7 @@ class PracticeEngine:
         plan = self.plan
         if plan is None or self.playback_session.preview_only or not self.playback_session.running:
             return []
-        engraved = self.score_artifacts.cached_layout(self._score_selection())
+        engraved = self.score_artifacts.cached_layout(self.score_read.selection())
         if engraved is None:
             return []
         return self.assessment_policies.live_projection(
@@ -2227,12 +2214,12 @@ class PracticeEngine:
             learner_snapshot=self.lesson_execution.learner_snapshot,
             elapsed_beat=self._elapsed_beat,
             phase=self._phase,
-            source_model=self._source_model,
+            source_model=self.score_read.source_model,
             live_feedback=self._live_marks_for_snapshot,
             visual_motion=self._visual_motion,
             active_tempo_map=self._active_tempo_map,
             display_phrase=self.display_phrase,
-            guided_marks=self._guided_marks,
+            guided_marks=self.score_read.guided_marks,
             listen_snapshot=self.listen.snapshot,
             live_input_snapshot=self.live_input.snapshot,
             preparation_schedule=self.visual_transport.preparation_schedule,
@@ -2277,49 +2264,15 @@ class PracticeEngine:
                 self._next_stage_selection(offset=2))
             return accepted
 
-    def _score_selection(self) -> ScoreSelection:
-        """Capture the selected source under the application lock."""
-        if self.plan is None:
-            raise ValueError("No piece loaded")
-        p = self.plan
-        return ScoreSelection(piece=p.piece, phrase=self.display_phrase(),
-            hand=p.hand, stage_key=p.identity, revision=self.score_revision,
-            fingerprint=self.fingerprint,
-            transformed_rhythm=(self._remediation_active.transformed_rhythm
-                if self._remediation_active is not None else p.active_stage.transformed_rhythm),
-            display_name=(self._remediation_active.focus if self._remediation_active is not None else ""))
-
-    def _source_model(self) -> dict:
-        with self.lock:
-            return self.score_artifacts.source_model(self._score_selection())
-
-    def _selected_artifacts(self) -> tuple[ScoreArtifacts, ScoreSelection]:
-        """Capture the selection and its owner under the engine lock only.
-
-        Notation, engraving and native asset preparation then run outside
-        the engine lock (ScoreArtifacts serializes itself), so a cold Verovio
-        engraving cannot stall the musical tick or a MIDI callback. Results
-        carry their source revision; a stale one is rejected by revision.
-        """
-        with self.lock:
-            return self.score_artifacts, self._score_selection()
-
     def semantic_score(self) -> dict:
-        artifacts, selection = self._selected_artifacts()
-        return artifacts.semantic_score(selection)
+        return self.score_read.semantic_score()
 
     def engraving(self) -> EngravedScore:
-        artifacts, selection = self._selected_artifacts()
-        return artifacts.engraving(selection)
+        return self.score_read.engraving()
 
     def geometry(self) -> dict:
-        """Publish the selected native score and semantic asset revision."""
-        artifacts, selection = self._selected_artifacts()
-        return artifacts.geometry(selection)
+        return self.score_read.geometry()
 
     def lesson_overview(self) -> dict:
         with self.lock:
-            return self.learner_progress.lesson_overview(
-                self.plan, fingerprint=self.fingerprint)
-
-
+            return self.score_read.lesson_overview()

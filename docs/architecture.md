@@ -356,6 +356,11 @@ the visual transport owns scheduling/rest metadata, and SessionCommands
 owns its command reason. The full workflow and transaction decomposition is
 still open; these new owners do not establish phase completion.
 
+Score selection, current artifact geometry, cached completed-take layouts,
+guided marks and overview now use `application/score_read_services.py`,
+which resolves the promoted artifact owner through the registry. Cold
+native engraving continues outside the application lock.
+
 History-management transactions now reside in
 `application/history_management.py`: scoped evidence reset, learner deletion,
 lesson reset, history reads and export. It consumes the installed
