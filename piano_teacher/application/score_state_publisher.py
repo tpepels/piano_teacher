@@ -86,6 +86,14 @@ class ScoreStatePublisher:
         state["playback_timeline"] = facts.timeline["current"]
         if facts.timeline["intent"] is not None:
             state["phase"] = "admitting"
+        elif (facts.timeline["current"].get("state") == "failed"
+              and not facts.running):
+            # Project the transaction owner's terminal error in the same
+            # read model used by the practice screen. This makes Retry
+            # available again instead of indefinitely showing "admitting".
+            state["feedback"] = (facts.timeline["current"].get("failure")
+                                 or "The score could not be admitted")
+            state["next_action"] = "Retry the passage or choose other music"
         if guided is not None:
             state["playback_timeline"]["guided"] = guided
         return guided

@@ -19,6 +19,12 @@ from .physical_admission import PhysicalAdmissionEvidence, choose_admission_dead
 from .playback_transitions import CountInPlan, PlaybackTransition
 
 
+# The backend owns the retry/timeout budget. A native renderer must never
+# leave a session waiting for notation admission indefinitely.
+MAX_ADMISSION_ATTEMPTS = 3
+MAX_ADMISSION_WAIT_SECONDS = 120.0
+
+
 class PlaybackState(str, Enum):
     IDLE = "idle"
     AWAITING_ADMISSION = "awaiting_admission"
@@ -243,8 +249,19 @@ class PlaybackCoordinator:
     def _expire(self, *, message: str) -> None:
         if self.intent is None:
             return
+        intent = self.intent
+        # A pre-announced automatic repeat cannot have another deadline.
+        # Retrying its expired world slot would silently add another bar.
+        # Other physical failures have a bounded number of new attempts.
+        if (intent.fixed_deadline_ms is not None or
+                intent.attempt + 1 >= MAX_ADMISSION_ATTEMPTS):
+            self.intent = None
+            self.receipt = None
+            self.state = PlaybackState.FAILED
+            self.failure = message
+            return
         from dataclasses import replace
-        self.intent = replace(self.intent, attempt=self.intent.attempt + 1)
+        self.intent = replace(intent, attempt=intent.attempt + 1)
         self.receipt = None
         self.state = PlaybackState.AWAITING_ADMISSION
         self.failure = message
@@ -426,7 +443,8 @@ class PlaybackCoordinator:
         self._require_intent(facts, intent_id, attempt)
         self._expire(message=reason)
         return {"withdrawn": True, "intent_id": intent_id,
-                "next_attempt": self.intent.attempt}
+                "abandoned": self.intent is None,
+                "next_attempt": self.intent.attempt if self.intent else None}
 
     def fail(self, *, take_id: str, segment_id: str, reason: str,
              notify_failure: Callable[[str], None]) -> None:
@@ -442,6 +460,13 @@ class PlaybackCoordinator:
         if self.intent is not None:
             if not self._valid_source(facts, self.intent):
                 self.invalidate("Source changed before notation admission")
+            elif facts.now - self.intent.requested_at > MAX_ADMISSION_WAIT_SECONDS:
+                # Includes silent physical preflight failures and unavailable
+                # engraving. A dead/admitting UI is not a valid steady state.
+                self.intent = None
+                self.receipt = None
+                self.state = PlaybackState.FAILED
+                self.failure = "The score could not be prepared for playback; retry the lesson"
             return
         if not self.active_take_id:
             return

@@ -286,6 +286,24 @@ resulting action projection, demonstrable through the V1 runner.
 Read/poll does not execute transitions. No Godot component independently
 infers an enabled musical action, target tempo or next lesson decision.
 
+### V3 bounded admission lifecycle - 2026-11-21
+
+The Python playback transaction now owns the admission retry budget
+(maximum three physical attempts) and a 120-second maximum pending
+lifetime while assets or physical preflight are unavailable. Expiring
+a fixed-deadline automatic repeat terminates that intent immediately:
+there is no second timestamp or extra bar. A permanently failed
+attempt clears the intent and publishes `playback_timeline.state=failed`
+and its reason; `ScoreStatePublisher` displays that reason in the
+normal practice feedback and enables manual recovery by exiting
+`admitting`. Existing interrupted/paused active source history is
+retained. This replaces unbounded invisible retry behavior with one
+backend-owned lifetime policy.
+
+**Unverified:** Embedded worker cadence, long-source engraving,
+frame-step and physical recoverability still need native/CI checks.
+No new unit tests were added.
+
 ### V3/V4 source-and-receipt identity hardening - 2026-11-21
 
 `PlaybackCoordinator.present` now replays an earlier successful
