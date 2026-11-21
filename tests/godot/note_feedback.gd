@@ -6,6 +6,8 @@ const Feedback := preload("res://native_score_feedback.gd")
 const Segment := preload("res://notation/native/retained_segment.gd")
 const StatusLayer := preload("res://notation/native/note_status_layer.gd")
 const Ink := preload("res://note_status_ink.gd")
+const LiveReactions := preload("res://live_midi_feedback.gd")
+const PracticeStage := preload("res://practice_score_stage.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -170,6 +172,38 @@ func _initialize() -> void:
     free.feedback_marks = []
     feedback.present(free)
     check(feedback.status_for(free_take,"head-a") == "unplayed","Restarted Free cannot inherit completed target marks")
+    # The actual stage must accept graded synthetic MIDI attacks without
+    # touching a removed property. This is the physical Pathétique failure
+    # route: event -> LiveMidiFeedback -> PracticeScoreStage.effects.
+    var stage := PracticeStage.new()
+    root.add_child(stage)
+    var reactions := LiveReactions.new()
+    reactions.bind_layout({"attack_map":{"a":"head-a"}},7)
+    var physical_hit := event("attack")
+    physical_hit.status = "on_time"
+    var accepted: bool = reactions.react(physical_hit,stage,7,0.0)
+    check(accepted and stage.effects.impact_energy > 0.0,
+        "Fresh graded MIDI must reach the actual practice stage's impact effect")
+    var before_impact: float = stage.effects.impact_energy
+    var stale := physical_hit.duplicate()
+    stale.revision = 8
+    check(not reactions.react(stale,stage,7,0.0)
+        and stage.effects.impact_energy == before_impact,
+        "Stale source revision cannot react on the practice stage")
+    var preview := physical_hit.duplicate()
+    preview.graded = false
+    check(not reactions.react(preview,stage,7,0.0)
+        and stage.effects.impact_energy == before_impact,
+        "Ungraded Listen MIDI cannot produce a scored stage reaction")
+    check(not reactions.react(physical_hit,stage,7,251.0),
+        "Feedback arriving after its live effect window is ignored")
+    var wrong_key := physical_hit.duplicate()
+    wrong_key.status = "unexpected"
+    wrong_key.source_id = ""
+    wrong_key.reference_source_id = "a"
+    check(reactions.react(wrong_key,stage,7,0.0),
+        "Unexpected graded MIDI reacts through its bound source note")
+    stage.free()
     segment.free()
     next_view.free()
     view.free()
