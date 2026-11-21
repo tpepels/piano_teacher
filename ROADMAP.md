@@ -656,6 +656,27 @@ verify the authored plan becomes visible strictly ahead of the
 playhead, and that wrong input/no input cannot move it. No physical
 acceptance has run.
 
+### V4 backend-only motion and Free target decisions - 2026-11-21
+
+The authoritative `ScoreStatePublisher` now projects a source-bound
+`presentation_directive` with one of `hold`, `retain`, `target`
+or `run`. Pause, unloaded/unready score, untimed Free phases,
+the earliest expected musical note and pending timed successors
+are interpreted in Python under the existing application state
+read transaction. `GuidedPresentationSession.update_hold` now
+interprets only that explicit directive and its native world-space
+target binding. It no longer determines learning phases or
+re-examines `teaching.expected_notes` to choose which MIDI note
+stops the physical bar. A missing/unknown directive fails closed
+to a frozen score.
+
+The same backend projection is covered by a new Python table of
+held Free, paused, unready, pending-admission and running scenarios.
+This is a material removal of duplicated lesson policy from Godot,
+rather than a code move. Existing physical frame owner still decides
+how to draw/rebase the immutable authored score after authorization.
+Native acceptance on this revision remains unverified.
+
 ### Phase V4 - Make visual time obey authorized state
 
 **Implement:** Convert the native `PresentationTimeline` into a projection

@@ -350,3 +350,42 @@ def test_guided_plan_deadline_changes_only_with_authenticated_source():
     # Any later handoff also invalidates the old Free plan.
     another_transport = replace(next_source, transport_id=11)
     assert publisher.publish(dict(state), another_transport) is None
+
+
+def test_backend_publishes_hold_target_and_running_motion_without_ui_phase_policy():
+    """Free and Pause target semantics are decided before Godot sees a frame."""
+    from dataclasses import replace
+    from piano_teacher.application.score_state_publisher import (
+        ScoreProjectionFacts, ScoreStatePublisher)
+
+    projector = ScoreStatePublisher()
+    facts = ScoreProjectionFacts(
+        fingerprint="piece", stage_key="window:1", revision=1,
+        transport_id=1, mode="learn", running=False, paused=False,
+        awaiting_score=False, bpm=40.0, presentation_bpm=40.0,
+        run_at=0.0, play_from_beat=0.0, announced=None,
+        announced_deadline=None, announcement_serial=0,
+        scheduled_start=None, timeline={}, next_count_in_beats=4.0,
+        next_count_in_meter=(4,4), continuous_horizon_beats=4.0,
+        duration_beats=4.0, has_source=True)
+
+    def motion(observation, context):
+        state = dict(observation)
+        projector.publish(state, context)
+        return state["presentation_directive"]
+
+    teaching = {"phase":"guided_wait", "teaching":{
+        "expected_notes":[{"beat":1.0,"pitch":72},{"beat":0.5,"pitch":76}]}}
+    assert motion(teaching, facts) == {"kind":"target","source_beat":0.5}
+    assert motion(teaching, replace(facts, paused=True)) == {"kind":"hold"}
+    assert motion({"phase":"guided_complete","teaching":{"expected_notes":[]}},
+                  facts) == {"kind":"hold"}
+    assert motion(teaching, replace(facts, awaiting_score=True)) == {"kind":"hold"}
+    pending = replace(facts, mode="practice", timeline={
+        "intent":{"intent_id":"next"}, "current":{"state":"awaiting_admission"}})
+    assert motion({"phase":"admitting"}, pending) == {"kind":"retain"}
+    running = replace(pending, running=True)
+    assert motion({"phase":"playing"}, running) == {
+        "kind":"run","clear_target":True}
+    assert motion({"phase":"ready"}, replace(pending,timeline={},
+        running=False)) == {"kind":"run","clear_target":True}

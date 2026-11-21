@@ -8,6 +8,7 @@ guided display epoch. Headless fixture projection has a separate adapter.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from .musical_scheduler import SCHEDULER
 
 
@@ -90,9 +91,38 @@ class ScoreStatePublisher:
             "count_in_meter":list(facts.next_count_in_meter),
             "bpm":facts.bpm}
 
+    @staticmethod
+    def _motion_directive(state: dict, facts: ScoreProjectionFacts) -> dict:
+        """The only domain interpretation of score motion and Free targets.
+
+        The native view owns world-space target placement, but never
+        decides musical transitions by inspecting phases or MIDI notes.
+        A pending, unpresented successor retains the previous visual
+        hold without taking over the currently playing source.
+        """
+        if facts.paused or not facts.has_source or facts.awaiting_score:
+            return {"kind": "hold"}
+        guided = (facts.mode == "learn" and state.get("phase") in
+                  {"guided_wait", "introducing", "disconnected",
+                   "guided_complete"})
+        if guided:
+            teaching = state.get("teaching")
+            notes = teaching.get("expected_notes", ()) if isinstance(teaching, dict) else ()
+            beats = [float(note["beat"]) for note in notes
+                     if isinstance(note, dict) and "beat" in note
+                     and isinstance(note["beat"], (int, float))]
+            beats = [beat for beat in beats if math.isfinite(beat)]
+            return ({"kind": "target", "source_beat": min(beats)}
+                    if beats else {"kind": "hold"})
+        if facts.timeline and facts.timeline.get("intent") is not None:
+            if not facts.running:
+                return {"kind": "retain"}
+        return {"kind": "run", "clear_target": facts.mode != "learn"}
+
     def publish(self, state: dict, facts: ScoreProjectionFacts) -> dict | None:
         """Project authorized desktop score facts. Never construct a headless plan."""
         guided = self._guided_plan(state, facts)
+        state["presentation_directive"] = self._motion_directive(state, facts)
         if not facts.timeline:
             return guided
         # All desktop take intents and receipts originate in PlaybackCoordinator.

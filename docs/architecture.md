@@ -377,6 +377,22 @@ source key is stale. Godot's native target cache is already
 revision-bound, but it is never allowed to invent or reuse an
 application-level deadline independently.
 
+### V4 motion directives replace native teaching-phase interpretation
+
+`ScoreStatePublisher._motion_directive` owns the semantic choice
+to freeze paused/unready material, retain the previous Free hold
+during admission, follow the currently required Free target beat
+or run an authorized timed score. The read model now publishes this
+single explicit `presentation_directive` alongside the existing
+source-bound `playback_timeline`. The native
+`GuidedPresentationSession` implements only a physical hold and
+target-anchor transform. It no longer reads phase-string sets or
+expected MIDI note lists to decide practice progress; unknown
+directives fail closed. A new source revision clears the native
+target binding while the backend source projection creates the
+new target plan. This narrows cross-language responsibility
+without creating another timeline or clock.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
