@@ -35,6 +35,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "count_in_bar_beats": ('number',),
     "count_in_beats": ('number',),
     "count_in_meter": ('list',),
+    "controls": ('dict',),
     "countdown": ('number',),
     "current_bar": ('number',),
     "demo": ('dict', 'null'),
