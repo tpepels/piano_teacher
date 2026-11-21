@@ -49,6 +49,17 @@ var _marker_revision := -999999
 var _marker_hand := ""
 var _first_attack_offset := INF
 
+## The visual surface is the sole source of measured header/rest clearance.
+## Publish primitive beats only after the matching source is ready; neither
+## the UI nor Python may reconstruct this from a nominal meter or viewport.
+func continuation_geometry() -> Dictionary:
+    if renderer == null or not is_instance_valid(renderer) or \
+            not bool(renderer.native_ready) or \
+            not renderer.has_method("short_rest_geometry"):
+        return {}
+    return renderer.short_rest_geometry()
+
+
 func _clear_progress_rail(child: Node) -> void:
     var layout: Variant = child.get("layout")
     if layout is Object and "bottom_clearance" in layout:

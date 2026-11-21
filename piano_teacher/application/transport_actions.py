@@ -82,6 +82,10 @@ class TransportActions:
 
     def control_acknowledgement(self, action: str, kwargs: dict) -> None:
         if action == "score_ready":
+            # The compiled native score has now supplied real printed rest
+            # and header clearance. Install it before the score-ready ACK
+            # can select a future fixed-deadline automatic continuation.
+            self.transport_timing.update_short_rest(kwargs)
             revision = int(kwargs.get("revision",-1))
             decision = self.playback_session.score_acknowledged(revision,
                 current_revision=self.source_identity.revision,teaching_bound=self.guided_session.controller is not None)
