@@ -597,6 +597,31 @@ unprepared new source, then generate a new strictly future
 the same Python CI playback module and complements the native
 frame-stepped target-cache check. It does not fake teaching policy.
 
+### V6/V7 verified core CI and production window acceptance - 2026-11-21
+
+The GitHub Actions core test run
+[`44954792014`](https://github.com/tpepels/piano_teacher/actions/runs/44954792014)
+completed successfully after the source-bound fake-MIDI fixture
+migration. The CI logs confirm all Python tests, the Godot syntax
+gate, and the existing five native behavior scenarios including
+`AUTHORIZED_TIMELINE_FAILURES:0`.
+
+The full-scene embedded fake-MIDI acceptance journey now also
+examines the ACTUAL immutable physical score queue immediately
+after the first Free-to-Tempo transition. It rejects a missing
+source and any clipped source strip outside the selected one-bar
+practice window (allowing complete sounding tails), regardless
+of how much neighboring notation was pre-engraved. A success
+marker `FULL_SCENE_SELECTED_WINDOW_OK` is printed with the
+bound and actual admitted-strip count. The native-production
+GitHub Actions job is being requested by a `[native]` commit.
+
+**V7 remains unclosed** until the native job confirms the complete
+embedded score journey, timing, package audit and physical-keyboard
+acceptance. A remote synthetic MIDI input exercises the real
+production device callback, but cannot attest to the user's physical
+keyboard, speakers or platform rendering.
+
 ### V1/V4 authored native-frame acceptance gate - 2026-11-21
 
 Added `tests/godot/authorized_timeline.gd` to the existing

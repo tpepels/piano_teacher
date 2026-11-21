@@ -179,6 +179,31 @@ func _process(_delta: float) -> bool:
                     int(state.get("bpm",0)) != 40:
                 _fail("Free did not begin first measure Tempo at 50%")
                 return true
+            # The renderer may have pre-engraved a full piece, but the
+            # physically admitted queue must contain ONLY the selected
+            # one-bar practice source (plus sounding tails and rests).
+            # No extra neighboring measure may enter as hidden context.
+            var active_source: Dictionary = state.get("practice_timeline",{})
+            var source_bound: float = maxf(
+                float(active_source.get("source_duration_beats",NAN)),
+                float(active_source.get("sounding_duration_beats",NAN)))
+            if not is_finite(source_bound) or source_bound <= 0.0:
+                _fail("Timed source has no authenticated practice-window duration")
+                return true
+            var actual_source_count := 0
+            for strip in renderer.diagnostic_stream_snapshot():
+                if str(strip.get("kind","")) != "source":
+                    continue
+                actual_source_count += 1
+                if (float(strip.get("source_floor",-INF)) < -.0001 or
+                        float(strip.get("source_ceiling",INF)) > source_bound+.0001):
+                    _fail("Native score queue contains measures outside selected passage")
+                    return true
+            if actual_source_count == 0:
+                _fail("Timed source started without its selected measure")
+                return true
+            print("FULL_SCENE_SELECTED_WINDOW_OK duration=",source_bound,
+                " admitted_sources=",actual_source_count)
             initial_transport = int(state.get("transport_id",-1))
             if initial_transport <= 0:
                 _fail("Tempo has no published transport identity")
