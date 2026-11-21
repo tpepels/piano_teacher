@@ -68,8 +68,25 @@ func _process(_delta: float) -> bool:
     if app == null or not is_instance_valid(app):
         return false
     if Time.get_ticks_msec() - begun_ms > MAX_MS:
+        var state: Dictionary = app.current_state()
+        var gateway = app.score_admission
+        var timeline = app.score_flow.timeline
+        var renderer = app.practice_view.stage.renderer
+        print("PHASE6_RESUME_DIAGNOSTIC:",JSON.stringify({
+            "state_phase":state.get("phase"),"mode":state.get("mode"),
+            "paused":state.get("paused"),"intent":state.get("playback_intent"),
+            "flow_hold":timeline.hold_world,"flow_rate":timeline.current_rate(),
+            "flow_world":app.score_flow.project(Time.get_ticks_msec()),
+            "world_sample":timeline.last_world,"world_ms":timeline.last_ms,
+            "renderer_world":renderer.stream_world_beat,
+            "reservation_current":gateway.current,
+            "reservation_problem":gateway._last_problem,
+            "reserved_pending":gateway.reserve_request.is_pending(),
+            "present_pending":gateway.present_request.is_pending(),
+            "prepared_destination":app.score_runway.has_prepared_destination(state)
+        }))
         _fail("Production UI timed out phase=%s error=%s pending=%s" % [
-            str(app.current_state().get("phase","missing")),
+            str(state.get("phase","missing")),
             str(app.score_error),str(app.command_coordinator.state.pending)])
         return true
     if not app.native_started:

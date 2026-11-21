@@ -73,6 +73,17 @@ func _fail(message: String) -> void:
             "armed":renderer.stream_owner_status().get("armed_serial",-1),
             "last_take":renderer.stream_owner_status().get("last_take",""),
             "passes":passages}
+        var timeline = app.score_flow.timeline
+        witness["projection"] = {
+            "flow_hold":timeline.hold_world,
+            "flow_rate":timeline.current_rate(),
+            "flow_world":app.score_flow.project(Time.get_ticks_msec()),
+            "world_sample":timeline.last_world,
+            "last_ms":timeline.last_ms,
+            "intent":state.get("playback_intent"),
+            "reservation_current":app.score_admission.current,
+            "reservation_problem":app.score_admission._last_problem
+        }
     printerr("PHASE6_REAL_SCORE_FAILED: ", phase, ": ", message,
         " witness=", JSON.stringify(witness))
     quit(1)
