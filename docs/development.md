@@ -171,6 +171,33 @@ repertoire journeys, strict standalone bundle and relocated boot remain
 a **separate gate** for this revision. No new tests or simulated
 application engine were introduced.
 
+### Pause/Resume and selected-window software acceptance — 2026-11-21
+
+The post-S7 Pause repair freezes the authored score in an acknowledged
+Pause, preserves Free's stationary target and restricts visible notation to
+the current one-to-four-measure practice window with its ending barline and
+full sounding tails. The native presentation still owns exactly one visual
+timeline and source/admission ledger. The backend remains paused while an
+explicit Resume intent is reserved; the visual hold must be released for
+that pending intent so graphical deadline inversion can complete.
+
+The first native run on `b37e7693` failed because the two existing
+integration scripts still required movement during Pause. The subsequent
+run on `1948651a` exposed an actual `admitting` stall during Resume.
+These were corrected without adding new tests. Final source `81ae006f`
+passed [full core and native-production run
+44925026112](https://github.com/tpepels/piano_teacher/actions/runs/44925026112):
+**103 Python passed, four skipped**, all four native behavior groups and
+Godot syntax passed, embedded Python/real-score preparation succeeded,
+production Pause/Resume and Moonlight/Peace Piece/Chopin journeys passed,
+the relocated standalone package contents and boot passed, and the
+native-production log contained **zero `SCRIPT ERROR` lines**.
+
+The next acceptance is physical: verify stationary Free targets, immediate
+Pause/Resume, no new source admission while paused, exact one-to-four-bar
+visible windows, preserved long ties and barlines, speakers/count-in and
+actual piano input. Headless software acceptance does not certify those.
+
 ## Standalone Linux package
 
 [package-inprocess.sh](../scripts/package-inprocess.sh) assembles Godot, the

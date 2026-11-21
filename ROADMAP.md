@@ -906,20 +906,32 @@ the renderer/control paths were corrected on main:
   retains the selected window's authentic closing barline (including authored
   repeat styles) without showing the following measure.
 
-No new tests were introduced. [The existing core and native/embedded/
-relocated-package CI](https://github.com/tpepels/piano_teacher/actions/runs/44922019745)
-runs against `b37e7693`. **Core CI passed: 103 Python tests,
-four skips, Godot startup and four native behaviour groups with zero
-failures.** Full embedded/standalone acceptance remains under verification.
-[Full native acceptance run 44922019745](https://github.com/tpepels/piano_teacher/actions/runs/44922019745)
-failed in four scenarios because the **existing acceptance scripts** still
-required the bar to scroll during Pause. The backend acknowledged Pause and
-held the score, which these obsolete assertions treated as failure.
-[`1948651a`](https://github.com/tpepels/piano_teacher/commit/1948651ac82c3d536b2e723d2749f41914b1c17b)
-updates the two **existing** production/repertoire journey scripts to require
-the bar to remain stationary, with no new strip admission while paused. The
-full check was rerun against that source; the rerun result is recorded by CI,
-not assumed from the corrected assertion.
+**Native acceptance and Resume correction.** The first full run,
+[44922019745](https://github.com/tpepels/piano_teacher/actions/runs/44922019745),
+failed four scenes because two existing acceptance scripts still expected the
+previous moving-during-Pause behavior. The scripts now assert a stationary
+score and no new admission during Pause ([`1948651a`](https://github.com/tpepels/piano_teacher/commit/1948651ac82c3d536b2e723d2749f41914b1c17b)).
+The following full run,
+[44922940896](https://github.com/tpepels/piano_teacher/actions/runs/44922940896),
+exposed a **real Resume deadlock**: the backend remained in `admitting`
+after Pause with no graphical receipt. Source `ae20d6c4` reconciles the
+canonical hold in every presentation frame rather than only at a snapshot.
+Source [`81ae006f`](https://github.com/tpepels/piano_teacher/commit/81ae006ff186ce9a6bce39f0293b0d2510390e40)
+releases the visual hold when an explicitly pending Resume intent is being
+admitted. The backend intentionally retains `paused=true` until authorization;
+holding the visual world throughout that admission made the deadline inversion
+unable to reach any future source. No separate clock or alternative admission
+path was added. Existing acceptance failure witnesses were extended in
+`9312b83c` (no new test scenarios).
+
+**Final source acceptance:** [GitHub Actions 44925026112](https://github.com/tpepels/piano_teacher/actions/runs/44925026112)
+passed on source `81ae006f`: **103 Python passed, 4 skipped**,
+Godot startup and all four existing native behavior groups passed with zero
+failures, embedded CPython/native registration succeeded, production
+Play/Pause/Resume succeeded, Moonlight/Peace Piece/Chopin journeys succeeded,
+strict relocated standalone package contents and boot succeeded, and there
+were **zero Godot script errors**. No new tests were added; two preexisting
+production scripts were updated to the current Pause contract.
 
 A real piano is still needed to verify immediate Pause/Resume feel, whether
 Free remains stationary while thinking, and that source cropping shows exactly

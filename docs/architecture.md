@@ -121,12 +121,19 @@ full sounding tails. The Python `TeachingController` shares the same pause
 lifetime in introducing/disconnected states (`9eec8103`). Native
 `RenderPass.event_visible` excludes context-role bars and notes
 (`fc65791f`) while `SourcePassPainter` retains the selected window's
-authentic ending barline and repeat mark (`b37e7693`). Full
-native/embedded/package CI on `b37e7693` failed because two old acceptance
-scripts expected scrolling during Pause. Those **existing** scripts now verify
-stationary notation and unchanged admission on Pause (`1948651a`).
-The corrected full source is under verification; physical observation remains
-outstanding.
+authentic ending barline and repeat mark (`b37e7693`). The original full native run on `b37e7693` failed obsolete assertions
+that Pause should keep scrolling. The existing UI and repertoire checks now
+require stationary notation and unchanged admission on Pause (`1948651a`).
+A separate real Resume failure on `1948651a` revealed that Python keeps
+`paused=true` while awaiting graphical authorization: the visual hold then
+prevented the future-deadline inversion from finishing. `ae20d6c4`
+reconciles holds in the canonical presentation frame, and `81ae006f`
+releases that hold specifically for a pending, explicit Resume intent.
+No new timeline, grader, renderer or parallel reservation authority was
+introduced. [Full core/native/repertoire/relocated-package acceptance
+44925026112](https://github.com/tpepels/piano_teacher/actions/runs/44925026112)
+passed on `81ae006f` with zero Godot script errors. Physical piano,
+audible and visual acceptance remain outstanding.
 
 ## Current embedded Python application boundaries (2026-11-21)
 
