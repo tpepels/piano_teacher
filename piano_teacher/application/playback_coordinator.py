@@ -15,6 +15,7 @@ from enum import Enum
 import math
 
 from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
+from .physical_admission import PhysicalAdmissionEvidence, choose_admission_deadline
 from .playback_transitions import CountInPlan, PlaybackTransition
 
 
@@ -249,9 +250,16 @@ class PlaybackCoordinator:
     def reserve(self, facts: PlaybackRuntimeFacts, *, intent_id: str, attempt: int,
                 take_id: str, fingerprint: str, stage_key: str,
                 revision: int, hand: str, source_from_beat: float,
-                source_end_beat: float,
-                deadline_ms: float, world_origin: float, queue_generation: int,
+                source_end_beat: float, sampled_at_ms: float, travel_ms: float,
+                world_origin: float, queue_generation: int,
                 renderer_generation: int, reused_count_in: bool = False) -> dict:
+        """Authorize a musical deadline from an immutable physical witness.
+
+        The native renderer supplies source placement/travel evidence,
+        never an absolute musical deadline. Source identity, score
+        revision, freshness, counting and tempo policy are validated
+        within this one application transaction.
+        """
         intent = self._require_intent(facts, intent_id, attempt)
         if (take_id != intent.take_id or fingerprint != intent.fingerprint
                 or stage_key != intent.stage_key or revision != intent.revision
@@ -259,36 +267,20 @@ class PlaybackCoordinator:
                 or abs(float(source_from_beat)-intent.from_beat) > 1e-7
                 or abs(float(source_end_beat)-intent.end_beat) > 1e-7):
             raise ValueError("Score reservation has the wrong musical source")
-        if (not math.isfinite(float(deadline_ms))
-                or not math.isfinite(float(world_origin))):
-            raise ValueError("Score reservation has invalid physical coordinates")
-        if reused_count_in and not (
-                intent.action == "resume" and intent.resume_remaining_beats > 0):
-            raise ValueError("Only a paused count-in can reuse its spoken beats")
-        earliest = intent.earliest_deadline_ms
-        if reused_count_in:
-            earliest = (intent.requested_at + SNAPSHOT_LATENCY_SECONDS
-                        + SCHEDULER.beats_seconds(
-                            intent.resume_remaining_beats,intent.bpm)) * 1000.0
-        if intent.fixed_deadline_ms is not None and abs(
-                deadline_ms-intent.fixed_deadline_ms) > .01:
-            raise ValueError("A direct repeat cannot change its one-bar deadline")
-        chosen = SCHEDULER.resolve(
-            intent.action,now=facts.now,bpm=intent.bpm,
-            count_in_beats=(intent.resume_remaining_beats
-                if reused_count_in else 0.0 if intent.fixed_deadline_ms is not None
-                else intent.count_in_beats),
-            latency=0.0,
-            physical_at=deadline_ms/1000.0,
-            earliest_at=earliest/1000.0)
-        if chosen.run_at > deadline_ms/1000.0 + 1e-5:
-            raise ValueError(
-                "Score admission is earlier than the authoritative musical schedule")
+        evidence = PhysicalAdmissionEvidence(
+            sampled_at_ms=float(sampled_at_ms), travel_ms=float(travel_ms),
+            world_origin=float(world_origin),
+            queue_generation=queue_generation,
+            renderer_generation=renderer_generation)
+        deadline_ms = choose_admission_deadline(
+            intent, facts, evidence, reused_count_in=reused_count_in)
         if self.receipt is not None:
             receipt = self.receipt
             if (receipt.intent_id == intent_id and receipt.attempt == attempt
-                    and receipt.deadline_ms == deadline_ms
-                    and receipt.world_origin == world_origin):
+                    and abs(receipt.deadline_ms-deadline_ms) <= 0.01
+                    and receipt.world_origin == world_origin
+                    and receipt.queue_generation == queue_generation
+                    and receipt.renderer_generation == renderer_generation):
                 return self._receipt_response(receipt)
             raise ValueError("Conflicting score reservation for the same intent")
         self.receipt = ScoreReceipt(
@@ -297,9 +289,9 @@ class PlaybackCoordinator:
             hand=hand,source_from_beat=intent.from_beat,
             source_end_beat=intent.end_beat,
             segment_id=f"{intent_id}:segment:{attempt}",
-            deadline_ms=float(deadline_ms), world_origin=float(world_origin),
-            queue_generation=int(queue_generation),
-            renderer_generation=int(renderer_generation),
+            deadline_ms=deadline_ms, world_origin=evidence.world_origin,
+            queue_generation=evidence.queue_generation,
+            renderer_generation=evidence.renderer_generation,
             reused_count_in=bool(reused_count_in))
         self.state = PlaybackState.RESERVED
         return self._receipt_response(self.receipt)

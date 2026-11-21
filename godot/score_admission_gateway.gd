@@ -79,7 +79,7 @@ func _matching_renderer(intent: Dictionary):
     return runway.prepared_renderer(intent) if runway != null else null
 
 
-func _deadline_at_world(target_world: float, local_ms: int, beat: float,
+func _physical_travel_ms(target_world: float, local_ms: int, beat: float,
         bpm: float, segments: Array) -> float:
     # Invert the very same forward source/world projection the renderer
     # uses. A fixed nominal-BPM conversion fails across tempo-map changes.
@@ -157,7 +157,6 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     var opening: float = float(intent.get("from_beat",0.0))
     var planned: Dictionary = {}
     var partial: float = float(intent.get("resume_remaining_beats",0.0))
-    var admitted_floor: float = backend_floor
     var fixed: Variant = intent.get("fixed_deadline_ms")
     if fixed != null:
         if action != "auto" or not is_finite(float(fixed)) or float(fixed) <= backend_now:
@@ -188,7 +187,7 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
                 "resume",world,opening,partial_slot)
             if not planned.is_empty() and \
                     bool(planned.get("reused_unplayed_count_in",false)):
-                admitted_floor = partial_floor
+                pass
             else:
                 if not planned.is_empty():
                     view.cancel_stream_arm()
@@ -202,30 +201,22 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
     if planned.is_empty():
         _report_problem("Cannot reserve source notation for this playback")
         return
-    # From this point the gateway owns the provisional source. Any failure
-    # in coordinate inversion or deadline validation must cancel that exact
-    # arm and restore its safe withdrawn suffix.
+    # From here the gateway owns only provisional physical ink. Python
+    # decides the musical deadline from this source-bound placement witness.
     renderer = view
     admission_state = state.duplicate(true)
     current = intent.duplicate(true)
     started_ms = frame_ms
     var start_world: float = float(planned.get("start_world", NAN))
-    var lead_ms: float = _deadline_at_world(
+    var physical_travel_ms: float = _physical_travel_ms(
         start_world,frame_ms,float(state.get("clock_beat",0.0)),
         tempo,authored)
-    if not is_finite(lead_ms):
+    if not is_finite(physical_travel_ms):
         _cancel_provisional()
         return
-    var deadline: float = float(fixed) if fixed != null else backend_now+lead_ms
-    if deadline < admitted_floor-.01:
-        _cancel_provisional()
-        _report_problem("Reserved notation precedes its musical deadline")
-        return
-    current["deadline_ms"] = deadline
     current["world_origin"] = start_world
     current["reused_count_in"] = bool(
-        planned.get("reused_unplayed_count_in", false))
-    started_ms = frame_ms
+        planned.get("reused_unplayed_count_in",false))
     var payload: Dictionary = {
         "intent_id": str(intent["intent_id"]),
         "attempt": int(intent["attempt"]),
@@ -236,7 +227,8 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         "hand": str(intent["hand"]),
         "source_from_beat": opening,
         "source_end_beat": float(intent["end_beat"]),
-        "deadline_ms": deadline,
+        "sampled_at_ms": backend_now,
+        "travel_ms": physical_travel_ms,
         "world_origin": start_world,
         "queue_generation": view.admission_queue_generation(),
         "renderer_generation": int(intent["revision"]),

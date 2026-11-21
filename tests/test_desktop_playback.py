@@ -20,9 +20,13 @@ def desktop_tempo(session):
 def reserve(session, intent, **changes):
     values = {key: intent[key] for key in (
         "intent_id", "attempt", "take_id", "fingerprint", "stage_key", "revision", "hand")}
+    sampled_ms = session.clock() * 1000.0
+    physical_ms = (intent["fixed_deadline_ms"] if intent["fixed_deadline_ms"] is not None
+                   else intent["earliest_deadline_ms"])
     values.update(source_from_beat=intent["from_beat"], source_end_beat=intent["end_beat"],
-                  deadline_ms=intent["earliest_deadline_ms"], world_origin=100.0,
-                  queue_generation=1, renderer_generation=1)
+                  sampled_at_ms=sampled_ms, travel_ms=physical_ms-sampled_ms,
+                  world_origin=100.0, queue_generation=1,
+                  renderer_generation=intent["revision"])
     values.update(changes)
     return session.ask("playback.reserve", **values)
 
@@ -71,7 +75,7 @@ def test_expired_admission_can_retry_without_starting_a_partial_count_in(practic
     retry = session.snapshot()["playback_intent"]
     rejected(session, "playback.present", intent_id=intent["intent_id"],
              attempt=intent["attempt"], segment_id=receipt["segment_id"])
-    fresh = reserve(session, retry, deadline_ms=(session.clock()+20)*1000)
+    fresh = reserve(session, retry, travel_ms=20000.0)
     present(session, retry, fresh)
     assert session.snapshot()["running"]
     assert session.snapshot()["countdown"] >= 6
@@ -182,7 +186,7 @@ def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(p
         assert len(final) == 2
         # A successor's source/revision must also be prepared off the clock.
         session.ask("score.native_layout")
-        receipt = reserve(session, incoming, deadline_ms=incoming["fixed_deadline_ms"])
+        receipt = reserve(session, incoming)
         result = present(session, incoming, receipt)
         assert result["transport_id"] != initial["transport_id"]
         assert session.snapshot()["bpm"] == next_bpm and session.snapshot()["running"]
