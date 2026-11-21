@@ -205,10 +205,13 @@ def test_fake_keyboard_presentation_failure_and_resume_never_grade_unpresented_m
     assert session.snapshot()["midi_notes"] == 0
     values = {k: intent[k] for k in ("intent_id", "attempt", "take_id",
                                     "fingerprint", "stage_key", "revision", "hand")}
+    sample = session.clock()*1000.0
     values.update(source_from_beat=intent["from_beat"],
                   source_end_beat=intent["end_beat"],
-                  deadline_ms=intent["earliest_deadline_ms"],
-                  world_origin=100.0,queue_generation=1,renderer_generation=1)
+                  sampled_at_ms=sample,
+                  travel_ms=intent["earliest_deadline_ms"]-sample,
+                  world_origin=100.0,queue_generation=1,
+                  renderer_generation=intent["revision"])
     receipt = session.ask("playback.reserve", **values)
     assert not session.snapshot()["running"] and session.snapshot()["midi_notes"] == 0
     session.ask("playback.present", intent_id=intent["intent_id"],
@@ -223,8 +226,9 @@ def test_fake_keyboard_presentation_failure_and_resume_never_grade_unpresented_m
     assert resumed["take_id"] == intent["take_id"]
     new_values = dict(values)
     new_values.update(intent_id=resumed["intent_id"],attempt=resumed["attempt"],
-                      deadline_ms=(session.clock()+20)*1000,
-                      renderer_generation=2,queue_generation=2,
+                      sampled_at_ms=session.clock()*1000.0,
+                      travel_ms=20000.0,
+                      renderer_generation=resumed["revision"],queue_generation=2,
                       take_id=resumed["take_id"])
     fresh = session.ask("playback.reserve", **new_values)
     session.ask("playback.present",intent_id=resumed["intent_id"],

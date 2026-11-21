@@ -204,7 +204,10 @@ def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(p
 def test_lost_reserve_ack_recovers_original_immutable_witness(practice_session):
     session = practice_session(bars=1)
     intent = desktop_tempo(session)
-    offer = physical_offer(session, intent)
+    # Use a physically safe long future slot so the ACK can be lost
+    # for longer than the witness's allowed sampling age while leaving
+    # enough *full count-in* time for a later playback.present.
+    offer = physical_offer(session, intent, travel_ms=20000.0)
     original = session.ask("playback.reserve", **offer)
     status = session.ask("playback.status")
     assert status["state"] == "reserved"

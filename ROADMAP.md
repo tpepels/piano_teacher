@@ -227,6 +227,23 @@ No runtime behavior or prior acceptance claim is changed in this design
 phase. Source inspection and existing tests must still run without a new
 failure. The baseline source and test result are recorded here.
 
+### V6 CI failure corrections from actual GitHub Actions - 2026-11-21
+
+GitHub Actions core runs `44954408749` and `44954577853`
+failed with two concrete scenario defects: a previously existing
+`test_state_transition_journeys` fixture still sent legacy
+`deadline_ms` instead of physical evidence, and the new
+lost-ACK replay fixture advanced the virtual clock beyond the
+original musical count-in without reserving sufficient future lead.
+The journey fixture now uses current source-bound
+`sampled_at_ms`/`travel_ms` evidence for both Start and Resume,
+including the actual renderer revision. The ACK fixture now
+reserves twenty seconds of safe physical travel before aging
+its sample, so it checks true idempotence without requiring a
+musically expired take to start. These correct scenarios, not
+application policy or backwards-compatibility fallbacks.
+Fresh CI must pass before V6 can be marked complete.
+
 ### V1/V3 real worker integration matrix - 2026-11-21
 
 The existing `tests/test_desktop_playback.py` was extended using
