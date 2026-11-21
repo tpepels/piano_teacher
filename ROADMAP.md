@@ -469,6 +469,22 @@ Exactly the selected one-to-four authored measures remain visible, with
 original closing barline, dim opposite hand and complete sounding tails;
 the final exam intentionally shows its full selected piece.
 
+### V5 eliminate speculative command effects - 2026-11-21
+
+`PracticeCommandCoordinator` no longer uses the last published
+primary-button action to cancel metronome cues or decide whether to
+send native physical clearance. Its only local projection of that
+action is the pending-button caption and click-queue UX. The native
+adapter sends physical facts for raw gestures that can start, retry
+or resume; the Python session lock interprets the actual action.
+The metronome continues to reconcile with the authorized take and
+is not cancelled by an unrelated failed command. A Pause requested
+while another command is pending stays `ui_pause` rather than
+being transformed into an explicit stale `pause` operation.
+
+Other screen-side effects and physical acceptance are still open.
+No new unit tests added.
+
 ### V5 retired control-policy owner - 2026-11-21
 
 The superseded Godot `practice_control_policy.gd` is removed. Its

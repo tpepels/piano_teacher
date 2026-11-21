@@ -107,9 +107,12 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         practice_view.begin_action(projected_action if not projected_action.is_empty() else action,previous)
         return
     practice_view.begin_action(projected_action if not projected_action.is_empty() else action)
-    if projected_action not in ["start","restart","resume","score_ready"]:
-        metronome_frame.cancel_reserved_count_in()
-    if projected_action in ["start","restart","resume","score_ready"]:
+    # A displayed label may be stale when the backend resolves this click.
+    # Provide physical facts for any raw gesture that *may* start, retry
+    # or resume. Python chooses the concrete action under its lock.
+    # The metronome consumes only an authorized playback segment.
+    if action in ["ui_primary","ui_pause","ui_retry",
+            "start","restart","resume","score_ready"]:
         var clearance: Dictionary = score_session.continuation_geometry()
         if not clearance.is_empty():
             command = command.duplicate()
@@ -148,8 +151,9 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
     if operation == "practice.command":
         practice_view.finish_action()
     if code != 0:
-        if operation == "practice.command":
-            metronome_frame.cancel_reserved_count_in()
+        # A failed unrelated command cannot cancel an existing audible
+        # segment. MetronomeFrameCoordinator reconciles its countdown
+        # directly from the authorized playback state.
         var message := Reply.failure_message(code,body)
         if operation == "fingering.correct":
             fingering_save_error = message

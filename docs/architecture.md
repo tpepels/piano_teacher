@@ -290,6 +290,16 @@ slot, deduplicating by intent/attempt without selecting a replacement
 musical deadline. A native failure can therefore leave `admitting`
 and restore manual retry instead of waiting indefinitely.
 
+### V5 local request effects cease interpreting backend actions
+
+The native command coordinator no longer cancels count-in sound from
+a projected button action or command failure. The existing metronome
+frame owner already follows the authorized playback timeline.
+Source-bound physical clearance accompanies any raw gesture that
+could request timed playback; Python resolves it from current session
+state. The asynchronous queue retains a raw Pause gesture while
+a different command is in flight.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
