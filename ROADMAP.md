@@ -286,6 +286,20 @@ resulting action projection, demonstrable through the V1 runner.
 Read/poll does not execute transitions. No Godot component independently
 infers an enabled musical action, target tempo or next lesson decision.
 
+### V2/V3 preserve active phase during successor admission - 2026-11-21
+
+`ScoreStatePublisher` now projects `admitting` only when the
+backend is **neither running nor paused**. A new reserved successor
+while an existing take is playing or paused remains visible in
+`playback_intent` without overwriting the active musical phase.
+That prevents the native stream, metronome and controls from
+misclassifying an actually playing take as idle admission merely
+because its next exposure is being prepared. The current and pending
+identities remain orthogonal application facts.
+
+No new tests; the native transition matrix/physical acceptance
+must verify continuous outgoing ink and correct active-phase cues.
+
 ### V3 verify physical source before local authorization effects - 2026-11-21
 
 The native score ledger now publishes a read-only

@@ -84,7 +84,12 @@ class ScoreStatePublisher:
         # All desktop take intents and receipts originate in PlaybackCoordinator.
         state["playback_intent"] = facts.timeline["intent"]
         state["playback_timeline"] = facts.timeline["current"]
-        if facts.timeline["intent"] is not None:
+        if (facts.timeline["intent"] is not None
+                and not facts.running and not facts.paused):
+            # A successor can be physically prepared while an older take
+            # continues playing or is paused. "admitting" describes
+            # an idle transport waiting for its first authorized source;
+            # it must never overwrite the active take's actual phase.
             state["phase"] = "admitting"
         elif (facts.timeline["current"].get("state") == "failed"
               and not facts.running):

@@ -313,6 +313,16 @@ an authorization receipt from producing graded/audio time against
 missing or superseded notation. The backend retains sole authority
 to stop the musical take and publish failure.
 
+### Pending admission is orthogonal to active playback phase
+
+The canonical state projection retains the actual `playing` or
+`paused` phase when a separate future `playback_intent` exists.
+`admitting` is emitted only for an idle/unpaused transport awaiting
+its first score authorization. A speculative successor cannot
+replace the active phase seen by stream painting, audio, pause or
+practice controls. The coordinator still owns both identities
+and presents the successor through the single receipt protocol.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
