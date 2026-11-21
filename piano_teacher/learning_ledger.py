@@ -1,124 +1,31 @@
-"""One local, transactional ledger of exposure, grading and intervention facts.
+"""Connection-scoped transactional ledger of attempts and intervention facts.
 
-The application owns IDs, musical timing and the connection. This module never
-grades, rematches MIDI, infers a legacy pass, or independently commits a take.
+The application owns IDs, musical timing and the connection. This boundary
+records facts, not alternative grading or MIDI interpretations. Retention,
+schema and export are distinct collaborators on the same SQLite connection.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from collections import Counter
 from hashlib import sha256
 import json
-import math
-from pathlib import Path
 import sqlite3
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from .diagnosis_policies import AssessmentEvidence, LearnerSnapshot
+from .learning_ledger_common import (
+    SCHEMA_VERSION, LearningLedgerLimitError, _compact, _context_summary,
+    _hash, _identifier, _json, _object, _utc,
+)
+from .learning_ledger_export import LearningHistoryExporter
+from .learning_ledger_retention import LearningDetailRetention
+from .learning_ledger_schema import create_ledger_schema
 from .sqlite_transaction import sqlite_atomic
 
 
-SCHEMA_VERSION = 1
 _PROGRESS_TABLES = ("strategy_sessions", "learner_units", "learner_stages",
                     "repeat_tempo_credit", "stage_tempos", "mastery", "sessions",
                     "fukuda_mistakes")
-
-
-class LearningLedgerLimitError(ValueError):
-    """Detail cannot fit without discarding an open or pending exposure."""
-
-
-def _utc() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
-
-
-def _identifier(value, label="identity") -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"A nonempty {label} is required")
-    return value
-
-
-def _validate(value):
-    if value is None or isinstance(value, (str, bool, int)):
-        return
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError("Evidence numbers must be finite")
-        return
-    if isinstance(value, (list, tuple)):
-        for item in value:
-            _validate(item)
-        return
-    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
-        for item in value.values():
-            _validate(item)
-        return
-    raise ValueError("Evidence must be finite JSON with string object keys")
-
-
-def _json(value) -> str:
-    _validate(value)
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False)
-
-
-def _hash(value) -> str:
-    return sha256(_json(value).encode("utf-8")).hexdigest()
-
-
-def _object(value, label="payload") -> dict:
-    if not isinstance(value, dict):
-        raise ValueError(f"The {label} must be a JSON object")
-    _validate(value)
-    return value
-
-
-def _compact(value):
-    """Small facts retained after detail pruning; omission is labeled in coverage."""
-    if isinstance(value, dict):
-        return {key: _compact(item) for key, item in value.items()
-                if not isinstance(item, str) or len(item) <= 1024}
-    if isinstance(value, (list, tuple)):
-        if len(value) <= 16 and all(not isinstance(item, (dict, list, tuple)) for item in value):
-            return list(value)
-        return {"item_count": len(value), "detail_required": True}
-    return value
-
-
-_CONTEXT_FACTS = frozenset((
-    "score_revision", "from_beat", "phrase_start", "phrase_end", "assistance",
-    "calibration_ms", "calibration_applied_ms", "midi_available", "count_in_beats", "count_in_meter", "scheduled_origin",
-    "fingerprint", "stage_key", "rule_id", "generator", "generator_version", "strategy",
-    "strategy_version", "hand", "variant", "level", "classification", "mode", "scope",
-    "target_bpm", "source_bpm", "performed_bpm", "bpm", "tempo_map_hash", "transport_id", "revision",
-    "started_utc", "monotonic_start", "run_id", "parent_decision_id", "first_bar", "last_bar",
-    "start_beat", "end_beat", "full_target", "mastery_eligible", "eligibility_reason",
-    "calibration", "calibration_ms", "device_available", "midi_available", "assistance",
-    "score_revision", "phrase_start", "phrase_end", "from_beat", "source_sha256", "provenance"))
-
-
-def _context_summary(value: dict) -> dict:
-    return _compact({key: item for key, item in value.items() if key in _CONTEXT_FACTS})
-
-
-def _redact(value):
-    if isinstance(value, dict):
-        result = {}
-        for key, item in value.items():
-            normalized = key.lower().replace("-", "_")
-            if ("path" in normalized or normalized in {"name", "title", "filename", "file_name", "raw_midi", "midi_bytes",
-                    "music_dir", "midi_device", "last_piece", "source", "device"}
-                    or normalized.endswith("_name") or normalized.endswith("_title")
-                    or normalized in {"device", "piece"} and isinstance(item, str)):
-                continue
-            result[key] = _redact(item)
-            if normalized.endswith("_residual") and isinstance(item, (int, float)) and not isinstance(item, bool):
-                result[key + "_microseconds"] = round(item * 1_000_000)
-            if normalized.endswith("_residual_seconds") and isinstance(item, (int, float)) and not isinstance(item, bool):
-                result[key[:-7] + "microseconds"] = round(item * 1_000_000)
-        return result
-    if isinstance(value, list):
-        return [_redact(item) for item in value]
-    return value
 
 
 class LearningLedger:
@@ -127,98 +34,15 @@ class LearningLedger:
     def __init__(self, db: sqlite3.Connection):
         self.db = db
         self._recovering = False
+        self.retention = LearningDetailRetention(db)
+        self.history_exporter = LearningHistoryExporter(db, self.retention)
         # ProgressRepository enables this before beginning migration. Standalone
         # use on a fresh connection gets the same relational protections.
         self.db.execute("PRAGMA foreign_keys=ON")
         with sqlite_atomic(db):
-            self._create_schema()
+            create_ledger_schema(db)
             if not db.execute("SELECT 1 FROM learning_current_learner").fetchone():
                 self._new_learner()
-
-    def _create_schema(self):
-        statements = (
-            """CREATE TABLE IF NOT EXISTS learning_learners (
-                learner_id TEXT PRIMARY KEY, created_utc TEXT NOT NULL)""",
-            """CREATE TABLE IF NOT EXISTS learning_current_learner (
-                singleton INTEGER PRIMARY KEY CHECK(singleton=1),
-                learner_id TEXT NOT NULL REFERENCES learning_learners ON DELETE CASCADE)""",
-            """CREATE TABLE IF NOT EXISTS learning_retention (
-                singleton INTEGER PRIMARY KEY CHECK(singleton=1),
-                days INTEGER NOT NULL, budget_mib INTEGER NOT NULL)""",
-            """CREATE TABLE IF NOT EXISTS learning_sessions (
-                session_id TEXT PRIMARY KEY, learner_id TEXT NOT NULL REFERENCES learning_learners ON DELETE CASCADE,
-                run_id TEXT NOT NULL, started_utc TEXT, timezone TEXT,
-                ended_utc TEXT, closure_reason TEXT, recovered_utc TEXT,
-                start_hash TEXT NOT NULL, durations_json TEXT NOT NULL DEFAULT '{}',
-                detail_pruned INTEGER NOT NULL DEFAULT 0)""",
-            """CREATE TABLE IF NOT EXISTS learning_rules (
-                rule_id TEXT PRIMARY KEY, snapshot_json TEXT NOT NULL, created_utc TEXT NOT NULL)""",
-            """CREATE TABLE IF NOT EXISTS learning_attempts (
-                attempt_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES learning_sessions ON DELETE CASCADE,
-                fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
-                rule_id TEXT REFERENCES learning_rules,
-                state TEXT NOT NULL DEFAULT 'open', reason TEXT, ended_utc TEXT,
-                context_hash TEXT NOT NULL, terminal_hash TEXT,
-                summary_json TEXT NOT NULL, context_json TEXT, checkpoint_json TEXT,
-                detail_pruned INTEGER NOT NULL DEFAULT 0, provenance TEXT NOT NULL DEFAULT 'native')""",
-            """CREATE TABLE IF NOT EXISTS learning_assessments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                attempt_id TEXT NOT NULL UNIQUE REFERENCES learning_attempts ON DELETE CASCADE,
-                bpm REAL NOT NULL, statuses_json TEXT NOT NULL, extra_notes INTEGER NOT NULL,
-                assessed INTEGER NOT NULL DEFAULT 1, clean INTEGER, passed INTEGER,
-                mastery_eligible INTEGER NOT NULL DEFAULT 0, summary_json TEXT NOT NULL)""",
-            """CREATE TABLE IF NOT EXISTS learning_attempt_details (
-                attempt_id TEXT PRIMARY KEY REFERENCES learning_attempts ON DELETE CASCADE,
-                detail_json TEXT NOT NULL)""",
-            """CREATE TABLE IF NOT EXISTS learning_events (
-                event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES learning_sessions ON DELETE CASCADE,
-                attempt_id TEXT REFERENCES learning_attempts ON DELETE CASCADE,
-                fingerprint TEXT, kind TEXT NOT NULL, payload_hash TEXT NOT NULL,
-                summary_json TEXT NOT NULL, data_json TEXT)""",
-            """CREATE TABLE IF NOT EXISTS learning_decisions (
-                decision_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES learning_sessions ON DELETE CASCADE,
-                attempt_id TEXT REFERENCES learning_attempts ON DELETE CASCADE,
-                fingerprint TEXT, payload_hash TEXT NOT NULL, summary_json TEXT NOT NULL, data_json TEXT)""",
-            """CREATE TABLE IF NOT EXISTS learning_outcomes (
-                outcome_id TEXT PRIMARY KEY, decision_id TEXT NOT NULL REFERENCES learning_decisions ON DELETE CASCADE,
-                attempt_id TEXT REFERENCES learning_attempts ON DELETE CASCADE,
-                payload_hash TEXT NOT NULL, summary_json TEXT NOT NULL, data_json TEXT)""",
-            """CREATE INDEX IF NOT EXISTS learning_session_time ON learning_sessions(learner_id,started_utc)""",
-            """CREATE INDEX IF NOT EXISTS learning_attempt_stage ON learning_attempts(fingerprint,stage_key,session_id)""",
-            """CREATE INDEX IF NOT EXISTS learning_attempt_statistics_context ON learning_attempts(
-                fingerprint,stage_key,json_extract(summary_json,'$.hand'),
-                json_extract(summary_json,'$.performed_bpm'),json_extract(summary_json,'$.scope'),
-                substr(json_extract(summary_json,'$.started_utc'),1,10))""",
-            """CREATE INDEX IF NOT EXISTS learning_attempt_session ON learning_attempts(session_id,state)""",
-            """CREATE INDEX IF NOT EXISTS learning_event_session ON learning_events(session_id,attempt_id)""",
-            """CREATE INDEX IF NOT EXISTS learning_decision_attempt ON learning_decisions(attempt_id,session_id)""",
-            """CREATE INDEX IF NOT EXISTS learning_outcome_decision ON learning_outcomes(decision_id,attempt_id)""",
-            """CREATE INDEX IF NOT EXISTS learning_retained_status ON learning_assessments(attempt_id)
-                WHERE statuses_json<>'[]'""",
-        )
-        for statement in statements:
-            self.db.execute(statement)
-        self.db.execute("INSERT OR IGNORE INTO learning_retention VALUES (1,365,256)")
-        self.db.execute("""CREATE TABLE IF NOT EXISTS learning_detail_usage (
-            singleton INTEGER PRIMARY KEY CHECK(singleton=1), logical_bytes INTEGER NOT NULL CHECK(logical_bytes>=0))""")
-        if not self.db.execute("SELECT 1 FROM learning_detail_usage WHERE singleton=1").fetchone():
-            self.db.execute("INSERT INTO learning_detail_usage VALUES (1,?)", (self._scan_detail_bytes(),))
-        # Accounting lives in SQLite so nested rollback, FK cascades and a
-        # reopened connection retain the same byte total. Normal writes inspect
-        # only their own changed payload, never every past note observation.
-        for table, columns in (
-                ("learning_attempts", ("context_json", "checkpoint_json")),
-                ("learning_attempt_details", ("detail_json",)),
-                *((name, ("data_json",)) for name in ("learning_events", "learning_decisions", "learning_outcomes"))):
-            amount = lambda prefix: "+".join(f"coalesce(length(CAST({prefix}.{column} AS BLOB)),0)" for column in columns)
-            new, old = amount("NEW"), amount("OLD")
-            for suffix, event, change in (("insert", "INSERT", f"+({new})"),
-                                          ("delete", "DELETE", f"-({old})"),
-                                          ("update", "UPDATE OF " + ",".join(columns), f"+({new})-({old})")):
-                self.db.execute(f"""CREATE TRIGGER IF NOT EXISTS {table}_usage_{suffix}
-                    AFTER {event} ON {table} BEGIN
-                    UPDATE learning_detail_usage SET logical_bytes=logical_bytes{change} WHERE singleton=1;
-                    END""")
 
     @property
     def learner_id(self) -> str:
@@ -536,160 +360,17 @@ class LearningLedger:
     def _table_exists(self, table):
         return self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
 
-    def _scan_detail_bytes(self) -> int:
-        expressions = (
-            "SELECT coalesce(sum(coalesce(length(CAST(context_json AS BLOB)),0)+coalesce(length(CAST(checkpoint_json AS BLOB)),0)),0) FROM learning_attempts",
-            "SELECT coalesce(sum(length(CAST(detail_json AS BLOB))),0) FROM learning_attempt_details",
-            *(f"SELECT coalesce(sum(length(CAST(data_json AS BLOB))),0) FROM {table}" for table in ("learning_events", "learning_decisions", "learning_outcomes")),
-        )
-        return sum(self.db.execute(query).fetchone()[0] for query in expressions)
-
-    def _logical_detail_bytes(self) -> int:
-        return self.db.execute("SELECT logical_bytes FROM learning_detail_usage WHERE singleton=1").fetchone()[0]
-
-    def _prune_session(self, session_id):
-        count = self.db.execute("SELECT count(*) FROM learning_attempts WHERE session_id=? AND detail_pruned=0 AND provenance='native'", (session_id,)).fetchone()[0]
-        self.db.execute("DELETE FROM learning_attempt_details WHERE attempt_id IN (SELECT attempt_id FROM learning_attempts WHERE session_id=?)", (session_id,))
-        self.db.execute("UPDATE learning_attempts SET context_json=NULL,checkpoint_json=NULL,detail_pruned=1 WHERE session_id=? AND provenance='native'", (session_id,))
-        self.db.execute("UPDATE learning_events SET data_json=NULL WHERE session_id=?", (session_id,))
-        self.db.execute("UPDATE learning_decisions SET data_json=NULL WHERE session_id=?", (session_id,))
-        self.db.execute("UPDATE learning_outcomes SET data_json=NULL WHERE decision_id IN (SELECT decision_id FROM learning_decisions WHERE session_id=?)", (session_id,))
-        self.db.execute("UPDATE learning_sessions SET detail_pruned=1 WHERE session_id=?", (session_id,))
-        self._prune_status_sequences(session_id)
-        return count
-
-    def _prune_status_sequences(self, session_id=None):
-        # Status order is per-note detail too. Keep counts/pass facts after
-        # pruning, rather than allowing the old sequence to bypass retention.
-        query = """SELECT a.attempt_id,a.statuses_json,a.summary_json
-            FROM learning_assessments a JOIN learning_attempts t USING(attempt_id)
-            WHERE t.detail_pruned=1 AND a.statuses_json<>'[]'"""
-        if session_id is not None:
-            query += " AND t.session_id=?"
-        rows = self.db.execute(query, () if session_id is None else (session_id,)).fetchall()
-        for attempt, encoded, summary_json in rows:
-            statuses = json.loads(encoded)
-            summary = json.loads(summary_json)
-            summary.pop("statuses", None)
-            summary.update(status_counts=dict(Counter(statuses)), note_count=len(statuses),
-                           note_detail_pruned=True)
-            self.db.execute("UPDATE learning_assessments SET statuses_json='[]',summary_json=? WHERE attempt_id=?",
-                            (_json(summary), attempt))
-
-    def _prune(self, days, budget_mib, now_utc=None):
-        now = datetime.fromisoformat((now_utc or _utc()).replace("Z", "+00:00"))
-        if now.tzinfo is None:
-            raise ValueError("Retention requires a timezone-aware UTC timestamp")
-        cutoff = (now - timedelta(days=days)).isoformat().replace("+00:00", "Z")
-        candidates = self.db.execute("""SELECT session_id,coalesce(ended_utc,recovered_utc,started_utc)
-            FROM learning_sessions s WHERE learner_id=? AND closure_reason IS NOT NULL AND detail_pruned=0
-            AND closure_reason<>'legacy_bounded'
-            AND NOT EXISTS (SELECT 1 FROM learning_attempts t WHERE t.session_id=s.session_id AND t.state='open')
-            ORDER BY coalesce(ended_utc,recovered_utc,started_utc),session_id""", (self.learner_id,)).fetchall()
-        pruned = 0
-        for session_id, completed_utc in candidates:
-            if (completed_utc is not None and completed_utc < cutoff) or self._logical_detail_bytes() > budget_mib * 1024 * 1024:
-                pruned += self._prune_session(session_id)
-        if self._logical_detail_bytes() > budget_mib * 1024 * 1024:
-            raise LearningLedgerLimitError("The logical detail budget limit cannot fit open or pending evidence")
-        return pruned
-
     def _enforce_budget(self):
-        if self._recovering:
-            return
-        days, budget = self.db.execute("SELECT days,budget_mib FROM learning_retention WHERE singleton=1").fetchone()
-        if self._logical_detail_bytes() > budget * 1024 * 1024:
-            self._prune(days, budget)
+        self.retention.enforce_budget(recovering=self._recovering)
 
     def prune(self, days=365, budget_mib=256, now_utc=None) -> dict:
-        if (isinstance(days, bool) or not isinstance(days, int) or not 7 <= days <= 3650
-                or isinstance(budget_mib, bool) or not isinstance(budget_mib, int) or not 16 <= budget_mib <= 4096):
-            raise ValueError("Retention requires 7–3650 days and a 16–4096 MiB logical detail budget")
-        with sqlite_atomic(self.db):
-            self._prune_status_sequences()
-            count = self._prune(days, budget_mib, now_utc)
-            self.db.execute("UPDATE learning_retention SET days=?,budget_mib=? WHERE singleton=1", (days, budget_mib))
-            return {"pruned_attempts": count, **self.status()}
+        return self.retention.prune(days, budget_mib, now_utc)
 
     def status(self) -> dict:
-        count = lambda table: self.db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
-        days, budget = self.db.execute("SELECT days,budget_mib FROM learning_retention WHERE singleton=1").fetchone()
-        bounds = self.db.execute("""SELECT min(s.started_utc),min(CASE WHEN t.detail_pruned=0 THEN s.started_utc END),
-                sum(t.detail_pruned),sum(CASE WHEN t.provenance='legacy_bounded' THEN 1 ELSE 0 END)
-                FROM learning_attempts t JOIN learning_sessions s USING(session_id)""").fetchone()
-        censored = self.db.execute("SELECT summary_json FROM learning_outcomes").fetchall()
-        pruned_sessions = self.db.execute("SELECT count(*) FROM learning_sessions WHERE detail_pruned=1").fetchone()[0]
-        coverage = {"summary_retained_since_utc": bounds[0], "detail_retained_since_utc": bounds[1],
-                    "pruned_detail_attempts": bounds[2] or 0, "legacy_bounded_attempts": bounds[3] or 0,
-                    "pruned_detail_sessions": pruned_sessions,
-                    "censored_outcomes": sum(json.loads(row[0]).get("state") == "censored" for row in censored),
-                    "legacy_history_complete": False, "detail_history_complete": not bool(pruned_sessions or bounds[2] or bounds[3])}
-        return {"learner_id": self.learner_id, "sessions": count("learning_sessions"),
-                "attempts": count("learning_attempts"), "assessments": count("learning_assessments"),
-                "open_attempts": self.db.execute("SELECT count(*) FROM learning_attempts WHERE state='open'").fetchone()[0],
-                "logical_detail_bytes": self._logical_detail_bytes(), "detail_days": days,
-                "detail_budget_mib": budget, "coverage": coverage}
-
-    def _rows(self, table):
-        cursor = self.db.execute(f"SELECT * FROM {table}")
-        names = [column[0] for column in cursor.description]
-        return [dict(zip(names, row)) for row in cursor.fetchall()]
+        return self.retention.status()
 
     def export(self, path, *, include_detail=False) -> dict:
-        if not isinstance(include_detail, bool):
-            raise ValueError("Detailed export must be explicitly selected")
-        with sqlite_atomic(self.db):
-            attempts = self._rows("learning_attempts")
-            for row in attempts:
-                row["summary"] = json.loads(row.pop("summary_json"))
-                context = row.pop("context_json")
-                checkpoint = row.pop("checkpoint_json")
-                row["context"] = json.loads(context) if include_detail and context else row["summary"]
-                row["checkpoint"] = json.loads(checkpoint) if include_detail and checkpoint else None
-                detail = self.db.execute("SELECT detail_json FROM learning_attempt_details WHERE attempt_id=?", (row["attempt_id"],)).fetchone()
-                row["detail"] = json.loads(detail[0]) if include_detail and detail else None
-                row["detail_pruned"] = bool(row["detail_pruned"])
-            assessments = self._rows("learning_assessments")
-            for row in assessments:
-                row["summary"] = json.loads(row.pop("summary_json"))
-                row["statuses"] = json.loads(row.pop("statuses_json"))
-                for key in ("clean", "passed", "mastery_eligible", "assessed"):
-                    if row[key] is not None:
-                        row[key] = bool(row[key])
-            result = {"schema_version": SCHEMA_VERSION, "exported_utc": _utc(), "learner_id": self.learner_id,
-                      "include_detail": include_detail, "units": {"beats": "quarter_notes", "times": "seconds",
-                          "residuals": "seconds", "derived_residuals": "integer_microseconds", "tempo": "beats_per_minute",
-                          "monotonic": "seconds_within_run_only", "calendar": "UTC"},
-                      "missingness": {"unknown": "null or an explicit unknown marker; never a measured zero",
-                          "legacy_bounded": "Only the retained old status window was imported; timing, rules, timestamps and passed are unknown",
-                          "pruned_detail": "Compact summaries remain; missing note detail is not a complete lifetime observation",
-                          "unavailable": ["physical_hand", "pedal_accuracy", "velocity_accuracy"]},
-                      "coverage": self.status()["coverage"], "sessions": self._rows("learning_sessions"),
-                      "attempts": attempts, "assessments": assessments,
-                      "rules": [{"rule_id": row["rule_id"], "snapshot": json.loads(row["snapshot_json"])}
-                                for row in self._rows("learning_rules")]}
-            for session in result["sessions"]:
-                session["durations_seconds"] = json.loads(session.pop("durations_json"))
-            for name in ("events", "decisions", "outcomes"):
-                rows = self._rows("learning_" + name)
-                for row in rows:
-                    row["summary"] = json.loads(row.pop("summary_json"))
-                    encoded = row.pop("data_json")
-                    row["data"] = json.loads(encoded) if include_detail and encoded else row["summary"]
-                result[name] = rows
-            result = _redact(result)
-        target = Path(path)
-        # A failed serialization or write never leaves an apparently complete
-        # export at the selected destination.
-        encoded = json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = target.with_name(target.name + "." + str(uuid4()) + ".tmp")
-        try:
-            temporary.write_text(encoded, encoding="utf-8")
-            temporary.replace(target)
-        finally:
-            temporary.unlink(missing_ok=True)
-        return {"path": str(target), "schema_version": SCHEMA_VERSION, "attempts": len(attempts), "include_detail": include_detail}
+        return self.history_exporter.export(path, include_detail=include_detail)
 
     def _delete_progress(self, fingerprint=None):
         for table in _PROGRESS_TABLES:
