@@ -94,6 +94,36 @@ func run() -> void:
         "Retry preserves exposed original notes and their written rest")
     check(controller.visible_take_keys().has("piece|7|10|practice")
         and controller.visible_take_keys().has("piece|7|11|practice"),"Old and retried score copies keep separate results")
+    # A real one-bar printed rest must reserve the following native header
+    # *inside* that bar's musical silence, otherwise a fixed four-beat repeat
+    # becomes impossible even when no source notes overlap. Use this same
+    # current controller, queue and physical admission path.
+    var automatic_controller := Controller.new()
+    var automatic_pool := Pool.new()
+    var automatic_canvas := Control.new()
+    root.add_child(automatic_canvas)
+    automatic_pool.install(automatic_canvas,windows)
+    automatic_controller.bind_surface(automatic_canvas,automatic_pool,
+        func(_beat: float) -> Array[Vector2]: return windows)
+    automatic_controller.append_source(geometry(0.0),0.0,4.0,0.0,"prepared")
+    var rest_snapshot: Array = automatic_controller.online_snapshot()
+    var authored_rest: Dictionary = rest_snapshot[-1]
+    check(str(authored_rest.get("kind","")) == "rest" and
+        float(authored_rest.get("source_ceiling",INF)) < 4.0,
+        "Count-in rest reserves physical header space without changing the musical bar")
+    var auto_facts: Dictionary = facts(automatic_controller,5.0)
+    var auto_plan: Dictionary = Reservation.plan_facts(
+        auto_facts,"auto",5.0,0.0,4.0,8.0)
+    check(bool(auto_plan.get("ok",false)),
+        "Fixed one-bar repeat clears real retained written-rest ink")
+    if bool(auto_plan.get("ok",false)):
+        var next_armed: Dictionary = automatic_controller.arm_take(
+            geometry(5.0),5.0,0.0,6.7,0.4,8.0,
+            false,false,4.0,true)
+        check(not next_armed.is_empty(),
+            "A fixed one-bar repeat that passes physical preflight commits")
+    automatic_canvas.free()
+
     # An already-printed rest is physical queue ink. A fixed Tempo repeat
     # must refuse overlap at preflight instead of passing the backend's
     # deadline to a queue that cannot commit it. The deadline cannot move.

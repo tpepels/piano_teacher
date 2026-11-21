@@ -318,13 +318,28 @@ func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: fl
                 "take_key":"rest","pending":false,
                 "hidden_until_armed":hidden})
         if is_last and rest_gap > .0001 and not (context and facts.display_end > duration+.0001):
-            specs.append({
-                "kind":"rest","owner_serial":strip_serial,
-                "take_owner":first_serial,
-                "world_origin":original_origin+duration,
-                "source_floor":0.0,"source_ceiling":rest_gap,
-                "take_key":"rest","pending":false,
-                "hidden_until_armed":hidden})
+            # The REST occupies the count-in bar in musical time. Its
+            # retained *ink*, however, must finish before the next opening's
+            # clef/key header, which appears immediately BEFORE the new
+            # first attack. A full-bar REST clip left no physical slot for
+            # that header at the fixed one-bar automatic deadline and
+            # stranded genuine MIDI repeats in permanent 'admitting'.
+            #
+            # This is a visual clip budget, not a second transport clock:
+            # the rest glyph still represents the complete measure, while
+            # the rightmost part of its staff is reserved for the incoming
+            # native header. The queue still rejects any actual ink overlap.
+            var header_beats: float = first_header_spaces*gap_pixels/density
+            var printed_rest: float = maxf(0.0,
+                rest_gap-header_beats-Admission.OFFSCREEN_MARGIN_BEATS)
+            if printed_rest > .0001:
+                specs.append({
+                    "kind":"rest","owner_serial":strip_serial,
+                    "take_owner":first_serial,
+                    "world_origin":original_origin+duration,
+                    "source_floor":0.0,"source_ceiling":printed_rest,
+                    "take_key":"rest","pending":false,
+                    "hidden_until_armed":hidden})
         if not queue.enqueue(canvas(),specs,
                 _pool.repeat_segments,_pool.rest_segments,
                 _pool.first_once,facts.world,width,
