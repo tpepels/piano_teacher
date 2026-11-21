@@ -48,9 +48,16 @@ class PracticeControls:
             if action in UI_INTENTS:
                 ready = kwargs.pop("score_ready", None)
                 error = kwargs.pop("score_error", "")
-                if type(ready) is not bool or type(error) is not str:
-                    raise ValueError("UI control requires typed renderer readiness")
+                score_revision = kwargs.pop("score_revision", None)
+                score_fingerprint = kwargs.pop("score_fingerprint", None)
+                if (type(ready) is not bool or type(error) is not str
+                        or type(score_revision) is not int
+                        or type(score_fingerprint) is not str):
+                    raise ValueError("UI control requires source-bound renderer readiness")
                 current = self.read_models.snapshot()
+                if ready and (score_revision != current.get("revision")
+                              or score_fingerprint != current.get("piece_fingerprint")):
+                    raise ValueError("Displayed score belongs to an earlier source revision")
                 resolved, options = resolve_ui_intent(
                     action, current, score_ready=ready, score_error=error)
                 if resolved is None:

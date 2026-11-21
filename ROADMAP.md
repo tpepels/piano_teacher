@@ -141,6 +141,13 @@ practice phases to enable or disable buttons. The existing
 `tests/godot/practice_controls.gd` presentation fixture was adjusted to
 supply a published `controls` model rather than consult the superseded
 Godot policy. This updates an existing test; no new tests were added.
+Native UI gestures additionally carry the exact ready renderer
+`revision` and source fingerprint. Python validates these against the
+current authoritative snapshot under the command lock; a ready renderer
+from an earlier piece or engraving generation cannot authorize the
+new selection. This protects the control boundary while the full V3
+admission and deadline refactor remains open.
+
 The old policy file is still retained pending a complete caller sweep,
 and all native/software gates remain unverified.
 

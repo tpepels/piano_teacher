@@ -49,7 +49,14 @@ func listen() -> void:
     _ui_intent("ui_listen")
 
 func _ui_intent(intent: String) -> void:
-    var command := {"action":intent,"score_ready":score_session.is_ready()}
+    # Readiness must be bound to the renderer's own installed source. A
+    # bool alone can refer to the previous piece/revision during a handoff.
+    var command := {
+        "action":intent,
+        "score_ready":score_session.is_ready(),
+        "score_revision":score_session.revision,
+        "score_fingerprint":score_session.source_fingerprint(),
+    }
     if not score_session.score_error.is_empty():
         command["score_error"] = score_session.score_error
     request_action(command,last_state)
