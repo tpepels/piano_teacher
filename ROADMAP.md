@@ -891,6 +891,27 @@ This is a cross-language contract replacement, not a relocation
 of the native navigation branch. Core and native acceptance on
 this revision remain outstanding.
 
+### V5 physical MIDI-start shortcuts are backend-owned - 2026-11-21
+
+`ApplicationInputSession.observe_midi_state` no longer inspects
+lesson phase, practice mode, or automatic retry flags to decide
+between Start/Restart/primary. It now checks only the freshness
+of a received MIDI event, the stability of its source revision
+and backend-published control action, modal suppression, and
+score readiness. It sends one raw `ui_midi_start` gesture.
+`control_projection` now publishes `controls.midi_start`
+using the same authoritative phase/learning/transport state
+and the existing locked `resolve_ui_intent` rejects stale or
+unavailable requests. The command coordinator includes native
+physical clearance facts for this raw gesture without knowing
+whether it means start, retry or a guided transition.
+
+A single parametric backend test checks first Play, Perform,
+manual Retry, auto Retry, playing, count-in, Listen and Free.
+This closes another independent native application-policy path.
+Actual MIDI input debouncing remains a physical-adapter concern.
+Native production acceptance is still required.
+
 ### Phase V5 - Reduce Godot screens to presentation and raw intents
 
 **Implement:** Change `PracticeScreen` and `PracticeChrome` to render the

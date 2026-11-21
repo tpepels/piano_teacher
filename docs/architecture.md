@@ -433,6 +433,21 @@ queue correctly rejected the resulting physical overlap. The
 scheduler now preserves both the strict one-bar musical interval
 and the native queue's collision invariants.
 
+### Physical MIDI key gestures never choose practice actions in Godot
+
+The Godot input session now observes only fresh connected MIDI
+key events, a stable source revision and a backend-enabled
+`controls.midi_start` availability fact. It issues a raw
+`ui_midi_start` gesture for Python to resolve under its
+session lock. The backend projection chooses actual Start,
+manual Retry or guided primary transition from authoritative
+mode, phase and automatic-continue policy. There are no native
+`if mode=practice -> start` or `if feedback -> restart`
+branches remaining in the MIDI input adapter. Input debounce,
+modal suppression and source-readiness checks remain physical
+and view-owned. The exact accepted action comes back through
+the existing versioned command outcome envelope.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

@@ -115,7 +115,7 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         # Immediate audible safety effect of an explicit user Stop.
         # No musical deadline or accepted transport is inferred here.
         metronome_frame.cancel_reserved_count_in()
-    if action in ["ui_primary","ui_pause","ui_retry",
+    if action in ["ui_primary","ui_pause","ui_retry","ui_midi_start",
             "start","restart","resume","score_ready"]:
         var clearance: Dictionary = score_session.continuation_geometry()
         if not clearance.is_empty():

@@ -446,3 +446,30 @@ def test_command_navigation_effects_are_projected_only_in_backend():
     assert project_command_outcome("reset_path")["effects"]["invalidate_lesson"]
     assert not project_command_outcome(None)["executed"]
     assert not project_command_outcome(None)["effects"]["navigate_practice"]
+
+
+@pytest.mark.parametrize("phase,mode,auto,expected",[
+    ("ready","practice",False,"start"),
+    ("performance_complete","perform",True,"start"),
+    ("feedback","practice",False,"restart"),
+    ("feedback","practice",True,""),
+    ("playing","practice",True,""),
+    ("count_in","practice",False,""),
+    ("ready","listen",False,""),
+    ("guided_wait","learn",False,""),
+])
+def test_backend_exclusively_decides_midi_start_gesture(
+        phase, mode, auto, expected):
+    from piano_teacher.application.control_projection import (
+        project_controls, resolve_ui_intent)
+    facts = {"loaded":True, "device":"Connected MIDI",
+             "mode":mode, "phase":phase, "auto":auto,
+             "running":phase in ("playing","count_in"),
+             "paused":False, "warmup":False}
+    choice = project_controls(facts)["midi_start"]
+    assert choice["action"] == expected
+    assert choice["enabled"] == bool(expected)
+    if expected:
+        action, options = resolve_ui_intent(
+            "ui_midi_start",facts,score_ready=True)
+        assert action == expected and options == {}

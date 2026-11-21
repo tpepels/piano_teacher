@@ -6,7 +6,7 @@ from .transport_commands import PAUSABLE_PHASES
 UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
     "ui_previous", "ui_review_previous", "ui_skip",
-    "ui_tempo_up", "ui_tempo_down"))
+    "ui_tempo_up", "ui_tempo_down", "ui_midi_start"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
 
 
@@ -77,6 +77,22 @@ def project_controls(s: Mapping) -> dict:
     if s.get("loaded"):
         listen = (None if s.get("mode") == "listen" else "listen") if course else (
             "practice" if s.get("mode") == "listen" else "listen")
+    # A physical MIDI key is a gesture. The application determines
+    # whether the current phase allows an initial start, manual retry
+    # or course continuation. The input adapter only reports freshness.
+    midi_action = None
+    if (s.get("loaded") and s.get("device") and
+            not s.get("paused")):
+        phase = s.get("phase")
+        mode = s.get("mode")
+        if phase in ("ready", "performance_complete", "guided_complete"):
+            if mode == "learn":
+                midi_action = main
+            elif mode in ("practice", "perform"):
+                midi_action = "start"
+        elif (phase == "feedback" and mode == "practice"
+              and not s.get("auto")):
+            midi_action = "restart"
     # Returning from standalone Listen is a mode action, not score
     # admission; the prior UI permitted it without ready notation.
     needs_score = (main not in (None, "pause", "resume") and
@@ -100,6 +116,9 @@ def project_controls(s: Mapping) -> dict:
             int(s.get("lesson_step", 1)) > 1},
         "skip": {"action": "skip_stage" if skip_enabled else "",
                  "enabled": skip_enabled, "visible": previous_visible},
+        "midi_start": {"action": midi_action or "",
+                       "enabled": midi_action is not None,
+                       "requires_score": True},
         "tempo_up": {"action": "tempo_up" if tempo_allowed and s.get("can_increase_tempo") else "",
                      "enabled": tempo_allowed and bool(s.get("can_increase_tempo"))},
         "tempo_down": {"action": "tempo_down" if tempo_allowed and s.get("can_decrease_tempo") else "",

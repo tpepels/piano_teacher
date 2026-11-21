@@ -17,7 +17,7 @@ signal command_requested(payload: Dictionary)
 var _practice
 var _library
 var _last_midi_input_count := -1
-var _last_midi_phase := ""
+var _last_midi_action := ""
 var _last_midi_revision := -1
 
 func configure(practice, library) -> void:
@@ -34,31 +34,28 @@ func suppress_midi_start(input_count: int) -> void:
 func observe_midi_state(state: Dictionary, sampled: bool, screen: String,
         busy: bool, score_ready: bool) -> void:
     var count: int = int(state.get("midi_input_count",0))
-    var phase: String = str(state.get("phase",""))
     var revision: int = int(state.get("revision",-1))
+    var controls: Dictionary = state.get("controls",{})
+    var choice: Variant = controls.get("midi_start",{})
+    var action: String = str(choice.get("action","")) \
+        if choice is Dictionary else ""
+    var enabled: bool = bool(choice.get("enabled",false)) \
+        if choice is Dictionary else false
     var fresh: bool = _last_midi_input_count >= 0 and \
         count > _last_midi_input_count
-    var stable: bool = _last_midi_phase == phase and \
+    var stable: bool = _last_midi_action == action and \
         _last_midi_revision == revision
     _last_midi_input_count = count
-    _last_midi_phase = phase
+    _last_midi_action = action
     _last_midi_revision = revision
-    if not fresh or not stable or not sampled or screen != "practice" or \
-            busy or not score_ready or _practice.is_source_picker_open() or \
-            str(state.get("device","")).is_empty():
+    if not fresh or not stable or not enabled or not sampled or \
+            screen != "practice" or busy or not score_ready or \
+            _practice.is_source_picker_open():
         return
-    var idle: bool = phase in ["ready","performance_complete","guided_complete"]
-    var retry: bool = phase == "feedback" and \
-        str(state.get("mode","")) == "practice" and \
-        not bool(state.get("auto",false))
-    if not idle and not retry:
-        return
-    if str(state.get("mode","")) == "learn":
-        primary_requested.emit()
-    elif retry:
-        command_requested.emit({"action":"restart"})
-    elif str(state.get("mode","")) in ["practice","perform"]:
-        command_requested.emit({"action":"start"})
+    # The key press is only an input fact, not permission to start or
+    # restart a take. Python resolves this raw gesture against its current
+    # locked lesson/transport state and rechecks renderer identity.
+    command_requested.emit({"action":"ui_midi_start"})
 
 func capture(event: InputEvent, screen: String, viewport: Viewport) -> bool:
     if _practice == null or _library == null:
