@@ -610,6 +610,13 @@ CI must confirm.
 source-note identity and authorized playback match; pending feedback is
 acknowledged exactly once; core, Godot/native and packaged read paths pass.
 
+**S7 composition preparation:** The last facade-bound phase projection
+is now in `SessionPhase`. TimedPlayback and SessionReadModels receive
+that same pure projection instead of a method callback into
+`PracticeEngine`. This allows a new factory/composition root to
+construct the whole graph without an engine backreference. Core/native
+verification and final composer migration remain.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public

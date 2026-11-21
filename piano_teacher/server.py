@@ -66,6 +66,7 @@ from .application.practice_timeline import PracticeTimeline
 from .application.practice_controls import PracticeControls
 from .application.midi_application_input import MidiApplicationInput
 from .application.score_preload_workflow import ScorePreloadWorkflow
+from .application.session_phase import SessionPhase
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -443,6 +444,12 @@ class PracticeEngine:
             attempt_settlement=self.attempt_settlement, score_read=self.score_read,
             midi_ingress=self.midi_ingress, playback=self.playback, clock=self.now)
 
+        self.session_phase = SessionPhase(
+            visual_transport=self.visual_transport,
+            playback_session=self.playback_session,
+            guided_session=self.guided_session, midi_ingress=self.midi_ingress,
+            attempt=self.attempt, attempt_settlement=self.attempt_settlement)
+
         self.timed_playback = TimedPlayback(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
             notices=self.notices, playback_session=self.playback_session,
@@ -452,7 +459,7 @@ class PracticeEngine:
             visual_transport=self.visual_transport, midi=self.midi,
             score_read=self.score_read, evidence_context=self.evidence_context,
             transport_timing=self.transport_timing, lesson_execution=self.lesson_execution,
-            clock=self.now, lock=self.lock, phase=self._phase)
+            clock=self.now, lock=self.lock, phase=self.session_phase.at)
 
         self.live_feedback_workflows = LiveFeedbackWorkflows(
             source_identity=self.source_identity, playback_session=self.playback_session,
@@ -520,7 +527,7 @@ class PracticeEngine:
             lesson_execution=self.lesson_execution, score_read=self.score_read,
             listen=self.listen, live_input=self.live_input,
             live_assessment=self.live_assessment, lock=self.lock, clock=self.now,
-            phase=self._phase, elapsed_beat=self.transport_timing.elapsed_beat,
+            phase=self.session_phase.at, elapsed_beat=self.transport_timing.elapsed_beat,
             visual_motion=self.transport_timing.visual_motion, tempo_map=self.transport_timing.active_tempo_map,
             next_count_in_beats=self.transport_timing.next_count_in_beats,
             next_count_in_meter=self.transport_timing.next_count_in_meter,
@@ -799,25 +806,6 @@ class PracticeEngine:
 
     def control(self, action: str, **kwargs) -> None:
         return self.practice_controls.control(action, **kwargs)
-
-    def _phase(self, now: float) -> str:
-        teaching_phase = None
-        if not self.visual_transport.paused and self.playback_session.mode == "learn" and self.teaching is not None:
-            teaching_phase = ("loading" if self.playback_session.awaiting_score_revision is not None
-                              else self.teaching.snapshot(now=now)["phase"])
-        if (self.playback_session.running and not self.visual_transport.paused
-                and now < self.midi_ingress.resume_grading_after):
-            return "count_in"
-        return project_phase(PhaseSnapshot(
-            paused=self.visual_transport.paused, running=self.playback_session.running, run_at=self.visual_transport.run_at,
-            teaching_phase=teaching_phase,
-            performance_complete=self.attempt.performance_summary is not None,
-            preview_loop_pending=self.visual_transport.preview_loop_pending,
-            review_complete=self.attempt.review_session_complete,
-            pending_result=self.attempt_settlement.pending_result is not None,
-            awaiting_score=self.playback_session.awaiting_score_revision is not None,
-            pending_rewind=self.visual_transport.pending_rewind is not None,
-        ), mode=self.playback_session.mode, now=now)
 
     def advance_clock(self) -> int:
         """Advance scheduled transitions without waiting for a UI state request.
