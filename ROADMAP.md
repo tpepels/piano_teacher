@@ -37,6 +37,343 @@ The separate final examination uses the whole original piece.
 | 2026-11-21 | The PracticeEngine redesign may introduce or replace architectural layers, boundaries and interfaces. File-size limits are diagnostic goals, not mandatory constraints. |
 | 2026-11-21 | Pause freezes the visible score even in Free/Listen/count-in; render only the selected practice measure window, retaining full sounding tails but no visible neighboring bars. |
 
+## Active roadmap: UI boundary and MIDI transition verification (V0-V7, 2026-11-21)
+
+**Status: PLANNED. V0-V7 have not been implemented or accepted.** This is the
+next architectural workstream. It does not undo the completed Python
+`PracticeEngine` S0-S7 decomposition; it addresses the remaining distribution
+of behavior between Python and Godot. Prior green CI and package runs are
+historical evidence for their exact revisions, not acceptance of this plan.
+The connected-piano failures (Pause/Free motion, unexpected visible measures,
+and Pathétique MIDI/runtime failures) are open until reproduced and accepted.
+
+**Objective:** A single, inspectable practice state machine and playback
+transaction authority drive the product from opening a MIDI file through
+Listen, Free, Tempo, automatic repeat, recovery, final examination and saved
+reopening. Godot renders the authoritative outcome, performs the physical
+notation reservation, reports geometry/readiness and emits user or device
+intents. It does not independently choose practice modes, actions, tempo,
+musical deadlines, grades, mastery, measure windows or retry behavior.
+
+**Why another workstream is necessary:**
+- `godot/practice_control_policy.gd` decides Play/Pause/Resume/Retry/Listen
+  commands from backend phase strings; `godot/practice_screen.gd` separately
+  interprets those strings to enable controls and choose captions.
+- `godot/score_admission_gateway.gd` calculates future musical deadlines,
+  chooses between resume reuse/fresh reservations and handles retries and
+  reconciliation in the presentation process. Some physical geometry must
+  stay native, but musical decisions should have one backend owner.
+- `godot/presentation_timeline.gd` contains mutable visual rate/hold/epoch
+  logic, including an idle initialization rate. The graphical time
+  projection needs an explicit authorization contract rather than inferred
+  permission to advance.
+- `tests/test_desktop_playback.py` supplies synthetic reserve/present
+  receipts. Those tests validate backend responses but cannot establish
+  that the real Godot gateway would produce the receipts or display the
+  expected score. Existing native journeys cover selected cases, not the
+  full successful/failed MIDI state-transition graph.
+
+**Governing contracts:** [practice flow](docs/practice-flow.md) defines
+visible behavior, including one-to-four-bar moving windows (whole-piece
+final excepted), stationary untimed Free, frozen Pause, real sustained tails,
+original MIDI tempo, one-bar count-in/repeats, two target-tempo clean runs,
+saved Free reentry and Coda/Fukuda fallback. Preserve one source-note
+identity, accepted musical clock, graded take, immutable notation ledger and
+durable settlement. No HTTP server, duplicate engine, parallel score,
+shadow clock, or fallback application behavior. New layers/interfaces are
+permitted where they reduce ownership ambiguity. No arbitrary file-size
+limits or architecture-shape tests.
+
+### Required final ownership
+
+| Concern | Sole authority | Godot's permitted responsibility |
+| --- | --- | --- |
+| Practice state, transitions, hand/window, tempo, aid, mastery, persistence | Python lesson/teaching/assessment owners coordinated through the application boundary | Display selected state and emit raw user intents |
+| Available actions and their meaning | Python state machine publishes typed action availability and accepted command outcome | Draw buttons, enabled states and labels from the published model |
+| Musical deadlines, count-in, Pause/Resume and transaction lifecycle | Python `PlaybackCoordinator`/`PlaybackSession` with `MusicalScheduler` and the existing transport owners | Supply measured constraints, reserve physical ink, report typed receipts/failure |
+| Authored and sounding bounds | Canonical source selection and one `ScoreArtifacts` model | Engrave authentic notation; clip visible measures without truncating sounding tails |
+| Immutable queue, geometry and raster readiness | Existing native queue/renderer and physical admission adapter | Inspect actual canvas capacity, atomically reserve/withdraw *unexposed* ink, report exact outcomes |
+| Musical grade and physical input admission | Python `MidiIngress`, Recorder and assessment policy | Forward timestamped MIDI, paint authoritative note feedback |
+| Visual scroll position | One native projector driven only by authorized epochs/holds from the backend contract | Interpolate and paint smooth forward motion; no independent musical state transitions |
+| Saved evidence | Existing Python progress repository and `LearningLedger` | Present a read-only summary |
+
+The backend may propose a deadline only after receiving the native physical
+constraints needed to make it feasible. Godot can reject a physically
+impossible proposal; it must never silently substitute a different deadline,
+practice stage or musical tempo. Unresolved, stale, expired or contradictory
+receipts fail closed and produce observable recovery, never invisible
+continuation or partial grading.
+
+### Phase status
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| V0 | Full transition/ownership audit and reproducible failure witnesses | Not started |
+| V1 | Deterministic end-to-end MIDI/Godot simulation harness | Not started |
+| V2 | Canonical transition, action and presentation contracts | Not started |
+| V3 | Unify graphical admission and playback transaction decisions | Not started |
+| V4 | Single authorization-driven visual timeline and Pause/Free semantics | Not started |
+| V5 | Strip application decisions out of Godot UI and effect coordinators | Not started |
+| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Not started |
+| V7 | Integrated production/package verification and physical acceptance | Not started |
+
+### Phase V0 - Trace the complete production state machine
+
+**Implement:** Inventory *all* active paths from MIDI/file load or button
+intent to Python command, accepted state, asset publication, physical
+reservation, render frame, note ingress, grading, settlement, navigation and
+saved reopening. Review `godot/main.gd`, `practice_screen.gd`,
+`practice_control_policy.gd`, `practice_command_coordinator.gd`,
+`practice_presentation_session.gd`, `score_admission_gateway.gd`,
+`presentation_timeline.gd`, `practice_frame_coordinator.gd`,
+`notation/native/view.gd` and their real callees; then the Python application
+owners, native bridge and CI journeys. Enumerate every writer, decision,
+implicit default, timeout, reentry and handoff. Record the exact transition
+table, authority, command and acknowledgment of each edge, and how it is
+observed by the learner. Compare with `docs/practice-flow.md`.
+
+**Defect witnesses:** Retain reproducible software/physical traces for:
+Free moving without input or selected tempo; Pause moving/remaining
+unavailable; Resume stuck in admitting; extra measures visible; automatic
+repeat refusing immutable source admission; played MIDI reaching obsolete
+Godot effects. Log source SHA, user action, state, score revision, transport/
+take/segment identity and expected versus observed result. Do not infer a
+causal fix from a passing headless reproduction.
+
+**Exit:** The complete state graph, boundary matrix and ordered migration
+map are written in `docs/architecture.md`; missing facts and observed
+counterexamples are explicit; prior behavior is not silently redefined.
+No runtime behavior or prior acceptance claim is changed in this design
+phase. Source inspection and existing tests must still run without a new
+failure. The baseline source and test result are recorded here.
+
+### Phase V1 - Build the deterministic real-path simulator
+
+**Implement:** A controllable monotonic time source and fake MIDI
+note-on/note-off, disconnect/reconnect and physical shortcut input *at the
+existing production ingress boundary*, with recorded timestamp/velocity/
+channel data. Run the *actual* Python engine/worker, command router,
+Recorder, grading, lesson generator, settlement and saved progress; do
+not duplicate those algorithms in a fake lesson engine. Add an embedded
+Godot runner using the real `PianoNative` operation path, score preparation,
+admission gateway, score queue, presentation frame and renderer with
+controlled frame stepping. Stub only external I/O (piano hardware, speaker
+output, wall-clock sleep and genuinely external services); do not stub
+native score admission in a purported end-to-end scenario.
+
+**Observations:** Capture public state/commands, accepted action list,
+selected measure IDs, BPM, musical beat, visual world position, live note
+marks, source queue/receipt identities, audible scheduling facts and
+persisted evidence. Provide distinct *backend-only* quick checks and
+*embedded-Godot* boundary checks, with neither misrepresented as the other.
+Keep a simple, reproducible scenario script rather than a parallel
+application state machine. No pixel tests, private-object shape assertions
+or architecture-parity checks.
+
+**Exit:** The runner can execute at least an opening Listen -> Free ->
+Tempo journey and both a simulated successful and unsuccessful played
+take through production paths, producing deterministic trace artifacts.
+A deliberately withheld/stale admission and an injected MIDI failure are
+detected as failures, not accepted or silently skipped. Known existing
+player-reported defects have reproducible red witnesses, without claiming
+the unchanged build is green on those checks. Normal existing CI still
+passes; newly introduced, confirmed behavior checks join CI as fixed.
+
+### Phase V2 - Publish one authoritative practice/presentation contract
+
+**Implement:** Define typed/versioned immutable session projections and
+commands across embedded Python and Godot. The backend publishes a single
+selected source/window/hand, mode and transition state, tempo and meter,
+paused/running/ready facts, grading eligibility, active take/segment,
+available actions (meaning, enabled, label/reason), displayed measure bounds,
+feedback and *explicit visual directives* (held Free target, frozen Pause,
+authorized timed epoch, or no source movement). Avoid relying on scattered
+phase-string interpretation and implicit defaults. Use typed correlation IDs
+for session, source revision, intent, attempt, take, transport and queue
+generation. Specify duplicate, delayed and out-of-order acknowledgment
+semantics. Centralize semantic transition rules in the existing Python
+owners; do not introduce a second Python policy owner.
+
+**Migrate:** All affected native inbox/coordinator, command/feedback and
+screen readers consume the one canonical projection, with validation of
+missing/incompatible fields. Remove superseded flags and incompatible
+production paths in the same phase. Preserve documented MIDI-only import,
+saved-session migrations, alternate course paths and current public
+operations. Update the architectural contract and tests with the code.
+
+**Exit:** Each supported input has one authoritative transition and
+resulting action projection, demonstrable through the V1 runner.
+Read/poll does not execute transitions. No Godot component independently
+infers an enabled musical action, target tempo or next lesson decision.
+
+### Phase V3 - Replace distributed playback/admission decisions
+
+**Implement:** Give the existing Python playback transaction owner the
+complete state machine for start, Listen, fresh take, automatic repeat,
+Retry, Pause, Resume, cancel, expiry, failure and successful commit.
+The renderer first reports source-revision-bound physical readiness,
+available immutable predecessor/rest/header clearance, viewport geometry
+and reservation constraints. The Python scheduler determines the *one*
+feasible musical deadline using these constraints and the selected source
+tempo map. The native adapter preflights and atomically reserves that exact
+source/world/deadline proposal; Python validates the receipt and authorizes
+the take only after presentation is bound. Godot retains the physical queue
+and monotonic visual math, not deadline/policy selection. Use explicit
+`proposed -> measured -> reserved -> presented -> authorized` (or
+failed/cancelled) identities with idempotent reconciliation of lost replies.
+No speculative grading, sound, admission of another source, or mutation of
+committed ink.
+
+**Keep:** Full one-bar count-in for fresh attempts; exact one-bar fixed
+auto-repeat without extra gap; safe partial count-in reuse only when still
+unexposed; irreversible ink protection; full cross-bar releases; differing
+tempo maps; long score/slow engraving; temporary unready assets; loss of
+reserve/present/status responses. Remove the old gateway deadline
+inversion and competing retry/resume decisions after migrating all callers.
+
+**Exit:** V1 embedded scenarios prove that reserve/present receipts are
+actually generated by Godot and committed to Python for clean, failed,
+paused, resumed and repeated takes. Missing, stale, mismatched or expired
+receipts cannot run or grade a take; the UI receives a bounded recoverable
+failure, without an endless `admitting` state.
+
+### Phase V4 - Make visual time obey authorized state
+
+**Implement:** Convert the native `PresentationTimeline` into a projection
+of authorized musical/visual epochs and explicit hold/release directives
+from the canonical state. Eliminate the ability of an idle/unready
+presentation clock or fallback BPM to advance visible source ink. Free
+waits at its current target until a correct MIDI event; wrong input and
+silence do not move it. Pause freezes visible ink, targets, metronome and
+audio in Listen, Free, count-in, timed take, between attempts and during
+source readiness. A pending Resume may forecast *unexposed* geometry
+without releasing the displayed hold; the hold releases only when the
+correct resume transaction is authorized. Prevent backwards jumps,
+half-drawn strips and new visible notes during Pause.
+
+**Exit:** Deterministic frame-stepped Godot checks verify unchanged visual
+world/source identities across arbitrary idle time, Pause, delayed replies
+and failed Resume; only authorized outcomes move it. Timed notation,
+count-in, audio scheduling and grading share the same accepted take epoch.
+Exactly the selected one-to-four authored measures remain visible, with
+original closing barline, dim opposite hand and complete sounding tails;
+the final exam intentionally shows its full selected piece.
+
+### Phase V5 - Reduce Godot screens to presentation and raw intents
+
+**Implement:** Change `PracticeScreen` and `PracticeChrome` to render the
+canonical control/lesson/feedback projection and emit raw click/keyboard/
+MIDI-shortcut intents only. Delete the phase-string command decisions from
+`PracticeControlPolicy` (or retire that policy entirely); eliminate
+duplicate Play/Pause enablement, tempo permission, retry and Listen rules
+in widgets, `PracticeCommandCoordinator` and screen side effects.
+`PracticePresentationSession`, `PracticeFrameCoordinator`, visual effects,
+native score view and audio adapters may sample/present accepted frames
+and report physical facts; none may select a new learning transition,
+deadline, grade or action. Reduce `main.gd` to composition, event wiring
+and screen navigation. Move semantic decisions to actual application
+owners; do not just relocate large conditional blocks to another Godot
+service or a generic context object.
+
+**Exit:** Every control shown by the real UI matches the backend's
+published availability and emits the intended command under all documented
+phases. The same projection drives both button and physical-shortcut
+semantics. Hidden/disabled controls cannot bypass policy via another
+entrypoint. Existing settings, library, source picker, corrections and
+history screens still function.
+
+### Phase V6 - Complete transition coverage, harden CI, delete legacy paths
+
+**Implement:** Extend the V1 runner into a data-driven, deterministic
+transition matrix, driving *both* successful and unsuccessful simulated
+MIDI and observing authoritative and native-visible outcomes:
+
+| Path | Success witness | Failure/edge witness |
+| --- | --- | --- |
+| Load -> Listen | Correct first window, authentic sound/score readiness, ungraded playback | Missing/stale assets, lost reply, listen audio error |
+| Listen -> Free | Automatic handoff, complete window target at fixed playhead | Pause, disconnect, no tempo/no input, wrong input |
+| Free -> Tempo | Correct pitches/chords advance one target at a time, full selected window | Wrong/extra/missing key, partial chord, release, interrupted Free |
+| Tempo attempt | Count-in, correct attacks, clean grade and +10% target-speed ladder | Wrong/missing/extra/early/late notes, opted-in hold errors, no input |
+| Repeat/recovery | One-bar gap, safe source reservation, same or lower tempo, return to Free | Expired deadline, immutable overlap, failed reserve, second floor return and Coda/Fukuda |
+| Pause/Resume/Retry | Exact source/take semantics, frozen score/grade, one authorized restart | Pause during count-in/Free/Listen/admitting, duplicate Pause, delayed receipt, interrupted Resume |
+| Window/hand progression | 1; 2; 1-2; 3; 2-3; 1-3; ..., right -> left -> together; independent progress | Empty hand, skipped window, extra visible measures, held note crossing barline |
+| Final and persistence | Whole-piece final at 50% -> target, two clean target runs, saved Free reopen | Failed final, restart, reopen interrupted take, no false mastery |
+
+For every edge assert: current mode/hand/window/tempo, accepted available
+action, authorization/receipt identity, what the user would see (stationary
+or scrolling and exact measure bounds), correct/wrong note feedback, audio
+timing facts and persistence when relevant. Exercise tempo-map and meter
+changes, long rests, ties, low BPM, multiple MIDI events at one timestamp,
+lost/delayed/duplicate/out-of-order replies, disconnect/reconnect, render
+failure, stage promotion, resizing and source change during pending work.
+Include both note-on and note-off, and hold grading on/off. Use real MIDI
+fixtures and deterministic fakes at hardware/time seams only.
+
+**CI:** Run the bounded fast matrix on every commit; run real embedded
+Godot/bridge/render/admission journeys and relocated package boot in the
+native-production gate. Fail on `SCRIPT ERROR:`, admitted-score refusal,
+unexpected error logs, unhandled exceptions, wrong final state,
+wrong source visibility or nonzero scenario failure counters, even when
+Godot exits zero. Preserve traces, revision and scenario ID for every
+failure; do not treat absent mandatory dependencies as skips, rely on
+hard-coded sleep or leave positive-path simulations using fabricated
+reservation receipts. Keep useful existing feature tests; retire tests
+that assert superseded behavior without weakening the corresponding
+player-observable checks.
+
+**Exit:** All enumerated state/action/MIDI outcome combinations have a
+passing deterministic witness at the appropriate real boundary, CI core
+and native production are green on the same source revision, and an
+ownership sweep finds no remaining legacy practice policy/clock/deadline
+owner in UI scripts. Update `docs/architecture.md`, `docs/development.md`
+and this table with exact evidence and deleted paths.
+
+### Phase V7 - Integrated release and connected-piano acceptance
+
+**Implement/verify:** Run `bash scripts/test.sh --coverage`, the complete
+embedded native/repertoire verifier, strict relocated package build/boot
+and real-score journeys (including Pathétique II). Exercise startup,
+MIDI device connection, loss/reconnect, opening a new piece, every
+Listen/Free/Tempo path, repeated successes and failures, changing tempo,
+Pause/Resume in every mode, automatic retry, growing windows, final,
+settings, save/reopen and sound. On the actual Kawai CA49, compare
+physical key on/off, headphones/speaker audio, the scrolling staff,
+count-in, wrong-key marks and all one-to-four-bar clips against
+`docs/practice-flow.md`. Verify stationary Free and Pause with a long
+real-time hold; verify no additional visible measures. Check a separate
+clean-machine Linux installation instead of inferring compatibility from
+same-host isolated HOME.
+
+**Exit:** All V0-V6 phases are closed with implementation commits, passing
+same-SHA core and full native CI, no runtime exceptions, unambiguous
+production trace evidence, and connected-piano/clean-machine acceptance
+recorded separately by the person running those checks. If hardware or
+second-machine access is unavailable, mark V7 *open*; never claim it
+from simulation. No provisional acceptance for the failed Pathétique
+session until the failure is reproduced and corrected.
+
+### Execution and reporting rules for V0-V7
+
+- Work only on `main`; make coherent commits, never rewrite user history.
+  Record baseline SHA, per-phase source SHAs, actual files and responsibility
+  moves, removed compatibility paths, passing/failing scenario IDs,
+  relevant logs, runtime/size diagnostics, and separate physical gates here.
+- A phase is complete only when **all** listed functionality is integrated,
+  affected consumers migrated, superseded paths removed, and that phase's
+  end-to-end checks pass. Do not equate a code move, mocked backend test
+  or partial implementation with closure. Report unverified scope explicitly.
+- The user's 2026-11-21 request for fake-MIDI success/failure transition
+  testing authorizes *player-visible* regression coverage in this roadmap.
+  Follow `AGENTS.md` otherwise: no abstract implementation-shape, pixel,
+  infrastructure or duplicate-engine tests; do not silently change the
+  practice-flow contract. Physical MIDI/audio/visual acceptance stays
+  separate from simulation.
+- Never add a second application state machine in the test runner. Tests
+  inject events and assert observable outputs of the real one.
+- If a phase exposes a wrong boundary, replace it, including across
+  Python/Godot, instead of preserving it via a compatibility layer.
+  Any change to the player's specified behavior requires explicit approval.
+
 ## Implementation and verification record
 
 The last source baseline at the start of this continuation was `92780348`.
