@@ -300,6 +300,19 @@ could request timed playback; Python resolves it from current session
 state. The asynchronous queue retains a raw Pause gesture while
 a different command is in flight.
 
+### V3 physical binding attestation before audible effects
+
+`StreamTakeBinding.owns_authorized_segment` is the physical ledger's
+single ownership query for a backend-authorized source. A pending
+ACKed arm and a later live segment are both valid only if their
+queue owner still exists. The Godot gateway now queries that port
+before renderer promotion, visual epoch authorization or local
+count-in audio, reporting `playback.failure` to the backend if
+the authorized physical source has disappeared. This prevents
+an authorization receipt from producing graded/audio time against
+missing or superseded notation. The backend retains sole authority
+to stop the musical take and publish failure.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

@@ -301,6 +301,19 @@ func has_armed_reservation() -> bool:
 func bound_segment() -> String:
     return live_segment_id
 
+func owns_authorized_segment(segment_id: String) -> bool:
+    # The physical source may be ACKed but not yet promoted by the next
+    # state-poll observation. Both states must prove ownership of an
+    # existing queue take, not merely preserve a matching string.
+    if segment_id.is_empty():
+        return false
+    if (live_segment_id == segment_id and live_serial >= 0
+            and queue.has_take(live_serial)):
+        return true
+    return (armed_segment_id == segment_id and arm_acknowledged
+        and armed_serial >= 0 and not arm_rollback.is_empty()
+        and queue.has_take(armed_serial))
+
 func status(generation: int) -> Dictionary:
     return {"generation":generation,"live_serial":live_serial,
         "armed_serial":armed_serial,"last_take":last_take,

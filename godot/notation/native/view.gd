@@ -421,6 +421,9 @@ func unscored_take_status() -> String:
 func bound_segment_id() -> String:
     return _stream_controller.bound_segment()
 
+func owns_authorized_segment(segment_id: String) -> bool:
+    return _stream_controller.owns_authorized_segment(segment_id)
+
 func has_armed_reservation() -> bool:
     return _stream_controller.has_armed_reservation()
 

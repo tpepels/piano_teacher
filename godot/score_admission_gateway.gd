@@ -447,6 +447,26 @@ func _confirm_authorized(data: Dictionary) -> void:
         pending_reconciliation = true
         _query_status()
         return
+    if (renderer == null or not is_instance_valid(renderer)
+            or not renderer.owns_authorized_segment(expected)):
+        # The backend may already be grading this exact take, but native
+        # physical source ownership was lost across a resize/withdrawal.
+        # Stop that take instead of starting count-in sound over blank ink.
+        if not failure_request.is_pending():
+            failure_request.request("playback.failure",{
+                "take_id":str(receipt.get("take_id","")),
+                "segment_id":expected,
+                "reason":"authorized_source_missing_from_physical_queue"})
+        _report_problem("Authorized score source disappeared before presentation")
+        if renderer != null and is_instance_valid(renderer):
+            renderer.cancel_stream_arm()
+        current.clear()
+        receipt.clear()
+        admission_state.clear()
+        renderer = null
+        started_ms = -1
+        pending_reconciliation = false
+        return
     if runway != null and renderer != null and \
             is_instance_valid(renderer) and runway.owns_prepared_renderer(renderer):
         if not runway.promote_reserved(admission_state):

@@ -129,6 +129,9 @@ func has_take(owner_serial: int) -> bool:
 func bound_segment() -> String:
     return _binding.bound_segment()
 
+func owns_authorized_segment(segment_id: String) -> bool:
+    return _binding.owns_authorized_segment(segment_id)
+
 func has_armed_reservation() -> bool:
     return _binding.has_armed_reservation()
 

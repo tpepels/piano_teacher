@@ -286,6 +286,27 @@ resulting action projection, demonstrable through the V1 runner.
 Read/poll does not execute transitions. No Godot component independently
 infers an enabled musical action, target tempo or next lesson decision.
 
+### V3 verify physical source before local authorization effects - 2026-11-21
+
+The native score ledger now publishes a read-only
+`owns_authorized_segment(segment_id)` query. It accepts either the
+same take as an ACKed, still-armable future reservation or the already
+live source, and in both cases requires the immutable queue to still
+contain that exact owner. This is an invariant query on the existing
+`StreamTakeBinding`, not a second native take state machine.
+
+After `playback.present` is authorized by Python, the physical
+gateway verifies this ownership **before** promoting the renderer,
+authorizing visual tempo epochs or speaking count-in syllables. If a
+resize, late withdrawal or invalidation removed the source, Godot
+reports `playback.failure` against the exact take/segment and clears
+the provisional stage. Python remains responsible for stopping
+grading. The older `bound_segment_id()` view is insufficient here
+because it becomes live only upon the next authorized state poll.
+
+No new tests were written; native execution and physical verification
+remain exit gates.
+
 ### V3 fixed-repeat native rejection - 2026-11-21
 
 The native physical gateway now explicitly withdraws a fixed
