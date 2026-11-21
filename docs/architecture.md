@@ -117,8 +117,13 @@ backend pausable-phase contract agree on these Free states, and the Play/Pause
 label follows the same active-state predicate. The native stream still
 pre-engraves authentic neighboring context for clefs, ties and safe cuts,
 but visible source-strip crops expose only the selected exercise window and
-full sounding tails. Source SHA `098ff955`; native software acceptance
-and physical observation are pending at the time of this record.
+full sounding tails. The Python `TeachingController` shares the same pause
+lifetime in introducing/disconnected states (`9eec8103`). Native
+`RenderPass.event_visible` excludes context-role bars and notes
+(`fc65791f`) while `SourcePassPainter` retains the selected window's
+authentic ending barline and repeat mark (`b37e7693`). Full
+native/embedded/package CI is being verified on `b37e7693`; physical
+observation remains outstanding.
 
 ## Current embedded Python application boundaries (2026-11-21)
 

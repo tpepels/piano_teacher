@@ -123,7 +123,8 @@ The music is the focus:
 - Display only the currently selected authored practice window (one to four
   measures), with its full authentic held-note tails. Neighbouring measures
   may be used internally to engrave ties, clefs and safe clip boundaries,
-  but must not appear as additional exercise measures.
+  but must not appear as additional exercise measures. The selected
+  window retains its original closing barline and any authored repeat mark.
 - Keep the hand not being practised visible but dimmed.
 - Show finger numbers wherever known. Never invent an unavailable assignment.
 - Space fast notes generously: about **3.3 staff spaces per sixteenth** at least.

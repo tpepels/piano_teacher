@@ -894,9 +894,22 @@ the renderer/control paths were corrected on main:
   `disconnected` and completion transitions; these untimed phases can be
   paused through the same backend transport authority.
 
-No new tests were introduced. [The full existing core and native/embedded/
-package acceptance run](https://github.com/tpepels/piano_teacher/actions/runs/44921228447)
-is running on `098ff955` and is **not yet evidence of acceptance**.
+- [`9eec8103`](https://github.com/tpepels/piano_teacher/commit/9eec8103842a21df927950f5d0592649743365cf)
+  gives the Python Free teaching controller the same Pause/Resume lifetime
+  in `guided_wait`, `introducing` and `disconnected`; device changes cannot
+  silently unpause a frozen controller.
+- [`fc65791f`](https://github.com/tpepels/piano_teacher/commit/fc65791f5d6750cfc42c29cb3e2ce787213d42b1)
+  prevents neighboring context-role notes and headers from being painted in
+  native selected-window strips even when engraving margins overlap them.
+- [`b37e7693`](https://github.com/tpepels/piano_teacher/commit/b37e7693076ef4e8059458465d353be5c0559ae6)
+  retains the selected window's authentic closing barline (including authored
+  repeat styles) without showing the following measure.
+
+No new tests were introduced. [The existing core and native/embedded/
+relocated-package CI](https://github.com/tpepels/piano_teacher/actions/runs/44922019745)
+runs against `b37e7693`. **Core CI passed: 103 Python tests,
+four skips, Godot startup and four native behaviour groups with zero
+failures.** Full embedded/standalone acceptance remains under verification.
 A real piano is still needed to verify immediate Pause/Resume feel, whether
 Free remains stationary while thinking, and that source cropping shows exactly
 the selected window on screen. No physical, audible or visual success is claimed.
