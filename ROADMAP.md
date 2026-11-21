@@ -384,6 +384,20 @@ receipt. Native `playback.present` replies still require the full
 intent/attempt/take/segment identity. This preserves authorization
 after a lost present ACK without accepting an unrelated take.
 
+### V3 active playback watchdog covers absent renderer - 2026-11-21
+
+A playback state whose authorized score renderer is null or invalid
+is now treated as a missing source, like a renderer bound to the wrong
+segment. After the existing four-frame grace the physical adapter
+reports the exact take and segment to Python, which alone halts graded
+playback. The watchdog, post-authorization physical owner check and
+prepared-stage promotion now share one failure-request port. Busy
+requests do not falsely mark another failure as delivered, and a
+failed report can be retried on subsequent active frames.
+
+Native runtime/physical acceptance remains unverified; no new
+unit tests were added.
+
 ### V3 missing renderer / authoritative-cancel race - 2026-11-21
 
 A fixed automatic repeat now expires immediately even when no

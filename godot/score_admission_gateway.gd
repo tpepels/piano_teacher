@@ -31,6 +31,7 @@ var last_activated_intent := ""
 var last_activated_attempt := -1
 var missing_score_frames := 0
 var reported_failure_segment := ""
+var failure_report_in_flight := ""
 var _last_problem := ""
 var _last_problem_ms := -100000
 var last_rejected_fixed_intent := ""
@@ -91,6 +92,21 @@ func _reject_fixed_intent(intent: Dictionary, reason: String) -> void:
     if withdraw_request.request("playback.withdraw",payload) == OK:
         last_rejected_fixed_intent = key
         _report_problem(reason)
+
+
+func _report_authorized_failure(take_id: String, segment_id: String,
+        reason: String) -> void:
+    # This is a native physical-failure report. The Python coordinator
+    # alone decides whether a take must be stopped or graded.
+    if (segment_id.is_empty() or take_id.is_empty()
+            or reported_failure_segment == segment_id
+            or failure_request.is_pending()):
+        return
+    var payload := {"take_id":take_id,
+        "segment_id":segment_id,"reason":reason}
+    if failure_request.request("playback.failure",payload) == OK:
+        reported_failure_segment = segment_id
+        failure_report_in_flight = segment_id
 
 
 func _matching_renderer(intent: Dictionary):
@@ -270,19 +286,18 @@ func observe(state: Dictionary, frame_ms: int) -> void:
         _confirm_authorized(receipt)
     if timeline is Dictionary:
         var segment: String = str(timeline.get("segment_id",""))
-        if bool(state.get("running", false)) and \
-                str(state.get("phase", "")) == "playing" and \
-                not segment.is_empty() and \
-                stage.renderer != null and \
-                stage.renderer.bound_segment_id() != segment:
+        if (bool(state.get("running",false))
+                and str(state.get("phase","")) == "playing"
+                and not segment.is_empty()
+                and (stage.renderer == null or not is_instance_valid(stage.renderer)
+                    or stage.renderer.bound_segment_id() != segment)):
+            # An absent renderer must fail closed too, not bypass the
+            # watchdog's wrong-bound-segment check.
             missing_score_frames += 1
-            if missing_score_frames >= 4 and reported_failure_segment != segment:
-                reported_failure_segment = segment
-                if not failure_request.is_pending():
-                    failure_request.request("playback.failure",{
-                        "take_id": str(timeline.get("take_id", "")),
-                        "segment_id": segment,
-                        "reason": "running_take_without_admitted_source"})
+            if missing_score_frames >= 4:
+                _report_authorized_failure(
+                    str(timeline.get("take_id","")),segment,
+                    "running_take_without_admitted_source")
         else:
             missing_score_frames = 0
     var suspended: bool = (bool(state.get("paused",false)) and
@@ -500,11 +515,9 @@ func _confirm_authorized(data: Dictionary) -> void:
         # The backend may already be grading this exact take, but native
         # physical source ownership was lost across a resize/withdrawal.
         # Stop that take instead of starting count-in sound over blank ink.
-        if not failure_request.is_pending():
-            failure_request.request("playback.failure",{
-                "take_id":str(receipt.get("take_id","")),
-                "segment_id":expected,
-                "reason":"authorized_source_missing_from_physical_queue"})
+        _report_authorized_failure(
+            str(receipt.get("take_id","")),expected,
+            "authorized_source_missing_from_physical_queue")
         _report_problem("Authorized score source disappeared before presentation")
         if renderer != null and is_instance_valid(renderer):
             renderer.cancel_stream_arm()
@@ -513,11 +526,9 @@ func _confirm_authorized(data: Dictionary) -> void:
     if runway != null and renderer != null and \
             is_instance_valid(renderer) and runway.owns_prepared_renderer(renderer):
         if not runway.promote_reserved(admission_state):
-            if not failure_request.is_pending():
-                failure_request.request("playback.failure",{
-                    "take_id":str(receipt.get("take_id","")),
-                    "segment_id":expected,
-                    "reason":"prepared_stage_promotion_failed"})
+            _report_authorized_failure(
+                str(receipt.get("take_id","")),expected,
+                "prepared_stage_promotion_failed")
             _report_problem("Authorized stage could not be presented")
             if renderer != null and is_instance_valid(renderer):
                 renderer.cancel_stream_arm()
@@ -590,4 +601,10 @@ func _withdrawn(code: int, body: PackedByteArray) -> void:
 
 func _failure_reported(code: int, body: PackedByteArray) -> void:
     if code != 0:
-        _report_problem("Could not halt playback after notation loss: "+body.get_string_from_utf8())
+        # An unsuccessful report is not a delivered failure. A subsequent
+        # frame may retry this exact source loss if playback remains active.
+        if reported_failure_segment == failure_report_in_flight:
+            reported_failure_segment = ""
+        _report_problem("Could not halt playback after notation loss: "+
+            body.get_string_from_utf8())
+    failure_report_in_flight = ""

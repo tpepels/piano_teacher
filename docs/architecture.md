@@ -356,6 +356,16 @@ Failed physical ownership or runway promotion retracts the
 provisional arm and notifies the backend with the exact take
 and segment instead of attempting local musical compensation.
 
+### One physical playback-failure reporting adapter
+
+The native gateway reports missing, invalid or wrongly bound
+renderer sources through a single source-bound
+`_report_authorized_failure` port. The existing four-frame
+watchdog covers an entirely missing renderer. Busy report requests
+do not suppress a different failure, and a rejected report is
+retryable from subsequent active playback state. Godot never
+chooses a grading or musical retry policy as a consequence.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
