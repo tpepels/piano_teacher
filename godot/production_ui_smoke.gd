@@ -296,8 +296,10 @@ func _process(_delta: float) -> bool:
             return false
         if Time.get_ticks_msec()-paused_sample_ms < 400:
             return false
-        if renderer.stream_world_beat <= paused_world_beat:
-            _fail("Paused staff stopped scrolling")
+        # Pause holds the same immutable source/world position. No new
+        # measure may be admitted and the visible staff must be stationary.
+        if absf(renderer.stream_world_beat-paused_world_beat) > .01:
+            _fail("Paused staff moved after the acknowledged Pause")
             return true
         if renderer.admission_queue_generation() != paused_pass_serial:
             _fail("Pause spawned another exercise instead of letting previous notes leave")

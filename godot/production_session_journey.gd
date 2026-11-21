@@ -164,8 +164,11 @@ func _process(_delta: float) -> bool:
                 return false
             if now-paused_ms < 350:
                 return false
-            if view.stream_world_beat <= paused_clock or view.admission_queue_generation() != paused_serial:
-                _fail("Paused score stopped moving or admitted new notes")
+            if absf(view.stream_world_beat-paused_clock) > .01:
+                _fail("Paused score moved after Pause was acknowledged")
+                return true
+            if view.admission_queue_generation() != paused_serial:
+                _fail("Pause admitted additional source notes")
                 return true
             if not _press(app.practice_view.start_button,"Resume"):
                 return false
