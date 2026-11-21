@@ -356,6 +356,11 @@ the visual transport owns scheduling/rest metadata, and SessionCommands
 owns its command reason. The full workflow and transaction decomposition is
 still open; these new owners do not establish phase completion.
 
+Source-bound live note observations and acknowledgement identity now use
+`application/live_feedback_workflows.py`. It invokes the sole configured
+assessment policy and the existing live publisher; it contains no
+second used-note matcher or independent musical clock.
+
 Score-state snapshots and exact graphical or explicit headless fixture
 projection now use `application/session_read_models.py`. It owns only
 the read side; command/worker transitions cannot be induced by polling.

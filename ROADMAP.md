@@ -557,8 +557,13 @@ selection and asset compilation are separate; the original public commands
 remain intact. The source/transport state snapshot, score projection and explicit headless
 fixture serialization now use `SessionReadModels`. The facade continues
 to own public read timing, while named read ports provide the immutable
-projection dependencies. Live feedback and next-stage acknowledgments
-remain; this commit requires core/native CI.
+projection dependencies. Source/take-bound live grading, its single provisional/final publication
+channel and the current feedback event identity now use
+`LiveFeedbackWorkflows`. The former engine methods and duplicate
+snapshot marks port were removed; the existing `AssessmentService`
+and `LiveAssessmentPublisher` remain the only grader/publisher.
+Next-stage acknowledgment and remaining read ports need integration;
+core/native CI must confirm.
 
 ### Phase S6 — Read models, feedback and score projection
 

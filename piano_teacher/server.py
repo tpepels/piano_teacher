@@ -58,6 +58,7 @@ from .application.score_read_services import ScoreReadServices
 from .application.session_read_models import SessionReadModels
 from .application.transport_timing import TransportTiming
 from .application.timed_playback import TimedPlayback
+from .application.live_feedback_workflows import LiveFeedbackWorkflows
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -446,6 +447,15 @@ class PracticeEngine:
             transport_timing=self.transport_timing, lesson_execution=self.lesson_execution,
             clock=self.now, lock=self.lock, phase=self._phase)
 
+        self.live_feedback_workflows = LiveFeedbackWorkflows(
+            source_identity=self.source_identity, playback_session=self.playback_session,
+            visual_transport=self.visual_transport,
+            score_artifact_registry=self.score_artifact_registry,
+            score_read=self.score_read, policy_registry=self.policy_registry,
+            library=self.library, attempt=self.attempt,
+            live_assessment=self.live_assessment,
+            transport_timing=self.transport_timing, clock=self.now)
+
         self.read_models = SessionReadModels(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
             notices=self.notices, attempt=self.attempt,
@@ -683,7 +693,7 @@ class PracticeEngine:
                 musical_seconds=self.transport_timing.musical_seconds,
                 recorder=lambda: self.attempt.recorder,
                 teaching=lambda: self.teaching,
-                feedback_take=self._feedback_take)
+                feedback_take=self.live_feedback_workflows.feedback_take)
 
     def load(self, path: str, *, warmup: bool = False):
         """Commit a prepared source under one mutation guard and short lock."""
@@ -1319,8 +1329,8 @@ class PracticeEngine:
         # BPM selected for the next retry. Re-scaling the recorded
         # timestamps early would move mistakes to incorrect notes.
         self.attempt.publish_live_marks(
-            self._live_feedback((now-self.visual_transport.run_at)))
-        self.live_assessment.publish(self.attempt.feedback_marks, self._feedback_take())
+            self.live_feedback_workflows.live_feedback((now-self.visual_transport.run_at)))
+        self.live_assessment.publish(self.attempt.feedback_marks, self.live_feedback_workflows.feedback_take())
         outgoing_bpm = self.plan.bpm
         scored_end = self.visual_transport.run_at + (
             self.transport_timing.elapsed_seconds(decision.end_beat) -
@@ -1433,7 +1443,7 @@ class PracticeEngine:
             marks=assessed.marks,unmapped=assessed.unmapped)
         # The completed take's settled grades, before any transition below can
         # start another transport.
-        self.live_assessment.publish(self.attempt.feedback_marks, self._feedback_take(),
+        self.live_assessment.publish(self.attempt.feedback_marks, self.live_feedback_workflows.feedback_take(),
                                      final=True)
         self.feedback = assessed.feedback
         self.playback_session.finish_take()
@@ -1627,7 +1637,7 @@ class PracticeEngine:
         self.read_models.prepare_score_presentation()
         # Display publication must never pause the take or alter feedback text.
         try:
-            self._publish_live_assessment()
+            self.live_feedback_workflows.publish_live()
         except Exception:
             logging.getLogger(__name__).exception(
                 "Live assessment publication failed; skipping this tick")
@@ -1706,59 +1716,6 @@ class PracticeEngine:
             awaiting_score=self.playback_session.awaiting_score_revision is not None,
             pending_rewind=self.visual_transport.pending_rewind is not None,
         ), mode=self.playback_session.mode, now=now)
-
-    def _open_take(self, *, phrase: Phrase | None = None,
-                   recording: bool = False) -> int:
-        return self.playback_session.open_take(phrase=phrase,recording=recording)
-
-    def _feedback_take(self) -> dict:
-        """Immutable identity of the take that the next feedback belongs to."""
-        return {"piece_fingerprint": self.fingerprint or "",
-                "revision": int(self.score_revision),
-                "transport_id": int(self.playback_session.transport_id), "mode": self.playback_session.mode,
-                "release_advisory": not self.library.settings["grade_note_holds"],
-                "graded": (not self.playback_session.preview_only
-                           and self.playback_session.mode in ("practice", "perform"))}
-
-    def _publish_live_assessment(self) -> None:
-        """Publish the incremental assessment continuously during playback.
-
-        Uses the same _live_feedback grading call as every other consumer;
-        only new or changed per-note results enter the feedback event log.
-        """
-        if (not self.playback_session.running or self.playback_session.preview_only
-                or self.playback_session.mode not in ("practice", "perform")):
-            # No running graded take: never carry the previous take's marks.
-            self.live_assessment.clear()
-            return
-        if self.visual_transport.paused:
-            return
-        elapsed = self.transport_timing.musical_seconds(self.now())
-        marks = self._live_feedback(elapsed)
-        scope, _ = live_scope(self.plan.active_phrase,
-            from_beat=self.visual_transport.play_from_beat,elapsed_seconds=elapsed,
-            bpm=self.plan.bpm,tempo=self.transport_timing.active_tempo_map())
-        self.live_assessment.publish(marks, self._feedback_take(),scope_start_beat=scope)
-
-    def _live_marks_for_snapshot(self, _elapsed_seconds: float) -> list[dict]:
-        # The command worker publishes marks; serialization only reads them.
-        return list(self.live_assessment.latest_marks) if self.playback_session.running else []
-
-    def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
-        """Read the current cached source and ask the single grading owner."""
-        plan = self.plan
-        if plan is None or self.playback_session.preview_only or not self.playback_session.running:
-            return []
-        engraved = self.score_artifacts.cached_layout(self.score_read.selection())
-        if engraved is None:
-            return []
-        return self.assessment_policies.live_projection(
-            plan.active_phrase, hand=plan.hand, bpm=plan.bpm,
-            played=self.attempt.recorder.presses if self.attempt.recorder else (),
-            from_beat=self.visual_transport.play_from_beat,
-            elapsed_seconds=elapsed_seconds,
-            bar_boundaries=plan.piece.bar_boundaries,
-            layout=engraved.layout, tempo=self.transport_timing.active_tempo_map())
 
     def advance_clock(self) -> int:
         """Advance scheduled transitions without waiting for a UI state request.
