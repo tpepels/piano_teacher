@@ -58,7 +58,7 @@ class PracticeControls:
                     effect = self.teaching_decisions.prepare("manual", manual=change,
                         action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
                 with self.session_commands.executing(effect):
-                    result = self.dispatch_control(action, **kwargs)
+                    result = self._dispatch_control(action, route, **kwargs)
                     self.read_models.prepare_score_presentation()
                     if action not in ("score_ready", "demo_ready", "reset_path"):
                         self.measurement.event("manual_action", {"action": action,
@@ -71,34 +71,32 @@ class PracticeControls:
             finally:
                 self.session_commands.action_reason = previous_reason
 
-    def dispatch_control(self, action: str, **kwargs) -> None:
-        """Single locked command entry; dispatch owns no engine state."""
-        with self.lock:
-            self.exposure_workflows.apply_listen_failure()
-            route = ControlDispatcher.route(action)
-            if route == "calibration":
-                return self.calibration_action(action)
-            if route == "device_range":
-                if action == "midi_range_cancel":
-                    self.midi_key_shortcuts.cancel_capture()
-                else:
-                    if not self.midi.connected:
-                        raise ValueError("Connect a MIDI piano before setting its key range")
-                    if self.playback_session.running and not self.visual_transport.paused:
-                        self.timed_playback.pause()
-                    self.midi_key_shortcuts.begin_capture(self.midi.device)
-                return
-            if route == "reset":
-                return self.history_management.reset_current_path(
-                    fingerprint=kwargs.get("fingerprint"),
-                    confirm=kwargs.get("confirm") is True)
-            if route == "acknowledgement":
-                return self.transport_commands.control_acknowledgement(action, kwargs)
-            if route == "listening":
-                return self.learning_commands.control_listening(action, kwargs)
-            if route == "learning":
-                return self.learning_commands.control_learning(action, kwargs)
-            if route == "transport":
-                return self.transport_commands.control_transport(action, kwargs)
-            return self.learning_commands.change_stage(action, kwargs)
+    def _dispatch_control(self, action: str, route: str, **kwargs) -> None:
+        """Dispatch within the existing outer command transaction and lock."""
+        self.exposure_workflows.apply_listen_failure()
+        if route == "calibration":
+            return self.calibration_action(action)
+        if route == "device_range":
+            if action == "midi_range_cancel":
+                self.midi_key_shortcuts.cancel_capture()
+            else:
+                if not self.midi.connected:
+                    raise ValueError("Connect a MIDI piano before setting its key range")
+                if self.playback_session.running and not self.visual_transport.paused:
+                    self.timed_playback.pause()
+                self.midi_key_shortcuts.begin_capture(self.midi.device)
+            return
+        if route == "reset":
+            return self.history_management.reset_current_path(
+                fingerprint=kwargs.get("fingerprint"),
+                confirm=kwargs.get("confirm") is True)
+        if route == "acknowledgement":
+            return self.transport_commands.control_acknowledgement(action, kwargs)
+        if route == "listening":
+            return self.learning_commands.control_listening(action, kwargs)
+        if route == "learning":
+            return self.learning_commands.control_learning(action, kwargs)
+        if route == "transport":
+            return self.transport_commands.control_transport(action, kwargs)
+        return self.learning_commands.change_stage(action, kwargs)
 

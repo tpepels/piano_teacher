@@ -670,6 +670,11 @@ directly, with the prior action reason restored in `finally`. No new
 grading clock, source decision or admission gate is introduced.
 These changes require core and full native/package verification.
 
+**S7 lock/route cleanup:** The private action dispatcher now consumes
+the validated route within the command's existing lock and does not
+re-enter the RLock or classify the same action twice. The outer command
+transaction remains the only owner of failure-safe action-reason cleanup.
+
 **S7 command transaction hardening:** `PracticeControls.control` now
 restores `SessionCommands.action_reason` even if route validation or
 teaching-decision preparation raises before dispatch. Lesson-stage commands
