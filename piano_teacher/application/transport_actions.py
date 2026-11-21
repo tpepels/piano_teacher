@@ -69,9 +69,12 @@ class TransportActions:
                         loop_continuation=authorized.action == "auto",
                         decided=False,scheduled_deadline=authorized.deadline,
                         count_in_plan=intent.count_in)
-                self.visual_transport.scheduled_start = (
-                    self.playback_session.transport_id,self.visual_transport.play_from_beat,
-                    self.visual_transport.run_at,self.source_identity.plan.identity,self.source_identity.revision,None)
+                self.visual_transport.bind_scheduled_start(
+                    transport_id=self.playback_session.transport_id,
+                    from_beat=self.visual_transport.play_from_beat,
+                    run_at=self.visual_transport.run_at,
+                    stage_key=self.source_identity.plan.identity,
+                    revision=self.source_identity.revision)
             elif authorized.action == "listen":
                 self.playback_session.start_listen(revision=self.source_identity.revision,
                     count_in=intent.count_in,deadline=authorized.deadline)
@@ -104,9 +107,12 @@ class TransportActions:
                 self.timed_playback.start(from_beat=position,mode=mode,scheduled_deadline=timing.deadline,
                     presentation_lead_seconds=timing.lead_seconds,decided=True)
                 if announce:
-                    self.visual_transport.scheduled_start = (
-                        self.playback_session.transport_id,self.visual_transport.play_from_beat,
-                        self.visual_transport.run_at,self.source_identity.plan.identity,self.source_identity.revision,None)
+                    self.visual_transport.bind_scheduled_start(
+                        transport_id=self.playback_session.transport_id,
+                        from_beat=self.visual_transport.play_from_beat,
+                        run_at=self.visual_transport.run_at,
+                        stage_key=self.source_identity.plan.identity,
+                        revision=self.source_identity.revision)
         elif self.playback_session.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
             self.timed_playback.begin_listen_if_ready()
 
@@ -121,7 +127,7 @@ class TransportActions:
         elif action == "stop":
             self.lifecycle.stop(reason="stop")
             # A stopped session has no take a later rest could follow (M6).
-            self.visual_transport.rest_take_end = None
+            self.visual_transport.clear_take_end()
             self.notices.feedback = "Stopped"
             self.notices.next_action = "Start when you are ready."
         elif action in ("start", "restart"):

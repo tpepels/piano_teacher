@@ -55,7 +55,9 @@ class PracticeTimeline:
         This method is called from the locked _update loop. Assessment and
         grading are calculated only after a completed non-preview take.
         """
-        self.visual_transport.rest_take_end = (self.visual_transport.run_at + duration, self.source_identity.plan.bpm)
+        self.visual_transport.record_take_end(
+            at=self.visual_transport.run_at + duration,
+            bpm=self.source_identity.plan.bpm)
         if self.playback_session.preview_only:
             # Disconnected MIDI: repeat as an ungraded preview, never create
             # fake notes, misses, accepted passes or mastery.
@@ -307,7 +309,7 @@ class PracticeTimeline:
             bpm=self.source_identity.plan.bpm, gap_beats=self.visual_transport.visual_gap_beats),
             self.recovery_workflows.assess_rolling_boundary, self.transport_timing.elapsed_seconds,
             exact_repeats=self.lesson_execution.flow_active())
-        self.visual_transport.next_boundary_beat = step.next_boundary
+        self.visual_transport.advance_boundary(step.next_boundary)
         if step.action == "recovery":
             self.recovery_workflows.apply_rolling_recovery(
                 step.recovery, phrase, step.grid, score_beat, now)

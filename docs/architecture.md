@@ -34,6 +34,16 @@ router. The existing `SessionCommands`, `PlaybackCoordinator`,
 `PlaybackSession`, and `TeachingDecisions` remain the only owners of their
 respective choices and receipts. This change must pass integration gates.
 
+### Final VisualTransport state-writer audit — 2026-11-21
+
+The application services no longer assign directly to the visual transport's
+`scheduled_start`, `rest_take_end`, `short_rest`,
+`next_boundary_beat` or `continuous_horizon_beats`. The transport
+owns semantic installation, clearing and the renderer's bounded geometry/
+reading-horizon validation. The source identity, grading clock, displayed
+score and immutable admission ledger remain unchanged. This audit covers
+the migrated Python caller modules, not physical instrument acceptance.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

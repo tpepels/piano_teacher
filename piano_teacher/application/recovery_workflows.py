@@ -119,7 +119,7 @@ class RecoveryWorkflows:
         if completed.transition is None:
             from ..measure_grid import next_chunk_end
             following = next_chunk_end(grid, decision.end_beat)
-            self.visual_transport.next_boundary_beat = following if following > decision.end_beat+1e-7 else 0.
+            self.visual_transport.advance_boundary(following if following > decision.end_beat+1e-7 else 0.)
             return
         pending,transition = completed.pending,completed.transition
         outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
@@ -127,7 +127,7 @@ class RecoveryWorkflows:
             stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         short_deadline = None
         if transition.uses_completed_rest:
-            self.visual_transport.rest_take_end = (scored_end, outgoing_bpm)
+            self.visual_transport.record_take_end(at=scored_end, bpm=outgoing_bpm)
             short_deadline = SCHEDULER.measured_rest(
                 self.transport_timing.collect_rest_measurement(from_beat=transition.restart_beat),
                 now=now,bpm=self.transport_timing.presentation_bpm())

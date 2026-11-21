@@ -457,6 +457,18 @@ components are recorded under
 This is a design inventory, not a statement that subsequent refactoring
 is complete.
 
+**S1 last direct-writer cleanup (2026-11-21):** All remaining
+cross-service assignments to VisualTransport's rest, next-boundary,
+runway and scheduled-strip fields have been migrated to owner methods:
+`bind_scheduled_start`, `clear_scheduled_start`,
+`record_take_end`, `clear_take_end`, `advance_boundary`,
+`report_rest_geometry` and `configure_reading_horizon`.
+The owner enforces the existing native clearance/horizon validation;
+transport/assessment/application services consume the accepted facts.
+No source identities, deadlines, native rendering or grading authorities
+were changed. Core and production/relocated package verification must
+confirm this complete caller migration.
+
 ### Phase S1 — State authority and transactional foundations
 
 - Establish explicit ownership and semantic updates for `feedback`,

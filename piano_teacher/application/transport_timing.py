@@ -145,10 +145,7 @@ class TransportTiming:
         header = kwargs.get("continuation_header_beats")
         if clear is None or header is None:
             return
-        clear, header = float(clear), float(header)
-        if not all(math.isfinite(v) and 0.0 <= v <= 16.0 for v in (clear, header)):
-            raise ValueError("Invalid short-rest geometry")
-        self.visual_transport.short_rest = (clear, header)
+        self.visual_transport.report_rest_geometry(clear, header)
 
     def collect_rest_measurement(self, *,
                                   from_beat: float = 0.0,
@@ -180,10 +177,7 @@ class TransportTiming:
     def update_continuous_horizon(self, value) -> None:
         if value is None:
             return
-        horizon = float(value)
-        if not math.isfinite(horizon) or not 0.0 <= horizon <= 64.0:
-            raise ValueError("Invalid continuous score reading horizon")
-        self.visual_transport.continuous_horizon_beats = horizon
+        self.visual_transport.configure_reading_horizon(value)
 
     def presentation_lead(self, kwargs: dict) -> float:
         """Lead to the world position Godot reserved for this command.

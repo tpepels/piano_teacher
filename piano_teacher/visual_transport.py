@@ -1,12 +1,13 @@
 """Owns the mutable musical timeline and presentation loop state.
 
-PracticeEngine keeps MIDI grading, learning decisions, revision acknowledgements,
-and locking. This component owns the forward/reverse score-clock state and the
-single empty preparation measure between repeated takes. No engine import.
+Assessment, lesson selection and command execution retain their distinct
+owners. This transport owns forward/reverse score-clock state and the empty
+preparation measure between repeated takes. No facade backreference.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
 from .notation.practice_timeline import (
@@ -74,6 +75,43 @@ class VisualTransport:
     rest_take_end: tuple[float, float] | None = None
     continuous_horizon_beats: float = 0.0
     next_boundary_beat: float = 0.0
+
+    def bind_scheduled_start(
+        self, *, transport_id: int, from_beat: float, run_at: float,
+        stage_key: str, revision: int, serial: int | None = None,
+    ) -> None:
+        """Bind the accepted next strip to its actual transport and revision."""
+        self.scheduled_start = (
+            transport_id, from_beat, run_at, stage_key, revision, serial)
+
+    def clear_scheduled_start(self) -> None:
+        self.scheduled_start = None
+
+    def record_take_end(self, *, at: float, bpm: float) -> None:
+        """Record the completed source end used for the following printed rest."""
+        self.rest_take_end = (at, bpm)
+
+    def clear_take_end(self) -> None:
+        self.rest_take_end = None
+
+    def advance_boundary(self, beat: float) -> None:
+        """Install the next source checkpoint chosen by AttemptProgression."""
+        self.next_boundary_beat = beat
+
+    def report_rest_geometry(self, clear: float, header: float) -> None:
+        """Accept bounded native ink clearance without modifying admitted strips."""
+        clear, header = float(clear), float(header)
+        if not all(math.isfinite(v) and 0.0 <= v <= 16.0 for v in (clear, header)):
+            raise ValueError("Invalid short-rest geometry")
+        self.short_rest = (clear, header)
+
+    def configure_reading_horizon(self, value: float) -> None:
+        """Record bounded renderer runway information, not a new deadline."""
+        horizon = float(value)
+        if not math.isfinite(horizon) or not 0.0 <= horizon <= 64.0:
+            raise ValueError("Invalid continuous score reading horizon")
+        self.continuous_horizon_beats = horizon
+
 
     @property
     def tempo_epoch(self) -> float | None:

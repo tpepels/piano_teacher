@@ -50,7 +50,7 @@ class SourceWorkflows:
 
     def install(self, prepared, *, warmup: bool) -> bool | None:
         """Called with application lock and source-mutation guard held."""
-        self.visual_transport.rest_take_end = None
+        self.visual_transport.clear_take_end()
         self.lifecycle.stop(reason="source_changed")
         self.recovery_streak.clear()
         self.lesson_cursor.set_course_guided(False)

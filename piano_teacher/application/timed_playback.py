@@ -67,7 +67,7 @@ class TimedPlayback:
                     scheduled_deadline=scheduled_deadline,
                     presentation_lead_seconds=presentation_lead_seconds,
                     count_in_plan=count_in_plan))
-            self.visual_transport.next_boundary_beat = started.next_boundary_beat
+            self.visual_transport.advance_boundary(started.next_boundary_beat)
             try:
                 self.playback_session.capture_start(self.evidence_context.build(
                     scope=started.scope,start=started.from_beat,end=started.end_beat,
@@ -85,7 +85,7 @@ class TimedPlayback:
             self.transport_timing.request_playback( action="auto", mode=self.playback_session.mode,
                 from_beat=from_beat, earliest_deadline=deadline,
                 fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
-            self.visual_transport.scheduled_start = None
+            self.visual_transport.clear_scheduled_start()
             self.notices.feedback = "Preparing the next passage"
             return
         announced = self.visual_transport.announced_deadline(from_beat)
@@ -97,10 +97,12 @@ class TimedPlayback:
                        bar_beats=self.transport_timing.next_count_in_beats(),
                        meter=tuple(self.transport_timing.next_count_in_meter()),bpm=self.source_identity.plan.bpm,
                        beats=self.transport_timing.next_count_in_beats()) if self.lesson_execution.flow_active() else None))
-        self.visual_transport.scheduled_start = (
-            self.playback_session.transport_id, self.visual_transport.play_from_beat,
-            self.visual_transport.run_at, self.source_identity.plan.identity,
-            self.source_identity.revision, serial)
+        self.visual_transport.bind_scheduled_start(
+            transport_id=self.playback_session.transport_id,
+            from_beat=self.visual_transport.play_from_beat,
+            run_at=self.visual_transport.run_at,
+            stage_key=self.source_identity.plan.identity,
+            revision=self.source_identity.revision, serial=serial)
         self.playback_session.retain_announced_count_in(bpm=self.source_identity.plan.bpm)
 
     def begin_listen_if_ready(self):
