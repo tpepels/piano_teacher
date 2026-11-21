@@ -640,6 +640,31 @@ acceptance must pass before this phase is marked complete. The
 Godot renderer still measures physical travel by inverting its visual
 projection; the Python application remains the final deadline owner.
 
+### V3 backend musical proposal before physical arm - 2026-11-21
+
+The Python musical boundary now treats
+`playback.reserve` as an uncommitted musical reservation based
+on the renderer's *read-only earliest feasible* physical witness.
+`PhysicalAdmissionEvidence` supplies a lower bound, and the
+existing `MusicalScheduler.resolve` is the sole selector of the
+final `deadline_ms`. Fixed automatic repeats still admit only
+their previously published deadline, refusing a physical lower
+bound that arrives after it. Godot must commit its native source
+at that exact backend result, and the `playback.present` gate
+requires a fresh source-world/queue-generation/travel-time
+attestation proving the now-armed strip reaches the exact
+deadline. The backend refuses incomplete, stale, conflicting
+or physically earlier/later attestation before grading or
+audio. It publishes the *committed* physical world in the
+authorized segment, not the preliminary feasibility position.
+
+**Integration in progress:** The native renderer must now
+provide the attestation after the backend reserve response.
+The remaining Godot arm ordering and test callers are migrated
+in the same development sequence. Do not accept this phase
+or deploy the interim contract before the complete native and
+core CI transaction checks pass.
+
 ### Phase V3 - Replace distributed playback/admission decisions
 
 **Implement:** Give the existing Python playback transaction owner the

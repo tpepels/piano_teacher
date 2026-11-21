@@ -272,12 +272,12 @@ class PlaybackCoordinator:
                 source_end_beat: float, sampled_at_ms: float, travel_ms: float,
                 world_origin: float, queue_generation: int,
                 renderer_generation: int, reused_count_in: bool = False) -> dict:
-        """Authorize a musical deadline from an immutable physical witness.
+        """Reserve the backend-chosen musical deadline *before* ink is armed.
 
-        The native renderer supplies source placement/travel evidence,
-        never an absolute musical deadline. Source identity, score
-        revision, freshness, counting and tempo policy are validated
-        within this one application transaction.
+        This physical witness is a read-only earliest-feasible position.
+        The renderer must arm the exact selected deadline on receipt,
+        then attest its committed queue/world in playback.present.
+        No grading, voice or Listen audio starts from this reservation.
         """
         intent = self._require_intent(facts, intent_id, attempt)
         if (take_id != intent.take_id or fingerprint != intent.fingerprint
@@ -351,7 +351,12 @@ class PlaybackCoordinator:
     def present(self, facts: PlaybackRuntimeFacts, *, intent_id: str,
                 attempt: int, segment_id: str, commit: Callable,
                 capture: Callable[[], PlaybackRuntimeFacts],
-                abort: Callable[[str], None]) -> dict:
+                abort: Callable[[str], None],
+                physical_world_origin: float | None = None,
+                physical_sampled_at_ms: float | None = None,
+                physical_travel_ms: float | None = None,
+                physical_queue_generation: int | None = None,
+                physical_renderer_generation: int | None = None) -> dict:
         for past_id, result in self._completed:
             if past_id == segment_id and result["intent_id"] == intent_id:
                 # Idempotence applies only while the same authorization
@@ -368,6 +373,32 @@ class PlaybackCoordinator:
         if (receipt is None or receipt.segment_id != segment_id
                 or receipt.intent_id != intent_id or receipt.attempt != attempt):
             raise ValueError("No matching score reservation to present")
+        # A reservation is only the backend's musical proposal. Physical
+        # arming must have happened *after* it. Require a new authenticated
+        # native measurement at the committed source/queue, and refuse
+        # the authorization unless the ink reaches the downbeat exactly.
+        if (physical_world_origin is None or
+                physical_sampled_at_ms is None or
+                physical_travel_ms is None or
+                physical_queue_generation is None or
+                physical_renderer_generation is None):
+            raise ValueError("Physical score arm attestation required for playback")
+        committed = PhysicalAdmissionEvidence(
+            sampled_at_ms=float(physical_sampled_at_ms),
+            travel_ms=float(physical_travel_ms),
+            world_origin=float(physical_world_origin),
+            queue_generation=physical_queue_generation,
+            renderer_generation=physical_renderer_generation)
+        arrived_ms = committed.physical_deadline(
+            now_ms=facts.now * 1000.0, revision=intent.revision)
+        if (abs(arrived_ms-receipt.deadline_ms) > 5.0
+                or committed.world_origin + 1e-5 < receipt.world_origin
+                or committed.queue_generation < receipt.queue_generation):
+            raise ValueError("Physical score arm does not match reserved downbeat")
+        from dataclasses import replace
+        receipt = replace(
+            receipt, world_origin=committed.world_origin,
+            queue_generation=committed.queue_generation)
         now = facts.now
         remaining = (intent.resume_remaining_beats if receipt.reused_count_in
                      else 0.0 if intent.fixed_deadline_ms is not None else intent.count_in_beats)
