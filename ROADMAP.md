@@ -227,6 +227,20 @@ No runtime behavior or prior acceptance claim is changed in this design
 phase. Source inspection and existing tests must still run without a new
 failure. The baseline source and test result are recorded here.
 
+### Native-production full-source rerun after timing and UI contract changes - 2026-11-21
+
+The previous native-production run showed that native compiler,
+embedded Python, Moonlight/Peace Piece/Chopin score loading,
+UI Play/Pause/Resume and relocated package audit all passed.
+Its synthetic hardware-boundary MIDI journey revealed the
+faster-repeat collision now fixed in the musical schedule.
+A new `[native]` full CI run is requested for the integrated
+outgoing-tempo rest, source-bound backend motion directives,
+version-5 state contract, transient command outcome envelope,
+idle score hold and stronger wrong-Free/window assertions.
+This phase remains **unaccepted** until that run is green and
+local physical MIDI/audio remains an explicit manual gate.
+
 ### V3/V7 fixed one-bar faster-repeat clock defect - 2026-11-21
 
 Native-production GitHub Actions run
