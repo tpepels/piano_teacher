@@ -23,6 +23,16 @@ class SessionCommands:
         self.action_reason = "transition"
 
     @contextmanager
+    def reason(self, action: str):
+        """Restore the original reason even when command preparation fails."""
+        previous = self.action_reason
+        self.action_reason = action
+        try:
+            yield
+        finally:
+            self.action_reason = previous
+
+    @contextmanager
     def executing(self, effect):
         """Scope the original chosen effect while applying an authorization."""
         previous = self.active

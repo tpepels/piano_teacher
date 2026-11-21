@@ -469,6 +469,14 @@ No source identities, deadlines, native rendering or grading authorities
 were changed. Core and production/relocated package verification must
 confirm this complete caller migration.
 
+**S1 command-context ownership completion:** Both public action
+transactions and Resume's internal score-ready acknowledgment now use
+`SessionCommands.reason(...)`, a single owner-managed context manager
+that restores the outer command reason even on exceptions. The application
+services no longer assign directly to that state. This removes the last
+independent reason-writer/restore pattern without adding another command
+router. Core and full embedded/native/package acceptance are required.
+
 ### Phase S1 — State authority and transactional foundations
 
 - Establish explicit ownership and semantic updates for `feedback`,

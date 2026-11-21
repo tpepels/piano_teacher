@@ -256,13 +256,9 @@ class TransportActions:
             # Infrastructure acknowledgement stays within this transaction.
             # Re-entering control() from Resume would recursively start a
             # second command scope and repeat the application router.
-            previous_reason = self.session_commands.action_reason
-            self.session_commands.action_reason = "score_ready"
-            try:
+            with self.session_commands.reason("score_ready"):
                 self.control_acknowledgement(
                     "score_ready", {"revision": completed.deferred_score_revision})
                 self.read_models.prepare_score_presentation()
-            finally:
-                self.session_commands.action_reason = previous_reason
         self.timed_playback.begin_listen_if_ready()
 
