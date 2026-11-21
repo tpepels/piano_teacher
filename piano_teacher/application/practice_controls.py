@@ -55,6 +55,18 @@ class PracticeControls:
                         or type(score_fingerprint) is not str):
                     raise ValueError("UI control requires source-bound renderer readiness")
                 current = self.read_models.control_snapshot()
+                if action == "ui_review_previous":
+                    # The dialog retains a snapshot only to identify the
+                    # source that was offered. Python selects the actual
+                    # previous step from the current lesson, never the
+                    # outdated step number on the screen.
+                    context_revision = kwargs.pop("context_revision", None)
+                    context_fingerprint = kwargs.pop("context_fingerprint", None)
+                    if (type(context_revision) is not int
+                            or type(context_fingerprint) is not str
+                            or context_revision != current.get("revision")
+                            or context_fingerprint != current.get("piece_fingerprint")):
+                        raise ValueError("Resume prompt belongs to an obsolete lesson")
                 if ready and (score_revision != current.get("revision")
                               or score_fingerprint != current.get("piece_fingerprint")):
                     raise ValueError("Displayed score belongs to an earlier source revision")

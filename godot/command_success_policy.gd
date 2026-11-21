@@ -2,7 +2,7 @@ extends RefCounted
 ## Success classification only. The command coordinator applies completion
 ## effects, score publication and deferred library selection.
 const GUIDED_NAVIGATION := ["skip_stage", "place_original", "revisit_trouble",
-    "ui_previous", "ui_skip"]
+    "ui_previous", "ui_review_previous", "ui_skip"]
 const CALIBRATION_ACTIONS := ["calibration_apply", "calibration_reset"]
 
 static func decide(path: String, action: String,

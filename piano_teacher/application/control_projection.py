@@ -5,7 +5,8 @@ from .transport_commands import PAUSABLE_PHASES
 
 UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
-    "ui_previous", "ui_skip", "ui_tempo_up", "ui_tempo_down"))
+    "ui_previous", "ui_review_previous", "ui_skip",
+    "ui_tempo_up", "ui_tempo_down"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
 
 
@@ -92,6 +93,11 @@ def project_controls(s: Mapping) -> dict:
                    "label": "Listen again" if course else "Practice" if s.get("mode") == "listen" else "Listen"},
         "previous": {"action": "select_step" if previous_enabled else "",
                      "enabled": previous_enabled, "visible": previous_visible},
+        "review_previous": {
+            "action": "select_step" if s.get("loaded") and
+            int(s.get("lesson_step", 1)) > 1 else "",
+            "enabled": bool(s.get("loaded")) and
+            int(s.get("lesson_step", 1)) > 1},
         "skip": {"action": "skip_stage" if skip_enabled else "",
                  "enabled": skip_enabled, "visible": previous_visible},
         "tempo_up": {"action": "tempo_up" if tempo_allowed and s.get("can_increase_tempo") else "",
@@ -109,7 +115,8 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
     choice = project_controls(state)[intent.removeprefix("ui_")]
     action = choice["action"]
     if not action or not choice.get("enabled", False):
-        if intent in ("ui_previous", "ui_skip", "ui_tempo_up", "ui_tempo_down"):
+        if intent in ("ui_previous", "ui_review_previous", "ui_skip",
+                      "ui_tempo_up", "ui_tempo_down"):
             raise ValueError("This control is no longer available in the current lesson")
         return None, {}
     if action == "resume" and score_error:
@@ -118,6 +125,8 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
         raise ValueError(SCORE_WAIT)
     if intent == "ui_previous":
         return action, {"number": int(state["lesson_step"]) - 1}
+    if intent == "ui_review_previous":
+        return action, {"number": max(1, int(state["lesson_step"]) - 2)}
     if intent == "ui_skip":
         return action, {"reason": "Learner skipped to the next lesson from the practice screen"}
     if intent == "ui_listen" and action == "practice" and not flow(state):

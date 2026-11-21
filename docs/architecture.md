@@ -323,6 +323,15 @@ replace the active phase seen by stream painting, audio, pause or
 practice controls. The coordinator still owns both identities
 and presents the successor through the single receipt protocol.
 
+### Source-bound modal command interpretation
+
+The saved resume prompt is a view snapshot, not a valid source of
+course transitions. Its “Review 2” gesture now carries only the
+offered source fingerprint/revision. Python validates the context
+against the current locked session and computes the lesson index
+itself. An obsolete prompt is rejected instead of navigating an
+unrelated reopened or revised source.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

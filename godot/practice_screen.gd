@@ -573,9 +573,11 @@ func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
 func _review_previous_steps() -> void:
     if _resume_open_state.is_empty():
         return
-    var step: int = int(_resume_open_state.get("lesson_step",1))
+    var context := _resume_open_state.duplicate(true)
     _dismiss_resume_hint()
-    command_requested.emit({"action":"select_step","number":maxi(1,step-2)})
+    command_requested.emit({"action":"ui_review_previous",
+        "context_fingerprint":str(context.get("piece_fingerprint","")),
+        "context_revision":int(context.get("revision",-1))})
 
 func _resume_choose_measure() -> void:
     if _resume_open_state.is_empty():

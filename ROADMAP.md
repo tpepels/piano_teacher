@@ -504,6 +504,21 @@ Exactly the selected one-to-four authored measures remain visible, with
 original closing barline, dim opposite hand and complete sounding tails;
 the final exam intentionally shows its full selected piece.
 
+### V5 source-bound saved lesson navigation - 2026-11-21
+
+The resume prompt's “Review 2” button now sends a raw
+`ui_review_previous` intent, its original fingerprint and source
+revision. The UI no longer computes `select_step = old_step - 2`
+from a stale saved display snapshot. `PracticeControls` rejects a
+prompt belonging to an older piece/revision under the command lock,
+then the shared Python control projection resolves the previous
+lesson number from the *current* backend learner cursor.
+Backend success navigation recognizes the new raw intent.
+
+This closes one concrete stale-navigation responsibility in the
+screen, without adding a second UI-side course policy.
+No new unit tests; modal/real keyboard acceptance is outstanding.
+
 ### V5 sound ownership tied to authorized take - 2026-11-21
 
 The metronome's reserved spoken count-in now stores the authorized
