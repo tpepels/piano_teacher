@@ -40,6 +40,9 @@ from .application.attempt_settlement import AttemptSettlement
 from .application.attempt_runtime import AttemptRuntime
 from .application.recovery_streak import RecoveryStreak
 from .application.session_commands import SessionCommands
+from .application.source_identity import SourceIdentity
+from .application.lesson_cursor import LessonCursor
+from .application.session_notices import SessionNotices
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -108,7 +111,51 @@ from .remediation import RemedialAssignment
 
 
 class PracticeEngine:
-    # Existing public attributes delegate to one actual transport-state owner.
+    # Public observations of independently owned application session facts.
+    @property
+    def source(self):
+        return self.source_identity.source
+
+    @property
+    def is_builtin_warmup(self) -> bool:
+        return self.source_identity.warmup
+
+    @property
+    def fingerprint(self) -> str:
+        return self.source_identity.fingerprint
+
+    @property
+    def score_revision(self) -> int:
+        return self.source_identity.revision
+
+    @property
+    def open_from_beat(self) -> float:
+        return self.lesson_cursor.opening_beat
+
+    @property
+    def course_guided(self) -> bool:
+        return self.lesson_cursor.course_guided
+
+    @property
+    def feedback(self) -> str:
+        return self.notices.feedback
+
+    @feedback.setter
+    def feedback(self, value: str) -> None:
+        self.notices.feedback = value
+
+    @property
+    def next_action(self) -> str:
+        return self.notices.next_action
+
+    @next_action.setter
+    def next_action(self, value: str) -> None:
+        self.notices.next_action = value
+
+    @property
+    def _remediation_active(self) -> RemedialAssignment | None:
+        return self.attempt.remediation_active
+
 
     @property
     def teaching(self):
@@ -169,16 +216,15 @@ class PracticeEngine:
         self.attempt = AttemptRuntime()
         self.recovery_streak = RecoveryStreak()
         self.plan: LearningPlan | None = None
-        self.source = None
-        self.is_builtin_warmup = False
-        self.fingerprint = ""
+        self.source_identity = SourceIdentity()
+        self.lesson_cursor = LessonCursor()
+        self.notices = SessionNotices()
         self.visual_transport = VisualTransport(
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
         self.playback = PlaybackCoordinator()
         self.playback_session = PlaybackSession()
         self.tempo_map_cache = TempoMapCache()
         self.attempt_progression = AttemptProgression()
-        self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
         self.feedback_seconds = SETTINGS.feedback_seconds
         self.midi_calibration = MidiTapCalibration()
@@ -193,21 +239,17 @@ class PracticeEngine:
         # Graded musical position (seconds since run_at) at the Pause moment.
         # The graded timeline stands still there until grading resumes after
         # Resume's lead; see _musical_seconds (R1 F2).
-        self.next_action = "Open a MIDI file."
         # Persistent trouble means two boundary failures in consecutive takes
         # at the same stage and source two-bar chunk. Only a clean full take
         # or explicit stage navigation resets the history.
         # Automatic remedial sections are timed source reviews, never an
         # input-blocking lesson. A partial review never awards mastery.
-        self.course_guided = False
         # Practice flow lesson state: changed only through the transitions
         # of application/practice_flow.py (see _flow_execute).
         self.flow_session = PracticeFlowCourseSession(self.now)
         # One short on-screen message at a time: (serial, text, engine time).
         self.guided_session.clear_selection()
         self.guided_session.set_hints(False,now=self.now())
-        self.feedback = "Open a MIDI file"
-        self.score_revision = 0
         self.midi = MidiConnection(enabled=enable_midi, clock=self.now)
         self.live_input = LiveInputView()
         self.assessment = AssessmentService()
@@ -255,7 +297,6 @@ class PracticeEngine:
             self.progress.ledger,
             diagnosis=self.library.settings["diagnosis_strategy"],
             learner=self.library.settings["learner_strategy"])
-        self._remediation_active: RemedialAssignment | None = None
         self.midi_ingress = MidiIngress(self.midi,self.midi_calibration,self.midi_key_shortcuts,
             self.live_input,self.measurement,self.feedback_events)
         self.session_commands = SessionCommands()
@@ -461,7 +502,7 @@ class PracticeEngine:
         prepared = prepare_response(response,
             source_duration=self.plan.active_phrase.end-self.plan.active_phrase.start,
             has_deadline=deadline is not None)
-        self.open_from_beat = prepared.start
+        self.lesson_cursor.select_opening(prepared.start)
         self.attempt.prepare_recovery(prepared)
         if prepared.action == "pause":
             self.playback_session.stop_automatic()
@@ -500,13 +541,13 @@ class PracticeEngine:
             self._stop(reason="delete_piece_history", persist_evidence=False)
             self.plan = replacement
             self._reset_trouble()
-            self.open_from_beat = 0.0
+            self.lesson_cursor.select_opening(0.0)
             self.playback_session.select_source()
             self.guided_session.clear_selection()
             self.score_artifacts.invalidate()
-            self.score_revision += 1
+            self.source_identity.advance_revision()
             self.feedback = "Piece history and learning progress deleted"
-            self.course_guided = False
+            self.lesson_cursor.set_course_guided(False)
             self.guided_session.set_hints(False,now=self.now())
             return self.learning_history_status()
 
@@ -527,13 +568,13 @@ class PracticeEngine:
             self.measurement.begin_fresh_learner_session()
             self.plan = replacement
             self._reset_trouble()
-            self.open_from_beat = 0.0
+            self.lesson_cursor.select_opening(0.0)
             self.playback_session.select_source()
             self.guided_session.clear_selection()
             self.score_artifacts.invalidate()
-            self.score_revision += 1
+            self.source_identity.advance_revision()
             self.feedback = "All learning history and progress deleted"
-            self.course_guided = False
+            self.lesson_cursor.set_course_guided(False)
             self.guided_session.set_hints(False,now=self.now())
             return self.learning_history_status()
 
@@ -636,7 +677,7 @@ class PracticeEngine:
                 # Restore this hand and its clean streak, starting at left
                 # when the student has no prior progress on the warm-up.
                 self.playback_session.select_source()
-                self.course_guided = False
+                self.lesson_cursor.set_course_guided(False)
                 self.feedback = 'Warm-up ready - left, right, then both hands'
                 self.next_action = 'Three clean passes unlock the next hand.'
                 self._save()
@@ -715,11 +756,10 @@ class PracticeEngine:
                 self._rest_take_end = None
                 self._stop(reason="source_changed")
                 self._reset_trouble()
-                self.course_guided = False
-                self.source = str(prepared.path)
-                self.is_builtin_warmup = warmup
-                self.open_from_beat = 0.0
-                self.fingerprint = prepared.fingerprint
+                self.lesson_cursor.set_course_guided(False)
+                self.source_identity.install(source=str(prepared.path),
+                    fingerprint=prepared.fingerprint, warmup=warmup)
+                self.lesson_cursor.select_opening(0.0)
                 self.score_artifacts.invalidate()
                 self.plan = prepared.plan
                 self.source_preparation.source_installed()
@@ -727,7 +767,7 @@ class PracticeEngine:
                 self.guided_session.clear_selection()
                 self.feedback = "Press Start to practice"
                 self.next_action = "Press Start to practice."
-                self.score_revision += 1
+                self.source_identity.advance_revision()
                 self.attempt.reset_source_presentation()
                 if self._flow_active():
                     self._flow_open(resumed=prepared.resumed)
@@ -763,7 +803,7 @@ class PracticeEngine:
                 self._apply_listen_failure()
                 self.plan.piece = installed.piece
                 self.score_artifacts.invalidate()
-                self.score_revision = installed.score_revision
+                self.source_identity.publish_revision(installed.score_revision)
                 if self.playback_session.source_revised(self.score_revision):
                     self.listen.retarget_score(self.score_revision)
 
@@ -801,12 +841,12 @@ class PracticeEngine:
         self._stop(reason="lesson_reset", persist_evidence=False)
         self._reset_trouble()
         self.plan = replacement
-        self.open_from_beat = 0.0
-        self.course_guided = False
+        self.lesson_cursor.select_opening(0.0)
+        self.lesson_cursor.set_course_guided(False)
         self.playback_session.select_source()
         self.guided_session.clear_selection()
         self.score_artifacts.invalidate()
-        self.score_revision += 1
+        self.source_identity.advance_revision()
         self.playback_session.wait_for_player()
         self.feedback = "Lesson path reset to its first step"
         self.next_action = "Press Play when you are ready."
@@ -840,7 +880,6 @@ class PracticeEngine:
         self.attempt.reset_for_stop()
         self.live_input.reset_attempt()
         self.listen.cancel()
-        self._remediation_active = None
 
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
@@ -915,7 +954,7 @@ class PracticeEngine:
         if effect.step is practice_flow.Step.LISTEN:
             self._prepare_listen()
         elif effect.step is practice_flow.Step.FREE:
-            self.course_guided = True
+            self.lesson_cursor.set_course_guided(True)
             self._begin_learn(from_beat=0.0)
         elif effect.step is practice_flow.Step.TEMPO:
             self._prepare_practice()
@@ -925,7 +964,7 @@ class PracticeEngine:
 
     def _flow_open(self, *, resumed: bool = False) -> None:
         """Open: a fresh piece starts with Listen, a resumed one in Free."""
-        self.course_guided = True
+        self.lesson_cursor.set_course_guided(True)
         self.playback_session.continue_course()
         # Even an opening Listen is a selected window. Closing before the
         # first Free note must still reopen that saved location in Free.
@@ -951,7 +990,7 @@ class PracticeEngine:
         self._stop(reason="skip_stage")
         selected = self._install_command(effect)
         self._reset_trouble()
-        self.course_guided = True
+        self.lesson_cursor.set_course_guided(True)
         self._enter_selected_exposure(selected)
         self._save()
 
@@ -965,7 +1004,7 @@ class PracticeEngine:
         self._stop()
         selected = self._install_command(effect)
         self._reset_trouble()
-        self.course_guided = True
+        self.lesson_cursor.set_course_guided(True)
         self._enter_selected_exposure(selected)
         self._save()
 
@@ -979,7 +1018,7 @@ class PracticeEngine:
         selected = self._install_command(effect)
         self._reset_trouble()
         self.learner_progress.reactivate_trouble(fingerprint=self.fingerprint, stage_key=selected.stage_key)
-        self.course_guided = True
+        self.lesson_cursor.set_course_guided(True)
         grid = phrase_grid(self.plan.active_phrase,self.plan.piece.bar_boundaries)
         self.attempt.prepare_section(start=selected.from_beat,end=selected.end_beat,
             first_bar=self.plan.active_phrase.first_bar+grid.index(selected.from_beat),
@@ -1035,14 +1074,14 @@ class PracticeEngine:
             self._save()
             self._stop(reason=prepared.stop_reason,preserve_episode=prepared.recovery)
             self.score_state_publisher.reset_guided()
-            self._remediation_active = prepared.remediation
+            self.attempt.assign_remediation(prepared.remediation)
             if prepared.recovery:
                 self.attempt.restore_retry(prepared.retry_range)
             self.playback_session.select_exposure(
                 mode="learn",automatic=False,awaited_revision=None)
             self.guided_session.select(fragment,stage_key=prepared.source.stage_key,
                                        recovery=prepared.recovery)
-            self.score_revision = prepared.revision
+            self.source_identity.publish_revision(prepared.revision)
             self._open_take()
             self.guided_session.bind_selected(revision=prepared.revision,
                 now=self.now(),connected=self.midi.connected)
@@ -1056,13 +1095,13 @@ class PracticeEngine:
             if not timed or prepared.mode == "practice":
                 self.visual_transport.select_opening(prepared.from_beat if timed else 0.0)
             if timed:
-                self.open_from_beat = prepared.from_beat
+                self.lesson_cursor.select_opening(prepared.from_beat)
                 self.attempt.prepare_timed_exposure(prepared)
                 if prepared.return_context is not None:
                     self.visual_transport.prepare_rewind(prepared.from_beat)
                     self.guided_session.select_timed_return(prepared.return_context)
             self.guided_session.clear_selection()
-            self.score_revision = prepared.revision
+            self.source_identity.publish_revision(prepared.revision)
             self.playback_session.select_exposure(
                 mode=prepared.mode if timed else "listen",automatic=False,
                 awaited_revision=prepared.awaiting_score if timed else prepared.revision)
@@ -1147,7 +1186,7 @@ class PracticeEngine:
         effect = self._manual_effect("review_retry",values={"first_bar":first_bar,"last_bar":last_bar})
         selected = self._install_command(effect)
         self._prepare_practice(exposure=selected)
-        self.open_from_beat = selected.from_beat
+        self.lesson_cursor.select_opening(selected.from_beat)
         self.attempt.prepare_section(start=self.open_from_beat,
             end=selected.end_beat or self.plan.active_phrase.end-self.plan.active_phrase.start,
             first_bar=first_bar,last_bar=last_bar)
@@ -1159,7 +1198,7 @@ class PracticeEngine:
         effect = self._manual_effect("practice_weak")
         selected = self._install_command(effect)
         self._prepare_practice(exposure=selected)
-        self.open_from_beat = selected.from_beat
+        self.lesson_cursor.select_opening(selected.from_beat)
         self.attempt.prepare_section(start=self.open_from_beat,
             end=selected.end_beat or self.plan.active_phrase.end-self.plan.active_phrase.start)
         self.playback_session.prepare_section_review()
@@ -1281,8 +1320,8 @@ class PracticeEngine:
             if decision.verdict is not None and decision.verdict.clears_trouble:
                 self._reset_trouble()
             if outcome.stage_changed:
-                self.open_from_beat = 0.0
-                self.score_revision = committed.selection.revision
+                self.lesson_cursor.select_opening(0.0)
+                self.source_identity.publish_revision(committed.selection.revision)
                 self.playback_session.wait_for_player()
                 prebuilt = self.teaching_continuation.consume_committed_asset(
                     committed.prepared,changed=True,auto=self.playback_session.auto,
@@ -1602,7 +1641,7 @@ class PracticeEngine:
             self._revisit_trouble(kwargs.get("stage_key"), kwargs.get("start_beat"))
         elif action in ("learn", "learn_retry"):
             if action == "learn":
-                self.course_guided = True
+                self.lesson_cursor.set_course_guided(True)
                 if "from_beat" not in kwargs:
                     self._begin_course_stage(explicit_learn=True)
                     return
@@ -1764,8 +1803,8 @@ class PracticeEngine:
         self._stop()
         selected = self._install_command(effect)
         self._reset_trouble()
-        self.course_guided = selected.mode == "learn"
-        self.open_from_beat = selected.from_beat
+        self.lesson_cursor.set_course_guided(selected.mode == "learn")
+        self.lesson_cursor.select_opening(selected.from_beat)
         if selected.mode == "learn":
             self._begin_learn(from_beat=selected.from_beat,exposure=selected)
         else:
@@ -1809,7 +1848,7 @@ class PracticeEngine:
             return
         if route == "reload_score":
             self._stop()
-            self.score_revision += 1
+            self.source_identity.advance_revision()
             self.playback_session.await_score(self.score_revision)
             self.feedback = "Preparing sheet music"
             return
@@ -1894,16 +1933,16 @@ class PracticeEngine:
         self._reset_trouble()
         # Preserve the original ordering of the source opening reset.
         if action in ("select_step", "next", "previous"):
-            self.open_from_beat = 0.0
+            self.lesson_cursor.select_opening(0.0)
         effect = self.session_commands.active or self._prepare_teaching("manual", manual=change, action=action, store=False)
         self.session_commands.apply_progress(effect, plan=p)
         self.attempt_settlement.command_applied()
         if action == "hand":
-            self.open_from_beat = 0.0
+            self.lesson_cursor.select_opening(0.0)
         # Native notation is engraved in source coordinates: changing
         # only playback BPM must not invalidate the score/reload Godot.
         if not change.tempo_only:
-            self.score_revision+=1
+            self.source_identity.advance_revision()
         self.feedback="Ready"
         self.next_action="Start when you are ready."
         if was_guided:
@@ -2013,7 +2052,7 @@ class PracticeEngine:
         if prepared.action == "prepare":
             self._prepare_practice(exposure=exposure)
             self.playback_session.wait_for_player()
-        self.open_from_beat = prepared.start
+        self.lesson_cursor.select_opening(prepared.start)
         self.attempt.prepare_recovery(prepared)
         self.feedback,self.next_action = prepared.feedback,prepared.next_action
         if prepared.action == "continue":
@@ -2181,7 +2220,7 @@ class PracticeEngine:
         self.playback_session.stop_automatic()
         self.attempt.finish_section_review()
         self.visual_transport.finish_rewind()
-        self.open_from_beat = 0.0
+        self.lesson_cursor.select_opening(0.0)
         self.feedback = "Section review finished · " + result.summary
         self.next_action = "Review the notes or press Start for the whole passage."
 
@@ -2190,7 +2229,7 @@ class PracticeEngine:
         # A clean *partial* recovery cannot confer full passage mastery.
         # Clear the bounded review before the scheduled full-pass retry.
         self.attempt.prepare_full_retry()
-        self.open_from_beat = exposure.from_beat if exposure is not None else 0.0
+        self.lesson_cursor.select_opening(exposure.from_beat if exposure is not None else 0.0)
         self._schedule_preparation(self.open_from_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + self.visual_transport.play_from_beat
                 + self._elapsed_beat(now-self.visual_transport.run_at),

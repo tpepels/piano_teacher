@@ -293,7 +293,7 @@ Physical acceptance still requires the instrument.
 
 ## Active plan — PracticeEngine architecture replacement (2026-11-21)
 
-**Status: planned, not implemented.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
+**Status: implementation underway; the phases are not complete.** Baseline: `f8bd9cd`; `piano_teacher/server.py`
 has **2,783 nonblank/trailing-newline-adjusted source lines, 151,578 bytes and
 168 methods**. The [baseline core and native-production CI run
 44895386721](https://github.com/tpepels/piano_teacher/actions/runs/44895386721)
@@ -350,6 +350,20 @@ indirect `PracticeEngine` backreferences, global service locators, a
 universal mutable `EngineContext`, duplicated transport/grading clocks,
 shadow selection state and transitional alternate runtime paths. Cross-layer
 events/effects must declare identity, generation and ordering when relevant.
+
+### Implementation record — session state ownership (in progress)
+
+The first production migration gives installed source identity/revision,
+selected lesson opening/course-guided state, and learner-facing notices
+independent storage owners (`SourceIdentity`, `LessonCursor`,
+`SessionNotices`). `AttemptRuntime` now owns the active remedial assignment
+and clears it on stop. `PracticeEngine` exposes read-only observations and
+keeps existing public feedback setters while remaining command/transaction
+entry. All source revision writes, opening selection writes, course-guided
+writes and remedial assignment writes now target their respective owners.
+This is **not** completion of S1: the remaining transport/pending fields,
+semantic notice transitions and lifecycle transaction still need an
+ownership and caller audit. Existing core/native CI must verify the change.
 
 ### Phase S0 — Full responsibility and dependency design
 
