@@ -298,6 +298,15 @@ The native physical forecast now reads the **currently authorized**
 guessing from `phase == playing` or taking the new stage's tempo
 before the handoff. That distinction prevents a future stage or a
 paused source from accidentally changing the clearance calculation.
+Reserve retry now compares the *entire original physical witness*
+with its stored receipt before checking measurement freshness.
+This makes identical lost-ACK retransmissions idempotent, while
+conflicting world/timing/generation evidence is rejected. The native
+gateway also samples its local presentation clock and backend
+monotonic clock together, avoiding inversion against the older
+accepted-state receipt time. The resulting measured travel is still
+submitted only as physical evidence, not a chosen timestamp.
+
 The existing desktop playback test fixture now submits physical
 evidence; no new unit tests were added.
 

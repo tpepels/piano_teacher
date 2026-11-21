@@ -80,6 +80,8 @@ class ScoreReceipt:
     world_origin: float
     queue_generation: int
     renderer_generation: int
+    evidence_sampled_at_ms: float
+    evidence_travel_ms: float
     reused_count_in: bool
 
 
@@ -272,17 +274,24 @@ class PlaybackCoordinator:
             world_origin=float(world_origin),
             queue_generation=queue_generation,
             renderer_generation=renderer_generation)
-        deadline_ms = choose_admission_deadline(
-            intent, facts, evidence, reused_count_in=reused_count_in)
         if self.receipt is not None:
+            # A lost native ACK may retransmit the identical physical
+            # reservation after its measurement has aged out. The receipt
+            # already binds this exact source/attempt/witness, so returning
+            # it is safe. Different evidence must never replace ink under
+            # the same intent or negotiate a second musical deadline.
             receipt = self.receipt
             if (receipt.intent_id == intent_id and receipt.attempt == attempt
-                    and abs(receipt.deadline_ms-deadline_ms) <= 0.01
-                    and receipt.world_origin == world_origin
-                    and receipt.queue_generation == queue_generation
-                    and receipt.renderer_generation == renderer_generation):
+                    and receipt.world_origin == evidence.world_origin
+                    and receipt.queue_generation == evidence.queue_generation
+                    and receipt.renderer_generation == evidence.renderer_generation
+                    and receipt.evidence_sampled_at_ms == evidence.sampled_at_ms
+                    and receipt.evidence_travel_ms == evidence.travel_ms
+                    and receipt.reused_count_in == reused_count_in):
                 return self._receipt_response(receipt)
             raise ValueError("Conflicting score reservation for the same intent")
+        deadline_ms = choose_admission_deadline(
+            intent, facts, evidence, reused_count_in=reused_count_in)
         self.receipt = ScoreReceipt(
             intent_id=intent_id, attempt=attempt, take_id=take_id,
             fingerprint=fingerprint, stage_key=stage_key, revision=revision,
@@ -292,6 +301,8 @@ class PlaybackCoordinator:
             deadline_ms=deadline_ms, world_origin=evidence.world_origin,
             queue_generation=evidence.queue_generation,
             renderer_generation=evidence.renderer_generation,
+            evidence_sampled_at_ms=evidence.sampled_at_ms,
+            evidence_travel_ms=evidence.travel_ms,
             reused_count_in=bool(reused_count_in))
         self.state = PlaybackState.RESERVED
         return self._receipt_response(self.receipt)

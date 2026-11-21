@@ -107,7 +107,7 @@ func _physical_travel_ms(target_world: float, local_ms: int, beat: float,
             high = mid
     return high
 
-func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
+func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> void:
     var view = _matching_renderer(intent)
     if view == null or not is_instance_valid(view):
         return
@@ -125,6 +125,11 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
         # including a cross-bar key release. Never admit another window's
         # notes merely because its initial source beat matches.
         return
+    # Capture the two physical-clock coordinates together at admission,
+    # not at a possibly old state-reply timestamp. All projection queries
+    # below use this exact local sample and the witness carries the
+    # corresponding native/Python monotonic timestamp.
+    var frame_ms: int = Time.get_ticks_msec()
     var backend_now: float = _backend_ms()
     if not is_finite(backend_now):
         return
@@ -193,11 +198,8 @@ func _admit(intent: Dictionary, state: Dictionary, frame_ms: int) -> void:
             planned = view.reserve_transport_action(
                 "resume",world,opening,partial_slot)
             if not planned.is_empty() and \
-                    bool(planned.get("reused_unplayed_count_in",false)):
-                pass
-            else:
-                if not planned.is_empty():
-                    view.cancel_stream_arm()
+                    not bool(planned.get("reused_unplayed_count_in",false)):
+                view.cancel_stream_arm()
                 planned.clear()
     if planned.is_empty():
         # Every newly inserted source gets its own complete bar. Reuse is
