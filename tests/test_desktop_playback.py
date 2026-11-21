@@ -396,3 +396,14 @@ def test_backend_publishes_hold_target_and_running_motion_without_ui_phase_polic
     idle = replace(pending,timeline={
         "intent":None, "current":{"current":None,"state":"idle"}})
     assert motion({"phase":"ready"}, idle) == {"kind":"hold"}
+
+
+def test_real_state_contract_includes_authoritative_motion_directive(practice_session):
+    from piano_teacher.state_contract import VERSION, problems
+    session = practice_session(bars=1)
+    result = session.snapshot()
+    assert VERSION == 5
+    assert "presentation_directive" in result
+    assert result["presentation_directive"]["kind"] in (
+        "hold", "target", "retain", "run")
+    assert not problems(result), problems(result)

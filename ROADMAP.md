@@ -684,6 +684,20 @@ This is a semantic repair to the published authorization model,
 with Python fixture coverage for idle, pending and prior-source
 successor. The full native acceptance is still required.
 
+### V4 protocol schema synchronized with semantic motion owner - 2026-11-21
+
+The new backend `presentation_directive` key was initially
+published without being added to the versioned state schema, a
+real cross-language contract omission. `state_contract.VERSION`
+is now 5 in both Python and the generated Godot mirror, with
+a typed dictionary entry for the motion directive. A real
+`PracticeSession.snapshot` regression checks that the
+application publishes one of the four supported directives
+and that every state field satisfies the declared protocol.
+The embedded native logger therefore validates the *actual*
+application view model instead of silently treating this key
+as unknown.
+
 ### V4 backend-only motion and Free target decisions - 2026-11-21
 
 The authoritative `ScoreStatePublisher` now projects a source-bound

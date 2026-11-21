@@ -12,7 +12,7 @@ Bump VERSION whenever a key is removed, renamed or changes meaning.
 """
 from __future__ import annotations
 
-VERSION = 4
+VERSION = 5
 
 # Values that do not change frame to frame. They travel in command replies
 # (library.open, practice.command, ...) and are omitted from state.snapshot.
@@ -104,6 +104,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "piece_last_bar": ('number',),
     "placement_available": ('bool',),
     "play_from_beat": ('number',),
+    "presentation_directive": ('dict',),
     "practice_preparation": ('dict', 'null'),
     "practice_timeline": ('dict',),
     "preview_only": ('bool',),
