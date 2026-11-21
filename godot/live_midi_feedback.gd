@@ -19,8 +19,8 @@ func bind_layout(source_layout: Dictionary, source_revision: int) -> void:
 ## channel. Delivered exactly once, so no sequence bookkeeping lives here.
 ## The event names its own take; only graded attacks on the bound engraving
 ## produce a reaction. Score ink is owned by NativeScoreFeedback.
-## `age_ms` is how long ago the attack happened; the transient reaction (effect,
-## callout) is skipped when a backend stall delivered it late.
+## `age_ms` is how long ago the attack happened; the transient stage
+## effect is skipped when a backend stall delivered it late.
 const MAX_REACTION_AGE_MS := 250.0
 func react(event: Dictionary, stage, current_revision: int,
         age_ms: float = 0.0) -> bool:
@@ -39,5 +39,4 @@ func react(event: Dictionary, stage, current_revision: int,
             not attack_map.has(mapped):
         return false
     stage.effects.react(status)
-    stage.impact_callout.call("react", status)
     return true
