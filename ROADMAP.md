@@ -964,10 +964,17 @@ Corrective commits on `main`:
 - `584f017a`: fail the **existing** full-native positive journeys on
   score-queue/preflight/commit runtime errors even if Godot exits zero.
 
-No new tests or fixtures. Fast/core CI passed on `584f017a`.
-[Full embedded/relocated-package verification](https://github.com/tpepels/piano_teacher/actions/runs/44927279888)
-was still running when recorded. **Physical Pathétique/MIDI acceptance and
-auditory/visual confirmation remain unverified.**
+No new tests or fixtures. **Full [GitHub Actions run 44927279888](https://github.com/tpepels/piano_teacher/actions/runs/44927279888)
+passed on source `584f017a`**: 103 Python tests passed, four optional
+skips; Godot startup syntax and all four existing native behavior groups
+reported zero failures. Embedded Godot/Python registration, production
+Play/Pause/Resume, Moonlight Sonata Retry/Listen/navigation, Peace Piece,
+Chopin Nocturne, and relocated standalone package boot/contents all passed.
+The stricter positive-journey gate reported no rejected immutable source
+admissions or Godot script exceptions. Documentation commit `9877ea93`
+also passed its core CI gate. **The actual physical Pathétique MIDI session,
+sound and visual layout have not yet been re-tested; green software CI
+does not establish those outcomes.**
 
 ## Phase status and remaining acceptance
 

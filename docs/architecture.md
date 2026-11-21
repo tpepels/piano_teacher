@@ -148,8 +148,12 @@ source/rest obstruction rules as `ScoreStreamQueue` and the existing
 `announced_empty_strip_start` proof for a late fixed source. Neither
 component may retime an authorized take or move already admitted ink.
 Queue failures expose the rejecting physical guard, and the existing
-native-production verifier fails on those errors. Source through
-`584f017a`; physical confirmation is outstanding.
+native-production verifier fails on those errors. Source through `584f017a`; full
+[CI 44927279888](https://github.com/tpepels/piano_teacher/actions/runs/44927279888)
+passed core and all embedded/native/repertoire/package gates with no
+script errors or reported immutable admission refusals. The exact
+Pathétique II hardware session was not reproduced by CI and remains
+open for connected-piano, sound and visual acceptance.
 
 ## Current embedded Python application boundaries (2026-11-21)
 
