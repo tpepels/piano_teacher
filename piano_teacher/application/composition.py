@@ -67,6 +67,7 @@ from .post_assessment_effects import PostAssessmentEffects
 from .recovery_workflows import RecoveryWorkflows
 from .completion_continuations import CompletionContinuations
 from .practice_timeline import PracticeTimeline
+from .application_worker import ApplicationWorker
 from .practice_controls import PracticeControls
 from .midi_application_input import MidiApplicationInput
 from .score_preload_workflow import ScorePreloadWorkflow

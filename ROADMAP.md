@@ -630,6 +630,13 @@ temporary wiring namespace. Remaining S7 tasks: eliminate obsolete
 facade delegates and imports, audit genuine cycles/re-entry and test
 the full product + package. No size-only completion claim.
 
+**CI correction:** The first composition run `504ccc13` failed
+because the application-local imports still used parent paths. The follow-up
+`10d04a5d` fixed those paths and extracted the native worker, but
+core CI then exposed a missing `ApplicationWorker` import in the
+composition file. The import is now explicit. No tests or alternate
+runtime were introduced.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public
