@@ -351,7 +351,9 @@ Initial production migration moves source identity/revision into
 `application/source_identity.py`, selected opening/course flag into
 `application/lesson_cursor.py`, learner-facing messages into
 `application/session_notices.py`, and active remedial assignment into
-`AttemptRuntime`. The full workflow and transaction decomposition is
+`AttemptRuntime`. The selected plan lives with its source identity,
+the visual transport owns scheduling/rest metadata, and SessionCommands
+owns its command reason. The full workflow and transaction decomposition is
 still open; these new owners do not establish phase completion.
 
 Identified high-risk state: `feedback`, `next_action`, selected source

@@ -5,19 +5,28 @@ installed immutable source identifier and the revision of its drawn assets.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..learning import LearningPlan
 
 
 @dataclass(slots=True)
 class SourceIdentity:
+    plan: LearningPlan | None = None
     source: str | None = None
     fingerprint: str = ""
     warmup: bool = False
     revision: int = 0
 
-    def install(self, *, source: str, fingerprint: str, warmup: bool) -> None:
+    def install(self, *, plan: LearningPlan, source: str, fingerprint: str,
+                warmup: bool) -> None:
+        self.plan = plan
         self.source = source
         self.fingerprint = fingerprint
         self.warmup = warmup
+
+    def replace_plan(self, plan: LearningPlan | None) -> None:
+        self.plan = plan
 
     def advance_revision(self) -> None:
         self.revision += 1

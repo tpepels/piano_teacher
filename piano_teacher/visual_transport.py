@@ -68,6 +68,12 @@ class VisualTransport:
     announce_serial: int = 0
     _tempo_key: tuple | None = None
     _tempo_epoch: float | None = None
+    # Presentation schedule facts live with the one forward visual transport.
+    scheduled_start: tuple | None = None
+    short_rest: tuple[float, float] | None = None
+    rest_take_end: tuple[float, float] | None = None
+    continuous_horizon_beats: float = 0.0
+    next_boundary_beat: float = 0.0
 
     @property
     def tempo_epoch(self) -> float | None:

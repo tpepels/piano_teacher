@@ -20,6 +20,7 @@ class SessionCommands:
         self.active = None
         self.applied = None
         self.prepared = None
+        self.action_reason = "transition"
 
     @contextmanager
     def executing(self, effect):

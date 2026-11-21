@@ -361,9 +361,16 @@ and clears it on stop. `PracticeEngine` exposes read-only observations and
 keeps existing public feedback setters while remaining command/transaction
 entry. All source revision writes, opening selection writes, course-guided
 writes and remedial assignment writes now target their respective owners.
-This is **not** completion of S1: the remaining transport/pending fields,
-semantic notice transitions and lifecycle transaction still need an
-ownership and caller audit. Existing core/native CI must verify the change.
+The selected LearningPlan now lives beside its source identity, instead of
+having a second mutable engine field. The visual transport owns the
+remaining continuation scheduling metadata (announced start, physical rest,
+post-take rest, horizon, next boundary); SessionCommands owns the current
+action reason. S1 still requires a complete semantic-writer/transaction
+audit before its exit gate can be declared. The first state-owner commit
+`f01e2960` passed
+[core CI 44900868358](https://github.com/tpepels/piano_teacher/actions/runs/44900868358).
+This follow-up must pass CI separately; native production and physical
+acceptance have not been rerun on it.
 
 ### Phase S0 — Full responsibility and dependency design
 
