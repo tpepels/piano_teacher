@@ -6,7 +6,7 @@ decision or alternate notation stream is created here.
 """
 from __future__ import annotations
 from .score_artifacts import ScoreSelection
-from .teaching_continuation import PreloadedFeedbackSource
+from .playback_facts import PreloadedFeedbackSource
 
 
 class ScorePreloadWorkflow:

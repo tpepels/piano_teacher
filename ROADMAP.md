@@ -568,6 +568,12 @@ policy, incompatible retry or retroactive ink mutation. Existing recovery,
 long-note, rolling-window, alternate-course and failure/retry behaviours pass,
 plus native and package verification.
 
+**CI correction:** The first S6 preload extraction CI on `02b39c81`
+failed at collection because `PreloadedFeedbackSource` was imported
+from `teaching_continuation` instead of its actual
+`application/playback_facts.py` owner. Corrected in the following
+commit; full CI still required.
+
 **S6 implementation underway:** `ScoreReadServices` now owns current
 source-bound score selection, native geometry/engraving, guided marks,
 completed-take cached-layout lookup and lesson overview. Score source
