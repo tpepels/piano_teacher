@@ -1,5 +1,5 @@
 extends RefCounted
-## Transient stage reactions only (beat accents and the impact callout).
+## Transient stage reactions only (beat accents and brief visual energy).
 ## Score ink belongs to the note-status ledger and its retained strips;
 ## nothing here stores, positions or draws notes.
 
@@ -16,8 +16,6 @@ func transition_mode(state: Dictionary, stage) -> void:
         str(state.get("mode", "")) == "listen"
     if not ungraded:
         return
-    if stage.impact_callout != null:
-        stage.impact_callout.call("clear")
     if stage.effects != null and float(stage.effects.impact_energy) != 0.0:
         stage.effects.impact_energy = 0.0
         stage.effects.queue_redraw()

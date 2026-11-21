@@ -70,6 +70,13 @@ check() {
   if timeout --signal=TERM --kill-after=5s 600s \
       bash -Eeuo pipefail -c '"$@"' _ "$@" 2>&1 | tee "$case_log"; then
     cat "$case_log" >> "$LOG"
+    # Godot can exit successfully after reporting a GDScript runtime error.
+    # Reject that broken player journey instead of counting it as passed.
+    if grep -Fq 'SCRIPT ERROR:' "$case_log"; then
+      printf 'FAIL  %s (Godot script error)\n' "$label"
+      FAILED_CASES+=("$label (Godot script error)")
+      return 1
+    fi
     printf 'PASS  %s\n' "$label"
     return 0
   else
