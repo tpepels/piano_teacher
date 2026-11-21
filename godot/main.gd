@@ -199,7 +199,7 @@ func _ready() -> void:
         practice_view,settings_view,lesson_view,lesson_session,
         demo_player,frame_meter)
     state_presenter = PracticeStatePresenter.new(
-        practice_view,settings_view,lesson_view,lesson_session)
+        practice_view,settings_view,lesson_view)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(
@@ -239,7 +239,7 @@ func _ready() -> void:
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     state_inbox.configure(command_coordinator,practice_view,presentation_session,
         state_presenter,statistics_coordinator,debug_session_logger,
-        navigation_session,input_session)
+        navigation_session,input_session,lesson_session)
     command_success_effects.refresh_score.connect(presentation_session.refresh_status)
     practice_view.score_retry_requested.connect(presentation_session.retry_score)
     presentation_session.refresh_status()
