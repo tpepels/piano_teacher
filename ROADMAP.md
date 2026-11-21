@@ -617,6 +617,15 @@ that same pure projection instead of a method callback into
 construct the whole graph without an engine backreference. Core/native
 verification and final composer migration remain.
 
+**S7 composition extraction:** The application graph now assembles in
+`application/composition.py`; the facade constructor is a short invocation.
+The private temporary composition namespace is *not* passed to any service,
+which continues receiving explicit named owner dependencies. This removes
+the 340-line wiring responsibility from `server.py`. Public native
+entry points and live state remain the same. Remaining S7 tasks:
+eliminate obsolete facade delegates and imports, audit genuine cycles/
+re-entry and test the full product + package. No size-only completion claim.
+
 ### Phase S7 — Final facade, dependency and legacy elimination
 
 - Reduce `PracticeEngine` to justified composition, transaction/public
