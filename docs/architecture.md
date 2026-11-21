@@ -419,6 +419,20 @@ outcome, so stale button labels cannot initiate navigation.
 No transient command outcome is inserted into persistent state
 or the source-bound playback timeline.
 
+### Exact repeat rest uses outgoing source tempo
+
+An automatic retry can select a different incoming tempo after
+a graded result. The printed one-bar rest between attempts is part
+of the outgoing immutable score epoch and therefore occupies one
+bar at the outgoing BPM; the incoming BPM begins at the next
+authorized downbeat. The Python `AttemptProgression` policy
+selects that full-bar deadline from the actual prior `facts.bpm`.
+Previously it shortened the rest to the incoming faster BPM and
+placed the next header inside still-visible rest ink; the native
+queue correctly rejected the resulting physical overlap. The
+scheduler now preserves both the strict one-bar musical interval
+and the native queue's collision invariants.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

@@ -15,12 +15,15 @@ def test_repeat_follows_held_ending_with_exactly_one_bar(practice_session, corre
     assert source["practice_timeline"]["sounding_duration_beats"] == 6
     after = session.play_take(correct=correct)
     incoming = after["score_queue_next"]
-    expected = outgoing_start+(6-.5)*60/40+4*60/(48 if correct else 40)
+    # A complete PRINTED rest belongs to the outgoing score clock (40),
+    # even when success has selected the next take's faster 48 BPM.
+    expected = outgoing_start+(6-.5)*60/40+4*60/40
     assert incoming["deadline_at_ms"]/1000 == pytest.approx(expected,abs=.001)
     assert incoming["transport_id"] == after["transport_id"]
     assert after["transport_id"] != before["transport_id"]
     assert incoming["count_in_beats"] == 4
     assert incoming["source_from_beat"] == .5
+    assert incoming["bpm"] == (48 if correct else 40)
 
 
 def test_count_in_uses_authored_six_eight_and_first_playable_attack(practice_session):

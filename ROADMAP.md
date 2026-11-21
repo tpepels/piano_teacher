@@ -227,6 +227,35 @@ No runtime behavior or prior acceptance claim is changed in this design
 phase. Source inspection and existing tests must still run without a new
 failure. The baseline source and test result are recorded here.
 
+### V3/V7 fixed one-bar faster-repeat clock defect - 2026-11-21
+
+Native-production GitHub Actions run
+[`44955009440`](https://github.com/tpepels/piano_teacher/actions/runs/44955009440)
+completed all embedded Python build/registration, production UI
+Play/Pause/Resume, Moonlight Sonata, Peace Piece, Chopin and
+relocated standalone package audit successfully, but the
+full-scene synthetic MIDI journey exposed a critical real bug:
+`SCORE_TRANSPORT_PREFLIGHT: direct_repeat_overlaps_existing_ink`
+when the learner achieved the first clean 40 BPM take and the
+next target increased to 48 BPM. The backend exact-repeat deadline
+was placing the one-bar *outgoing* visual rest at the *incoming*
+48 BPM, consuming only 3.333 beats on the still-moving 40 BPM
+visual ledger. The still-visible written rest therefore occupied
+the incoming header's position and the immutable queue correctly
+refused the collision. `AttemptProgression.plan_full_passage`
+now measures the entire authored gap at `facts.bpm`, the
+outgoing take's rate, and switches the new take to its
+`exposure.bpm` only at the authoritative downbeat. This
+preserves exactly one complete written rest measure and never
+shifts already printed material or adds a silent second gap.
+
+The real `tests/test_practice_timeline.py` clean-faster and
+failed-same-tempo cases now assert this outgoing rest clock
+and independently verify the incoming selected tempo. The
+native-production journey still needs a fresh successful run
+before the faster repeat is accepted; no visual exception or
+overlap bypass was introduced.
+
 ### V6 CI failure corrections from actual GitHub Actions - 2026-11-21
 
 GitHub Actions core runs `44954408749` and `44954577853`

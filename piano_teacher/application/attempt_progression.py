@@ -178,8 +178,14 @@ class AttemptProgression:
         if facts.exact_repeats and automatic and same_timed:
             from ..notation.practice_timeline import retry_preparation_rest_beats
             bar = retry_preparation_rest_beats(facts.source_model,exposure.from_beat)
+            # This printed rest is a continuation of the OUTGOING
+            # immutable source and must run at that source's tempo.
+            # Choosing the incoming faster BPM shortens its wall-clock
+            # duration, placing the next first header into still-visible
+            # old rest ink and making the fixed one-bar repeat impossible.
+            # The incoming tempo begins only at the authorized downbeat.
             deadline = SCHEDULER.repeat(run_at=runtime.run_at,
-                source_seconds=facts.duration,gap_beats=bar,bpm=exposure.bpm)
+                source_seconds=facts.duration,gap_beats=bar,bpm=facts.bpm)
             return PassageFinishPlan(None,False,"announce",deadline=deadline,
                 next_action=notice,advance_early=True)
         if facts.exact_repeats:
