@@ -49,6 +49,12 @@ func color(feedback, take: String, head: String) -> Color:
     return Ink.color_for(feedback.status_for(take,head))
 
 func _initialize() -> void:
+    # SceneTree._initialize precedes the first entered frame. Assemble the
+    # real stage only once its child-control _ready lifecycle can run.
+    call_deferred("_run")
+
+
+func _run() -> void:
     var view = renderer()
     var feedback := Feedback.new()
     feedback.bind_score(view,7)
