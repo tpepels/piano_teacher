@@ -41,6 +41,11 @@ func screen_x(axis, beat: float) -> float:
     return axis.screen_x(beat,clock,playhead_x,play_from_beat)
 
 func event_visible(event: Dictionary) -> bool:
+    # The source atlas can contain adjacent bars for authentic layout and
+    # carry-in geometry, but it must never paint those bars as part of the
+    # selected Free/Tempo exercise. Active note releases remain visible.
+    if str(event.get("display_role","")) == "context":
+        return false
     var at: float = float(event.get("beat",event.get("start_beat",0.0)))
     return at >= source_floor-.25 and at <= source_ceiling+.25
 
