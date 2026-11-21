@@ -384,6 +384,23 @@ receipt. Native `playback.present` replies still require the full
 intent/attempt/take/segment identity. This preserves authorization
 after a lost present ACK without accepting an unrelated take.
 
+### V3 local transaction cleanup and late-present idempotence - 2026-11-21
+
+A confirmed segment can appear in a backend state poll before its
+`playback.present` callback reaches Godot. The native gateway
+previously cleared its receipt on poll confirmation, then treated
+the late success callback as a new uncertain failure. The callback
+now ignores replies for a transaction already completed locally.
+Every success, physical-source failure, failed runway promotion
+and abandoned reservation now uses one `_clear_provisional()`
+lifecycle termination, which clears stale reconciliation flags.
+Failed physical source/stage promotion retracts only its provisional
+arm and reports `playback.failure` for the authorized take;
+it cannot reuse the old receipt.
+
+No unit tests added by owner request; Godot and physical acceptance
+remain outstanding.
+
 ### V3 physical travel measured by one tempo/epoch model - 2026-11-21
 
 Removed `ScoreAdmissionGateway._physical_travel_ms` and its

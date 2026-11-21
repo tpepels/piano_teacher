@@ -348,6 +348,17 @@ The result is only physical timing evidence. Python remains the
 sole authority for whether a count-in, repeat or resume may use
 the proposed slot and for the eventual downbeat.
 
+### Native acknowledgement completion is idempotent
+
+A state-poll acknowledgement and a delayed direct
+`playback.present` reply may refer to the same authorization.
+Once one has bound the physical source, the gateway retires the
+local transaction in one place. The late reply cannot restart
+reconciliation or inherit a pending status into the next take.
+Failed physical ownership or runway promotion retracts the
+provisional arm and notifies the backend with the exact take
+and segment instead of attempting local musical compensation.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit

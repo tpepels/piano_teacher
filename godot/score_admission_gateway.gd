@@ -407,6 +407,12 @@ func _send_presentation() -> void:
         pending_reconciliation = true
 
 func _presented(code: int, body: PackedByteArray) -> void:
+    if current.is_empty() or receipt.is_empty():
+        # A newer state poll may have confirmed and cleared this exact
+        # presentation before the worker's direct reply arrived. It is
+        # already committed; a delayed callback must not open a fresh
+        # reconciliation cycle against the next lesson.
+        return
     var data: Variant = JSON.parse_string(body.get_string_from_utf8())
     if code == 0 and data is Dictionary and \
             bool(data.get("authorized",false)) and \
@@ -468,7 +474,7 @@ func _status_received(code: int, body: PackedByteArray) -> void:
 
 
 func _confirm_authorized(data: Dictionary) -> void:
-    if receipt.is_empty():
+    if receipt.is_empty() or current.is_empty():
         return
     var expected: String = str(receipt.get("segment_id",""))
     if str(data.get("segment_id","")) != expected or \
@@ -489,12 +495,7 @@ func _confirm_authorized(data: Dictionary) -> void:
         _report_problem("Authorized score source disappeared before presentation")
         if renderer != null and is_instance_valid(renderer):
             renderer.cancel_stream_arm()
-        current.clear()
-        receipt.clear()
-        admission_state.clear()
-        renderer = null
-        started_ms = -1
-        pending_reconciliation = false
+        _clear_provisional()
         return
     if runway != null and renderer != null and \
             is_instance_valid(renderer) and runway.owns_prepared_renderer(renderer):
@@ -505,10 +506,9 @@ func _confirm_authorized(data: Dictionary) -> void:
                     "segment_id":expected,
                     "reason":"prepared_stage_promotion_failed"})
             _report_problem("Authorized stage could not be presented")
-            current.clear()
-            receipt.clear()
-            admission_state.clear()
-            renderer = null
+            if renderer != null and is_instance_valid(renderer):
+                renderer.cancel_stream_arm()
+            _clear_provisional()
             return
     last_activated_segment = expected
     last_activated_intent = str(receipt.get("intent_id",""))
@@ -535,11 +535,20 @@ func _confirm_authorized(data: Dictionary) -> void:
             current.get("count_in_plan",{}),
             str(receipt.get("take_id","")))
         metronome.acknowledge_reserved_count_in(now_ms)
+    _clear_provisional()
+
+
+func _clear_provisional() -> void:
+    # One local lifecycle termination for success, failed promotion,
+    # missing physical source and withdrawal. A delayed callback can
+    # never inherit pending reconciliation from an earlier transaction.
     renderer = null
     current.clear()
     receipt.clear()
     admission_state.clear()
+    pending_reconciliation = false
     started_ms = -1
+
 
 func _cancel_provisional() -> void:
     if renderer != null and is_instance_valid(renderer):
@@ -552,12 +561,7 @@ func _cancel_provisional() -> void:
     # No provisional transaction owns an audible countdown: that
     # reservation is created only after authorization. Cancelling here
     # could otherwise silence the previous take's still-active count-in.
-    renderer = null
-    current.clear()
-    receipt.clear()
-    admission_state.clear()
-    pending_reconciliation = false
-    started_ms = -1
+    _clear_provisional()
 
 func _withdrawn(code: int, body: PackedByteArray) -> void:
     # The backend may already have expired/superseded this attempt.
