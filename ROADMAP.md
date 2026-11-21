@@ -402,6 +402,13 @@ The proposed graph is documented in `docs/architecture.md`, with explicit
 reasons for significant new/replaced abstractions. No implementation is
 declared complete in S0.
 
+**S0 evidence:** The complete current method/line mapping, target
+responsibility groups, owner matrix and command/settlement re-entry
+components are recorded under
+[the S0 inventory](docs/architecture.md#s0-responsibility-inventory--implementation-baseline-2026-11-21).
+This is a design inventory, not a statement that subsequent refactoring
+is complete.
+
 ### Phase S1 — State authority and transactional foundations
 
 - Establish explicit ownership and semantic updates for `feedback`,

@@ -379,6 +379,86 @@ ownership table above is an inventory of the *current* architecture and
 can change as the S0–S7 plan is implemented. Existing graphical-admission,
 read-only snapshot and musical-tick asset requirements remain binding.
 
+### S0 responsibility inventory — implementation baseline 2026-11-21
+
+Method-level audit on `75965fc6` identifies **180 methods
+including public properties** after the initial state migration. The original
+baseline contained 168 methods, before the explicit owner observation
+properties were introduced. The following is a **complete migration map**,
+not proof that the listed methods have already moved; final destinations may
+become new classes or layers when the group dependencies are resolved.
+
+| Intended responsibility | Current methods (name and source line) |
+| --- | --- |
+| S2: source/device/history | `_midi_lost` (383), `_present_midi_notice` (396), `ports` (405), `connect` (419), `hardware_diagnostics` (432), `hardware_diagnostics_action` (436) |
+| ↳ | `library_listing` (440), `library_health_status` (444), `start_library_health` (447), `midi_calibration_action` (450), `preferences` (472), `_learning_context` (476) |
+| ↳ | `learning_history_status` (489), `learning_statistics` (494), `_retry_context` (498), `export_learning_history` (530), `delete_piece_history` (536), `delete_learner_history` (559) |
+| ↳ | `close` (586), `set_preferences` (596), `_active_tempo_map` (641), `_elapsed_beat` (652), `_elapsed_seconds` (657), `exercise_diagnostics` (661) |
+| ↳ | `load_library` (672), `performance_diagnostics` (691), `load` (746), `fingering_status` (783), `correct_fingering` (788), `_restore` (814) |
+| ↳ | `_save` (817), `_reset_current_path` (820), `_poll_midi_connection` (1938) |
+| S3: lesson/exposure | `_learner_saved` (864), `_guided_unit` (868), `_save_guided_preparation` (872), `_learner_snapshot` (902), `_enter_selected_exposure` (907), `_flow_active` (920) |
+| ↳ | `flow` (924), `_flow_stage_entry` (927), `_flow_execute` (930), `_flow_open` (944), `_flow_say` (953), `_flow_state` (956) |
+| ↳ | `_begin_course_stage` (959), `_skip_stage` (966), `_place_original` (976), `_valid_trouble_spots` (990), `_revisit_trouble` (994), `_reset_trouble` (1009) |
+| ↳ | `display_phrase` (1012), `_begin_learn` (1019), `_exposure_source` (1035), `_apply_exposure_preparation` (1042), `_prepare_practice` (1100), `_apply_listen_failure` (1117) |
+| ↳ | `_prepare_listen` (1124), `demo_audio` (1132), `_start_listen_if_ready` (1136), `_prepare_perform` (1146), `_review_retry` (1164), `_practice_weak` (1176) |
+| ↳ | `_seek_grid` (1186), `_seek` (1195), `_teaching_binding` (1214), `_prepare_teaching` (1220), `_manual_effect` (1265), `_install_command` (1269) |
+| ↳ | `_control_listening` (1583), `_control_learning` (1601), `_change_stage` (1899), `_open_take` (2448) |
+| S4: command/playback | `require_presentation` (321), `playback_status` (325), `reserve_playback` (329), `present_playback` (333), `withdraw_playback` (339), `report_playback_failure` (343) |
+| ↳ | `_playback_facts` (348), `_request_playback` (370), `_abort_playback` (374), `_on_playback_failure` (377), `_receive` (694), `_midi_transport_facts` (702) |
+| ↳ | `_apply_midi_shortcut` (718), `_receive_message` (726), `_stop` (858), `_presentation_bpm` (1279), `start` (1325), `_commit_playback_intent` (1378) |
+| ↳ | `_next_count_in` (1406), `_next_count_in_beats` (1418), `_next_count_in_meter` (1421), `_continue_at` (1424), `_collect_continuation_measurement` (1449), `_start_rate_bpm` (1464) |
+| ↳ | `_schedule_preparation` (1471), `_visual_motion` (1481), `control` (1490), `_dispatch_control` (1519), `_control_acknowledgement` (1550), `_update_short_rest` (1642) |
+| ↳ | `_collect_rest_measurement` (1660), `_update_continuous_horizon` (1688), `_presentation_lead` (1696), `_control_transport` (1709), `_open_selected_measure` (1780), `_start_or_restart` (1795) |
+| ↳ | `_musical_seconds` (1851), `_pause_current_session` (1863), `_resume_current_session` (1871), `_update` (2340), `_update_transition` (2361), `advance_clock` (2501) |
+| S5: outcome | `_apply_policy_response` (504), `_performance_review` (1154), `_commit_pending` (1285), `_decided_stage_selection` (1948), `_advance_pending_feedback` (1954), `_publish_feedback_fault` (1986) |
+| ↳ | `_dispatch_continuation_effect` (1990), `_start_remedial_assignment` (2012), `_apply_rolling_recovery` (2042), `_complete_attempt` (2106), `_finish_performance_review` (2188), `_finish_section_review` (2194) |
+| ↳ | `_finish_partial_recovery` (2206), `_finish_full_passage` (2219), `_assess_rolling_boundary` (2255), `_run_pre_assessment_transition` (2282) |
+| S6: projection/read | `_guided_marks` (1091), `_phase` (2417), `_layout_for_completed_take` (2436), `_feedback_take` (2452), `_publish_live_assessment` (2461), `_live_marks_for_snapshot` (2481) |
+| ↳ | `_live_feedback` (2485), `_score_projection_facts` (2548), `_prepare_score_presentation` (2579), `_state_snapshot` (2588), `_capture_session_snapshot` (2647), `_next_stage_selection` (2720) |
+| ↳ | `next_stage_score` (2728), `report_preload_failure` (2733), `acknowledge_preloaded_stage` (2740), `_score_selection` (2756), `_source_model` (2768), `_selected_artifacts` (2772) |
+| ↳ | `semantic_score` (2783), `engraving` (2787), `geometry` (2791), `lesson_overview` (2796) |
+| S7: facade/public projection | `plan` (117), `source` (121), `is_builtin_warmup` (125), `fingerprint` (129), `score_revision` (133), `open_from_beat` (137) |
+| ↳ | `course_guided` (141), `feedback` (145), `feedback` (149), `next_action` (153), `next_action` (157), `_remediation_active` (161) |
+| ↳ | `teaching` (166), `persistent_hints` (170), `running` (175), `mode` (179), `auto` (183), `preview_only` (187) |
+| ↳ | `transport_id` (191), `count_in_beats` (195), `count_in_bar_beats` (199), `count_in_meter` (203), `awaiting_score_revision` (207), `pause_context` (211) |
+| ↳ | `__init__` (214), `state` (2530), `poll_state` (2541) |
+
+The proposed domain/state dependency ownership is:
+
+| Fact or operation | Single authoritative owner / planned boundary |
+| --- | --- |
+| Loaded source, `LearningPlan`, source fingerprint and published revision | `SourceIdentity` (now), prepared/install effects in S2 |
+| Selected opening and course-guided designation | `LessonCursor` (now); S3 manages semantic transitions |
+| Learner-facing feedback and suggested action | `SessionNotices` (now); policy produces facts, presentation consumes them |
+| Active remedial assignment, recording, review and recovery flags | `AttemptRuntime` and teaching decisions |
+| Current audio/MIDI transport lifetime, count-in and mode | `PlaybackSession`; physical admission in `PlaybackCoordinator` |
+| Forward view epoch, continuation rest and rendering runway | `VisualTransport`; native score admission owns physical ink |
+| Command reason, selected manual effects and application provenance | `SessionCommands` |
+| Assessment and lasting result | `AssessmentService`, `AttemptSettlement`, `LearningCapture` |
+| Asynchronous source and asset work | `SourcePreparationSession`, `ScoreArtifacts`, native asset worker |
+| Graded command/tick transaction | New/updated S4 application executor; not snapshot reads |
+| Cross-workflow completion/return effects | New/updated S5 effect/settlement orchestrator; no shadow selector |
+| Read models and score projections | S6 projection boundary using immutable `SnapshotValues` and named read ports |
+
+**Cycle and ordering evidence.** The major method-call strongly connected
+groups in the current facade are: `control` /
+`_dispatch_control` / `_control_transport` /
+`_resume_current_session` (command re-entry);
+`_update` / `_update_transition` / `_complete_attempt` /
+`_run_pre_assessment_transition` / `_finish_full_passage`
+(automatic completion); and `_flow_execute` / `_begin_learn`
+(course re-entry). S3–S5 must explicitly resolve those cycles by accepted
+commands and ordered effects rather than moving them into mutually
+referencing coordinator classes. The planned dependency graph in the
+preceding section is the design baseline; the concrete port contracts and
+transaction implementations are S1–S5 deliverables.
+
+**Migration rule:** All 180 inventoried names must be
+accounted for after S7 as moved code, intentional public wrappers, or
+demonstrably unused/deleted methods. Public in-process operations must
+retain their contract. User-state migrations and the headless fixture adapter
+remain only where needed for supported behaviour.
+
 ## Remaining work — source audit 2026-11-20
 
 Historical discovery findings and original source evidence follow. A1–A6 now
