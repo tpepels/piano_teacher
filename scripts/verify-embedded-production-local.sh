@@ -152,6 +152,26 @@ add_hand(0,right)
 add_hand(1,left)
 piece.save(target)
 print("CREATED_FIXTURE", target)
+
+# Small source for the full-scene synthetic physical MIDI journey.
+# First bar: two distinct right-hand attacks (0 and 3 beats), no hand
+# remapping, fake score or altered grading rules.
+short = mido.MidiFile(type=1,ticks_per_beat=480)
+short_meta = mido.MidiTrack()
+short.tracks.append(short_meta)
+short_meta.append(mido.MetaMessage("time_signature",numerator=4,denominator=4))
+short_meta.append(mido.MetaMessage("set_tempo",tempo=mido.bpm2tempo(80)))
+notes = mido.MidiTrack()
+short.tracks.append(notes)
+notes.extend([
+    mido.Message("note_on",channel=0,note=72,velocity=84,time=0),
+    mido.Message("note_off",channel=0,note=72,velocity=0,time=240),
+    mido.Message("note_on",channel=0,note=79,velocity=84,time=1200),
+    mido.Message("note_off",channel=0,note=79,velocity=0,time=240),
+])
+short_path = target.parent / "ci_state_journey.mid"
+short.save(short_path)
+print("CREATED_FAKE_MIDI_JOURNEY",short_path)
 PY
 }
 verify_fixture_ui() {
@@ -159,6 +179,19 @@ verify_fixture_ui() {
   seed phase6_native_fixture.mid practice-flow
   timeout 105s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
     --script res://production_ui_smoke.gd
+}
+verify_fake_midi_ui() {
+  set_case fake-midi
+  seed ci_state_journey.mid practice-flow
+  local port
+  port="$("$PYTHON" -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+  # sitecustomize exists only on this test's PYTHONPATH. The real embedded
+  # engine sees one synthetic mido input and unmodified MIDI callbacks.
+  # No production command or fake application path is exposed.
+  timeout 130s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+    PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
+    "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
+      --script res://production_fake_midi_journey.gd
 }
 verify_moonlight() {
   set_case moonlight
@@ -257,7 +290,7 @@ audit_package() {
 # following scenarios unrun after a nonfatal failure.
 export ROOT WORK PYTHON GODOT_BIN PY_SITE PY_LIB
 export -f set_case seed verify_bridge make_fixture verify_fixture_ui
-export -f verify_moonlight verify_real_source audit_package
+export -f verify_fake_midi_ui verify_moonlight verify_real_source audit_package
 
 printf 'Revision: %s\n' "$(git rev-parse --short HEAD)"
 printf 'Log: %s\n' "$LOG"
@@ -271,6 +304,7 @@ fi
 check "Create isolated two-hand MIDI fixture" make_fixture || :
 check "Embedded Godot + Python registration and real score" verify_bridge || :
 check "Production UI / Play / Pause / Resume" verify_fixture_ui || :
+check "Real Godot practice transitions with synthetic physical MIDI" verify_fake_midi_ui || :
 check "Moonlight Sonata / retry / Listen / lesson navigation" verify_moonlight || :
 check "Peace Piece native score" verify_real_source peace \
   'Peace_Piece_-_Bill_Evans_(Piano_Solo).midi' || :
