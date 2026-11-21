@@ -9,7 +9,8 @@ from .musical_scheduler import SCHEDULER
 
 PAUSABLE_PHASES = frozenset((
     "playing", "count_in", "feedback", "recovering",
-    "loading", "guided_wait", "preview_gap", "admitting"))
+    "loading", "guided_wait", "introducing", "disconnected",
+    "preview_gap", "admitting"))
 
 
 def require_pausable(*, paused: bool, phase: str) -> None:

@@ -3,7 +3,8 @@ extends RefCounted
 ## PracticeCommandCoordinator applies the result; backend remains authoritative.
 const ACTIVE_PHASES := [
     "count_in", "playing", "paused", "feedback", "recovering",
-    "loading", "preview_gap", "admitting", "guided_wait"]
+    "loading", "preview_gap", "admitting", "guided_wait",
+    "introducing", "disconnected"]
 const NOTATION_WAIT := "Preparing sheet music - wait for the notes before starting"
 
 static func active_transport(state: Dictionary) -> bool:

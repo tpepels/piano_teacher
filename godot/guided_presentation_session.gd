@@ -18,8 +18,12 @@ func update_hold(state: Dictionary) -> void:
         # hold is released and notation keeps passing the playhead.
         score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
         return
+    # These are all states of the same untimed Free exposure; losing MIDI
+    # or briefly introducing the passage must not release its target hold.
     var guided: bool = str(state.get("mode","")) == "learn" and \
-        str(state.get("phase","")).begins_with("guided") and is_finite(world)
+        str(state.get("phase","")) in [
+            "guided_wait", "introducing", "disconnected", "guided_complete"
+        ] and is_finite(world)
     if not guided:
         if str(state.get("mode","")) != "learn":
             world = NAN
