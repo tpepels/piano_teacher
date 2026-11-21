@@ -471,8 +471,11 @@ owns no grading or transport clock. Guided/timed/Listen source creation is now i
 ordered state/persistence effects of an accepted preparation belong to
 `ExposureInstaller`. `SessionEvidenceContext` builds the exact source,
 transport and learning capture facts without entering a second clock.
-Course entry, manual navigation and transition orchestration are still in
-the facade; S3 is **not complete**.
+The source-bound lesson execution, guided completion, course entry, manual
+navigation, lesson review and seek are now in `LessonExecution`, with all
+23 identified methods moved and the facade retaining the public display
+phrase method. S3 still needs integrated player-behaviour verification and
+a check of the remaining command-dispatch course transitions.
 
 ### Phase S3 — Lesson selection and exposure workflow
 

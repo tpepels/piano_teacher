@@ -382,8 +382,10 @@ Exposure selection and materialization use
 `application/exposure_workflows.py`; selected-effect installation uses
 `application/exposure_installer.py`. Exact guided evidence facts are
 assembled by `application/session_evidence_context.py`, and the installer
-does not re-decide the lesson. Navigation and course-flow extraction
-remain pending.
+does not re-decide the lesson. Course entry, guided completion, navigation and original measure
+selection now execute inside `application/lesson_execution.py`.
+It uses the registered teaching decision and persisted source state
+rather than introducing another curriculum selection policy.
 
 The final shutdown path shares `SessionLifecycle` and retains the
 evidence-close, MIDI-select-close and database-close ordering exactly.
