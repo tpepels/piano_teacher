@@ -56,6 +56,7 @@ from .application.exposure_workflows import ExposureWorkflows
 from .application.lesson_execution import LessonExecution
 from .application.score_read_services import ScoreReadServices
 from .application.session_read_models import SessionReadModels
+from .application.transport_timing import TransportTiming
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -425,6 +426,14 @@ class PracticeEngine:
             score_artifact_registry=self.score_artifact_registry,
             learner_progress=self.learner_progress, lock=self.lock)
 
+        self.transport_timing = TransportTiming(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, playback_session=self.playback_session,
+            visual_transport=self.visual_transport, tempo_map_cache=self.tempo_map_cache,
+            attempt_progression=self.attempt_progression,
+            attempt_settlement=self.attempt_settlement, score_read=self.score_read,
+            midi_ingress=self.midi_ingress, playback=self.playback, clock=self.now)
+
         self.read_models = SessionReadModels(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
             notices=self.notices, attempt=self.attempt,
@@ -438,16 +447,16 @@ class PracticeEngine:
             lesson_execution=self.lesson_execution, score_read=self.score_read,
             listen=self.listen, live_input=self.live_input,
             live_assessment=self.live_assessment, lock=self.lock, clock=self.now,
-            phase=self._phase, elapsed_beat=self._elapsed_beat,
-            visual_motion=self._visual_motion, tempo_map=self._active_tempo_map,
-            next_count_in_beats=self._next_count_in_beats,
-            next_count_in_meter=self._next_count_in_meter,
-            start_rate_bpm=self._start_rate_bpm,
-            presentation_bpm=lambda: self._presentation_bpm)
+            phase=self._phase, elapsed_beat=self.transport_timing.elapsed_beat,
+            visual_motion=self.transport_timing.visual_motion, tempo_map=self.transport_timing.active_tempo_map,
+            next_count_in_beats=self.transport_timing.next_count_in_beats,
+            next_count_in_meter=self.transport_timing.next_count_in_meter,
+            start_rate_bpm=self.transport_timing.start_rate_bpm,
+            presentation_bpm=lambda: self.transport_timing.presentation_bpm())
 
     def require_presentation(self) -> None:
         with self.lock:
-            self.playback.enable_presentation(self._playback_facts())
+            self.playback.enable_presentation(self.transport_timing.playback_facts())
 
     def playback_status(self) -> dict:
         with self.lock:
@@ -455,48 +464,22 @@ class PracticeEngine:
 
     def reserve_playback(self, **values) -> dict:
         with self.lock:
-            return self.playback.reserve(self._playback_facts(),**values)
+            return self.playback.reserve(self.transport_timing.playback_facts(),**values)
 
     def present_playback(self, **values) -> dict:
         with self.lock:
-            return self.playback.present(self._playback_facts(),
-                commit=self._commit_playback_intent,capture=self._playback_facts,
+            return self.playback.present(self.transport_timing.playback_facts(),
+                commit=self._commit_playback_intent,capture=self.transport_timing.playback_facts,
                 abort=self._abort_playback,**values)
 
     def withdraw_playback(self, **values) -> dict:
         with self.lock:
-            return self.playback.withdraw(self._playback_facts(),**values)
+            return self.playback.withdraw(self.transport_timing.playback_facts(),**values)
 
     def report_playback_failure(self, **values) -> dict:
         with self.lock:
             self.playback.fail(notify_failure=self._on_playback_failure,**values)
             return {"accepted":True}
-
-    def _playback_facts(self, *, from_beat: float | None = None) -> PlaybackRuntimeFacts:
-        """Frozen source, meter and transport facts; never hand over the engine."""
-        source = None
-        if self.plan is not None:
-            plan = self.plan
-            bar, meter = self.playback_session.count_in_bar_beats, tuple(self.playback_session.count_in_meter)
-            if from_beat is not None:
-                _, bar, meter = self.attempt_progression.count_in_bar(
-                    phrase=plan.active_phrase,boundaries=plan.piece.bar_boundaries,
-                    time_signatures=plan.piece.time_signatures,position=from_beat)
-            tempo = self._active_tempo_map()
-            segments = tuple((float(s["start_beat"]),float(s["end_beat"]),
-                              float(s["bpm"])) for s in
-                             (tempo.as_segments() if tempo is not None else ()))
-            source = PlaybackSourceFacts(
-                fingerprint=self.fingerprint,stage_key=plan.identity,
-                revision=self.score_revision,hand=plan.hand,bpm=float(plan.bpm),
-                end_beat=plan.active_phrase.sounding_end-plan.active_phrase.start,
-                count_in_bar_beats=float(bar),count_in_meter=tuple(meter),
-                tempo_segments=segments)
-        return self.playback_session.facts(source)
-
-    def _request_playback(self, *, from_beat: float, **kwargs):
-        return self.playback.request(self._playback_facts(from_beat=from_beat),
-                                     from_beat=from_beat,**kwargs)
 
     def _abort_playback(self, reason: str) -> None:
         self._stop(reason=reason)
@@ -562,7 +545,7 @@ class PracticeEngine:
                           run_at: float | None = None) -> dict:
         return self.evidence_context.build(
             scope=scope, start=start, end=end, run_at=run_at,
-            tempo_map=self._active_tempo_map())
+            tempo_map=self.transport_timing.active_tempo_map())
 
     def learning_history_status(self) -> dict:
         with self.lock:
@@ -592,11 +575,11 @@ class PracticeEngine:
                 exposure=self.attempt_settlement.pending.decision.next_exposure)
         elif prepared.action == "continue":
             self._continue_at(SCHEDULER.continuation(
-                self._collect_continuation_measurement(deadline,prepared.start),
-                now=self.now(),bpm=self._presentation_bpm),from_beat=prepared.start)
+                self.transport_timing.collect_continuation_measurement(deadline,prepared.start),
+                now=self.now(),bpm=self.transport_timing.presentation_bpm()),from_beat=prepared.start)
         else:
-            self._schedule_preparation(prepared.start,now=now,
-                from_visual=self._visual_motion(now)[0] if visual_from is None else visual_from,
+            self.transport_timing.schedule_preparation(prepared.start,now=now,
+                from_visual=self.transport_timing.visual_motion(now)[0] if visual_from is None else visual_from,
                 reverse_seconds=self.feedback_seconds)
         self.next_action = prepared.next_action
 
@@ -622,30 +605,10 @@ class PracticeEngine:
             return self.settings_workflows.update(
                 changes, pause_current=self._pause_current_session)
 
-    def _active_tempo_map(self):
-        """Reuse an immutable authored tempo map until stage or BPM changes.
-
-        This runs on the 20 ms worker as well as during state snapshots.
-        ExerciseStage.tempo_map() may transform every note, so rebuilding it
-        for every clock read creates work proportional to the full passage.
-        """
-        if self.plan is None or self.playback_session.mode not in ("practice", "listen"):
-            return None
-        return self.tempo_map_cache.get(self.plan.active_stage, self.plan.bpm)
-
-    def _elapsed_beat(self, elapsed_seconds: float) -> float:
-        return SCHEDULER.elapsed_beats(
-            self._active_tempo_map(),self.visual_transport.play_from_beat,
-            elapsed_seconds,self.plan.bpm)
-
-    def _elapsed_seconds(self, beat: float) -> float:
-        tempo = self._active_tempo_map()
-        return SCHEDULER.source_seconds(tempo,beat,self.plan.bpm)
-
     def exercise_diagnostics(self) -> dict:
         with self.lock:
             return self.settings_workflows.exercise_diagnostics(
-                tempo_map=self._active_tempo_map())
+                tempo_map=self.transport_timing.active_tempo_map())
 
     def load_library(self, identifier: str) -> None:
         with self.lock:
@@ -698,14 +661,14 @@ class PracticeEngine:
                 self.plan.hand if self.plan else "both",self.plan.bpm if self.plan else 60.,
                 self.playback_session.mode,self.playback_session.running,self.visual_transport.paused,self.playback_session.preview_only,
                 self.visual_transport.play_from_beat,self.visual_transport.run_at,self.playback_session.transport_id,
-                self._active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.teaching is not None))
+                self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.teaching is not None))
             self.midi_ingress.dispatch(
                 message,facts=facts,received_at=now,
                 corrected_at=corrected_at,deferred=deferred,
                 midi_offset_seconds=self.library.settings["midi_offset_ms"]/1000.0,
                 apply_shortcut=self._apply_midi_shortcut,
                 transport_facts=self._midi_transport_facts,
-                musical_seconds=self._musical_seconds,
+                musical_seconds=self.transport_timing.musical_seconds,
                 recorder=lambda: self.attempt.recorder,
                 teaching=lambda: self.teaching,
                 feedback_take=self._feedback_take)
@@ -784,7 +747,7 @@ class PracticeEngine:
         activation = self.playback_session.begin_listen_if_ready(
             revision=self.score_revision,presentation_required=self.playback.presentation_required)
         if activation.requested_count_in is not None:
-            self._request_playback(action="listen",mode="listen",from_beat=activation.from_beat,
+            self.transport_timing.request_playback(action="listen",mode="listen",from_beat=activation.from_beat,
                 count_in_beats=activation.requested_count_in)
         elif activation.started:
             self.feedback = "Count in, then listen"
@@ -794,7 +757,7 @@ class PracticeEngine:
 
     def _performance_review(self, phrase: Phrase, result) -> dict:
         """Retained engine API; assessment service owns report construction."""
-        tempo = self._active_tempo_map()
+        tempo = self.transport_timing.active_tempo_map()
         elapsed_to_beat = (None if tempo is None else
             lambda seconds: tempo.beat_at(tempo.seconds_at(self.visual_transport.play_from_beat)+seconds))
         return self.assessment.review(
@@ -819,12 +782,6 @@ class PracticeEngine:
     def _install_command(self, effect):
         return self.teaching_decisions.install_command(effect)
 
-    @property
-    def _presentation_bpm(self):
-        pending = self.attempt_settlement.pending
-        if pending is not None and pending.receipt is None and pending.decision.next_exposure is not None:
-            return pending.decision.next_exposure.bpm
-        return self.plan.bpm if self.plan is not None else 0
 
     def _commit_pending(self, *, finish_publication: bool = True) -> str:
         if self.attempt_settlement.pending_result is None or self.plan is None:
@@ -947,29 +904,11 @@ class PracticeEngine:
                     count_in=intent.count_in,deadline=authorized.deadline)
                 self.feedback = "Count in, then listen"
 
-    def _next_count_in(self) -> tuple[float,tuple[int,int]]:
-        plan = self.plan
-        return self.attempt_progression.next_count_in(
-            phrase=plan.active_phrase if plan is not None else None,
-            boundaries=plan.piece.bar_boundaries if plan is not None else (),
-            time_signatures=plan.piece.time_signatures if plan is not None else (),
-            bpm=float(plan.bpm) if plan is not None else 0.0,
-            start_from=self.open_from_beat,
-            already_active=self.playback_session.running or self.visual_transport.paused,
-            current_bar_beats=self.playback_session.count_in_bar_beats,
-            current_meter=tuple(self.playback_session.count_in_meter))
-
-    def _next_count_in_beats(self) -> float:
-        return self._next_count_in()[0]
-
-    def _next_count_in_meter(self) -> list[int]:
-        return list(self._next_count_in()[1])
-
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Continue only through the unified score-admission gate."""
         if self.playback.presentation_required:
             self.playback_session.prepare_admitted_continuation()
-            self._request_playback( action="auto", mode=self.playback_session.mode,
+            self.transport_timing.request_playback( action="auto", mode=self.playback_session.mode,
                 from_beat=from_beat, earliest_deadline=deadline,
                 fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
             self.visual_transport.scheduled_start = None
@@ -981,55 +920,14 @@ class PracticeEngine:
         self.start(from_beat=from_beat, mode=self.playback_session.mode, loop_continuation=True,
                    scheduled_deadline=deadline,
                    count_in_plan=(CountInPlan.create(
-                       bar_beats=self._next_count_in_beats(),
-                       meter=tuple(self._next_count_in_meter()),bpm=self.plan.bpm,
-                       beats=self._next_count_in_beats()) if self.lesson_execution.flow_active() else None))
+                       bar_beats=self.transport_timing.next_count_in_beats(),
+                       meter=tuple(self.transport_timing.next_count_in_meter()),bpm=self.plan.bpm,
+                       beats=self.transport_timing.next_count_in_beats()) if self.lesson_execution.flow_active() else None))
         self.visual_transport.scheduled_start = (
             self.playback_session.transport_id, self.visual_transport.play_from_beat,
             self.visual_transport.run_at, self.plan.identity,
             self.score_revision, serial)
         self.playback_session.retain_announced_count_in(bpm=self.plan.bpm)
-
-    def _collect_continuation_measurement(self, deadline: float,
-                                          from_beat: float
-                                          ) -> ContinuationMeasurement:
-        """Sample queue and engraving facts; deadline calculus lives in SCHEDULER."""
-        return ContinuationMeasurement(
-            deadline=deadline,
-            announced_at=self.visual_transport.announced_deadline(from_beat),
-            rest_beats=self.visual_transport.visual_gap_beats,
-            horizon_beats=self.visual_transport.continuous_horizon_beats,
-            rest=self._collect_rest_measurement(
-                from_beat=from_beat,
-                source_end=deadline if self.visual_transport.rest_take_end is None else None),
-            automatic=self.plan is not None and self.playback_session.auto)
-
-
-    def _start_rate_bpm(self, from_beat: float, bpm: float) -> float:
-        """Authored tempo-map rate at a take's first beat, at this BPM."""
-        if self.plan is None or bpm <= 0 or self.playback_session.mode not in ("practice", "listen"):
-            return float(bpm)
-        tempo = self.tempo_map_cache.get(self.plan.active_stage, bpm)
-        return float(tempo.bpm_at(from_beat)) if tempo is not None else float(bpm)
-
-    def _schedule_preparation(self, target: float, *, now: float,
-                              from_visual: float, reverse_seconds: float,
-                              reading_lead_included: bool = False,
-                              announce: bool = True,
-                              short_deadline: float | None = None):
-        self.playback_session.schedule_preparation(PreparationRequest(
-            self.score_read.source_model(),target,now,from_visual,reverse_seconds,
-            self._presentation_bpm,self.visual_transport.continuous_horizon_beats,
-            reading_lead_included,announce,short_deadline))
-
-    def _visual_motion(self, now: float) -> tuple[float, float, float]:
-        """Read the one transport projection, including authored tempo and silence."""
-        phrase = self.plan.active_phrase
-        return self.visual_transport.position(
-            now, phrase_length=phrase.sounding_end-phrase.start, bpm=self.plan.bpm,
-            running=self.playback_session.running,
-            pending_auto_result=(self.attempt_settlement.pending_result is not None and self.playback_session.auto),
-            tempo_map=self._active_tempo_map())
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:
@@ -1105,16 +1003,16 @@ class PracticeEngine:
                     if self.visual_transport.pending_rewind is not None else self.open_from_beat)
                 mode = "perform" if self.playback_session.mode == "perform" else "practice"
                 if self.playback.presentation_required:
-                    self._request_playback(action="score_ready",mode=mode,from_beat=position)
+                    self.transport_timing.request_playback(action="score_ready",mode=mode,from_beat=position)
                     return
                 announce = self.visual_transport.short_rest is not None or self.lesson_execution.flow_active()
                 timing = self.playback_session.headless_ready_timing(
                     reserved_ms=kwargs.get("presentation_deadline_ms"),
-                    count_in_beats=self._next_count_in_beats(),bpm=self.plan.bpm,
-                    announce=announce,rest=(self._collect_rest_measurement(
+                    count_in_beats=self.transport_timing.next_count_in_beats(),bpm=self.plan.bpm,
+                    announce=announce,rest=(self.transport_timing.collect_rest_measurement(
                         from_beat=self.open_from_beat) if announce and
                         kwargs.get("presentation_deadline_ms") is None else None),
-                    presentation_bpm=self._presentation_bpm)
+                    presentation_bpm=self.transport_timing.presentation_bpm())
                 self.start(from_beat=position,mode=mode,scheduled_deadline=timing.deadline,
                     presentation_lead_seconds=timing.lead_seconds,decided=True)
                 if announce:
@@ -1183,73 +1081,6 @@ class PracticeEngine:
             if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
                 self.measurement.use_assistance()
 
-    def _update_short_rest(self, kwargs: dict) -> None:
-        """Godot's written-rest geometry between takes (owner, round 4).
-
-        continuation_clear_beats: the written rest bar printed directly after
-        a take's last source beat, plus the margin that new ink keeps from it.
-        continuation_header_beats: the next opening's header plus a frame
-        margin. The next source is admitted straight after the rest on the
-        empty staff; its one count-in bar is spoken over the rest bar.
-        """
-        clear = kwargs.get("continuation_clear_beats")
-        header = kwargs.get("continuation_header_beats")
-        if clear is None or header is None:
-            return
-        clear, header = float(clear), float(header)
-        if not all(math.isfinite(v) and 0.0 <= v <= 16.0 for v in (clear, header)):
-            raise ValueError("Invalid short-rest geometry")
-        self.visual_transport.short_rest = (clear, header)
-
-    def _collect_rest_measurement(self, *,
-                                  from_beat: float = 0.0,
-                                  source_end: float | None = None
-                                  ) -> RestMeasurement | None:
-        """Read authored meter and actual native glyph clearance only.
-
-        This routine has no timing arithmetic. The musical scheduler owns
-        the outgoing/incoming tempo conversion, count-in and deadline.
-        """
-        if self.visual_transport.short_rest is None or self.plan is None or self._presentation_bpm <= 0:
-            return None
-        clear, header = self.visual_transport.short_rest
-        outgoing_bpm = self._presentation_bpm
-        if source_end is None:
-            if self.visual_transport.rest_take_end is None:
-                return None
-            source_end,outgoing_bpm = self.visual_transport.rest_take_end
-        _, bar, _ = self.attempt_progression.count_in_bar(
-            phrase=self.plan.active_phrase,
-            boundaries=self.plan.piece.bar_boundaries,
-            time_signatures=self.plan.piece.time_signatures,
-            position=from_beat)
-        return RestMeasurement(
-            source_end=source_end,outgoing_bpm=outgoing_bpm,
-            clear_beats=clear,header_beats=header,
-            count_in_beats=bar,tempo_epoch=self.visual_transport.tempo_epoch)
-
-
-    def _update_continuous_horizon(self, value) -> None:
-        if value is None:
-            return
-        horizon = float(value)
-        if not math.isfinite(horizon) or not 0.0 <= horizon <= 64.0:
-            raise ValueError("Invalid continuous score reading horizon")
-        self.visual_transport.continuous_horizon_beats = horizon
-
-    def _presentation_lead(self, kwargs: dict) -> float:
-        """Lead to the world position Godot reserved for this command.
-
-        Godot reports the reserved deadline itself (presentation_deadline_ms,
-        backend clock). Measuring the lead from it here absorbs the time the
-        command spent queued behind engine work, which a relative lead added
-        to the engine's own "now" turned into an offset (Clair, 12 px).
-        """
-        deadline = kwargs.get("presentation_deadline_ms")
-        if deadline is not None and math.isfinite(float(deadline)):
-            return max(0.0, float(deadline) / 1000.0 - self.now())
-        return float(kwargs.get("presentation_lead_seconds", 0.0))
-
     def _control_transport(self, action: str, kwargs: dict) -> None:
         if action == "practice":
             self._prepare_practice()
@@ -1265,8 +1096,8 @@ class PracticeEngine:
             self.feedback = "Stopped"
             self.next_action = "Start when you are ready."
         elif action in ("start", "restart"):
-            self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self._update_short_rest(kwargs)
+            self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
+            self.transport_timing.update_short_rest(kwargs)
             if self.playback.presentation_required:
                 if self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None:
                     self._start_or_restart(action)
@@ -1284,22 +1115,22 @@ class PracticeEngine:
                     self._start_or_restart(action)
                 else:
                     selected = transition.exposure
-                    self._request_playback( action=action,
+                    self.transport_timing.request_playback( action=action,
                         mode=selected.mode, from_beat=selected.from_beat,
                         transition=transition)
             else:
                 self._start_or_restart(
-                    action, presentation_lead_seconds=self._presentation_lead(kwargs))
+                    action, presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs))
         elif action == "pause":
             self._pause_current_session(
                 pending_admission=self.playback_session.suspend_admission(self.playback))
         elif action == "resume":
-            self._update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self._update_short_rest(kwargs)
+            self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
+            self.transport_timing.update_short_rest(kwargs)
             if self.playback.presentation_required:
                 suspended = self.playback_session.take_suspended_admission()
                 if suspended is not None:
-                    self._request_playback(action=suspended.action,
+                    self.transport_timing.request_playback(action=suspended.action,
                         mode=suspended.mode,from_beat=suspended.from_beat,
                         transition=suspended.transition)
                     return
@@ -1311,13 +1142,13 @@ class PracticeEngine:
                     return
                 from_beat = self.visual_transport.play_from_beat
                 if self.playback_session.running:
-                    from_beat += max(0.0, self._elapsed_beat(
+                    from_beat += max(0.0, self.transport_timing.elapsed_beat(
                         self.visual_transport.paused_at
                         - self.visual_transport.run_at))
-                self._request_playback( action="resume",
+                self.transport_timing.request_playback( action="resume",
                     mode=self.playback_session.mode, from_beat=from_beat)
             else:
-                self._resume_current_session(presentation_lead_seconds=self._presentation_lead(kwargs),
+                self._resume_current_session(presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs),
                     reuse_pending_score=kwargs.get("reuse_pending_score",False) is True,
                     reuse_announced_score=kwargs.get("reuse_announced_score",False) is True)
 
@@ -1378,10 +1209,10 @@ class PracticeEngine:
         if route == "rewind":
             sampled = self.now()
             visual_now = self.visual_transport.paused_at if self.visual_transport.paused else sampled
-            position,_,_ = self._visual_motion(visual_now)
+            position,_,_ = self.transport_timing.visual_motion(visual_now)
             self.playback_session.prepare_retry(PreparationRequest(
                 self.score_read.source_model(),selected.from_beat,sampled,position,self.feedback_seconds,
-                self._presentation_bpm,self.visual_transport.continuous_horizon_beats,
+                self.transport_timing.presentation_bpm(),self.visual_transport.continuous_horizon_beats,
                 reading_lead_included=presentation_lead_seconds > 0,
                 short_deadline=scheduled_deadline),
                 presentation_lead_seconds=presentation_lead_seconds,source_bpm=p.bpm)
@@ -1391,18 +1222,6 @@ class PracticeEngine:
                    scheduled_deadline=scheduled_deadline,
                    presentation_lead_seconds=presentation_lead_seconds)
         return
-
-    def _musical_seconds(self, at: float) -> float:
-        """Graded musical time of wall instant ``at``, in seconds since run_at.
-
-        The one clock the Recorder and the live input view share (R1 F2).
-        It stands still from the Pause moment until grading resumes after
-        Resume's lead (Resume moves run_at by the paused time plus that
-        lead): a key held across the pause excludes the paused interval, and
-        a key-up while paused or in the lead counts at the pause moment.
-        """
-        return self.visual_transport.musical_seconds(
-            at,grading_after=self.midi_ingress.resume_grading_after)
 
     def _pause_current_session(self, *, pending_admission: bool = False):
         now = self.now()
@@ -1419,7 +1238,7 @@ class PracticeEngine:
         resumed = self.playback_session.resume_timeline(ResumeRequest(
             learning=self.playback_session.mode == "learn" and self.teaching is not None,
             bpm=self.plan.bpm if self.plan is not None else None,
-            full_count_in_beats=self._next_count_in_beats(),
+            full_count_in_beats=self.transport_timing.next_count_in_beats(),
             midi_connected=self.midi.connected,reading_lead_seconds=presentation_lead_seconds,
             reuse_pending_score=reuse_pending_score,scheduled_deadline=scheduled_deadline))
         if resumed.learning:
@@ -1429,9 +1248,9 @@ class PracticeEngine:
             now=resumed.now,reading_lead_seconds=presentation_lead_seconds,
             running=self.playback_session.running,mode=self.playback_session.mode,
             bpm=self.plan.bpm if self.plan is not None else None,
-            presentation_bpm=self._presentation_bpm,horizon_beats=self.visual_transport.continuous_horizon_beats,
+            presentation_bpm=self.transport_timing.presentation_bpm(),horizon_beats=self.visual_transport.continuous_horizon_beats,
             physical_rest_enabled=self.visual_transport.short_rest is not None,
-            rest=(self._collect_rest_measurement(from_beat=announced[0],source_end=0.0)
+            rest=(self.transport_timing.collect_rest_measurement(from_beat=announced[0],source_end=0.0)
                 if announced is not None else None),reuse=reuse_announced_score))
         completion = self.playback_session.finish_resume(resumed)
         if completion.feedback is not None:
@@ -1509,7 +1328,7 @@ class PracticeEngine:
         try:
             self._commit_pending(finish_publication=False)
             self.visual_transport.note_tempo(
-            stage=self.plan.identity,bpm=self._presentation_bpm,now=now)
+            stage=self.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
             self._publish_feedback_fault(self.teaching_continuation.settlement_failure(exc),now)
             if not isinstance(exc,UnpreparedNextStage):
@@ -1518,8 +1337,8 @@ class PracticeEngine:
         self.attempt.clear_feedback()
         publication = self.teaching_continuation.finish_feedback(transaction,SettledSourceFacts(
             fingerprint=self.fingerprint,stage_key=self.plan.identity,revision=self.score_revision,
-            now=now,bpm=self.plan.bpm,presentation_bpm=self._presentation_bpm,
-            count_in_beats=self._next_count_in_beats(),automatic=self.playback_session.auto,
+            now=now,bpm=self.plan.bpm,presentation_bpm=self.transport_timing.presentation_bpm(),
+            count_in_beats=self.transport_timing.next_count_in_beats(),automatic=self.playback_session.auto,
             flow_active=self.lesson_execution.flow_active()))
         if publication.flow_outcome is not None:
             self.flow_session.settle_decided(publication.flow_outcome,plan=self.plan,
@@ -1543,7 +1362,7 @@ class PracticeEngine:
         else:
             if isinstance(effect,ContinueSelectedScore):
                 applied = self.playback_session.apply_continuation(effect,
-                    measurement=self._collect_continuation_measurement(
+                    measurement=self.transport_timing.collect_continuation_measurement(
                         effect.deadline,effect.exposure.from_beat),
                     source_stride_beats=self.score_read.source_model()["practice_timeline"]["stride_beats"])
             else:
@@ -1580,8 +1399,8 @@ class PracticeEngine:
         self.feedback,self.next_action = prepared.feedback,prepared.next_action
         if prepared.action == "continue":
             self._continue_at(SCHEDULER.continuation(
-                self._collect_continuation_measurement(deadline,prepared.start),
-                now=self.now(),bpm=self._presentation_bpm),from_beat=prepared.start)
+                self.transport_timing.collect_continuation_measurement(deadline,prepared.start),
+                now=self.now(),bpm=self.transport_timing.presentation_bpm()),from_beat=prepared.start)
 
     def _apply_rolling_recovery(self, decision, phrase: Phrase, grid, score_beat: float, now: float):
         """Apply an accepted source-grid recovery decision atomically."""
@@ -1593,15 +1412,15 @@ class PracticeEngine:
         self.live_assessment.publish(self.attempt.feedback_marks, self._feedback_take())
         outgoing_bpm = self.plan.bpm
         scored_end = self.visual_transport.run_at + (
-            self._elapsed_seconds(decision.end_beat) -
-            self._elapsed_seconds(self.visual_transport.play_from_beat))
+            self.transport_timing.elapsed_seconds(decision.end_beat) -
+            self.transport_timing.elapsed_seconds(self.visual_transport.play_from_beat))
         try:
             completed = self.attempt_settlement.complete_rolling(
                 decision=decision,phrase=phrase,grid=grid,score_beat=score_beat,
                 now=now,bpm=outgoing_bpm,scored_end=scored_end,hand=self.plan.hand,
                 played=self.attempt.recorder.presses if self.attempt.recorder else (),
                 from_beat=self.visual_transport.play_from_beat,
-                tempo=self._active_tempo_map(),policies=self.assessment_policies,
+                tempo=self.transport_timing.active_tempo_map(),policies=self.assessment_policies,
                 prepare_decision=self._prepare_teaching,plan=self.plan,
                 binding=self._teaching_binding(),
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
@@ -1621,14 +1440,14 @@ class PracticeEngine:
         pending,transition = completed.pending,completed.transition
         outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
         self.visual_transport.note_tempo(
-            stage=self.plan.identity,bpm=self._presentation_bpm,now=now)
+            stage=self.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         short_deadline = None
         if transition.uses_completed_rest:
             self.visual_transport.rest_take_end = (scored_end, outgoing_bpm)
             short_deadline = SCHEDULER.measured_rest(
-                self._collect_rest_measurement(from_beat=transition.restart_beat),
-                now=now,bpm=self._presentation_bpm)
-        self._schedule_preparation(transition.restart_beat, now=now,
+                self.transport_timing.collect_rest_measurement(from_beat=transition.restart_beat),
+                now=now,bpm=self.transport_timing.presentation_bpm())
+        self.transport_timing.schedule_preparation(transition.restart_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds,
             short_deadline=short_deadline)
@@ -1662,8 +1481,8 @@ class PracticeEngine:
             self.playback_session.finish_take()
             self.visual_transport.schedule_preview_repeat(
                 source_seconds=duration,source_bpm=self.plan.bpm,
-                presentation_bpm=self._presentation_bpm,
-                rest_measurement=self._collect_rest_measurement(
+                presentation_bpm=self.transport_timing.presentation_bpm(),
+                rest_measurement=self.transport_timing.collect_rest_measurement(
                     from_beat=0.0,
                     source_end=self.visual_transport.run_at+duration),
                 now=now,reading_horizon_beats=self.visual_transport.continuous_horizon_beats)
@@ -1677,13 +1496,13 @@ class PracticeEngine:
             elif now >= self.visual_transport.next_at:
                 self._update()
             return
-        completed_visual = self._visual_motion(now)[0]
+        completed_visual = self.transport_timing.visual_motion(now)[0]
         completed = self.attempt_settlement.complete_take(
             phrase=phrase,hand=self.plan.hand,bpm=self.plan.bpm,
             played=(self.attempt.recorder.presses
                     if self.attempt.recorder else ()),
             from_beat=self.visual_transport.play_from_beat,end_beat=ending,
-            tempo=self._active_tempo_map(),policies=self.assessment_policies,
+            tempo=self.transport_timing.active_tempo_map(),policies=self.assessment_policies,
             layout_for_feedback=self.score_read.completed_take_layout,
             mode=self.playback_session.mode,review_end_beat=self.attempt.review_end_beat,
             automatic_remedial_review=self.attempt.automatic_remedial_review,
@@ -1698,7 +1517,7 @@ class PracticeEngine:
             completed.pending,completed.response,completed.settled)
         if settled:
             self.visual_transport.note_tempo(
-            stage=self.plan.identity,bpm=self._presentation_bpm,now=now)
+            stage=self.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         self.attempt.publish_completion(
             marks=assessed.marks,unmapped=assessed.unmapped)
         # The completed take's settled grades, before any transition below can
@@ -1753,9 +1572,9 @@ class PracticeEngine:
         # Clear the bounded review before the scheduled full-pass retry.
         self.attempt.prepare_full_retry()
         self.lesson_cursor.select_opening(exposure.from_beat if exposure is not None else 0.0)
-        self._schedule_preparation(self.open_from_beat, now=now,
+        self.transport_timing.schedule_preparation(self.open_from_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + self.visual_transport.play_from_beat
-                + self._elapsed_beat(now-self.visual_transport.run_at),
+                + self.transport_timing.elapsed_beat(now-self.visual_transport.run_at),
             reverse_seconds=self.feedback_seconds)
         self.feedback = "Selected section finished · " + result.summary
         self.next_action = "Next: play the whole passage from its beginning to earn mastery."
@@ -1767,7 +1586,7 @@ class PracticeEngine:
         total_beats,duration = publication.total_beats,publication.duration
         self.attempt_settlement.checkpoint_failed_streak(pending,plan=self.plan,now=now)
         self.visual_transport.note_tempo(
-            stage=self.plan.identity,bpm=self._presentation_bpm,now=now)
+            stage=self.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         exposure = pending.decision.next_exposure
         target = exposure.from_beat if exposure is not None else self.visual_transport.play_from_beat
         completion = self.playback_session.finish_full_passage(FullPassageFacts(
@@ -1775,13 +1594,13 @@ class PracticeEngine:
             target_bpm=self.plan.target_bpm,
             assessed_bpm=self.attempt_settlement.pending_assessed_bpm,
             total_beats=total_beats,duration=duration,now=now,
-            visual_from=self._visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
-            source_model=self.score_read.source_model(),presentation_bpm=self._presentation_bpm,
+            visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
+            source_model=self.score_read.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
             horizon_beats=self.visual_transport.continuous_horizon_beats,warmup=self.is_builtin_warmup,
             presentation_required=self.playback.presentation_required,
             short_rest_enabled=self.visual_transport.short_rest is not None,
-            retry_rest=self._collect_rest_measurement(from_beat=target),
-            repeat_rest=self._collect_rest_measurement(from_beat=0.0,
+            retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
+            repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,
                 source_end=self.visual_transport.run_at+duration),
             assets_ready=self.teaching_continuation.decision_assets_ready(pending,
                 revision=self.score_revision,fingerprint=self.fingerprint),
@@ -1813,7 +1632,7 @@ class PracticeEngine:
                 self.library.settings["mistake_response_strategy"]).interrupt_rolling:
             # Practice flow: a take always plays to its end (no mid-take rewind).
             return None
-        tempo_map = self._active_tempo_map()
+        tempo_map = self.transport_timing.active_tempo_map()
         return self.assessment_policies.select(tempo_map).recover(
             self.plan.active_phrase, hand=self.plan.hand, bpm=self.plan.bpm,
             played=self.attempt.recorder.presses if self.attempt.recorder else [],
@@ -1859,8 +1678,8 @@ class PracticeEngine:
             self.visual_transport.advance_source_stride(self.score_read.source_model()[
                 "practice_timeline"]["stride_beats"])
             self._continue_at(SCHEDULER.continuation(
-                    self._collect_continuation_measurement(deadline, 0.0),
-                    now=self.now(),bpm=self._presentation_bpm))
+                    self.transport_timing.collect_continuation_measurement(deadline, 0.0),
+                    now=self.now(),bpm=self.transport_timing.presentation_bpm()))
         elif decision.action == "feedback":
             publication = self.attempt_settlement.pending_full_completion
             if publication is not None:
@@ -1876,8 +1695,8 @@ class PracticeEngine:
                 target = self.visual_transport.pending_rewind
                 self._continue_at(
                     SCHEDULER.continuation(
-                    self._collect_continuation_measurement(self.visual_transport.next_at, target),
-                    now=self.now(),bpm=self._presentation_bpm),
+                    self.transport_timing.collect_continuation_measurement(self.visual_transport.next_at, target),
+                    now=self.now(),bpm=self.transport_timing.presentation_bpm()),
                     from_beat=target)
         return decision.consumed
 
@@ -1893,7 +1712,7 @@ class PracticeEngine:
         # A playback intent is reconciled by the actual monotonic worker
         # transition, never by a later serializer's snapshot traversal.
         # Only worker/command execution advances the accepted lifecycle.
-        self.playback.advance(self._playback_facts())
+        self.playback.advance(self.transport_timing.playback_facts())
         self.read_models.prepare_score_presentation()
         # Display publication must never pause the take or alter feedback text.
         try:
@@ -1934,7 +1753,7 @@ class PracticeEngine:
             return
         phrase = self.plan.active_phrase
         score_beat = self.visual_transport.play_from_beat + max(
-            0.0, self._elapsed_beat(now-self.visual_transport.run_at))
+            0.0, self.transport_timing.elapsed_beat(now-self.visual_transport.run_at))
 
         step = self.attempt_progression.inspect(AttemptTick(
             phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
@@ -1943,7 +1762,7 @@ class PracticeEngine:
             review_end=self.attempt.review_end_beat, preview=self.playback_session.preview_only,
             auto=self.playback_session.auto, mode=self.playback_session.mode,
             bpm=self.plan.bpm, gap_beats=self.visual_transport.visual_gap_beats),
-            self._assess_rolling_boundary, self._elapsed_seconds,
+            self._assess_rolling_boundary, self.transport_timing.elapsed_seconds,
             exact_repeats=self.lesson_execution.flow_active())
         self.visual_transport.next_boundary_beat = step.next_boundary
         if step.action == "recovery":
@@ -2003,11 +1822,11 @@ class PracticeEngine:
             return
         if self.visual_transport.paused:
             return
-        elapsed = self._musical_seconds(self.now())
+        elapsed = self.transport_timing.musical_seconds(self.now())
         marks = self._live_feedback(elapsed)
         scope, _ = live_scope(self.plan.active_phrase,
             from_beat=self.visual_transport.play_from_beat,elapsed_seconds=elapsed,
-            bpm=self.plan.bpm,tempo=self._active_tempo_map())
+            bpm=self.plan.bpm,tempo=self.transport_timing.active_tempo_map())
         self.live_assessment.publish(marks, self._feedback_take(),scope_start_beat=scope)
 
     def _live_marks_for_snapshot(self, _elapsed_seconds: float) -> list[dict]:
@@ -2028,7 +1847,7 @@ class PracticeEngine:
             from_beat=self.visual_transport.play_from_beat,
             elapsed_seconds=elapsed_seconds,
             bar_boundaries=plan.piece.bar_boundaries,
-            layout=engraved.layout, tempo=self._active_tempo_map())
+            layout=engraved.layout, tempo=self.transport_timing.active_tempo_map())
 
     def advance_clock(self) -> int:
         """Advance scheduled transitions without waiting for a UI state request.
@@ -2104,7 +1923,7 @@ class PracticeEngine:
                 self._next_stage_selection(),stage_key=stage_key,revision=revision)
             source = (PreloadedFeedbackSource(
                 self.plan.active_phrase.sounding_end-self.plan.active_phrase.start,
-                self.plan.bpm,self._active_tempo_map()) if self.plan is not None else None)
+                self.plan.bpm,self.transport_timing.active_tempo_map()) if self.plan is not None else None)
             released_at = self.playback_session.activate_preloaded_feedback(source,
                 revision=self.score_revision,fingerprint=self.fingerprint)
             if released_at is not None:

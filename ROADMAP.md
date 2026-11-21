@@ -499,6 +499,14 @@ backward-growing four-bar windows, Right/Left/Together, resumes, return aids,
 alternate courses and full-original examination follow a single
 selection/execution contract with passing existing behaviour CI.
 
+**S4 implementation underway:** `TransportTiming` now owns the source
+tempo-map cache read, authored elapsed conversion, count-in, exact
+source-bound playback facts, continuation/rest clearance, presentation
+lead and musical-seconds projections. It retains the existing
+PlaybackCoordinator/PlaybackSession/VisualTransport authority. Timed
+start/resume/Retry and control dispatch remain in the facade; S4 is
+**not complete**. The migration must pass core and native CI.
+
 ### Phase S4 — Command dispatch and authorized playback
 
 - Extract public `start`/`control`, command classification, musical

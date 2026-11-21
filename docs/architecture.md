@@ -383,6 +383,11 @@ captured at service construction. Device connection lifecycle and calibration no
 rather than calling the engine or mutating configured policies itself.
 The short facade entry preserves source interruption ordering and locking.
 
+Source-bound count-in, musical-rate projection, rest geometry,
+forward visual motion and playback admission facts now live in
+`application/transport_timing.py`, which holds no extra clock
+epoch and makes no curriculum decision.
+
 The decision-building part of lesson orchestration now lives in
 `application/teaching_workflows.py`. It gathers bound evidence and route
 facts and applies exactly the generator's validated decision. It does not
