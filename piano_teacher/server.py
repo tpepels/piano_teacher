@@ -50,6 +50,9 @@ from .application.policy_registry import PolicyRegistry
 from .application.settings_workflows import SettingsWorkflows
 from .application.device_workflows import DeviceWorkflows
 from .application.teaching_workflows import TeachingDecisions
+from .application.session_evidence_context import SessionEvidenceContext
+from .application.exposure_installer import ExposureInstaller
+from .application.exposure_workflows import ExposureWorkflows
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -381,6 +384,24 @@ class PracticeEngine:
             learner_progress=self.learner_progress,
             session_commands=self.session_commands,
             learning_evidence=self.learning_evidence, clock=self.now)
+        self.evidence_context = SessionEvidenceContext(
+            source_identity=self.source_identity, playback_session=self.playback_session,
+            guided_session=self.guided_session, learning_evidence=self.learning_evidence)
+        self.exposure_installer = ExposureInstaller(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, lifecycle=self.session_lifecycle,
+            learner_progress=self.learner_progress, progress=self.progress,
+            score_state_publisher=self.score_state_publisher,
+            attempt=self.attempt, playback_session=self.playback_session,
+            guided_session=self.guided_session, visual_transport=self.visual_transport,
+            midi=self.midi, listen=self.listen, evidence_context=self.evidence_context,
+            session_commands=self.session_commands, clock=self.now)
+        self.exposure_workflows = ExposureWorkflows(
+            source_identity=self.source_identity, flow_session=self.flow_session,
+            teaching_decisions=self.teaching_decisions, session_commands=self.session_commands,
+            guided_session=self.guided_session, attempt=self.attempt,
+            tempo_map_cache=self.tempo_map_cache, playback_session=self.playback_session,
+            listen=self.listen, notices=self.notices, installer=self.exposure_installer)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -497,16 +518,9 @@ class PracticeEngine:
 
     def _learning_context(self, *, scope: str, start: float, end: float,
                           run_at: float | None = None) -> dict:
-        return self.learning_evidence.context(
-            self.plan, fingerprint=self.fingerprint, scope=scope,
-            start=start, end=end, run_at=run_at,
-            tempo_map=self._active_tempo_map(), transport_id=self.playback_session.transport_id,
-            score_revision=self.score_revision, count_in_beats=self.playback_session.count_in_beats,
-            count_in_meter=self.playback_session.count_in_meter,
-            guided_config=self.teaching.config if self.teaching is not None else None,
-            persistent_hints=self.persistent_hints,
-            variant=(self.guided_session.fragment.variant
-                if scope == "guided" and self.guided_session.fragment is not None else None))
+        return self.evidence_context.build(
+            scope=scope, start=start, end=end, run_at=run_at,
+            tempo_map=self._active_tempo_map())
 
     def learning_history_status(self) -> dict:
         with self.lock:
@@ -866,60 +880,11 @@ class PracticeEngine:
         self._apply_exposure_preparation(prepared)
 
     def _exposure_source(self) -> ExposureSource:
-        if self.plan is None:
-            raise ValueError("Open a piece first")
-        return ExposureSource(self.plan.identity,self.plan.active_variant,
-            self.plan.piece.bar_boundaries,self.plan.piece.time_signatures,
-            self.is_builtin_warmup,self._flow_active())
+        return self.exposure_workflows.source()
 
     def _apply_exposure_preparation(self, prepared:
             GuidedPreparation | TimedPreparation | ListenPreparation) -> None:
-        """Apply prepared effects under the engine lock; never reselect source."""
-        if isinstance(prepared,GuidedPreparation):
-            fragment = prepared.fragment
-            # Durable source preparation must succeed before cancelling a
-            # committed continuation or stopping its previous controller.
-            self.learner_progress.save_resume(fingerprint=self.fingerprint,
-                stage_key=prepared.source.stage_key,
-                unit=self.learner_progress.guided_unit(self.plan,mode="learn",
-                    guided_range=fragment.beat_range))
-            self._save()
-            self._stop(reason=prepared.stop_reason,preserve_episode=prepared.recovery)
-            self.score_state_publisher.reset_guided()
-            self.attempt.assign_remediation(prepared.remediation)
-            if prepared.recovery:
-                self.attempt.restore_retry(prepared.retry_range)
-            self.playback_session.select_exposure(
-                mode="learn",automatic=False,awaited_revision=None)
-            self.guided_session.select(fragment,stage_key=prepared.source.stage_key,
-                                       recovery=prepared.recovery)
-            self.source_identity.publish_revision(prepared.revision)
-            self._open_take()
-            self.guided_session.bind_selected(revision=prepared.revision,
-                now=self.now(),connected=self.midi.connected)
-            self.playback_session.await_score(prepared.revision)
-            self.playback_session.capture_guided_start(self._learning_context(scope="guided",
-                start=fragment.start_beat,end=fragment.end_beat))
-        else:
-            timed = isinstance(prepared,TimedPreparation)
-            self._stop(reason="reintegration" if timed and prepared.mode == "practice" else None,
-                       preserve_episode=timed and prepared.preserve_episode)
-            if not timed or prepared.mode == "practice":
-                self.visual_transport.select_opening(prepared.from_beat if timed else 0.0)
-            if timed:
-                self.lesson_cursor.select_opening(prepared.from_beat)
-                self.attempt.prepare_timed_exposure(prepared)
-                if prepared.return_context is not None:
-                    self.visual_transport.prepare_rewind(prepared.from_beat)
-                    self.guided_session.select_timed_return(prepared.return_context)
-            self.guided_session.clear_selection()
-            self.source_identity.publish_revision(prepared.revision)
-            self.playback_session.select_exposure(
-                mode=prepared.mode if timed else "listen",automatic=False,
-                awaited_revision=prepared.awaiting_score if timed else prepared.revision)
-        self.feedback,self.next_action = prepared.feedback,prepared.next_action
-        if isinstance(prepared,ListenPreparation):
-            self.listen.prepare(prepared.selection)
+        return self.exposure_installer.apply(prepared)
 
     def _guided_marks(self, snapshot: dict) -> list[dict]:
         """Project current guided note identities through the owned fragment."""
@@ -931,36 +896,13 @@ class PracticeEngine:
 
 
     def _prepare_practice(self, *, exposure=None):
-        if self.plan is None:
-            raise ValueError("Open a piece first")
-        effect = None if exposure is not None else self._manual_effect("practice")
-        selected = exposure or self._install_command(effect)
-        entry = self.flow_session.tempo_entry(self.plan,
-            warmup=self.is_builtin_warmup,bpm=selected.bpm)
-        if entry.active:
-            # The settled guided decision selected this timed exposure; the
-            # score acknowledgement starts what is prepared, not Free again.
-            self.session_commands.prepare_exposure(selected)
-        if entry.clear_guided_return:
-            self.guided_session.discard_return()
-        self._apply_exposure_preparation(prepare_timed(self._exposure_source(),selected,
-            mode="practice",revision=self.score_revision,
-            return_context=self.guided_session.return_context,retry_range=self.attempt.retry_range))
+        return self.exposure_workflows.prepare_practice(exposure=exposure)
 
     def _apply_listen_failure(self) -> None:
-        failure = self.listen.take_failure()
-        if failure is not None:
-            self.playback_session.wait_for_player()
-            self.feedback = failure
-            self.next_action = failure
+        self.exposure_workflows.apply_listen_failure()
 
     def _prepare_listen(self):
-        if self.plan is None:
-            raise ValueError("Open a piece first")
-        self._install_command(self._manual_effect("listen"))
-        self._apply_exposure_preparation(prepare_listen(self._exposure_source(),
-            revision=self.score_revision,bpm=self.plan.bpm,
-            tempo_map=self.tempo_map_cache.get(self.plan.active_stage,self.plan.bpm)))
+        return self.exposure_workflows.prepare_listen()
 
     def demo_audio(self, token: str) -> Path:
         with self.lock:
@@ -977,12 +919,7 @@ class PracticeEngine:
             self.feedback = "Count in, then listen"
 
     def _prepare_perform(self, *, scope: str = "current", exposure=None):
-        if self.plan is None:
-            raise ValueError("Open a piece first")
-        effect = None if exposure is not None else self._manual_effect("perform",values={"scope":scope})
-        selected = exposure or self._install_command(effect)
-        self._apply_exposure_preparation(prepare_timed(self._exposure_source(),selected,
-            mode="perform",revision=self.score_revision))
+        return self.exposure_workflows.prepare_perform(scope=scope, exposure=exposure)
 
     def _performance_review(self, phrase: Phrase, result) -> dict:
         """Retained engine API; assessment service owns report construction."""

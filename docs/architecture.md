@@ -378,7 +378,12 @@ The decision-building part of lesson orchestration now lives in
 `application/teaching_workflows.py`. It gathers bound evidence and route
 facts and applies exactly the generator's validated decision. It does not
 create another stage-selection policy or hold an engine backreference.
-Further exposure, navigation and course-flow extraction is pending.
+Exposure selection and materialization use
+`application/exposure_workflows.py`; selected-effect installation uses
+`application/exposure_installer.py`. Exact guided evidence facts are
+assembled by `application/session_evidence_context.py`, and the installer
+does not re-decide the lesson. Navigation and course-flow extraction
+remain pending.
 
 The final shutdown path shares `SessionLifecycle` and retains the
 evidence-close, MIDI-select-close and database-close ordering exactly.
