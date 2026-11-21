@@ -832,6 +832,31 @@ New regression tests require the owner's separately stated approval.
 Physical MIDI, audible output and visual acceptance are never inferred
 from headless or Dummy-audio CI.
 
+## Post-S7 persistence boundary — learning evidence (2026-11-21)
+
+Source commit [`8eccd16e`](https://github.com/tpepels/piano_teacher/commit/8eccd16eb1b5ea7fa80ef43b56e7fe955925013e)
+separates the previously 733-line `LearningLedger` into an explicit
+414-line transactional evidence owner, shared canonical JSON/privacy encoding,
+SQLite schema/accounting trigger setup, independent detail-budget retention,
+and atomic/redacted export. The ledger composes these connection-scoped owners
+on the **same** SQLite connection: nested `sqlite_atomic` savepoints,
+crash recovery, legacy data import, replay identities, the public history
+API and the single authoritative source of assessments remain unchanged.
+No architecture-only, pixel, infrastructure or new regression tests were added.
+
+[Core CI run 44908940976](https://github.com/tpepels/piano_teacher/actions/runs/44908940976)
+on the source commit passed **103 Python tests, four skips**, Godot startup
+parsing, and four existing native behaviour groups with zero failures.
+The opt-in embedded native/repertoire/standalone-package gate is separately
+running on that same source revision; it must pass before this follow-up is
+claimed fully software accepted. Physical MIDI/audio, visual inspection and
+installation on another clean target machine are not covered by CI.
+
+Current three largest production source files by bytes after extraction:
+`notation/lesson.py` (43,054), `godot/settings_screen.gd` (36,961), and
+`godot/practice_screen.gd` (34,101). These remain diagnostic review targets;
+size alone does not authorize moving their responsibilities.
+
 ## Phase status and remaining acceptance
 
 ### Historical architecture re-audit — pre-correction log

@@ -75,6 +75,23 @@ passed on the final code source `daf466e6`. The only subsequent
 changes are documentation. Physical hardware/visual acceptance and
 a truly separate clean target machine have not been performed.
 
+### Learning evidence persistence boundaries — 2026-11-21
+
+The durable ledger is now an explicit composition rather than a combined
+schema, session, retention and export class. `LearningLedger` keeps session,
+attempt, event, decision and outcome writes. `learning_ledger_schema.py`
+initializes relational constraints and trigger-backed logical-byte accounting;
+`LearningDetailRetention` enforces detail budgets and ages without discarding
+pending attempts or durable summaries; `LearningHistoryExporter` builds a
+consistent read snapshot and writes redacted JSON with atomic replacement.
+`learning_ledger_common.py` supplies canonical serialization, validation and
+redaction. All collaborators share the ledger's existing SQLite connection,
+not a separate writer, data copy or asynchronous history service. Public
+`LearningLedger` methods retain their meanings and persistence migrations.
+Source: [`8eccd16e`](https://github.com/tpepels/piano_teacher/commit/8eccd16eb1b5ea7fa80ef43b56e7fe955925013e).
+Core CI passes (103 Python passed, four skipped; Godot native behaviour zero
+failures); the full native-production/package gate is pending separately.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
