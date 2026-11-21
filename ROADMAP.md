@@ -640,6 +640,25 @@ acceptance must pass before this phase is marked complete. The
 Godot renderer still measures physical travel by inverting its visual
 projection; the Python application remains the final deadline owner.
 
+### V3 bounded presentation-reconciliation witness freshness - 2026-11-21
+
+The native present retry after a lost ACK now re-measures the
+*same already committed physical source* immediately before
+its `playback.present` request. It checks source/segment ownership
+in the immutable queue and proves the unchanged world still
+reaches Python's reserved deadline. A delayed reply cannot
+extend or retime a fixed source. Fresh timestamp, actual queue
+generation and pure geometry travel are submitted; failure to
+reconcile rejects/withdraws without enabling grading.
+
+On the backend, an expired musical count-in is checked before
+physical attestation validation: an overdue reserved take can
+advance its authoritative retry/terminal state even when
+the old physical witness is missing or stale. This prevents a
+lost-status loop that otherwise kept the same expired attempt
+reserved for the full admission timeout. Native testing remains
+an explicit gate on this changed transaction protocol.
+
 ### V1/V3 real backend physical-arm attestation checks - 2026-11-21
 
 The real fake-MIDI backend integration suites now supply

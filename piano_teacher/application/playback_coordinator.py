@@ -373,6 +373,13 @@ class PlaybackCoordinator:
         if (receipt is None or receipt.segment_id != segment_id
                 or receipt.intent_id != intent_id or receipt.attempt != attempt):
             raise ValueError("No matching score reservation to present")
+        now = facts.now
+        remaining = (intent.resume_remaining_beats if receipt.reused_count_in
+                     else 0.0 if intent.fixed_deadline_ms is not None else intent.count_in_beats)
+        count_in_seconds = SCHEDULER.beats_seconds(remaining, intent.bpm)
+        if receipt.deadline_ms / 1000.0 < now + count_in_seconds - 1e-4:
+            self._expire(message="Score admission expired before its count-in")
+            raise ValueError("Score reservation expired; admit the new attempt")
         # A reservation is only the backend's musical proposal. Physical
         # arming must have happened *after* it. Require a new authenticated
         # native measurement at the committed source/queue, and refuse
@@ -399,13 +406,6 @@ class PlaybackCoordinator:
         receipt = replace(
             receipt, world_origin=committed.world_origin,
             queue_generation=committed.queue_generation)
-        now = facts.now
-        remaining = (intent.resume_remaining_beats if receipt.reused_count_in
-                     else 0.0 if intent.fixed_deadline_ms is not None else intent.count_in_beats)
-        count_in_seconds = SCHEDULER.beats_seconds(remaining, intent.bpm)
-        if receipt.deadline_ms / 1000.0 < now + count_in_seconds - 1e-4:
-            self._expire(message="Score admission expired before its count-in")
-            raise ValueError("Score reservation expired; admit the new attempt")
         # No graded/audio transport mutation happened in either prior step.
         # This is the single authorization boundary. An exception leaves
         # the intent retryable; a successful commit fixes the take's clock.

@@ -483,10 +483,33 @@ func _reserved(code: int, body: PackedByteArray) -> void:
 func _send_presentation() -> void:
     if receipt.is_empty():
         return
+    # A lost presentation ACK can be followed by another attempt to
+    # present the same still-armable score. Refresh only its PHYSICAL
+    # witness on the original world/queue; never choose a new downbeat.
+    if (renderer == null or not is_instance_valid(renderer) or
+            not renderer.owns_authorized_segment(str(receipt["segment_id"]))):
+        _cancel_provisional()
+        return
     var attestation: Variant = current.get("physical_attestation")
     if not attestation is Dictionary:
         _cancel_provisional()
         return
+    var at_ms: int = Time.get_ticks_msec()
+    var backend_now: float = _backend_ms()
+    var target_world: float = float(attestation.get("physical_world_origin",NAN))
+    var travel: float = flow.physical_travel_ms_to(
+        target_world,at_ms,
+        float(current.get("projection_source_beat",NAN)),
+        float(current.get("projection_bpm",NAN)),
+        current.get("projection_segments",[]))
+    if (not is_finite(backend_now) or not is_finite(travel) or
+            absf(backend_now+travel-float(receipt["deadline_ms"])) > 5.0):
+        _cancel_provisional()
+        return
+    attestation["physical_sampled_at_ms"] = backend_now
+    attestation["physical_travel_ms"] = travel
+    attestation["physical_queue_generation"] = renderer.admission_queue_generation()
+    current["physical_attestation"] = attestation
     var payload: Dictionary = {
         "intent_id":str(receipt["intent_id"]),
         "attempt":int(receipt["attempt"]),
