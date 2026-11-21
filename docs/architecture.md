@@ -361,7 +361,11 @@ History-management transactions now reside in
 lesson reset, history reads and export. It consumes the installed
 source/plan identity and `SessionLifecycle` rather than holding a
 `PracticeEngine` reference. The external public methods remain locked
-entry points. Source and device workflows still require migration.
+entry points. Source installation and fingering correction now live in
+`application/source_workflows.py`. Preparation is outside the short
+application lock, installation is inside it, and course-entry effects
+remain in the facade transaction until S3. Device/configuration
+workflows still require migration.
 
 The active-take stop transaction now resides in
 `application/session_lifecycle.py`. The stop workflow owns ordered

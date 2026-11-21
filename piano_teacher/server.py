@@ -45,6 +45,7 @@ from .application.lesson_cursor import LessonCursor
 from .application.session_notices import SessionNotices
 from .application.session_lifecycle import SessionLifecycle
 from .application.history_management import HistoryManagement
+from .application.source_workflows import SourceWorkflows
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -332,6 +333,19 @@ class PracticeEngine:
             score_artifact_registry=self.score_artifact_registry,
             learning_evidence=self.learning_evidence, clock=self.now,
             data_dir=self._data_dir)
+        self.source_workflows = SourceWorkflows(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, lifecycle=self.session_lifecycle,
+            recovery_streak=self.recovery_streak,
+            visual_transport=self.visual_transport,
+            source_preparation=self.source_preparation,
+            playback_session=self.playback_session, guided_session=self.guided_session,
+            score_artifact_registry=self.score_artifact_registry,
+            attempt=self.attempt, listen=self.listen,
+            preprocessing=self.preprocessing, fingering=self.fingering,
+            progress=self.progress, fukuda_mistakes=self.fukuda_mistakes,
+            library=self.library, library_health=self.library_health,
+            flow_session=self.flow_session, lock=self.lock, clock=self.now)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -454,13 +468,13 @@ class PracticeEngine:
 
     def library_listing(self) -> dict:
         with self.lock:
-            return self.library.scan()
+            return self.source_workflows.library_listing()
 
     def library_health_status(self) -> dict:
-        return self.library_health.snapshot()
+        return self.source_workflows.library_health_status()
 
     def start_library_health(self) -> dict:
-        return self.library_health.start()
+        return self.source_workflows.start_library_health()
 
     def midi_calibration_action(self, action: str) -> None:
         with self.lock:
@@ -640,22 +654,11 @@ class PracticeEngine:
 
     def load_library(self, identifier: str) -> None:
         with self.lock:
-            path = self.library.resolve(identifier)
-        # Preserve the ordinary loader path for imported music and its callers.
-        if is_warmup(identifier):
-            self.load(str(path), warmup=True)
-        else:
-            self.load(str(path))  # Parse before recording success.
+            path = self.source_workflows.resolve_library(identifier)
+        warmup = is_warmup(identifier)
+        self.load(str(path), warmup=warmup)
         with self.lock:
-            if is_warmup(identifier):
-                # Restore this hand and its clean streak, starting at left
-                # when the student has no prior progress on the warm-up.
-                self.playback_session.select_source()
-                self.lesson_cursor.set_course_guided(False)
-                self.feedback = 'Warm-up ready - left, right, then both hands'
-                self.next_action = 'Three clean passes unlock the next hand.'
-                self._save()
-            self.library.mark_opened(identifier)
+            self.source_workflows.mark_library_opened(identifier, warmup=warmup)
 
     def performance_diagnostics(self) -> dict:
         return self.runtime_timings.snapshot()
@@ -713,37 +716,16 @@ class PracticeEngine:
                 feedback_take=self._feedback_take)
 
     def load(self, path: str, *, warmup: bool = False):
-        """Commit one source only after its MIDI, curriculum and fingering exist."""
+        """Commit a prepared source under one mutation guard and short lock."""
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
-        # Correction and replacement serialize over the entire preparation
-        # and commit; the musical state lock covers only short snapshots.
         with self.source_preparation.source_mutation():
-            prepared = self.source_preparation.prepare(
-                Path(path).expanduser().resolve(), warmup=warmup,
-                preprocessing=self.preprocessing, fingering=self.fingering,
-                progress=self.progress, fukuda_mistakes=self.fukuda_mistakes,
-                library=self.library, state_lock=self.lock,
-                importer=import_piece, plan_type=LearningPlan,
-                diagnostics=diagnostics)
+            prepared = self.source_workflows.prepare(
+                path, warmup=warmup, diagnostics=diagnostics)
             with self.lock:
-                self.visual_transport.rest_take_end = None
-                self._stop(reason="source_changed")
-                self._reset_trouble()
-                self.lesson_cursor.set_course_guided(False)
-                self.source_identity.install(plan=prepared.plan, source=str(prepared.path),
-                    fingerprint=prepared.fingerprint, warmup=warmup)
-                self.lesson_cursor.select_opening(0.0)
-                self.score_artifacts.invalidate()
-                self.source_preparation.source_installed()
-                self.playback_session.select_source()
-                self.guided_session.clear_selection()
-                self.feedback = "Press Start to practice"
-                self.next_action = "Press Start to practice."
-                self.source_identity.advance_revision()
-                self.attempt.reset_source_presentation()
-                if self._flow_active():
-                    self._flow_open(resumed=prepared.resumed)
+                resumed = self.source_workflows.install(prepared, warmup=warmup)
+                if resumed is not None:
+                    self._flow_open(resumed=resumed)
         if diagnostics:
             print("SCORE_LOAD_STAGE: ready",
                   round((time.perf_counter()-began)*1000,1),
@@ -751,34 +733,12 @@ class PracticeEngine:
 
     def fingering_status(self) -> dict:
         with self.lock:
-            return self.source_preparation.fingering_status(
-                self.plan.piece if self.plan is not None else None)
+            return self.source_workflows.fingering_status()
 
     def correct_fingering(self, source_id: str, finger: int | None,
                          *, fingerprint: str | None = None) -> None:
-        """Save a source correction without rebuilding learning or grading notes."""
-        with self.lock:
-            self._apply_listen_failure()
-            identity = self.source_preparation.capture_correction(
-                piece=self.plan.piece if self.plan is not None else None,
-                fingerprint=self.fingerprint,requested_fingerprint=fingerprint)
-        with self.source_preparation.source_mutation():
-            with self.lock:
-                piece = self.plan.piece if self.plan is not None else None
-                source_fingerprint = self.fingerprint
-            corrected = self.source_preparation.correct_fingering(identity,
-                piece=piece,fingerprint=source_fingerprint,
-                source_id=source_id,finger=finger,fingering=self.fingering)
-            with self.lock:
-                installed = self.source_preparation.correction_install(corrected,
-                    piece=self.plan.piece if self.plan is not None else None,
-                    fingerprint=self.fingerprint,score_revision=self.score_revision)
-                self._apply_listen_failure()
-                self.plan.piece = installed.piece
-                self.score_artifacts.invalidate()
-                self.source_identity.publish_revision(installed.score_revision)
-                if self.playback_session.source_revised(self.score_revision):
-                    self.listen.retarget_score(self.score_revision)
+        return self.source_workflows.correct_fingering(
+            source_id, finger, fingerprint=fingerprint)
 
     def _restore(self):
         self.progress.restore(self.plan, self.fingerprint)

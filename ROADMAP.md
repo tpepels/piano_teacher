@@ -429,8 +429,13 @@ affected behaviours and core CI pass.
 export, scoped deletion, full deletion and current-lesson reset are now
 centralized in `HistoryManagement`. It has explicit dependencies and uses
 the same lifecycle, settled evidence and plan identity owners; no second
-LearningPlan store is introduced. Source loading, device and configuration
-workflows remain in `server.py`, so S2 is **not complete**. Verify this
+LearningPlan store is introduced. MIDI loading, validated installation, fingering correction and library
+listing/open/health now execute through `SourceWorkflows`, with the
+source-mutation guard and application lock retained around installation.
+`PracticeEngine.load` composes the atomic installation with course entry;
+the source service receives no engine backreference. Device, configuration,
+shutdown and remaining diagnostics workflows are still pending; S2 is
+**not complete**. Verify this
 commit in core CI before accepting its source mutation paths.
 
 ### Phase S2 — Source, device, configuration and history workflows
