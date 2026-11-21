@@ -12,10 +12,15 @@ func _init(flow) -> void:
     score_flow = flow
 
 func update_hold(state: Dictionary) -> void:
-    if bool(state.get("paused",false)):
-        # The backend freezes MIDI/teaching here. Freeze the one visual
-        # world at the last painted position too; otherwise an idle/Free
-        # hold is released and notation keeps passing the playhead.
+    var pending: Variant = state.get("playback_intent")
+    var resuming: bool = pending is Dictionary and \
+        str(pending.get("action","")) == "resume"
+    if bool(state.get("paused",false)) and not resuming:
+        # An acknowledged Pause freezes the sole world projection.
+        # During physical Resume admission the backend remains paused
+        # until the receipt is authorized, but the player has requested
+        # forward movement. Release the visual hold for that intent so
+        # the inverse future-deadline calculation can reach the source.
         score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
         return
     # These are all states of the same untimed Free exposure; losing MIDI
