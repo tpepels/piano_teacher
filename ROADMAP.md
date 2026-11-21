@@ -286,6 +286,19 @@ resulting action projection, demonstrable through the V1 runner.
 Read/poll does not execute transitions. No Godot component independently
 infers an enabled musical action, target tempo or next lesson decision.
 
+### V3 lost-ACK state reconciliation correction - 2026-11-21
+
+A prior callback identity hardening incorrectly passed the compact
+`playback_timeline` read model to the exact-ID receipt validator.
+The timeline only publishes its authorized segment, not a request
+attempt or intent ID. This made a successful presentation observed
+through state polling fail to promote the held/provisional score.
+The gateway now verifies that the **active segment equals the pending
+receipt's segment**, then confirms from its already validated immutable
+receipt. Native `playback.present` replies still require the full
+intent/attempt/take/segment identity. This preserves authorization
+after a lost present ACK without accepting an unrelated take.
+
 ### V3 source-bound physical admission contract - 2026-11-21
 
 The production `playback.reserve` contract has been replaced rather than

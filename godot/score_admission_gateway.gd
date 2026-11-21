@@ -257,8 +257,12 @@ func observe(state: Dictionary, frame_ms: int) -> void:
     # The resulting running-state poll is AUTHORITATIVE; never roll back the
     # source just because this poll no longer contains the pending intent.
     if not pending_segment.is_empty() and active_segment == pending_segment:
+        # The published active timeline intentionally has no request ID
+        # or attempt. The segment matched our previously verified receipt,
+        # so confirm with that immutable receipt, never with the reduced
+        # read model as though it were a reserve/present reply.
         pending_reconciliation = false
-        _confirm_authorized(timeline)
+        _confirm_authorized(receipt)
     if timeline is Dictionary:
         var segment: String = str(timeline.get("segment_id",""))
         if bool(state.get("running", false)) and \
