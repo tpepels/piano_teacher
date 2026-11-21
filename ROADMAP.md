@@ -531,6 +531,14 @@ including Listen, stage handoff, Retry, resume and shortcut; rejected/stale
 receipts do not grade or sound. Core, native behaviour, embedded runtime and
 relevant package checks pass on the integrated phase.
 
+**S5 implementation underway:** Accepted, durable full-passage publication
+and its exact stage/asset effects now use `PostAssessmentEffects`.
+Performance-review construction, section review and partial-recovery
+return effects also moved. The original `AttemptSettlement` remains
+the sole assessment commit authority. Completion routing, rolling
+recovery and feedback continuation still require migration and
+full core/native verification; S5 is **not complete**.
+
 ### Phase S5 — Attempt result, recovery and durable continuation
 
 - Extract `_complete_attempt`, `_apply_rolling_recovery`,

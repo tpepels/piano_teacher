@@ -398,6 +398,12 @@ forward visual motion and playback admission facts now live in
 `application/transport_timing.py`, which holds no extra clock
 epoch and makes no curriculum decision.
 
+Committed full-passage assessment effects and bounded review return
+operations now reside in `application/post_assessment_effects.py`.
+It consumes the one sealed `AttemptSettlement` receipt, updates the
+selected source/score registry, and never regrades a take or independently
+chooses its successor.
+
 The decision-building part of lesson orchestration now lives in
 `application/teaching_workflows.py`. It gathers bound evidence and route
 facts and applies exactly the generator's validated decision. It does not

@@ -59,6 +59,7 @@ from .application.session_read_models import SessionReadModels
 from .application.transport_timing import TransportTiming
 from .application.timed_playback import TimedPlayback
 from .application.live_feedback_workflows import LiveFeedbackWorkflows
+from .application.post_assessment_effects import PostAssessmentEffects
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -456,6 +457,17 @@ class PracticeEngine:
             live_assessment=self.live_assessment,
             transport_timing=self.transport_timing, clock=self.now)
 
+        self.outcome_effects = PostAssessmentEffects(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            notices=self.notices, attempt_settlement=self.attempt_settlement,
+            teaching_decisions=self.teaching_decisions, clock=self.now,
+            teaching_continuation=self.teaching_continuation, library=self.library,
+            visual_transport=self.visual_transport, attempt=self.attempt,
+            lesson_execution=self.lesson_execution, playback_session=self.playback_session,
+            score_artifact_registry=self.score_artifact_registry,
+            transport_timing=self.transport_timing, assessment=self.assessment,
+            feedback_seconds=self.feedback_seconds)
+
         self.read_models = SessionReadModels(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
             notices=self.notices, attempt=self.attempt,
@@ -767,16 +779,6 @@ class PracticeEngine:
     def _prepare_perform(self, *, scope: str = "current", exposure=None):
         return self.exposure_workflows.prepare_perform(scope=scope, exposure=exposure)
 
-    def _performance_review(self, phrase: Phrase, result) -> dict:
-        """Retained engine API; assessment service owns report construction."""
-        tempo = self.transport_timing.active_tempo_map()
-        elapsed_to_beat = (None if tempo is None else
-            lambda seconds: tempo.beat_at(tempo.seconds_at(self.visual_transport.play_from_beat)+seconds))
-        return self.assessment.review(
-            phrase, result, bar_boundaries=self.plan.piece.bar_boundaries,
-            played_from_beat=self.visual_transport.play_from_beat, bpm=self.plan.bpm,
-            elapsed_to_beat=elapsed_to_beat)
-
     def _teaching_binding(self):
         return self.teaching_decisions.binding()
 
@@ -794,46 +796,6 @@ class PracticeEngine:
     def _install_command(self, effect):
         return self.teaching_decisions.install_command(effect)
 
-
-    def _commit_pending(self, *, finish_publication: bool = True) -> str:
-        if self.attempt_settlement.pending_result is None or self.plan is None:
-            return ""
-        pending = self.attempt_settlement.pending
-        decision = pending.decision
-        try:
-            committed = self.attempt_settlement.commit_full_passage(
-                plan=self.plan,binding=self._teaching_binding(),now=self.now(),
-                continuation=self.teaching_continuation,
-                policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
-                score_revision=self.score_revision,
-                visual_offset=self.visual_transport.visual_offset_beats)
-            outcome = committed.receipt
-            self.attempt.apply_settlement(committed,plan=self.plan)
-            if decision.verdict is not None and decision.verdict.clears_trouble:
-                self.lesson_execution.reset_trouble()
-            if outcome.stage_changed:
-                self.lesson_cursor.select_opening(0.0)
-                self.source_identity.publish_revision(committed.selection.revision)
-                self.playback_session.wait_for_player()
-                prebuilt = self.teaching_continuation.consume_committed_asset(
-                    committed.prepared,changed=True,auto=self.playback_session.auto,
-                    selection=committed.selection)
-                if prebuilt is not None:
-                    self.score_artifact_registry.adopt(prebuilt)
-                else:
-                    self.score_artifacts.invalidate()
-                self.visual_transport.adopt_committed_stage(
-                    committed,preserved=prebuilt is not None)
-            else:
-                self.teaching_continuation.consume_committed_asset(
-                    None,changed=False,auto=self.playback_session.auto,selection=None)
-        except BaseException:
-            self.attempt.publication_failed()
-            raise
-        if finish_publication:
-            self.attempt_settlement.finish_publication()
-        self.attempt.publication_finished()
-        return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
               loop_continuation: bool = False, scheduled_deadline: float | None = None,
@@ -1130,7 +1092,7 @@ class PracticeEngine:
         """Start a take or schedule a seamless retry under the control lock."""
         if self.attempt.settlement_failed:
             revision = self.score_revision
-            self.feedback = self._commit_pending() or "Assessment saved"
+            self.feedback = self.outcome_effects.commit_pending() or "Assessment saved"
             if self.score_revision != revision:
                 self.playback_session.await_score(self.score_revision)
             self.next_action = "Press Play when the score is ready."
@@ -1247,7 +1209,7 @@ class PracticeEngine:
             self._publish_feedback_fault(transaction,now)
             return
         try:
-            self._commit_pending(finish_publication=False)
+            self.outcome_effects.commit_pending(finish_publication=False)
             self.visual_transport.note_tempo(
             stage=self.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
@@ -1427,7 +1389,7 @@ class PracticeEngine:
             layout_for_feedback=self.score_read.completed_take_layout,
             mode=self.playback_session.mode,review_end_beat=self.attempt.review_end_beat,
             automatic_remedial_review=self.attempt.automatic_remedial_review,
-            performance_review=self._performance_review,
+            performance_review=self.outcome_effects.performance_review,
             prepare_decision=self._prepare_teaching,
             plan=self.plan,binding=self._teaching_binding(),now=now,
             policy=resolve_mistake_policy(
@@ -1453,9 +1415,9 @@ class PracticeEngine:
         if effect.action == "response":
             self._apply_policy_response(effect.response,now=now,visual_from=completed_visual)
         elif effect.action == "perform":
-            self._finish_performance_review(phrase,result)
+            self.outcome_effects.finish_performance_review(phrase,result)
         elif effect.action == "section_review":
-            self._finish_section_review(result)
+            self.outcome_effects.finish_section_review(result)
         elif effect.action == "stop_review":
             self.playback_session.stop_automatic()
             self.visual_transport.cancel_preparation()
@@ -1464,41 +1426,10 @@ class PracticeEngine:
         elif effect.action == "exposure":
             self.lesson_execution.enter_selected_exposure(effect.exposure)
         elif effect.action == "partial_recovery":
-            self._finish_partial_recovery(result,now,exposure=effect.exposure)
+            self.outcome_effects.finish_partial_recovery(result,now,exposure=effect.exposure)
         else:
             self._finish_full_passage(result,total_beats,duration,now)
 
-
-    def _finish_performance_review(self, phrase: Phrase, result):
-        """Publish review only after its evidence and source feedback commit."""
-        self.next_action = performance_next_action(
-            warmup=self.is_builtin_warmup,summary=self.attempt.performance_summary)
-        self.playback_session.stop_automatic()
-
-    def _finish_section_review(self, result):
-        """Complete finish section review after a scored take."""
-        # Section reviews are deliberate, bounded practice. Stop at the
-        # selected boundary, preserve detailed feedback, and never
-        # auto-advance to a different passage.
-        self.playback_session.stop_automatic()
-        self.attempt.finish_section_review()
-        self.visual_transport.finish_rewind()
-        self.lesson_cursor.select_opening(0.0)
-        self.feedback = "Section review finished · " + result.summary
-        self.next_action = "Review the notes or press Start for the whole passage."
-
-    def _finish_partial_recovery(self, result, now: float, *, exposure=None):
-        """Complete finish partial recovery after a scored take."""
-        # A clean *partial* recovery cannot confer full passage mastery.
-        # Clear the bounded review before the scheduled full-pass retry.
-        self.attempt.prepare_full_retry()
-        self.lesson_cursor.select_opening(exposure.from_beat if exposure is not None else 0.0)
-        self.transport_timing.schedule_preparation(self.open_from_beat, now=now,
-            from_visual=self.visual_transport.visual_offset_beats + self.visual_transport.play_from_beat
-                + self.transport_timing.elapsed_beat(now-self.visual_transport.run_at),
-            reverse_seconds=self.feedback_seconds)
-        self.feedback = "Selected section finished · " + result.summary
-        self.next_action = "Next: play the whole passage from its beginning to earn mastery."
 
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
         publication = self.attempt_settlement.begin_full_completion(
