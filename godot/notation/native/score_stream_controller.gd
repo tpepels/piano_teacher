@@ -337,11 +337,9 @@ func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: fl
                     facts.playhead,"failed_take_batch")
                 if queue.has_take(first_serial):
                     push_error("Cannot safely roll back incomplete streamed take")
-            push_error(
-                "Refused immutable score strip admission %d: %s "
-                "(world=%.5f source=%.5f..%.5f start=%.5f)" % [
-                    strip_serial,queue.admission_refusal,facts.world,
-                    bounds.x,bounds.y,start_world])
+            push_error("Refused immutable score strip %d: %s (world=%.5f source=%.5f..%.5f start=%.5f)" % [
+                strip_serial,queue.admission_refusal,facts.world,
+                bounds.x,bounds.y,start_world])
             return
         added += 1
     serial = first_serial+windows.size()-1
