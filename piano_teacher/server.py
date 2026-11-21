@@ -61,6 +61,7 @@ from .application.timed_playback import TimedPlayback
 from .application.live_feedback_workflows import LiveFeedbackWorkflows
 from .application.post_assessment_effects import PostAssessmentEffects
 from .application.recovery_workflows import RecoveryWorkflows
+from .application.completion_continuations import CompletionContinuations
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -482,6 +483,17 @@ class PracticeEngine:
             live_assessment=self.live_assessment,
             teaching_decisions=self.teaching_decisions,
             clock=self.now, feedback_seconds=self.feedback_seconds)
+
+        self.completion_continuations = CompletionContinuations(
+            source_identity=self.source_identity, notices=self.notices,
+            teaching_continuation=self.teaching_continuation,
+            attempt_settlement=self.attempt_settlement,
+            playback_session=self.playback_session,
+            visual_transport=self.visual_transport, attempt=self.attempt,
+            flow_session=self.flow_session, lesson_execution=self.lesson_execution,
+            transport_timing=self.transport_timing, score_read=self.score_read,
+            recovery_workflows=self.recovery_workflows,
+            timed_playback=self.timed_playback, outcome_effects=self.outcome_effects)
 
         self.read_models = SessionReadModels(
             source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
@@ -1186,64 +1198,6 @@ class PracticeEngine:
         return self.teaching_continuation.selection(self.attempt_settlement.pending,
             revision=self.score_revision,fingerprint=self.fingerprint)
 
-    def _advance_pending_feedback(self, now: float, *, force_early: bool = False):
-        transaction = self.teaching_continuation.begin_feedback(
-            self.attempt_settlement.pending,now=now,automatic=self.playback_session.auto,
-            force_early=force_early,revision=self.score_revision,fingerprint=self.fingerprint)
-        if isinstance(transaction,FeedbackWaiting):
-            if transaction.message:
-                self.feedback = transaction.message
-            return
-        if isinstance(transaction,FeedbackFault):
-            self._publish_feedback_fault(transaction,now)
-            return
-        try:
-            self.outcome_effects.commit_pending(finish_publication=False)
-            self.visual_transport.note_tempo(
-            stage=self.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
-        except Exception as exc:
-            self._publish_feedback_fault(self.teaching_continuation.settlement_failure(exc),now)
-            if not isinstance(exc,UnpreparedNextStage):
-                print("ASSESSMENT_SETTLEMENT_FAILED:",type(exc).__name__,str(exc),flush=True)
-            return
-        self.attempt.clear_feedback()
-        publication = self.teaching_continuation.finish_feedback(transaction,SettledSourceFacts(
-            fingerprint=self.fingerprint,stage_key=self.plan.identity,revision=self.score_revision,
-            now=now,bpm=self.plan.bpm,presentation_bpm=self.transport_timing.presentation_bpm(),
-            count_in_beats=self.transport_timing.next_count_in_beats(),automatic=self.playback_session.auto,
-            flow_active=self.lesson_execution.flow_active()))
-        if publication.flow_outcome is not None:
-            self.flow_session.settle_decided(publication.flow_outcome,plan=self.plan,
-                message=publication.message,decision_id=transaction.decision_id)
-        self._dispatch_continuation_effect(publication.effect,now)
-        self.attempt_settlement.finish_publication()
-
-    def _publish_feedback_fault(self, fault: FeedbackFault, now: float) -> None:
-        self.playback_session.apply_feedback_fault(fault,now=now)
-        self.feedback,self.next_action = fault.feedback,fault.next_action
-
-    def _dispatch_continuation_effect(self, effect, now: float) -> None:
-        """Apply typed source ports; every route/deadline was selected by its owner."""
-        if isinstance(effect,EnterSelectedExposure):
-            self.lesson_execution.enter_selected_exposure(effect.exposure)
-        elif isinstance(effect,ApplySelectedResponse):
-            self.recovery_workflows.apply_policy_response(effect.response,now=now,deadline=effect.deadline)
-        elif isinstance(effect,EnterSelectedRemediation):
-            self.recovery_workflows.start_remedial_assignment(effect.assignment,deadline=effect.deadline,
-                exposure=effect.exposure)
-        else:
-            if isinstance(effect,ContinueSelectedScore):
-                applied = self.playback_session.apply_continuation(effect,
-                    measurement=self.transport_timing.collect_continuation_measurement(
-                        effect.deadline,effect.exposure.from_beat),
-                    source_stride_beats=self.score_read.source_model()["practice_timeline"]["stride_beats"])
-            else:
-                applied = self.playback_session.apply_continuation(effect)
-            if applied.feedback is not None:
-                self.feedback = applied.feedback
-            if applied.start is not None:
-                self.timed_playback.continue_at(applied.start.deadline,from_beat=applied.start.from_beat)
-
     def _complete_attempt(self, phrase: Phrase, ending: float,
                           total_beats: float, duration: float, now: float) -> None:
         """Apply post-performance state after the score's settlement interval.
@@ -1355,7 +1309,7 @@ class PracticeEngine:
         if completion.next_action is not None:
             self.next_action = completion.next_action
         if completion.advance_feedback:
-            self._advance_pending_feedback(now,force_early=completion.force_early)
+            self.completion_continuations.advance_pending_feedback(now,force_early=completion.force_early)
         elif completion.update_clock:
             self.attempt_settlement.finish_full_completion(publication)
             self._update()
@@ -1406,7 +1360,7 @@ class PracticeEngine:
                 self._finish_full_passage(publication.result,
                     publication.total_beats,publication.duration,now)
             else:
-                self._advance_pending_feedback(now)
+                self.completion_continuations.advance_pending_feedback(now)
         elif decision.action == "rewind_due":
             if self.attempt.guided_recovery_pending:
                 self.lesson_execution.begin_learn(from_beat=self.visual_transport.pending_rewind, recovery=True,
@@ -1594,7 +1548,7 @@ class PracticeEngine:
             released_at = self.playback_session.activate_preloaded_feedback(source,
                 revision=self.score_revision,fingerprint=self.fingerprint)
             if released_at is not None:
-                self._advance_pending_feedback(released_at)
+                self.completion_continuations.advance_pending_feedback(released_at)
             self.teaching_continuation.warm_more(
                 self._next_stage_selection(offset=2))
             return accepted

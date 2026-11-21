@@ -398,6 +398,11 @@ forward visual motion and playback admission facts now live in
 `application/transport_timing.py`, which holds no extra clock
 epoch and makes no curriculum decision.
 
+Exact post-settlement feedback and typed continuation dispatch now
+belong to `application/completion_continuations.py`. The selected
+next source and admission deadline come from existing authoritative
+course and playback owners, not a second continuation policy.
+
 Recovery materialization, recorded boundary checks and automatic
 remedial effects now use `application/recovery_workflows.py`, which
 executes the existing configured assessment/recovery decisions and
