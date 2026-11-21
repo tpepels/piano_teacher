@@ -463,6 +463,13 @@ commit in core CI before accepting its source mutation paths.
 facade; native operations and persistence behaviour remain compatible;
 cancellation and exact source generation are intact; required CI passes.
 
+**S3 implementation underway:** `TeachingDecisions` now builds the one
+source-bound `TeachingEvent`/`TeachingState`, routes manual commands through
+the configured lesson generator and applies the accepted decision. It
+resolves the current policy instance, not a cached pre-settings copy, and
+owns no grading or transport clock. Exposure installation, course entry
+and navigation remain in the facade; S3 is **not complete**.
+
 ### Phase S3 — Lesson selection and exposure workflow
 
 - Extract the complete `_flow_*`, `_begin_learn`,

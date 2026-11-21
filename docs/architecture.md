@@ -374,6 +374,12 @@ captured at service construction. Device connection lifecycle and calibration no
 rather than calling the engine or mutating configured policies itself.
 The short facade entry preserves source interruption ordering and locking.
 
+The decision-building part of lesson orchestration now lives in
+`application/teaching_workflows.py`. It gathers bound evidence and route
+facts and applies exactly the generator's validated decision. It does not
+create another stage-selection policy or hold an engine backreference.
+Further exposure, navigation and course-flow extraction is pending.
+
 The final shutdown path shares `SessionLifecycle` and retains the
 evidence-close, MIDI-select-close and database-close ordering exactly.
 No shutdown workflow calls back into the engine.

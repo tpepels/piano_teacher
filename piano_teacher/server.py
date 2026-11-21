@@ -49,6 +49,7 @@ from .application.source_workflows import SourceWorkflows
 from .application.policy_registry import PolicyRegistry
 from .application.settings_workflows import SettingsWorkflows
 from .application.device_workflows import DeviceWorkflows
+from .application.teaching_workflows import TeachingDecisions
 from .application.teaching_continuation import (
     TeachingContinuation, UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
@@ -369,6 +370,17 @@ class PracticeEngine:
             playback_session=self.playback_session,
             calibration=self.midi_calibration, library=self.library,
             clock=self.now)
+        self.teaching_decisions = TeachingDecisions(
+            source_identity=self.source_identity, lesson_cursor=self.lesson_cursor,
+            attempt=self.attempt, attempt_settlement=self.attempt_settlement,
+            measurement=self.measurement, playback_session=self.playback_session,
+            visual_transport=self.visual_transport,
+            guided_session=self.guided_session, recovery_streak=self.recovery_streak,
+            policy_registry=self.policy_registry, library=self.library,
+            fukuda_mistakes=self.fukuda_mistakes,
+            learner_progress=self.learner_progress,
+            session_commands=self.session_commands,
+            learning_evidence=self.learning_evidence, clock=self.now)
 
     def require_presentation(self) -> None:
         with self.lock:
@@ -504,10 +516,7 @@ class PracticeEngine:
         return self.history_management.statistics(fingerprint, query=query)
 
     def _retry_context(self, result, *, end_beat=None):
-        return self.learning_evidence.adaptive_context(
-            result, plan=self.plan, fingerprint=self.fingerprint,
-            from_beat=self.visual_transport.play_from_beat,
-            end_beat=end_beat)
+        return self.teaching_decisions.retry_context(result, end_beat=end_beat)
 
     def _apply_policy_response(self, response, *, now: float, deadline: float | None = None,
                                visual_from: float | None = None):
@@ -813,8 +822,7 @@ class PracticeEngine:
         self._save()
 
     def _valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
-        return self.learner_progress.valid_trouble_spots(
-            self.plan, fingerprint=self.fingerprint, stage_key=stage_key)
+        return self.teaching_decisions.valid_trouble_spots(stage_key=stage_key)
 
     def _revisit_trouble(self, stage_key, start_beat):
         effect = self._manual_effect("revisit_trouble", from_beat=start_beat, values={"stage_key":stage_key})
@@ -1037,68 +1045,21 @@ class PracticeEngine:
 
 
     def _teaching_binding(self):
-        owner = self.attempt_settlement
-        return TeachingBinding(self.measurement.run_id, self.measurement.session_id,
-            self.fingerprint, self.plan.identity, owner.course_revision,
-            owner.authority_revision, self.playback_session.transport_id, owner.cancellation_generation)
+        return self.teaching_decisions.binding()
 
     def _prepare_teaching(self, kind, result=None, *, rolling=None, manual=None, action=None,
                           from_beat=None, end_beat=None, store=True, values=None, completed=False, assisted_count=0):
-        p = self.plan
-        values = values or {}
-        event = TeachingEvent(1, (identifier() if kind in ("manual","interrupted","source_feedback_changed") else self.measurement.attempt_id or identifier())+":"+kind+(":"+str(end_beat) if kind == "rolling_result" else ""), kind,
-            self.measurement.attempt_id, result, rolling, manual, action, from_beat, end_beat,
-            assisted_count=assisted_count, completed=completed, reason=values.get("reason"),
-            bar=values.get("bar"), first_bar=values.get("first_bar"), last_bar=values.get("last_bar"),
-            scope=values.get("scope"), requested_stage=values.get("stage_key"), requested_mode=values.get("mode"))
-        scope = completion_route(self.playback_session.mode, self.attempt.review_end_beat,
-            self.visual_transport.play_from_beat,
-            full_from_beat=p.active_phrase.first_attack_beat)
-        if self.attempt.automatic_remedial_review and scope == "section_review":
-            scope = "partial_recovery"
-        policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
-        history = (self.practice_policy.store.recent(self.fingerprint, p.identity)
-                   if self.fingerprint else LearnerSnapshot(p.identity, ()))
-        state = TeachingState(1, self._teaching_binding(), p.course_state(), policy,
-            tuple(sorted(self.fukuda_mistakes.evidence(self.fingerprint).items())) if self.fingerprint else (),
-            history, self._retry_context(result, end_beat=end_beat) if result is not None and (policy.whole_handler is not None or policy.rolling_handler is not None) else None,
-            TeachingRouteFacts(mode=self.playback_session.mode, automatic=self.playback_session.auto, warmup=self.is_builtin_warmup,
-                preview_only=self.playback_session.preview_only, assistance_used=self.measurement.assistance_used,
-                scope=scope, performed_bpm=self.attempt_settlement.pending_assessed_bpm or p.bpm,
-                from_beat=self.visual_transport.play_from_beat,
-                end_beat=end_beat if end_beat is not None else p.active_phrase.sounding_end-p.active_phrase.start,
-                course_guided=self.course_guided, guided_return=self.guided_session.return_context,
-                guided_range=self.guided_session.beat_range, review_end_beat=self.attempt.review_end_beat,
-                remediation_active=self._remediation_active is not None,
-                trouble_key=self.recovery_streak.key, trouble_count=self.recovery_streak.count,
-                parent_decision_id=self.measurement.parent_decision),
-            self.practice_policy.diagnosis, self.practice_policy.learner,
-            getattr(p.lesson_generator, "catalog", None),
-            ManualFacts(credits=self.learner_progress.teaching_credits(self.fingerprint),
-                trouble=tuple((unit["stage_key"],unit["start_beat"],unit["end_beat"],tuple(unit["source_indices"]))
-                    for unit in self._valid_trouble_spots()),
-                review=tuple((u["first_bar"],u["last_bar"],u["start_beat"],u["end_beat"],u["errors"])
-                    for u in (self.attempt.performance_summary or {}).get("sections",())),
-                review_current=self.attempt.review_stage_identity == p.identity,
-                paused=self.visual_transport.paused,
-                guidance_completed=bool(self.teaching is not None and self.teaching.snapshot(now=self.now())["completed"]),
-                open_from_beat=self.open_from_beat,pending_rewind=self.visual_transport.pending_rewind))
-        if not store:
-            return self.session_commands.prepare(event=event, state=state, generator=p.lesson_generator)
-        return self.attempt_settlement.prepare(event=event, state=state, generator=p.lesson_generator)
+        return self.teaching_decisions.prepare(
+            kind, result, rolling=rolling, manual=manual, action=action,
+            from_beat=from_beat, end_beat=end_beat, store=store,
+            values=values, completed=completed, assisted_count=assisted_count)
 
     def _manual_effect(self, action, *, from_beat=None, values=None):
-        return self.session_commands.active or self._prepare_teaching("manual", action=action,
-            from_beat=from_beat, values=values, store=False)
+        return self.teaching_decisions.manual_effect(
+            action, from_beat=from_beat, values=values)
 
     def _install_command(self, effect):
-        current = self.plan.teaching_progress()
-        if current == effect.decision.before_progress:
-            if self.session_commands.apply_progress(effect, plan=self.plan):
-                self.attempt_settlement.command_applied()
-        elif current != effect.decision.progress_after:
-            raise ValueError("Manual teaching progress changed before application")
-        return effect.decision.next_exposure
+        return self.teaching_decisions.install_command(effect)
 
     @property
     def _presentation_bpm(self):
