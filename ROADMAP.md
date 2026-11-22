@@ -734,6 +734,17 @@ with safe withdrawal, and paused-source nonrelocation using
 the real source preflight owner. This is a source-geometry
 fix only; Python remains the only author of musical time.
 
+### V3/V6 complete native rerun requested after measured timing correction (2026-11-22)
+
+A fresh `[native]` CI run is required for the integrated
+physical downbeat validation fix, safe prepared-source reuse,
+consistent Resume preflight/commit action, predecessor tempo
+immutability, source revision and typed result handling.
+This checkpoint also exercises all checked-in MIDI files
+and two actual worker-reply-loss fault injections. Core
+CI and the complete native result must both pass on the
+same revision before any V0–V6 phase is reported complete.
+
 ### V3 native failure: elapsed-time world comparison was invalid (2026-11-22)
 
 The first backend-first native run
