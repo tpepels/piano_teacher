@@ -863,6 +863,13 @@ format was removed. Other A0 inventory entries, old orchestration
 composition and library/persistence migrations still require a full
 reachability audit before A6 closure.
 
+**Embedded C++ worker dispatch:** `PianoNative::is_asset_operation`
+routes production `score.bundle` to the existing dedicated asset worker
+alongside read-only diagnostic scores and learning statistics. Heavy
+current-source Verovio and source-model compilation therefore do not
+enter the musical deadline worker's operation queue. This still requires
+same-HEAD embedded verification.
+
 **Verification and release gate:** All above changes are committed on
 `main` but **have not been executed** in Python, Godot, embedded
 native or physical MIDI/audio. CI stays manual-only and has not been
