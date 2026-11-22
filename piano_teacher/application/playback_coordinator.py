@@ -404,8 +404,11 @@ class PlaybackCoordinator:
                 if (result["attempt"] != attempt
                         or self.active_segment_id != segment_id
                         or self.active_take_id != result["take_id"]
-                        or self.state == PlaybackState.FAILED
+                        or self.state in (PlaybackState.FAILED,
+                                          PlaybackState.IDLE,
+                                          PlaybackState.COMPLETE)
                         or source is None
+                        or facts.mode != self.active_segment.get("mode")
                         or facts.transport_id != self.active_segment.get("transport_id")
                         or source.fingerprint != active_source.get("fingerprint")
                         or source.stage_key != active_source.get("stage_key")
