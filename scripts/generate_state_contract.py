@@ -95,7 +95,7 @@ static func problems(state: Dictionary) -> Array[String]:
             elif kind == "target" and (
                     kind_of(directive.get("source_beat")) != "number" or
                     not is_finite(float(directive.get("source_beat", NAN)))):
-                found.append("presentation_directive target has no finite source_beat")
+                found.append("presentation_directive target has no source_beat or has a nonfinite source_beat")
     return found
 '''
 
