@@ -36,6 +36,367 @@ The separate final examination uses the whole original piece.
 | 2026-11-20 | Hold-duration grading is opt-in from Settings (off by default); key releases remain measured in both modes. |
 | 2026-11-21 | The PracticeEngine redesign may introduce or replace architectural layers, boundaries and interfaces. File-size limits are diagnostic goals, not mandatory constraints. |
 | 2026-11-21 | Pause freezes the visible score even in Free/Listen/count-in; render only the selected practice measure window, retaining full sounding tails but no visible neighboring bars. |
+| 2026-11-22 | Adopt A0–A7 architectural unification: one serialized PracticeSession; cohesive lesson, assessment, transport and score domains; one score preparation pipeline; physical Godot adapters; and complete migration/removal of redundant orchestration. Preserve supported features and real physical invariants; CI remains manual. |
+
+## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
+
+**Status: PLANNED — A0–A7 have not been implemented or verified.** This is
+the next development track. The V0–V7 implementation/acceptance work and
+older S0–S7 decomposition remain below as historical evidence and open
+verification requirements, **not** as a requirement to keep all existing
+abstractions. The user will perform connected-piano MIDI/audio/visual
+acceptance after software development.
+
+**Objective:** Replace accumulated per-problem coordinators, mutable phase
+mirrors, callback handoffs and duplicate preparation/projection protocols
+with one coherent, inspectable application. Preserve the complete current
+[practice-flow specification](docs/practice-flow.md), supported alternative
+courses and warm-ups, original MIDI note identities, authentic Verovio
+notation, retained physical ink, real-time input and saved progress. A
+renamed coordinator chain or new monolithic PracticeEngine is not completion.
+
+### Evidence from current main and audit hypotheses
+
+Source audit at **4a80bee** found **63 constructed Python services**, **79
+Python application modules** and **146 production Godot scripts** (49 of them
+notation scripts; developer MCP addon excluded). These counts are descriptive,
+not size targets. The 343-line PracticeEngine facade is thin, but the object
+graph and transition lifecycle remain spread across many owners.
+
+| Current modules/responsibilities | Audit hypothesis and required decision |
+| --- | --- |
+| PracticeControls, ControlDispatcher, SessionCommands, LearningActions, TransportActions | Several routes/context scopes participate in one gesture; replace with one locked event transaction while retaining the actual lesson decision |
+| PlaybackSession, PlaybackCoordinator, VisualTransport, TransportTiming, TimedPlayback, SessionPhase | Playback state and timing are distributed; distinguish legitimate independent facts from duplicate mutable authority before merging |
+| PracticeTimeline, CompletionContinuations, TeachingContinuation, RecoveryWorkflows, AttemptSettlement, ExposureWorkflows | Multiple handoffs represent one lesson/take continuation; PracticeTimeline.update explicitly imitates former recursive publications and should be replaced by ordered event processing |
+| SessionReadModels, SessionSnapshotBuilder, ScoreStatePublisher, control_projection, state_projection | Multiple state/projection passes; aim for one published model from one committed state |
+| ScoreAssetSession, FutureScore, ScoreRunway, ScoreReadServices | Normal source requests layout then semantics, preloaded source supplies both together; unification can remove independent request/identity/retry paths |
+| ScoreAdmissionGateway, ScoreTransportReservation, ScoreStreamQueue, native ScoreStreamController | Physical queue and attestation are necessary; reduce orchestration surface without weakening the immutable ledger |
+| lesson_generators, exercise_strategies, lesson_settings.json, SettingsScreen, ScoreLibrary | Default Practice Flow already incorporates remedial Coda/Fukuda; investigate separate selectable Coda/Fukuda course, policy pickers and historical numeric defaults |
+
+**Feature-retirement gate:** Current settings expose both **practice-flow**
+and **coda-fukuda-midi**. Built-in warm-ups use **source-progression**. A0 must
+identify all real callers, stored selections and supported behavior. Do not
+silently remove a selectable course, warm-up, useful policy or readable saved
+history. Explicitly record any owner decision required to retire a feature.
+Historical persistence migrations can remain at the storage boundary where
+existing installations need them; runtime compatibility branches and dead
+headless fallbacks require current consumers or removal. The older
+lesson_settings.json defaults for three clean runs and two-bar focus must
+not compete with the documented default Practice Flow (two target-tempo
+clean passes and moving windows of at most four measures).
+
+### Proposed architecture: one session, bounded domain ownership
+
+    Godot UI and timestamped MIDI / physical-device input
+                         |
+               typed in-process commands
+                         |
+                   PracticeSession
+         one serialized transition coordinator
+         one authoritative session aggregate
+                         |
+        +----------------+----------------+
+        |                |                |
+    Lesson domain   Transport domain   Assessment domain
+    window/hand     epochs/deadline    MIDI matching
+    progression     transaction        take verdict
+    recovery        pause/count-in     release evidence
+        |                |                |
+        +----------------+----------------+
+                         |
+      Source/Score · Persistence · Presentation projection
+                         |
+        Godot physical score surface and local audio
+       immutable queue · true clearance · retained ink
+
+The architecture remains **one desktop Godot + embedded Python runtime**.
+Do not introduce a network service, generic message bus, event-sourcing
+framework, plugin system, duplicate practice engine, second musical clock or
+global service locator. PracticeSession sequences events and commits one
+authoritative state; domain components provide cohesive pure decisions or
+infrastructure operations, without running separate lesson lifecycles.
+
+**Canonical event path:**
+1. A user gesture, timestamped MIDI, tick or asynchronous completion arrives
+   as a typed event with source/attempt/take identity as applicable.
+2. PracticeSession validates identity, fresh-state eligibility, and event order
+   under the existing short application lock.
+3. The relevant lesson, transport, assessment or score domain returns a typed
+   decision/effect; only its owner may make that decision.
+4. A single transaction commits the change and durable settlement, then
+   issues explicit effects (prepare, reserve, persist, notify) in defined order.
+5. Physical reservation/receipt/failure returns as an **event**, never a
+   speculative success; state is projected once into controls, score motion,
+   feedback and audio for the accepted version.
+
+**Authority and necessary physical split:**
+
+| Domain | Sole Python authority | Godot/infrastructure authority |
+| --- | --- | --- |
+| Lesson | Selected measure window/hand, Listen/Free/Tempo, tempo ladder, retries, aid, mastery and saved course state | Draw selection and forward input; no progression inference |
+| Assessment | Matching original note IDs, note-on/off evidence, extra/missed notes and graded result | Timestamp MIDI and paint approved feedback |
+| Transport | One take/source epoch, count-in, Pause/Resume/Stop, deadline, musical rate map, playback intent/receipt and recovery | Measure available physical travel, provisionally arm, attest, withdraw safe future ink and report exact failures |
+| Score | Original MIDI identities, semantic notes, authored/sounding bounds, immutable prepared bundle | Authentic engraving, cache/prewarm glyphs, retained rendering |
+| Presentation | One pure versioned projection of committed lesson/transport/assessment state, controls, notices and motion directives | Smooth interpolation/paint; emit audio/cues keyed to authorized segment |
+| Persistence | Progress, history, settings, learning evidence and migrations | Display read-only data and request approved actions |
+
+**Non-negotiable invariants:** One musical clock and scheduler; one selected
+source identity; one graded take; full authored count-in including odd meter;
+no grading without authorization; paused/Free notation holds; one immutable
+forward-only physical score ledger; previously exposed ink is never retimed
+or rewritten; native preflight and measured pixel clearance remain native;
+Python alone chooses a deadline after source-bound physical evidence; native
+may refuse but never substitute a new deadline; reserve → arm → attest →
+present remains idempotent and recovers from missing/reordered ACKs; stale
+source/revision/take/segment replies fail closed; original sounding tails,
+selected window bounds, real-source Coda/Fukuda changes, saved evidence,
+asynchronous engraving and texture prewarming are preserved. The live
+hardware/visual constraints justify these safeguards even if individual
+intermediate wrappers can be eliminated.
+
+### A0 — Complete dependency, behavior and legacy audit
+
+- [ ] Map every active Python/Godot production entrypoint and state writer:
+  buttons, keyboard/MIDI notes, in-process request/response, timer, source
+  replacement, async preparation, score admission, audio, persistence,
+  project scenes/autoloads and standalone package. Include threads, lock
+  boundaries, callbacks and physical generation IDs.
+- [ ] Inventory every composed service/native coordinator with its owned
+  state, callers, side effects and current product purpose; classify each
+  **retain / merge / remove / migration-only / undecided** with evidence.
+- [ ] Trace actual default journeys end to end: new MIDI, per-bar moving
+  windows, hands, Listen, Free, Tempo, clean/failure/repeat, remedial
+  Coda/Fukuda, full-piece exam, saved reopen, Pause/Resume/Stop, navigation,
+  disconnect/reconnect, failed admission, lost ACK and source switch.
+- [ ] Inventory selectable alternate courses, built-in warm-ups, diagnosis
+  and learner policies, old settings/parameters, test-only/headless ports,
+  migrations and saved-data compatibility. Record explicit product decisions
+  where retirement changes supported behavior.
+- [ ] Capture an **exact-HEAD** baseline of tests, known failures, native
+  scene/repertoire/package gates, performance and timing traces. The last
+  known green full run was on **1c1b98e**, not the later source commits.
+  Do not claim current-HEAD green without execution.
+- [ ] Produce dependency/ownership map, typed event/outcome contract,
+  deletion/migration ledger and risk/verification matrix. Classify every
+  safeguard as a live requirement, historical workaround or unknown.
+
+**Exit A0:** No active feature/entrypoint or mutable owner is unclassified.
+Every current component has an intended destination or evidence-backed
+retirement, and explicit unresolved product decisions are recorded.
+
+### A1 — One PracticeSession transaction/event coordinator
+
+- [ ] Implement one serial event processor and session aggregate on the
+  existing in-process worker, monotonic clock and short application lock.
+  Define typed gesture, MIDI, tick, score-ready, source, admission, failure,
+  reconciliation, take-result and settlement events and explicit effects.
+- [ ] Move all public and native action entrypoints through this boundary.
+  Resolve UI eligibility against the **fresh current state**, with complete
+  source/revision/attempt/take identity; preserve public operations during
+  migration without leaving a second runtime router.
+- [ ] Replace fragmented manual command routing, context managers and
+  callback-driven effect ordering with one transaction coordinator that
+  executes domain decisions without duplicating them.
+- [ ] Replace PracticeTimeline's nested/recursive transition publication
+  emulation with an ordered in-worker event queue, bounded cycle detection,
+  and **one state publication per committed event**.
+- [ ] Migrate every active caller and delete superseded action routing,
+  nested command orchestration and duplicated mutation paths in this phase.
+- [ ] Verify actual invalid/stale commands, queued Stop priority, navigation
+  suspension, source changes and real fake-MIDI/tick transitions.
+
+**Exit A1:** All session state changes enter through the one event boundary.
+No parallel command router, active legacy engine or recursive handoff remains.
+
+### A2 — Unified lesson, assessment and durable settlement
+
+- [ ] Give the lesson domain one course/window/hand/step, BPM, mastery and
+  recovery authority. Reuse pure Practice Flow decisions and real-source
+  Coda/Fukuda generators; eliminate mirrored course-phase and alternate
+  progression state for the **same** selected course.
+- [ ] Produce a typed immutable TakeResult with original MIDI note IDs,
+  timing and release evidence, source, hand, passage and attempt identity.
+  Only the selected lesson policy decides repeat/faster/slower/Free/aid/
+  next window/final completion.
+- [ ] Integrate rolling checkpoints, complete-take settlement, feedback,
+  recovery, automatic continuation and ledger writes in **one ordered,
+  atomic and idempotent path**. Handle interrupted/failed persistence and
+  partial take cancellation without double mastery or lost events.
+- [ ] Replace redundant Exposure*, Recovery*, Completion*, TeachingContinuation
+  and settlement orchestration only after migrating every active rule and
+  effect; retain useful pure policy, storage and source-generation components.
+- [ ] Preserve the practice-flow contract exactly: each new authored bar
+  alone then trailing windows to four, RH → LH → Both, own Listen → Free →
+  Tempo, 50% initial tempo, two target clean passes, held-note tails, graded
+  onsets with optional hold grading, floor-failure Free recovery, explicit
+  source-bound aid and whole-original-piece final.
+- [ ] Make settings explicitly course-scoped; eliminate conflicting generic
+  defaults without changing supported alternative/warm-up behavior or
+  breaking existing persisted sessions.
+
+**Exit A2:** One take result yields one lesson decision and one durable
+settlement. No other owner can independently grade, advance or select tempo.
+
+### A3 — Single transport state and physical playback protocol
+
+- [ ] Consolidate running, paused, pending, terminal-failure and source
+  epochs; musical count-in/rate map; authorized current and future take; and
+  receipt/deadline into one transport aggregate. Retain MusicalScheduler as
+  the sole musical scheduling policy.
+- [ ] Migrate all active responsibilities and consumers of PlaybackSession,
+  PlaybackCoordinator, VisualTransport, TransportTiming and TimedPlayback.
+  Delete duplicate flags, independent time calculations and redundant
+  state holders once their full responsibilities are integrated.
+- [ ] Implement one explicit intent → physical evidence → Python deadline
+  reservation → native immutable arm → attested present → authorized start
+  transaction, plus typed failure/withdraw/reconciliation transitions.
+- [ ] Integrate Listen, untimed stationary Free, Tempo, automatic faster/
+  same/slower repeats, exact one-bar gap, full-meter count-in, Pause/
+  fresh-future Resume, Stop, disconnection, source change, and bounded
+  failed-admission recovery in that one model.
+- [ ] Drive grading enablement, visual epoch/hold, audible count-in/voice
+  and cue deduplication from the **same authorized segment**. Preserve
+  outgoing ink and existing genuinely authorized rest reuse; eliminate any
+  remaining obsolete paused-source reuse or shortened-count-in paths.
+
+**Exit A3:** Every transport state and deadline has one owner and one
+explainable receipt, including stale/lost-ACK and failure recovery.
+
+### A4 — One source/revision-keyed ScoreBundle pipeline
+
+- [ ] Standardize normal and successor preparation on an immutable
+  ScoreBundle containing fingerprint, revision, stage/window/hand identity,
+  semantic notes, original note IDs, authentic engraving geometry,
+  selected bounds, sounding tails and cache/generation identifiers.
+- [ ] Use one bounded background preparation/adoption lifecycle for opening,
+  navigation, future-stage prewarming, saved resume and fingering correction;
+  preserve source generation cancellation, no MIDI tick blocking, and
+  expensive Verovio/inference work outside the session lock.
+- [ ] Replace separate current layout→semantic and future combined request
+  protocols with one verified ready/failure contract and adoption path.
+  Remove retired duplicate retry queues, source identity mirrors,
+  acknowledgements and stale-result fallback logic once migrated.
+- [ ] Preserve authentic context needed to engrave ties/clefs and only
+  display selected measures with full sounding tails; retain prewarmed
+  textures, retained ready ink, safe source switching, resize, no viewport
+  jump and immutable previously exposed score strips.
+
+**Exit A4:** Every current or prepared future source uses the same bundle,
+identity, readiness, retry and adoption protocol.
+
+### A5 — Thin Godot UI and one native physical score surface
+
+- [ ] Keep native code responsible only for raw inputs, widgets, source
+  renderer readiness, physical availability/queue, visual interpolation,
+  sound/cues and navigation display. No Godot learner policy, grading,
+  retry tempo, mode or musical deadline decisions.
+- [ ] Expose one physical score-surface interface over the **existing**
+  immutable queue: measure, preflight, reserve, arm, attest/bind, present,
+  withdraw unexposed suffix, expire spent ink, report failure. Consolidate
+  the gateway, runway and stream-controller orchestration without creating
+  a replacement ledger or altering admission safety.
+- [ ] Make main Practice, advanced Pause, Lesson Path and MIDI shortcut UI
+  consume one versioned backend controls/projection contract. Malformed or
+  stale state and command replies must fail closed before effect publication.
+- [ ] Use only authorized epochs and backend hold/target directives for
+  visual motion, frozen Pause, Free targets, count-in, notes and audio.
+  Retain one smooth forward-only score and draw no extraneous practice bars.
+- [ ] Audit every active native scene, effect coordinator and callback;
+  migrate each live responsibility and delete obsolete policy/adapter paths.
+
+**Exit A5:** Godot owns real physical facts and presentation only; it cannot
+select a different practice action, musical time or take verdict.
+
+### A6 — Complete legacy deletion, composition and documentation closure
+
+- [ ] Remove every superseded Python/Godot class, facade, callback layer,
+  dead policy, duplicate clock/phase, retired projection, request shim and
+  compatibility-only runtime branch identified in A0–A5. Trace imports,
+  scene references, bridge operations, packaged assets and test callers;
+  **zero production dependency** may remain on the retired architecture.
+- [ ] Simplify the 63-object flat composition graph into cohesive domain
+  assembly and narrow ports. Avoid a new service locator, a parallel engine,
+  interface explosion or a monolithic session implementation.
+- [ ] Keep required backwards-compatible migrations **at persistence
+  boundaries**, with idempotent stored-state upgrades. Retire supported
+  visible features only after the documented owner decision; otherwise
+  fully integrate them in the new domains.
+- [ ] Make presentation state a pure snapshot of committed session facts,
+  with no independent command/render phase and action-policy mirrors.
+- [ ] Update docs/architecture.md with *only* the live architecture; label
+  prior implementation history as historical, update development/build
+  instructions, delete implementation-shape tests and keep behavior tests.
+- [ ] Re-audit complete dependency and state-writer closure, constructor
+  coupling, callbacks, dead fallbacks and package contents. Compare with
+  A0 evidence; justify remaining complexity by a current product constraint.
+
+**Exit A6:** All production paths use the new model; no temporary dual
+owner, old/new bridge, obsolete active dependency or runtime legacy creep
+remains. Saved user data remains readable.
+
+### A7 — Same-HEAD software verification, then physical handoff
+
+- [ ] On the **same final HEAD**, run and fix all failures in
+  **bash scripts/test.sh --coverage** and
+  **bash scripts/verify-embedded-production-local.sh**. GitHub Actions
+  remains **workflow_dispatch only**; do not run CI on commits.
+- [ ] Exercise the actual embedded Godot/Python scene, fake MIDI clean/wrong/
+  missed/late/extra/release paths, Free/Tempo/Listen, Pause/Resume/Stop,
+  disconnected/reconnect, lost reserve/present ACK, stale replies,
+  failure recovery and saved-progress reopening, with complete outcomes.
+- [ ] Verify all 16 checked-in MIDI repertoire cases, variable/odd meter,
+  full count-ins, timed repeats/empty rest, moving windows, fast/dense and
+  sparse notation, sustained tails, exact physical admission, resize and
+  preloaded transitions. Require no Godot SCRIPT ERROR and no unacknowledged
+  authority or overlapping immutable ink.
+- [ ] Verify both hold-grading settings, alternate supported courses and
+  warm-ups, Coda/Fukuda aid return, persistent history/settings and
+  failure-safe data migration. Keep the application responsive during
+  background layout/inference and prewarming.
+- [ ] Verify standalone build, relocated package contents and boot on
+  the same revision. Add exact Pathétique II native case only if
+  **PIANO_PATHETIQUE_II_MIDI** is actually supplied; do not treat an absent
+  original source as a pass.
+- [ ] Record final SHA, complete passing/failing case results, deleted-code
+  ledger, ownership diagram and precise outstanding owner test procedure
+  for real CA49/physical MIDI, audible metronome/voice, visual continuity
+  and clean-machine installation.
+
+**Exit A7 (software):** The whole agreed software scope is integrated,
+retired paths are gone, all current real-path tests and the native/repertoire/
+relocated-package gate pass on **one exact commit**. **Separate physical
+acceptance remains pending** until performed with the connected keyboard
+and speakers, including the original Pathétique source and readability.
+
+### Implementation and reporting rules
+
+1. Work on **main** only. Complete and integrate each phase before marking
+   it done. A wrapper added while the old owner still runs does not count.
+2. No indefinite parallel architectures, speculative UI state machines,
+   network layer, extra scheduler/clock, generated service-locator maze,
+   arbitrary file-size target or "architecture shape" tests.
+3. A phase is only done when **all** consumers have migrated, old active
+   paths are deleted, behavior and error handling are preserved, affected
+   real-path checks pass, and the exact commit plus evidence are recorded.
+4. Tests should prove visible transitions, physical admission and MIDI
+   behavior, not number of files or structure. Full verification is A7;
+   focused checks are required as each phase is integrated.
+5. Any proposed retirement of still-selectable/saved functionality needs
+   an explicit owner decision. Do not leave abandoned code because it
+   once solved a problem, but do not guess that a capability is obsolete.
+6. Keep V0–V7 software verification obligations and V7 physical acceptance
+   distinguishable from A0–A7 implementation progress.
+
+| Phase | Required result | Status |
+| --- | --- | --- |
+| A0 | Full source/runtime/feature audit and migration/deletion map | Not started |
+| A1 | One authoritative PracticeSession and event processing path | Not started |
+| A2 | Unified lesson/assessment/settlement/recovery | Not started |
+| A3 | Unified transport clock and physical playback transaction | Not started |
+| A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
+| A5 | Thin Godot UI and single native physical-surface interface | Not started |
+| A6 | All old dependencies removed; simplified composition, docs and migration | Not started |
+| A7 | Green same-HEAD software/native/package; physical acceptance handoff | Not started |
 
 ## Active roadmap: UI boundary and MIDI transition verification (V0-V7, updated 2026-11-22)
 
