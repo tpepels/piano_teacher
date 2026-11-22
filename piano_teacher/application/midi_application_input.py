@@ -63,8 +63,10 @@ class MidiApplicationInput:
             # PracticeSession's lock. Otherwise a source import, settlement
             # or long command could falsely move this attack to a later
             # beat or an adjacent take.
+            arrival = self._session.midi_arrival()
             received_at = self.clock()
-            self._session.on_midi(message, received_at=received_at)
+            self._session.on_midi(
+                message, received_at=received_at, arrival=arrival)
         finally:
             self.runtime_timings.midi_ms.append(
                 (time.perf_counter()-began)*1000.0)
@@ -92,6 +94,12 @@ class MidiApplicationInput:
             raise RuntimeError("MIDI shortcut before session binding")
         self._session.on_shortcut(effect)
 
+    def corrected_time(self, received_at: float,
+                       corrected_at: float | None = None) -> float:
+        """Apply the selected physical MIDI calibration to its arrival time."""
+        return (received_at - self.library.settings["midi_offset_ms"]/1000.0
+                if corrected_at is None else corrected_at)
+
     def _deliver_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
         now = self.clock() if received_at is None else received_at
         facts = MidiInputFacts(self.source_identity.fingerprint,self.source_identity.revision,
@@ -99,7 +107,8 @@ class MidiApplicationInput:
             self.source_identity.plan.hand if self.source_identity.plan else "both",self.source_identity.plan.bpm if self.source_identity.plan else 60.,
             self.playback_session.mode,self.playback_session.running,self.visual_transport.paused,self.playback_session.preview_only,
             self.visual_transport.play_from_beat,self.visual_transport.run_at,self.playback_session.transport_id,
-            self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.guided_session.controller is not None))
+            self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.guided_session.controller is not None),
+            self.attempt_settlement.cancellation_generation)
         self.midi_ingress.dispatch(
             message,facts=facts,received_at=now,
             corrected_at=corrected_at,deferred=deferred,

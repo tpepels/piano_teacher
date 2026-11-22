@@ -36,11 +36,24 @@ class MidiShortcut:
 
 
 @dataclass(frozen=True, slots=True)
+class MidiArrival:
+    """Committed source/take epoch observed when hardware called back."""
+    fingerprint: str
+    revision: int
+    stage_key: str
+    hand: str
+    transport_id: int
+    cancellation_generation: int
+    automatic: bool
+
+
+@dataclass(frozen=True, slots=True)
 class PhysicalMidi:
     message: object
     received_at: float | None = None
     corrected_at: float | None = None
     deferred: bool = False
+    arrival: MidiArrival | None = None
 
 
 

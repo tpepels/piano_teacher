@@ -8,6 +8,7 @@ from collections import deque
 from dataclasses import dataclass
 import math
 from .musical_scheduler import SCHEDULER
+from .session_events import MidiArrival
 from ..live_feedback import live_assessment
 from ..grading_tolerance import onset_tolerance
 
@@ -29,6 +30,7 @@ class MidiInputFacts:
     transport_id: int
     tempo_map: object
     can_pause: bool
+    cancellation_generation: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,11 +60,7 @@ class DeferredMidi:
     message: object
     received_at: float
     corrected_at: float
-    fingerprint: str
-    score_revision: int
-    stage_key: str
-    hand: str
-    transport_id: int
+    arrival: MidiArrival
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,8 +207,9 @@ class MidiIngress:
         if due or self.deferred:
             self.deferred.append(DeferredMidi(
                 message.copy(), received_at, corrected_at,
-                facts.fingerprint, facts.score_revision, facts.stage_key,
-                facts.hand, facts.transport_id))
+                MidiArrival(facts.fingerprint, facts.score_revision,
+                            facts.stage_key, facts.hand, facts.transport_id,
+                            facts.cancellation_generation, transport.automatic)))
             return True
         return False
 
