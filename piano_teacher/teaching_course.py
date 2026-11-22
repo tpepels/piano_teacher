@@ -114,6 +114,13 @@ def minimum_bpm(course):
     return max(SETTINGS.minimum_bpm, min(course.progress.target_bpm, floor))
 
 
+def maximum_bpm(course):
+    """The highest tempo the selected course allows its manual controls."""
+    if course.profile == "practice-flow" and not course.warmup:
+        return min(SETTINGS.maximum_bpm, course.progress.target_bpm)
+    return SETTINGS.maximum_bpm
+
+
 def carried_bpm(course):
     """Reuse earned tempo only when this stage has the same actual source ink.
 
@@ -253,9 +260,9 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
         return course.with_progress(bpm=min(bpm,target), target_bpm=target, stage_tempos=(),
                                     transferable_tempos=(), streak=0, failures=0)
     tempos, transferable = dict(p.stage_tempos), set(p.transferable_tempos)
-    if action == "tempo_up" and p.bpm < SETTINGS.maximum_bpm:
-        ceiling = (p.target_bpm if course.profile == "practice-flow" or p.bpm < p.target_bpm
-                   else SETTINGS.maximum_bpm)
+    if action == "tempo_up" and p.bpm < maximum_bpm(course):
+        ceiling = (p.target_bpm if p.bpm < p.target_bpm
+                   else maximum_bpm(course))
         bpm = min(ceiling, p.bpm + SETTINGS.manual_tempo_step_bpm)
         transferable.add(course.key)
     elif action == "tempo_down" and p.bpm > minimum_bpm(course):
