@@ -704,6 +704,23 @@ in the same development sequence. Do not accept this phase
 or deploy the interim contract before the complete native and
 core CI transaction checks pass.
 
+### V3 prepared-source exact-deadline reconciliation (2026-11-22)
+
+Corrected a pure native `ScoreTransportReservation.plan_facts`
+edge: a separately prepared, unexposed READY strip can be
+withdrawn as a safe future suffix when the backend selects a
+later final deadline. The prior preflight treated that
+provisional source like an immutable paused take and rejected
+the otherwise valid selected downbeat, trapping Start on the
+same stale prepared placement. The new rule falls through to
+the sole append-only placement only for `action=start`;
+Pause/Resume and authorized ink remain immutable and may be
+rejected rather than retimed. `tests/godot/score_stream.gd`
+checks exact prepared reuse, later backend-selected append
+with safe withdrawal, and paused-source nonrelocation using
+the real source preflight owner. This is a source-geometry
+fix only; Python remains the only author of musical time.
+
 ### V3 integrated native production acceptance requested (2026-11-22)
 
 Backend-first V3 transaction code is now integrated across Python and

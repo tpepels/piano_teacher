@@ -142,14 +142,23 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     if reusable >= 0:
         var reused_world: float = float(online[reusable]["world_origin"]) + source_opening
         if is_finite(exact_start_world) and absf(exact_start_world-reused_world) > .0001:
-            # Existing musical ink cannot be shifted to meet a proposed
-            # later backend deadline, even if it has not been exposed yet.
-            return _refuse("immutable_reuse_differs_from_backend_deadline")
-        return {"ok":true,"mode":"reuse","action":action,
-            "opening":source_opening,
-            "protected_take":int(online[reusable].get("take_owner",
-                online[reusable]["serial"])),
-            "start_world":reused_world,"reason":"existing_future_owner"}
+            # A prepared READY source is provisional and may be retracted
+            # with the same future-only suffix rule as any other plan.
+            # The backend has already chosen a later exact downbeat: do
+            # not insist on a stale prepared placement or spin forever
+            # attempting to bind the same obsolete queue slot.
+            #
+            # A paused, authorized source is immutable. It may never be
+            # silently moved to accommodate a different count-in.
+            if action != "start":
+                return _refuse("immutable_reuse_differs_from_backend_deadline")
+            reusable = -1
+        else:
+            return {"ok":true,"mode":"reuse","action":action,
+                "opening":source_opening,
+                "protected_take":int(online[reusable].get("take_owner",
+                    online[reusable]["serial"])),
+                "start_world":reused_world,"reason":"existing_future_owner"}
     if is_finite(near_onset):
         if is_finite(exact_start_world) and exact_start_world < near_onset-.0001:
             return _refuse("backend_deadline_precedes_empty_strip_clearance")

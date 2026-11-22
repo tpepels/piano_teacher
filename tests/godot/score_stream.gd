@@ -48,6 +48,45 @@ func run() -> void:
     controller.bind_surface(canvas,pool,func(_opening: float) -> Array[Vector2]: return windows)
     var plan: Dictionary = Reservation.plan_facts(facts(controller,0.0),"start",0.0,0.0,4.0)
     check(bool(plan.get("ok",false)) and float(plan.start_world) >= 4.0,"Play reserves a complete count-in before the first note")
+    # A preliminary prepared READY source may have been placed before
+    # the backend computes its final, later musical deadline. Only an
+    # unexposed prepared strip may be replaced; no authorized/paused
+    # source may be repositioned. The pure preflight uses actual queue
+    # snapshots, with no second teaching or transport implementation.
+    var prepared: Dictionary = {
+        "kind":"source", "world_origin":12.0,"source_floor":0.0,
+        "source_ceiling":4.0,"pending":true,"armed":false,
+        "take_key":"prepared","serial":42,"take_owner":42}
+    var prepared_facts: Dictionary = facts(controller,0.0)
+    prepared_facts["online"] = [prepared]
+    prepared_facts["withdrawn"] = {"remaining":[],"owners":[42]}
+    var same_prepared: Dictionary = Reservation.plan_facts(
+        prepared_facts,"start",0.0,0.0,4.0,12.0)
+    check(bool(same_prepared.get("ok",false)) and
+        str(same_prepared.get("mode","")) == "reuse",
+        "A prepared source is reused when the backend selects its exact existing slot")
+    var later_prepared: Dictionary = Reservation.plan_facts(
+        prepared_facts,"start",0.0,0.0,4.0,20.0)
+    check(bool(later_prepared.get("ok",false)) and
+        str(later_prepared.get("mode","")) == "append" and
+        absf(float(later_prepared.get("start_world",0.0))-20.0) < .0001 and
+        int(later_prepared.get("withdraw_owners",[]).size()) == 1,
+        "A retractable READY strip yields to the exact later backend deadline")
+    var paused_mismatch: Dictionary = prepared_facts.duplicate(true)
+    paused_mismatch["online"] = [prepared.duplicate(true)]
+    paused_mismatch["online"][0]["pending"] = false
+    paused_mismatch["online"][0]["armed"] = true
+    paused_mismatch["online"][0]["take_key"] = "active"
+    paused_mismatch["was_paused"] = true
+    paused_mismatch["paused_source"] = 0.0
+    paused_mismatch["last_take"] = "active"
+    paused_mismatch["paused_owner"] = 42
+    var paused_relocate: Dictionary = Reservation.plan_facts(
+        paused_mismatch,"resume",0.0,0.0,4.0,20.0)
+    check(not bool(paused_relocate.get("ok",false)) or
+        str(paused_relocate.get("mode","")) != "reuse",
+        "A genuinely paused authorized source cannot be moved to a new backend deadline")
+
     var armed: Dictionary = controller.arm_take(geometry(0.0),0.0,0.0,6.7,0.4,
         float(plan.start_world),false,false,4.0)
     check(not armed.is_empty(),"The physical source accepts the planned start")
