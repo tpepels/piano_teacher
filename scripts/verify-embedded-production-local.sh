@@ -3,8 +3,21 @@
 # Run from any directory. All lesson settings and imported MIDI fixtures are
 # isolated under a temporary HOME; real learner progress is never modified.
 set -Eeuo pipefail
+# Optional local-only source for the unresolved Pathétique II regression.
+# Resolve before moving to repository root; never commit or package the file.
+CALLER_DIR="$PWD"
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
+if [[ -n "${PIANO_PATHETIQUE_II_MIDI:-}" ]]; then
+  if [[ "$PIANO_PATHETIQUE_II_MIDI" != /* ]]; then
+    PIANO_PATHETIQUE_II_MIDI="$CALLER_DIR/$PIANO_PATHETIQUE_II_MIDI"
+  fi
+  if [[ ! -f "$PIANO_PATHETIQUE_II_MIDI" ]]; then
+    echo "Pathétique II acceptance source not found: $PIANO_PATHETIQUE_II_MIDI" >&2
+    exit 2
+  fi
+  export PIANO_PATHETIQUE_II_MIDI
+fi
 MODE="${1:-full}"
 if [[ "$MODE" != full && "$MODE" != --without-package ]]; then
   echo "Usage: bash scripts/verify-embedded-production-local.sh [--without-package]" >&2
@@ -222,8 +235,9 @@ verify_moonlight() {
 verify_real_source() {
   local case_name="$1"
   local score="$2"
+  local source_path="${3:-midi/$score}"
   set_case "$case_name"
-  cp "midi/$score" "$HOME/Music/Piano Teacher/$score"
+  cp "$source_path" "$HOME/Music/Piano Teacher/$score"
   seed "$score" coda-fukuda-midi
   local fingerprint
   fingerprint="$(sha256sum "$HOME/Music/Piano Teacher/$score" | cut -d' ' -f1)"
@@ -350,6 +364,16 @@ if ((CORPUS_CHECKED == 0)); then
   FAILED_CASES+=("Native repertoire corpus is empty")
 fi
 printf 'NATIVE_REPERTOIRE_CORPUS_CHECKED=%d\n' "$CORPUS_CHECKED"
+if [[ -n "${PIANO_PATHETIQUE_II_MIDI:-}" ]]; then
+  # The real source is not bundled with the repository. Run the same
+  # embedded Godot/Verovio/physical-reservation journey as every corpus
+  # item, against an isolated copy in a disposable test HOME.
+  check "Native Pathétique II externally supplied MIDI" verify_real_source \
+    "pathétique-II" "external_pathetique_II.midi" "$PIANO_PATHETIQUE_II_MIDI" || :
+  printf 'NATIVE_PATHETIQUE_II_SOURCE_CHECKED=1\n'
+else
+  printf 'PENDING NATIVE_PATHETIQUE_II_SOURCE: supply PIANO_PATHETIQUE_II_MIDI to verify the original regression\n'
+fi
 if [[ "$MODE" == full ]]; then
   check "Relocated standalone runtime package audit" audit_package || :
 else

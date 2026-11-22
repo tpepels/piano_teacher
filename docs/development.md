@@ -121,7 +121,15 @@ pixel tests. The requested suite rebuild was an explicit exception to the
 prior restriction on adding tests. Notation appearance is judged on screen.
 
 The full [production verifier](../scripts/verify-embedded-production-local.sh)
-runs embedded startup, a real default Practice Flow fixture, and Moonlight,
+can also check the original Pathétique II failure against a local MIDI that is
+not in the versioned corpus. Pass `PIANO_PATHETIQUE_II_MIDI=/absolute/path/to/source.mid`
+when running it. The script imports that source into an isolated temporary
+test HOME, runs the actual embedded Godot admission journey, and deletes the
+copy on completion. Without this setting it prints a **PENDING** marker rather
+than implying that Pathétique has been tested; this source-specific gate
+does not replace physical piano/audio acceptance.
+
+The verifier runs embedded startup, a real default Practice Flow fixture, and Moonlight,
 Peace Piece and Chopin journeys with explicitly selected Coda/Fukuda.
 Full mode also builds and boots the relocated standalone package. These checks
 exercise built application routes, separately from the fast suite. Serialize
