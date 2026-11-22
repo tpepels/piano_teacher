@@ -156,8 +156,19 @@ class AttemptSettlement:
                 if self.pending_result is not None else None)
 
     def finish_publication(self) -> None:
-        if self.pending is not None:
-            self.pending.phase = "published"
+        """Publish only after the durable receipt's source effects completed.
+
+        The state transition is one-way and idempotent. Callers cannot hide
+        an unsettled or partially applied lesson decision by marking it
+        published before the already-selected continuation is installed.
+        """
+        pending = self.pending
+        if pending is None or pending.phase == "published":
+            return
+        if (pending.phase != "effects_applied"
+                or pending.receipt is None or pending.publication is None):
+            raise ValueError("Cannot publish a teaching decision before its source effects")
+        pending.phase = "published"
 
     def effects_applied(self, pending: PendingTeachingDecision) -> None:
         """Acknowledge post-commit source effects exactly once per receipt.
