@@ -395,6 +395,18 @@ GitHub Tests remains opt-in `workflow_dispatch`; no CI run was triggered.
   sampled **before** waiting for the session lock, not inside the event
   handler. Deferred MIDI retains the separate recorded/corrected timestamp.
 
+- [Source dependency audit, 2026-11-22] After deleting the two old
+  coordinators and migrating fingering installation, all **79 current
+  `piano_teacher/application/*.py` modules** were individually scanned
+  for imports/callers of `PracticeControls`, `ApplicationWorker`,
+  `application_worker`, `practice_controls`, the former public
+  `receive_message` entrypoint and `SourceWorkflows.correct_fingering`.
+  **No remaining reference was found.** This is a production source
+  reachability result, not execution or proof of feature acceptance.
+  The source-level writer map, remaining mutable context and serialized
+  event inventory are documented in
+  [architecture](docs/architecture.md#a1-concrete-serialized-write-boundary--source-integration-2026-11-22).
+
 **Still open:** Although the public command/MIDI/tick and high-value
 source/physical/persistence mutation paths now enter the serialized
 boundary, `SessionCommands` still holds mutable `active`, `prepared`,

@@ -171,10 +171,12 @@ class PracticeSession:
 
 
     def apply(self, event: PracticeEvent) -> dict | int | None:
-        """Execute native input under the single short application lock.
+        """Commit one typed action under the existing application lock.
 
-        Source import and physical attestation have multi-step asynchronous
-        protocols; their adoption events will migrate separately.
+        Heavy source import and fingering inference run under the separate
+        source-mutation guard without holding this lock. Only prepared
+        installation, attested physical receipts and ordinary state changes
+        reach this synchronous transaction boundary.
         """
         with self.lock:
             if isinstance(event, TimedStartRequested):

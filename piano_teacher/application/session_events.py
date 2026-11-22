@@ -1,8 +1,9 @@
-"""Typed immutable inputs to the single serialized desktop practice session.
+"""Frozen event envelopes for the one serialized desktop practice session.
 
-These are source/take/physical actions, not a second musical clock,
-background event bus or persisted event stream. Every accepted mutation
-still executes through PracticeSession.apply under the session RLock.
+Payload dictionaries, MIDI messages and prepared-source objects are not
+deep-frozen: they are consumed immediately while holding the application
+lock, with source/revision/receipt identity validated by the domain.
+No separate timer, event bus or persisted event log is introduced.
 """
 from __future__ import annotations
 from dataclasses import dataclass

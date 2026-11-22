@@ -800,6 +800,14 @@ The pre-existing `source_mutation` mutex remains necessary to serialize
 source import and fingering correction while releasing the application
 lock during inference.
 
+**Post-migration dependency check:** All 79 current Python application
+modules were read from the repository at the A1 integration HEAD and
+checked for the two deleted coordinator classes, their old instance
+names, the removed MIDI ingress method and the previous direct fingering
+workflows method. There are no matching production references in those
+modules. This does not verify semantic behavior, the current Godot scene,
+or source-module references outside the application package.
+
 **Intentional remaining debt:** `SessionCommands.active/prepared/applied`
 and `action_reason` are still mutation context shared by TeachingDecisions,
 LearningActions, TimedPlayback, ExposureInstaller and TransportActions.
