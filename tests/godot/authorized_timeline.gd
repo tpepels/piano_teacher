@@ -71,6 +71,21 @@ func run() -> void:
     check(running.sample(4200) >= advanced,
         "Late state frames cannot rewind the authorized world")
 
+    var uninterrupted := Flow.new()
+    uninterrupted.sample(1000,40.0)
+    uninterrupted.authorize_source_epoch(2000,0.0,40.0,[],"older:approved")
+    uninterrupted.sample(2000)
+    var authorized_rate: float = uninterrupted.timeline.current_rate()
+    uninterrupted.sample_uncommitted(2600,120.0)
+    check(near(uninterrupted.timeline.current_rate(),authorized_rate),
+        "Pending next source cannot apply its nominal BPM to previous authorized ink")
+    check(near(uninterrupted.project(3200)-uninterrupted.project(2600),.4),
+        "Predecessor's forward physical world keeps its original 40 BPM until new authorization")
+    var unbound := Flow.new()
+    unbound.sample_uncommitted(1000,72.0)
+    check(near(unbound.timeline.current_rate(),72.0),
+        "Unbound first source can still initialize its own projected rate")
+
     var guided := Guided.new(flow)
     guided.world = 100.0
     guided.source_from_beat = 0.0

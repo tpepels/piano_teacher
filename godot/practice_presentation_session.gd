@@ -143,7 +143,10 @@ func accept(state: Dictionary, request_midpoint_ms: int,
     if authorized is Dictionary:
         score_flow.sample(received_ms)
     else:
-        score_flow.sample(received_ms,_source_rate(state,beat))
+        # This is an uncommitted source's projected BPM. The canonical
+        # flow refuses to install it over already-authorized predecessor
+        # epochs while the next source is still awaiting physical ACK.
+        score_flow.sample_uncommitted(received_ms,_source_rate(state,beat))
     var prepared_stage_waiting: bool = runway != null and \
         runway.has_prepared_destination(state)
     if runway != null and not prepared_stage_waiting:

@@ -22,6 +22,16 @@ func sample(at_ms: int, selected_bpm: float = NAN) -> float:
     hold_world = timeline.hold_world
     return beat
 
+func sample_uncommitted(at_ms: int, proposed_bpm: float) -> float:
+    # A next-source state snapshot may arrive before its physical
+    # admission/present ACK. That source's nominal BPM has no right to
+    # rewrite the already-authorized predecessor's future tempo epochs.
+    # A genuinely fresh, unbound score may establish its initial rate,
+    # while a committed segment is sampled from its existing ledger.
+    return sample(at_ms) if not timeline.active_segment.is_empty() else \
+        sample(at_ms,proposed_bpm)
+
+
 func authorize_source_epoch(deadline_ms: float, opening: float,
         nominal_bpm: float, authored_segments: Array,
         segment_id: String) -> void:

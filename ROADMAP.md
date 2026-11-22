@@ -941,6 +941,21 @@ rather than a code move. Existing physical frame owner still decides
 how to draw/rebase the immutable authored score after authorization.
 Native acceptance on this revision remains unverified.
 
+### V4 prevent successor-BPM corruption of an authorized predecessor (2026-11-22)
+
+`PracticePresentationSession.accept` no longer feeds a pending
+next stage's uncommitted nominal BPM directly into
+`PresentationTimeline.set_rate` when an earlier segment owns the
+visual world. `ContinuousScoreFlow.sample_uncommitted` now samples
+an existing authorized segment from its immutable tempo epochs,
+and uses the projected BPM only for an unbound initial source.
+This fixes a remaining cross-source rate writer that could
+speed up or slow down previously admitted notation before the
+successor had an authenticated physical reservation. The
+actual Godot timeline behavior gate now tests an old 40 BPM
+segment surviving a new uncommitted 120 BPM stage snapshot,
+while fresh unbound initialization still accepts 72 BPM.
+
 ### Phase V4 - Make visual time obey authorized state
 
 **Implement:** Convert the native `PresentationTimeline` into a projection
