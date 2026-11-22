@@ -12,13 +12,18 @@ var resume_requested := false
 
 func action_requested(action: String, projected_action: String = "") -> bool:
     if pending:
-        if action == "ui_suspend":
-            # A one-way navigation suspend supersedes any queued pause
-            # toggle; the backend later decides whether Pause still applies.
+        # A user Stop has priority over a later navigation suspend or stale
+        # Pause/Resume gesture. Never silently drop a Stop while Play/Resume
+        # is being admitted or waiting for its backend reply.
+        if action in ["stop","ui_stop"]:
             queued_transport = action
-        elif action in ["pause", "stop", "ui_pause"] or projected_action == "pause":
-            # Preserve the raw pause gesture across the request queue.
-            # Its final transport meaning belongs to the Python session.
+        elif action == "ui_suspend":
+            if queued_transport not in ["stop","ui_stop"]:
+                queued_transport = action
+        elif (action in ["pause","ui_pause"] or projected_action == "pause") and \
+                queued_transport not in ["stop","ui_stop","ui_suspend"]:
+            # Preserve raw Pause under the backend's current action policy;
+            # never turn a newer one-way suspend into a Resume toggle.
             queued_transport = "ui_pause" if action.begins_with("ui_") else action
         return false
     control_action = action
