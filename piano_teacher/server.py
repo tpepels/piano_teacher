@@ -261,7 +261,11 @@ class PracticeEngine:
 
     @property
     def flow(self) -> practice_flow.FlowState | None:
-        return self.flow_session.state
+        # The flow's BPM and mastery counters are projected from the
+        # mutable canonical LearningPlan. Read that plan under its owner
+        # lock, not across a concurrent source/course commit.
+        with self.lock:
+            return self.flow_session.state
 
     def display_phrase(self) -> Phrase:
         return self.lesson_execution.display_phrase()
