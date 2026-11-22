@@ -263,10 +263,14 @@ class AttemptSettlement:
             self.pending = None
             self._rolling = None
             return completed
-        self.seal_rolling_recovery(
-            completed.pending,played=take.played,
-            result=take.assessment,end_beat=take.end_beat,
-            plan=plan,binding=binding,now=now,policy=policy)
+        # A source-bound rolling result may already have been durably sealed
+        # before a later recovery presentation effect failed. Reuse that
+        # receipt; do not call capture.seal() again on the same attempt.
+        if completed.pending.receipt is None:
+            self.seal_rolling_recovery(
+                completed.pending,played=take.played,
+                result=take.assessment,end_beat=take.end_beat,
+                plan=plan,binding=binding,now=now,policy=policy)
         return completed
 
     def commit_full_passage(self, *, plan, binding, now: float,
