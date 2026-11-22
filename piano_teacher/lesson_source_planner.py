@@ -11,7 +11,11 @@ from dataclasses import dataclass
 import math
 
 from .exercise_generator import ExerciseVariant,generate_variants
-from .lesson_settings import SETTINGS
+from .lesson_settings import course_rules
+
+# Source-preserving segmentation belongs only to the source-progression
+# generator. Practice Flow builds its own backward-growing windows.
+SOURCE_RULES = course_rules("source-progression")
 from .music import Piece,Phrase
 from .musical_groups import MusicalGrouping,grouping_for_piece
 
@@ -107,12 +111,12 @@ def focus_phrases(piece: Piece, *, adaptive: bool = True,
     def within_attack_limit(first: int, last: int) -> bool:
         # The union of onset times is the number of rhythmic attacks a
         # both-hands learner would need. Individual hands are subsets.
-        return onsets(first, last) <= SETTINGS.focus_max_attacks
+        return onsets(first, last) <= SOURCE_RULES.focus_max_attacks
 
     ranges: list[tuple[int, int]] = []
     start = 0
     while start < bars:
-        end = min(bars, start + SETTINGS.focus_measures)
+        end = min(bars, start + SOURCE_RULES.focus_measures)
         if onsets(start, end) == 0:
             # Preserve source introduction/trailing rests for the complete
             # performance instead of padding a sparse practice unit with
@@ -128,10 +132,10 @@ def focus_phrases(piece: Piece, *, adaptive: bool = True,
             # An underused hand is introduced with BOTH hands instead of
             # forcing an overlong one-note solo lesson. Extend only when
             # the whole passage has too few distinct attacks.
-            while (end < bars and end-start < SETTINGS.focus_max_measures
-                   and onsets(start, end) < SETTINGS.focus_min_onsets):
-                proposed = min(bars, start + SETTINGS.focus_max_measures,
-                               end + SETTINGS.focus_measures)
+            while (end < bars and end-start < SOURCE_RULES.focus_max_measures
+                   and onsets(start, end) < SOURCE_RULES.focus_min_onsets):
+                proposed = min(bars, start + SOURCE_RULES.focus_max_measures,
+                               end + SOURCE_RULES.focus_measures)
                 if not within_attack_limit(start, proposed):
                     # Try one more full measure if a two-measure increment
                     # would be too dense. Never split a musical measure.
@@ -146,7 +150,7 @@ def focus_phrases(piece: Piece, *, adaptive: bool = True,
         if adaptive and grouping is not None:
             short_slurs = []
             for group in grouping.groups:
-                if group.kind == "slur" and group.attack_count <= SETTINGS.focus_max_attacks:
+                if group.kind == "slur" and group.attack_count <= SOURCE_RULES.focus_max_attacks:
                     times = [piece.notes[next(iter(onset))].start for onset in group.onsets]
                     short_slurs.append((min(times), max(times)))
             for _ in range(len(short_slurs)):
@@ -161,12 +165,12 @@ def focus_phrases(piece: Piece, *, adaptive: bool = True,
                 # Prefer normal-budget extensions, then a clean boundary
                 # before the phrase. If neither works, accept an overfull
                 # lesson, provided the eight-measure safety cap still holds.
-                if (needed - start <= SETTINGS.focus_max_measures
+                if (needed - start <= SOURCE_RULES.focus_max_measures
                         and within_attack_limit(start, needed)):
                     end = needed
                 elif first_bar > start and onsets(start, first_bar):
                     end = first_bar
-                elif needed - start <= SETTINGS.focus_max_measures:
+                elif needed - start <= SOURCE_RULES.focus_max_measures:
                     end = needed
                 else:
                     # Exceptionally long short-note slur (>8 measures).
@@ -179,8 +183,8 @@ def focus_phrases(piece: Piece, *, adaptive: bool = True,
     if adaptive and len(ranges) > 1:
         first, last = ranges[-1]
         previous_first, _ = ranges[-2]
-        if (0 < onsets(first, last) < SETTINGS.focus_min_onsets
-                and last - previous_first <= SETTINGS.focus_max_measures
+        if (0 < onsets(first, last) < SOURCE_RULES.focus_min_onsets
+                and last - previous_first <= SOURCE_RULES.focus_max_measures
                 and within_attack_limit(previous_first, last)):
             ranges[-2:] = [(previous_first, last)]
 
@@ -230,7 +234,7 @@ def build_exercises(piece: Piece, *, consolidate: bool = True,
                 if (any(n.start < phrase.start for n in joined.notes)
                         and any(n.start >= phrase.start for n in joined.notes)
                         and len({round(n.start, 6) for n in joined.notes})
-                            <= SETTINGS.focus_max_attacks):
+                            <= SOURCE_RULES.focus_max_attacks):
                     exercises.append(Exercise("connect", joined,
                                               f"connect:{joined.first_bar}-{joined.last_bar}"))
     last_release = max((n.end for n in piece.notes), default=phrases[-1].end) if phrases else 0.0
@@ -275,11 +279,11 @@ def _dense_single_measure_variants(phrase: Phrase, hand: str, *,
     """
     if groups:
         return generate_variants(phrase, hand, groups=groups,
-                                 max_attacks=SETTINGS.focus_max_attacks)
+                                 max_attacks=SOURCE_RULES.focus_max_attacks)
     indexed = [(i, n) for i, n in enumerate(phrase.notes)
                if hand == "both" or n.hand == hand]
     times = sorted({round(n.start, 6) for _, n in indexed})
-    limit = SETTINGS.focus_max_attacks
+    limit = SOURCE_RULES.focus_max_attacks
     if len(times) <= limit:
         return generate_variants(phrase, hand)
     # Existing on-beat skeleton provides musically meaningful landmarks;
@@ -324,7 +328,7 @@ def hands_for_learning(exercise: Exercise) -> tuple[str, ...]:
         return individual
     useful = tuple(hand for hand in individual
                    if len({round(note.start, 6) for note in exercise.phrase.notes
-                           if note.hand == hand}) >= SETTINGS.focus_min_onsets)
+                           if note.hand == hand}) >= SOURCE_RULES.focus_min_onsets)
     return useful + ("both",)
 
 
@@ -334,13 +338,13 @@ def source_variants(exercise: Exercise, hand: str, *,
     groups = (grouping.for_phrase(exercise.phrase, hand)
               if grouping is not None else ())
     variants = generate_variants(exercise.phrase, hand, groups=groups,
-                                 max_attacks=SETTINGS.focus_max_attacks)
+                                 max_attacks=SOURCE_RULES.focus_max_attacks)
     if exercise.kind != "learn":
         return variants[-1:]
     if (exercise.phrase.first_bar == exercise.phrase.last_bar
             and len({round(n.start, 6) for n in exercise.phrase.notes
                      if hand == "both" or n.hand == hand})
-                > SETTINGS.focus_max_attacks):
+                > SOURCE_RULES.focus_max_attacks):
         return _dense_single_measure_variants(exercise.phrase, hand,
                                                groups=groups)
     if hand == "both":
@@ -357,11 +361,11 @@ def source_variants(exercise: Exercise, hand: str, *,
     # A simplified skeleton must not create a one-note lesson when the
     # original exercise has more playable attacks. Such a stage adds no
     # useful practice and looks like an accidental short passage.
-    if len(onsets) >= SETTINGS.focus_min_onsets:
+    if len(onsets) >= SOURCE_RULES.focus_min_onsets:
         variants = tuple(v for v in variants
                          if v.level == "original"
                          or len({round(n.start, 6) for n in v.notes})
-                            >= SETTINGS.focus_min_onsets)
+                            >= SOURCE_RULES.focus_min_onsets)
     trivial = (len(onsets) == len(notes)
                and len(notes) <= max(1.0, exercise.phrase.end - exercise.phrase.start)
                and all(b - a >= .5 - 1e-6 for a, b in zip(onsets, onsets[1:]))
