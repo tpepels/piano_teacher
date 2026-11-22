@@ -6,7 +6,7 @@ canonical PlaybackSession/VisualTransport without an alternative clock.
 """
 from __future__ import annotations
 from ..music import Phrase
-from ..lesson_settings import SETTINGS
+from ..lesson_settings import course_rules
 from .exposure_preparation import prepare_remedial, prepare_response
 from .mistake_responses import resolve_mistake_policy
 from .musical_scheduler import SCHEDULER
@@ -196,8 +196,8 @@ class RecoveryWorkflows:
             self.source_identity.plan.active_phrase, hand=self.source_identity.plan.hand, bpm=self.source_identity.plan.bpm,
             played=self.attempt.recorder.presses if self.attempt.recorder else [],
             from_beat=self.visual_transport.play_from_beat, end_beat=boundary, grid=grid,
-            threshold=(SETTINGS.warmup_recovery_errors
-                       if self.source_identity.warmup
-                       else SETTINGS.recovery_errors_in_window),
+            threshold=course_rules(
+                self.source_identity.plan.lesson_definition.generator_name,
+                warmup=self.source_identity.warmup).recovery_errors_in_window,
             warmup=self.source_identity.warmup, tempo=tempo_map)
 
