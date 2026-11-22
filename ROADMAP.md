@@ -208,6 +208,19 @@ The source-audit record is in [docs/architecture.md](docs/architecture.md#a0-run
   The ChallengeFlow three-run fallback must be checked against a valid
   course-specific backend count. This is an audit warning, **not** a
   reproduced failure.
+- [600eeb5](https://github.com/tpepels/piano_teacher/commit/600eeb5a5c2d9408686ce1674a0c8225e43c6cfc)
+  quantified the actual `application/composition.py` constructor
+  dependency graph: **21 of 63 services** have at least 10 direct injected
+  `r.*` dependencies, and **14 have at least 15**. `PracticeTimeline`
+  reaches 33, `SessionReadModels` 25, `TransportActions` 24.
+  `godot/main.gd` has 42 unique preload references and 44 `.new()`
+  call sites. The report also documents the existing independent
+  C++ asset worker for score geometry, semantics and statistics;
+  A1/A4 must preserve that non-blocking division.
+- [97e117c](https://github.com/tpepels/piano_teacher/commit/97e117ce22bcedf58599a1d9871cdf87f1332d4b)
+  corrected the auditor's dynamic-load detection so whitespace before
+  literal Godot paths is not mistaken for computed loading. The auditor
+  remains conservative; full-repository runtime execution is pending.
 **Open A0 exit gates:** Every candidate's *runtime* call/writer reachability
 must be proved (including dynamically loaded native scenes and registered
 generators); full source-to-transaction/async edge coverage and exact HEAD
