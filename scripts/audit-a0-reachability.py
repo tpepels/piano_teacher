@@ -128,7 +128,7 @@ def audit(root: Path) -> dict:
             for name, dest in class_names.items():
                 if name != own_name and re.search(r'\b' + re.escape(name) + r'\b', source):
                     edges[path].add(dest)
-            if re.search(r'\b(?:load|preload)\s*\(\s*(?!["\'])', source):
+            if re.search(r'\b(?:load|preload)\s*\(\s*(?=[^"\'\s])', source):
                 dynamic[path].append('computed resource path')
     project = texts.get('godot/project.godot', '')
     roots: set[str] = {'piano_teacher/inprocess.py', 'godot/main.tscn'} & sources
