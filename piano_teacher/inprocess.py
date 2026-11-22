@@ -71,6 +71,10 @@ class EngineCommands:
                 return self._reply(OK, self.drain_feedback_events(acknowledged))
             if operation == "midi.devices":
                 return self._reply(OK, {"devices": engine.ports()})
+            if operation == "score.bundle":
+                if values:
+                    raise ValueError("score.bundle takes no input")
+                return self._reply(OK, engine.score_bundle())
             if operation == "score.native_layout":
                 return self._reply(OK, engine.geometry())
             if operation == "score.next_stage":
