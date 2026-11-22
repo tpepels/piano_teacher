@@ -60,6 +60,9 @@ func run() -> void:
     var prepared_facts: Dictionary = facts(controller,0.0)
     prepared_facts["online"] = [prepared]
     prepared_facts["withdrawn"] = {"remaining":[],"owners":[42]}
+    # An earlier peer source occupies the empty-strip route, so the
+    # intentionally prepared offscreen source is the reuse candidate.
+    prepared_facts["peer_floor"] = 8.0
     var same_prepared: Dictionary = Reservation.plan_facts(
         prepared_facts,"start",0.0,0.0,4.0,12.0)
     check(bool(same_prepared.get("ok",false)) and
