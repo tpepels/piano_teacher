@@ -330,6 +330,9 @@ class PracticeEngine:
     def geometry(self) -> dict:
         return self.score_read.geometry()
 
+    def score_bundle(self) -> dict:
+        return self.score_read.bundle()
+
     def lesson_overview(self) -> dict:
         with self.lock:
             return self.score_read.lesson_overview()
