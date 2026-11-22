@@ -94,11 +94,6 @@ def steps(course):
 
 def start_bpm(course):
     p = course.progress
-    if course.profile == "practice-flow" and not course.warmup:
-        # The default course has no independent generic 40-BPM start.
-        # Its authoritative ladder starts at 50% of the source tempo.
-        from .application.practice_flow import floor_bpm
-        return floor_bpm(int(p.target_bpm))
     if course.warmup:
         return min(p.target_bpm, course.piece.bpm)
     baseline = min(p.target_bpm, max(SETTINGS.minimum_bpm, SETTINGS.start_tempo_bpm))
