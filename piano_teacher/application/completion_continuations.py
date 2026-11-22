@@ -35,10 +35,18 @@ class CompletionContinuations:
         # A continuation dispatch error leaves the receipt retryable.
         self._applied_continuation_effect = None
 
-    def advance_pending_feedback(self, now: float, *, force_early: bool = False):
+    def advance_pending_feedback(self, now: float, *, force_early: bool = False,
+                                 explicit_retry: bool = False):
+        # Worker ticks must not spin on a failed committed effect after
+        # automatic playback was stopped. Only the user-facing Retry route
+        # may re-enter that already-selected feedback transaction.
+        if not self.playback_session.auto and not explicit_retry:
+            return
         transaction = self.teaching_continuation.begin_feedback(
-            self.attempt_settlement.pending,now=now,automatic=self.playback_session.auto,
-            force_early=force_early,revision=self.source_identity.revision,fingerprint=self.source_identity.fingerprint)
+            self.attempt_settlement.pending, now=now,
+            automatic=self.playback_session.auto or explicit_retry,
+            force_early=force_early, revision=self.source_identity.revision,
+            fingerprint=self.source_identity.fingerprint)
         if isinstance(transaction,FeedbackWaiting):
             if transaction.message:
                 self.notices.feedback = transaction.message
@@ -67,7 +75,7 @@ class CompletionContinuations:
                     now=now, bpm=self.source_identity.plan.bpm,
                     presentation_bpm=self.transport_timing.presentation_bpm(),
                     count_in_beats=self.transport_timing.next_count_in_beats(),
-                    automatic=self.playback_session.auto,
+                    automatic=transaction.pending.state.route.automatic,
                     flow_active=self.lesson_execution.flow_active()))
             if publication.flow_outcome is not None:
                 self.flow_session.settle_decided(
@@ -95,7 +103,8 @@ class CompletionContinuations:
         if (pending is None or pending.event.kind != "full_result"
                 or pending.phase == "published"):
             raise ValueError("No interrupted full-passage settlement to retry")
-        self.advance_pending_feedback(now, force_early=True)
+        self.advance_pending_feedback(
+            now, force_early=True, explicit_retry=True)
         if pending.phase != "published" or pending.receipt is None:
             raise RuntimeError("Selected assessment continuation is still pending")
         return pending.receipt.message
