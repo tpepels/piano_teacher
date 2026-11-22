@@ -116,6 +116,14 @@ def audit(root: Path) -> dict:
         if path in py:
             imported, unresolved = py_imports(path, source, py)
             edges[path].update(imported)
+            # Loading a Python submodule imports its parent packages first,
+            # even when no source file explicitly imports __init__.py.
+            # Without these implicit edges the package markers look dead.
+            parts = path.split('/')
+            for depth in range(2, len(parts)):
+                marker = '/'.join(parts[:depth]) + '/__init__.py'
+                if marker in py and marker != path:
+                    edges[path].add(marker)
             dynamic[path].extend(unresolved)
             continue
         for res in RESOURCE.findall(source):
@@ -153,6 +161,17 @@ def audit(root: Path) -> dict:
             for candidate in py:
                 if candidate in source:
                     roots.add(candidate)
+    # Native UI smoke scripts are launched by --script in shell verifiers,
+    # not imported by main.tscn. They are test harness roots, NEVER
+    # production roots; keep their dependencies in a separate reachability
+    # category rather than mislabeling them as dead.
+    harness_roots: set[str] = set()
+    for path, source in texts.items():
+        if path.startswith('scripts/') and path.endswith('.sh'):
+            for match in re.finditer(r'--script\s+res://([\w./-]+\.gd)', source):
+                target = 'godot/' + match.group(1)
+                if target in sources:
+                    harness_roots.add(target)
     # Test references are reported separately, not used as production roots.
     tests = {p for p in known if p.startswith('tests/') and p.endswith(('.py', '.gd'))}
     for path in tests:
@@ -165,14 +184,17 @@ def audit(root: Path) -> dict:
                 if 'godot/' + res in sources:
                     edges[path].add('godot/' + res)
     test_used = walk(tests, edges) & sources
+    harness_used = walk(harness_roots, edges) & sources
     runtime_used = walk(roots, edges) & sources
     return {
         'runtime_roots': sorted(roots),
+        'harness_roots': sorted(harness_roots),
         'counts': {'python': len(py), 'godot_scripts': len(gd),
                    'godot_resources': len(scenes)},
         'statically_reachable': sorted(runtime_used),
         'statically_unreached': sorted(sources - runtime_used),
         'unreached_test_referenced': sorted((sources - runtime_used) & test_used),
+        'unreached_harness_referenced': sorted((sources - runtime_used) & harness_used),
         'unresolved_dynamic_loads': {p: v for p, v in sorted(dynamic.items()) if v},
         'edges': {p: sorted(v) for p, v in sorted(edges.items()) if v},
     }
@@ -199,7 +221,9 @@ def main() -> int:
                '## Runtime entry roots']
         out += ['- ' + p for p in data['runtime_roots']]
         out += ['', '## Unreached candidates requiring review']
-        out += ['- ' + p + (' (test-referenced)' if p in data['unreached_test_referenced'] else '')
+        out += ['- ' + p
+                + (' (test-referenced)' if p in data['unreached_test_referenced'] else '')
+                + (' (native verification harness)' if p in data['unreached_harness_referenced'] else '')
                 for p in data['statically_unreached']]
         out += ['', '## Dynamic loading requiring manual resolution']
         for path, issues in data['unresolved_dynamic_loads'].items():
