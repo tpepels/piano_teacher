@@ -179,8 +179,10 @@ class AttemptSettlement:
         """
         if pending is not self.pending or pending.receipt is None or pending.publication is None:
             raise ValueError("Post-commit effects require the current durable receipt")
-        if pending.phase not in ("effects_applied", "published"):
+        if pending.phase == "settled":
             pending.phase = "effects_applied"
+        elif pending.phase not in ("effects_applied", "published"):
+            raise ValueError("Cannot apply effects to an unsettled teaching decision")
 
     @property
     def pending_full_completion(self) -> PendingFullCompletion | None:
@@ -449,6 +451,8 @@ class AttemptSettlement:
         pending.checkpoint_progress = after
 
     def settle(self, pending, *, plan, binding, now, performance_summary=None, continuation=None, policy=None):
+        if pending is not self.pending:
+            raise ValueError("Cannot settle a superseded teaching decision")
         if pending.receipt is not None:
             return pending.receipt
         decision, state, result = pending.decision, pending.state, pending.assessment
