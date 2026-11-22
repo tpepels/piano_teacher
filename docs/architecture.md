@@ -116,12 +116,13 @@ old injected owners after their full behavior and callers migrate.
 Treat these counts as diagnostics, never arbitrary pass/fail targets.
 
 **Real-time worker constraint:** The native C++ bridge sends
-`score.native_layout`, `score.semantic` and `learning.statistics`
-to its separate asset worker; other commands and the musical tick
-use the session worker. Each embedded Python call obtains the GIL;
-application and artifact locks separately protect state. A1/A4
-must not move heavy layout/statistics work into the real-time tick
-or hold the session lock during fingering inference.
+the production `score.bundle` and the retained headless diagnostic
+`score.native_layout`, `score.semantic` reads, plus
+`learning.statistics`, to its separate asset worker; other commands
+and the musical tick use the session worker. Each embedded Python call
+obtains the GIL; application and artifact locks separately protect
+state. Heavy layout/statistics work must not run on the musical-tick
+worker or hold the session lock during fingering inference.
 
 ### Source-backed legacy and complexity findings
 
@@ -1118,6 +1119,12 @@ or retry state. The native diagnostic path reports one
 format was removed. Other A0 inventory entries, old orchestration
 composition and library/persistence migrations still require a full
 reachability audit before A6 closure.
+
+**Embedded bridge integration:** `PianoNative::is_asset_operation`
+also routes `score.bundle` to the existing dedicated asset worker.
+Without this C++ dispatch change the single larger native bundle
+would have serialized Verovio engraving with the musical tick.
+The previous independent diagnostic read routing is preserved.
 
 **Verification and release gate:** All above changes are committed on
 `main` but **have not been executed** in Python, Godot, embedded
