@@ -55,6 +55,11 @@ class ScoreReadServices:
         artifacts, selection = self.selected_artifacts()
         return artifacts.geometry(selection)
 
+    def bundle(self) -> dict:
+        """One snapshot and one compilation path for the active score."""
+        artifacts, selection = self.selected_artifacts()
+        return artifacts.bundle(selection)
+
     def completed_take_layout(self) -> dict:
         cached = self.score_artifact_registry.current.cached_layout(self.selection())
         if cached is None:
