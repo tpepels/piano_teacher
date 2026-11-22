@@ -379,6 +379,21 @@ class AttemptSettlement:
                 completion_effect(route,pending.decision),take)
         completed = self._completion
         take = completed.take
+        # Focused/performance outcomes may advance the lesson as part of
+        # their immediate durable settlement. A later presentation failure
+        # must reuse that receipt rather than compare against the already
+        # advanced original teaching binding or re-seal the same evidence.
+        pending = completed.pending
+        if pending.receipt is not None and completed.route != "full_passage":
+            if (pending is not self.pending
+                    or binding.fingerprint != take.binding.fingerprint
+                    or binding.cancellation_generation != take.binding.cancellation_generation
+                    or plan.teaching_progress() != pending.decision.progress_after
+                    or (binding.stage_key != take.binding.stage_key
+                        and not pending.receipt.stage_changed)):
+                raise ValueError("Committed focused take changed before publication retry")
+            self._completion = replace(completed,settled=True)
+            return self._completion
         if (binding != take.binding or score_revision != take.score_revision
                 or hand != take.hand or mode != take.mode or bpm != take.bpm
                 or from_beat != take.from_beat or end_beat != take.end_beat):
