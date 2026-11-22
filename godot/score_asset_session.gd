@@ -20,15 +20,11 @@ const ASSET_KEYS := ["native_glyphs","native_note_templates","native_tie_templat
 
 var revision := -1
 var layout_revision := -1
-var requested_layout_revision := -1
-var timeline_model_revision := -1
 var rendered_revision := -1
 var native_score_piece_fingerprint := ""
 var score_error := ""
 var layout_pending: bool:
     get: return _requests.has("bundle")
-var timeline_model_pending: bool:
-    get: return layout_pending
 var score_layout: Dictionary:
     get: return layout_snapshot()
 
@@ -84,8 +80,8 @@ func fingering_correction_request(source_id: String, finger: Variant,
     ## A renderer correction cannot target a newer stage/piece or an
     ## incomplete native layout, even if its glyph editor remains open.
     var valid: bool = not command_pending and is_ready() and \
-        not layout_pending and not timeline_model_pending and \
-        int(current_state.get("revision",-1)) == timeline_model_revision and \
+        not layout_pending and \
+        int(current_state.get("revision",-1)) == rendered_revision and \
         native_score_piece_fingerprint == \
             str(current_state.get("piece_fingerprint",""))
     if not valid:
@@ -145,8 +141,6 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     revision = int(state.get("revision",-1))
     _layout = prepared_layout.duplicate(true)
     layout_revision = revision
-    requested_layout_revision = revision
-    timeline_model_revision = revision
     rendered_revision = revision
     _published_retained_generation = _renderer.retained_generation()
     native_score_piece_fingerprint = _fingerprint
@@ -177,7 +171,7 @@ func layout_snapshot() -> Dictionary:
 func is_ready() -> bool:
     return score_error.is_empty() and _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
         (not _renderer.has_method("retained_ready") or _renderer.retained_ready()) and \
-        layout_revision == revision and timeline_model_revision == revision and \
+        layout_revision == revision and \
         rendered_revision == revision and \
         _published_retained_generation == _renderer.retained_generation()
 
@@ -212,7 +206,7 @@ func status() -> Dictionary:
 func poll(now_ms: int) -> void:
     if not _loaded or not score_error.is_empty():
         return
-    if timeline_model_revision == revision and rendered_revision != revision and \
+    if layout_revision == revision and rendered_revision != revision and \
             _retained_started_ms >= 0 and \
             now_ms - _retained_started_ms >= RETAINED_INK_TIMEOUT_MS:
         _fail("Retained notation did not finish compiling. Retry the score.")
@@ -229,7 +223,6 @@ func finish_native_score() -> void:
 func request_layout() -> bool:
     if layout_pending or not _loaded or not score_error.is_empty():
         return false
-    requested_layout_revision = revision
     _begin_request("bundle","score.bundle",90.0)
     return true
 
@@ -324,7 +317,6 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
         return
     _layout = installed["layout"]
     layout_revision = revision
-    timeline_model_revision = revision
     native_score_piece_fingerprint = _fingerprint
     _retained_started_ms = now_ms
     _renderer.visible = true
@@ -336,7 +328,7 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
     _finish_native_score()
 
 func _finish_native_score() -> void:
-    if layout_revision != revision or timeline_model_revision != revision or \
+    if layout_revision != revision or \
             not is_instance_valid(_renderer) or not bool(_renderer.native_ready):
         return
     # Publishing now would let the engine start while a future source copy
@@ -378,7 +370,6 @@ func _reset_assets() -> bool:
     _retained_started_ms = -1
     _layout.clear()
     layout_revision = -1
-    timeline_model_revision = -1
     rendered_revision = -1
     _published_retained_generation = -1
     native_score_piece_fingerprint = ""
@@ -413,7 +404,6 @@ func _fail(message: String, release_renderer: bool = true) -> void:
                 "" if _identical_failure_repeats == 1 else "s"])
     _retained_started_ms = -1
     rendered_revision = -1
-    timeline_model_revision = -1
     if release_renderer and not _hide_renderer():
         var preservation: String = str(_renderer.failure_reason)
         if not preservation.is_empty() and not score_error.contains(preservation):
