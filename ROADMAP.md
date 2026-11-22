@@ -704,6 +704,26 @@ in the same development sequence. Do not accept this phase
 or deploy the interim contract before the complete native and
 core CI transaction checks pass.
 
+### V3 integrated native production acceptance requested (2026-11-22)
+
+Backend-first V3 transaction code is now integrated across Python and
+the Godot `ScoreTransportReservation`, `StreamAdmissionExecutor`
+and `ScoreAdmissionGateway` boundaries. A pure renderer feasibility
+witness reaches `playback.reserve`, the backend selects the final
+musical downbeat, the native gateway commits one exact immutable queue
+slot at that returned time, and `playback.present` requires a new
+post-arm position/queue-generation/clock attestation before enabling
+graded transport. Lost response recovery uses the original
+`playback.status` ledger identity and an independently refreshed
+physical witness without changing the downbeat.
+
+The core run [44958509113](https://github.com/tpepels/piano_teacher/actions/runs/44958509113)
+passed on source `b5e16e97`. This `[native]` checkpoint requests the
+full real Godot scene, simulated physical MIDI, real repertoire and
+relocated package suite on the same implementation. The V3
+integration remains *open* until this native job completes successfully
+and all physical receipts are verified against the acceptance trace.
+
 ### Phase V3 - Replace distributed playback/admission decisions
 
 **Implement:** Give the existing Python playback transaction owner the
