@@ -564,6 +564,90 @@ lesson transitions. Retain one monotonic source clock and bounded threaded
 workers. This map forbids coordinator-to-coordinator backreferences and
 self-mutating projection getters.
 
+### A0 reproducible reachability method and concrete A1 contract
+
+Commit [9ec6936](https://github.com/tpepels/piano_teacher/commit/9ec6936c421775c96098a1e9e5ad7c996a269407)
+adds a conservative, **read-only** local source graph tool:
+
+    python3 scripts/audit-a0-reachability.py --output /tmp/piano-a0-reachability.md
+    python3 scripts/audit-a0-reachability.py --json --output /tmp/piano-a0-reachability.json
+
+The script enumerates actual Python import statements and literal/dynamic
+\`importlib\` calls, Godot \`res://\` preload/load paths, known
+\`class_name\` usages and scene/project resources. Its regular runtime roots
+are \`godot/main.tscn\` (plus declared main scene and configured resources),
+embedded \`piano_teacher.inprocess\` from native CPython, the standalone
+\`piano_teacher.__main__\` launcher and explicitly invoked script modules.
+Test-only references are reported separately. The JSON edge graph supports
+manual review of individual dependency chains.
+
+**Caveat:** An untraced path is *never* proof of dead code. The graph
+cannot certify computed resource names, reflection, loaded third-party
+plugins, platform packaging, arbitrary data-driven file names or actual
+execution; class names appearing in comments can conservatively produce
+false-positive edges. Native C++ and asynchronous GDScript callbacks must
+still be checked against the real runtime. These limitations are explicit
+because a false "dead" classification could remove working support.
+
+**Concrete current protocol and proposed A1 seam**
+
+| Existing boundary | Current source API | A1 event or stable read |
+| --- | --- | --- |
+| Raw button and MIDI keyboard gesture | \`practice.command\` with \`ui_*\` or explicit action | \`UserIntent\` containing action, source revision/fingerprint, authenticated renderer readiness where needed |
+| Physical MIDI callback | \`MidiApplicationInput.receive_message\` → \`MidiIngress\` | \`MidiInput\` containing note-on/off, hardware timestamp and corrected musical time; current source/take validated |
+| Native tick | \`EngineCommands.tick\` → \`ApplicationWorker.advance\` → \`PracticeTimeline.update\` | \`ClockAdvanced(now)\`, processed once in serialized event queue; timer checks are pure requests, not recursive ticks |
+| Source opening and corrected fingering | \`library.open\`, \`fingering.correct\` / \`SourcePreparationSession\` | \`SourcePrepared\` / \`SourceRevisionChanged\` tied to original MIDI fingerprint and generation |
+| Prepared current/future ink | \`score.native_layout\`, \`score.semantic\`, \`score.next_stage\`, \`score.stage_ready\` | \`ScorePrepared\` / \`ScorePhysicallyReady\`; ultimately one ScoreBundle protocol in A4 |
+| Physical reservation and attestation | \`playback.reserve\`, \`playback.present\`, \`playback.withdraw\`, \`playback.failure\`, \`playback.status\` | \`AdmissionEvidence\`, \`ReservationReceipt\`, \`ArmedPresentation\`, \`Withdrawal\`, \`PhysicalFailure\` and explicit \`Reconcile\` events |
+| Whole/rolling take evidence | AssessmentService and AttemptSettlement | One typed \`TakeAssessed\` / \`SettlementCommitted\` transition, with persisted outcome identity |
+| Authoritative snapshot | \`state.snapshot\`; \`practice.command\` returns \`{state,outcome}\` | One stable versioned \`SessionProjection\`; an accepted command may include both the already-committed snapshot and one typed effect outcome |
+
+**Identity model:** Keep immutable \`SourceKey\` (fingerprint,
+revision, stage_key, hand, selected bounds), \`TakeKey\` (source key,
+take_id, attempt) and \`PhysicalSegmentKey\` (take key, segment_id,
+queue_generation, renderer_generation). The current
+\`PlaybackIntent\` and \`ScoreReceipt\` already carry nearly all these
+fields. The new types must preserve their meanings across Python/Godot:
+the source revision is not just a renderer serial, and an old ACK cannot
+authorize a newer source or take.
+
+**Processing/commit model:** Commands and native acknowledgements enter
+the *existing* C++ worker queue and Python application lock, not another
+thread or bus. The session applies **at most one canonical publication
+for each committed state change**, with no synthetic nested recursion.
+A no-op event need not publish a new snapshot. External physical effects
+are asynchronous and cannot be treated as part of a synchronous database
+transaction: \`intent\` and \`reservation\` are pending states; **grading,
+audio and moving source presentation start only when the exact physical
+arm/attested-present event is accepted**. Durable lesson settlement uses
+one idempotent repository commit. Failure or stale ACK compensates only
+unexposed future strips; already visible source remains immutable.
+This preserves the current correct split of musical authorization and
+physical canvas truth without the existing coordinator cascade.
+
+**Migration dependency direction:** Native input adapter → PracticeSession
+→ pure Lesson/Assessment/Transport/Score decision ports; authorized
+effects → native physical adapter, audio adapter and persistence ports;
+committed state → one pure presentation projection → Godot screens.
+The in-process \`EngineCommands\` operation names should remain stable
+at the external boundary until every native consumer has migrated.
+Deleting the prior Python service is permitted only after its actual
+producer/consumer ports and negative/failure behavior are accounted for.
+
+**Confirmed live, not legacy by filename:** The native
+\`PracticeScreen\` preloads \`challenge_flow.gd\` and
+\`tempo_vocabulary.gd\`; \`PracticeChrome\` instantiates
+\`pause_sheet.gd\`, \`review_sheet.gd\` and measure picker;
+\`DemoPlayer\` instantiates \`listen_sync.gd\`;
+\`NavigationSession\` preloads \`navigation_policy.gd\`.
+They have live presentation/adaptation callers. Any cleanup must
+first distinguish their display utilities from duplicated domain
+state. The \`challenge_flow.gd\` fallback for an absent
+\`clean_runs_required\` is three, whereas default Practice Flow
+requires two target-tempo clean passes; confirm the backend always
+provides the correct course-specific value before replacing its UI
+status fallback. This is an audit warning, **not** a reproduced bug.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or
