@@ -192,7 +192,7 @@ func present(state: Dictionary) -> void:
     if opening:
         bar_choice.value = bar_choice.min_value
         resume_button.grab_focus()
-    seek_button.disabled = state.get("mode") == "listen" or not state.get("seek_available", false)
+    seek_button.disabled = not bool(state.get("seek_available",false))
     bar_choice.editable = not seek_button.disabled
 
 
