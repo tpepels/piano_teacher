@@ -303,6 +303,26 @@ score-asset readiness adapters. They may draw or prefetch a selected state;
 none may select practice progression or override a backend deadline.
 Native parsing, real-scene CI and connected-piano acceptance remain open.
 
+### V2 fail-closed snapshots and V5 warm-up eligibility — 2026-11-22
+
+The Python state-contract owner additionally publishes required top-level
+ports, action/enablement shape for all controls and valid motion-directive
+variants. Its generated Godot checker rejects unknown/missing/ill-formed
+snapshots **before** adoption by the UI, input coordinator or native score
+queue. The last accepted source is preserved, stale controls are blocked and
+a subsequent valid snapshot restores normal presentation. No new local
+phase/transport state machine was added.
+
+Warm-up step, hand and passage selection is validated in
+`teaching_course.manual_progress` against the ordered earned stage keys.
+`stage_change` invokes the same pure eligibility rule before stopping a
+current take. `lesson.overview` reports exact stage availability; Godot's
+Lesson Path and advanced Pause selectors display that backend status.
+Unrestricted manual navigation for ordinary imported scores is preserved.
+
+These source changes and new real-MIDI regression scenarios have not
+been run against this revision. See [ROADMAP](../ROADMAP.md).
+
 ### Additional source/receipt invariants (2026-11-21)
 
 A replayed `playback.present` receipt is valid only while its

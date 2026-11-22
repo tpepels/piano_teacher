@@ -52,7 +52,8 @@ For same-HEAD local acceptance, run the core suite and strict native verifier
 after development is complete; the last green run on an older SHA does not
 verify subsequent source edits. The 2026-11-22 native binder, Python
 full-bar Resume, terminal admission/Stop, lesson controls and embedded
-fake-MIDI transition changes were committed without local CI. Run the
+fake-MIDI transition changes, plus warm-up unlock and required-snapshot
+validation, were committed without local CI. Run the
 same-HEAD core and full embedded verification together after source work
 is finished; their results must be recorded in ROADMAP before closing V0–V6. CI requests informational Python coverage:
 

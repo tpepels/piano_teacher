@@ -112,11 +112,11 @@ continuation or partial grading.
 | --- | --- | --- |
 | V0 | Full transition/ownership audit and reproducible failure witnesses | Source audit extended across native action emitters and display-only state readers; remaining complete graph/witness acceptance and local CI open |
 | V1 | Deterministic end-to-end MIDI/Godot simulation harness | Source implemented; real engine MIDI transitions and production Godot fake-MIDI Play/Pause/Resume/failure/repeat/Stop/lost-ACK paths integrated; current-HEAD native execution pending |
-| V2 | Canonical transition, action and presentation contracts | In progress; backend-owned passage, Stop, advanced Pause, lesson modes/hints/hands and navigation gesture projections now integrated; local native acceptance pending |
+| V2 | Canonical transition, action and presentation contracts | Source implemented: source-owned actions, ordered warm-up unlocks, versioned snapshot and explicit native fail-closed validation; local CI pending |
 | V3 | Unify graphical admission and playback transaction decisions | Source implemented; one Python deadline, post-arm attestation, bounded failure, immutable native queue, and fresh full-bar Resume contract; current-HEAD native acceptance pending |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress; backend-owned hold/target directives, frozen idle and frame-stepped Godot checks pass core CI; connected native acceptance open |
-| V5 | Strip application decisions out of Godot UI and effect coordinators | Source ownership sweep completed: native control emitters updated; passive presentation/physical adapters distinguished; current-HEAD native gate open |
-| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Expanded real-engine and native fake-MIDI success/failure/Pause/Stop cases; shortened-Resume alternatives removed; software gates have not run on current HEAD |
+| V5 | Strip application decisions out of Godot UI and effect coordinators | Source sweep includes warm-up step/passage and advanced Pause hand gating; course owns eligibility, Godot renders it; current-HEAD native gate open |
+| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Real MIDI/default-vs-strict release, warm-up locking and native Pause/Stop/fault journeys added; no current-HEAD local gate run yet |
 | V7 | Integrated production/package verification and physical acceptance | In progress; full embedded production and packaging passed on 1c1b98e (run 45017492022); final code cleanup and physical keyboard/audio acceptance open |
 
 ### Latest verified gates and remaining constraints (2026-11-22)
@@ -152,6 +152,16 @@ actual selected bar bounds and package contents. Only after successful local
 core/native results may V0–V6 be considered software-verified. Physical
 CA49, speaker/headphone, Pathétique visual and independent installation
 acceptance remain separate open V7 requirements.
+
+### V2/V5/V6 warm-up and snapshot acceptance follow-up — 2026-11-22
+
+- [`d9493eb`](https://github.com/tpepels/piano_teacher/commit/d9493eb8518c1883985610533e7e8ba4bbd905bd): Python owns the required state ports, control-action shapes and presentation-directive variants, and generates the same checker for Godot. Native `ApplicationStateInbox` rejects malformed/incompatible snapshots before score adoption, native admission, input or visible controls. [`ed2e138`](https://github.com/tpepels/piano_teacher/commit/ed2e1383c1192adc15c8ea05e5a0c7f3b7c10226) deduplicates rejection diagnostics and disables stale controls until a valid snapshot arrives. Schema remains v5 (no renamed fields).
+- [`4f717c8`](https://github.com/tpepels/piano_teacher/commit/4f717c80c9ef9898e952af6d3728792e3da1456d) adds public real-engine one-way Suspend/Stop, passage navigation and malformed snapshot tests. [`6c3687d`](https://github.com/tpepels/piano_teacher/commit/6c3687dd36e05f71f3ce779e6602d1a7cb3bfdca) immediately cancels local count-in sound for pending Stop without bypassing backend transport authority.
+- [`53b7db5`](https://github.com/tpepels/piano_teacher/commit/53b7db5bcc07b1510154120125e3df7be7238c9b): `teaching_course` rejects attempts to jump ahead of unearned warm-up steps; `stage_change` prevalidates those actions before canceling a live take, and `lesson.overview` projects each step's availability from one course owner.
+- [`143f4ef`](https://github.com/tpepels/piano_teacher/commit/143f4ef3501dd3e53e17a27655ef2ce4ff309d1d): Native Lesson Path picker and arrows disable unavailable warm-up stages; advanced Pause disables locked hands, and backend passage-next availability requires mastery of the current warm-up exercise. Imported-score step selection remains unrestricted.
+- [`ae0291b`](https://github.com/tpepels/piano_teacher/commit/ae0291b79f06d212e9ef19116aaa6a0adcf1d743) checks direct public warm-up action refusal and unrestricted ordinary MIDI selection. [`ac61332`](https://github.com/tpepels/piano_teacher/commit/ac61332e19b7139209440987eeb3f9a4208a25c2) checks default and strict note-release policies using a real engine/fake MIDI input.
+
+**Not yet verified:** Source work has not been compiled or run against this HEAD. Same-HEAD local core + embedded production + optional exact Pathétique MIDI must pass before marking V0–V6 software accepted. CA49 hardware, audio judgment and independent-machine package acceptance remain separate V7 gates. GitHub Tests remains manual-only.
 
 ### V0/V2/V3/V5 secondary entrypoint implementation — 2026-11-22
 
