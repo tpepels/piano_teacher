@@ -7,7 +7,6 @@ const INK := Design.STONE
 const MUTED := Design.SECONDARY_INK
 const ACCENT := Design.TEAL
 signal command_requested(command: Dictionary)
-signal practice_requested
 signal advanced_requested
 
 var stage_labels: Dictionary = {}
@@ -52,7 +51,7 @@ func _ready() -> void:
     hints_toggle = CheckButton.new()
     hints_toggle.text = "Hints"
     hints_toggle.toggled.connect(func(enabled: bool): command_requested.emit({"action": "hints", "enabled": enabled}))
-    stop_button = _button("Stop attempt", func(): command_requested.emit({"action":"stop"}), false, "danger")
+    stop_button = _button("Stop attempt", func(): command_requested.emit({"action":"ui_stop"}), false, "danger")
     stop_button.tooltip_text = "End the attempt · S"
     stop_button.disabled = true
     var content := UI.stack(14)
@@ -238,10 +237,6 @@ func present_context(state: Dictionary, busy: bool) -> void:
     var warmup: bool = bool(state.get("warmup",false))
     var phase: String = str(state.get("phase","ready"))
     var controls: Dictionary = state.get("controls",{}) if state.get("controls") is Dictionary else {}
-    previous_passage_button.disabled = _busy or not bool(
-        controls.get("passage_previous",{}).get("enabled",false))
-    next_passage_button.disabled = _busy or not bool(
-        controls.get("passage_next",{}).get("enabled",false))
     mode_choice.select(0 if learning else 2 if str(state.get("mode","")) == "perform" else 1)
     mode_choice.set_item_text(1,"Warm-up practice" if warmup else "Practice rhythm")
     for index in [0,2,3]: mode_choice.set_item_disabled(index,warmup)
@@ -251,17 +246,30 @@ func present_context(state: Dictionary, busy: bool) -> void:
     hints_toggle.disabled = not learning or phase == "loading"
     hints_toggle.set_pressed_no_signal(bool(state.get("hints_enabled",false)))
     placement_button.visible = bool(state.get("placement_available",false))
-    skip_button.disabled = not bool(state.get("skip_available",false))
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
         button.set_selected(str(state.get("hand","")) == hand)
         button.disabled = not state.get("hands",[]).has(hand) or str(state.get("hand","")) == hand
-    stop_button.disabled = _busy or not bool(
-        controls.get("stop",{}).get("enabled",false))
+    present_busy(_busy)
 
 func present_busy(busy: bool) -> void:
     _busy = busy
-    reset_button.disabled = busy or not bool(_context.get("loaded",false))
+    var controls: Dictionary = _context.get("controls",{}) \
+        if _context.get("controls") is Dictionary else {}
+    var loaded: bool = bool(_context.get("loaded",false))
+    reset_button.disabled = busy or not loaded
+    if previous_passage_button != null:
+        previous_passage_button.disabled = busy or not bool(
+            controls.get("passage_previous",{}).get("enabled",false))
+    if next_passage_button != null:
+        next_passage_button.disabled = busy or not bool(
+            controls.get("passage_next",{}).get("enabled",false))
+    if stop_button != null:
+        stop_button.disabled = busy or not bool(
+            controls.get("stop",{}).get("enabled",false))
+    if skip_button != null:
+        skip_button.disabled = busy or not bool(
+            controls.get("skip",{}).get("enabled",false))
 
 func present_error(message: String) -> void:
     summary.text = message

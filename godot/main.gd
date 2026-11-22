@@ -445,7 +445,6 @@ func _build_lesson_screen() -> void:
     lesson_view = LessonScreen.new()
     page.add_child(lesson_view)
     lesson_view.command_requested.connect(_send_action)
-    lesson_view.practice_requested.connect(func(): _navigate("practice"))
     lesson_view.advanced_requested.connect(practice_view.open_advanced_pause)
     lesson_session.overview_changed.connect(lesson_view.present_overview)
     lesson_session.request_failed.connect(lesson_view.present_error)

@@ -7,7 +7,7 @@ UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
     "ui_previous", "ui_review_previous", "ui_skip",
     "ui_tempo_up", "ui_tempo_down", "ui_midi_start", "ui_suspend",
-    "ui_passage_previous", "ui_passage_next"))
+    "ui_passage_previous", "ui_passage_next", "ui_stop"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
 
 

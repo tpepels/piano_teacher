@@ -58,7 +58,7 @@ static func command(event: InputEvent,screen: String,source_picker: bool,
         KEY_L:
             return {"kind":"listen"}
         KEY_S:
-            return {"kind":"command","action":"stop"}
+            return {"kind":"command","action":"ui_stop"}
         KEY_LEFT:
             return {"kind":"command","action":"ui_passage_previous"}
         KEY_RIGHT:
