@@ -239,17 +239,24 @@ func present_context(state: Dictionary, busy: bool) -> void:
     var controls: Dictionary = state.get("controls",{}) if state.get("controls") is Dictionary else {}
     mode_choice.select(0 if learning else 2 if str(state.get("mode","")) == "perform" else 1)
     mode_choice.set_item_text(1,"Warm-up practice" if warmup else "Practice rhythm")
-    for index in [0,2,3]: mode_choice.set_item_disabled(index,warmup)
-    mode_choice.disabled = false
+    var activities: Dictionary = controls.get("activities",{})
+    for index in range(mode_choice.item_count):
+        var choice_name: String = ["learn","practice",
+            "perform_current","perform_whole"][index]
+        mode_choice.set_item_disabled(index,not bool(
+            activities.get(choice_name,{}).get("enabled",false)))
+    mode_choice.disabled = _busy
     if str(state.get("mode","")) == "listen": mode_choice.text = "Listen"
     hints_toggle.visible = learning
-    hints_toggle.disabled = not learning or phase == "loading"
+    hints_toggle.disabled = _busy or not bool(
+        controls.get("hints",{}).get("enabled",false))
     hints_toggle.set_pressed_no_signal(bool(state.get("hints_enabled",false)))
     placement_button.visible = bool(state.get("placement_available",false))
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
         button.set_selected(str(state.get("hand","")) == hand)
-        button.disabled = not state.get("hands",[]).has(hand) or str(state.get("hand","")) == hand
+        button.disabled = _busy or not bool(
+            controls.get("hands",{}).get(hand,{}).get("enabled",false))
     present_busy(_busy)
 
 func present_busy(busy: bool) -> void:
@@ -269,7 +276,15 @@ func present_busy(busy: bool) -> void:
             controls.get("stop",{}).get("enabled",false))
     if skip_button != null:
         skip_button.disabled = busy or not bool(
-            controls.get("skip",{}).get("enabled",false))
+            controls.get("path_skip",{}).get("enabled",false))
+    if mode_choice != null:
+        mode_choice.disabled = busy or not bool(_context.get("loaded",false))
+    if hints_toggle != null:
+        hints_toggle.disabled = busy or not bool(
+            controls.get("hints",{}).get("enabled",false))
+    for hand in hand_buttons:
+        hand_buttons[hand].disabled = busy or not bool(
+            controls.get("hands",{}).get(hand,{}).get("enabled",false))
 
 func present_error(message: String) -> void:
     summary.text = message

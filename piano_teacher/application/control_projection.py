@@ -96,6 +96,24 @@ def project_controls(s: Mapping) -> dict:
         bool(s.get("running")) or phase in (
             "count_in", "playing", "paused", "feedback",
             "recovering", "loading", "preview_gap"))
+    # Lesson Path exposes explicit exploration even while Flow hides
+    # compact manual navigation. Keep its availability independent.
+    path_skip = bool(s.get("loaded")) and bool(s.get("skip_available"))
+    warmup = bool(s.get("warmup"))
+    loaded = bool(s.get("loaded"))
+    hand_stages = {row["hand"]: row for row in s.get("hand_stages",[])
+                   if isinstance(row, Mapping) and "hand" in row}
+    hands = {
+        hand: {"enabled": loaded and hand != s.get("hand")
+               and (not warmup or not hand_stages.get(hand,{}).get("locked",True))}
+        for hand in s.get("hands",[]) if isinstance(hand,str)
+    }
+    activity_modes = {
+        "learn": {"enabled":loaded and not warmup},
+        "practice": {"enabled":loaded},
+        "perform_current": {"enabled":loaded and not warmup},
+        "perform_whole": {"enabled":loaded and not warmup},
+    }
     listen = None
     if s.get("loaded"):
         listen = (None if s.get("mode") == "listen" else "listen") if course else (
@@ -139,6 +157,13 @@ def project_controls(s: Mapping) -> dict:
             int(s.get("lesson_step", 1)) > 1},
         "skip": {"action": "skip_stage" if skip_enabled else "",
                  "enabled": skip_enabled, "visible": previous_visible},
+        "path_skip": {"action": "skip_stage" if path_skip else "",
+                      "enabled": path_skip},
+        "hints": {"action": "hints" if loaded and mode == "learn" and
+                   phase != "loading" else "",
+                  "enabled": loaded and mode == "learn" and phase != "loading"},
+        "activities": activity_modes,
+        "hands": hands,
         "passage_previous": {"action": "previous" if passage_previous else "",
                              "enabled": passage_previous},
         "passage_next": {"action": "next" if passage_next else "",
