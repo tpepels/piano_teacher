@@ -760,6 +760,31 @@ Queue-generation, source-revision and actual-deadline mismatch
 remain rejection cases. The application protocol and physical
 authorization timing have not been loosened further.
 
+### V3 terminal automatic-admission latch (2026-11-22)
+
+The 44980830938 physical trace exposed a separate structural
+failure: after repeated rejected Listen reservations, the backend
+requested a new automatic Listen intent each time the already
+compiled score or audio reported readiness. The three-attempt
+admission limit was therefore scoped to one intent, not to
+the authenticated source, and the native scene cycled through
+167 new Listen intent IDs in 95 seconds.
+
+`PlaybackCoordinator` now binds a terminal automatic-admission
+latch to the complete source/hand/revision/mode/opening identity
+when a fixed deadline fails, three physical attempts fail, or a
+score-preparation timeout expires. Repeated `listen`,
+`score_ready` and `auto` requests for that same source are
+refused by the transaction owner; `TransportTiming` safely
+returns without spawning new intents from repeated asynchronous
+readiness notifications. Explicit Start/Restart/Resume or a
+genuine source invalidation/exposure change opens a new
+budget. The real in-process playback fixture now asserts
+four repeated automatic callbacks/ticks cannot create a
+fourth intent or clear the visible terminal failure.
+
+Core and full native acceptance on this change remain open.
+
 ### V3 native failure: elapsed-time world comparison was invalid (2026-11-22)
 
 The first backend-first native run

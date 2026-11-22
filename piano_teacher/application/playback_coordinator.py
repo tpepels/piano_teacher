@@ -113,6 +113,33 @@ class PlaybackCoordinator:
         self.active_segment: dict = {}
         self._completed: deque[tuple[str, dict]] = deque(maxlen=16)
         self.failure = ""
+        # Terminal automatic admission failures are scoped to the exact
+        # source/exposure. A repeated score_ready or completed Listen-audio
+        # notification cannot create infinitely many new intent IDs after
+        # the documented three physical attempts have been exhausted.
+        self._terminal_automatic_source: tuple | None = None
+
+    @staticmethod
+    def _automatic_source_key(facts: PlaybackRuntimeFacts, *,
+                              mode: str, from_beat: float) -> tuple | None:
+        source = facts.source
+        if source is None:
+            return None
+        return (source.fingerprint, source.stage_key, source.revision,
+                source.hand, source.end_beat, source.bpm, mode,
+                round(float(from_beat), 7))
+
+    def automatic_request_blocked(self, facts: PlaybackRuntimeFacts, *,
+                                  action: str, mode: str,
+                                  from_beat: float) -> bool:
+        # Explicit Start/Restart/Resume are new user intents. Listen,
+        # score_ready and auto are asynchronous reactions that must not
+        # resurrect their own terminally failed physical admission.
+        return (action in ("listen", "score_ready", "auto")
+                and self._terminal_automatic_source is not None
+                and self._terminal_automatic_source ==
+                    self._automatic_source_key(
+                        facts, mode=mode, from_beat=from_beat))
 
     def enable_presentation(self, facts: PlaybackRuntimeFacts) -> None:
         if facts.running or self.intent is not None:
@@ -120,6 +147,9 @@ class PlaybackCoordinator:
         self.presentation_required = True
 
     def invalidate(self, reason: str) -> None:
+        # New, explicitly selected exposure/score revision permits a fresh
+        # automatic Listen/Tempo admission, not a new attempt on old ink.
+        self._terminal_automatic_source = None
         self.generation += 1
         self.intent = None
         self.receipt = None
@@ -168,6 +198,14 @@ class PlaybackCoordinator:
             raise ValueError("Unsupported playback intent")
         if mode not in {"practice", "perform", "listen"}:
             raise ValueError("Untimed lessons do not authorize graded playback")
+        if self.automatic_request_blocked(
+                facts, action=action, mode=mode, from_beat=from_beat):
+            raise ValueError(
+                "Automatic score admission already failed for this source")
+        if action in ("start", "restart", "resume"):
+            # An explicit human-initiated retry may proceed, but it does
+            # not grant a future automatic callback its own retry budget.
+            self._terminal_automatic_source = None
         if transition is not None and (
                 transition.action != action
                 or transition.exposure.mode != mode
@@ -255,6 +293,10 @@ class PlaybackCoordinator:
         # Other physical failures have a bounded number of new attempts.
         if (intent.fixed_deadline_ms is not None or
                 intent.attempt + 1 >= MAX_ADMISSION_ATTEMPTS):
+            self._terminal_automatic_source = (
+                intent.fingerprint, intent.stage_key, intent.revision,
+                intent.hand, intent.end_beat, intent.bpm,
+                intent.mode, round(intent.from_beat, 7))
             self.intent = None
             self.receipt = None
             self.state = PlaybackState.FAILED
@@ -519,6 +561,11 @@ class PlaybackCoordinator:
             elif facts.now - self.intent.requested_at > MAX_ADMISSION_WAIT_SECONDS:
                 # Includes silent physical preflight failures and unavailable
                 # engraving. A dead/admitting UI is not a valid steady state.
+                intent = self.intent
+                self._terminal_automatic_source = (
+                    intent.fingerprint, intent.stage_key, intent.revision,
+                    intent.hand, intent.end_beat, intent.bpm,
+                    intent.mode, round(intent.from_beat, 7))
                 self.intent = None
                 self.receipt = None
                 self.state = PlaybackState.FAILED

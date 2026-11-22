@@ -51,8 +51,16 @@ class TransportTiming:
         return self.playback_session.facts(source)
 
     def request_playback(self, *, from_beat: float, **kwargs):
-        return self.playback.request(self.playback_facts(from_beat=from_beat),
-                                     from_beat=from_beat,**kwargs)
+        facts = self.playback_facts(from_beat=from_beat)
+        if self.playback.automatic_request_blocked(
+                facts, action=str(kwargs.get("action", "")),
+                mode=str(kwargs.get("mode", "")), from_beat=from_beat):
+            # Repeated renderer/audio readiness callbacks are events, not
+            # permission for unlimited new transactions on one failed
+            # score. Keep the prior terminal failure visible and await
+            # an explicit user selection rather than raising in every tick.
+            return None
+        return self.playback.request(facts, from_beat=from_beat, **kwargs)
 
     def active_tempo_map(self):
         """Reuse an immutable authored tempo map until stage or BPM changes.
