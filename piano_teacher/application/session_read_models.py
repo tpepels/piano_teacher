@@ -83,45 +83,40 @@ class SessionReadModels:
         self.score_state_publisher.prepare_guided(
             state,self.score_facts(pending,timeline),now=now)
 
-    def control_snapshot(self) -> dict:
-        """Read command facts without publishing or preparing visual scores.
+    def _committed_base(self, now: float) -> tuple[dict, dict | None, dict]:
+        """Project the same locked transport/lesson state for all consumers.
 
-        This runs inside the same application lock as command execution.
-        It samples canonical session ports without invoking the graphical
-        score projection, headless score fixture or readiness transitions.
-        UI labels and actual actions subsequently use the same policy.
+        The native button resolver and the frame presenter must not disagree
+        about admission, failure or the currently authorized segment. A
+        headless practice run still publishes the required real transaction
+        status, without inventing a physical admission receipt.
         """
-        now = self.clock()
         state = project_session_state(self.capture_snapshot(sampled_at=now))
-        # Source admission/failure must be projected identically in the
-        # lightweight locked command path and the graphical snapshot.
-        # Reading a gesture cannot trigger engraving or a state transition.
         pending, timeline = self.playback.snapshot()
         if self.playback.presentation_required:
             self.score_state_publisher.project_transport_state(
-                state,pending,timeline,
+                state, pending, timeline,
                 running=self.playback_session.running,
                 paused=self.visual_transport.paused)
         else:
             state["playback_timeline"] = timeline
         if self.lesson_execution.flow_active():
             state["flow"] = self.lesson_execution.flow_state()
+        return state, pending, timeline
+
+    def control_snapshot(self) -> dict:
+        """Read authoritative command facts without engraving or transitions."""
+        state, _, _ = self._committed_base(self.clock())
         return state
 
     def snapshot(self) -> dict:
         with self.lock:
             now = self.clock()
-            state = project_session_state(self.capture_snapshot(sampled_at=now))
-            pending, timeline = self.playback.snapshot()
+            state, pending, timeline = self._committed_base(now)
             facts = self.score_facts(pending,timeline)
             plan = self.source_identity.plan
             guided_plan = self.score_state_publisher.publish(state, facts)
             if not self.playback.presentation_required:
-                # Headless sessions have no physical admission intent, but the
-                # versioned published-state contract still requires the real
-                # playback transaction state. Match control_snapshot without
-                # fabricating a renderer receipt or a graphical deadline.
-                state["playback_timeline"] = timeline
                 # Test/command fixture adapter; never entered by the desktop.
                 def count_in_source_at(from_beat, rate):
                     _, bars, meter = self.attempt_progression.count_in_bar(
@@ -136,8 +131,6 @@ class SessionReadModels:
             if self.attempt_settlement.pending_result is not None:
                 state["bpm"] = self.presentation_bpm()
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
-            if self.lesson_execution.flow_active():
-                state["flow"] = self.lesson_execution.flow_state()
             if self.source_identity.plan is not None:
                 epoch = self.visual_transport.tempo_epoch_for(
                     stage=self.source_identity.plan.identity,bpm=self.presentation_bpm())

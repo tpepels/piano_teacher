@@ -160,13 +160,10 @@ class ScoreStatePublisher:
         """Project authorized desktop score facts. Never construct a headless plan."""
         guided = self._guided_plan(state, facts)
         state["presentation_directive"] = self._motion_directive(state, facts)
-        if not facts.timeline:
-            return guided
-        # Both locked command resolution and painting use this same pure
-        # transport-status projection from the Python transaction owner.
-        self.project_transport_state(
-            state, facts.timeline["intent"],facts.timeline["current"],
-            running=facts.running,paused=facts.paused)
-        if guided is not None:
+        # SessionReadModels already projected one canonical committed
+        # transport status for both command and frame reads. This method
+        # contributes only score motion and the source-bound Free target.
+        # Pure projection callers can inspect motion without a full session.
+        if facts.timeline and guided is not None and "playback_timeline" in state:
             state["playback_timeline"]["guided"] = guided
         return guided
