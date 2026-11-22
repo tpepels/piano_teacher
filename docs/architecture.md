@@ -813,11 +813,14 @@ or source-module references outside the application package.
 the `ControlDispatcher` router were deleted after complete caller migration.
 `TeachingDecisions` validates and installs exact lesson decisions and
 owns their plan/source/stage-bound prepared selection. The public UI,
-MIDI and physical command paths enter `PracticeSession`. The outstanding
-A1 work is the typed session-owned immediate-continuation event queue,
-complete event/effect publication and verified Stop/stale receipt/source
-transition behavior. `PracticeTimeline` still executes lesson and
-settlement continuation logic (primarily A2), and separate bounded
+MIDI and physical command paths enter `PracticeSession`. The previously outstanding
+immediate-continuation event queue now belongs to `PracticeSession`,
+with typed `ImmediateTransition` entries, an explicit follow-up return
+from `PracticeTimeline`, and the former mutable same-tick flag removed.
+The remaining A1 work is complete event/effect atomicity and verified
+Stop/stale receipt/source transition behavior. `PracticeTimeline`
+still executes lesson and settlement continuation logic (primarily A2),
+and separate bounded
 library-health/future-score workers remain necessary for non-blocking
 preparation (A4). No current-revision runtime acceptance is claimed.
 
@@ -853,6 +856,29 @@ and found no remaining executable references to `SessionCommands` or
 rather than left as redirecting wrappers. Source code has **not** been
 parsed/executed by the target embedded Python 3.14 or Godot runtime in
 this environment; the behavioral and physical gates remain open.
+
+### A1 immediate-transition queue implementation — 2026-11-22
+
+The native tick's one short-lock transaction now owns
+`deque[ImmediateTransition]`. Each domain update reports whether an
+immediate follow-up becomes due, without holding a latent mutable
+`_followup_requested` field or publishing an intermediate score state.
+The worker drains at most one initial update plus 16 follow-ups; an
+overflow or transition exception pauses the current transport and
+publishes the original save/retry error notices.
+
+Automatic preview-repeat, feedback settlement, and immediate
+post-completion transitions report their follow-up through a return
+value from `PracticeTimeline`. After the queue is empty, only
+source/revision/stage/hand-authenticated deferred MIDI is replayed, then
+the authorized playback status and live feedback are projected once.
+This keeps the original physical reservation/attestation authority and
+does not invent a second timeline or background queue.
+
+The method-level change and source consistency were reviewed through the
+connected GitHub tree. **No Python 3.14, Godot or fake MIDI runtime gate
+has executed on this HEAD**, so replay, failure, Pause/Resume and
+physical ink invariants remain unverified.
 
 ### A0 remaining evidence required before marking complete
 

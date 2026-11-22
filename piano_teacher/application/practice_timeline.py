@@ -49,8 +49,9 @@ class PracticeTimeline:
                           total_beats: float, duration: float, now: float) -> bool:
         """Apply post-performance state after the score's settlement interval.
 
-        This method is called from the locked _update loop. Assessment and
-        grading are calculated only after a completed non-preview take.
+        Called from PracticeSession's locked event drain. Assessment
+        and grading occur only after a completed non-preview take.
+        Returns whether another same-tick transition must be queued.
         """
         self.visual_transport.record_take_end(
             at=self.visual_transport.run_at + duration,
@@ -166,7 +167,7 @@ class PracticeTimeline:
         return False
 
     def run_pre_assessment_transition(self, now: float) -> tuple[bool, bool]:
-        """Apply an explicit non-grading transition under the session lock."""
+        """Apply a non-grading transition; return consumed and follow-up flags."""
         if self.playback.presentation_required and self.playback.intent is not None:
             return True, False
         context = TransitionContext(

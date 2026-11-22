@@ -466,15 +466,24 @@ source evidence, not executed acceptance. The composition root now has
 constructor convention**, compared with 63 earlier. The exact count is
 descriptive, not an architectural success criterion.
 
-**A1 exit still open:** `PracticeTimeline` requests immediate follow-up
-with a private boolean rather than a typed, ordered, session-owned event
-queue; complete event/effect atomicity and single-version publication
-must be confirmed in actual MIDI, Stop/queued Stop, stale/failure
+**Additional A1 source implementation:** [90b69ab](https://github.com/tpepels/piano_teacher/commit/90b69ab64043b5f5b70cb06f20b95eea1b45c440)
+moves the bounded, typed immediate-transition queue into
+`PracticeSession._advance_tick`. `PracticeTimeline.update_transition`
+and its complete-take/feedback helpers return a follow-up decision;
+the private `_followup_requested` state and `settle_transitions` loop
+were removed. At most 16 successive follow-ups are accepted, retaining
+failure pause/notices. Only after the final settled transition does the
+session replay source-bound MIDI and publish once.
+
+**A1 exit still open:** Complete source/state aggregate ownership,
+explicit take-result/settlement transaction contracts and effect
+atomicity, with actual MIDI, Stop/queued Stop, stale/failure
 receipt, Pause/Resume, navigation and source-change journeys.
-Physical/desktop fake MIDI, core Godot, embedded execution, packaging
-and keyboard behavior have **not been run on this revision**.
-A1 stays **IN PROGRESS**. Preserve the last successful CI as historical
-evidence only; do not auto-trigger GitHub Actions.
+Core Python, desktop fake MIDI, Godot, embedded native execution,
+packaging and physical keyboard behavior have **not been run on this
+revision**. A1 stays **IN PROGRESS**; A0 exact-HEAD verification is also
+open. The last successful CI is historical evidence only, and no
+GitHub Actions run was triggered.
 
 ### A1 — One PracticeSession transaction/event coordinator
 
@@ -682,7 +691,7 @@ and speakers, including the original Pathétique source and readability.
 | Phase | Required result | Status |
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
-| A1 | One authoritative PracticeSession and event processing path | **In progress** — session event ingress, explicit teaching effects, source-bound prepared selection, reasons and MIDI replay identities integrated; PracticeControls, ApplicationWorker, ControlDispatcher and SessionCommands removed; bounded immediate-transition event queue, source/Stop/failure journeys and same-HEAD execution still open |
+| A1 | One authoritative PracticeSession and event processing path | **In progress** — typed serialized event ingress, source-bound lesson effects, source-authenticated deferred MIDI and bounded immediate-transition queue in PracticeSession; four obsolete coordinator/router modules deleted; integration/Stop/failure/source-change execution and complete aggregate ownership still open |
 | A2 | Unified lesson/assessment/settlement/recovery | Not started |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
