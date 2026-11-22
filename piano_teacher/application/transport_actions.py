@@ -78,7 +78,8 @@ class TransportActions:
                 authorized.validate_installed(selected,intent)
                 with self.session_commands.executing(authorized.transition.effect):
                     self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,
-                        scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in)
+                        scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in,
+                        effect=authorized.transition.effect)
             elif authorized.action == "resume":
                 self.resume_current_session(
                     presentation_lead_seconds=max(0.0,authorized.deadline-self.clock()),
@@ -140,9 +141,9 @@ class TransportActions:
         elif self.playback_session.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
             self.timed_playback.begin_listen_if_ready()
 
-    def control_transport(self, action: str, kwargs: dict) -> None:
+    def control_transport(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "practice":
-            self.exposure_workflows.prepare_practice()
+            self.exposure_workflows.prepare_practice(effect=effect)
             if kwargs.get("wait_for_player", False):
                 # Listen returns to a ready score without an auto count-in.
                 self.playback_session.wait_for_player()
@@ -159,9 +160,9 @@ class TransportActions:
             self.transport_timing.update_short_rest(kwargs)
             if self.playback.presentation_required:
                 if self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None:
-                    self.start_or_restart(action)
+                    self.start_or_restart(action, effect=effect)
                     return
-                effect = self.session_commands.active or self.teaching_decisions.manual_effect(action)
+                effect = effect or self.teaching_decisions.manual_effect(action)
                 transition = PlaybackTransition.from_effect(
                     effect,action=action,source_changed=(
                         self.score_artifact_registry.current.source_bpm_changed(self.source_identity.plan.piece.bpm)
@@ -171,7 +172,7 @@ class TransportActions:
                     # These routes change assets or enter untimed teaching.
                     # The resulting timed source, if any, is requested only
                     # after its exact selected score revision is prepared.
-                    self.start_or_restart(action)
+                    self.start_or_restart(action, effect=effect)
                 else:
                     selected = transition.exposure
                     self.transport_timing.request_playback( action=action,
@@ -179,7 +180,8 @@ class TransportActions:
                         transition=transition)
             else:
                 self.start_or_restart(
-                    action, presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs))
+                    action, effect=effect,
+                    presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs))
         elif action == "pause":
             self.timed_playback.pause(
                 pending_admission=self.playback_session.suspend_admission(self.playback))
@@ -212,7 +214,7 @@ class TransportActions:
 
     def start_or_restart(self, action: str, *,
                           presentation_lead_seconds: float = 0.0,
-                          scheduled_deadline: float | None = None):
+                          scheduled_deadline: float | None = None, effect=None):
         """Start a take or schedule a seamless retry under the control lock."""
         if self.attempt.settlement_failed:
             revision = self.source_identity.revision
@@ -229,14 +231,14 @@ class TransportActions:
         p = self.source_identity.plan
         if p is None:
             raise ValueError("Open a piece first")
-        effect = self.teaching_decisions.manual_effect(action)
+        effect = self.teaching_decisions.manual_effect(action, effect=effect)
         selected = self.teaching_decisions.install_command(effect)
         route = PlaybackTransition.from_effect(
             effect,action="start",source_changed=(
             self.score_artifact_registry.current.source_bpm_changed(p.piece.bpm)
             if self.playback_session.mode not in ("listen","learn") else False)).route
         if route == "listen":
-            self.exposure_workflows.prepare_listen()
+            self.exposure_workflows.prepare_listen(effect=effect)
             return
         if route == "prepare_practice":
             self.exposure_workflows.prepare_practice(exposure=selected)
