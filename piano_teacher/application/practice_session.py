@@ -23,6 +23,7 @@ from .session_events import (
     PlaybackWithdrawn,
     PlaybackFailed,
     SourceCommitted,
+    FingeringCorrectionCommitted,
     SettingsChanged,
     DeviceSelected,
     PreloadReady,
@@ -214,6 +215,9 @@ class PracticeSession:
                     self.source_workflows.mark_library_opened(
                         event.opened_identifier, warmup=event.warmup)
                 return resumed
+            if isinstance(event, FingeringCorrectionCommitted):
+                return self.source_workflows.install_fingering_correction(
+                    event.corrected)
             if isinstance(event, SettingsChanged):
                 return self.settings_workflows.update(
                     event.changes, pause_current=self.timed_playback.pause)

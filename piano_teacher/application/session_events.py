@@ -71,6 +71,11 @@ class SourceCommitted:
 
 
 @dataclass(frozen=True, slots=True)
+class FingeringCorrectionCommitted:
+    corrected: object
+
+
+@dataclass(frozen=True, slots=True)
 class SettingsChanged:
     changes: dict
 
@@ -130,7 +135,8 @@ PracticeEvent = (TimedStartRequested | UserCommand | ClockAdvanced |
                  PhysicalMidi | MidiShortcut |
                  PresentationRequired | PlaybackReserved | PlaybackPresented |
                  PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
-                 SettingsChanged | DeviceSelected | PreloadReady | PreloadFailed |
+                 FingeringCorrectionCommitted | SettingsChanged | DeviceSelected |
+                 PreloadReady | PreloadFailed |
                  SessionClosed | CalibrationRequested | HardwareRequested |
                  HistoryExported | PieceHistoryDeleted | LearnerHistoryDeleted)
 

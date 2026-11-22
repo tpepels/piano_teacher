@@ -12,7 +12,8 @@ from pathlib import Path
 from .application.composition import compose_application
 from .application.session_events import (
     TimedStartRequested, PresentationRequired, PlaybackReserved, PlaybackPresented,
-    PlaybackWithdrawn, PlaybackFailed, SourceCommitted, SettingsChanged,
+    PlaybackWithdrawn, PlaybackFailed, SourceCommitted,
+    FingeringCorrectionCommitted, SettingsChanged,
     DeviceSelected, PreloadReady, PreloadFailed, SessionClosed,
     CalibrationRequested, HardwareRequested, HistoryExported,
     PieceHistoryDeleted, LearnerHistoryDeleted)
@@ -249,8 +250,14 @@ class PracticeEngine:
 
     def correct_fingering(self, source_id: str, finger: int | None,
                          *, fingerprint: str | None = None) -> None:
-        return self.source_workflows.correct_fingering(
-            source_id, finger, fingerprint=fingerprint)
+        identity = self.source_workflows.correction_identity(
+            fingerprint=fingerprint)
+        with self.source_preparation.source_mutation():
+            # Preserve original-note/generation identity across inference,
+            # then commit only the validated revision inside PracticeSession.
+            corrected = self.source_workflows.prepare_fingering_correction(
+                identity, source_id=source_id, finger=finger)
+            self.practice_session.apply(FingeringCorrectionCommitted(corrected))
 
     @property
     def flow(self) -> practice_flow.FlowState | None:

@@ -80,35 +80,40 @@ class SourceWorkflows:
             self.playback_session.wait_for_player()
             self.notices.publish(failure, failure)
 
-    def correct_fingering(self, source_id: str, finger: int | None,
-                          *, fingerprint: str | None = None) -> None:
+    def correction_identity(self, *, fingerprint: str | None = None):
+        """Capture the exact original MIDI source before asynchronous work."""
         with self.lock:
             self._apply_listen_failure()
             selected = self.source_identity.plan
-            identity = self.source_preparation.capture_correction(
+            return self.source_preparation.capture_correction(
                 piece=selected.piece if selected is not None else None,
                 fingerprint=self.source_identity.fingerprint,
                 requested_fingerprint=fingerprint)
-        with self.source_preparation.source_mutation():
-            with self.lock:
-                selected = self.source_identity.plan
-                piece = selected.piece if selected is not None else None
-                source_fingerprint = self.source_identity.fingerprint
-            corrected = self.source_preparation.correct_fingering(
-                identity, piece=piece, fingerprint=source_fingerprint,
-                source_id=source_id, finger=finger, fingering=self.fingering)
-            with self.lock:
-                selected = self.source_identity.plan
-                installed = self.source_preparation.correction_install(
-                    corrected, piece=selected.piece if selected is not None else None,
-                    fingerprint=self.source_identity.fingerprint,
-                    score_revision=self.source_identity.revision)
-                self._apply_listen_failure()
-                selected.piece = installed.piece
-                self.score_artifact_registry.invalidate()
-                self.source_identity.publish_revision(installed.score_revision)
-                if self.playback_session.source_revised(self.source_identity.revision):
-                    self.listen.retarget_score(self.source_identity.revision)
+
+    def prepare_fingering_correction(self, identity, *,
+                                    source_id: str, finger: int | None):
+        """Heavy correction while source_mutation is held; release state lock."""
+        with self.lock:
+            selected = self.source_identity.plan
+            piece = selected.piece if selected is not None else None
+            fingerprint = self.source_identity.fingerprint
+        return self.source_preparation.correct_fingering(
+            identity, piece=piece, fingerprint=fingerprint,
+            source_id=source_id, finger=finger, fingering=self.fingering)
+
+    def install_fingering_correction(self, corrected) -> None:
+        """One source-bound state commit, under session and mutation guards."""
+        selected = self.source_identity.plan
+        installed = self.source_preparation.correction_install(
+            corrected, piece=selected.piece if selected is not None else None,
+            fingerprint=self.source_identity.fingerprint,
+            score_revision=self.source_identity.revision)
+        self._apply_listen_failure()
+        selected.piece = installed.piece
+        self.score_artifact_registry.invalidate()
+        self.source_identity.publish_revision(installed.score_revision)
+        if self.playback_session.source_revised(self.source_identity.revision):
+            self.listen.retarget_score(self.source_identity.revision)
 
     def library_listing(self) -> dict:
         return self.library.scan()
