@@ -225,6 +225,26 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
     if not bool(planned.get("ok",false)):
         _report_problem("Cannot preflight authentic source notation for playback")
         return
+    if fixed == null and str(planned.get("mode","")) == "append":
+        # A read-only preflight is sampled BEFORE the Python reservation
+        # round trip. A minimally clear offscreen slot becomes too close
+        # by the time we arm it, because the immutable ledger advances
+        # while the worker chooses its deadline. Offer enough additional
+        # *physical* runway for that transaction, without inventing a
+        # second musical deadline or moving any already-admitted ink.
+        # Auto repeats have an immutable slot and must never be extended.
+        var arm_budget_world: float = flow.project_authored_future(
+            frame_ms+500,frame_ms,float(state.get("clock_beat",0.0)),
+            tempo,authored)-world
+        if not is_finite(arm_budget_world) or arm_budget_world <= 0.0:
+            return
+        planned = TransportReservation.plan(
+            view,physical_action,world,opening,required_slot,
+            float(planned["start_world"])+arm_budget_world,
+            str(intent.get("mode","")) == "listen")
+        if not bool(planned.get("ok",false)):
+            _report_problem("Cannot reserve a safe physical arm window")
+            return
     # No physical strip is armed yet. Python chooses the exact musical
     # deadline from this read-only earliest-feasible renderer witness.
     # Only its accepted reply may authorize the native queue to arm ink.
