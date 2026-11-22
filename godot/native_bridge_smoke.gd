@@ -14,6 +14,7 @@ var request_id := -1
 var operation := ""
 var real_score := false
 var revision := -1
+var fingerprint := ""
 var started_transport := -1
 
 func _initialize() -> void:
@@ -91,26 +92,29 @@ func _process(_delta: float) -> bool:
                 if not bool(values.get("loaded",false)) or revision < 0:
                     _fail("MIDI opened without loaded state and revision")
                     return true
+                fingerprint = str(values.get("piece_fingerprint",""))
                 print("PIANO_NATIVE_MIDI_OPEN_OK revision=",revision)
-                _submit("score.native_layout")
-            "score.native_layout":
-                var anchors: Variant = values.get("anchors")
-                if int(values.get("revision",-1)) != revision or \
-                        not anchors is Array or anchors.is_empty():
-                    _fail("Verovio anchors missing, empty or stale (revision=%d, keys=%s)" % [
-                        int(values.get("revision",-1)),str(values.keys())])
+                _submit("score.bundle")
+            "score.bundle":
+                var layout: Variant = values.get("layout")
+                var model: Variant = values.get("model")
+                var identifiers: Variant = values.get("source_note_ids")
+                if (str(values.get("status","")) != "ready" or
+                        int(values.get("revision",-1)) != revision or
+                        str(values.get("fingerprint","")) != fingerprint or
+                        not layout is Dictionary or not model is Dictionary or
+                        not identifiers is Array or identifiers.is_empty() or
+                        int(layout.get("revision",-1)) != revision or
+                        int(model.get("revision",-1)) != revision or
+                        not layout.get("anchors") is Array or
+                        layout["anchors"].is_empty() or
+                        not model.get("notes") is Array or
+                        model["notes"].is_empty()):
+                    _fail("Native ScoreBundle is missing original notes, engraving or source identity")
                     return true
                 print("PIANO_NATIVE_SCORE_GEOMETRY_OK anchors=",
-                    values["anchors"].size())
-                _submit("score.semantic")
-            "score.semantic":
-                if int(values.get("revision",-1)) != revision or \
-                        not values.has("notes") or \
-                        not values["notes"] is Array or \
-                        values["notes"].is_empty():
-                    _fail("Semantic score has missing notes or wrong revision")
-                    return true
-                print("PIANO_NATIVE_SEMANTIC_OK notes=",values["notes"].size())
+                    layout["anchors"].size())
+                print("PIANO_NATIVE_SEMANTIC_OK notes=",model["notes"].size())
                 _submit("practice.command",{"action":"score_ready","revision":revision})
                 operation = "practice.ack"
             "practice.ack":
