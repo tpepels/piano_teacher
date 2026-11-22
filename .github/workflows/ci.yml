@@ -1,18 +1,25 @@
 name: Tests
 
+# Deliberately manual: do not spend CI minutes on individual commits.
+# Select "Core" for fast checks or "Full" for embedded Godot, MIDI and package.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "Verification scope"
+        required: true
+        type: choice
+        options:
+          - core
+          - full
+        default: core
 
 permissions:
   contents: read
 
 concurrency:
-  # Native compilation and package audit may run for tens of minutes.
-  # Normal source pushes cancel only old core runs, not a native audit.
-  group: tests-${{ github.ref }}-${{ contains(github.event.head_commit.message, '[native]') && 'native' || 'core' }}
+  # One manually selected suite at a time per branch.
+  group: tests-${{ github.ref }}-${{ inputs.suite }}
   cancel-in-progress: true
 
 jobs:
@@ -47,9 +54,8 @@ jobs:
           if-no-files-found: ignore
 
   native-production:
-    # Opt-in full integration gate; uses the already-existing production
-    # acceptance script. Ordinary core-CI pushes remain fast.
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[native]')
+    # Run only when the user explicitly selects the full suite.
+    if: ${{ inputs.suite == 'full' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
