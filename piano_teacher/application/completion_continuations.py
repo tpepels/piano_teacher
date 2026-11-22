@@ -78,7 +78,23 @@ class CompletionContinuations:
         self.notices.feedback,self.notices.next_action = fault.feedback,fault.next_action
 
     def dispatch_effect(self, effect, now: float) -> None:
-        """Apply an exact decided successor once after durable settlement."""
+        """Apply a committed successor only to its exact installed source.
+
+        This guard is deliberately at the effect boundary: an ACK, Stop or
+        source replacement can supersede a publication after a decision was
+        durably settled but before the native continuation starts.
+        """
+        pending = self.attempt_settlement.pending
+        identity = effect.identity
+        plan = self.source_identity.plan
+        if (pending is None or plan is None
+                or pending.decision.decision_id != identity.decision_id
+                or pending.receipt is None
+                or pending.phase not in ("effects_applied", "published")
+                or identity.fingerprint != self.source_identity.fingerprint
+                or identity.stage_key != plan.identity
+                or identity.revision != self.source_identity.revision):
+            raise ValueError("Stale or unsettled teaching continuation effect")
         previous = self._applied_continuation_effect
         if previous is not None and previous.identity == effect.identity:
             if previous != effect:
