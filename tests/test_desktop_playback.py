@@ -447,6 +447,19 @@ def test_backend_publishes_hold_target_and_running_motion_without_ui_phase_polic
     idle = replace(pending,timeline={
         "intent":None, "current":{"current":None,"state":"idle"}})
     assert motion({"phase":"ready"}, idle) == {"kind":"hold"}
+    # Failed admission can retain the predecessor's historical segment.
+    # That is not a licence to scroll forever with no playable tempo.
+    old_source = {"segment_id":"old","take_id":"previous"}
+    failed = replace(pending,timeline={
+        "intent":None,"current":{"current":old_source,"state":"failed",
+                                  "failure":"No physical source can be admitted"}})
+    assert motion({"phase":"loading"}, failed) == {"kind":"hold"}
+    # A pending valid successor may continue the old, already authorized
+    # rest without inventing a second clock or resetting the world.
+    still_pending = replace(pending,timeline={
+        "intent":{"intent_id":"next"},
+        "current":{"current":old_source,"state":"playing"}})
+    assert motion({"phase":"admitting"}, still_pending) == {"kind":"retain"}
 
 
 def test_real_state_contract_includes_authoritative_motion_directive(practice_session):

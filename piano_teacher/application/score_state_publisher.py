@@ -116,6 +116,12 @@ class ScoreStatePublisher:
                     if beats else {"kind": "hold"})
         if facts.timeline:
             transport = facts.timeline.get("current") or {}
+            # An old authorized strip is retained for painting history,
+            # not as permission for perpetual motion once the backend has
+            # definitively failed or reset. A pending successor still uses
+            # the separate retain branch below.
+            if not facts.running and transport.get("state") in ("failed","idle"):
+                return {"kind":"hold"}
             authorized = transport.get("current")
             # An initial loaded/ready source does not authorize a tempo
             # clock. In particular, the first pending Start or Listen
