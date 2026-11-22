@@ -569,3 +569,33 @@ def test_frozen_canvas_physical_world_can_shrink_as_deadline_approaches(practice
     assert active["world_origin"] == pytest.approx(fresh["physical_world_origin"])
     assert active["deadline_ms"] == receipt["deadline_ms"]
     assert active["segment_id"] == receipt["segment_id"]
+
+
+def test_repeated_listen_audio_and_score_acks_cannot_reopen_failed_admission(practice_session):
+    """The real Listen-ready worker may emit the same acknowledgements again."""
+    session = practice_session(bars=1)
+    session.commands.require_presentation()
+    session.ready_score()
+    demo = session.wait_audio()
+    session.command("demo_ready", token=demo["token"])
+    pending = session.snapshot()["playback_intent"]
+    assert pending and pending["action"] == "listen"
+    started_sequence = session.engine.playback.sequence
+    for attempt in range(3):
+        pending = session.snapshot()["playback_intent"]
+        assert pending and pending["attempt"] == attempt
+        session.ask("playback.withdraw", intent_id=pending["intent_id"],
+                    attempt=attempt,
+                    reason="Native Listen geometry never became available")
+    finished = session.snapshot()
+    assert finished["playback_intent"] is None
+    assert finished["playback_timeline"]["state"] == "failed"
+    for _ in range(4):
+        session.command("score_ready", revision=finished["revision"])
+        session.command("demo_ready", token=demo["token"])
+        session.tick(.25)
+        observed = session.snapshot()
+        assert observed["playback_intent"] is None
+        assert observed["playback_timeline"]["state"] == "failed"
+        assert not observed["running"]
+    assert session.engine.playback.sequence == started_sequence

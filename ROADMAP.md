@@ -775,6 +775,21 @@ The existing real fake-MIDI workflow regression checks
 there is no new intent, mutation of notice or extra
 automatic attempt.
 
+### V3 real Listen duplicate-readiness regression (2026-11-22)
+
+Extended the in-process fixture to open an actual Listen
+source in graphical-presentation mode, wait for its actual
+prepared demonstration audio, authorize score/audio readiness,
+then deliberately withdraw all three physical admission
+attempts through `playback.withdraw`. The test resends
+both `score_ready` and `demo_ready` four times and advances
+the real engine clock; the terminal failure, stopped musical
+transport and exact original intent sequence must remain
+unchanged. This specifically guards the 167-new-intents
+failure witnessed in production and uses the existing
+`PracticeEngine`, in-process worker and real Listen
+preparation, without mocking a teaching state machine.
+
 ### V3 terminal automatic-admission latch (2026-11-22)
 
 The 44980830938 physical trace exposed a separate structural
