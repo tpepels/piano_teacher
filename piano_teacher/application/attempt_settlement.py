@@ -337,7 +337,7 @@ class AttemptSettlement:
         completed = self._completion
         take = completed.take
         if (binding != take.binding or score_revision != take.score_revision
-                or hand != take.hand or mode != take.mode
+                or hand != take.hand or mode != take.mode or bpm != take.bpm
                 or from_beat != take.from_beat or end_beat != take.end_beat):
             raise ValueError(
                 "Completed take source or window changed before evidence settlement")
