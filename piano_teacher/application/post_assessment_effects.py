@@ -34,6 +34,7 @@ class PostAssessmentEffects:
             # receipt, but must never replay stage adoption or rewind.
             if finish_publication:
                 self.attempt_settlement.finish_publication()
+            self.attempt.publication_finished()
             return pending.publication.receipt.message
         decision = pending.decision
         try:
