@@ -808,21 +808,51 @@ workflows method. There are no matching production references in those
 modules. This does not verify semantic behavior, the current Godot scene,
 or source-module references outside the application package.
 
-**Intentional remaining debt:** `SessionCommands.active/prepared/applied`
-and `action_reason` are still mutation context shared by TeachingDecisions,
-LearningActions, TimedPlayback, ExposureInstaller and TransportActions.
-The static class `ControlDispatcher` still selects the pure action route,
-and `PracticeTimeline` retains lesson/settlement continuation logic.
-`LibraryHealth.start` starts its own asynchronous diagnostic worker,
-while next-stage scoring uses a separate preload workflow. Removing
-these requires behavior-complete migration; their existence prevents
-A1 from being marked finished.
+**Current remaining debt (updated 2026-11-22):** The previous
+`SessionCommands` mutable action/effect/prepared/idempotence context and
+the `ControlDispatcher` router were deleted after complete caller migration.
+`TeachingDecisions` validates and installs exact lesson decisions and
+owns their plan/source/stage-bound prepared selection. The public UI,
+MIDI and physical command paths enter `PracticeSession`. The outstanding
+A1 work is the typed session-owned immediate-continuation event queue,
+complete event/effect publication and verified Stop/stale receipt/source
+transition behavior. `PracticeTimeline` still executes lesson and
+settlement continuation logic (primarily A2), and separate bounded
+library-health/future-score workers remain necessary for non-blocking
+preparation (A4). No current-revision runtime acceptance is claimed.
 
 The new event envelopes are frozen dataclasses but may carry mutable
 JSON payload dictionaries or already-prepared source objects; these are
 used immediately under the lock and are **not deep-immutable event logs**.
 Authentication and source generation validation remain the domain's
 responsibility.
+
+### A1 command-context elimination and source-bound MIDI evidence (2026-11-22)
+
+The session event boundary now uses an explicit original teaching decision
+and explicit cancellation reason. The old `SessionCommands` and pure
+`ControlDispatcher` files are absent from current source. The lesson owner
+validates `CommandEffect` and holds one source-bound approved exposure;
+a native score-ready/retry cannot silently consume a previous piece's
+`prepared` field. The selected exposure identity includes the same
+LearningPlan instance, source fingerprint, and stage key, and is reset
+when a new source is installed.
+
+Deferred MIDI is a typed `DeferredMidi` record whose **original**
+fingerprint, score revision, stage, hand, transport id and exact timestamps
+survive across the native worker tick. The queue is checked against the
+newly selected source before replay. A new take epoch for the *same*
+stage may receive an event only if the corrected physical time is at or
+after the newly authorized run onset; notes from earlier rests do not
+earn credit by crossing an epoch. Clearing the queue on Stop and source
+cancellation remains with `SessionLifecycle`.
+
+The static app-module audit covers 77 extant Python application files
+and found no remaining executable references to `SessionCommands` or
+`ControlDispatcher`. The former file owners and callers were removed
+rather than left as redirecting wrappers. Source code has **not** been
+parsed/executed by the target embedded Python 3.14 or Godot runtime in
+this environment; the behavioral and physical gates remain open.
 
 ### A0 remaining evidence required before marking complete
 

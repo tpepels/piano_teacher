@@ -335,14 +335,11 @@ the phase exit criteria:
   invoked the removed `PracticeTimeline.update` method. This source
   reachability check is not a successful execution of those tests.
 
-**Still unimplemented in A1:** A first-class typed `PracticeSession`
-event processor/aggregate owning all entrypoints; explicit effect
-transactions and identity checks for each event; migration and deletion
-of all old `PracticeControls`, `ControlDispatcher`, `SessionCommands`
-and nested continuation routing; integrated fault/queued-Stop/source-change
-behavior. Current `ApplicationWorker` and `PracticeTimeline` still
-exist and their responsibilities remain too broad. Do not interpret this
-as A1 completion.
+**Historical A1 baseline, superseded by later integration:** This
+checkpoint preceded the typed `PracticeSession` merger and deletion of
+`PracticeControls`, `ApplicationWorker`, `ControlDispatcher` and
+`SessionCommands`. Its stated open work was accurate at that commit;
+refer to the latest A1 checkpoint below for current remaining work.
 
 **Verification:** No executable Python/Godot runtime is available to this
 connected repository environment. The previous local log of 159 passing
@@ -407,22 +404,77 @@ GitHub Tests remains opt-in `workflow_dispatch`; no CI run was triggered.
   event inventory are documented in
   [architecture](docs/architecture.md#a1-concrete-serialized-write-boundary--source-integration-2026-11-22).
 
-**Still open:** Although the public command/MIDI/tick and high-value
-source/physical/persistence mutation paths now enter the serialized
-boundary, `SessionCommands` still holds mutable `active`, `prepared`,
-`applied` and action-context fields across domain workflows;
-`ControlDispatcher` still classifies user actions and `PracticeTimeline`
-still owns complex continuation orchestration. Independent background
-library health and future-score preparation retain intentionally
-asynchronous ownership. The complete source writer/dependency migration,
-failed/stale event and queued Stop verification and deletion of all old
-nested effect-context paths remain unproved/unfinished.
+**Historical open items, since migrated:** Later commits delete
+`SessionCommands` and `ControlDispatcher`, and place decision validation,
+idempotence and prepared source-bound exposures with `TeachingDecisions`.
+`PracticeTimeline` still handles automatic continuation, while background
+library health and future-score preparation remain intentionally
+asynchronous. The remaining A1 acceptance checks are recorded below.
 
 **Testing:** No runnable Python 3.14/Godot 4.7.2 checkout is available in
 this connected source environment. These changes have been committed and
 source-inspected only; **no current-HEAD test, fake physical MIDI, native
 packaging or keyboard-acceptance pass is claimed.** A0/A1 gates stay open.
 The user runs local checks; GitHub Actions remain manual-only.
+
+### A1 effect context and MIDI replay integration — 2026-11-22
+
+**Code integrated on `main` since the earlier source checkpoint:**
+
+- [de0ac59](https://github.com/tpepels/piano_teacher/commit/de0ac59d0037a8a992c805c389025a845598fa6b)
+  eliminated the extra `ControlDispatcher` class/file. Accepted user
+  actions are routed within `PracticeSession` after current-state UI
+  eligibility is resolved.
+- [9f724b3](https://github.com/tpepels/piano_teacher/commit/9f724b330eb3f5e22d88708a65e39a13a67049f1)
+  changed deferred MIDI from an unexamined tuple into a source-bound
+  `DeferredMidi` value retaining original fingerprint, revision,
+  selected stage/hand, take transport, received time and corrected time.
+  Replay drops old-source, wrong-stage/hand or pre-onset cross-epoch
+  events. The physical callback still timestamps **before** the lock.
+- [43fe21e](https://github.com/tpepels/piano_teacher/commit/43fe21ef5d2bb9fc300fb5c20cc2803b6371577e)
+  moved teaching-effect validation and single-effect progress idempotence
+  from `SessionCommands` to the selected lesson owner `TeachingDecisions`.
+  `PlaybackTransition.from_effect` now owns the pure start-route mapping.
+- [3b7dad5](https://github.com/tpepels/piano_teacher/commit/3b7dad5a0e0901c269bc5dcf87e2cf162b27051b)
+  retains approved prepared exposures inside `TeachingDecisions`,
+  validated against the *same plan object*, source fingerprint and stage;
+  resets that selection on source installation. Direct decided starts
+  reject a missing/stale approved exposure rather than using an older
+  command's mutable `prepared` slot. The intermediate
+  source-identity-owned version was corrected before this checkpoint.
+- [e1aefb0](https://github.com/tpepels/piano_teacher/commit/e1aefb041204738318e20070ff465d1bb1a0c045)
+  completed explicit original-effect propagation through user command,
+  lesson/navigation, timed take and physical playback admission, removing
+  `SessionCommands.active` and the nested `executing()` context.
+- [a6fe63f](https://github.com/tpepels/piano_teacher/commit/a6fe63f4ebb7d79e48f9821c7d2e7d33e868e654)
+  completed reason propagation for interruption and course flow, deleting
+  `SessionCommands` entirely. Producers now supply explicit user,
+  physical-receipt or automatic `transition` reasons; no second mutable
+  action-reason scope survives.
+- [46f6a82](https://github.com/tpepels/piano_teacher/commit/46f6a82a2638fff11395883ba038d74171acfd89)
+  routes MIDI device scan/reconciliation through an explicit
+  `MidiPortsRequested` session event and updates the stale transport
+  documentation. Listen re-entry reason is maintained by [b3cf9a9](https://github.com/tpepels/piano_teacher/commit/b3cf9a930292dc5b740af5a8f18f590e2c2eb453).
+
+**Source audit:** All **77 extant Python application modules** were
+read and scanned for `SessionCommands`, `ControlDispatcher`, old
+`session_commands`/ `control_dispatch` references and removed nested
+`executing()` calls. **No executable reference remains**; the sole
+outdated header was corrected in `playback_session.py`. This is static
+source evidence, not executed acceptance. The composition root now has
+**61 constructor assignments matching the baseline's uppercase-class
+constructor convention**, compared with 63 earlier. The exact count is
+descriptive, not an architectural success criterion.
+
+**A1 exit still open:** `PracticeTimeline` requests immediate follow-up
+with a private boolean rather than a typed, ordered, session-owned event
+queue; complete event/effect atomicity and single-version publication
+must be confirmed in actual MIDI, Stop/queued Stop, stale/failure
+receipt, Pause/Resume, navigation and source-change journeys.
+Physical/desktop fake MIDI, core Godot, embedded execution, packaging
+and keyboard behavior have **not been run on this revision**.
+A1 stays **IN PROGRESS**. Preserve the last successful CI as historical
+evidence only; do not auto-trigger GitHub Actions.
 
 ### A1 — One PracticeSession transaction/event coordinator
 
@@ -630,7 +682,7 @@ and speakers, including the original Pathétique source and readability.
 | Phase | Required result | Status |
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
-| A1 | One authoritative PracticeSession and event processing path | **In progress** — typed PracticeSession integrated with command, MIDI, tick, physical admission, source and persistence events; old PracticeControls and ApplicationWorker deleted, 79 application-module refs audited; SessionCommands effect context, remaining async owners and same-HEAD verification open |
+| A1 | One authoritative PracticeSession and event processing path | **In progress** — session event ingress, explicit teaching effects, source-bound prepared selection, reasons and MIDI replay identities integrated; PracticeControls, ApplicationWorker, ControlDispatcher and SessionCommands removed; bounded immediate-transition event queue, source/Stop/failure journeys and same-HEAD execution still open |
 | A2 | Unified lesson/assessment/settlement/recovery | Not started |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
