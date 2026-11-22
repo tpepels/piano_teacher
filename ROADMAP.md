@@ -132,6 +132,17 @@ The graphical controls now read the terminal backend admission result under the 
 Native Resume always protects the paused source and schedules a distinct full count-in after a frozen pause (`91f5c0a`, revised by `1c1b98e`). Its accepted snapshot synchronously binds authorized notation; Python rejects deadline retiming of genuinely reused paused ink, and native preflight tolerates only integer-frame quantization (`d32cb13`). An attempted reused-origin correction (`ed9e11b`) still failed the Moonlight Pause-in-count-in native scenario: the paused world's time remains frozen during the asynchronous reservation. Production consequently always selects a **fresh, backend-authorized Resume slot** (`1c1b98e`), with the paused predecessor physically protected. Audible cue deduplication is keyed by the authorized segment. The full native rerun is pending.
 No replacement UI state machine, second musical clock or software-only claim of physical acceptance was introduced. On 2026-11-22 the GitHub workflow was changed to `workflow_dispatch` only, with `core` (default) and `full` scopes: commits and pull requests no longer launch CI. Manual verification is available from Actions → Tests. A running workflow cannot be canceled through the available GitHub connector; its existing run completed successfully before the manual-only change.
 
+### V4 and navigation source closure — 2026-11-22 (awaiting local CI)
+
+- [`a4990a7`](https://github.com/tpepels/piano_teacher/commit/a4990a7d7fcc391a263acd1885984649468d9647): `ScoreStatePublisher` now freezes notation when a terminal failed or idle playback ledger still contains a historical authorized segment. Historical ink can be displayed but no old rate epoch may advance after the playback owner failed. The existing motion regression checks that terminal failure yields `hold`, while a valid pending successor can still `retain` the predecessor's authorized rest.
+- [`b6045b4`](https://github.com/tpepels/piano_teacher/commit/b6045b46f0e094cc9c7dbf08b5b258a27fb852ac) and [`fa70f32`](https://github.com/tpepels/piano_teacher/commit/fa70f32fd76a671cb293388aa2b78af3bf273f6c) remove the obsolete `CommandRequestState` dependency from `NavigationSession.navigate`, the unused `back` route, and the corresponding injection from `Main`. Navigation now receives only target and authoritative published state; pending-command safety remains in the command queue.
+- Concurrent [`53b7db5`](https://github.com/tpepels/piano_teacher/commit/53b7db5bcc), [`143f4ef`](https://github.com/tpepels/piano_teacher/commit/143f4ef350), [`ae0291b`](https://github.com/tpepels/piano_teacher/commit/ae0291b79f06d212e9ef19116aaa6a0adcf1d743) guard warm-up passage, hand and stage navigation against unearned mastery, in both backend and screen presentation. [`d67c03f`](https://github.com/tpepels/piano_teacher/commit/d67c03f1fcd7b682117f189ac72716ace6c23a1b) records those separate source fixes and pending gates. These changes were preserved on `main`.
+
+These changes share the existing engine/session, single physical ledger,
+native projector and accepted-command routes. No alternate musical state,
+graded clock or pause policy was introduced. No same-HEAD CI, connected
+MIDI/audio or independent package acceptance has been performed.
+
 ### V1/V2/V3/V5/V6 integrated source follow-up — 2026-11-22 (awaiting owner CI)
 
 The following fixes are committed on `main` and have **not** yet passed the

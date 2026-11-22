@@ -1416,10 +1416,16 @@ The native `resume_fresh` route keeps the paused source's unexpired
 physical strip immutable, admits new source ink at a backend-selected
 future full-bar countdown, and reports that exact queue commit before
 transport resumes. The Python transport identity and saved lesson state
-remain continuous. The backend's historical reused-count-in receipt
-remains accepted for test/headless contracts, but production native
-admission never proposes one. Failure or lost acknowledgments retain fail-closed,
-source-bound recovery. The production MIDI corpus and physical piano
+remain continuous. The obsolete partial-count-in reuse, receipt flag and paused-origin
+selection have now been removed from both backend and native contracts;
+a resumed transport preserves the musical take but always needs a fresh
+full authored count-in. A terminal failed admission may retain an
+older authorized segment for painting history; that history cannot
+authorize further scrolling. The Python motion directive publishes
+`hold` when the terminal ledger is `failed` or `idle`
+without an active take. An admissible successor may still publish
+`retain` so the previously authorized rest moves forward.
+Lost acknowledgements retain fail-closed, source-bound recovery. The production MIDI corpus and physical piano
 verification remain independent acceptance gates; ownership code is
 not evidence that every native transition succeeds.
 
