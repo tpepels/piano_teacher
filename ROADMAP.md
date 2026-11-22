@@ -112,11 +112,11 @@ continuation or partial grading.
 | --- | --- | --- |
 | V0 | Full transition/ownership audit and reproducible failure witnesses | In progress; critical timing/UI/receipt owners traced and fixed, exhaustive remaining-native audit open |
 | V1 | Deterministic end-to-end MIDI/Godot simulation harness | In progress; real backend fake-MIDI matrix and production-scene synthetic MIDI integrated, final native gate pending |
-| V2 | Canonical transition, action and presentation contracts | In progress; nine source-bound UI gestures, schema v5 and typed accepted-command outcomes integrated, native acceptance pending |
-| V3 | Unify graphical admission and playback transaction decisions | In progress; immutable physical receipts, Python deadline authorization, retry/recovery and outgoing-tempo fixed rest; full native admission acceptance pending |
+| V2 | Canonical transition, action and presentation contracts | In progress; ten source-bound UI gestures plus idempotent navigation suspend, schema v5 and typed accepted-command outcomes integrated, native acceptance pending |
+| V3 | Unify graphical admission and playback transaction decisions | In progress; immutable physical receipts, Python deadline authorization, retry/recovery, malformed-geometry refusal and outgoing-tempo fixed rest; current-HEAD native acceptance pending |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress; backend-owned hold/target directives, frozen idle and frame-stepped Godot checks pass core CI; connected native acceptance open |
-| V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; obsolete native control policy removed, backend owns motion and command effects; other screen/effect ownership and native gate open |
-| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | In progress; source-bound fake MIDI and dropped reserve/present ACK pass real embedded Godot; core CI 45016371433 passes, hardware matrix open |
+| V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; obsolete policy, navigation phase decisions and advanced Pause action/tempo policy removed; other effect ownership and native gate open |
+| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | In progress; real embedded fake-MIDI and lost-ACK scenarios passed on 1c1b98e; remaining matrix and current-HEAD manual local gates open |
 | V7 | Integrated production/package verification and physical acceptance | In progress; full embedded production and packaging passed on 1c1b98e (run 45017492022); final code cleanup and physical keyboard/audio acceptance open |
 
 ### Latest verified gates and remaining constraints (2026-11-22)
@@ -131,6 +131,15 @@ continuation or partial grading.
 The graphical controls now read the terminal backend admission result under the same command lock (`2cd9e64`) and display a recoverable, explicit failure (`68b1bca`). Physical preflight retains only the measured arm round-trip clearance rather than delaying the first audible count-in (`c4a3bf1`, corrected by `d32cb13`).
 Native Resume always protects the paused source and schedules a distinct full count-in after a frozen pause (`91f5c0a`, revised by `1c1b98e`). Its accepted snapshot synchronously binds authorized notation; Python rejects deadline retiming of genuinely reused paused ink, and native preflight tolerates only integer-frame quantization (`d32cb13`). An attempted reused-origin correction (`ed9e11b`) still failed the Moonlight Pause-in-count-in native scenario: the paused world's time remains frozen during the asynchronous reservation. Production consequently always selects a **fresh, backend-authorized Resume slot** (`1c1b98e`), with the paused predecessor physically protected. Audible cue deduplication is keyed by the authorized segment. The full native rerun is pending.
 No replacement UI state machine, second musical clock or software-only claim of physical acceptance was introduced. On 2026-11-22 the GitHub workflow was changed to `workflow_dispatch` only, with `core` (default) and `full` scopes: commits and pull requests no longer launch CI. Manual verification is available from Actions → Tests. A running workflow cannot be canceled through the available GitHub connector; its existing run completed successfully before the manual-only change.
+
+### V0/V2/V3/V5 secondary entrypoint implementation — 2026-11-22
+
+- [`ceffe050`](https://github.com/tpepels/piano_teacher/commit/ceffe050a0822402934e3eae18fb14310ca31d31): Removed navigation's independent musical phase/pending-action tables and direct Pause dispatch. Leaving Practice requests a one-way `ui_suspend`, resolved under Python's session lock. It pauses a newly started take after any pending command completes, and cannot accidentally Resume an already paused one. As a suspension-only action, it does not require a physically ready renderer.
+- [`19c7378`](https://github.com/tpepels/piano_teacher/commit/19c7378c8906cdcbf8e83dd3fcf605a6b96f494d): Native preflight now refuses absent, malformed or nonfinite geometry instead of attempting a provisional reservation with a Godot runtime error; physical rejection reasons appear in diagnostic messages.
+- [`12f04f9`](https://github.com/tpepels/piano_teacher/commit/12f04f9a1372ecbadef9eefadffc9f78ba8b2d97): Advanced Pause now renders the backend-published Resume, Retry, Listen and tempo actions. It emits raw `ui_*` intents instead of deciding mode-specific Retry or calculating ±10% BPM. Keyboard left/right lesson actions also emit backend-validated `ui_previous`/`ui_skip` instead of direct legacy `previous`/`next`. Python's Retry projection handles the Listen replay consistently with the former paused Listen behavior.
+- [`2102229`](https://github.com/tpepels/piano_teacher/commit/21022296de3cef3f5b73c1722f0cb353afef5d3f): The advanced measure seek button uses the canonical `seek_available` projection rather than a second Listen-mode veto.
+
+**Unverified gates:** These commits have not run CI. At completion of software work the owner will run `bash scripts/test.sh --coverage` and `bash scripts/verify-embedded-production-local.sh` against the **same current HEAD**, then separately accept connected CA49 MIDI/audio, Pathétique II and independent clean-machine packaging. The prior green run applies only to `1c1b98e`. V0–V7 phase exit criteria remain open where matrix, native, visual or physical evidence is missing.
 
 ### Initial implementation record - 2026-11-21
 
@@ -1367,7 +1376,7 @@ failure, stage promotion, resizing and source change during pending work.
 Include both note-on and note-off, and hold grading on/off. Use real MIDI
 fixtures and deterministic fakes at hardware/time seams only.
 
-**CI:** Run the bounded fast matrix on every commit; run real embedded
+**CI (manual-only since 2026-11-22):** Run the bounded fast matrix only on explicit local execution or GitHub `workflow_dispatch`; run real embedded
 Godot/bridge/render/admission journeys and relocated package boot in the
 native-production gate. Fail on `SCRIPT ERROR:`, admitted-score refusal,
 unexpected error logs, unhandled exceptions, wrong final state,

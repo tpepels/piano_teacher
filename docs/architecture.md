@@ -179,15 +179,17 @@ authorization. Explicit legacy public commands continue to work during
 the migration.
 
 **Follow-up in-progress migration:** The `controls` projection
-now includes nine user gestures: primary, Pause, Retry, Listen,
-Previous lesson, source-bound Review previous, Skip, tempo increase and
-tempo decrease. Native
+now includes backend-resolved UI gestures: primary, Pause, Retry, Listen,
+Previous lesson, source-bound Review previous, Skip, tempo increase/decrease
+and physical MIDI start. Native
 `PracticeScreen` consumes the projected visibility/enablement and
 caption facts; the clicked navigation/tempo actions are routed as
 uninterpreted `ui_*` intents, resolved from the fresh Python
-snapshot. All UI intents carry `score_ready`, renderer revision
+snapshot. Score-affecting UI intents carry `score_ready`, renderer revision
 and source fingerprint. The application lock rejects a ready
 renderer belonging to a different source revision before it acts.
+A navigation-only `ui_suspend` requires no renderer witness; it can only
+pause an eligible take, never turn an existing Pause into Resume.
 The backend command-success routing recognizes the new navigation
 intents. Native business-state inference remains elsewhere, notably
 in admission, presentation hold and remaining advanced controls.
@@ -264,6 +266,23 @@ and controls are owned by the Python application projection, while
 gate now compiles the production coordinators for the actual playback
 admission and visual timeline instead of the dead policy. Other
 native domain-like responsibilities still require V5 audit and tests.
+
+### V5 additional native control and navigation boundary — 2026-11-22
+
+Navigation has no phase/action-based Pause policy; on exit it emits
+`ui_suspend`, whose one-way Pause/no-op meaning is resolved under the
+Python practice lock. The command queue retains it when a Play/Listen
+request is still pending ([`ceffe050`](https://github.com/tpepels/piano_teacher/commit/ceffe050a0822402934e3eae18fb14310ca31d31)).
+Advanced Pause now draws and emits the same backend control actions
+as the main screen. Left/right lesson shortcuts use the backend UI
+projection rather than unconditional next/previous commands
+([`12f04f9`](https://github.com/tpepels/piano_teacher/commit/12f04f9a1372ecbadef9eefadffc9f78ba8b2d97)).
+Paused seek availability reads the backend projection
+([`2102229`](https://github.com/tpepels/piano_teacher/commit/21022296de3cef3f5b73c1722f0cb353afef5d3f)).
+Native preflight rejects malformed physical geometry and exposes its
+exact refusal reason without creating another scheduling owner
+([`19c7378`](https://github.com/tpepels/piano_teacher/commit/19c7378c8906cdcbf8e83dd3fcf605a6b96f494d)).
+Same-HEAD local core/native and physical acceptance remain open.
 
 ### Additional source/receipt invariants (2026-11-21)
 
