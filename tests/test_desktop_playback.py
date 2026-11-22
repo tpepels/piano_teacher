@@ -299,6 +299,17 @@ def test_three_failed_physical_attempts_end_admitting(practice_session):
     assert state["phase"] != "admitting"
     assert "native queue" in state["feedback"]
     assert not state["running"]
+    sequence = session.engine.playback.sequence
+    # Actual playback workflow, not a mocked scheduler: readiness callbacks
+    # cannot turn a terminal source failure into unlimited new intent IDs.
+    for _ in range(4):
+        assert session.engine.transport_timing.request_playback(
+            action="auto", mode="practice", from_beat=0.0) is None
+        later = session.tick(.25)
+        assert later["playback_intent"] is None
+        assert later["playback_timeline"]["state"] == "failed"
+        assert not later["running"]
+    assert session.engine.playback.sequence == sequence
 
 
 def test_unready_score_timeout_does_not_leave_endless_admitting(practice_session):
