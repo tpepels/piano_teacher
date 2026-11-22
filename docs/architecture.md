@@ -988,6 +988,53 @@ assessment/continuation handoff still needs a writer/owner audit before
 A2 can be closed. No Python, Godot, embedded native, package or physical
 MIDI test execution is claimed; CI remains manual-only.
 
+### A2 rolling and failed-continuation retry checkpoint — 2026-11-22
+
+**Implemented on main, not yet runtime-accepted:**
+
+- Rolling `TakeResult` replay now requires the original run, session,
+  fingerprint, physical transport and cancellation identity, plus exact
+  source revision, selected passage, hand/BPM and the committed authority/
+  course epochs. An alternate learner, changed stage, restarted source or
+  further progress cannot claim the same receipt.
+- Rolling recovery effects are acknowledged individually in
+  `AttemptSettlement`, after each accepted action completes. Replays skip
+  the previously acknowledged tempo, completed-rest, preparation, streak,
+  attempt, notice, withdrawal and cancellation effects. The required effect
+  set is determined by the original transition, and rolling decisions follow
+  the same `settled -> effects_applied -> published` lifetime as full takes.
+  A failed effect retains the frozen receipt for retry; a superseded or
+  unrecognized effect is rejected.
+- `PracticeTimeline` prioritizes the frozen rolling decision over new
+  boundary assessment when an effect failed after boundary advancement.
+  The existing manual Retry path also reuses the same frozen rolling take.
+- `RecoveryWorkflows` now rejects stale remedial assignments and missing
+  active sources instead of silently treating their no-op as successful
+  continuation publication. Selected action/deadline validation occurs
+  before cursor/transport effects.
+- Full-passage post-commit failures now retain their original
+  `TeachingContinuation` feedback transaction even after automatic
+  playback is stopped or the original deadline withdrawn. Explicit
+  Start/Retry re-enters the selected transaction, including its physical/
+  source effects, instead of merely resaving progress. Failed effect dispatch
+  preserves original marks and does not publish the receipt; successful
+  replay publishes once without a second assessment.
+- Added `tests/test_rolling_receipt_replay.py`,
+  `tests/test_continuation_effect_guards.py` and
+  `tests/test_course_rule_scopes.py` for source/epoch mismatch, one-shot
+  effects, failure retention, worker precedence, stopped-auto retry,
+  post-commit publication and alternative/warm-up rules.
+
+**Remaining A2 acceptance:** Run the exact-HEAD Python suite and fake-MIDI
+full/focused/rolling traces, inject real SQLite failure before and after
+durable commit, verify Stop/source-change and physical admission/ACK loss,
+saved-session reopening, Coda/Fukuda and warm-up behavior, Godot embedded
+execution and real keyboard/audio. Individual effects are acknowledged only
+after their call returns; if an external effect partially mutates then raises,
+the corresponding physical reconciliation must still be verified in A3.
+No passing runtime tests or CI completion is claimed, and GitHub CI was not
+triggered. **A2 remains IN PROGRESS until these gates pass.**
+
 ### A2 receipt replay and publication boundary — 2026-11-22
 
 A selected `TakeResult` captures immutable original MIDI
