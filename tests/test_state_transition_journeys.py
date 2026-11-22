@@ -361,3 +361,29 @@ def test_real_state_rejects_missing_control_and_invalid_motion_contract(practice
     missing = deepcopy(valid)
     missing["presentation_directive"] = {"kind":"target"}  # No target beat.
     assert any("target has no source_beat" in issue for issue in problems(missing))
+
+@pytest.mark.parametrize("grade_holds,next_bpm", [
+    (False,48), (True,40),
+], ids=["pedal-friendly-default","strict-held-release"])
+def test_real_midi_release_setting_changes_tempo_credit(
+        practice_session, grade_holds, next_bpm):
+    """The same physical early release is advisory unless hold grading is on."""
+    session = practice_session(bars=1, single=True)
+    session.ask("settings.update", grade_note_holds=grade_holds)
+    session.finish_listen()
+    session.finish_free()
+    active = session.ready_score()
+    assert active["flow"]["step"] == "tempo" and active["bpm"] == 40
+    semantic = session.ask("score.semantic")
+    assert len(semantic["notes"]) == 1
+    note = semantic["notes"][0]
+    assert note["duration_beats"] >= 3.0
+    start = active["score_queue_next"]["deadline_at_ms"]/1000
+    session.clock.at = start
+    session.engine.midi.port.send(int(note["midi_pitch"]),True)
+    session.clock.at = start + .15*60/active["bpm"]
+    session.engine.midi.port.send(int(note["midi_pitch"]),False)
+    changed = session.play_take(correct=False)
+    assert changed["flow"]["step"] == "tempo"
+    assert changed["bpm"] == next_bpm
+    assert changed["mastered"] == 0
