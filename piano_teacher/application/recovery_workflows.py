@@ -167,32 +167,41 @@ class RecoveryWorkflows:
             following = next_chunk_end(grid, decision.end_beat)
             self.visual_transport.advance_boundary(following if following > decision.end_beat+1e-7 else 0.)
             return
-        pending,transition = completed.pending,completed.transition
+        transition = completed.transition
         outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
-        self.visual_transport.note_tempo(
-            stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
+        apply = self.attempt_settlement.rolling_effect
+        apply(completed, "tempo", lambda: self.visual_transport.note_tempo(
+            stage=self.source_identity.plan.identity,
+            bpm=self.transport_timing.presentation_bpm(), now=now))
         short_deadline = None
         if transition.uses_completed_rest:
-            self.visual_transport.record_take_end(at=scored_end, bpm=outgoing_bpm)
+            apply(completed, "take_end", lambda: self.visual_transport.record_take_end(
+                at=scored_end, bpm=outgoing_bpm))
             short_deadline = SCHEDULER.measured_rest(
-                self.transport_timing.collect_rest_measurement(from_beat=transition.restart_beat),
-                now=now,bpm=self.transport_timing.presentation_bpm())
-        self.transport_timing.schedule_preparation(transition.restart_beat, now=now,
+                self.transport_timing.collect_rest_measurement(
+                    from_beat=transition.restart_beat),
+                now=now, bpm=self.transport_timing.presentation_bpm())
+        apply(completed, "prepare", lambda: self.transport_timing.schedule_preparation(
+            transition.restart_beat, now=now,
             from_visual=self.visual_transport.visual_offset_beats + score_beat,
-            reverse_seconds=self.feedback_seconds,
-            short_deadline=short_deadline)
-        self.recovery_streak.record(
-            transition.trouble_key,transition.trouble_count)
-        self.attempt.apply_recovery(transition)
+            reverse_seconds=self.feedback_seconds, short_deadline=short_deadline))
+        apply(completed, "streak", lambda: self.recovery_streak.record(
+            transition.trouble_key, transition.trouble_count))
+        apply(completed, "attempt", lambda: self.attempt.apply_recovery(transition))
         if transition.guided:
-            # The next step is note-by-note learning, not a timed take.
-            self.visual_transport.withdraw_announcement()
-        self.notices.feedback = transition.feedback
-        self.notices.next_action = transition.next_action
+            # Guided recovery must never re-withdraw an already processed
+            # immutable future announcement during a publication retry.
+            apply(completed, "withdraw", self.visual_transport.withdraw_announcement)
+        def publish_notices():
+            self.notices.feedback = transition.feedback
+            self.notices.next_action = transition.next_action
+        apply(completed, "notices", publish_notices)
         if transition.action == "pause":
-            self.playback_session.stop_automatic()
-            self.visual_transport.cancel_preparation()
-            self.visual_transport.cancel_continuation()
+            apply(completed, "stop_auto", self.playback_session.stop_automatic)
+            apply(completed, "cancel_preparation",
+                  self.visual_transport.cancel_preparation)
+            apply(completed, "cancel_continuation",
+                  self.visual_transport.cancel_continuation)
         self.attempt_settlement.finish_rolling_publication(completed)
         return
 
