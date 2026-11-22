@@ -81,6 +81,12 @@ class CompletionContinuations:
                 self.flow_session.settle_decided(
                     publication.flow_outcome, plan=self.source_identity.plan,
                     message=publication.message, decision_id=transaction.decision_id)
+            if explicit_retry and transaction.pending.state.route.automatic:
+                # Only an explicitly requested retry restores the original
+                # automatic course intent; a failed effect below stops it
+                # again. The committed decision, not current UI mode, owns
+                # whether this continuation should run automatically.
+                self.playback_session.continue_course()
             self.dispatch_effect(publication.effect, now)
             # Visible marks are retained until the exact physical/source
             # continuation has been installed successfully.
