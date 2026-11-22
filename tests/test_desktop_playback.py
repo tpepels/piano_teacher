@@ -300,6 +300,12 @@ def test_three_failed_physical_attempts_end_admitting(practice_session):
     assert "native queue" in state["feedback"]
     assert not state["running"]
     sequence = session.engine.playback.sequence
+    # Even a malformed explicit action must not erase the terminal
+    # source latch before the musical scheduler accepts its inputs.
+    with pytest.raises(ValueError, match="count-in"):
+        session.engine.transport_timing.request_playback(
+            action="start", mode="practice", from_beat=0.0,
+            count_in_beats=-4.0)
     # Actual playback workflow, not a mocked scheduler: readiness callbacks
     # cannot turn a terminal source failure into unlimited new intent IDs.
     for _ in range(4):

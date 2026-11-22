@@ -202,10 +202,6 @@ class PlaybackCoordinator:
                 facts, action=action, mode=mode, from_beat=from_beat):
             raise ValueError(
                 "Automatic score admission already failed for this source")
-        if action in ("start", "restart", "resume"):
-            # An explicit human-initiated retry may proceed, but it does
-            # not grant a future automatic callback its own retry budget.
-            self._terminal_automatic_source = None
         if transition is not None and (
                 transition.action != action
                 or transition.exposure.mode != mode
@@ -251,6 +247,11 @@ class PlaybackCoordinator:
             if action != "auto" or not math.isfinite(fixed_deadline) or fixed_deadline <= now:
                 raise ValueError("An automatic continuation requires its future exact deadline")
             earliest = fixed_deadline
+        if action in ("start", "restart", "resume"):
+            # Clear the terminal latch ONLY after all source, transition,
+            # meter and countdown inputs have been validated. A malformed
+            # manual request must not unlock another automatic retry.
+            self._terminal_automatic_source = None
         self.sequence += 1
         attempt = 0
         take_id = (self.active_take_id if action == "resume"

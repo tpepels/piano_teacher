@@ -790,6 +790,20 @@ failure witnessed in production and uses the existing
 `PracticeEngine`, in-process worker and real Listen
 preparation, without mocking a teaching state machine.
 
+### V3 invalid explicit gestures cannot bypass terminal admission (2026-11-22)
+
+The terminal-source latch is now reset only *after* a
+new explicit Start/Restart/Resume action passes source,
+transition, count-in and fixed-deadline input validation.
+Previously an invalid manual command cleared the latch
+before checking its own malformed count-in, indirectly
+allowing a subsequent asynchronous callback to create
+another retry for the old failed score. The existing
+real engine test now submits that invalid command,
+verifies the error and confirms automatic reentry
+remains blocked. A valid explicit action or authenticated
+source replacement still creates a new admission budget.
+
 ### V3 terminal automatic-admission latch (2026-11-22)
 
 The 44980830938 physical trace exposed a separate structural
