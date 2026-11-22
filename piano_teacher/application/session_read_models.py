@@ -117,6 +117,11 @@ class SessionReadModels:
             plan = self.source_identity.plan
             guided_plan = self.score_state_publisher.publish(state, facts)
             if not self.playback.presentation_required:
+                # Headless sessions have no physical admission intent, but the
+                # versioned published-state contract still requires the real
+                # playback transaction state. Match control_snapshot without
+                # fabricating a renderer receipt or a graphical deadline.
+                state["playback_timeline"] = timeline
                 # Test/command fixture adapter; never entered by the desktop.
                 def count_in_source_at(from_beat, rate):
                     _, bars, meter = self.attempt_progression.count_in_bar(
