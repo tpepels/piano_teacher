@@ -44,12 +44,9 @@ class PracticeTimeline:
         self.read_models, self.clock, self.poll_midi = read_models, clock, poll_midi
         self.teaching_continuation, self.exposure_workflows = teaching_continuation, exposure_workflows
         self.feedback_seconds = feedback_seconds
-        # Complete any immediate follow-up inside the same locked tick.
-        # Publishing remains one operation after the final transition.
-        self._followup_requested = False
 
     def complete_attempt(self, phrase: Phrase, ending: float,
-                          total_beats: float, duration: float, now: float) -> None:
+                          total_beats: float, duration: float, now: float) -> bool:
         """Apply post-performance state after the score's settlement interval.
 
         This method is called from the locked _update loop. Assessment and
@@ -78,8 +75,8 @@ class PracticeTimeline:
                 self.timed_playback.continue_at(self.visual_transport.next_at,
                     from_beat=0.0)
             elif now >= self.visual_transport.next_at:
-                self._request_immediate_transition()
-            return
+                return True
+            return False
         completed_visual = self.transport_timing.visual_motion(now)[0]
         completed = self.attempt_settlement.complete_take(
             phrase=phrase,hand=self.source_identity.plan.hand,bpm=self.source_identity.plan.bpm,
@@ -129,7 +126,8 @@ class PracticeTimeline:
         elif effect.action == "partial_recovery":
             self.outcome_effects.finish_partial_recovery(result,now,exposure=effect.exposure)
         else:
-            self.finish_full_passage(result,total_beats,duration,now)
+            return self.finish_full_passage(result,total_beats,duration,now)
+        return False
 
     def finish_full_passage(self, result, total_beats: float, duration: float, now: float):
         publication = self.attempt_settlement.begin_full_completion(
@@ -163,14 +161,14 @@ class PracticeTimeline:
             self.completion_continuations.advance_pending_feedback(now,force_early=completion.force_early)
         elif completion.update_clock:
             self.attempt_settlement.finish_full_completion(publication)
-            self._request_immediate_transition()
-            return
+            return True
         self.attempt_settlement.finish_full_completion(publication)
+        return False
 
-    def run_pre_assessment_transition(self, now: float) -> bool:
+    def run_pre_assessment_transition(self, now: float) -> tuple[bool, bool]:
         """Apply an explicit non-grading transition under the session lock."""
         if self.playback.presentation_required and self.playback.intent is not None:
-            return True
+            return True, False
         context = TransitionContext(
             has_plan=self.source_identity.plan is not None,
             learning=self.playback_session.mode == "learn" and self.guided_session.controller is not None,
@@ -184,6 +182,7 @@ class PracticeTimeline:
         decision = decide_transition(
             context, now=now, next_at=self.visual_transport.next_at,
             preparation_at=self.visual_transport.preparation_deadline)
+        followup = False
         if decision.preparation_phase is not None:
             self.visual_transport.enter_preparation_phase(decision.preparation_phase)
         if decision.action == "learning":
@@ -208,7 +207,7 @@ class PracticeTimeline:
         elif decision.action == "feedback":
             publication = self.attempt_settlement.pending_full_completion
             if publication is not None:
-                self.finish_full_passage(publication.result,
+                followup = self.finish_full_passage(publication.result,
                     publication.total_beats,publication.duration,now)
             else:
                 self.completion_continuations.advance_pending_feedback(now)
@@ -223,35 +222,7 @@ class PracticeTimeline:
                     self.transport_timing.collect_continuation_measurement(self.visual_transport.next_at, target),
                     now=self.clock(),bpm=self.transport_timing.presentation_bpm()),
                     from_beat=target)
-        return decision.consumed
-
-    def _request_immediate_transition(self) -> None:
-        """Schedule one follow-up transition in the current locked worker tick."""
-        self._followup_requested = True
-
-    def settle_transitions(self) -> None:
-        """Drain all newly eligible transitions under the caller's lock.
-
-        An automatic repeat or committed completion may immediately make
-        another transition eligible. Never expose intermediate clock states
-        or invoke another worker tick recursively.
-        """
-        try:
-            for _ in range(17):
-                self._followup_requested = False
-                self.update_transition()
-                if not self._followup_requested:
-                    break
-            else:
-                raise RuntimeError(
-                    "Practice transitions exceeded the bounded same-tick handoff")
-        except Exception:
-            if not self.visual_transport.paused:
-                self.visual_transport.pause(at=self.clock())
-            self.notices.feedback = "Could not save or finish the practice transition"
-            self.notices.next_action = (
-                "Check storage or the reported error, then Resume to retry this same take.")
-            raise
+        return decision.consumed, followup
 
     def publish_settled(self) -> None:
         """Publish one accepted outcome after transitions and deferred MIDI.
@@ -267,7 +238,7 @@ class PracticeTimeline:
             logging.getLogger(__name__).exception(
                 "Live assessment publication failed; skipping this tick")
 
-    def update_transition(self) -> None:
+    def update_transition(self) -> bool:
         """Advance the backend clock under its existing session lock."""
         self.poll_midi()
         self.midi_calibration.advance(self.clock())
@@ -288,15 +259,16 @@ class PracticeTimeline:
             pending_result=self.attempt_settlement.pending_result is not None,
             preparation_pending=self.visual_transport.preparation_pending,
             performance_complete=self.attempt.performance_summary is not None),now)
-        if self.run_pre_assessment_transition(now):
-            return
+        consumed, followup = self.run_pre_assessment_transition(now)
+        if consumed or followup:
+            return followup
         if (self.playback_session.running and self.visual_transport.grading_is_frozen(
                     now,grading_after=self.midi_ingress.resume_grading_after)):
             # The canonical recorder and live-assessment clock stand at the
             # paused source position. Do not inspect rolling checkpoints,
             # missed attacks, completion or recovery during the admitted
             # continuation's reading/count-in lead.
-            return
+            return False
         phrase = self.source_identity.plan.active_phrase
         score_beat = self.visual_transport.play_from_beat + max(
             0.0, self.transport_timing.elapsed_beat(now-self.visual_transport.run_at))
@@ -315,11 +287,12 @@ class PracticeTimeline:
             self.recovery_workflows.apply_rolling_recovery(
                 step.recovery, phrase, step.grid, score_beat, now)
         elif step.action == "complete":
-            self.complete_attempt(phrase, step.ending,
-                                   phrase.sounding_end-phrase.start, step.duration, now)
+            followup = self.complete_attempt(phrase, step.ending,
+                phrase.sounding_end-phrase.start, step.duration, now)
             self.playback_session.refloor_fresh_announcement(TimedTakeSource(
                 self.source_identity.plan.active_phrase,self.source_identity.plan.piece.bar_boundaries,
                 self.source_identity.plan.piece.time_signatures,self.source_identity.plan.bpm,
                 self.visual_transport.visual_gap_beats),
                 physical_rest_enabled=self.visual_transport.short_rest is not None)
+        return followup
 

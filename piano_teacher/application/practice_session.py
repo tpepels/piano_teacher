@@ -5,6 +5,7 @@ the same active musical source. Lesson/transport/assessment owners retain
 their decisions; the session sequences their effects and publications.
 """
 from __future__ import annotations
+from collections import deque
 import time
 from .control_projection import UI_INTENTS, resolve_ui_intent, project_command_outcome
 from .stage_change import prepare_stage_change
@@ -14,6 +15,7 @@ from .session_events import (
     TimedStartRequested,
     UserCommand,
     ClockAdvanced,
+    ImmediateTransition,
     MidiShortcut,
     PhysicalMidi,
     PresentationRequired,
@@ -63,7 +65,7 @@ class PracticeSession:
                  timed_playback, transport_commands, visual_transport,
                  timeline, midi_ingress, midi_application_input, runtime_timings,
                  source_workflows, lesson_execution, score_preload,
-                 lifecycle, progress):
+                 lifecycle, progress, notices, clock):
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
         self.device_workflows = device_workflows
@@ -91,6 +93,8 @@ class PracticeSession:
         self.score_preload = score_preload
         self.lifecycle = lifecycle
         self.progress = progress
+        self.notices = notices
+        self.clock = clock
 
     def calibration_action(self, action: str) -> None:
         changes = self.device_workflows.calibrate(
@@ -289,7 +293,24 @@ class PracticeSession:
     def _advance_tick(self) -> int:
         # Same native transaction: settle musical handoffs, replay MIDI
         # using the new take identity, then publish a single final state.
-        self.timeline.settle_transitions()
+        immediate = deque((ImmediateTransition(),))
+        transitions = 0
+        try:
+            while immediate:
+                immediate.popleft()
+                if transitions >= 17:
+                    raise RuntimeError(
+                        "Practice transitions exceeded the bounded same-tick handoff")
+                transitions += 1
+                if self.timeline.update_transition():
+                    immediate.append(ImmediateTransition())
+        except Exception:
+            if not self.visual_transport.paused:
+                self.visual_transport.pause(at=self.clock())
+            self.notices.feedback = "Could not save or finish the practice transition"
+            self.notices.next_action = (
+                "Check storage or the reported error, then Resume to retry this same take.")
+            raise
         while self.midi_ingress.deferred:
             item = self.midi_ingress.deferred.popleft()
             selected = self.source_identity.plan

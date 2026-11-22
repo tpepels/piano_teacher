@@ -25,6 +25,11 @@ class ClockAdvanced:
 
 
 @dataclass(frozen=True, slots=True)
+class ImmediateTransition:
+    """Session-owned follow-up to a transition committed in this worker tick."""
+
+
+@dataclass(frozen=True, slots=True)
 class MidiShortcut:
     """Accepted keyboard-control gesture, not a grading event."""
     effect: object
