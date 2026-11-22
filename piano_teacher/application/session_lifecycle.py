@@ -39,9 +39,21 @@ class SessionLifecycle:
             extra = ({"guidance": guidance.snapshot(now=self.clock())}
                      if self.playback_session.mode == "learn"
                      and guidance is not None else None)
-            self.settlement.interrupt_current(
-                reason=reason, played=played, censor=not preserve_episode,
-                extra=extra, now=self.clock(), flush=True)
+            try:
+                self.settlement.interrupt_current(
+                    reason=reason, played=played, censor=not preserve_episode,
+                    extra=extra, now=self.clock(), flush=True)
+            except Exception:
+                # The storage transaction rolls back the interrupted
+                # evidence; keep the recorder/lesson available for a later
+                # retry. Nevertheless the physical take must be inert now:
+                # a failed disk flush cannot leave grading running after
+                # Stop already invalidated its playback authorization.
+                self.playback_session.finish_take()
+                self.midi_ingress.deferred.clear()
+                if not self.visual_transport.paused:
+                    self.visual_transport.pause(at=self.clock())
+                raise
         self.settlement.cancel(reason=reason, now=self.clock())
         self.midi_ingress.deferred.clear()
         self.midi_ingress.clear_resume_gate()
