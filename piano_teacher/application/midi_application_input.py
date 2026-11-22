@@ -59,7 +59,12 @@ class MidiApplicationInput:
         try:
             if self._session is None:
                 raise RuntimeError("MIDI event before session binding")
-            self._session.on_midi(message)
+            # Capture the physical callback timestamp before waiting for
+            # PracticeSession's lock. Otherwise a source import, settlement
+            # or long command could falsely move this attack to a later
+            # beat or an adjacent take.
+            received_at = self.clock()
+            self._session.on_midi(message, received_at=received_at)
         finally:
             self.runtime_timings.midi_ms.append(
                 (time.perf_counter()-began)*1000.0)
