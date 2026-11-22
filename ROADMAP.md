@@ -576,6 +576,18 @@ inspection alone.
 **Exit A1:** All session state changes enter through the one event boundary.
 No parallel command router, active legacy engine or recursive handoff remains.
 
+### A2 implementation checkpoint — 2026-11-22
+
+- [19c678c](https://github.com/tpepels/piano_teacher/commit/19c678c311a5798cb3d301e36ffe8d1dca95a0a7) retains the prior take's visible note feedback until its selected continuation succeeds.
+- [d0e0acf](https://github.com/tpepels/piano_teacher/commit/d0e0acf6f4d965f1db7d5e8d405c11215172a0c9) and [318886c](https://github.com/tpepels/piano_teacher/commit/318886c8730923731193cbe86a74d5ce447aeca5) add a receipt-keyed `effects_applied` checkpoint to `AttemptSettlement`: a failed continuation retries its durable receipt without adopting the same stage/score a second time.
+- [8910f08](https://github.com/tpepels/piano_teacher/commit/8910f084574a2f3d6e684aa473a2bbf68e433df2) and [0c6e0a5](https://github.com/tpepels/piano_teacher/commit/0c6e0a526d92bedced261655f8fa31a17e6a9b6d) introduce an immutable, source-bound `TakeResult` for completed full/focused takes: run/session/attempt, source/revision/stage/hand, course and cancellation epochs, passage/BPM, original MIDI onsets/releases/press IDs and graded original-note observations. Persistence retries use the original frozen `PlayedNote` tuple and reject changed source/window/BPM.
+- [76f06f8](https://github.com/tpepels/piano_teacher/commit/76f06f8249f083097e21d0f770cea26c3411f979) extends the same `TakeResult` to rolling recovery. [70b8d74](https://github.com/tpepels/piano_teacher/commit/70b8d741693692b3ba1c86924cad3d6ffdb1737f) prevents resealing an already durable rolling receipt. [67c6af2](https://github.com/tpepels/piano_teacher/commit/67c6af2acb9a83913d79b5d82b6620954feff8f9), [6a28650](https://github.com/tpepels/piano_teacher/commit/6a28650bc0e7d3703b89b3add599aa6cc1c35e66) and [d95fc79](https://github.com/tpepels/piano_teacher/commit/d95fc7912459942fa4f9d710ec8f453721984c1d) retain the old graded tempo, score identity and feedback if a committed slowdown needs presentation retry.
+- [c9ab312](https://github.com/tpepels/piano_teacher/commit/c9ab312d83912bafa313fa8568ca135c15d6e7b6) merges all `PostAssessmentEffects` completion and presentation responsibilities into `CompletionContinuations` and **deletes** the previous coordinator/file. All 76 current application modules and 16 Python test modules were inspected for its former references; none remain.
+- [63347d3](https://github.com/tpepels/piano_teacher/commit/63347d341e1ad12281bcc7eb2c2dedbe53bca659) also prevents nested typed MIDI shortcut events from publishing an intermediate source/take epoch before the outer event commits (A1).
+- Verified in source: `practice_windows.moving_windows` enumerates each authored measure alone then trailing windows up to four; Practice Flow retains 50% starting tempo and two clean target passes, and preserves the full original final piece. This **has not been executed** on the new commits.
+
+**A2 remaining:** Remove redundant Practice Flow projection counters without losing Listen → Free → Tempo; consolidate residual recovery/settlement effect ownership and course-scoped policy settings, preserve alternative Coda/Fukuda/warm-up behavior, and verify actual failure/Stop/source-change/MIDI journeys. These items are not complete. A0 exact-HEAD and A1 acceptance are also open. No Python, Godot, native package, or physical keyboard execution was performed, and GitHub CI was not triggered.
+
 ### A2 — Unified lesson, assessment and durable settlement
 
 - [ ] Give the lesson domain one course/window/hand/step, BPM, mastery and
@@ -759,7 +771,7 @@ and speakers, including the original Pathétique source and readability.
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
 | A1 | One authoritative PracticeSession and event processing path | **In progress** — event input and return-state atomicity, cancellation/device-bound callback epochs, bounded transition queue and fail-closed Stop persistence integrated; old router modules deleted; native queued-Stop latency, full event/settlement ownership and same-HEAD behavior verification remain open |
-| A2 | Unified lesson/assessment/settlement/recovery | Not started |
+| A2 | Unified lesson/assessment/settlement/recovery | **In progress** — immutable TakeResult for completed and rolling takes, original MIDI evidence and receipt retry, unified completion coordinator; mirrored flow state, course-scoped settings and integrated verification still open |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
 | A5 | Thin Godot UI and single native physical-surface interface | Not started |

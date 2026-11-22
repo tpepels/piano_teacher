@@ -912,6 +912,35 @@ preserving the unflushed original recorder/evidence for retry.
 Successful Stop preserves its original durable cancellation order.
 Runtime execution and physical MIDI behavior remain unverified.
 
+### A2 frozen completed-take and rolling recovery receipts (2026-11-22)
+
+`AttemptSettlement.TakeResult` freezes the selected `TeachingBinding` and
+score revision, hand, attempt ID, original source IDs, completed passage,
+performed BPM, raw immutable `PlayedNote` presses/releases and
+`Assessment` before persisting. Both full/focused and rolling takes
+retain this evidence for any storage retry, rather than rereading a
+mutable recorder under another tempo or source. Rolling receipts skip
+duplicate evidence sealing and reuse their original tempo/feedback.
+A changed engraving revision or cancellation epoch rejects replay.
+
+The durable settlement `effects_applied` checkpoint differentiates
+progress saved from source presentation applied. Completion marks remain
+visible until successor installation succeeds. The previous
+`PostAssessmentEffects` instance/file was removed; its post-assessment
+and performance/section/recovery completion effects now belong to
+`CompletionContinuations`, together with successor dispatch. All 76
+current Python application modules and 16 test modules were source-scanned
+for callers of the deleted service and none were found.
+
+Pure Practice Flow policy remains the only graded pace decision;
+`practice_windows.moving_windows` contains the authored one-bar then
+cumulative trailing-four-window rule. The current
+`PracticeFlowCourseSession._state` mirrors stage/BPM/clean counters also
+in `LearningPlan` and still needs a complete consumer migration.
+Course-scoped settings and behavior tests for all source strategies
+remain open. All of the above is source inspection, **not tested
+Python/Godot or physical acceptance**.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or
