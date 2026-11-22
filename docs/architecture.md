@@ -735,6 +735,35 @@ fake MIDI/native package verifier and corrected A0 auditor on the **same
 final commit**. The submitted log predates both source fixes and does not
 establish a passing state. No physical CA49 acceptance is claimed.
 
+### A1 transaction ordering implementation checkpoint (2026-11-22)
+
+The A1 code commits above changed actual production ordering. The native
+worker still drives the same monotonic source timeline and MIDI callback
+lock; no second runner or duplicate domain is introduced.
+
+1. **Advance**: `PracticeTimeline.settle_transitions()` drains eligible
+   automatic handoffs with its bounded same-tick cycle guard. No
+   intermediate playback/live projection occurs.
+2. **Replay**: `ApplicationWorker.advance()` replays MIDI deferred across
+   a source boundary, retaining the hardware/corrected timestamp and
+   letting `MidiIngress` apply the current authenticated take.
+3. **Publish**: `PracticeTimeline.publish_settled()` advances playback
+   status, publishes Free target preparation and live assessment once.
+   Prior nested-update simulation could repeat all three per tick.
+4. **Read**: `SessionReadModels._committed_base` is shared by
+   `control_snapshot` and full graphical `snapshot`. Both consume the
+   same `PlaybackCoordinator.snapshot` result. Only the full snapshot
+   adds score-related presentation and the headless fixture queue.
+5. **Command**: `EngineCommands.request("practice.command")` holds
+   the existing RLock across `PracticeControls.control` and
+   `PracticeEngine.state`, so native MIDI callbacks cannot interleave
+   a different event between action acceptance and Godot's state reply.
+
+These edits remove **duplicate publication and projection paths**. The
+individual old domain coordinators and the general native message dispatch
+still need A1 architectural replacement. The source-level review did not
+run the tests or prove physical MIDI acceptance.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or

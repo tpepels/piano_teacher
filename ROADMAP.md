@@ -40,7 +40,7 @@ The separate final examination uses the whole original piece.
 
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
-**Status: IN PROGRESS — A0 source baseline and transition inventory committed; A0 exit and all A1–A7 implementation/verification remain open.** This is
+**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; A1 integration has begun but is not accepted; A2–A7 remain open.** This is
 the next development track. The V0–V7 implementation/acceptance work and
 older S0–S7 decomposition remain below as historical evidence and open
 verification requirements, **not** as a requirement to keep all existing
@@ -299,6 +299,56 @@ has been changed by this checkpoint; CI is still manual-only.
 Every current component has an intended destination or evidence-backed
 retirement, and explicit unresolved product decisions are recorded.
 
+### A1 implementation progress — 2026-11-22
+
+A1 began after the source-backed A0 reachability classifications, at the
+owner's request to keep developing; **A0's exact-HEAD local test/embedded
+verifier gates remain open**. Work below is integrated but does not meet
+the phase exit criteria:
+
+- [5b4488b](https://github.com/tpepels/piano_teacher/commit/5b4488bc29621e1956a15ece07999a747d91010c)
+  removed the old recursive-return **multiple publication** emulation.
+  The native worker still settles all immediate automatic handoffs under
+  the application lock, but publishes playback status and live feedback
+  **once** rather than 1+N times for the same tick.
+- [118fbe2](https://github.com/tpepels/piano_teacher/commit/118fbe2e459ed4063a48b3a60f2f2daed983e6dd)
+  separated transition settlement from presentation. The existing
+  `ApplicationWorker` owns the ordered lifecycle
+  **settle same-tick transitions → replay timestamped deferred MIDI →
+  publish final transport/live state once → schedule next wakeup**.
+  The prior MIDI replay ran *after* publication, so one tick could expose
+  an intermediate source without its hardware evidence. No additional
+  musical clock, worker or synthetic grading was added.
+- [5ca1085](https://github.com/tpepels/piano_teacher/commit/5ca1085bc7020a48b68f6e65e8a5c065e6c19fb8)
+  unified native command-state and frame-state transaction projection
+  through `SessionReadModels._committed_base`. It gives both consumers
+  identical pending/authorized/failure state and course progress.
+  `ScoreStatePublisher` now only contributes guided source and
+  presentation motion; headless tests still receive the real
+  `playback_timeline` without a fabricated physical receipt.
+- [7e9d4c6](https://github.com/tpepels/piano_teacher/commit/7e9d4c634c482c6e5ff28228fd1717acacdd3012)
+  makes a `practice.command` action and its returned authoritative
+  state **one RLock transaction** in `EngineCommands.request`. A
+  concurrent MIDI callback cannot change the source/phase between the
+  accepted action and the response Godot consumes.
+- Inspected all 13 committed Python behavior-test modules: none directly
+  invoked the removed `PracticeTimeline.update` method. This source
+  reachability check is not a successful execution of those tests.
+
+**Still unimplemented in A1:** A first-class typed `PracticeSession`
+event processor/aggregate owning all entrypoints; explicit effect
+transactions and identity checks for each event; migration and deletion
+of all old `PracticeControls`, `ControlDispatcher`, `SessionCommands`
+and nested continuation routing; integrated fault/queued-Stop/source-change
+behavior. Current `ApplicationWorker` and `PracticeTimeline` still
+exist and their responsibilities remain too broad. Do not interpret this
+as A1 completion.
+
+**Verification:** No executable Python/Godot runtime is available to this
+connected repository environment. The previous local log of 159 passing
+and four failing cases predates the source fixes and these A1 changes.
+GitHub Tests remains opt-in `workflow_dispatch`; no CI run was triggered.
+
 ### A1 — One PracticeSession transaction/event coordinator
 
 - [ ] Implement one serial event processor and session aggregate on the
@@ -505,7 +555,7 @@ and speakers, including the original Pathétique source and readability.
 | Phase | Required result | Status |
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
-| A1 | One authoritative PracticeSession and event processing path | Not started |
+| A1 | One authoritative PracticeSession and event processing path | **In progress** — single settled tick publication, deferred MIDI replay before publish, unified transport projection, atomic command outcome/state reply; typed unified event processor and old-router deletion still open |
 | A2 | Unified lesson/assessment/settlement/recovery | Not started |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
