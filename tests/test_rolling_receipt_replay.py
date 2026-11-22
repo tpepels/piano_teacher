@@ -31,7 +31,7 @@ def _settled_rolling():
     decision = SimpleNamespace(
         decision_id="decided", definition_after=definition, progress_after=progress)
     pending = PendingTeachingDecision(
-        event=object(),
+        event=SimpleNamespace(kind="rolling_result"),
         state=SimpleNamespace(course=course),
         decision=decision,
         phase="settled",
