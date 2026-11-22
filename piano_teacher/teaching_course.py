@@ -261,8 +261,8 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
                                     transferable_tempos=(), streak=0, failures=0)
     tempos, transferable = dict(p.stage_tempos), set(p.transferable_tempos)
     if action == "tempo_up" and p.bpm < maximum_bpm(course):
-        ceiling = (p.target_bpm if p.bpm < p.target_bpm
-                   else maximum_bpm(course))
+        ceiling = (min(p.target_bpm, maximum_bpm(course))
+                   if p.bpm < p.target_bpm else maximum_bpm(course))
         bpm = min(ceiling, p.bpm + SETTINGS.manual_tempo_step_bpm)
         transferable.add(course.key)
     elif action == "tempo_down" and p.bpm > minimum_bpm(course):
