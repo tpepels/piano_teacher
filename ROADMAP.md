@@ -1119,6 +1119,31 @@ semantics. Hidden/disabled controls cannot bypass policy via another
 entrypoint. Existing settings, library, source picker, corrections and
 history screens still function.
 
+### V6 real worker lost-ACK recovery fault injection (2026-11-22)
+
+Added a strictly opt-in test seam in `InprocessRequest.complete`
+controlled by `PIANO_TEST_DROP_REPLY_ONCE`. It discards the first
+**successful** `playback.reserve` or `playback.present` callback
+*after* the real embedded Python worker has already applied that
+operation, then returns a transport-level failure to the actual
+`ScoreAdmissionGateway`. No alternative playback, grading,
+renderer or state machine is constructed; the gate must recover
+through the original `playback.status` ledger and retain the
+same exact take/segment/downbeat. Normal desktop behavior has
+no injected failure unless the explicit test environment variable
+is set; each process drops at most one named operation.
+
+`scripts/verify-embedded-production-local.sh` now runs the
+full real `production_fake_midi_journey.gd` three times: normal,
+one lost reserve acknowledgement, and one lost present
+acknowledgement. Each uses isolated persisted session state and
+a distinct synthetic MIDI port, and the acceptance wrapper
+requires the `NATIVE_TEST_DROPPED_REPLY:<operation>` marker
+to prove the fault actually occurred. Wrong Free, Pause, Resume,
+failed Tempo, clean Tempo, exact 40→48 BPM repeat and native
+score bounds must all still pass in the same session.
+These full native cases are unverified until the new gate runs.
+
 ### Phase V6 - Complete transition coverage, harden CI, delete legacy paths
 
 **Implement:** Extend the V1 runner into a data-driven, deterministic

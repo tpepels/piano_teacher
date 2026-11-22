@@ -181,7 +181,12 @@ verify_fixture_ui() {
     --script res://production_ui_smoke.gd
 }
 verify_fake_midi_ui() {
-  set_case fake-midi
+  local drop="${1:-}"
+  local variant="normal"
+  if [[ -n "$drop" ]]; then
+    variant="${drop//./-}"
+  fi
+  set_case "fake-midi-$variant"
   seed ci_state_journey.mid practice-flow
   # Restore the synthetic device as a persisted preference during normal
   # startup discovery. Selecting a new device mid-Listen would correctly
@@ -195,10 +200,17 @@ PY
   # sitecustomize exists only on this test's PYTHONPATH. The real embedded
   # engine sees one synthetic mido input and unmodified MIDI callbacks.
   # No production command or fake application path is exposed.
+  local scenario_log="$WORK/native-midi-$variant.log"
   timeout 130s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+    PIANO_TEST_DROP_REPLY_ONCE="$drop" \
     PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
     "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
-      --script res://production_fake_midi_journey.gd
+      --script res://production_fake_midi_journey.gd | tee "$scenario_log"
+  if [[ -n "$drop" ]] && \
+      ! grep -Fq "NATIVE_TEST_DROPPED_REPLY:$drop" "$scenario_log"; then
+    echo "The requested in-process ACK was never actually dropped: $drop" >&2
+    return 1
+  fi
 }
 verify_moonlight() {
   set_case moonlight
@@ -312,6 +324,10 @@ check "Create isolated two-hand MIDI fixture" make_fixture || :
 check "Embedded Godot + Python registration and real score" verify_bridge || :
 check "Production UI / Play / Pause / Resume" verify_fixture_ui || :
 check "Real Godot practice transitions with synthetic physical MIDI" verify_fake_midi_ui || :
+check "Lost reserve ACK: real Godot and physical MIDI status recovery" \
+  verify_fake_midi_ui playback.reserve || :
+check "Lost present ACK: real Godot and physical MIDI status recovery" \
+  verify_fake_midi_ui playback.present || :
 check "Moonlight Sonata / retry / Listen / lesson navigation" verify_moonlight || :
 # Every checked-in MIDI source is part of the real native acceptance
 # corpus. Do not quietly narrow the scope to a few handpicked pieces:

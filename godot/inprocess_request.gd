@@ -7,6 +7,10 @@ var timeout := 5.0
 var _bus: Node
 var _pending_id := -1
 var _deadline_ms := 0
+var _operation := ""
+# Test stimulus at the actual embedded-worker reply seam. No production
+# lesson, queue, clock or grading policy is replaced by this injector.
+static var _test_dropped_operations: Dictionary = {}
 
 static func decode_reply(body: PackedByteArray) -> Variant:
     return JSON.parse_string(body.get_string_from_utf8()) if not body.is_empty() else null
@@ -29,8 +33,10 @@ func request(operation: String, payload: Dictionary = {}) -> Error:
         return ERR_BUSY
     if operation.is_empty():
         return ERR_INVALID_PARAMETER
+    _operation = operation
     _pending_id = int(_bus.submit(self, operation, JSON.stringify(payload)))
     if _pending_id < 0:
+        _operation = ""
         return ERR_UNAVAILABLE
     _deadline_ms = Time.get_ticks_msec() + maxi(1, int(timeout * 1000.0))
     set_process(true)
@@ -41,6 +47,7 @@ func _process(_delta: float) -> void:
         return
     var expired_id: int = _pending_id
     _pending_id = -1
+    _operation = ""
     set_process(false)
     if _bus != null:
         _bus.forget(expired_id, self)
@@ -51,6 +58,7 @@ func cancel_request() -> void:
     # A timed-out or canceled request must not leak a registered weakref.
     var canceled_id: int = _pending_id
     _pending_id = -1
+    _operation = ""
     set_process(false)
     if canceled_id >= 0 and _bus != null:
         _bus.forget(canceled_id, self)
@@ -58,6 +66,21 @@ func cancel_request() -> void:
 func complete(identifier: int, status: int, body: PackedByteArray) -> void:
     if identifier != _pending_id:
         return
+    var completed_operation: String = _operation
     _pending_id = -1
+    _operation = ""
     set_process(false)
+    # The worker has ALREADY executed the real transaction and returned
+    # success. Dropping only its first reply tests lost ACK reconciliation
+    # without changing the application operation or physical queue.
+    var drop: String = OS.get_environment("PIANO_TEST_DROP_REPLY_ONCE")
+    if (status == OK and not drop.is_empty()
+            and completed_operation == drop
+            and not _test_dropped_operations.has(drop)):
+        _test_dropped_operations[drop] = true
+        print("NATIVE_TEST_DROPPED_REPLY:",drop)
+        request_completed.emit(3,JSON.stringify({
+            "error":"Simulated lost in-process reply after worker commit"
+        }).to_utf8_buffer())
+        return
     request_completed.emit(status, body)
