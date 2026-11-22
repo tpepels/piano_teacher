@@ -6,6 +6,7 @@ const MAX_MS := 145000
 var app
 var begun_ms := 0
 var phase_ms := 0
+var last_heartbeat_ms := 0
 var phase := "boot"
 var udp := PacketPeerUDP.new()
 var first_pitch := -1
@@ -104,6 +105,19 @@ func _process(_delta: float) -> bool:
     if not app.native_started or not app.startup_last_music_checked or \
             not bool(state.get("loaded",false)):
         return false
+    var now_ms: int = Time.get_ticks_msec()
+    if now_ms-last_heartbeat_ms >= 5000:
+        last_heartbeat_ms = now_ms
+        print("FULL_SCENE_MIDI_HEARTBEAT:", JSON.stringify({
+            "phase":phase,"elapsed_ms":now_ms-begun_ms,
+            "phase_elapsed_ms":now_ms-phase_ms,
+            "mode":state.get("mode"),"step":state.get("flow",{}).get("step"),
+            "transport_id":state.get("transport_id"),
+            "backend_phase":state.get("phase"),
+            "paused":state.get("paused"),"running":state.get("running"),
+            "command_pending":app.command_coordinator.state.pending,
+            "score_ready":app.score_session.is_ready(),
+            "admission_problem":app.score_admission._last_problem}))
     var step: String = str(state.get("flow",{}).get("step",""))
     var mode: String = str(state.get("mode",""))
     var renderer = app.practice_view.stage.renderer

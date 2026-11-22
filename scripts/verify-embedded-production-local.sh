@@ -76,13 +76,13 @@ check() {
   CASE_COUNT=$((CASE_COUNT+1))
   local case_log="$WORK/native-case-$CASE_COUNT.log"
   printf '\n=== %s ===\n' "$label" >> "$LOG"
-  # Every case is bounded and its actual output streams to CI, rather
-  # than silently sitting inside one opaque script step until completion.
+  # Every case is bounded and its actual output streams to CI AND the
+  # main diagnostic log immediately. The log remains useful even when a
+  # native case hangs or the verifier is interrupted before its exit.
   # The underlying Godot/package commands retain their stricter timeouts.
   printf 'RUN   %s\n' "$label"
   if timeout --signal=TERM --kill-after=5s 600s \
-      bash -Eeuo pipefail -c '"$@"' _ "$@" 2>&1 | tee "$case_log"; then
-    cat "$case_log" >> "$LOG"
+      bash -Eeuo pipefail -c '"$@"' _ "$@" 2>&1 | tee -a "$LOG" "$case_log"; then
     # Godot can exit successfully after reporting a GDScript runtime error.
     # Reject that broken player journey instead of counting it as passed.
     if grep -Fq 'SCRIPT ERROR:' "$case_log"; then
@@ -102,7 +102,6 @@ check() {
     return 0
   else
     local status=$?
-    cat "$case_log" >> "$LOG"
     printf 'FAIL  %s (exit %d)\n' "$label" "$status"
     FAILED_CASES+=("$label (exit $status)")
     return "$status"
