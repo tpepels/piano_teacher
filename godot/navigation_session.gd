@@ -40,7 +40,7 @@ func update_frame_rate(state: Dictionary) -> void:
     if Engine.max_fps != target_fps:
         Engine.max_fps = target_fps
 
-func navigate(destination: String, state: Dictionary, pending) -> void:
+func navigate(destination: String, state: Dictionary) -> void:
     if _practice == null or _drawer == null or _screens.is_empty():
         push_error("NAVIGATION_SESSION: screen composition is not ready")
         return
@@ -71,6 +71,3 @@ func navigate(destination: String, state: Dictionary, pending) -> void:
     elif target == "lesson":
         _lesson.refresh(Time.get_ticks_msec())
 
-func back(state: Dictionary, command) -> void:
-    navigate(settings_return_screen if current_screen == "settings"
-             else "practice",state,command)
