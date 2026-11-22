@@ -636,3 +636,28 @@ def test_physical_key_instruction_uses_only_available_backend_action():
     # The default Practice Flow transitions automatically: it must not
     # print a physical "press any key" instruction with no enabled action.
     assert not course["enabled"] and course["action"] == ""
+
+
+def test_explicit_primary_recovers_after_terminal_automatic_admission_failure(practice_session):
+    """A capped auto-retry must still expose a genuine user recovery route."""
+    session = practice_session(bars=1)
+    initial = desktop_tempo(session)
+    for attempt in range(3):
+        pending = session.snapshot()["playback_intent"]
+        assert pending["attempt"] == attempt
+        session.ask("playback.withdraw",intent_id=pending["intent_id"],
+                    attempt=attempt,reason="Simulated physical stream unavailable")
+    state = session.snapshot()
+    assert state["playback_timeline"]["state"] == "failed"
+    assert state["controls"]["primary"]["enabled"]
+    assert state["controls"]["primary"]["action"] == "start"
+    attempted = session.command(
+        "ui_primary",score_ready=True,score_revision=state["revision"],
+        score_fingerprint=state["piece_fingerprint"])
+    if attempted["playback_intent"] is None:
+        attempted = session.ready_score()
+    assert attempted["playback_intent"] is not None
+    assert attempted["playback_intent"]["intent_id"] != initial["intent_id"]
+    assert attempted["playback_intent"]["attempt"] == 0
+    assert attempted["playback_timeline"]["state"] == "awaiting_admission"
+    assert not attempted["running"]

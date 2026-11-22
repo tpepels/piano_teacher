@@ -821,6 +821,20 @@ The real `PracticeEngine` fixture asserts unchanged
 intent ID, take ID, sequence, stopped status and state
 for both score-ready and automatic continuation callbacks.
 
+### V3 explicit UI recovery after bounded failure (2026-11-22)
+
+Added a real worker/UI-intent transition test for the
+recovery path after three exhausted physical admissions.
+The backend must retain a terminal failed status and
+enable the canonical primary Play action. A user-initiated
+`ui_primary` with current source fingerprint/revision
+must be accepted under the session lock, create a new
+distinct source-bound intent beginning at attempt zero,
+and remain ungraded until actual physical authorization.
+The existing asynchronous Listen/repeat suppression
+remains scoped to the failed automatic source; it does
+not prevent a genuine new learner request.
+
 ### V3 terminal automatic-admission latch (2026-11-22)
 
 The 44980830938 physical trace exposed a separate structural
