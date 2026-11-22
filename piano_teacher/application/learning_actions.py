@@ -38,10 +38,11 @@ class LearningActions:
                 # Listen again: the state machine plays it, then Free.
                 self.lesson_execution.flow_execute(self.flow_session.listen_again())
             else:
-                self.exposure_workflows.prepare_listen(effect=effect)
+                self.exposure_workflows.prepare_listen(effect=effect,reason=action)
         elif action == "perform":
             self.exposure_workflows.prepare_perform(
-                scope=str(kwargs.get("scope", "current")), effect=effect)
+                scope=str(kwargs.get("scope", "current")), effect=effect,
+                reason=action)
         elif action == "practice_weak":
             self.lesson_execution.practice_weak(effect=effect)
         elif action == "review_retry":
@@ -57,9 +58,9 @@ class LearningActions:
                 raise ValueError("Find the current notes before continuing to the next idea")
             self.lesson_execution.save_guided_preparation()
             if self.guided_session.return_context is not None:
-                self.exposure_workflows.prepare_practice(effect=effect)
+                self.exposure_workflows.prepare_practice(effect=effect,reason=action)
             else:
-                self.lesson_execution.begin_course_stage(effect=effect)
+                self.lesson_execution.begin_course_stage(effect=effect,reason=action)
         elif action == "skip_stage":
             if self.source_identity.warmup:
                 raise ValueError("Warm-up stages unlock after three clean runs, not skips")
@@ -76,7 +77,7 @@ class LearningActions:
                 self.lesson_cursor.set_course_guided(True)
                 if "from_beat" not in kwargs:
                     self.lesson_execution.begin_course_stage(
-                        explicit_learn=True, effect=effect)
+                        explicit_learn=True, effect=effect, reason=action)
                     return
             previous_start = (self.guided_session.beat_range[0]
                               if self.guided_session.beat_range else 0.0)
@@ -85,7 +86,7 @@ class LearningActions:
                     "from_beat",
                     previous_start if action == "learn_retry" else 0.0)),
                 recovery=self.guided_session.return_context is not None and action == "learn_retry",
-                effect=effect)
+                effect=effect,reason=action)
         elif action == "open_at":
             self.open_selected_measure(kwargs, effect=effect)
         elif action == "hints":
@@ -103,9 +104,10 @@ class LearningActions:
         self.lesson_cursor.set_course_guided(selected.mode == "learn")
         self.lesson_cursor.select_opening(selected.from_beat)
         if selected.mode == "learn":
-            self.lesson_execution.begin_learn(from_beat=selected.from_beat,exposure=selected)
+            self.lesson_execution.begin_learn(
+                from_beat=selected.from_beat,exposure=selected,reason="open_at")
         else:
-            self.exposure_workflows.prepare_practice(exposure=selected)
+            self.exposure_workflows.prepare_practice(exposure=selected,reason="open_at")
             self.playback_session.wait_for_player()
             self.notices.feedback = f"Ready to practise from measure {kwargs.get('bar')}"
             self.notices.next_action = "Press Start to play from the selected measure."
@@ -148,8 +150,10 @@ class LearningActions:
                 recovery = change.tempo_only and guided_return is not None and guided_return[0] == p.identity
                 if recovery:
                     self.attempt.restore_retry(guided_retry_range)
-                self.lesson_execution.begin_learn(from_beat=selected.from_beat,bump_revision=False,recovery=recovery,exposure=selected)
+                self.lesson_execution.begin_learn(
+                from_beat=selected.from_beat,bump_revision=False,
+                recovery=recovery,exposure=selected,reason=action)
             elif selected is not None:
-                self.lesson_execution.enter_selected_exposure(selected)
+                self.lesson_execution.enter_selected_exposure(selected,reason=action)
         self.progress.save(self.source_identity.plan, self.source_identity.fingerprint)
 

@@ -28,7 +28,7 @@ class TimedPlayback:
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
               loop_continuation: bool = False, scheduled_deadline: float | None = None,
               presentation_lead_seconds: float = 0.0, decided: bool = False,
-              count_in_plan=None, effect=None):
+              count_in_plan=None, effect=None, reason=None):
         with self.lock:
             self.playback_session.require_authorized_start(self.playback.presentation_required)
             if self.source_identity.plan is None:
@@ -52,7 +52,7 @@ class TimedPlayback:
             if selected is not None and selected.stage_key == self.source_identity.plan.identity:
                 from_beat,mode = selected.from_beat,selected.mode
             if self.playback_session.mode == "learn":
-                self.exposure_workflows.prepare_practice(exposure=selected)
+                self.exposure_workflows.prepare_practice(exposure=selected,reason=reason)
                 return
             self.guided_session.clear_selection()
             self.guided_session.discard_return()
