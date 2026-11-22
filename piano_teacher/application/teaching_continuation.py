@@ -157,13 +157,17 @@ class TeachingContinuation:
     def begin_feedback(self, pending, *, now: float, automatic: bool,
                        force_early: bool, revision: int, fingerprint: str
                        ) -> FeedbackWaiting | FeedbackFault | FeedbackTransaction:
-        if (not automatic or not self.transport.next_at or pending is None
-                or not (force_early or now >= self.transport.next_at)):
-            return FeedbackWaiting()
+        # An already selected continuation is bound to its original
+        # transaction and durable receipt. A failed post-commit physical
+        # effect may have stopped automatic playback or withdrawn the old
+        # deadline; explicit Retry must still reach this exact transaction.
         if self._feedback_transaction is not None:
             if self._feedback_transaction.pending is pending:
                 return self._feedback_transaction
             raise ValueError("Another selected decision owns feedback publication")
+        if (not automatic or not self.transport.next_at or pending is None
+                or not (force_early or now >= self.transport.next_at)):
+            return FeedbackWaiting()
         effect = self.advance(pending,now=now,
             readiness=self.readiness(revision=revision,fingerprint=fingerprint))
         if effect.action == "fault":
