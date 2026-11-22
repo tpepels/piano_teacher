@@ -139,12 +139,17 @@ class EngineCommands:
                 return self._reply(OK, engine.hardware_diagnostics_action(
                     values.get("action", "")))
             elif operation == "practice.command":
-                # The command result and authoritative state snapshot are
-                # separate protocols. Do not inject a transient user event
-                # into the persistent versioned state contract.
-                outcome = engine.control(**values)
+                # One accepted input event must return its own committed
+                # state. Hardware MIDI callbacks can arrive on another
+                # native thread between control() and state(); without this
+                # outer RLock the UI might acknowledge action A while showing
+                # the state produced by a later MIDI action B.
+                # Outcome remains separate from the versioned state schema.
+                with engine.lock:
+                    outcome = engine.control(**values)
+                    state = engine.state()
                 return self._reply(OK, {
-                    "state": engine.state(), "outcome": outcome,
+                    "state": state, "outcome": outcome,
                 })
             else:
                 return self._reply(UNKNOWN, {"error": f"Unknown operation: {operation}"})
