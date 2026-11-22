@@ -452,11 +452,30 @@ func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
     var nominal: float = float(current.get("projection_bpm",NAN))
     var segments: Array = current.get("projection_segments",[])
     var source_beat: float = float(current.get("projection_source_beat",NAN))
-    var exact_world: float = flow.project_authored_future(
-        at_ms+roundi(deadline-backend_now),at_ms,source_beat,nominal,segments)
+    # Reused Pause ink has an already-committed world origin. Backend
+    # accepted the physical witness at that origin; converting its returned
+    # millisecond deadline to an integer frame and then projecting a NEW
+    # origin silently changes the source geometry. Preserve the original
+    # location and verify its physical arrival without another choice.
+    var reused_source: bool = bool(current.get("reused_count_in",false))
+    var exact_world: float
+    if reused_source:
+        exact_world = float(current.get("world_origin",NAN))
+    else:
+        exact_world = flow.project_authored_future(
+            at_ms+roundi(deadline-backend_now),at_ms,
+            source_beat,nominal,segments)
     if not is_finite(exact_world) or exact_world <= at_world:
         _cancel_provisional()
         return
+    if reused_source:
+        var original_travel_ms: float = flow.physical_travel_ms_to(
+            exact_world,at_ms,source_beat,nominal,segments)
+        if not is_finite(original_travel_ms) or \
+                absf(backend_now+original_travel_ms-deadline) > 5.0:
+            _report_problem("Paused score cannot meet the admitted musical downbeat")
+            _cancel_provisional()
+            return
     var opening: float = float(current.get("from_beat",0.0))
     var count_in: float = float(current.get("count_in_beats",0.0))
     var exact_action: String = str(current.get("reservation_action","start"))
@@ -694,7 +713,7 @@ func _confirm_authorized(data: Dictionary) -> void:
             float(current.get("count_in_beats",0.0)),
             str(current.get("action","start")),
             current.get("count_in_plan",{}),
-            str(receipt.get("take_id","")))
+            str(receipt.get("take_id","")),expected)
         metronome.acknowledge_reserved_count_in(now_ms)
     _clear_provisional()
 

@@ -24,13 +24,19 @@ var _reserved: Dictionary = {}
 var _count_in_owned_until_ms := -INF
 var _count_in_owned_transport := -1
 var _frame_now_ms := 0
+# A fresh Resume has a new authenticated segment even when it retains the
+# logical take ID. Partial-count-in Resume instead retains the old cue
+# epoch so beats already spoken before Pause cannot be repeated.
+var _authorized_cue_take := ""
+var _authorized_cue_token := ""
 # The engine's deadline for the reserved take may differ from Godot's by
 # at most this much before the countdown is re-based onto it (logged).
 const RESERVED_AGREEMENT_MS := 40.0
 
 func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
         meter: Variant, count_in_beats: float, action: String = "start",
-        authorized_plan: Dictionary = {}, take_id: String = "") -> void:
+        authorized_plan: Dictionary = {}, take_id: String = "",
+        segment_id: String = "") -> void:
     if not is_finite(deadline_ms) or not is_finite(bpm) or bpm <= 0.0 or \
             not is_finite(count_in_beats) or count_in_beats <= 0.0:
         _reserved = {}
@@ -43,11 +49,15 @@ func reserve_count_in(deadline_ms: float, bpm: float, bar_beats: float,
             push_error("COUNT_IN_PLAN: renderer and coordinator disagree")
             _reserved.clear()
             return
+    var token: String = ("authorized:"+segment_id if not segment_id.is_empty()
+        else "authorized:"+take_id if not take_id.is_empty()
+        else "countin:%d" % roundi(deadline_ms))
     _reserved = {"deadline_ms":deadline_ms,"bpm":bpm,"bar":bar_beats,
         "meter":meter,"count_in":count_in_beats,"action":action,
-        "take_id":take_id,
-        "plan":plan,"token":"authorized:"+take_id if not take_id.is_empty()
-            else "countin:%d" % roundi(deadline_ms),"acked_ms":NAN}
+        "take_id":take_id,"segment_id":segment_id,
+        "plan":plan,"token":token,"acked_ms":NAN}
+    _authorized_cue_take = take_id
+    _authorized_cue_token = token
 
 func cancel_reserved_count_in() -> void:
     _reserved = {}
@@ -116,7 +126,10 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
         var playback: Variant = state.get("playback_timeline")
         var active: Variant = playback.get("current") if playback is Dictionary else null
         if (not active is Dictionary or str(active.get("take_id","")) !=
-                str(_reserved.get("take_id",""))):
+                str(_reserved.get("take_id","")) or
+                (not str(_reserved.get("segment_id","")).is_empty() and
+                str(active.get("segment_id","")) !=
+                    str(_reserved.get("segment_id","")))):
             # A subsequent source replaced this authorization before
             # the first confirming snapshot. Equal BPM/deadline numbers
             # cannot give the old take permission to speak again.
@@ -274,7 +287,15 @@ func update(state: Dictionary, state_tick_ms: int,
                     var beat_ms: float = deadline_ms+float(clock.backend_offset_ms)
                     var before: float = TempoTimeline.beats_from_milliseconds(
                         float(now_ms)-beat_ms,tempo)
-                    var token: String = "authorized:"+take
+                    var segment: String = str(active.get("segment_id",""))
+                    var token: String = ("authorized:"+segment
+                        if not segment.is_empty() else "authorized:"+take)
+                    if bool(active.get("reused_count_in",false)) and \
+                            _authorized_cue_take == take and \
+                            not _authorized_cue_token.is_empty():
+                        token = _authorized_cue_token
+                    _authorized_cue_take = take
+                    _authorized_cue_token = token
                     var paused: bool = bool(state.get("paused",false))
                     if before < 0.0:
                         _count_in(token,before,
