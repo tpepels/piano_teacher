@@ -24,7 +24,7 @@ from dataclasses import dataclass
 
 from ..fingering.projection import project_model
 from ..lesson_validation import require_lesson_alignment
-from ..music import Phrase, Piece
+from ..music import Phrase, Piece, source_note_id
 from ..notation.lesson import (LessonScore, build_lesson_score,
                                infer_piece_clefs, infer_midi_clef_plan)
 from ..notation.model import build_score_model
@@ -142,10 +142,15 @@ class ScoreArtifacts:
             if (layout.get("revision") != selected.revision
                     or model.get("revision") != selected.revision):
                 raise ValueError("Score bundle contains mixed revisions")
-            source_ids = tuple(note.source_id for note in selected.phrase.notes)
+            # The engraving and active semantic projection resolve the
+            # same canonical fallback IDs for legitimate imported sources
+            # without explicit identifiers (including supported warm-ups).
+            source_ids = tuple(source_note_id(note, index)
+                               for index, note in enumerate(selected.phrase.notes))
             if (not source_ids or len(source_ids) != len(set(source_ids))):
                 raise ValueError("Score bundle has missing or duplicate source note IDs")
-            graded_ids = {note.source_id for note in selected.phrase.notes
+            graded_ids = {source_note_id(note, index)
+                          for index, note in enumerate(selected.phrase.notes)
                           if selected.hand == "both" or note.hand == selected.hand}
             if set(model.get("active_note_ids", ())) != graded_ids:
                 raise ValueError("Score bundle notation does not match graded MIDI source IDs")
