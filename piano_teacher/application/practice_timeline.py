@@ -91,6 +91,7 @@ class PracticeTimeline:
             performance_review=self.outcome_effects.performance_review,
             prepare_decision=self.teaching_decisions.prepare,
             plan=self.source_identity.plan,binding=self.teaching_decisions.binding(),now=now,
+            score_revision=self.source_identity.revision,
             policy=resolve_mistake_policy(
                 self.library.settings["mistake_response_strategy"]))
         assessed = completed.assessed

@@ -5,7 +5,7 @@ once; checkpoint and settlement apply only the recorded immutable effects.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace, asdict
-from ..teaching_decisions import validate_teaching_decision
+from ..teaching_decisions import TeachingBinding, validate_teaching_decision
 from .mistake_responses import mistake_policy_facts
 from .assessment_settlement import AssessedTake, assess_completed_take
 from ..completion_route import completion_route, completion_effect, CompletionEffect
@@ -58,7 +58,30 @@ class CommittedAttempt:
     committed_at: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class TakeResult:
+    """The exact graded source/take and recorded physical note evidence.
+
+    TeachingBinding retains run/session, source fingerprint, original
+    stage, transport, course/authority and cancellation identities.
+    Recorded PlayedNotes are frozen, retaining press ID, attack time,
+    release time and ambiguous key-pairing evidence. Assessment notes
+    retain original imported source-note IDs and timing measurements.
+    """
+    binding: TeachingBinding
+    score_revision: int
+    attempt_id: str | None
+    mode: str
+    hand: str
+    from_beat: float
+    end_beat: float
+    bpm: float
+    played: tuple[PlayedNote, ...]
+    assessment: Assessment
+    source_note_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CompletedTake:
     assessed: AssessedTake
     route: str
@@ -67,6 +90,7 @@ class CompletedTake:
     response: object
     settled: bool
     effect: CompletionEffect
+    take: TakeResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,7 +296,8 @@ class AttemptSettlement:
         review_end_beat: float | None, automatic_remedial_review: bool,
         performance_review: Callable[[Phrase, Assessment], dict],
         prepare_decision: Callable, plan,
-        binding, now: float, policy,
+        binding: TeachingBinding, now: float, policy,
+        score_revision: int,
     ) -> CompletedTake:
         """One full/focused grading and evidence-settlement boundary.
 
@@ -282,8 +307,9 @@ class AttemptSettlement:
         boundary; focused/performance decisions settle immediately.
         """
         if self._completion is None:
+            frozen_played = tuple(played)
             assessed = assess_completed_take(
-                phrase=phrase,hand=hand,bpm=bpm,played=played,
+                phrase=phrase,hand=hand,bpm=bpm,played=frozen_played,
                 from_beat=from_beat,end_beat=end_beat,tempo=tempo,
                 policies=policies,layout_for_feedback=layout_for_feedback)
             result = assessed.result
@@ -298,18 +324,31 @@ class AttemptSettlement:
             else:
                 pending = prepare_decision("focused_result",result,end_beat=end_beat)
                 response = pending.decision.response
+            take = TakeResult(
+                binding=binding, score_revision=score_revision,
+                attempt_id=pending.event.attempt_id, mode=mode,
+                hand=hand, from_beat=from_beat, end_beat=end_beat,
+                bpm=bpm, played=frozen_played, assessment=result,
+                source_note_ids=tuple(
+                    entry.note.source_id for entry in result.notes))
             self._completion = CompletedTake(
                 assessed,route,summary,pending,response,False,
-                completion_effect(route,pending.decision))
+                completion_effect(route,pending.decision),take)
         completed = self._completion
+        take = completed.take
+        if (binding != take.binding or score_revision != take.score_revision
+                or hand != take.hand or mode != take.mode
+                or from_beat != take.from_beat or end_beat != take.end_beat):
+            raise ValueError(
+                "Completed take source or window changed before evidence settlement")
         assessed,route,summary,pending,response = (
             completed.assessed,completed.route,completed.summary,
             completed.pending,completed.response)
         result = assessed.result
         settled = self.seal_completed_take(
-            pending,played=played,route=route,mode=mode,
-            at_target=bpm >= plan.target_bpm,
-            assessed_end_beat=end_beat,result=result,plan=plan,
+            pending,played=take.played,route=route,mode=take.mode,
+            at_target=take.bpm >= plan.target_bpm,
+            assessed_end_beat=take.end_beat,result=take.assessment,plan=plan,
             binding=binding,now=now,policy=policy,performance_summary=summary)
         self._completion = replace(completed,settled=settled)
         return self._completion
