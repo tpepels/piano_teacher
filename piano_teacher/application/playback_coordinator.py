@@ -399,10 +399,19 @@ class PlaybackCoordinator:
                 # Idempotence applies only while the same authorization
                 # remains the active source. A stale present retry must
                 # never re-authorize notation from an earlier lesson/take.
+                active_source = self.active_segment.get("source", {})
+                source = facts.source
                 if (result["attempt"] != attempt
                         or self.active_segment_id != segment_id
                         or self.active_take_id != result["take_id"]
-                        or self.state == PlaybackState.FAILED):
+                        or self.state == PlaybackState.FAILED
+                        or source is None
+                        or facts.transport_id != self.active_segment.get("transport_id")
+                        or source.fingerprint != active_source.get("fingerprint")
+                        or source.stage_key != active_source.get("stage_key")
+                        or source.revision != active_source.get("revision")
+                        or source.hand != active_source.get("hand")
+                        or abs(source.end_beat - active_source.get("end_beat", -1)) > 1e-7):
                     raise ValueError("Playback authorization has been superseded")
                 return dict(result)
         intent = self._require_intent(facts, intent_id, attempt)
