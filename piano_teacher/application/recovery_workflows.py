@@ -91,9 +91,17 @@ class RecoveryWorkflows:
         # Capture marks at the performance tempo, not at the slower
         # BPM selected for the next retry. Re-scaling the recorded
         # timestamps early would move mistakes to incorrect notes.
-        self.attempt.publish_live_marks(
-            self.live_feedback_workflows.live_feedback((now-self.visual_transport.run_at)))
-        self.live_assessment.publish(self.attempt.feedback_marks, self.live_feedback_workflows.feedback_take())
+        saved = self.attempt_settlement.rolling_record
+        if saved is None:
+            # The first assessment publishes frozen source-tempo feedback.
+            # A persistence/presentation retry must retain those old marks,
+            # not recompute them from a new BPM or paused source clock.
+            self.attempt.publish_live_marks(
+                self.live_feedback_workflows.live_feedback(
+                    now-self.visual_transport.run_at))
+            self.live_assessment.publish(
+                self.attempt.feedback_marks,
+                self.live_feedback_workflows.feedback_take())
         outgoing_bpm = self.source_identity.plan.bpm
         scored_end = self.visual_transport.run_at + (
             self.transport_timing.elapsed_seconds(decision.end_beat) -
@@ -102,7 +110,6 @@ class RecoveryWorkflows:
         notes = self.attempt.recorder.presses if self.attempt.recorder else ()
         from_beat = self.visual_transport.play_from_beat
         score_revision = self.source_identity.revision
-        saved = self.attempt_settlement.rolling_record
         if saved is not None:
             # A durable decision may already have lowered BPM or changed
             # the stage before visual continuation failed. Resume exactly
