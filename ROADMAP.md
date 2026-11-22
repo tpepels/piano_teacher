@@ -660,6 +660,48 @@ warm-up course behavior remain obligations for A2 acceptance.
 
 **A2 stale-source settlement guard (2026-11-22):** [73282e4](https://github.com/tpepels/piano_teacher/commit/73282e4c79d04d6faa31f1111d272a26f151a375) requires `PracticeFlowCourseSession.settle_decided` to operate on the currently installed `LearningPlan` and an existing projected phase before accepting a decision ID, including repeated receipts. A delayed completion after source replacement can no longer recreate or settle an obsolete course phase. This is source-level integration only; no runtime test was executed. Course-scoped settings, recovery ownership and failed-persistence/source-change acceptance remain open.
 
+### A2 course policy and continuation ownership checkpoint — 2026-11-22
+
+**Source changes on main (not runtime acceptance):**
+
+- `lesson_settings.course_rules(generator_name, warmup=...)` returns immutable,
+  selected `CourseRules`. Practice Flow gets its two-target-pass requirement
+  from the existing pure reducer, its four-bar cap from `practice_windows`,
+  and an independent 50%-of-target start. Source-progression, selectable
+  Coda/Fukuda and built-in warm-ups retain the previously configured flat
+  `lesson_settings.json` values (three clean runs and two-bar source focus
+  by default). The flat on-disk tuning format was not changed.
+- `teaching_course.CourseState` resolves the clean-pass rule from the selected
+  generator. Source segmentation, Practice Flow engraving-stage selection and
+  recovery thresholds request their explicit course rules. Manual tempo
+  increases use one course-owned maximum, now also published by
+  `LearningPlan.maximum_stage_bpm` to the control read model. In Practice
+  Flow the + button is disabled at the original target BPM.
+- `LearningEvidenceSession` records the selected course-rule snapshot
+  alongside the historical generic tuning and original source identifiers.
+  Newly recorded rule identities are version-distinct from earlier evidence;
+  previous ledger records and saved lesson state are left intact. Historical
+  attempts are not silently reclassified as current-rule attempts.
+- `RecoveryWorkflows._apply_prepared_recovery` is the one selected-response
+  executor for whole-response and remedial preparation, cursor/attempt,
+  transport and notice effects. The source-bound response selectors remain
+  pure; guided note-isolation and untimed timed-review preparation keep
+  their distinct semantics.
+- `CompletionContinuations.dispatch_effect` now validates its receipt,
+  decision ID, phase, installed source fingerprint, stage and revision
+  **before** applying an effect. `AttemptSettlement.commit_full_passage`
+  binds a receipt replay to the original run/session, cancellation and
+  authority/course revisions, installed stage and already-committed progress.
+  Once-applied effects remain one-shot.
+
+**Remaining A2 gates:** Runtime acceptance is outstanding for exact-HEAD
+Practice Flow, Coda/Fukuda, warm-ups, failed SQLite settlement, interrupted
+rolling takes, Stop/source replacement, stale and lost physical ACK, guided
+aid and all saved-session reopenings. The remaining rolling boundary
+assessment/continuation handoff still needs a writer/owner audit before
+A2 can be closed. No Python, Godot, embedded native, package or physical
+MIDI test execution is claimed; CI remains manual-only.
+
 ### A2 — Unified lesson, assessment and durable settlement
 
 - [ ] Give the lesson domain one course/window/hand/step, BPM, mastery and
