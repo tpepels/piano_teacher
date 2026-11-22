@@ -216,7 +216,9 @@ class TransportActions:
         """Start a take or schedule a seamless retry under the control lock."""
         if self.attempt.settlement_failed:
             revision = self.source_identity.revision
-            self.notices.feedback = self.completion_continuations.commit_pending() or "Assessment saved"
+            self.notices.feedback = (
+                self.completion_continuations.retry_failed_publication(
+                    now=self.clock()) or "Assessment saved")
             if self.source_identity.revision != revision:
                 self.playback_session.await_score(self.source_identity.revision)
             self.notices.next_action = "Press Play when the score is ready."
