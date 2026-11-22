@@ -6,6 +6,7 @@ canonical PlaybackSession/VisualTransport without an alternative clock.
 """
 from __future__ import annotations
 from ..music import Phrase
+from ..remediation import RemedialAssignment
 from ..lesson_settings import course_rules
 from .exposure_preparation import prepare_remedial, prepare_response
 from .mistake_responses import resolve_mistake_policy
