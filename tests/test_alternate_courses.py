@@ -84,3 +84,41 @@ def test_all_builtin_warmups_open_as_real_two_hand_music_outside_the_personal_fo
     assert len(fingerprints) == len(warmups)
     assert list(session.music.iterdir()) == [session.path]
     assert session.path.read_bytes() == original
+
+def test_warmup_step_picker_cannot_skip_unmastered_hands_or_stages(practice_session):
+    """Direct lesson commands must obey the same three-pass unlock as the UI."""
+    import json
+
+    session = practice_session(bars=1)
+    warmup = session.ask("library.catalog")["warmups"][0]
+    session.ask("library.open",id=warmup["id"])
+    state = session.snapshot()
+    overview = session.ask("lesson.overview")
+    steps = overview["steps"]
+    assert len(steps) >= 2
+    assert steps[0]["available"] and not steps[1]["available"]
+    assert state["warmup"] and not state["controls"]["path_skip"]["enabled"]
+    assert not state["controls"]["hands"].get("left",{}).get("enabled",False)
+    initial_step = state["lesson_step"]
+    # Both the numeric step selector and the alternate hand picker submit
+    # real practice.command requests, not internal curriculum mutations.
+    for action in ({"action":"select_step","number":2},
+                   {"action":"hand","hand":"left"}):
+        status, body = session.commands.request("practice.command",json.dumps(action))
+        assert status != 0, (action,body)
+        unchanged = session.snapshot()
+        assert unchanged["lesson_step"] == initial_step
+        assert unchanged["mastered"] == 0
+    assert session.ask("lesson.overview")["steps"][1]["available"] is False
+
+
+def test_manual_navigation_remains_available_for_non_warmup_course(practice_session):
+    """The warm-up mastery gate must not lock imported MIDI exploration."""
+    session = practice_session(bars=3)
+    overview = session.ask("lesson.overview")
+    assert len(overview["steps"]) >= 2
+    assert all(step["available"] for step in overview["steps"])
+    before = session.snapshot()
+    selected = session.command("select_step",number=2)
+    assert selected["lesson_step"] == 2
+    assert selected["mastered"] == before["mastered"]
