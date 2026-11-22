@@ -5,6 +5,7 @@ transport. No application command-router backreference or nested control call.
 """
 from __future__ import annotations
 from .playback_facts import PreparationRequest
+from .playback_transitions import PlaybackTransition
 
 
 class TransportActions:
@@ -161,7 +162,7 @@ class TransportActions:
                     self.start_or_restart(action)
                     return
                 effect = self.session_commands.active or self.teaching_decisions.manual_effect(action)
-                transition = self.session_commands.transition(
+                transition = PlaybackTransition.from_effect(
                     effect,action=action,source_changed=(
                         self.score_artifact_registry.current.source_bpm_changed(self.source_identity.plan.piece.bpm)
                         if self.playback_session.mode not in ("listen", "learn") else False))
@@ -230,9 +231,10 @@ class TransportActions:
             raise ValueError("Open a piece first")
         effect = self.teaching_decisions.manual_effect(action)
         selected = self.teaching_decisions.install_command(effect)
-        route = self.session_commands.start_route(effect,source_changed=(
+        route = PlaybackTransition.from_effect(
+            effect,action="start",source_changed=(
             self.score_artifact_registry.current.source_bpm_changed(p.piece.bpm)
-            if self.playback_session.mode not in ("listen","learn") else False))
+            if self.playback_session.mode not in ("listen","learn") else False)).route
         if route == "listen":
             self.exposure_workflows.prepare_listen()
             return

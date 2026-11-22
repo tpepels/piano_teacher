@@ -5,6 +5,8 @@ instance. This application service does not own an independent curriculum
 planner, score renderer, transport or engine reference.
 """
 from __future__ import annotations
+from dataclasses import dataclass
+from ..teaching_decisions import validate_teaching_decision
 from ..teaching_decisions import (
     TeachingBinding, TeachingState, TeachingRouteFacts, TeachingEvent)
 from ..teaching_manual import ManualFacts
@@ -12,6 +14,14 @@ from ..diagnosis_policies import LearnerSnapshot
 from ..completion_route import completion_route
 from .mistake_responses import resolve_mistake_policy
 from .learning_capture import identifier
+
+
+@dataclass(frozen=True, slots=True)
+class CommandEffect:
+    """One validated teaching decision for the selected source state."""
+    event: object
+    state: object
+    decision: object
 
 
 class TeachingDecisions:
@@ -34,6 +44,7 @@ class TeachingDecisions:
         self.fukuda_mistakes = fukuda_mistakes
         self.learner_progress = learner_progress
         self.session_commands = session_commands
+        self._last_applied_command = None
         self.learning_evidence = learning_evidence
         self.clock = clock
 
@@ -95,17 +106,37 @@ class TeachingDecisions:
                 guidance_completed=bool(self.guided_session.controller is not None and self.guided_session.controller.snapshot(now=self.clock())["completed"]),
                 open_from_beat=self.lesson_cursor.opening_beat,pending_rewind=self.visual_transport.pending_rewind))
         if not store:
-            return self.session_commands.prepare(event=event, state=state, generator=p.lesson_generator)
+            decision = p.lesson_generator.decide_teaching(event, state)
+            validate_teaching_decision(decision, event=event, state=state)
+            return CommandEffect(event, state, decision)
         return self.attempt_settlement.prepare(event=event, state=state, generator=p.lesson_generator)
 
     def manual_effect(self, action, *, from_beat=None, values=None):
         return self.session_commands.active or self.prepare("manual", action=action,
             from_beat=from_beat, values=values, store=False)
 
+    def apply_progress(self, effect) -> bool:
+        """Apply exactly one validated manual decision to the lesson owner.
+
+        Keep a source-bound idempotence identity here, not in the command
+        dispatch/context adapter. The exposure awaiting timed playback is
+        published only after the learner's progress was accepted.
+        """
+        if self._last_applied_command is effect:
+            return False
+        plan = self.source_identity.plan
+        plan.apply_teaching_progress(
+            effect.decision.progress_after,
+            definition=effect.decision.definition_after,
+            expected=effect.decision.before_progress)
+        self._last_applied_command = effect
+        self.session_commands.prepare_exposure(effect.decision.next_exposure)
+        return True
+
     def install_command(self, effect):
         current = self.source_identity.plan.teaching_progress()
         if current == effect.decision.before_progress:
-            if self.session_commands.apply_progress(effect, plan=self.source_identity.plan):
+            if self.apply_progress(effect):
                 self.attempt_settlement.command_applied()
         elif current != effect.decision.progress_after:
             raise ValueError("Manual teaching progress changed before application")

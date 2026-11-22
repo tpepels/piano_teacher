@@ -126,7 +126,7 @@ class LearningActions:
         effect = (queued if queued is not None and queued.event.action == action
                   else self.teaching_decisions.prepare(
                       "manual", manual=change, action=action, store=False))
-        self.session_commands.apply_progress(effect, plan=p)
+        self.teaching_decisions.apply_progress(effect)
         self.attempt_settlement.command_applied()
         if action == "hand":
             self.lesson_cursor.select_opening(0.0)
