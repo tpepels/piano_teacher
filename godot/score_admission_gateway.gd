@@ -4,7 +4,6 @@ extends Node
 ## preview -> arm immutable source -> backend reserve -> confirm presentation.
 const Request := preload("res://inprocess_request.gd")
 const TransportReservation := preload("res://score_transport_reservation.gd")
-const TempoTimeline := preload("res://tempo_timeline.gd")
 
 signal admission_problem(message: String)
 
@@ -192,7 +191,6 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         "resume_fresh" if action == "resume" else reservation_action)
     var opening: float = float(intent.get("from_beat",0.0))
     var planned: Dictionary = {}
-    var partial: float = float(intent.get("resume_remaining_beats",0.0))
     var fixed: Variant = intent.get("fixed_deadline_ms")
     if fixed != null:
         if action != "auto" or not is_finite(float(fixed)) or float(fixed) <= backend_now:
