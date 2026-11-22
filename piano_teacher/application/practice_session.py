@@ -257,10 +257,8 @@ class PracticeSession:
             if isinstance(event, MidiShortcut):
                 effect = event.effect
                 if effect.completed_range is not None:
-                    ranges = self.settings_workflows.library.settings["midi_key_ranges"].copy()
-                    ranges[self.midi.device] = list(effect.completed_range)
-                    self.settings_workflows.update(
-                        {"midi_key_ranges": ranges},
+                    self.settings_workflows.record_midi_key_range(
+                        self.midi.device, effect.completed_range,
                         pause_current=self.timed_playback.pause)
                 if effect.action:
                     return self._apply_command(effect.action)

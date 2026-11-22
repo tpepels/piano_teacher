@@ -27,6 +27,14 @@ class SettingsWorkflows:
     def preferences(self) -> dict:
         return self.library.public_settings()
 
+    def record_midi_key_range(self, device: str, keys: tuple,
+                              *, pause_current) -> dict:
+        """Store a completed physical shortcut capture through settings policy."""
+        ranges = self.library.settings["midi_key_ranges"].copy()
+        ranges[device] = list(keys)
+        return self.update({"midi_key_ranges": ranges},
+                           pause_current=pause_current)
+
     def update(self, changes: dict, *, pause_current) -> dict:
         proposed = self.library.propose_update(**changes)
         before = self.library.settings["music_dir"]
