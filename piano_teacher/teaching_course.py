@@ -194,6 +194,32 @@ def select_cursor(course, cursor, *, same_is_noop=False):
     return chosen.with_progress(bpm=tempo_for_stage(chosen))
 
 
+def warmup_unlocked_step(course) -> int:
+    """Last selectable warm-up step, derived from earned course mastery.
+
+    Imported scores remain freely navigable. Every warm-up stage must be
+    mastered in order before the next may be selected manually.
+    """
+    options = steps(course)
+    if not course.warmup:
+        return len(options)
+    earned = dict(course.progress.mastered)
+    for number, (_, _, _, key) in enumerate(options, start=1):
+        if key not in earned:
+            return number
+    return len(options)
+
+
+def _require_warmup_cursor(course, cursor) -> None:
+    if not course.warmup:
+        return
+    options = steps(course)
+    number = next((i for i, step in enumerate(options, start=1)
+                   if step[:3] == cursor), None)
+    if number is None or number > warmup_unlocked_step(course):
+        raise ValueError("Complete three clean passes to unlock the next warm-up step")
+
+
 def manual_progress(course, action, *, number=None, hand=None, bpm=None):
     p = course.progress
     if action in ("select_step", "next", "previous", "select", "hand"):
@@ -201,7 +227,9 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
             options = steps(course)
             if type(number) is not int or not 1 <= number <= len(options):
                 raise ValueError("Lesson step out of bounds")
-            return select_cursor(course, options[number-1][:3], same_is_noop=True)
+            destination = options[number-1][:3]
+            _require_warmup_cursor(course, destination)
+            return select_cursor(course, destination, same_is_noop=True)
         if action == "hand":
             if hand not in course.hands:
                 raise ValueError(f"Hand {hand!r} unavailable")
@@ -212,6 +240,8 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
             if type(index) is not int or not 0 <= index < len(course.definition.exercises):
                 raise ValueError("Exercise index out of bounds")
             cursor = (index, 0, 0)
+        if action != "select":
+            _require_warmup_cursor(course, cursor)
         return select_cursor(course, cursor)
     if action == "tempo":
         lower = 1 if course.profile == "practice-flow" else SETTINGS.minimum_bpm

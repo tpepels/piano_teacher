@@ -216,6 +216,8 @@ class LearnerProgress:
         if plan is None:
             raise ValueError("Open a piece first")
         from ..lesson_stage_semantics import describe
+        from ..teaching_course import warmup_unlocked_step
+        unlocked = warmup_unlocked_step(plan.course_state())
         steps = []
         for i, step in enumerate(plan.lesson_steps):
             saved = self.saved(plan, fingerprint=fingerprint, stage_key=step.key)
@@ -238,6 +240,7 @@ class LearnerProgress:
                 "kind": step.kind, "first_bar": step.first_bar,
                 "last_bar": step.last_bar, "required_notes": step.required_notes,
                 "completed": step.key in plan.mastered,
+                "available": i < unlocked,
                 "skip_status": saved["skip_status"], "skip_reason": saved["skip_reason"],
             })
         return {
