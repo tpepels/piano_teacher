@@ -109,7 +109,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
                             else FeedbackEventLog())
     r.live_assessment = LiveAssessmentPublisher(r.feedback_events)
     r.runtime_timings = RuntimeTimings()
-    r.flow_session = PracticeFlowCourseSession(r.now)
+    r.flow_session = PracticeFlowCourseSession(r.now, r.source_identity)
     # One short on-screen message at a time: (serial, text, engine time).
     r.guided_session.clear_selection()
     r.guided_session.set_hints(False,now=r.now())
