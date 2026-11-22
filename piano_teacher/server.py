@@ -13,7 +13,9 @@ from .application.composition import compose_application
 from .application.practice_session import (
     PresentationRequired, PlaybackReserved, PlaybackPresented,
     PlaybackWithdrawn, PlaybackFailed, SourceCommitted, SettingsChanged,
-    DeviceSelected, PreloadReady, PreloadFailed, SessionClosed)
+    DeviceSelected, PreloadReady, PreloadFailed, SessionClosed,
+    CalibrationRequested, HardwareRequested, HistoryExported,
+    PieceHistoryDeleted, LearnerHistoryDeleted)
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.score_artifacts import ScoreArtifacts
 from .clock import Clock
@@ -171,8 +173,7 @@ class PracticeEngine:
             return self.device_workflows.hardware_diagnostics()
 
     def hardware_diagnostics_action(self, action: str) -> dict:
-        with self.lock:
-            return self.device_workflows.hardware_action(action)
+        return self.practice_session.apply(HardwareRequested(action))
 
     def library_listing(self) -> dict:
         with self.lock:
@@ -185,11 +186,7 @@ class PracticeEngine:
         return self.source_workflows.start_library_health()
 
     def midi_calibration_action(self, action: str) -> None:
-        with self.lock:
-            changes = self.device_workflows.calibrate(
-                action, stop_reason=self.session_commands.action_reason)
-            if changes is not None:
-                self.set_preferences(**changes)
+        return self.practice_session.apply(CalibrationRequested(action))
 
     def preferences(self) -> dict:
         with self.lock:
@@ -203,16 +200,13 @@ class PracticeEngine:
         return self.history_management.statistics(fingerprint, query=query)
 
     def export_learning_history(self, path: str, include_detail: bool = False) -> dict:
-        with self.lock:
-            return self.history_management.export(path, include_detail=include_detail)
+        return self.practice_session.apply(HistoryExported(path, include_detail))
 
     def delete_piece_history(self, fingerprint: str, confirm: bool = False) -> dict:
-        with self.lock:
-            return self.history_management.delete_piece(fingerprint, confirm=confirm)
+        return self.practice_session.apply(PieceHistoryDeleted(fingerprint, confirm))
 
     def delete_learner_history(self, confirm: bool = False) -> dict:
-        with self.lock:
-            return self.history_management.delete_learner(confirm=confirm)
+        return self.practice_session.apply(LearnerHistoryDeleted(confirm))
 
     def close(self) -> None:
         self.practice_session.apply(SessionClosed())

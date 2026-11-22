@@ -95,6 +95,33 @@ class PreloadFailed:
 
 
 @dataclass(frozen=True, slots=True)
+class CalibrationRequested:
+    action: str
+
+
+@dataclass(frozen=True, slots=True)
+class HardwareRequested:
+    action: str
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryExported:
+    path: str
+    include_detail: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PieceHistoryDeleted:
+    fingerprint: str
+    confirm: bool
+
+
+@dataclass(frozen=True, slots=True)
+class LearnerHistoryDeleted:
+    confirm: bool
+
+
+@dataclass(frozen=True, slots=True)
 class SessionClosed:
     """Close ledger/device after the final active-take interruption."""
 
@@ -103,7 +130,8 @@ PracticeEvent = (UserCommand | ClockAdvanced | PhysicalMidi | MidiShortcut |
                  PresentationRequired | PlaybackReserved | PlaybackPresented |
                  PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
                  SettingsChanged | DeviceSelected | PreloadReady | PreloadFailed |
-                 SessionClosed)
+                 SessionClosed | CalibrationRequested | HardwareRequested |
+                 HistoryExported | PieceHistoryDeleted | LearnerHistoryDeleted)
 
 
 class PracticeSession:
@@ -294,6 +322,19 @@ class PracticeSession:
                 return self.score_preload.report_preload_failure(
                     fingerprint=event.fingerprint,step_number=event.step_number,
                     revision=event.revision,error=event.error)
+            if isinstance(event, CalibrationRequested):
+                return self.calibration_action(event.action)
+            if isinstance(event, HardwareRequested):
+                return self.device_workflows.hardware_action(event.action)
+            if isinstance(event, HistoryExported):
+                return self.history_management.export(
+                    event.path, include_detail=event.include_detail)
+            if isinstance(event, PieceHistoryDeleted):
+                return self.history_management.delete_piece(
+                    event.fingerprint, confirm=event.confirm)
+            if isinstance(event, LearnerHistoryDeleted):
+                return self.history_management.delete_learner(
+                    confirm=event.confirm)
             if isinstance(event, SessionClosed):
                 return self.lifecycle.shutdown(
                     midi=self.midi, progress=self.progress,
