@@ -18,6 +18,10 @@ var wrong_free_at_ms := -1
 var paused_world := NAN
 var paused_at_ms := -1
 var paused_target := -1
+var tempo_paused_at_ms := -1
+var tempo_paused_world := NAN
+var tempo_paused_generation := -1
+var stopped_at_ms := -1
 var failed_take_seen := false
 var played_first := false
 var played_second := false
@@ -260,6 +264,40 @@ func _process(_delta: float) -> bool:
             if initial_transport <= 0:
                 _fail("Tempo has no published transport identity")
                 return true
+            # Run a real timed Pause/Resume through the same primary button
+            # and native immutable queue used by a physical player, before
+            # any wrong MIDI can force a retry.
+            if _press_primary():
+                _advance("pause_tempo")
+        "pause_tempo":
+            if not bool(state.get("paused",false)):
+                return false
+            tempo_paused_world = renderer.stream_world_beat
+            tempo_paused_generation = renderer.admission_queue_generation()
+            tempo_paused_at_ms = Time.get_ticks_msec()
+            _advance("paused_tempo")
+        "paused_tempo":
+            if Time.get_ticks_msec()-tempo_paused_at_ms < 420:
+                return false
+            if not bool(state.get("paused",false)) or \
+                    int(state.get("transport_id",-1)) != initial_transport or \
+                    absf(renderer.stream_world_beat-tempo_paused_world) > .02 or \
+                    renderer.admission_queue_generation() != tempo_paused_generation:
+                _fail("Timed Pause moved the staff, changed the take, or admitted new ink")
+                return true
+            print("FULL_SCENE_TEMPO_PAUSE_HELD:",tempo_paused_world)
+            if _press_primary():
+                _advance("resume_tempo")
+        "resume_tempo":
+            if bool(state.get("paused",false)) or \
+                    not bool(state.get("running",false)):
+                return false
+            if int(state.get("transport_id",-1)) != initial_transport or \
+                    int(state.get("first_bar",0)) != 1 or \
+                    int(state.get("last_bar",0)) != 1:
+                _fail("Timed Resume lost its attempt identity or selected window")
+                return true
+            print("FULL_SCENE_TEMPO_RESUME_OK transport=",initial_transport)
             _advance("wrong_tempo")
         "wrong_tempo":
             if int(state.get("transport_id",-1)) != initial_transport:
@@ -302,6 +340,28 @@ func _process(_delta: float) -> bool:
                     int(state.get("lesson_steps_mastered",0)) != 0):
                 _fail("Two real MIDI attacks did not produce a clean 40->48 BPM repeat")
                 return true
-            print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause resume wrong_tempo auto_repeat clean_tempo")
+            # End an already accepted take through the production UI port.
+            # Pending auto-continuations must be invalidated; no late score
+            # status/reply may restart musical grading after Stop.
+            app._send_action({"action":"ui_stop"})
+            _advance("stop_tempo")
+        "stop_tempo":
+            if app.command_coordinator.state.pending or \
+                    str(state.get("feedback","")) != "Stopped":
+                return false
+            if bool(state.get("running",false)) or bool(state.get("paused",false)) or \
+                    state.get("playback_intent") is Dictionary:
+                _fail("Stop left a running take or outstanding native admission")
+                return true
+            stopped_at_ms = Time.get_ticks_msec()
+            _advance("stopped_stable")
+        "stopped_stable":
+            if bool(state.get("running",false)) or bool(state.get("paused",false)) or \
+                    state.get("playback_intent") is Dictionary:
+                _fail("Late native callback restarted playback after Stop")
+                return true
+            if Time.get_ticks_msec()-stopped_at_ms < 450:
+                return false
+            print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat clean_tempo stop")
             quit(0)
     return false
