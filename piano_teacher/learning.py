@@ -25,7 +25,7 @@ from .lesson_generators import (
 
 @dataclass(frozen=True)
 class LessonStep:
-    """One teachable stage; three accepted full-target passes earn mastery."""
+    """One teachable stage; mastery count comes from its selected course."""
     exercise_index: int
     hand: str
     level: str
