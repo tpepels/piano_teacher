@@ -102,15 +102,15 @@ func _process(_delta: float) -> bool:
         _fail("Native notation failed: "+app.score_error)
         return true
     var state: Dictionary = app.current_state()
-    if not app.native_started or not app.startup_last_music_checked or \
-            not bool(state.get("loaded",false)):
-        return false
     var now_ms: int = Time.get_ticks_msec()
     if now_ms-last_heartbeat_ms >= 5000:
         last_heartbeat_ms = now_ms
         print("FULL_SCENE_MIDI_HEARTBEAT:", JSON.stringify({
             "phase":phase,"elapsed_ms":now_ms-begun_ms,
             "phase_elapsed_ms":now_ms-phase_ms,
+            "native_started":app.native_started,
+            "startup_checked":app.startup_last_music_checked,
+            "loaded":bool(state.get("loaded",false)),
             "mode":state.get("mode"),"step":state.get("flow",{}).get("step"),
             "transport_id":state.get("transport_id"),
             "backend_phase":state.get("phase"),
@@ -118,6 +118,9 @@ func _process(_delta: float) -> bool:
             "command_pending":app.command_coordinator.state.pending,
             "score_ready":app.score_session.is_ready(),
             "admission_problem":app.score_admission._last_problem}))
+    if not app.native_started or not app.startup_last_music_checked or \
+            not bool(state.get("loaded",false)):
+        return false
     var step: String = str(state.get("flow",{}).get("step",""))
     var mode: String = str(state.get("mode",""))
     var renderer = app.practice_view.stage.renderer
