@@ -193,7 +193,7 @@ class RecoveryWorkflows:
             self.playback_session.stop_automatic()
             self.visual_transport.cancel_preparation()
             self.visual_transport.cancel_continuation()
-        self.attempt_settlement.finish_rolling_publication()
+        self.attempt_settlement.finish_rolling_publication(completed)
         return
 
     def assess_rolling_boundary(self, boundary: float,
