@@ -764,6 +764,58 @@ individual old domain coordinators and the general native message dispatch
 still need A1 architectural replacement. The source-level review did not
 run the tests or prove physical MIDI acceptance.
 
+### A1 concrete serialized write boundary — source integration 2026-11-22
+
+`piano_teacher/application/practice_session.py` is the sole new
+input/transaction coordinator; `session_events.py` declares frozen event
+envelopes, and `PracticeEngine` remains an adapter for the stable
+`EngineCommands` operation names. The old `PracticeControls` and
+`ApplicationWorker` source files are deleted.
+
+| Producer and arrival | Event and transaction | Real domain owner / invariant |
+| --- | --- | --- |
+| Accepted UI or direct take request | UserCommand / TimedStartRequested | Backend `resolve_ui_intent` + TeachingDecisions; no UI progress decisions |
+| Physical MIDI and keyboard shortcuts | PhysicalMidi / MidiShortcut | MidiIngress uses raw hardware/corrected times; SettingsWorkflows writes key ranges; note grading stays source-keyed |
+| Native monotonic tick | ClockAdvanced | PracticeTimeline settles eligible handoffs, replays deferred MIDI, publishes once; no second musical timer |
+| Native physical score arm/receipt/reconciliation | PresentationRequired, PlaybackReserved, PlaybackPresented, PlaybackWithdrawn, PlaybackFailed | TransportActions delegates to exact PlaybackCoordinator receipt validation; no early grading/sound |
+| Imported and corrected source | SourceCommitted, FingeringCorrectionCommitted | Heavy import/ONNX prediction occurs outside session lock under source_mutation; source identity and revision are validated on install |
+| User settings and hardware actions | SettingsChanged, DeviceSelected, CalibrationRequested, HardwareRequested | SettingsWorkflows/DeviceWorkflows retain validation; session sequences mutation |
+| History/persistence operations | HistoryExported, PieceHistoryDeleted, LearnerHistoryDeleted, SessionClosed | HistoryManagement and SessionLifecycle retain durability and cancellation rules |
+| Future score readiness | PreloadReady, PreloadFailed | ScorePreloadWorkflow validates stage and revision; does not choose a new independent lesson |
+
+**Important timestamp preservation:** The MIDI hardware callback obtains
+`received_at = self.clock()` **before** requesting the session RLock.
+Captured source/transport facts and graded delivery are then sequenced
+under that lock. Moving the timestamp sample inside the lock would shift
+notes by the duration of a source-admission or persistence operation;
+this was caught and corrected in 29d6aa0. A callback cannot credit a
+future unadmitted take: grading remains gated by MidiIngress and the
+validated playback receipt.
+
+**No accidental blocking work in tick:** Source preparation/fingering
+computation, native score geometry and semantic generation, and library
+health diagnostics retain their own bounded preparation workers or locks;
+only exact adoption/reconciliation enters the session mutation boundary.
+The pre-existing `source_mutation` mutex remains necessary to serialize
+source import and fingering correction while releasing the application
+lock during inference.
+
+**Intentional remaining debt:** `SessionCommands.active/prepared/applied`
+and `action_reason` are still mutation context shared by TeachingDecisions,
+LearningActions, TimedPlayback, ExposureInstaller and TransportActions.
+The static class `ControlDispatcher` still selects the pure action route,
+and `PracticeTimeline` retains lesson/settlement continuation logic.
+`LibraryHealth.start` starts its own asynchronous diagnostic worker,
+while next-stage scoring uses a separate preload workflow. Removing
+these requires behavior-complete migration; their existence prevents
+A1 from being marked finished.
+
+The new event envelopes are frozen dataclasses but may carry mutable
+JSON payload dictionaries or already-prepared source objects; these are
+used immediately under the lock and are **not deep-immutable event logs**.
+Authentication and source generation validation remain the domain's
+responsibility.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or

@@ -349,6 +349,69 @@ connected repository environment. The previous local log of 159 passing
 and four failing cases predates the source fixes and these A1 changes.
 GitHub Tests remains opt-in `workflow_dispatch`; no CI run was triggered.
 
+### A1 source integration checkpoint — 2026-11-22
+
+**Production ownership replacement (directly on `main`):**
+- [d78eafa](https://github.com/tpepels/piano_teacher/commit/d78eafa7f6552df79142bac4a32507cad7a2687e)
+  introduced one `PracticeSession.apply` boundary for typed user, hardware MIDI
+  and native tick events. `ApplicationWorker` and `PracticeControls` were
+  deleted. The native C++ monotonic worker, `r.lock`, and existing lesson and
+  assessment policy owners were retained. The actual `PracticeEngine.control`,
+  `advance_clock`, `MidiApplicationInput.receive`, and MIDI shortcut call
+  paths now enter `PracticeSession`.
+- [c63aa90](https://github.com/tpepels/piano_teacher/commit/c63aa902eeac433687fedbfed08705d8d117bf67)
+  migrated physical presentation enable/reserve/present/withdraw/failure,
+  version-bound successor preloads, prepared source adoption, settings,
+  device selection and shutdown to typed session events. The existing
+  `TransportActions` remains responsible for actual physical authorization;
+  its validated `PlaybackCoordinator` receipt contract was not replaced.
+  Source import and expensive fingering inference remain outside the musical
+  lock behind the existing `source_mutation` guard; only adoption is locked.
+- [5ab3f3a](https://github.com/tpepels/piano_teacher/commit/5ab3f3a10937abefd46ef86d41a6bd8dff917bc5)
+  removed a redundant inner command/MIDI lock and made MIDI shortcut
+  capture and control execution explicit session events. The hardware
+  adapter no longer mutates lesson controls or settings itself.
+- [7060171](https://github.com/tpepels/piano_teacher/commit/7060171a748febb62b5474ddefe6b52cf4d97a79)
+  assigns completed hardware key-range persistence to `SettingsWorkflows`,
+  avoiding a cross-domain `settings_workflows.library` reach-through.
+- [ca17e6c](https://github.com/tpepels/piano_teacher/commit/ca17e6cdf8d9ec85b213d3806fbf6fd7a2461ba3)
+  routes calibration, hardware mutation, history export and history
+  deletion through the same locked session boundary.
+- [07c25d0](https://github.com/tpepels/piano_teacher/commit/07c25d0c740bf188135cc2f50da7e61eb4a5ce19)
+  closes the public `PracticeEngine.start` direct-mutator bypass.
+- [e96b418](https://github.com/tpepels/piano_teacher/commit/e96b418e2536384c0ba8ada0d8dfc760f996d043)
+  separates frozen typed event envelopes into
+  `application/session_events.py` from the stateful
+  `application/practice_session.py`. The facade imports contracts rather
+  than importing the coordinator for its public command DTOs. Every event
+  class has a corresponding session branch in source inspection.
+- [db344df](https://github.com/tpepels/piano_teacher/commit/db344dfe90b31d3e01e5ebf5785dbd53574ab83d)
+  splits costly source-bound fingering correction into capture → inference →
+  validated installation. The final revision/score invalidation is one
+  `PracticeSession` event; original-note and source-generation checks
+  remain authoritative.
+- [29d6aa0](https://github.com/tpepels/piano_teacher/commit/29d6aa0d2df42acc2b77306b4bc39e04c8d82b2e)
+  fixes a regression in that consolidation: native MIDI arrival time must be
+  sampled **before** waiting for the session lock, not inside the event
+  handler. Deferred MIDI retains the separate recorded/corrected timestamp.
+
+**Still open:** Although the public command/MIDI/tick and high-value
+source/physical/persistence mutation paths now enter the serialized
+boundary, `SessionCommands` still holds mutable `active`, `prepared`,
+`applied` and action-context fields across domain workflows;
+`ControlDispatcher` still classifies user actions and `PracticeTimeline`
+still owns complex continuation orchestration. Independent background
+library health and future-score preparation retain intentionally
+asynchronous ownership. The complete source writer/dependency migration,
+failed/stale event and queued Stop verification and deletion of all old
+nested effect-context paths remain unproved/unfinished.
+
+**Testing:** No runnable Python 3.14/Godot 4.7.2 checkout is available in
+this connected source environment. These changes have been committed and
+source-inspected only; **no current-HEAD test, fake physical MIDI, native
+packaging or keyboard-acceptance pass is claimed.** A0/A1 gates stay open.
+The user runs local checks; GitHub Actions remain manual-only.
+
 ### A1 — One PracticeSession transaction/event coordinator
 
 - [ ] Implement one serial event processor and session aggregate on the
