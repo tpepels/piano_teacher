@@ -223,7 +223,19 @@ class AttemptSettlement:
         """One recorded rolling result including its original source and take."""
         return self._rolling
 
-    def finish_rolling_publication(self) -> None:
+    def finish_rolling_publication(self, completed: RollingTake) -> None:
+        """Acknowledge one durable rolling recovery after presentation effects.
+
+        A failed effect leaves the original graded take and receipt available
+        for retry. An obsolete or unsettled recovery cannot be published.
+        """
+        if (self._rolling is not completed or
+                self.pending is not completed.pending or
+                completed.transition is None or
+                completed.pending.receipt is None or
+                completed.pending.phase != "settled"):
+            raise ValueError("Cannot publish an unsettled or superseded rolling recovery")
+        completed.pending.phase = "published"
         self._rolling = None
 
     def complete_rolling(self, *, decision, phrase, grid, score_beat,
@@ -263,25 +275,37 @@ class AttemptSettlement:
         # recorder mutated by a later MIDI note. After a durable receipt
         # the authority counter can advance, but the source/take identity
         # must still match before any presentation effect is replayed.
-        if (score_revision != take.score_revision or
-                binding.fingerprint != take.binding.fingerprint or
-                binding.transport_id != take.binding.transport_id or
-                binding.cancellation_generation != take.binding.cancellation_generation or
-                hand != take.hand or bpm != take.bpm or
-                from_beat != take.from_beat or
-                decision.end_beat != take.end_beat or
-                completed.phrase is not phrase):
+        original = take.binding
+        if (completed.pending is not self.pending
+                or completed.pending.phase not in ("decided", "settled")
+                or score_revision != take.score_revision
+                or binding.run_id != original.run_id
+                or binding.session_id != original.session_id
+                or binding.fingerprint != original.fingerprint
+                or binding.transport_id != original.transport_id
+                or binding.cancellation_generation != original.cancellation_generation
+                or plan.piece is not completed.pending.state.course.piece
+                or hand != take.hand or bpm != take.bpm
+                or from_beat != take.from_beat
+                or decision.end_beat != take.end_beat
+                or completed.phrase is not phrase):
             raise ValueError("Rolling take source or timing changed before settlement")
         if completed.pending.receipt is None:
-            if binding != take.binding:
+            if binding != original:
                 raise ValueError("Rolling take authority changed before durable settlement")
         else:
-            # An already-committed slowdown/lesson change legitimately
-            # increments the authority revision and may change the active
-            # stage. The selected durable progress must still be exact.
-            if (plan.teaching_progress() != completed.pending.decision.progress_after
-                    or (binding.stage_key != take.binding.stage_key
-                        and not completed.pending.receipt.stage_changed)):
+            # A durable result advances these counters exactly once. The
+            # installed stage may change only when the decision actually
+            # changed it; no source, transport or learner takeover is valid.
+            chosen = replace(completed.pending.state.course,
+                definition=completed.pending.decision.definition_after,
+                progress=completed.pending.decision.progress_after)
+            if (binding.authority_revision != original.authority_revision + 1
+                    or binding.course_revision != original.course_revision
+                        + int(completed.pending.receipt.source_changed)
+                    or binding.stage_key != chosen.key
+                    or plan.lesson_definition != completed.pending.decision.definition_after
+                    or plan.teaching_progress() != completed.pending.decision.progress_after):
                 raise ValueError("Committed rolling take changed before publication retry")
         if completed.transition is None:
             # No interruption and no durable assessment; keep recording the
