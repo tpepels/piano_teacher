@@ -44,7 +44,9 @@ class CompletionContinuations:
             if not isinstance(exc,UnpreparedNextStage):
                 print("ASSESSMENT_SETTLEMENT_FAILED:",type(exc).__name__,str(exc),flush=True)
             return
-        self.attempt.clear_feedback()
+        # The assessment is durable, but the selected successor has not
+        # yet been applied. Retain its visible note feedback until the
+        # exact source-bound continuation is successfully installed.
         publication = self.teaching_continuation.finish_feedback(transaction,SettledSourceFacts(
             fingerprint=self.source_identity.fingerprint,stage_key=self.source_identity.plan.identity,revision=self.source_identity.revision,
             now=now,bpm=self.source_identity.plan.bpm,presentation_bpm=self.transport_timing.presentation_bpm(),
@@ -54,6 +56,10 @@ class CompletionContinuations:
             self.flow_session.settle_decided(publication.flow_outcome,plan=self.source_identity.plan,
                 message=publication.message,decision_id=transaction.decision_id)
         self.dispatch_effect(publication.effect,now)
+        # Only a fully applied continuation may retire the old note marks
+        # and acknowledge the once-only publication. If presentation fails,
+        # the sealed assessment and its feedback remain visible for retry.
+        self.attempt.clear_feedback()
         self.attempt_settlement.finish_publication()
 
     def publish_feedback_fault(self, fault: FeedbackFault, now: float) -> None:
