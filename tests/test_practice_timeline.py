@@ -37,6 +37,28 @@ def test_count_in_uses_authored_six_eight_and_first_playable_attack(practice_ses
     assert min(note["onset_beats"] for note in session.ask("score.semantic")["notes"]) == .5
 
 
+def test_resume_after_playing_preserves_full_authored_five_four_count_in(practice_session):
+    # A paused graded take must reopen with one complete authored measure,
+    # including when the local meter has more than four quarter beats.
+    session = practice_session(bars=1, meter=(5, 4))
+    session.finish_listen()
+    session.finish_free()
+    active = session.ready_score()
+    assert active["count_in_meter"] == [5, 4]
+    assert active["count_in_beats"] == 5
+    session.clock.at = active["score_queue_next"]["deadline_at_ms"] / 1000 + .5
+    before = session.snapshot()
+    session.command("pause")
+    session.tick(1)
+    resumed = session.command("resume")
+    assert resumed["transport_id"] == before["transport_id"]
+    assert resumed["count_in_meter"] == [5, 4]
+    assert resumed["count_in_beats"] == 5
+    assert resumed["resume_count_in_beat"] < 0
+    session.strike(72)
+    assert session.snapshot()["midi_notes"] == 0
+
+
 def test_pause_freezes_musical_time_and_resume_ignores_lead_in_keys(practice_session):
     session = practice_session(bars=1)
     session.finish_listen()

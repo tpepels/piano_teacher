@@ -56,7 +56,7 @@ def resume_timing(*, now: float, origin: float, previous_origin: float,
                 already_waiting=max(0.,grading_after-now))
         elif (midi_connected and not preview and pause_context == "playing"
               and not had_reading_lead and origin <= now):
-            count_in_beats = max(1.0,min(4.0,bar_beats))
+            count_in_beats = SCHEDULER.count_in_beats(full_count_in_beats,bpm)
             lead = SCHEDULER.beats_seconds(count_in_beats,bpm)
             origin += lead
             grading_after = now+lead
