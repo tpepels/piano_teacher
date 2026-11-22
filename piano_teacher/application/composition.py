@@ -67,7 +67,6 @@ from .score_artifacts import ScoreArtifacts
 from .score_preload_workflow import ScorePreloadWorkflow
 from .score_read_services import ScoreReadServices
 from .score_state_publisher import ScoreStatePublisher
-from .session_commands import SessionCommands
 from .session_evidence_context import SessionEvidenceContext
 from .session_lifecycle import SessionLifecycle
 from .session_notices import SessionNotices
@@ -147,7 +146,6 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         settings=r.library.settings)
     r.midi_ingress = MidiIngress(r.midi,r.midi_calibration,r.midi_key_shortcuts,
         r.live_input,r.measurement,r.feedback_events)
-    r.session_commands = SessionCommands()
     r.attempt_settlement = AttemptSettlement(r.progress, r.measurement,
         r.fukuda_mistakes, r.learner_progress)
     r.learning_evidence = LearningEvidenceSession(
@@ -406,7 +404,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         history_management=r.history_management, learning_commands=r.learning_commands,
         lock=r.lock, measurement=r.measurement, midi=r.midi,
         midi_key_shortcuts=r.midi_key_shortcuts, playback_session=r.playback_session,
-        read_models=r.read_models, session_commands=r.session_commands,
+        read_models=r.read_models,
         settings_workflows=r.settings_workflows, source_identity=r.source_identity,
         teaching_decisions=r.teaching_decisions, timed_playback=r.timed_playback,
         transport_commands=r.transport_commands, visual_transport=r.visual_transport,

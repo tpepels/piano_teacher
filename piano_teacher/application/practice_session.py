@@ -58,7 +58,7 @@ class PracticeSession:
                  attempt, attempt_settlement, device_workflows, exposure_workflows,
                  history_management, learning_commands, lock, measurement,
                  midi, midi_key_shortcuts, playback_session, read_models,
-                 session_commands, settings_workflows, source_identity, teaching_decisions,
+                 settings_workflows, source_identity, teaching_decisions,
                  timed_playback, transport_commands, visual_transport,
                  timeline, midi_ingress, midi_application_input, runtime_timings,
                  source_workflows, lesson_execution, score_preload,
@@ -75,7 +75,6 @@ class PracticeSession:
         self.midi_key_shortcuts = midi_key_shortcuts
         self.playback_session = playback_session
         self.read_models = read_models
-        self.session_commands = session_commands
         self.settings_workflows = settings_workflows
         self.source_identity = source_identity
         self.teaching_decisions = teaching_decisions
@@ -94,7 +93,7 @@ class PracticeSession:
 
     def calibration_action(self, action: str) -> None:
         changes = self.device_workflows.calibrate(
-            action, stop_reason=self.session_commands.action_reason)
+            action, stop_reason=action)
         if changes is not None:
             self.settings_workflows.update(
                 changes, pause_current=self.timed_playback.pause)
@@ -133,27 +132,26 @@ class PracticeSession:
                 return project_command_outcome(None)
             action = resolved
             kwargs.update(options)
-        with self.session_commands.reason(action):
-            before = {"fingerprint": self.source_identity.fingerprint,
-                      "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                      "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
-            effect = None
-            route = _COMMAND_ROUTES.get(action, "stage")
-            if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
-                change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
-                          if route == "stage" else None)
-                effect = self.teaching_decisions.prepare("manual", manual=change,
-                    action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
-            result = self._dispatch_control(action, route, effect=effect, **kwargs)
-            self.read_models.prepare_score_presentation()
-            if action not in ("score_ready", "demo_ready", "reset_path"):
-                self.measurement.event("manual_action", {"action": action,
-                    "fingerprint": before["fingerprint"] or None,
-                    "parameters": kwargs, "before": before,
-                    "after": {"fingerprint": self.source_identity.fingerprint,
-                              "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                              "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
-            return project_command_outcome(action)
+        before = {"fingerprint": self.source_identity.fingerprint,
+                  "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                  "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
+        effect = None
+        route = _COMMAND_ROUTES.get(action, "stage")
+        if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
+            change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
+                      if route == "stage" else None)
+            effect = self.teaching_decisions.prepare("manual", manual=change,
+                action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
+        result = self._dispatch_control(action, route, effect=effect, **kwargs)
+        self.read_models.prepare_score_presentation()
+        if action not in ("score_ready", "demo_ready", "reset_path"):
+            self.measurement.event("manual_action", {"action": action,
+                "fingerprint": before["fingerprint"] or None,
+                "parameters": kwargs, "before": before,
+                "after": {"fingerprint": self.source_identity.fingerprint,
+                          "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                          "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
+        return project_command_outcome(action)
 
     def _dispatch_control(self, action: str, route: str, *, effect=None, **kwargs) -> None:
         """Dispatch within the existing outer command transaction and lock."""
@@ -175,7 +173,7 @@ class PracticeSession:
                 fingerprint=kwargs.get("fingerprint"),
                 confirm=kwargs.get("confirm") is True)
         if route == "acknowledgement":
-            return self.transport_commands.control_acknowledgement(action, kwargs)
+            return self.transport_commands.control_acknowledgement(action, kwargs,reason=action)
         if route == "listening":
             return self.learning_commands.control_listening(action, kwargs, effect=effect)
         if route == "learning":
