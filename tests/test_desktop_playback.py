@@ -605,3 +605,20 @@ def test_repeated_listen_audio_and_score_acks_cannot_reopen_failed_admission(pra
         assert observed["playback_timeline"]["state"] == "failed"
         assert not observed["running"]
     assert session.engine.playback.sequence == started_sequence
+
+
+@pytest.mark.parametrize("next_action", ["score_ready", "auto"])
+def test_delayed_automatic_ack_cannot_replace_matching_unpresented_take(
+        practice_session, next_action):
+    session = practice_session(bars=1)
+    original = desktop_tempo(session)
+    prior_sequence = session.engine.playback.sequence
+    previous = session.snapshot()["playback_intent"]
+    callback = session.engine.transport_timing.request_playback(
+        action=next_action, mode="practice",
+        from_beat=original["from_beat"])
+    assert callback.intent_id == original["intent_id"]
+    assert callback.take_id == original["take_id"]
+    assert session.engine.playback.sequence == prior_sequence
+    assert session.snapshot()["playback_intent"] == previous
+    assert not session.snapshot()["running"]

@@ -211,9 +211,18 @@ class PlaybackCoordinator:
             raise ValueError("Playback transition disagrees with its selected exposure")
         if self.intent is not None:
             existing = self.intent
-            if (self._valid_source(facts, existing)
-                    and existing.action == action and existing.mode == mode
-                    and abs(existing.from_beat - from_beat) < 1e-7):
+            same_exposure = (
+                self._valid_source(facts, existing)
+                and existing.mode == mode
+                and abs(existing.from_beat - from_beat) < 1e-7)
+            if same_exposure and (
+                    existing.action == action
+                    or action in ("listen", "score_ready", "auto")):
+                # An asynchronous readiness/audio/repeat callback may
+                # arrive after an explicit Start, Retry or Resume already
+                # selected this very source. It confirms availability;
+                # it cannot silently cancel the stronger user choice,
+                # reset a partial count-in or create a second deadline.
                 return existing
             # A replacement intent may be prepared while the preceding
             # graded take is still settling. Superseding only withdraws

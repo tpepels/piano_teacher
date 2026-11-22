@@ -804,6 +804,23 @@ verifies the error and confirms automatic reentry
 remains blocked. A valid explicit action or authenticated
 source replacement still creates a new admission budget.
 
+### V3 automatic acknowledgements cannot supersede pending explicit playback (2026-11-22)
+
+`PlaybackCoordinator.request` now treats incoming
+`listen`, `score_ready` and `auto` callbacks for the
+**same authenticated source/mode/opening** as idempotent while
+a previously selected playback intent is still pending.
+Previously those callbacks could cancel an already pending
+Start, Retry or Resume simply because their action string
+differed, replacing the physical offer, count-in and receipt
+despite no actual source change or new user choice. The
+application's existing owner now returns the pending intent
+unchanged for late automatic callbacks, while explicit
+new user actions retain their ability to supersede it.
+The real `PracticeEngine` fixture asserts unchanged
+intent ID, take ID, sequence, stopped status and state
+for both score-ready and automatic continuation callbacks.
+
 ### V3 terminal automatic-admission latch (2026-11-22)
 
 The 44980830938 physical trace exposed a separate structural
