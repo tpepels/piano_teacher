@@ -30,7 +30,7 @@ class LearningActions:
         self.source_identity = source_identity
         self.teaching_decisions = teaching_decisions
 
-    def control_listening(self, action: str, kwargs: dict) -> None:
+    def control_listening(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "listen":
             if (self.lesson_execution.flow_active() and self.flow_session.state is not None
                     and self.flow_session.state.stage_key == self.source_identity.plan.identity
@@ -38,41 +38,45 @@ class LearningActions:
                 # Listen again: the state machine plays it, then Free.
                 self.lesson_execution.flow_execute(self.flow_session.listen_again())
             else:
-                self.exposure_workflows.prepare_listen()
+                self.exposure_workflows.prepare_listen(effect=effect)
         elif action == "perform":
-            self.exposure_workflows.prepare_perform(scope=str(kwargs.get("scope", "current")))
+            self.exposure_workflows.prepare_perform(
+                scope=str(kwargs.get("scope", "current")), effect=effect)
         elif action == "practice_weak":
-            self.lesson_execution.practice_weak()
+            self.lesson_execution.practice_weak(effect=effect)
         elif action == "review_retry":
-            self.lesson_execution.review_retry(kwargs.get("first_bar"), kwargs.get("last_bar"))
+            self.lesson_execution.review_retry(
+                kwargs.get("first_bar"), kwargs.get("last_bar"), effect=effect)
         elif action == "seek":
-            self.lesson_execution.seek(kwargs.get("bar"))
+            self.lesson_execution.seek(kwargs.get("bar"), effect=effect)
 
-    def control_learning(self, action: str, kwargs: dict) -> None:
+    def control_learning(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "learn_next":
             if (self.playback_session.mode != "learn" or self.guided_session.controller is None
                     or not self.guided_session.controller.snapshot(now=self.clock())["completed"]):
                 raise ValueError("Find the current notes before continuing to the next idea")
             self.lesson_execution.save_guided_preparation()
             if self.guided_session.return_context is not None:
-                self.exposure_workflows.prepare_practice()
+                self.exposure_workflows.prepare_practice(effect=effect)
             else:
-                self.lesson_execution.begin_course_stage()
+                self.lesson_execution.begin_course_stage(effect=effect)
         elif action == "skip_stage":
             if self.source_identity.warmup:
                 raise ValueError("Warm-up stages unlock after three clean runs, not skips")
-            self.lesson_execution.skip_stage(kwargs.get("reason"))
+            self.lesson_execution.skip_stage(kwargs.get("reason"), effect=effect)
         elif action == "place_original":
             if self.source_identity.warmup:
                 raise ValueError("Warm-up stages unlock after three clean runs")
-            self.lesson_execution.place_original()
+            self.lesson_execution.place_original(effect=effect)
         elif action == "revisit_trouble":
-            self.lesson_execution.revisit_trouble(kwargs.get("stage_key"), kwargs.get("start_beat"))
+            self.lesson_execution.revisit_trouble(
+                kwargs.get("stage_key"), kwargs.get("start_beat"), effect=effect)
         elif action in ("learn", "learn_retry"):
             if action == "learn":
                 self.lesson_cursor.set_course_guided(True)
                 if "from_beat" not in kwargs:
-                    self.lesson_execution.begin_course_stage(explicit_learn=True)
+                    self.lesson_execution.begin_course_stage(
+                        explicit_learn=True, effect=effect)
                     return
             previous_start = (self.guided_session.beat_range[0]
                               if self.guided_session.beat_range else 0.0)
@@ -80,17 +84,19 @@ class LearningActions:
                 from_beat=float(kwargs.get(
                     "from_beat",
                     previous_start if action == "learn_retry" else 0.0)),
-                recovery=self.guided_session.return_context is not None and action == "learn_retry")
+                recovery=self.guided_session.return_context is not None and action == "learn_retry",
+                effect=effect)
         elif action == "open_at":
-            self.open_selected_measure(kwargs)
+            self.open_selected_measure(kwargs, effect=effect)
         elif action == "hints":
             self.guided_session.set_hints(
                 bool(kwargs.get("enabled", False)), now=self.clock())
             if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
                 self.measurement.use_assistance()
 
-    def open_selected_measure(self, kwargs: dict):
-        effect = self.teaching_decisions.manual_effect("open_at",values=kwargs)
+    def open_selected_measure(self, kwargs: dict, *, effect=None):
+        effect = self.teaching_decisions.manual_effect(
+            "open_at", values=kwargs, effect=effect)
         self.lifecycle.stop(reason=self.session_commands.action_reason)
         selected = self.teaching_decisions.install_command(effect)
         self.lesson_execution.reset_trouble()
@@ -104,12 +110,12 @@ class LearningActions:
             self.notices.feedback = f"Ready to practise from measure {kwargs.get('bar')}"
             self.notices.next_action = "Press Start to play from the selected measure."
 
-    def change_stage(self, action: str, kwargs: dict):
+    def change_stage(self, action: str, kwargs: dict, *, effect=None):
         """Change the active lesson or tempo while preserving scoring state."""
         p=self.source_identity.plan
         if not p:
             raise ValueError("Open a piece first")
-        queued = self.session_commands.active
+        queued = effect or self.session_commands.active
         change = (queued.event.manual
                   if queued is not None and queued.event.action == action
                   and queued.event.manual is not None

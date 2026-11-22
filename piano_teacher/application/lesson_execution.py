@@ -125,14 +125,17 @@ class LessonExecution:
     def flow_state(self) -> dict:
         return self.flow_session.status(self.source_identity.plan,self.playback_session.mode)
 
-    def begin_course_stage(self, *, bump_revision: bool = True, explicit_learn: bool = False):
-        effect = self.teaching_decisions.manual_effect("learn" if explicit_learn else "course_stage")
+    def begin_course_stage(self, *, bump_revision: bool = True,
+                           explicit_learn: bool = False, effect=None):
+        effect = self.teaching_decisions.manual_effect(
+            "learn" if explicit_learn else "course_stage", effect=effect)
         selected = self.teaching_decisions.install_command(effect)
         if selected is not None:
             self.enter_selected_exposure(selected,bump_revision=bump_revision)
 
-    def skip_stage(self, reason):
-        effect = self.teaching_decisions.manual_effect("skip_stage", values={"reason":reason})
+    def skip_stage(self, reason, *, effect=None):
+        effect = self.teaching_decisions.manual_effect(
+            "skip_stage", values={"reason":reason}, effect=effect)
         self.learner_progress.mark_skipped(fingerprint=self.source_identity.fingerprint, stage_key=self.source_identity.plan.identity, reason=reason)
         self._stop(reason="skip_stage")
         selected = self.teaching_decisions.install_command(effect)
@@ -141,10 +144,11 @@ class LessonExecution:
         self.enter_selected_exposure(selected)
         self._save()
 
-    def place_original(self):
+    def place_original(self, *, effect=None):
         if self.source_identity.plan is None:
             raise ValueError("Open a piece first")
-        effect = self.teaching_decisions.manual_effect("place_original")
+        effect = self.teaching_decisions.manual_effect(
+            "place_original", effect=effect)
         key = effect.decision.next_exposure.stage_key
         candidate = next(step for step in self.source_identity.plan.lesson_steps if step.key == key)
         self.learner_progress.mark_prior_steps_placed(self.source_identity.plan, fingerprint=self.source_identity.fingerprint, candidate=candidate)
@@ -158,8 +162,10 @@ class LessonExecution:
     def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
         return self.teaching_decisions.valid_trouble_spots(stage_key=stage_key)
 
-    def revisit_trouble(self, stage_key, start_beat):
-        effect = self.teaching_decisions.manual_effect("revisit_trouble", from_beat=start_beat, values={"stage_key":stage_key})
+    def revisit_trouble(self, stage_key, start_beat, *, effect=None):
+        effect = self.teaching_decisions.manual_effect(
+            "revisit_trouble", from_beat=start_beat,
+            values={"stage_key":stage_key}, effect=effect)
         self._stop()
         selected = self.teaching_decisions.install_command(effect)
         self.reset_trouble()
@@ -184,22 +190,26 @@ class LessonExecution:
 
     def begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
                      recovery: bool = False,
-                     remediation: RemedialAssignment | None = None, exposure=None):
+                     remediation: RemedialAssignment | None = None,
+                     exposure=None, effect=None):
         source = self.exposure_workflows.source()
         entry = self.flow_session.guided_entry(self.source_identity.plan,
             warmup=source.warmup,recovery=recovery,simplified=remediation is not None)
         if entry is not None:
             self.flow_execute(entry)
             return
-        selected = exposure or self.teaching_decisions.install_command(self.teaching_decisions.manual_effect("learn",from_beat=from_beat))
+        selected = exposure or self.teaching_decisions.install_command(self.teaching_decisions.manual_effect(
+            "learn",from_beat=from_beat,effect=effect))
         # Command installation may select a different source variant/window.
         prepared = prepare_guided(self.exposure_workflows.source(),selected,
             revision=self.source_identity.revision,bump_revision=bump_revision,
             recovery=recovery,remediation=remediation,retry_range=self.attempt.retry_range)
         self.exposure_installer.apply(prepared)
 
-    def review_retry(self, first_bar, last_bar):
-        effect = self.teaching_decisions.manual_effect("review_retry",values={"first_bar":first_bar,"last_bar":last_bar})
+    def review_retry(self, first_bar, last_bar, *, effect=None):
+        effect = self.teaching_decisions.manual_effect(
+            "review_retry",values={"first_bar":first_bar,"last_bar":last_bar},
+            effect=effect)
         selected = self.teaching_decisions.install_command(effect)
         self.exposure_workflows.prepare_practice(exposure=selected)
         self.lesson_cursor.select_opening(selected.from_beat)
@@ -210,8 +220,8 @@ class LessonExecution:
         self.notices.feedback = f"Ready to repeat measures {first_bar}-{last_bar}"
         self.notices.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
 
-    def practice_weak(self):
-        effect = self.teaching_decisions.manual_effect("practice_weak")
+    def practice_weak(self, *, effect=None):
+        effect = self.teaching_decisions.manual_effect("practice_weak", effect=effect)
         selected = self.teaching_decisions.install_command(effect)
         self.exposure_workflows.prepare_practice(exposure=selected)
         self.lesson_cursor.select_opening(selected.from_beat)
@@ -229,13 +239,14 @@ class LessonExecution:
         except ValueError:
             return None
 
-    def seek(self, bar):
+    def seek(self, bar, *, effect=None):
         # A seek must never guess a measure from synthetic/fallback bar
         # numbering. Validate original source boundaries *before* preparing
         # any command or cancelling a paused transport.
         if self.seek_grid() is None:
             raise ValueError("Seeking requires the original source measure grid")
-        effect = self.teaching_decisions.manual_effect("seek",values={"bar":bar})
+        effect = self.teaching_decisions.manual_effect(
+            "seek",values={"bar":bar},effect=effect)
         selected = self.teaching_decisions.install_command(effect)
         if selected.mode == "learn":
             self.begin_learn(from_beat=selected.from_beat,exposure=selected)
