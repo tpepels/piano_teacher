@@ -703,6 +703,19 @@ assessment/continuation handoff still needs a writer/owner audit before
 A2 can be closed. No Python, Godot, embedded native, package or physical
 MIDI test execution is claimed; CI remains manual-only.
 
+**A2 explicit-retry closure (2026-11-22):** A failed post-commit full
+continuation now sets the runtime retry flag without clearing the original
+receipt, note marks or selected feedback transaction. The user Start/Retry
+action re-enters `CompletionContinuations.retry_failed_publication`,
+retries durable/post-commit effects once, and publishes only after dispatch
+succeeds. Worker ticks with stopped automatic playback do not retry it
+implicitly. `SettledSourceFacts.automatic` comes from the original
+`TeachingRouteFacts` instead of the faulted transport's current auto
+flag, and an explicit Retry restores the selected automatic course intent
+before effect dispatch. The original route is not reselected. New regression
+coverage checks the stopped-auto gate and failed-effect feedback retention.
+This remains source-level, unexecuted acceptance.
+
 ### A2 rolling and failed-continuation retry checkpoint — 2026-11-22
 
 **Implemented on main, not yet runtime-accepted:**
