@@ -636,6 +636,14 @@ open; GitHub CI was not triggered.
   reducer as policy and `LearningPlan` as the durable owner of
   counters/BPM. This removes a misleading legacy ownership claim;
   no lesson rule or stage sequence was changed.
+- [e2360ec](https://github.com/tpepels/piano_teacher/commit/e2360ec5c435f7105b9d8022e77d315d1c08fac3)
+  removes `PracticeFlowCourseSession.settle`, a second public entrypoint
+  accepting caller-owned BPM/mastery/failure counters. The sole
+  `settle_decided` entrypoint now reads canonical `LearningPlan`
+  progress and invokes the existing pure `practice_flow.settle`
+  reducer before storing only the transient source-bound phase.
+  The production lesson and completion callers were checked; no
+  other call to the deleted public method was found in those paths.
 
 **Scope and open verification:** These are production source changes,
 not a current-HEAD runtime acceptance pass. The existing 16 Python test
