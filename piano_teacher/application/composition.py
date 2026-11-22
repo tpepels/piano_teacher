@@ -229,7 +229,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         session_commands=r.session_commands, clock=r.now)
     r.exposure_workflows = ExposureWorkflows(
         source_identity=r.source_identity, flow_session=r.flow_session,
-        teaching_decisions=r.teaching_decisions, session_commands=r.session_commands,
+        teaching_decisions=r.teaching_decisions,
         guided_session=r.guided_session, attempt=r.attempt,
         tempo_map_cache=r.tempo_map_cache, playback_session=r.playback_session,
         listen=r.listen, notices=r.notices, installer=r.exposure_installer)

@@ -130,7 +130,7 @@ class TeachingDecisions:
             definition=effect.decision.definition_after,
             expected=effect.decision.before_progress)
         self._last_applied_command = effect
-        self.session_commands.prepare_exposure(effect.decision.next_exposure)
+        self.source_identity.prepare_exposure(effect.decision.next_exposure)
         return True
 
     def install_command(self, effect):

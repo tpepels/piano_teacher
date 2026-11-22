@@ -9,7 +9,6 @@ from contextlib import contextmanager
 class SessionCommands:
     def __init__(self):
         self.active = None
-        self.prepared = None
         self.action_reason = "transition"
 
     @contextmanager
@@ -32,6 +31,5 @@ class SessionCommands:
         finally:
             self.active = previous
 
-    def prepare_exposure(self, selected) -> None:
-        self.prepared = selected
+
 

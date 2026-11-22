@@ -10,12 +10,11 @@ from .exposure_preparation import ExposureSource, prepare_timed, prepare_listen
 
 class ExposureWorkflows:
     def __init__(self, *, source_identity, flow_session, teaching_decisions,
-                 session_commands, guided_session, attempt, tempo_map_cache,
+                 guided_session, attempt, tempo_map_cache,
                  playback_session, listen, notices, installer):
         self.source_identity = source_identity
         self.flow_session = flow_session
         self.teaching_decisions = teaching_decisions
-        self.session_commands = session_commands
         self.guided_session = guided_session
         self.attempt = attempt
         self.tempo_map_cache = tempo_map_cache
@@ -44,7 +43,7 @@ class ExposureWorkflows:
         entry = self.flow_session.tempo_entry(
             selected_plan, warmup=self.source_identity.warmup, bpm=selected.bpm)
         if entry.active:
-            self.session_commands.prepare_exposure(selected)
+            self.source_identity.prepare_exposure(selected)
         if entry.clear_guided_return:
             self.guided_session.discard_return()
         self.installer.apply(prepare_timed(
