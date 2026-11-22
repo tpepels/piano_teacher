@@ -485,6 +485,73 @@ revision**. A1 stays **IN PROGRESS**; A0 exact-HEAD verification is also
 open. The last successful CI is historical evidence only, and no
 GitHub Actions run was triggered.
 
+### A1 physical callback and Stop fault-boundary checkpoint — 2026-11-22
+
+**Production changes committed directly to `main`:**
+
+- [c5c5a93](https://github.com/tpepels/piano_teacher/commit/c5c5a93106197dc20c6b62c57cbda81f294c689a)
+  introduces a **committed, immutable MIDI arrival epoch**, atomically
+  replaced after each session event. The device callback samples it
+  before waiting for the application lock. Source, engraving revision,
+  lesson stage/hand, transport ID and the `AttemptSettlement`
+  cancellation generation must match at dispatch. Different transport
+  epochs may accept an original note only during a same-source
+  automatic continuation whose corrected hardware timestamp is at or
+  after the newly authorized onset.
+- [7aa4971](https://github.com/tpepels/piano_teacher/commit/7aa497110e9a40a82769c4eb84b81a50f37ef32c)
+  copies each callback MIDI message before deferring it. Obsolete notes
+  cannot be graded or execute shortcuts, but stale note-offs still
+  release shortcut suppression and hardware observation remains accurate
+  for the same connected device.
+- [97a855a](https://github.com/tpepels/piano_teacher/commit/97a855aa83cce1f6639fb08236e93792a182d4e6)
+  adds the original **physical device identity** to the same arrival
+  epoch and to deferred messages. Late callbacks from a disconnected
+  keyboard cannot increment the replacement device's input counters or
+  release its currently suppressed shortcut keys.
+- [704a317](https://github.com/tpepels/piano_teacher/commit/704a317e9088d4cc3f1a8e3e5b0a6421a53f15a9)
+  fixes an actual regression in the prior session-owned transition
+  queue: ordinary/recovery tick branches must initialize
+  `followup=False` before returning. Without it, those branches would
+  raise `UnboundLocalError` every tick.
+- [4d39bd6](https://github.com/tpepels/piano_teacher/commit/4d39bd604ba4e0316e3c296c1b90dd863f0c22cc)
+  makes the native `settings.update` public settings reply atomic with
+  the accepted mutation, avoiding a newer MIDI shortcut change between
+  update and response. Direct/headless MIDI calls receive a real
+  timestamp; missing timestamps fail closed across transport epochs.
+- [ae99ddb](https://github.com/tpepels/piano_teacher/commit/ae99ddbf4957d3025de236657112f40a2f90c776)
+  makes explicit `ui_stop` a one-way Stop independent of the renderer
+  projection. Stop, Pause and Resume no longer invoke an unused
+  curriculum policy decision before executing the transport control.
+  Godot's existing `CommandRequestState` still retains Stop when
+  another request is pending; **native-worker latency while busy on
+  source import remains an open verification/architectural issue**.
+- [22a978c](https://github.com/tpepels/piano_teacher/commit/22a978cee9d2fd8ee1deff7e6c43cae6eba6530f)
+  and [0cdf1fe](https://github.com/tpepels/piano_teacher/commit/0cdf1fe58dc8b1c73f7c041ffc415dc1aea05cfa)
+  make Stop **fail closed on guided-evidence snapshot or durable
+  interruption failure**. Physical playback authorization is invalid
+  before persistence; if persistence fails, the backend marks the take
+  no longer running, clears deferred MIDI and freezes the visual
+  transport. Its recorder and unsettled evidence remain available for
+  the original transaction to be retried rather than silently
+  awarding progress or discarding data.
+
+**Verification and scope:** The source-level audit included the committed
+16 Python test modules' direct constructors of `MidiInputFacts` and
+event contracts; the newly appended fact fields have defaults. That
+does not establish their execution or correct MIDI timing. Neither
+Python/Godot runtime, embedded desktop fake MIDI, native packaging, nor
+physical keyboard acceptance was run on this HEAD. No new tests and no
+GitHub Actions runs were triggered.
+
+**A1 remains IN PROGRESS:** The complete event/result aggregate and
+durable effect sequencing still cross into A2's settlement responsibilities;
+the one-worker queued Stop needs exact-state verification (especially
+during long source imports), as do Pause/Resume, stage/window changes,
+lost/stale physical receipts and the native fake-MIDI journeys.
+A0 exact-HEAD verification remains outstanding. Continue A1/A2
+production consolidation; do not certify these changes based on source
+inspection alone.
+
 ### A1 — One PracticeSession transaction/event coordinator
 
 - [ ] Implement one serial event processor and session aggregate on the
@@ -691,7 +758,7 @@ and speakers, including the original Pathétique source and readability.
 | Phase | Required result | Status |
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
-| A1 | One authoritative PracticeSession and event processing path | **In progress** — typed serialized event ingress, source-bound lesson effects, source-authenticated deferred MIDI and bounded immediate-transition queue in PracticeSession; four obsolete coordinator/router modules deleted; integration/Stop/failure/source-change execution and complete aggregate ownership still open |
+| A1 | One authoritative PracticeSession and event processing path | **In progress** — event input and return-state atomicity, cancellation/device-bound callback epochs, bounded transition queue and fail-closed Stop persistence integrated; old router modules deleted; native queued-Stop latency, full event/settlement ownership and same-HEAD behavior verification remain open |
 | A2 | Unified lesson/assessment/settlement/recovery | Not started |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |

@@ -880,6 +880,38 @@ connected GitHub tree. **No Python 3.14, Godot or fake MIDI runtime gate
 has executed on this HEAD**, so replay, failure, Pause/Resume and
 physical ink invariants remain unverified.
 
+### A1 committed MIDI identity and fail-closed Stop (2026-11-22)
+
+`PracticeSession` now publishes a frozen `MidiArrival` identity after
+each successful or failed serialized event. The actual physical callback
+samples that **committed** object before it waits for the application
+lock and copies the hardware message. Its source fingerprint,
+revision, stage/hand, device, transport and durable-evidence
+cancellation generation are compared under the lock before grading
+or lesson-control effects. Deferred MIDI uses the same canonical
+identity validator; there is no alternate old-tuple replay branch.
+Only an authorized same-source automatic transport rollover may
+cross a transport epoch, and only when corrected hardware onset is
+at or after the new run clock. A rejected obsolete note-off may clear
+suppressed shortcut release state on the same physical device, but it
+cannot execute a shortcut or earn any practice credit.
+
+Urgent user Stop no longer depends on stale renderer read-model
+projections or an irrelevant curriculum-generated effect. Pause and
+Resume likewise bypass unused teaching-decision preparation. The
+current Godot coordinator already queues Stop above subsequent
+navigation/pause gestures while a request is outstanding. It cannot
+preempt a Python source-import command **already running on the same
+native worker**; that latency is an unresolved operational gate, not
+evidence of a tested Stop priority guarantee.
+
+A failed guided-evidence snapshot or atomic ledger interruption now
+leaves playback authorization invalid, the running take disabled,
+deferred notes cleared and the visual transport frozen, while
+preserving the unflushed original recorder/evidence for retry.
+Successful Stop preserves its original durable cancellation order.
+Runtime execution and physical MIDI behavior remain unverified.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or
