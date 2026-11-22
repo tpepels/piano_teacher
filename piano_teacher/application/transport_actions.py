@@ -76,20 +76,18 @@ class TransportActions:
             if authorized.action in ("start","restart"):
                 selected = self.teaching_decisions.install_command(authorized.transition.effect)
                 authorized.validate_installed(selected,intent)
-                with self.session_commands.executing(authorized.transition.effect):
-                    self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,
-                        scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in,
-                        effect=authorized.transition.effect)
+                self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,
+                    scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in,
+                    effect=authorized.transition.effect)
             elif authorized.action == "resume":
                 self.resume_current_session(
                     presentation_lead_seconds=max(0.0,authorized.deadline-self.clock()),
                     scheduled_deadline=authorized.deadline)
             elif authorized.action in ("auto","score_ready"):
-                with self.session_commands.executing(None):
-                    self.timed_playback.start(from_beat=intent.from_beat,mode=intent.mode,
-                        loop_continuation=authorized.action == "auto",
-                        decided=False,scheduled_deadline=authorized.deadline,
-                        count_in_plan=intent.count_in)
+                self.timed_playback.start(from_beat=intent.from_beat,mode=intent.mode,
+                    loop_continuation=authorized.action == "auto",
+                    decided=False,scheduled_deadline=authorized.deadline,
+                    count_in_plan=intent.count_in)
                 self.visual_transport.bind_scheduled_start(
                     transport_id=self.playback_session.transport_id,
                     from_beat=self.visual_transport.play_from_beat,

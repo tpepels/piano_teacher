@@ -115,7 +115,7 @@ class LearningActions:
         p=self.source_identity.plan
         if not p:
             raise ValueError("Open a piece first")
-        queued = effect or self.session_commands.active
+        queued = effect
         change = (queued.event.manual
                   if queued is not None and queued.event.action == action
                   and queued.event.manual is not None

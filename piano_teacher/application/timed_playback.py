@@ -11,14 +11,14 @@ from .musical_scheduler import SCHEDULER
 
 class TimedPlayback:
     def __init__(self, *, source_identity, lesson_cursor, notices,
-                 playback_session, playback, attempt_settlement, session_commands,
+                 playback_session, playback, attempt_settlement,
                  teaching_decisions, exposure_workflows, guided_session,
                  visual_transport, midi, score_read, evidence_context,
                  transport_timing, lesson_execution, clock, lock, phase):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
         self.notices, self.playback_session = notices, playback_session
         self.playback, self.attempt_settlement = playback, attempt_settlement
-        self.session_commands, self.teaching_decisions = session_commands, teaching_decisions
+        self.teaching_decisions = teaching_decisions
         self.exposure_workflows, self.guided_session = exposure_workflows, guided_session
         self.visual_transport, self.midi = visual_transport, midi
         self.score_read, self.evidence_context = score_read, evidence_context
@@ -33,7 +33,6 @@ class TimedPlayback:
             self.playback_session.require_authorized_start(self.playback.presentation_required)
             if self.source_identity.plan is None:
                 raise ValueError("Open a piece first")
-            effect = effect or self.session_commands.active
             selected = None
             pending = self.attempt_settlement.pending
             if loop_continuation and pending is not None and pending.receipt is not None:

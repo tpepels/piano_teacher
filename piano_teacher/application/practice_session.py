@@ -137,26 +137,25 @@ class PracticeSession:
             before = {"fingerprint": self.source_identity.fingerprint,
                       "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
                       "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
-            effect = self.session_commands.active
+            effect = None
             route = _COMMAND_ROUTES.get(action, "stage")
             if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
                 change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
                           if route == "stage" else None)
                 effect = self.teaching_decisions.prepare("manual", manual=change,
                     action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
-            with self.session_commands.executing(effect):
-                result = self._dispatch_control(action, route, **kwargs)
-                self.read_models.prepare_score_presentation()
-                if action not in ("score_ready", "demo_ready", "reset_path"):
-                    self.measurement.event("manual_action", {"action": action,
-                        "fingerprint": before["fingerprint"] or None,
-                        "parameters": kwargs, "before": before,
-                        "after": {"fingerprint": self.source_identity.fingerprint,
-                                  "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                                  "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
-                return project_command_outcome(action)
+            result = self._dispatch_control(action, route, effect=effect, **kwargs)
+            self.read_models.prepare_score_presentation()
+            if action not in ("score_ready", "demo_ready", "reset_path"):
+                self.measurement.event("manual_action", {"action": action,
+                    "fingerprint": before["fingerprint"] or None,
+                    "parameters": kwargs, "before": before,
+                    "after": {"fingerprint": self.source_identity.fingerprint,
+                              "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                              "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
+            return project_command_outcome(action)
 
-    def _dispatch_control(self, action: str, route: str, **kwargs) -> None:
+    def _dispatch_control(self, action: str, route: str, *, effect=None, **kwargs) -> None:
         """Dispatch within the existing outer command transaction and lock."""
         self.exposure_workflows.apply_listen_failure()
         if route == "calibration":
@@ -178,12 +177,12 @@ class PracticeSession:
         if route == "acknowledgement":
             return self.transport_commands.control_acknowledgement(action, kwargs)
         if route == "listening":
-            return self.learning_commands.control_listening(action, kwargs)
+            return self.learning_commands.control_listening(action, kwargs, effect=effect)
         if route == "learning":
-            return self.learning_commands.control_learning(action, kwargs)
+            return self.learning_commands.control_learning(action, kwargs, effect=effect)
         if route == "transport":
-            return self.transport_commands.control_transport(action, kwargs)
-        return self.learning_commands.change_stage(action, kwargs)
+            return self.transport_commands.control_transport(action, kwargs, effect=effect)
+        return self.learning_commands.change_stage(action, kwargs, effect=effect)
 
 
     def apply(self, event: PracticeEvent) -> dict | int | None:

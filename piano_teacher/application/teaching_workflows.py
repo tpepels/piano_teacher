@@ -29,7 +29,7 @@ class TeachingDecisions:
                  attempt_settlement, measurement, playback_session,
                  visual_transport, guided_session, recovery_streak,
                  policy_registry, library, fukuda_mistakes, learner_progress,
-                 session_commands, learning_evidence, clock):
+                 learning_evidence, clock):
         self.source_identity = source_identity
         self.lesson_cursor = lesson_cursor
         self.attempt = attempt
@@ -43,7 +43,6 @@ class TeachingDecisions:
         self.library = library
         self.fukuda_mistakes = fukuda_mistakes
         self.learner_progress = learner_progress
-        self.session_commands = session_commands
         self._last_applied_command = None
         self._prepared_exposure = None
         self.learning_evidence = learning_evidence
@@ -113,10 +112,7 @@ class TeachingDecisions:
         return self.attempt_settlement.prepare(event=event, state=state, generator=p.lesson_generator)
 
     def manual_effect(self, action, *, from_beat=None, values=None, effect=None):
-        # During the A1 handoff existing call sites may still supply the
-        # command-scoped effect. Once all paths pass it explicitly, remove
-        # the old implicit context fallback.
-        return effect or self.session_commands.active or self.prepare(
+        return effect or self.prepare(
             "manual", action=action, from_beat=from_beat, values=values, store=False)
 
     def prepare_exposure(self, exposure) -> None:

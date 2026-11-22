@@ -8,7 +8,6 @@ from contextlib import contextmanager
 
 class SessionCommands:
     def __init__(self):
-        self.active = None
         self.action_reason = "transition"
 
     @contextmanager
@@ -20,16 +19,6 @@ class SessionCommands:
             yield
         finally:
             self.action_reason = previous
-
-    @contextmanager
-    def executing(self, effect):
-        """Scope the original chosen effect while applying an authorization."""
-        previous = self.active
-        self.active = effect
-        try:
-            yield
-        finally:
-            self.active = previous
 
 
 
