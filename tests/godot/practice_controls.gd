@@ -2,6 +2,7 @@ extends SceneTree
 ## Snapshot presentation only; MIDI/audio/physical layout need piano acceptance.
 const Screen := preload("res://practice_screen.gd")
 const Lessons := preload("res://lesson_session.gd")
+const StateInbox := preload("res://application_state_inbox.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -113,6 +114,15 @@ func run() -> void:
                  {"number":2,"available":true}]}, "",3)
     check(not lesson_cache.pending and lesson_cache.snapshot()["steps"][1]["available"] == true,
         "Newly unlocked warm-up step is available without reopening the piece")
+    # A corrupt successful snapshot must not leave old commands active;
+    # stale polls are discarded independently by the ordered-state gate.
+    var inbox := StateInbox.new()
+    check(inbox.accept(0,PackedByteArray(),0,0,-1).has("contract_error"),
+        "Empty backend state must fail closed")
+    check(inbox.accept(0,"[]".to_utf8_buffer(),0,0,-1).has("contract_error"),
+        "Non-object backend state must fail closed")
+    check(inbox.accept(0,"{}".to_utf8_buffer(),0,0,-1).has("state"),
+        "JSON-object backend state still reaches schema validation")
     view.free()
     print("PRACTICE_CONTROLS_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

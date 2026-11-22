@@ -39,7 +39,12 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
     if accepted.has("error_code"):
         _practice.present_message(Reply.failure_message(code,body))
         return
+    if accepted.has("contract_error"):
+        _reject_contract(str(accepted["contract_error"]))
+        return
     if not accepted.has("state"):
+        # Intentionally discarded stale polls have no payload. They must
+        # not overwrite the newer acknowledged command's accepted state.
         return
     var parsed: Dictionary = accepted["state"]
     var violations: Array[String] = StateContract.problems(parsed)
@@ -48,14 +53,7 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
         # incomplete backend snapshots never reach presentation, physical
         # admission, input policy or the published controls.
         _logger.check_contract(parsed)
-        var detail: String = "; ".join(violations)
-        if detail != _last_contract_error:
-            _last_contract_error = detail
-            push_error("STATE_CONTRACT_REJECTED: " + detail)
-        # No new control action may start from a rejected snapshot.
-        _practice.present_busy(true)
-        _practice.present_message(
-            "Invalid practice state; waiting for an authoritative update",true)
+        _reject_contract("; ".join(violations))
         return
     _last_contract_error = ""
     var received_ms: int = int(accepted["received_ms"])
@@ -90,6 +88,17 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
         _practice.stage.keyboard.visible,_presentation.guided.world,
         _presentation.score_flow.hold_world)
 
+func _reject_contract(detail: String) -> void:
+    if detail != _last_contract_error:
+        _last_contract_error = detail
+        push_error("STATE_CONTRACT_REJECTED: " + detail)
+    # Malformed replies must disable UI actions just as malformed objects do.
+    # An accepted source and its physical notation remain untouched.
+    _practice.present_busy(true)
+    _practice.present_message(
+        "Invalid practice state; waiting for an authoritative update",true)
+
+
 func begin_request(now_ms: int) -> void:
     if pending:
         push_error("STATE_INBOX: duplicate outstanding state request")
@@ -110,11 +119,13 @@ func accept(code: int, body: PackedByteArray, sample_started_ms: int,
             return {}
     if code != 0:
         return {"error_code":code}
-    var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())         if not body.is_empty() else null
+    var parsed: Variant = JSON.parse_string(body.get_string_from_utf8()) \
+        if not body.is_empty() else null
     if not parsed is Dictionary:
-        return {}
+        return {"contract_error":"Backend snapshot is not a JSON object"}
     var received_ms: int = Time.get_ticks_msec()
-    var started_ms: int = request_started_ms         if sample_started_ms < 0 else sample_started_ms
+    var started_ms: int = request_started_ms \
+        if sample_started_ms < 0 else sample_started_ms
     return {"state":parsed,"received_ms":received_ms,
         "tick_ms":int((started_ms+received_ms)/2.0)}
 
