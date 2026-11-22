@@ -161,3 +161,12 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
     assert stopped == [True]
     assert pending.phase == "effects_applied"
     assert "same saved result" in owner.notices.next_action
+
+
+def test_stopped_auto_worker_does_not_spin_on_failed_effect():
+    owner, _effect, _applied = _subject()
+    owner.playback_session.auto = False
+    owner.teaching_continuation = SimpleNamespace(
+        begin_feedback=lambda *args, **kwargs: pytest.fail(
+            "Stopped playback must require explicit user Retry"))
+    owner.advance_pending_feedback(now=120.0, force_early=True)
