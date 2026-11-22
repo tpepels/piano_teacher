@@ -11,7 +11,7 @@ from dataclasses import asdict
 import hashlib
 import json
 
-from ..lesson_settings import SETTINGS
+from ..lesson_settings import SETTINGS, course_rules
 from ..teaching import TeachingConfig
 from .mistake_responses import resolve_mistake_policy, mistake_policy_facts
 
@@ -40,6 +40,8 @@ class LearningEvidenceSession:
         rule = {"schema_version": 1, "grader": "nearest-onset-v1",
                 "mastery": "accepted-full-target-v1", "lesson_settings": asdict(SETTINGS),
                 "clean_runs_required": p.course_state().clean_runs_required,
+                "course_rules": asdict(course_rules(
+                    p.lesson_definition.generator_name, warmup=p.warmup)),
                 "grade_note_holds": self._library.settings["grade_note_holds"],
                 "onset_formula": "max(0.15,grading_onset_tolerance_seconds,0.25*local_spb)",
                 "hold_formula": "max(grading_duration_floor_seconds,duration*max(grading_duration_tolerance_fraction,min(0.75,grading_duration_tolerance_fraction+0.28*max(0,local_spb-0.5))))",
