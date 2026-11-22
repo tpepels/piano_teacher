@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 
 from .exercise_generator import generate_variants
 from .exercise_pipeline import ExerciseStage
-from .lesson_settings import SETTINGS
+from .lesson_settings import course_rules
 from .lesson_source_planner import Exercise
 from .lesson_contracts import LessonPlanDefinition
 from .music import Phrase, Piece
@@ -50,7 +50,7 @@ def course_exercises(piece: Piece) -> tuple[Exercise, ...]:
 
 def original_stage(exercise: Exercise, hand: str) -> ExerciseStage:
     variants = generate_variants(exercise.phrase, hand,
-                                 max_attacks=SETTINGS.focus_max_attacks)
+                                 max_attacks=course_rules("practice-flow").focus_max_attacks)
     return ExerciseStage(variants[-1])
 
 
