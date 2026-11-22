@@ -26,7 +26,8 @@ class FlowTempoEntry:
 
 @dataclass(frozen=True, slots=True)
 class FlowPhase:
-    """Only the ungraded Listen/Free/Tempo phase is transient UI state."""
+    """Transient phase keyed to one installed LearningPlan instance."""
+    plan: object
     stage_key: str
     final: bool
     step: practice_flow.Step
@@ -50,7 +51,7 @@ class PracticeFlowCourseSession:
         """
         phase = self._phase
         plan = self._source_identity.plan
-        if phase is None or plan is None:
+        if phase is None or plan is None or phase.plan is not plan:
             return None
         progress = plan.teaching_progress()
         return practice_flow.FlowState(
@@ -82,7 +83,8 @@ class PracticeFlowCourseSession:
                      simplified: bool) -> practice_flow.Transition | None:
         """A new source window/hand enters its course step before Free binds."""
         if (self.active(plan,warmup=warmup) and not recovery and not simplified
-                and (self._phase is None or self._phase.stage_key != plan.identity)):
+                and (self._phase is None or self._phase.plan is not plan
+                     or self._phase.stage_key != plan.identity)):
             # Explicit Learn requests Free, including for the whole-piece
             # final. Automatic final entry uses its timed exposure directly.
             # Selecting Tempo here would conflict with the already selected
@@ -92,7 +94,9 @@ class PracticeFlowCourseSession:
 
     def tempo_entry(self, plan, *, warmup: bool, bpm: int) -> FlowTempoEntry:
         active = self.active(plan,warmup=warmup)
-        if (active and self._phase is not None and self._phase.stage_key == plan.identity
+        if (active and self._phase is not None
+                and self._phase.plan is plan
+                and self._phase.stage_key == plan.identity
                 and self._phase.step is practice_flow.Step.FREE):
             progress = plan.teaching_progress()
             state = replace(self.state,step=practice_flow.Step.TEMPO,bpm=int(bpm),
@@ -124,8 +128,13 @@ class PracticeFlowCourseSession:
         return FlowStepEffect(state.step)
 
     def apply(self, transition: practice_flow.Transition) -> practice_flow.FlowState:
+        plan = self._source_identity.plan
+        if plan is None:
+            raise ValueError("Cannot enter Practice Flow without an installed source")
+        if self._phase is not None and self._phase.plan is not plan:
+            self._settled_decision_id = None
         self._phase = FlowPhase(
-            transition.state.stage_key,transition.state.final,
+            plan,transition.state.stage_key,transition.state.final,
             transition.state.step)
         self.say(transition.message)
         return self.state
@@ -163,7 +172,8 @@ class PracticeFlowCourseSession:
         done = outcome in (practice_flow.Outcome.STAGE_DONE,
                            practice_flow.Outcome.PIECE_DONE)
         stage_key = (self._phase.stage_key
-                     if done and self._phase is not None else plan.identity)
+                     if done and self._phase is not None
+                     and self._phase.plan is plan else plan.identity)
         self.settle(
             outcome,stage_key=stage_key,
             final=plan.exercise.kind == "perform",
@@ -182,7 +192,8 @@ class PracticeFlowCourseSession:
             current,outcome,stage_key=stage_key,final=final,
             bpm=bpm,target_bpm=target_bpm,failures=failures,clean=clean)
         self._phase = FlowPhase(
-            projected.stage_key,projected.final,projected.step)
+            self._source_identity.plan,projected.stage_key,
+            projected.final,projected.step)
         self.say(message)
         return self.state
 
@@ -196,6 +207,7 @@ class PracticeFlowCourseSession:
             where = (f"Measure {first}" if first == last
                      else f"Measures {first}–{last}")
         step = (self._phase.step.value if self._phase is not None
+                and self._phase.plan is plan
                 and self._phase.stage_key == plan.identity else
                 "listen" if mode == "listen" else
                 "free" if mode == "learn" else "tempo")
