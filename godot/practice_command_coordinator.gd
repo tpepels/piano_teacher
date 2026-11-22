@@ -102,6 +102,11 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         var controls: Dictionary = last_state.get("controls",{})
         var choice: Dictionary = controls.get(action.trim_prefix("ui_"),{})
         projected_action = str(choice.get("action",""))
+    # User-requested Stop immediately silences an already scheduled local
+    # count-in even when the backend command queue is currently busy.
+    # The authoritative Stop transaction is still resolved by Python.
+    if action in ["stop","ui_stop"]:
+        metronome_frame.cancel_reserved_count_in()
     var previous: String = state.control_action
     if not state.action_requested(action,projected_action):
         if action != "ui_suspend":
@@ -113,10 +118,6 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
     # Provide physical facts for any raw gesture that *may* start, retry
     # or resume. Python chooses the concrete action under its lock.
     # The metronome consumes only an authorized playback segment.
-    if action == "stop":
-        # Immediate audible safety effect of an explicit user Stop.
-        # No musical deadline or accepted transport is inferred here.
-        metronome_frame.cancel_reserved_count_in()
     if action in ["ui_primary","ui_pause","ui_retry","ui_midi_start",
             "start","restart","resume","score_ready"]:
         var clearance: Dictionary = score_session.continuation_geometry()
