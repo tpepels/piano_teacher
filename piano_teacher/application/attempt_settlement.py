@@ -224,33 +224,8 @@ class AttemptSettlement:
         """One recorded rolling result including its original source and take."""
         return self._rolling
 
-    def rolling_effect(self, completed: RollingTake, name: str, action) -> None:
-        """Run each decided recovery presentation effect at most once.
-
-        The callback is invoked only after durable progress/evidence settled.
-        A successful effect is acknowledged under the application session
-        lock; a failed effect leaves the receipt and all earlier successful
-        effects intact for an explicit Retry or worker continuation.
-        """
-        if (self._rolling is not completed or
-                self.pending is not completed.pending or
-                completed.transition is None or
-                completed.pending.receipt is None or
-                completed.pending.phase != "settled"):
-            raise ValueError("Cannot apply an unsettled or superseded rolling effect")
-        if name not in self._rolling_effects_applied:
-            action()
-            self._rolling_effects_applied.add(name)
-
-    def finish_rolling_publication(self, completed: RollingTake) -> None:
-        """Publish only after every required recovery effect was applied."""
-        if (self._rolling is not completed or
-                self.pending is not completed.pending or
-                completed.transition is None or
-                completed.pending.receipt is None or
-                completed.pending.phase != "settled"):
-            raise ValueError("Cannot publish an unsettled or superseded rolling recovery")
-        transition = completed.transition
+    @staticmethod
+    def _required_rolling_effects(transition) -> frozenset[str]:
         required = {"tempo", "prepare", "streak", "attempt", "notices"}
         if transition.uses_completed_rest:
             required.add("take_end")
@@ -258,7 +233,35 @@ class AttemptSettlement:
             required.add("withdraw")
         if transition.action == "pause":
             required.update(("stop_auto", "cancel_preparation", "cancel_continuation"))
-        if not required.issubset(self._rolling_effects_applied):
+        return frozenset(required)
+
+    def rolling_effect(self, completed: RollingTake, name: str, action) -> None:
+        """Acknowledge a selected recovery presentation effect exactly once."""
+        if (self._rolling is not completed or
+                self.pending is not completed.pending or
+                completed.transition is None or
+                completed.pending.receipt is None or
+                completed.pending.phase not in ("settled", "effects_applied")):
+            raise ValueError("Cannot apply an unsettled or superseded rolling effect")
+        required = self._required_rolling_effects(completed.transition)
+        if name not in required:
+            raise ValueError("Unselected rolling recovery effect")
+        if name not in self._rolling_effects_applied:
+            action()
+            self._rolling_effects_applied.add(name)
+        if required.issubset(self._rolling_effects_applied):
+            completed.pending.phase = "effects_applied"
+
+    def finish_rolling_publication(self, completed: RollingTake) -> None:
+        """Publish only after every source effect of this receipt completed."""
+        if (self._rolling is not completed or
+                self.pending is not completed.pending or
+                completed.transition is None or
+                completed.pending.receipt is None):
+            raise ValueError("Cannot publish an unsettled or superseded rolling recovery")
+        if (completed.pending.phase != "effects_applied" or
+                not self._required_rolling_effects(completed.transition).issubset(
+                    self._rolling_effects_applied)):
             raise ValueError("Cannot publish rolling recovery with unapplied source effects")
         completed.pending.phase = "published"
         self._rolling = None
