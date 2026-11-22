@@ -24,6 +24,7 @@ def _authorized():
     owner.active_take_id = "take"
     owner.active_segment_id = "segment"
     owner.active_segment = {
+        "mode": "practice",
         "source": {"fingerprint": source.fingerprint,
                    "stage_key": source.stage_key,
                    "revision": source.revision, "hand": source.hand,
@@ -69,3 +70,18 @@ def test_retransmitted_present_rejects_superseded_transport_epoch():
     owner.invalidate("Stop")
     with pytest.raises(ValueError, match="superseded"):
         _replay(owner, facts)
+
+
+@pytest.mark.parametrize("state", [PlaybackState.COMPLETE,
+                                   PlaybackState.FAILED, PlaybackState.IDLE])
+def test_finished_or_failed_take_cannot_be_reauthorized_by_old_present(state):
+    owner, facts, _ = _authorized()
+    owner.state = state
+    with pytest.raises(ValueError, match="superseded"):
+        _replay(owner, facts)
+
+
+def test_changed_playback_mode_cannot_reuse_old_present_receipt():
+    owner, facts, _ = _authorized()
+    with pytest.raises(ValueError, match="superseded"):
+        _replay(owner, replace(facts, mode="listen"))
