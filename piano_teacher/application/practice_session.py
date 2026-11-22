@@ -6,7 +6,6 @@ their decisions; the session sequences their effects and publications.
 """
 from __future__ import annotations
 import time
-from .control_dispatch import ControlDispatcher
 from .control_projection import UI_INTENTS, resolve_ui_intent, project_command_outcome
 from .stage_change import prepare_stage_change
 
@@ -36,6 +35,23 @@ from .session_events import (
     SessionClosed,
     PracticeEvent,
 )
+
+# User-command dispatch belongs to the same serialized session that
+# validates the current state. Unknown action names remain delegated to
+# the lesson stage validator; no second application router is constructed.
+_COMMAND_ROUTES = {
+    **dict.fromkeys(("calibration_start", "calibration_cancel",
+                     "calibration_apply", "calibration_reset"), "calibration"),
+    **dict.fromkeys(("midi_range_start", "midi_range_cancel"), "device_range"),
+    "reset_path": "reset",
+    **dict.fromkeys(("score_ready", "demo_ready"), "acknowledgement"),
+    **dict.fromkeys(("listen", "perform", "practice_weak", "review_retry", "seek"), "listening"),
+    **dict.fromkeys(("learn_next", "skip_stage", "place_original",
+                     "revisit_trouble", "learn", "learn_retry",
+                     "open_at", "hints"), "learning"),
+    **dict.fromkeys(("practice", "stop", "start", "restart", "pause", "resume"), "transport"),
+}
+
 
 class PracticeSession:
     def __init__(self, *,
@@ -122,7 +138,7 @@ class PracticeSession:
                       "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
                       "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
             effect = self.session_commands.active
-            route = ControlDispatcher.route(action)
+            route = _COMMAND_ROUTES.get(action, "stage")
             if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
                 change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
                           if route == "stage" else None)
