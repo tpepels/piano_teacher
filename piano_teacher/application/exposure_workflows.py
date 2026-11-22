@@ -33,12 +33,12 @@ class ExposureWorkflows:
             self.source_identity.warmup,
             self.flow_session.active(selected, warmup=self.source_identity.warmup))
 
-    def prepare_practice(self, *, exposure=None):
+    def prepare_practice(self, *, exposure=None, effect=None):
         selected_plan = self.source_identity.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
         effect = (None if exposure is not None
-                  else self.teaching_decisions.manual_effect("practice"))
+                  else self.teaching_decisions.manual_effect("practice", effect=effect))
         selected = exposure or self.teaching_decisions.install_command(effect)
         entry = self.flow_session.tempo_entry(
             selected_plan, warmup=self.source_identity.warmup, bpm=selected.bpm)
@@ -52,24 +52,25 @@ class ExposureWorkflows:
             return_context=self.guided_session.return_context,
             retry_range=self.attempt.retry_range))
 
-    def prepare_listen(self) -> None:
+    def prepare_listen(self, *, effect=None) -> None:
         selected_plan = self.source_identity.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
         self.teaching_decisions.install_command(
-            self.teaching_decisions.manual_effect("listen"))
+            self.teaching_decisions.manual_effect("listen", effect=effect))
         self.installer.apply(prepare_listen(
             self.source(), revision=self.source_identity.revision,
             bpm=selected_plan.bpm,
             tempo_map=self.tempo_map_cache.get(
                 selected_plan.active_stage, selected_plan.bpm)))
 
-    def prepare_perform(self, *, scope: str = "current", exposure=None) -> None:
+    def prepare_perform(self, *, scope: str = "current", exposure=None,
+                        effect=None) -> None:
         if self.source_identity.plan is None:
             raise ValueError("Open a piece first")
         effect = (None if exposure is not None else
                   self.teaching_decisions.manual_effect(
-                      "perform", values={"scope":scope}))
+                      "perform", values={"scope":scope}, effect=effect))
         selected = exposure or self.teaching_decisions.install_command(effect)
         self.installer.apply(prepare_timed(
             self.source(), selected,

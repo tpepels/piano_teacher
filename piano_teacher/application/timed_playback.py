@@ -28,12 +28,12 @@ class TimedPlayback:
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
               loop_continuation: bool = False, scheduled_deadline: float | None = None,
               presentation_lead_seconds: float = 0.0, decided: bool = False,
-              count_in_plan=None):
+              count_in_plan=None, effect=None):
         with self.lock:
             self.playback_session.require_authorized_start(self.playback.presentation_required)
             if self.source_identity.plan is None:
                 raise ValueError("Open a piece first")
-            effect = self.session_commands.active
+            effect = effect or self.session_commands.active
             selected = None
             pending = self.attempt_settlement.pending
             if loop_continuation and pending is not None and pending.receipt is not None:

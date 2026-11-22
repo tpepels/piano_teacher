@@ -112,9 +112,12 @@ class TeachingDecisions:
             return CommandEffect(event, state, decision)
         return self.attempt_settlement.prepare(event=event, state=state, generator=p.lesson_generator)
 
-    def manual_effect(self, action, *, from_beat=None, values=None):
-        return self.session_commands.active or self.prepare("manual", action=action,
-            from_beat=from_beat, values=values, store=False)
+    def manual_effect(self, action, *, from_beat=None, values=None, effect=None):
+        # During the A1 handoff existing call sites may still supply the
+        # command-scoped effect. Once all paths pass it explicitly, remove
+        # the old implicit context fallback.
+        return effect or self.session_commands.active or self.prepare(
+            "manual", action=action, from_beat=from_beat, values=values, store=False)
 
     def prepare_exposure(self, exposure) -> None:
         """Retain an accepted lesson selection for that plan and stage only."""
