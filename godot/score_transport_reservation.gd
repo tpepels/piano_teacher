@@ -144,7 +144,13 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
         reusable = -1
     if reusable >= 0:
         var reused_world: float = float(online[reusable]["world_origin"]) + source_opening
-        if is_finite(exact_start_world) and absf(exact_start_world-reused_world) > .0001:
+        # Native future projection samples integer milliseconds. A
+        # previously admitted paused origin is immutable, so tolerate only
+        # sub-frame quantization here; the gateway must also attest the
+        # physical deadline to the backend within five milliseconds.
+        var reuse_tolerance: float = .005 if action == "resume" else .0001
+        if is_finite(exact_start_world) and \
+                absf(exact_start_world-reused_world) > reuse_tolerance:
             # A prepared READY source is provisional and may be retracted
             # with the same future-only suffix rule as any other plan.
             # The backend has already chosen a later exact downbeat: do

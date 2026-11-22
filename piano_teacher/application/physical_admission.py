@@ -77,6 +77,14 @@ def choose_admission_deadline(intent, facts, evidence: PhysicalAdmissionEvidence
         count_in_beats=required_beats, latency=0.0,
         physical_at=physical_ms / 1000.0,
         earliest_at=earliest_ms / 1000.0).run_at * 1000.0
+    if reused_count_in:
+        # This origin is an already-printed, paused take. It cannot be
+        # shifted to a newly calculated deadline, even if the ordinary
+        # scheduler reports a later earliest bound. The renderer must
+        # offer a fresh full-bar Resume instead when reuse is too soon.
+        if deadline > physical_ms + FIXED_WORLD_ROUNDING_MS:
+            raise ValueError("Paused count-in cannot meet immutable source deadline")
+        return float(physical_ms)
     if intent.fixed_deadline_ms is not None:
         if deadline > intent.fixed_deadline_ms + FIXED_WORLD_ROUNDING_MS:
             raise ValueError("Count-in cannot meet immutable repeat deadline")

@@ -176,7 +176,11 @@ func accept(state: Dictionary, request_midpoint_ms: int,
             var new_renderer = practice_view.stage.renderer
             new_renderer.present(
                 state,beat,world-float(new_renderer.runway_origin_beat))
-        # The next frame reconciles stream ink exactly once. Snapshot
-        # acceptance only updates the authoritative model and admission ACK.
+        # A newly accepted PLAYING snapshot can be observed by the UI
+        # before the next process frame. Bind its already-attested stream
+        # owner NOW, in this same accepted-state transaction, so there is
+        # never a frame with a running transport and missing source ink.
+        # The later process-frame projection remains idempotent.
+        present_frame(state,beat,score_flow.project(received_ms))
     elif admission != null:
         admission.observe(state,received_ms)

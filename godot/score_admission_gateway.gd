@@ -35,6 +35,10 @@ var failure_report_in_flight := ""
 var _last_problem := ""
 var _last_problem_ms := -100000
 var last_rejected_fixed_intent := ""
+# Additional read-only physical clearance for a queued backend reservation.
+# The full 400 ms scheduling margin is already owned by MusicalScheduler;
+# adding another half-second delayed the first audible count-in pulse.
+const PHYSICAL_ARM_ROUNDTRIP_MS := 150
 
 func _report_problem(message: String) -> void:
     var now_ms: int = Time.get_ticks_msec()
@@ -217,8 +221,21 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
             view,"resume",world,opening,partial_slot)
         if bool(preview.get("ok",false)) and \
                 str(preview.get("mode","")) == "reuse":
-            planned = preview
-            physical_action = "resume"
+            # A paused take's original ink cannot move. Reuse only if its
+            # existing physical downbeat can ALSO satisfy the remaining
+            # backend-authored count-in and reservation latency. Otherwise
+            # a new full-bar Resume must preserve the old source as a
+            # predecessor instead of retiming or repeatedly rejecting it.
+            var reused_travel_ms: float = flow.physical_travel_ms_to(
+                float(preview["start_world"]),frame_ms,
+                float(state.get("clock_beat",0.0)),tempo,authored)
+            var required_reuse_ms: float = \
+                TempoTimeline.seconds_from_beats(
+                    partial,float(intent.get("bpm",tempo)))*1000.0+420.0
+            if is_finite(reused_travel_ms) and \
+                    reused_travel_ms >= required_reuse_ms:
+                planned = preview
+                physical_action = "resume"
     if planned.is_empty():
         planned = TransportReservation.plan(
             view,physical_action,world,opening,required_slot,NAN,
@@ -235,7 +252,8 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         # second musical deadline or moving any already-admitted ink.
         # Auto repeats have an immutable slot and must never be extended.
         var arm_budget_world: float = flow.project_authored_future(
-            frame_ms+500,frame_ms,float(state.get("clock_beat",0.0)),
+            frame_ms+PHYSICAL_ARM_ROUNDTRIP_MS,frame_ms,
+            float(state.get("clock_beat",0.0)),
             tempo,authored)-world
         if not is_finite(arm_budget_world) or arm_budget_world <= 0.0:
             return
@@ -453,8 +471,14 @@ func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
         committed = renderer.reserve_transport_action(
             exact_action,at_world,opening,slot_beats,
             str(current.get("mode","")) == "listen",exact_world)
+    # Converting a monotonic millisecond deadline to the renderer's
+    # integer frame sample rounds by at most one millisecond. A REUSED
+    # source keeps its immutable original world origin: validate that
+    # quantization in physical time below, never relocate its printed ink.
+    var reused_world_tolerance: float = (
+        .005 if bool(current.get("reused_count_in",false)) else .0001)
     if committed.is_empty() or not is_finite(float(committed.get("start_world",NAN))) or \
-            absf(float(committed["start_world"])-exact_world) > .0001 or \
+            absf(float(committed["start_world"])-exact_world) > reused_world_tolerance or \
             bool(committed.get("reused_unplayed_count_in",false)) != \
                 bool(current.get("reused_count_in",false)):
         _cancel_provisional()
