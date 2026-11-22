@@ -658,6 +658,8 @@ per-stage Listen → Free → Tempo, original final and Coda/Fukuda and
 warm-up course behavior remain obligations for A2 acceptance.
 **A2 stays IN PROGRESS.**
 
+**A2 stale-source settlement guard (2026-11-22):** [73282e4](https://github.com/tpepels/piano_teacher/commit/73282e4c79d04d6faa31f1111d272a26f151a375) requires `PracticeFlowCourseSession.settle_decided` to operate on the currently installed `LearningPlan` and an existing projected phase before accepting a decision ID, including repeated receipts. A delayed completion after source replacement can no longer recreate or settle an obsolete course phase. This is source-level integration only; no runtime test was executed. Course-scoped settings, recovery ownership and failed-persistence/source-change acceptance remain open.
+
 ### A2 — Unified lesson, assessment and durable settlement
 
 - [ ] Give the lesson domain one course/window/hand/step, BPM, mastery and
