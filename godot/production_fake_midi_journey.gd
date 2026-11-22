@@ -2,7 +2,7 @@ extends SceneTree
 ## Real production main.tscn + embedded Python + actual native notation,
 ## with a TEST-ONLY mido input port at the hardware boundary. No fake
 ## state machine, renderer, assessment, shortcut, or transport owner.
-const MAX_MS := 125000
+const MAX_MS := 145000
 var app
 var begun_ms := 0
 var phase_ms := 0

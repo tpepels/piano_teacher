@@ -214,7 +214,9 @@ PY
   # engine sees one synthetic mido input and unmodified MIDI callbacks.
   # No production command or fake application path is exposed.
   local scenario_log="$WORK/native-midi-$variant.log"
-  timeout 130s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+  # A fresh physical Resume includes an entire authored count-in bar.
+  # Bound the longer real-time journey consistently with its Godot budget.
+  timeout 155s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
     PIANO_TEST_DROP_REPLY_ONCE="$drop" \
     PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
     "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
