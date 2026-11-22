@@ -44,6 +44,10 @@ class RecoveryWorkflows:
         keeps its note-isolation controller without overwriting the active
         timed-retry context.
         """
+        if prepared.action not in ("pause", "guided", "continue", "prepare"):
+            raise ValueError("Unknown selected recovery action")
+        if prepared.action == "continue" and deadline is None:
+            raise ValueError("Timed recovery requires a selected deadline")
         if prepared.action == "guided" and prepared.assignment is not None:
             self.lesson_execution.begin_learn(
                 from_beat=prepared.start, recovery=True,
@@ -63,8 +67,6 @@ class RecoveryWorkflows:
                     from_beat=prepared.start, recovery=True,
                     exposure=self.attempt_settlement.pending.decision.next_exposure)
             elif prepared.action == "continue":
-                if deadline is None:
-                    raise ValueError("Timed recovery requires a selected deadline")
                 self.timed_playback.continue_at(SCHEDULER.continuation(
                     self.transport_timing.collect_continuation_measurement(
                         deadline, prepared.start),
@@ -99,14 +101,15 @@ class RecoveryWorkflows:
                                   *, deadline: float | None = None,
                                   exposure=None) -> None:
         if self.source_identity.plan is None:
-            return
+            raise ValueError("Remediation requires an installed lesson source")
         prepared = prepare_remedial(
             self.exposure_workflows.source(), assignment, exposure,
             has_deadline=deadline is not None,
             automatic=self.playback_session.auto)
-        if prepared is not None:
-            self._apply_prepared_recovery(
-                prepared, now=self.clock(), deadline=deadline, exposure=exposure)
+        if prepared is None:
+            raise ValueError("Remediation belongs to a superseded source stage")
+        self._apply_prepared_recovery(
+            prepared, now=self.clock(), deadline=deadline, exposure=exposure)
 
     def apply_rolling_recovery(self, decision, phrase: Phrase, grid, score_beat: float, now: float):
         """Apply an accepted source-grid recovery decision atomically."""
