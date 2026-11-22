@@ -21,6 +21,8 @@ var options: PanelContainer
 var mode_choice: OptionButton
 var hints_toggle: CheckButton
 var stop_button: Button
+var previous_passage_button: Button
+var next_passage_button: Button
 var hand_buttons: Dictionary = {}
 var skip_button: Button
 var placement_button: Button
@@ -106,8 +108,7 @@ func _ready() -> void:
     # continually scrolling score. A jump never grants mastery.
     steps = PracticeStepSelector.new()
     steps.step_requested.connect(func(number: int):
-        command_requested.emit({"action":"select_step","number":number})
-        practice_requested.emit())
+        command_requested.emit({"action":"select_step","number":number}))
     path_options.add_child(steps)
     # FlowContainer inside an expanding, vertically scrolling VBox can
     # calculate a near-zero width for its Label during a resize. The label
@@ -136,12 +137,14 @@ func _ready() -> void:
     var passage_nav := HFlowContainer.new()
     passage_nav.add_theme_constant_override("h_separation", 10)
     path_options.add_child(passage_nav)
-    passage_nav.add_child(_button("Previous passage", func():
-        command_requested.emit({"action": "previous"})
-        practice_requested.emit(), false, "navigation"))
-    passage_nav.add_child(_button("Next passage", func():
-        command_requested.emit({"action": "next"})
-        practice_requested.emit(), false, "navigation"))
+    previous_passage_button = _button("Previous passage", func():
+        command_requested.emit({"action":"ui_passage_previous"}),
+        false, "navigation")
+    passage_nav.add_child(previous_passage_button)
+    next_passage_button = _button("Next passage", func():
+        command_requested.emit({"action":"ui_passage_next"}),
+        false, "navigation")
+    passage_nav.add_child(next_passage_button)
     passage_nav.add_child(stop_button)
     var hand_row := HFlowContainer.new()
     hand_row.add_theme_constant_override("separation", 12)
@@ -150,7 +153,6 @@ func _ready() -> void:
         var button := _button(hand.capitalize() + (" hands" if hand == "both" else " hand"),
             func():
                 command_requested.emit({"action": "hand", "hand": hand})
-                practice_requested.emit()
         )
         button.configure("choice")
         hand_buttons[hand] = button
@@ -225,6 +227,9 @@ func present_context(state: Dictionary, busy: bool) -> void:
     present_busy(busy)
     if not bool(state.get("loaded",false)):
         mode_choice.disabled = true
+        previous_passage_button.disabled = true
+        next_passage_button.disabled = true
+        stop_button.disabled = true
         _cancel_path_reset()
         return
     if reset_confirmation.visible and str(state.get("piece_fingerprint","")) != _reset_fingerprint:
@@ -232,6 +237,11 @@ func present_context(state: Dictionary, busy: bool) -> void:
     var learning: bool = str(state.get("mode","practice")) == "learn"
     var warmup: bool = bool(state.get("warmup",false))
     var phase: String = str(state.get("phase","ready"))
+    var controls: Dictionary = state.get("controls",{}) if state.get("controls") is Dictionary else {}
+    previous_passage_button.disabled = _busy or not bool(
+        controls.get("passage_previous",{}).get("enabled",false))
+    next_passage_button.disabled = _busy or not bool(
+        controls.get("passage_next",{}).get("enabled",false))
     mode_choice.select(0 if learning else 2 if str(state.get("mode","")) == "perform" else 1)
     mode_choice.set_item_text(1,"Warm-up practice" if warmup else "Practice rhythm")
     for index in [0,2,3]: mode_choice.set_item_disabled(index,warmup)
@@ -246,8 +256,8 @@ func present_context(state: Dictionary, busy: bool) -> void:
         var button: Button = hand_buttons[hand]
         button.set_selected(str(state.get("hand","")) == hand)
         button.disabled = not state.get("hands",[]).has(hand) or str(state.get("hand","")) == hand
-    stop_button.disabled = (phase in ["ready","guided_complete","disconnected"]) if learning else not (
-        bool(state.get("running",false)) or phase in ["count_in","playing","paused","feedback","recovering","loading","preview_gap"])
+    stop_button.disabled = _busy or not bool(
+        controls.get("stop",{}).get("enabled",false))
 
 func present_busy(busy: bool) -> void:
     _busy = busy

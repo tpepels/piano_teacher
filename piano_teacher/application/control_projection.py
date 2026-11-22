@@ -6,7 +6,8 @@ from .transport_commands import PAUSABLE_PHASES
 UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
     "ui_previous", "ui_review_previous", "ui_skip",
-    "ui_tempo_up", "ui_tempo_down", "ui_midi_start", "ui_suspend"))
+    "ui_tempo_up", "ui_tempo_down", "ui_midi_start", "ui_suspend",
+    "ui_passage_previous", "ui_passage_next"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
 
 
@@ -81,6 +82,20 @@ def project_controls(s: Mapping) -> dict:
     previous_visible = bool(s.get("loaded")) and not course
     previous_enabled = previous_visible and int(s.get("lesson_step", 1)) > 1
     skip_enabled = previous_visible and bool(s.get("skip_available"))
+    # A passage is an exercise group; it may contain several lesson steps.
+    # These exact previous/next passage controls have different semantics
+    # from the previous-step and no-mastery skip actions.
+    passage_previous = bool(s.get("loaded")) and int(s.get("exercise", 1)) > 1
+    passage_next = (bool(s.get("loaded")) and
+                    int(s.get("exercise", 1)) < int(s.get("exercise_count", 1)))
+    mode = s.get("mode")
+    phase = s.get("phase")
+    stop_enabled = bool(s.get("loaded")) and (
+        phase not in ("ready", "guided_complete", "disconnected")
+        if mode == "learn" else
+        bool(s.get("running")) or phase in (
+            "count_in", "playing", "paused", "feedback",
+            "recovering", "loading", "preview_gap"))
     listen = None
     if s.get("loaded"):
         listen = (None if s.get("mode") == "listen" else "listen") if course else (
@@ -124,6 +139,12 @@ def project_controls(s: Mapping) -> dict:
             int(s.get("lesson_step", 1)) > 1},
         "skip": {"action": "skip_stage" if skip_enabled else "",
                  "enabled": skip_enabled, "visible": previous_visible},
+        "passage_previous": {"action": "previous" if passage_previous else "",
+                             "enabled": passage_previous},
+        "passage_next": {"action": "next" if passage_next else "",
+                         "enabled": passage_next},
+        "stop": {"action": "stop" if stop_enabled else "",
+                 "enabled": stop_enabled},
         "midi_start": {"action": midi_action or "",
                        "enabled": midi_action is not None,
                        "requires_score": True},
@@ -137,7 +158,7 @@ def project_controls(s: Mapping) -> dict:
 # View effects of the action ACTUALLY executed by the backend, never of a
 # stale raw gesture or a label reconstructed by the Godot screen.
 NAVIGATION_ACTIONS = frozenset((
-    "select_step", "skip_stage", "place_original",
+    "select_step", "previous", "next", "hand", "skip_stage", "place_original",
     "revisit_trouble", "learn_next", "open_at"))
 CALIBRATION_ACTIONS = frozenset(("calibration_apply", "calibration_reset"))
 
@@ -171,6 +192,7 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
     action = choice["action"]
     if not action or not choice.get("enabled", False):
         if intent in ("ui_previous", "ui_review_previous", "ui_skip",
+                      "ui_passage_previous", "ui_passage_next",
                       "ui_tempo_up", "ui_tempo_down"):
             raise ValueError("This control is no longer available in the current lesson")
         return None, {}
