@@ -35,7 +35,7 @@ class LearningActions:
                     and self.flow_session.state.stage_key == self.source_identity.plan.identity
                     and self.playback_session.mode != "listen"):
                 # Listen again: the state machine plays it, then Free.
-                self.lesson_execution.flow_execute(self.flow_session.listen_again())
+                self.lesson_execution.flow_execute(self.flow_session.listen_again(),reason=action)
             else:
                 self.exposure_workflows.prepare_listen(effect=effect,reason=action)
         elif action == "perform":
