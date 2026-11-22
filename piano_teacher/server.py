@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from .application.composition import compose_application
-from .application.practice_session import (
+from .application.session_events import (
     TimedStartRequested, PresentationRequired, PlaybackReserved, PlaybackPresented,
     PlaybackWithdrawn, PlaybackFailed, SourceCommitted, SettingsChanged,
     DeviceSelected, PreloadReady, PreloadFailed, SessionClosed,
