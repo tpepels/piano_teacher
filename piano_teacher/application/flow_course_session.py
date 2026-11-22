@@ -166,17 +166,22 @@ class PracticeFlowCourseSession:
         Listen/Free/Tempo entry is actually selected; a current-stage result
         follows the already-committed LearningPlan progression.
         """
+        # A delayed completion may arrive after Stop, navigation or a
+        # source replacement. It must not recreate a phase for a plan that
+        # is no longer installed, even when its stage key looks identical.
+        if plan is not self._source_identity.plan:
+            raise ValueError("Cannot settle a superseded Practice Flow source")
+        current = self.state
+        if current is None:
+            raise ValueError("No active Practice Flow stage to settle")
         if decision_id is not None and decision_id == self._settled_decision_id:
-            return self.state
+            return current
         progress = plan.teaching_progress()
         done = outcome in (practice_flow.Outcome.STAGE_DONE,
                            practice_flow.Outcome.PIECE_DONE)
         stage_key = (self._phase.stage_key
                      if done and self._phase is not None
                      and self._phase.plan is plan else plan.identity)
-        current = self.state
-        if current is None:
-            raise ValueError("No active Practice Flow stage to settle")
         # The pure course reducer determines the next Listen/Free/Tempo
         # phase. Its counters are derived only from the installed plan;
         # callers cannot supply a second mutable BPM/mastery snapshot.
