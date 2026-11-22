@@ -35,11 +35,11 @@ class SessionLifecycle:
                   if self.attempt.recorder is not None
                   else self.measurement.guided.presses)
         if persist_evidence:
-            guidance = self.guided_session.controller
-            extra = ({"guidance": guidance.snapshot(now=self.clock())}
-                     if self.playback_session.mode == "learn"
-                     and guidance is not None else None)
             try:
+                guidance = self.guided_session.controller
+                extra = ({"guidance": guidance.snapshot(now=self.clock())}
+                         if self.playback_session.mode == "learn"
+                         and guidance is not None else None)
                 self.settlement.interrupt_current(
                     reason=reason, played=played, censor=not preserve_episode,
                     extra=extra, now=self.clock(), flush=True)
