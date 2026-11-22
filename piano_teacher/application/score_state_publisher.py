@@ -129,30 +129,38 @@ class ScoreStatePublisher:
                 return {"kind": "retain"}
         return {"kind": "run", "clear_target": facts.mode != "learn"}
 
+    @staticmethod
+    def project_transport_state(state: dict, pending: dict | None,
+                                timeline: dict, *, running: bool,
+                                paused: bool) -> None:
+        """One read-only transaction-status projection for UI and commands.
+
+        The visible frame and a locked user gesture must see the same
+        pending admission and failure, even though the control snapshot
+        deliberately does not render or prepare scores.
+        """
+        state["playback_intent"] = pending
+        state["playback_timeline"] = timeline
+        if pending is not None and not running and not paused:
+            # A future successor does not overwrite the current live or
+            # paused take's phase until the physical presentation is bound.
+            state["phase"] = "admitting"
+        elif timeline.get("state") == "failed" and not running:
+            state["feedback"] = (timeline.get("failure")
+                                 or "The score could not be admitted")
+            state["next_action"] = "Retry the passage or choose other music"
+
     def publish(self, state: dict, facts: ScoreProjectionFacts) -> dict | None:
         """Project authorized desktop score facts. Never construct a headless plan."""
         guided = self._guided_plan(state, facts)
         state["presentation_directive"] = self._motion_directive(state, facts)
         if not facts.timeline:
             return guided
-        # All desktop take intents and receipts originate in PlaybackCoordinator.
-        state["playback_intent"] = facts.timeline["intent"]
-        state["playback_timeline"] = facts.timeline["current"]
-        if (facts.timeline["intent"] is not None
-                and not facts.running and not facts.paused):
-            # A successor can be physically prepared while an older take
-            # continues playing or is paused. "admitting" describes
-            # an idle transport waiting for its first authorized source;
-            # it must never overwrite the active take's actual phase.
-            state["phase"] = "admitting"
-        elif (facts.timeline["current"].get("state") == "failed"
-              and not facts.running):
-            # Project the transaction owner's terminal error in the same
-            # read model used by the practice screen. This makes Retry
-            # available again instead of indefinitely showing "admitting".
-            state["feedback"] = (facts.timeline["current"].get("failure")
-                                 or "The score could not be admitted")
-            state["next_action"] = "Retry the passage or choose other music"
+        # Both locked command resolution and painting use this same pure
+        # transport-status projection from the Python transaction owner.
+        self.project_transport_state(
+            state, facts.timeline["intent"],facts.timeline["current"],
+            running=facts.running,paused=facts.paused)
         if guided is not None:
             state["playback_timeline"]["guided"] = guided
         return guided

@@ -93,10 +93,17 @@ class SessionReadModels:
         """
         now = self.clock()
         state = project_session_state(self.capture_snapshot(sampled_at=now))
-        # Commands and visible buttons must observe the same authoritative
-        # transaction outcome. A terminal reservation failure can leave
-        # phase="loading" until the next explicit user action.
-        state["playback_timeline"] = self.playback.snapshot()[1]
+        # Source admission/failure must be projected identically in the
+        # lightweight locked command path and the graphical snapshot.
+        # Reading a gesture cannot trigger engraving or a state transition.
+        pending, timeline = self.playback.snapshot()
+        if self.playback.presentation_required:
+            self.score_state_publisher.project_transport_state(
+                state,pending,timeline,
+                running=self.playback_session.running,
+                paused=self.visual_transport.paused)
+        else:
+            state["playback_timeline"] = timeline
         if self.lesson_execution.flow_active():
             state["flow"] = self.lesson_execution.flow_state()
         return state
