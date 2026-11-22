@@ -21,7 +21,7 @@ static func plan(renderer, action: String, world: float,
 static func plan_facts(facts: Dictionary, action: String, world: float,
         source_opening: float, count_in_beats: float,
         exact_start_world: float = NAN) -> Dictionary:
-    if action not in ["start","resume","restart","auto"]:
+    if action not in ["start","resume","resume_fresh","restart","auto"]:
         return _refuse("unsupported_action")
     if not is_finite(world) or not is_finite(source_opening):
         return _refuse("invalid_transport_coordinate")
@@ -47,7 +47,10 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     var preview_world: float = float(facts["preview_world"])
     var withdrawn: Dictionary = facts["withdrawn"]
     var protected_strip := -1
-    if action == "resume" and facts.has("resume_protected_strip"):
+    # Fresh Resume has Start's full-bar slot but the SAME protected
+    # predecessor as an ordinary Resume. A new source cannot withdraw
+    # the paused take's first still-unexpired physical strip.
+    if action in ["resume","resume_fresh"] and facts.has("resume_protected_strip"):
         protected_strip = int(facts["resume_protected_strip"])
         if not facts.has("resume_withdrawn"):
             return _refuse("missing_paused_source_withdrawal_preview")
@@ -103,7 +106,7 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     # count-in bar ahead of the playhead. A hidden READY take was never
     # seen, so it is withdrawn rather than reused from beyond the right edge.
     var near_onset: float = NAN
-    if action in ["start","resume"]:
+    if action in ["start","resume","resume_fresh"]:
         near_onset = Admission.empty_strip_start(survivors,preview_world,
             count_in_beats,header,peer_floor,density,staff_gap,duration)
     # A prepared, fully offscreen take is the cheapest valid reservation

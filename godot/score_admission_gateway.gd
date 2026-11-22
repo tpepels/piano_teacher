@@ -180,11 +180,12 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
     var reservation_action: String = (
         "resume" if action == "resume" else
         "restart" if action == "restart" else "start")
-    # Resume with no immutable unexposed source to reuse is a fresh
-    # physical admission with a full bar. Its pure preflight and actual
-    # queue commit MUST use the same Start geometry/withdrawal contract.
+    # Resume with no reusable paused count-in admits a new full-bar
+    # source but still protects the preceding paused take's immutable ink.
+    # This is one physical queue action used identically by both preflight
+    # and commit. Python continues to own the semantic Resume transition.
     var physical_action: String = (
-        "start" if action == "resume" else reservation_action)
+        "resume_fresh" if action == "resume" else reservation_action)
     var opening: float = float(intent.get("from_beat",0.0))
     var planned: Dictionary = {}
     var partial: float = float(intent.get("resume_remaining_beats",0.0))
@@ -264,9 +265,8 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         action == "resume" and partial > 0.0
         and str(planned.get("mode","")) == "reuse")
     # Preserve the same physical action selected by read-only
-    # preflight. The Python action remains Resume even when the native
-    # queue must admit a fresh full-count-in source after an expired or
-    # withdrawn paused strip.
+    # preflight. Python's semantic Resume stays unchanged; a new full
+    # count-in still retains the paused source through its unexpired ink.
     current["reservation_action"] = (
         "auto" if fixed != null else physical_action)
     current["projection_bpm"] = tempo
