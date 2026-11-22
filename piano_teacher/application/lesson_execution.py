@@ -78,17 +78,17 @@ class LessonExecution:
             self.source_identity.plan, fingerprint=self.source_identity.fingerprint, mode=self.playback_session.mode,
             guided_range=self.guided_session.beat_range, course_guided=self.lesson_cursor.course_guided)
 
-    def enter_selected_exposure(self, selected, *, bump_revision: bool = True):
+    def enter_selected_exposure(self, selected, *, bump_revision: bool = True, reason=None):
         if selected is None:
             self.playback_session.stop_automatic()
             return
         if selected.mode == "learn":
             self.begin_learn(from_beat=selected.from_beat,
-                              bump_revision=bump_revision,exposure=selected)
+                              bump_revision=bump_revision,exposure=selected,reason=reason)
         elif selected.mode == "perform":
-            self.exposure_workflows.prepare_perform(exposure=selected)
+            self.exposure_workflows.prepare_perform(exposure=selected,reason=reason)
         else:
-            self.exposure_workflows.prepare_practice(exposure=selected)
+            self.exposure_workflows.prepare_practice(exposure=selected,reason=reason)
 
     def flow_active(self) -> bool:
         return self.flow_session.active(self.source_identity.plan,warmup=self.source_identity.warmup)
@@ -96,16 +96,16 @@ class LessonExecution:
     def flow_stage_entry(self, *, resumed: bool = False) -> practice_flow.Transition:
         return self.flow_session.stage_entry(self.source_identity.plan,resumed=resumed)
 
-    def flow_execute(self, transition: practice_flow.Transition) -> None:
+    def flow_execute(self, transition: practice_flow.Transition, *, reason=None) -> None:
         """Execute the selected course step; the session owns flow state."""
         effect = self.flow_session.execute(transition)
         if effect.step is practice_flow.Step.LISTEN:
-            self.exposure_workflows.prepare_listen()
+            self.exposure_workflows.prepare_listen(reason=reason)
         elif effect.step is practice_flow.Step.FREE:
             self.lesson_cursor.set_course_guided(True)
-            self.begin_learn(from_beat=0.0)
+            self.begin_learn(from_beat=0.0,reason=reason)
         elif effect.step is practice_flow.Step.TEMPO:
-            self.exposure_workflows.prepare_practice()
+            self.exposure_workflows.prepare_practice(reason=reason)
         if effect.feedback:
             self.notices.feedback = effect.feedback
             self.notices.next_action = effect.next_action
@@ -126,12 +126,13 @@ class LessonExecution:
         return self.flow_session.status(self.source_identity.plan,self.playback_session.mode)
 
     def begin_course_stage(self, *, bump_revision: bool = True,
-                           explicit_learn: bool = False, effect=None):
+                           explicit_learn: bool = False, effect=None,
+                           reason=None):
         effect = self.teaching_decisions.manual_effect(
             "learn" if explicit_learn else "course_stage", effect=effect)
         selected = self.teaching_decisions.install_command(effect)
         if selected is not None:
-            self.enter_selected_exposure(selected,bump_revision=bump_revision)
+            self.enter_selected_exposure(selected,bump_revision=bump_revision,reason=reason)
 
     def skip_stage(self, reason, *, effect=None):
         effect = self.teaching_decisions.manual_effect(
@@ -141,7 +142,7 @@ class LessonExecution:
         selected = self.teaching_decisions.install_command(effect)
         self.reset_trouble()
         self.lesson_cursor.set_course_guided(True)
-        self.enter_selected_exposure(selected)
+        self.enter_selected_exposure(selected,reason="skip_stage")
         self._save()
 
     def place_original(self, *, effect=None):
@@ -156,7 +157,7 @@ class LessonExecution:
         selected = self.teaching_decisions.install_command(effect)
         self.reset_trouble()
         self.lesson_cursor.set_course_guided(True)
-        self.enter_selected_exposure(selected)
+        self.enter_selected_exposure(selected,reason="place_original")
         self._save()
 
     def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
@@ -175,7 +176,8 @@ class LessonExecution:
         self.attempt.prepare_section(start=selected.from_beat,end=selected.end_beat,
             first_bar=self.source_identity.plan.active_phrase.first_bar+grid.index(selected.from_beat),
             last_bar=self.source_identity.plan.active_phrase.first_bar+grid.index(selected.end_beat)-1)
-        self.begin_learn(from_beat=selected.from_beat,recovery=True,exposure=selected)
+        self.begin_learn(from_beat=selected.from_beat,recovery=True,exposure=selected,
+            reason="revisit_trouble")
         self._save()
 
     def reset_trouble(self):
@@ -191,12 +193,12 @@ class LessonExecution:
     def begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
                      recovery: bool = False,
                      remediation: RemedialAssignment | None = None,
-                     exposure=None, effect=None):
+                     exposure=None, effect=None, reason=None):
         source = self.exposure_workflows.source()
         entry = self.flow_session.guided_entry(self.source_identity.plan,
             warmup=source.warmup,recovery=recovery,simplified=remediation is not None)
         if entry is not None:
-            self.flow_execute(entry)
+            self.flow_execute(entry,reason=reason)
             return
         selected = exposure or self.teaching_decisions.install_command(self.teaching_decisions.manual_effect(
             "learn",from_beat=from_beat,effect=effect))
@@ -204,14 +206,14 @@ class LessonExecution:
         prepared = prepare_guided(self.exposure_workflows.source(),selected,
             revision=self.source_identity.revision,bump_revision=bump_revision,
             recovery=recovery,remediation=remediation,retry_range=self.attempt.retry_range)
-        self.exposure_installer.apply(prepared)
+        self.exposure_installer.apply(prepared,reason=reason)
 
     def review_retry(self, first_bar, last_bar, *, effect=None):
         effect = self.teaching_decisions.manual_effect(
             "review_retry",values={"first_bar":first_bar,"last_bar":last_bar},
             effect=effect)
         selected = self.teaching_decisions.install_command(effect)
-        self.exposure_workflows.prepare_practice(exposure=selected)
+        self.exposure_workflows.prepare_practice(exposure=selected,reason="review_retry")
         self.lesson_cursor.select_opening(selected.from_beat)
         self.attempt.prepare_section(start=self.lesson_cursor.opening_beat,
             end=selected.end_beat or self.source_identity.plan.active_phrase.end-self.source_identity.plan.active_phrase.start,
@@ -223,7 +225,7 @@ class LessonExecution:
     def practice_weak(self, *, effect=None):
         effect = self.teaching_decisions.manual_effect("practice_weak", effect=effect)
         selected = self.teaching_decisions.install_command(effect)
-        self.exposure_workflows.prepare_practice(exposure=selected)
+        self.exposure_workflows.prepare_practice(exposure=selected,reason="practice_weak")
         self.lesson_cursor.select_opening(selected.from_beat)
         self.attempt.prepare_section(start=self.lesson_cursor.opening_beat,
             end=selected.end_beat or self.source_identity.plan.active_phrase.end-self.source_identity.plan.active_phrase.start)
@@ -249,9 +251,9 @@ class LessonExecution:
             "seek",values={"bar":bar},effect=effect)
         selected = self.teaching_decisions.install_command(effect)
         if selected.mode == "learn":
-            self.begin_learn(from_beat=selected.from_beat,exposure=selected)
+            self.begin_learn(from_beat=selected.from_beat,exposure=selected,reason="seek")
         else:
-            self.exposure_workflows.prepare_practice(exposure=selected)
+            self.exposure_workflows.prepare_practice(exposure=selected,reason="seek")
             self.visual_transport.prepare_rewind(selected.from_beat)
             self.attempt.prepare_section(start=selected.from_beat,
                 end=self.source_identity.plan.active_phrase.end-self.source_identity.plan.active_phrase.start,
