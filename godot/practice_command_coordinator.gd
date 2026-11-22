@@ -86,9 +86,9 @@ func _flush_transport_action() -> void:
 func request_action(command: Dictionary, presentation_facts: Dictionary) -> void:
     last_state = presentation_facts
     var action: String = str(command.get("action",""))
-    if action.begins_with("ui_"):
-        # Every raw screen or keyboard intent uses the exact ready renderer
-        # source and generation. The backend rechecks both under its lock.
+    if action.begins_with("ui_") and action not in ["ui_suspend","ui_stop"]:
+        # Source-bound gestures carry the physical renderer's revision and
+        # readiness. Stop and one-way suspension must survive a stale view.
         command = command.duplicate(true)
         command["score_ready"] = score_session.is_ready()
         command["score_revision"] = score_session.revision

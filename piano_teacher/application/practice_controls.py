@@ -50,7 +50,7 @@ class PracticeControls:
                 error = kwargs.pop("score_error", "")
                 score_revision = kwargs.pop("score_revision", None)
                 score_fingerprint = kwargs.pop("score_fingerprint", None)
-                if action != "ui_suspend" and (
+                if action not in ("ui_suspend","ui_stop") and (
                         type(ready) is not bool or type(error) is not str
                         or type(score_revision) is not int
                         or type(score_fingerprint) is not str):
@@ -68,7 +68,7 @@ class PracticeControls:
                             or context_revision != current.get("revision")
                             or context_fingerprint != current.get("piece_fingerprint")):
                         raise ValueError("Resume prompt belongs to an obsolete lesson")
-                if action != "ui_suspend" and ready and (
+                if action not in ("ui_suspend","ui_stop") and ready and (
                         score_revision != current.get("revision")
                         or score_fingerprint != current.get("piece_fingerprint")):
                     raise ValueError("Displayed score belongs to an earlier source revision")
