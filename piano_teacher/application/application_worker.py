@@ -26,12 +26,17 @@ class ApplicationWorker:
         began = time.perf_counter()
         try:
             with self.lock:
-                self.timeline.update()
+                # The native tick is one ordered session transaction:
+                # settle all musical handoffs, replay timestamp-preserving
+                # boundary input against the resulting take, then publish.
+                # No interim state projection may outrun deferred MIDI.
+                self.timeline.settle_transitions()
                 while self.midi_ingress.deferred:
                     message, received_at, corrected_at, _transport = self.midi_ingress.deferred.popleft()
                     self.midi_application_input.receive_message(
                         message, received_at=received_at,
                         corrected_at=corrected_at, deferred=True)
+                self.timeline.publish_settled()
                 if self.source_identity.plan is None or self.visual_transport.paused:
                     return 250
                 if (self.playback_session.running

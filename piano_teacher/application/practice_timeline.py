@@ -229,13 +229,12 @@ class PracticeTimeline:
         """Schedule one follow-up transition in the current locked worker tick."""
         self._followup_requested = True
 
-    def update(self) -> None:
-        """Settle same-tick transitions, then publish the resulting state once.
+    def settle_transitions(self) -> None:
+        """Drain all newly eligible transitions under the caller's lock.
 
-        An automatic repeat or a committed completion can immediately make
-        another transition eligible. There is no nested worker invocation
-        and no intermediate state publication: consumers must see the final
-        authorized take, not a historical chain of provisional snapshots.
+        An automatic repeat or committed completion may immediately make
+        another transition eligible. Never expose intermediate clock states
+        or invoke another worker tick recursively.
         """
         try:
             for _ in range(17):
@@ -254,9 +253,12 @@ class PracticeTimeline:
                 "Check storage or the reported error, then Resume to retry this same take.")
             raise
 
-        # Only the settled transaction can advance admission status or
-        # publish live feedback. Repeating these writes for former recursive
-        # frames duplicates side effects and exposes intermediate lifecycles.
+    def publish_settled(self) -> None:
+        """Publish one accepted outcome after transitions and deferred MIDI.
+
+        Replaying deferred hardware events before this publication makes
+        controls, live feedback and transport describe the same final source.
+        """
         self.playback.advance(self.transport_timing.playback_facts())
         self.read_models.prepare_score_presentation()
         try:
