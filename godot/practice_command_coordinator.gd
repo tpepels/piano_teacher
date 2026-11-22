@@ -104,9 +104,11 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
         projected_action = str(choice.get("action",""))
     var previous: String = state.control_action
     if not state.action_requested(action,projected_action):
-        practice_view.begin_action(projected_action if not projected_action.is_empty() else action,previous)
+        if action != "ui_suspend":
+            practice_view.begin_action(projected_action if not projected_action.is_empty() else action,previous)
         return
-    practice_view.begin_action(projected_action if not projected_action.is_empty() else action)
+    if action != "ui_suspend":
+        practice_view.begin_action(projected_action if not projected_action.is_empty() else action)
     # A displayed label may be stale when the backend resolves this click.
     # Provide physical facts for any raw gesture that *may* start, retry
     # or resume. Python chooses the concrete action under its lock.

@@ -122,8 +122,8 @@ func _ready() -> void:
     navigation_session.configure(
         practice_backdrop,navigation_drawer,practice_view,
         library_view,settings_view,lesson_session,screens)
-    navigation_session.pause_requested.connect(
-        func(): _send_action({"action":"pause"}))
+    navigation_session.suspend_requested.connect(
+        func(): _send_action({"action":"ui_suspend"}))
     navigation_session.library_requested.connect(library_catalog.request_catalog)
     navigation_session.settings_requested.connect(settings_interactions.request_settings)
     navigation_session.devices_requested.connect(midi_devices.discover)

@@ -1,27 +1,14 @@
 extends RefCounted
-## Pure screen-transition decisions. Main retains command dispatch, UI state
-## and the currently selected workspace; this policy has no scene references.
+## Screen routing only. Leaving Practice requests an idempotent backend
+## suspension; phase, pending action and musical pause eligibility belong
+## exclusively to Python's locked control projection.
 
-const TRANSPORT_PHASES := [
-    "count_in", "playing", "guided_wait", "feedback",
-    "recovering", "loading", "preview_gap"
-]
-const START_ACTIONS := [
-    "start", "restart", "resume", "score_ready",
-    "learn", "learn_retry", "practice", "listen", "perform"
-]
-
-static func plan(target: String, previous: String, phase: String,
-        action_pending: bool, operation: String,
-        control_action: String) -> Dictionary:
+static func plan(target: String, previous: String) -> Dictionary:
     if target == "home":
         target = "practice"
-    var beginning: bool = action_pending and operation == "practice.command" \
-        and control_action in START_ACTIONS
     return {
         "target": target,
         "previous": previous,
         "remember_settings": target == "settings" and previous != "settings",
-        "pause": previous == "practice" and target != "practice" and \
-            (phase in TRANSPORT_PHASES or beginning),
+        "suspend": previous == "practice" and target != "practice",
     }

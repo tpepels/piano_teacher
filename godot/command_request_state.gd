@@ -12,7 +12,11 @@ var resume_requested := false
 
 func action_requested(action: String, projected_action: String = "") -> bool:
     if pending:
-        if action in ["pause", "stop", "ui_pause"] or projected_action == "pause":
+        if action == "ui_suspend":
+            # A one-way navigation suspend supersedes any queued pause
+            # toggle; the backend later decides whether Pause still applies.
+            queued_transport = action
+        elif action in ["pause", "stop", "ui_pause"] or projected_action == "pause":
             # Preserve the raw pause gesture across the request queue.
             # Its final transport meaning belongs to the Python session.
             queued_transport = "ui_pause" if action.begins_with("ui_") else action

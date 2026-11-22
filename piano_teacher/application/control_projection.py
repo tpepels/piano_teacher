@@ -6,7 +6,7 @@ from .transport_commands import PAUSABLE_PHASES
 UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
     "ui_previous", "ui_review_previous", "ui_skip",
-    "ui_tempo_up", "ui_tempo_down", "ui_midi_start"))
+    "ui_tempo_up", "ui_tempo_down", "ui_midi_start", "ui_suspend"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
 
 
@@ -160,6 +160,12 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
     """Resolve the raw gesture under the session lock; renderer supplies readiness."""
     if intent not in UI_INTENTS:
         raise ValueError(f"Unknown UI intent: {intent}")
+    if intent == "ui_suspend":
+        # Leaving a screen is a one-way request. A pending Start may finish
+        # before this gesture is delivered, but an already paused lesson
+        # must NEVER turn this into Resume. No score readiness is required.
+        pause = project_controls(state)["pause"]
+        return ("pause" if pause["enabled"] and pause["action"] == "pause" else None), {}
     choice = project_controls(state)[intent.removeprefix("ui_")]
     action = choice["action"]
     if not action or not choice.get("enabled", False):

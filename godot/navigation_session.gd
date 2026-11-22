@@ -4,7 +4,7 @@ extends RefCounted
 ## changing a screen never independently starts or retimes a graded take.
 const NavigationPolicy := preload("res://navigation_policy.gd")
 
-signal pause_requested
+signal suspend_requested
 signal library_requested
 signal settings_requested
 signal devices_requested
@@ -44,16 +44,13 @@ func navigate(destination: String, state: Dictionary, pending) -> void:
     if _practice == null or _drawer == null or _screens.is_empty():
         push_error("NAVIGATION_SESSION: screen composition is not ready")
         return
-    var command = pending
-    var decision: Dictionary = NavigationPolicy.plan(
-        destination,current_screen,str(state.get("phase","")),
-        command.pending,command.operation,command.control_action)
+    var decision: Dictionary = NavigationPolicy.plan(destination,current_screen)
     var target: String = str(decision["target"])
     var previous: String = str(decision["previous"])
     if bool(decision["remember_settings"]):
         settings_return_screen = previous
-    if bool(decision["pause"]):
-        pause_requested.emit()
+    if bool(decision["suspend"]) and bool(state.get("loaded",false)):
+        suspend_requested.emit()
     current_screen = target
     if _backdrop != null:
         _backdrop.visible = target == "practice"
