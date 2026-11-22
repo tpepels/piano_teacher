@@ -365,7 +365,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         listen=r.listen, notices=r.notices, outcome_effects=r.outcome_effects,
         playback=r.playback, playback_session=r.playback_session, read_models=r.read_models,
         recovery_workflows=r.recovery_workflows, score_artifact_registry=r.score_artifact_registry, score_read=r.score_read,
-        session_commands=r.session_commands, source_identity=r.source_identity, teaching_decisions=r.teaching_decisions,
+        source_identity=r.source_identity, teaching_decisions=r.teaching_decisions,
         timed_playback=r.timed_playback, transport_timing=r.transport_timing, visual_transport=r.visual_transport)
 
     r.midi_application_input = MidiApplicationInput(

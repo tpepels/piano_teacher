@@ -14,7 +14,7 @@ class TransportActions:
                  feedback_seconds, guided_session, lesson_cursor, lesson_execution,
                  lifecycle, listen, notices, outcome_effects,
                  playback, playback_session, read_models, recovery_workflows,
-                 score_artifact_registry, score_read, session_commands, source_identity,
+                 score_artifact_registry, score_read, source_identity,
                  teaching_decisions, timed_playback, transport_timing, visual_transport):
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
@@ -34,7 +34,6 @@ class TransportActions:
         self.recovery_workflows = recovery_workflows
         self.score_artifact_registry = score_artifact_registry
         self.score_read = score_read
-        self.session_commands = session_commands
         self.source_identity = source_identity
         self.teaching_decisions = teaching_decisions
         self.timed_playback = timed_playback
@@ -78,7 +77,7 @@ class TransportActions:
                 authorized.validate_installed(selected,intent)
                 self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,
                     scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in,
-                    effect=authorized.transition.effect)
+                    effect=authorized.transition.effect,reason=authorized.action)
             elif authorized.action == "resume":
                 self.resume_current_session(
                     presentation_lead_seconds=max(0.0,authorized.deadline-self.clock()),
@@ -87,7 +86,7 @@ class TransportActions:
                 self.timed_playback.start(from_beat=intent.from_beat,mode=intent.mode,
                     loop_continuation=authorized.action == "auto",
                     decided=False,scheduled_deadline=authorized.deadline,
-                    count_in_plan=intent.count_in)
+                    count_in_plan=intent.count_in,reason=authorized.action)
                 self.visual_transport.bind_scheduled_start(
                     transport_id=self.playback_session.transport_id,
                     from_beat=self.visual_transport.play_from_beat,
@@ -99,7 +98,7 @@ class TransportActions:
                     count_in=intent.count_in,deadline=authorized.deadline)
                 self.notices.feedback = "Count in, then listen"
 
-    def control_acknowledgement(self, action: str, kwargs: dict) -> None:
+    def control_acknowledgement(self, action: str, kwargs: dict, *, reason=None) -> None:
         if action == "score_ready":
             # The compiled native score has now supplied real printed rest
             # and header clearance. Install it before the score-ready ACK
@@ -128,7 +127,8 @@ class TransportActions:
                         kwargs.get("presentation_deadline_ms") is None else None),
                     presentation_bpm=self.transport_timing.presentation_bpm())
                 self.timed_playback.start(from_beat=position,mode=mode,scheduled_deadline=timing.deadline,
-                    presentation_lead_seconds=timing.lead_seconds,decided=True)
+                    presentation_lead_seconds=timing.lead_seconds,decided=True,
+                    reason=reason or action)
                 if announce:
                     self.visual_transport.bind_scheduled_start(
                         transport_id=self.playback_session.transport_id,
@@ -141,7 +141,7 @@ class TransportActions:
 
     def control_transport(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "practice":
-            self.exposure_workflows.prepare_practice(effect=effect)
+            self.exposure_workflows.prepare_practice(effect=effect,reason=action)
             if kwargs.get("wait_for_player", False):
                 # Listen returns to a ready score without an auto count-in.
                 self.playback_session.wait_for_player()
@@ -236,16 +236,16 @@ class TransportActions:
             self.score_artifact_registry.current.source_bpm_changed(p.piece.bpm)
             if self.playback_session.mode not in ("listen","learn") else False)).route
         if route == "listen":
-            self.exposure_workflows.prepare_listen(effect=effect)
+            self.exposure_workflows.prepare_listen(effect=effect,reason=action)
             return
         if route == "prepare_practice":
-            self.exposure_workflows.prepare_practice(exposure=selected)
+            self.exposure_workflows.prepare_practice(exposure=selected,reason=action)
             return
         if route == "learn":
-            self.lesson_execution.begin_learn(exposure=selected)
+            self.lesson_execution.begin_learn(exposure=selected,reason=action)
             return
         if route == "reload_score":
-            self.lifecycle.stop(reason=self.session_commands.action_reason)
+            self.lifecycle.stop(reason=action)
             self.source_identity.advance_revision()
             self.playback_session.await_score(self.source_identity.revision)
             self.notices.feedback = "Preparing sheet music"
@@ -264,7 +264,7 @@ class TransportActions:
             return
         self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,decided=True,
                    scheduled_deadline=scheduled_deadline,
-                   presentation_lead_seconds=presentation_lead_seconds)
+                   presentation_lead_seconds=presentation_lead_seconds,reason=action)
         return
 
     def resume_current_session(self, *, presentation_lead_seconds=0.0,
@@ -278,9 +278,9 @@ class TransportActions:
             # Infrastructure acknowledgement stays within this transaction.
             # Re-entering control() from Resume would recursively start a
             # second command scope and repeat the application router.
-            with self.session_commands.reason("score_ready"):
-                self.control_acknowledgement(
-                    "score_ready", {"revision": completed.deferred_score_revision})
-                self.read_models.prepare_score_presentation()
+            self.control_acknowledgement(
+                "score_ready", {"revision": completed.deferred_score_revision},
+                reason="score_ready")
+            self.read_models.prepare_score_presentation()
         self.timed_playback.begin_listen_if_ready()
 
