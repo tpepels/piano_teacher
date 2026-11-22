@@ -282,7 +282,21 @@ Paused seek availability reads the backend projection
 Native preflight rejects malformed physical geometry and exposes its
 exact refusal reason without creating another scheduling owner
 ([`19c7378`](https://github.com/tpepels/piano_teacher/commit/19c7378c8906cdcbf8e83dd3fcf605a6b96f494d)).
-Same-HEAD local core/native and physical acceptance remain open.
+The separate Lesson Path passage controls and S/Stop gesture now resolve
+through the Python projection. Returning from a rejected lesson navigation
+does not change the screen. Source-published activity, hand, hint and
+explicit Lesson Path Skip eligibility replace local modal phase/locking rules.
+The native binder no longer has a physical paused-source reuse branch;
+a fresh authorized Resume is the only physical reservation route, with
+paused ink still protected as an immutable predecessor. See the
+2026-11-22 source commits and status in [ROADMAP](../ROADMAP.md).
+
+The ownership scan distinguishes display-only phase readers (`GameStage`,
+`GamePhaseCue`, `ScoreStepTimeline`, `NativeScoreFeedback`,
+`PracticeScoreStage`, `ViewBase`) from the native queue admission and
+score-asset readiness adapters. They may draw or prefetch a selected state;
+none may select practice progression or override a backend deadline.
+Native parsing, real-scene CI and connected-piano acceptance remain open.
 
 ### Additional source/receipt invariants (2026-11-21)
 

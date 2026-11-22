@@ -50,7 +50,9 @@ when manually dispatched from Actions → Tests with `core` or `full` (`full`
 also runs native-production). Pushes and pull requests do not start CI.
 For same-HEAD local acceptance, run the core suite and strict native verifier
 after development is complete; the last green run on an older SHA does not
-verify subsequent source edits. CI requests informational Python coverage:
+verify subsequent source edits. The 2026-11-22 native binder signature and
+Lesson Path control changes were committed without local CI; both are part
+of the next same-HEAD acceptance. CI requests informational Python coverage:
 
 ~~~bash
 bash scripts/test.sh --coverage
