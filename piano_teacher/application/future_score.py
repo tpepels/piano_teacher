@@ -112,15 +112,9 @@ class FutureScore:
                 self._working = selection.identity
             try:
                 assets = ScoreArtifacts(PreprocessingCache(self._folder))
-                layout = assets.geometry(selection)
-                model = assets.semantic_score(selection)
+                bundle = assets.bundle(selection)
                 payload = _reply({
-                    "status": "ready", "step_number": number,
-                    "stage_key": selection.stage_key,
-                    "hand": selection.hand, "stage_label": label,
-                    "revision": selection.revision,
-                    "fingerprint": selection.fingerprint,
-                    "layout": layout, "model": model,
+                    **bundle, "step_number": number, "stage_label": label,
                 })
                 error = ""
             except Exception as exc:
