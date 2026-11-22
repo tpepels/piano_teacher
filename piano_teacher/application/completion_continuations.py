@@ -31,6 +31,9 @@ class CompletionContinuations:
         self.clock, self.library = clock, library
         self.score_artifact_registry = score_artifact_registry
         self.assessment, self.feedback_seconds = assessment, feedback_seconds
+        # Successful effects are consumed by their exact durable identity.
+        # A continuation dispatch error leaves the receipt retryable.
+        self._applied_continuation_effect = None
 
     def advance_pending_feedback(self, now: float, *, force_early: bool = False):
         transaction = self.teaching_continuation.begin_feedback(
@@ -75,7 +78,12 @@ class CompletionContinuations:
         self.notices.feedback,self.notices.next_action = fault.feedback,fault.next_action
 
     def dispatch_effect(self, effect, now: float) -> None:
-        """Apply typed source ports; every route/deadline was selected by its owner."""
+        """Apply an exact decided successor once after durable settlement."""
+        previous = self._applied_continuation_effect
+        if previous is not None and previous.identity == effect.identity:
+            if previous != effect:
+                raise ValueError("Conflicting continuation effects for one decision")
+            return
         if isinstance(effect,EnterSelectedExposure):
             self.lesson_execution.enter_selected_exposure(effect.exposure)
         elif isinstance(effect,ApplySelectedResponse):
@@ -95,6 +103,9 @@ class CompletionContinuations:
                 self.notices.feedback = applied.feedback
             if applied.start is not None:
                 self.timed_playback.continue_at(applied.start.deadline,from_beat=applied.start.from_beat)
+        # Record success after every domain and physical start effect.
+        # If any action raises, the same settlement receipt can replay it.
+        self._applied_continuation_effect = effect
 
     def commit_pending(self, *, finish_publication: bool = True) -> str:
         if self.attempt_settlement.pending_result is None or self.source_identity.plan is None:
