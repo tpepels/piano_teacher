@@ -145,6 +145,10 @@ class ScoreArtifacts:
             source_ids = tuple(note.source_id for note in selected.phrase.notes)
             if (not source_ids or len(source_ids) != len(set(source_ids))):
                 raise ValueError("Score bundle has missing or duplicate source note IDs")
+            graded_ids = {note.source_id for note in selected.phrase.notes
+                          if selected.hand == "both" or note.hand == selected.hand}
+            if set(model.get("active_note_ids", ())) != graded_ids:
+                raise ValueError("Score bundle notation does not match graded MIDI source IDs")
             return {
                 "status": "ready",
                 "fingerprint": selected.fingerprint,
