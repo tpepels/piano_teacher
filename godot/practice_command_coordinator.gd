@@ -4,6 +4,7 @@ extends RefCounted
 ## and the one ScoreAdmissionGateway.
 const CommandRequestState := preload("res://command_request_state.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
+const StateContract := preload("res://state_contract.gd")
 const Reply := preload("res://inprocess_request.gd")
 
 signal succeeded(decision: Dictionary, opened: Variant, code: int, body: PackedByteArray, started_ms: int)
@@ -187,15 +188,36 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
                 operation,false)
             _flush_transport_action()
             return
+        # A successful command is not a license to run display or
+        # navigation effects before its backend state is accepted. Check
+        # the identical generated contract used by the poll inbox first.
+        var command_state: Dictionary = envelope["state"]
+        var violations: Array[String] = StateContract.problems(command_state)
+        if not violations.is_empty():
+            command_failure_presenter.present(
+                "Practice command returned an invalid state: " +
+                "; ".join(violations),operation,false)
+            _flush_transport_action()
+            return
         accepted_outcome = envelope["outcome"]
-        if (int(accepted_outcome.get("version",-1)) != 1
-                or not accepted_outcome.get("effects") is Dictionary):
+        var effects: Variant = accepted_outcome.get("effects")
+        var valid_outcome: bool = (
+            int(accepted_outcome.get("version",-1)) == 1
+            and typeof(accepted_outcome.get("executed")) == TYPE_BOOL
+            and typeof(accepted_outcome.get("action")) == TYPE_STRING
+            and effects is Dictionary)
+        if valid_outcome:
+            for name in ["navigate_practice","refresh_settings","invalidate_lesson"]:
+                if typeof(effects.get(name)) != TYPE_BOOL:
+                    valid_outcome = false
+                    break
+        if not valid_outcome:
             command_failure_presenter.present(
                 "Practice command outcome contract is obsolete",
                 operation,false)
             _flush_transport_action()
             return
-        presentation_body = JSON.stringify(envelope["state"]).to_utf8_buffer()
+        presentation_body = JSON.stringify(command_state).to_utf8_buffer()
     var decision: Dictionary = CommandSuccessPolicy.decide(
         operation,bool(completed["resume_saved"]),opened,accepted_outcome)
     if str(decision["kind"]) == "fingering":
