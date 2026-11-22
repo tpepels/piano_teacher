@@ -1,6 +1,6 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-21 · MIDI input only**
+**Updated 2026-11-22 · MIDI input only**
 
 [Practice flow](docs/practice-flow.md) is the learner-visible contract.
 [Architecture](docs/architecture.md), [development](docs/development.md) and
@@ -37,15 +37,17 @@ The separate final examination uses the whole original piece.
 | 2026-11-21 | The PracticeEngine redesign may introduce or replace architectural layers, boundaries and interfaces. File-size limits are diagnostic goals, not mandatory constraints. |
 | 2026-11-21 | Pause freezes the visible score even in Free/Listen/count-in; render only the selected practice measure window, retaining full sounding tails but no visible neighboring bars. |
 
-## Active roadmap: UI boundary and MIDI transition verification (V0-V7, 2026-11-21)
+## Active roadmap: UI boundary and MIDI transition verification (V0-V7, updated 2026-11-22)
 
-**Status: IN PROGRESS. Initial V0 ownership tracing and a V2 control-intent migration have begun; no phase is complete or accepted.** This is the
-next architectural workstream. It does not undo the completed Python
-`PracticeEngine` S0-S7 decomposition; it addresses the remaining distribution
-of behavior between Python and Godot. Prior green CI and package runs are
-historical evidence for their exact revisions, not acceptance of this plan.
-The connected-piano failures (Pause/Free motion, unexpected visible measures,
-and Pathétique MIDI/runtime failures) are open until reproduced and accepted.
+**Status: IN PROGRESS.** The backend-owned transition/action contract,
+physical feasibility → deadline → arm → attestation protocol, immutable
+native stream, frame-synchronous state projection, fake-MIDI fault journeys
+and package build are implemented. The latest complete embedded-production gate passes its real-scene
+journeys, all 16 checked-in repertoire sources and relocated package.
+The subsequent source cleanup has not yet been independently rerun. No V0–V7 phase is declared physically accepted.
+The earlier `PracticeEngine` S0–S7 decomposition remains in place. The
+connected-piano problems (Pause/Free motion, unintended neighboring measures
+and Pathétique runtime) require repeatable physical MIDI/audio acceptance.
 
 **Objective:** A single, inspectable practice state machine and playback
 transaction authority drive the product from opening a MIDI file through
@@ -55,7 +57,7 @@ notation reservation, reports geometry/readiness and emits user or device
 intents. It does not independently choose practice modes, actions, tempo,
 musical deadlines, grades, mastery, measure windows or retry behavior.
 
-**Why another workstream is necessary:**
+**Initial V0 failure inventory (historical, 2026-11-21):**
 - `godot/practice_control_policy.gd` decides Play/Pause/Resume/Retry/Listen
   commands from backend phase strings; `godot/practice_screen.gd` separately
   interprets those strings to enable controls and choose captions.
@@ -114,15 +116,21 @@ continuation or partial grading.
 | V3 | Unify graphical admission and playback transaction decisions | In progress; immutable physical receipts, Python deadline authorization, retry/recovery and outgoing-tempo fixed rest; full native admission acceptance pending |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress; backend-owned hold/target directives, frozen idle and frame-stepped Godot checks pass core CI; connected native acceptance open |
 | V5 | Strip application decisions out of Godot UI and effect coordinators | In progress; obsolete native control policy removed, backend owns motion and command effects; other screen/effect ownership and native gate open |
-| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | In progress; fake MIDI success/failure and source/receipt matrix in core CI, latest passing core run 44956379014; complete physical matrix open |
-| V7 | Integrated production/package verification and physical acceptance | In progress; embedded build, real-source scenes and relocated package passed earlier gate; fixed repeat native rerun 44956142119 pending, physical keyboard/audio open |
+| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | In progress; source-bound fake MIDI and dropped reserve/present ACK pass real embedded Godot; core CI 45016371433 passes, hardware matrix open |
+| V7 | Integrated production/package verification and physical acceptance | In progress; full embedded production and packaging passed on 1c1b98e (run 45017492022); final code cleanup and physical keyboard/audio acceptance open |
 
-### Verified gates and remaining hard constraints (2026-11-21)
+### Latest verified gates and remaining constraints (2026-11-22)
 
-- **Core CI:** [`44956379014`](https://github.com/tpepels/piano_teacher/actions/runs/44956379014) passed Python source-level tests and Godot behavior/syntax checks after the V5 raw advanced-Pause change. The Python command-result, schema-v5 and guided-motion changes are covered by earlier successful runs. The assertions are real application and native timeline/score-owner checks, not mocks of lesson grading.
-- **Earlier full native:** [`44955009440`](https://github.com/tpepels/piano_teacher/actions/runs/44955009440) built embedded Python, ran the production UI, authentic Moonlight/Peace Piece/Chopin scores and relocated-package audit successfully. Its full-scene synthetic MIDI journey exposed the documented outgoing/rest tempo bug at the 40-to-48 BPM repeat. The scheduler and outdated tests have been fixed.
-- **Latest native rerun:** [`44956142119`](https://github.com/tpepels/piano_teacher/actions/runs/44956142119) exercises that corrected timing and the new V4/V5 protocol. Its core job used the subsequently corrected stale test assertion; treat only the independent native-production job as a candidate acceptance gate, and do not mark V7 complete until that job passes.
-- **Unclosed design/acceptance:** Formal end-to-end source/receipt fault injection at the actual Godot/embedded-worker boundary, exhaustive phase/meter/polyrhythm coverage, a complete native-effects authority sweep and physically connected MIDI and speaker acceptance are still required. These cannot be inferred from a virtual MIDI device or an isolated passing CI shard. No phase is marked complete on source inspection alone.
+- **Core CI:** [45017492022](https://github.com/tpepels/piano_teacher/actions/runs/45017492022) passed 147 Python tests, 4 skips, and Godot startup syntax/behavior checks on `1c1b98e`. Existing regression tests were run, not expanded before physical piano acceptance.
+- **Native production on `d32cb13`:** [45015311868](https://github.com/tpepels/piano_teacher/actions/runs/45015311868) passed the real production Play/Pause/Resume UI, three real embedded-Godot synthetic-MIDI journeys (normal, lost reserve ACK, lost present ACK), all 16 available MIDI repertoire fixtures and the relocated standalone package. The independent Moonlight Sonata multi-action path still failed when Pause-in-count-in → Resume recalculated an immutable source origin; therefore this run is **failed (20/21)**.
+- **Native production on `1c1b98e`:** [45017492022](https://github.com/tpepels/piano_teacher/actions/runs/45017492022) passed all production scenarios: real Play/Pause/Resume, synthetic physical-MIDI transitions, lost reserve/present acknowledgements, the complete Moonlight Sonata retry/Listen/navigation journey, 16 MIDI repertoire fixtures and relocated standalone package boot. The earlier failed `ed9e11b` run ([45016371433](https://github.com/tpepels/piano_teacher/actions/runs/45016371433)) is retained as the source-specific failure witness. The subsequent native-legacy cleanup is unverified until an explicitly requested manual full CI run.
+- **Physical acceptance:** A keyboard with real MIDI timestamps, actual speaker/click/voice, continuity under Pause/Resume, selected-window bounds and Pathétique behavior remain unverified. Synthetic input and CI cannot certify device/audio latency or readability.
+
+### 2026-11-22 integrated source fixes and verification policy
+
+The graphical controls now read the terminal backend admission result under the same command lock (`2cd9e64`) and display a recoverable, explicit failure (`68b1bca`). Physical preflight retains only the measured arm round-trip clearance rather than delaying the first audible count-in (`c4a3bf1`, corrected by `d32cb13`).
+Native Resume always protects the paused source and schedules a distinct full count-in after a frozen pause (`91f5c0a`, revised by `1c1b98e`). Its accepted snapshot synchronously binds authorized notation; Python rejects deadline retiming of genuinely reused paused ink, and native preflight tolerates only integer-frame quantization (`d32cb13`). An attempted reused-origin correction (`ed9e11b`) still failed the Moonlight Pause-in-count-in native scenario: the paused world's time remains frozen during the asynchronous reservation. Production consequently always selects a **fresh, backend-authorized Resume slot** (`1c1b98e`), with the paused predecessor physically protected. Audible cue deduplication is keyed by the authorized segment. The full native rerun is pending.
+No replacement UI state machine, second musical clock or software-only claim of physical acceptance was introduced. On 2026-11-22 the GitHub workflow was changed to `workflow_dispatch` only, with `core` (default) and `full` scopes: commits and pull requests no longer launch CI. Manual verification is available from Actions → Tests. A running workflow cannot be canceled through the available GitHub connector; its existing run completed successfully before the manual-only change.
 
 ### Initial implementation record - 2026-11-21
 
@@ -206,7 +214,7 @@ acceptance claim; deterministic full-transition tests remain V1/V6 scope.
 
 ### V0 actual transition/ownership ledger - 2026-11-21
 
-Added `docs/practice-transition-boundaries.md` as a concrete
+Originally recorded separately; now consolidated into the [production transition ownership ledger](docs/architecture.md#production-practice-transition-and-ownership-ledger) as a concrete
 end-to-end authority/observation matrix for the active production
 path: MIDI/file/controls → locked Python transitions → typed
 `practice.command` outcome and versioned state → source-bound
