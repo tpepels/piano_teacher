@@ -412,6 +412,9 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         teaching_decisions=r.teaching_decisions, timed_playback=r.timed_playback,
         transport_commands=r.transport_commands, visual_transport=r.visual_transport,
         timeline=r.practice_timeline, midi_ingress=r.midi_ingress,
-        midi_application_input=r.midi_application_input, runtime_timings=r.runtime_timings)
+        midi_application_input=r.midi_application_input, runtime_timings=r.runtime_timings,
+        source_workflows=r.source_workflows, lesson_execution=r.lesson_execution,
+        score_preload=r.score_preload, lifecycle=r.session_lifecycle,
+        progress=r.progress)
     r.midi_application_input.bind_session(r.practice_session)
     return vars(r).copy()

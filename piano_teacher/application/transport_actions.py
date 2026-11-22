@@ -40,6 +40,26 @@ class TransportActions:
         self.transport_timing = transport_timing
         self.visual_transport = visual_transport
 
+    def enable_presentation(self) -> None:
+        self.playback.enable_presentation(self.transport_timing.playback_facts())
+
+    def reserve_physical(self, **values) -> dict:
+        return self.playback.reserve(self.transport_timing.playback_facts(), **values)
+
+    def present_physical(self, **values) -> dict:
+        return self.playback.present(
+            self.transport_timing.playback_facts(),
+            commit=self.commit_playback_intent,
+            capture=self.transport_timing.playback_facts,
+            abort=self.abort_playback, **values)
+
+    def withdraw_physical(self, **values) -> dict:
+        return self.playback.withdraw(self.transport_timing.playback_facts(), **values)
+
+    def fail_physical(self, **values) -> dict:
+        self.playback.fail(notify_failure=self.on_playback_failure, **values)
+        return {"accepted": True}
+
     def abort_playback(self, reason: str) -> None:
         self.lifecycle.stop(reason=reason)
 

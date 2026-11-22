@@ -10,6 +10,10 @@ import time
 from pathlib import Path
 
 from .application.composition import compose_application
+from .application.practice_session import (
+    PresentationRequired, PlaybackReserved, PlaybackPresented,
+    PlaybackWithdrawn, PlaybackFailed, SourceCommitted, SettingsChanged,
+    DeviceSelected, PreloadReady, PreloadFailed, SessionClosed)
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.score_artifacts import ScoreArtifacts
 from .clock import Clock
@@ -138,37 +142,29 @@ class PracticeEngine:
             feedback_events=feedback_events, clock=clock))
 
     def require_presentation(self) -> None:
-        with self.lock:
-            self.playback.enable_presentation(self.transport_timing.playback_facts())
+        self.practice_session.apply(PresentationRequired())
 
     def playback_status(self) -> dict:
         with self.lock:
             return self.playback.status()
 
     def reserve_playback(self, **values) -> dict:
-        with self.lock:
-            return self.playback.reserve(self.transport_timing.playback_facts(),**values)
+        return self.practice_session.apply(PlaybackReserved(values))
 
     def present_playback(self, **values) -> dict:
-        with self.lock:
-            return self.playback.present(self.transport_timing.playback_facts(),
-                commit=self.transport_commands.commit_playback_intent,capture=self.transport_timing.playback_facts,
-                abort=self.transport_commands.abort_playback,**values)
+        return self.practice_session.apply(PlaybackPresented(values))
 
     def withdraw_playback(self, **values) -> dict:
-        with self.lock:
-            return self.playback.withdraw(self.transport_timing.playback_facts(),**values)
+        return self.practice_session.apply(PlaybackWithdrawn(values))
 
     def report_playback_failure(self, **values) -> dict:
-        with self.lock:
-            self.playback.fail(notify_failure=self.transport_commands.on_playback_failure,**values)
-            return {"accepted":True}
+        return self.practice_session.apply(PlaybackFailed(values))
 
     def ports(self) -> list[str]:
         return self.midi_application_input.ports()
 
     def connect(self, name: str):
-        return self.midi_application_input.connect(name)
+        return self.practice_session.apply(DeviceSelected(name))
 
     def hardware_diagnostics(self) -> dict:
         with self.lock:
@@ -219,14 +215,10 @@ class PracticeEngine:
             return self.history_management.delete_learner(confirm=confirm)
 
     def close(self) -> None:
-        with self.lock:
-            self.session_lifecycle.shutdown(
-                midi=self.midi, progress=self.progress, receive=self.midi_application_input.receive)
+        self.practice_session.apply(SessionClosed())
 
     def set_preferences(self, **changes) -> dict:
-        with self.lock:
-            return self.settings_workflows.update(
-                changes, pause_current=self.timed_playback.pause)
+        return self.practice_session.apply(SettingsChanged(changes))
 
     def exercise_diagnostics(self) -> dict:
         with self.lock:
@@ -237,24 +229,21 @@ class PracticeEngine:
         with self.lock:
             path = self.source_workflows.resolve_library(identifier)
         warmup = is_warmup(identifier)
-        self.load(str(path), warmup=warmup)
-        with self.lock:
-            self.source_workflows.mark_library_opened(identifier, warmup=warmup)
+        self.load(str(path), warmup=warmup, opened_identifier=identifier)
 
     def performance_diagnostics(self) -> dict:
         return self.runtime_timings.snapshot()
 
-    def load(self, path: str, *, warmup: bool = False):
+    def load(self, path: str, *, warmup: bool = False,
+             opened_identifier: str | None = None):
         """Commit a prepared source under one mutation guard and short lock."""
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
         with self.source_preparation.source_mutation():
             prepared = self.source_workflows.prepare(
                 path, warmup=warmup, diagnostics=diagnostics)
-            with self.lock:
-                resumed = self.source_workflows.install(prepared, warmup=warmup)
-                if resumed is not None:
-                    self.lesson_execution.flow_open(resumed=resumed)
+            self.practice_session.apply(
+                SourceCommitted(prepared, warmup, opened_identifier))
         if diagnostics:
             print("SCORE_LOAD_STAGE: ready",
                   round((time.perf_counter()-began)*1000,1),
@@ -320,13 +309,11 @@ class PracticeEngine:
 
     def report_preload_failure(self, *, fingerprint: str, step_number: int,
                                revision: int, error: str) -> dict:
-        return self.score_preload.report_preload_failure(
-            fingerprint=fingerprint, step_number=step_number,
-            revision=revision, error=error)
+        return self.practice_session.apply(
+            PreloadFailed(fingerprint, step_number, revision, error))
 
     def acknowledge_preloaded_stage(self, *, stage_key: str, revision: int) -> dict:
-        return self.score_preload.acknowledge_preloaded_stage(
-            stage_key=stage_key, revision=revision)
+        return self.practice_session.apply(PreloadReady(stage_key, revision))
 
     def semantic_score(self) -> dict:
         return self.score_read.semantic_score()

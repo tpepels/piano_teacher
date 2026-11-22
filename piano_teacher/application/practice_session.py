@@ -31,7 +31,73 @@ class PhysicalMidi:
     deferred: bool = False
 
 
-PracticeEvent = UserCommand | ClockAdvanced | PhysicalMidi
+
+@dataclass(frozen=True, slots=True)
+class PresentationRequired:
+    """Desktop requests physical admission before any timed grading."""
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybackReserved:
+    receipt: dict
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybackPresented:
+    receipt: dict
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybackWithdrawn:
+    receipt: dict
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybackFailed:
+    failure: dict
+
+
+@dataclass(frozen=True, slots=True)
+class SourceCommitted:
+    prepared: object
+    warmup: bool
+    opened_identifier: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SettingsChanged:
+    changes: dict
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceSelected:
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class PreloadReady:
+    stage_key: str
+    revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class PreloadFailed:
+    fingerprint: str
+    step_number: int
+    revision: int
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
+class SessionClosed:
+    """Close ledger/device after the final active-take interruption."""
+
+
+PracticeEvent = (UserCommand | ClockAdvanced | PhysicalMidi |
+                 PresentationRequired | PlaybackReserved | PlaybackPresented |
+                 PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
+                 SettingsChanged | DeviceSelected | PreloadReady | PreloadFailed |
+                 SessionClosed)
 
 
 class PracticeSession:
@@ -41,7 +107,9 @@ class PracticeSession:
                  midi, midi_key_shortcuts, playback_session, read_models,
                  session_commands, settings_workflows, source_identity, teaching_decisions,
                  timed_playback, transport_commands, visual_transport,
-                 timeline, midi_ingress, midi_application_input, runtime_timings):
+                 timeline, midi_ingress, midi_application_input, runtime_timings,
+                 source_workflows, lesson_execution, score_preload,
+                 lifecycle, progress):
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
         self.device_workflows = device_workflows
@@ -65,6 +133,11 @@ class PracticeSession:
         self.midi_ingress = midi_ingress
         self.midi_application_input = midi_application_input
         self.runtime_timings = runtime_timings
+        self.source_workflows = source_workflows
+        self.lesson_execution = lesson_execution
+        self.score_preload = score_preload
+        self.lifecycle = lifecycle
+        self.progress = progress
 
     def calibration_action(self, action: str) -> None:
         changes = self.device_workflows.calibrate(
@@ -176,6 +249,41 @@ class PracticeSession:
                     corrected_at=event.corrected_at, deferred=event.deferred)
             if isinstance(event, ClockAdvanced):
                 return self._advance_tick()
+            if isinstance(event, PresentationRequired):
+                return self.transport_commands.enable_presentation()
+            if isinstance(event, PlaybackReserved):
+                return self.transport_commands.reserve_physical(**event.receipt)
+            if isinstance(event, PlaybackPresented):
+                return self.transport_commands.present_physical(**event.receipt)
+            if isinstance(event, PlaybackWithdrawn):
+                return self.transport_commands.withdraw_physical(**event.receipt)
+            if isinstance(event, PlaybackFailed):
+                return self.transport_commands.fail_physical(**event.failure)
+            if isinstance(event, SourceCommitted):
+                resumed = self.source_workflows.install(
+                    event.prepared, warmup=event.warmup)
+                if resumed is not None:
+                    self.lesson_execution.flow_open(resumed=resumed)
+                if event.opened_identifier is not None:
+                    self.source_workflows.mark_library_opened(
+                        event.opened_identifier, warmup=event.warmup)
+                return resumed
+            if isinstance(event, SettingsChanged):
+                return self.settings_workflows.update(
+                    event.changes, pause_current=self.timed_playback.pause)
+            if isinstance(event, DeviceSelected):
+                return self.midi_application_input.connect(event.name)
+            if isinstance(event, PreloadReady):
+                return self.score_preload.acknowledge_preloaded_stage(
+                    stage_key=event.stage_key, revision=event.revision)
+            if isinstance(event, PreloadFailed):
+                return self.score_preload.report_preload_failure(
+                    fingerprint=event.fingerprint,step_number=event.step_number,
+                    revision=event.revision,error=event.error)
+            if isinstance(event, SessionClosed):
+                return self.lifecycle.shutdown(
+                    midi=self.midi, progress=self.progress,
+                    receive=self.midi_application_input.receive)
             raise TypeError("Unsupported practice session event")
 
     def control(self, action: str, **kwargs) -> dict:
