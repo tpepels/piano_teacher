@@ -1048,6 +1048,72 @@ the corresponding physical reconciliation must still be verified in A3.
 No passing runtime tests or CI completion is claimed, and GitHub CI was not
 triggered. **A2 remains IN PROGRESS until these gates pass.**
 
+### A3–A6 integrated development checkpoint — 2026-11-22
+
+**A3 — physical receipt replay hardened (source integration):**
+`PlaybackCoordinator.present()` now requires an idempotent previously
+authorized receipt to remain attached to the exact current source
+fingerprint, stage, engraving revision, hand, sounding end and
+`transport_id`. A stale repeat `playback.present` cannot reuse a
+receipt after its source/transport changes, even before an explicit
+invalidate callback reaches the coordinator. Added
+`tests/test_physical_present_epoch.py` for same-epoch replay and
+stale Stop/source/transport rejection. This does **not** complete A3's
+aggregate consolidation, full physical failure reconciliation or
+native/audio acceptance.
+
+**A4 — one current/future ScoreBundle production path (source integration):**
+`ScoreArtifacts.bundle(ScoreSelection)` compiles one immutable-response
+snapshot of authentic native layout, semantic model and source IDs under
+the exact fingerprint, revision, stage/window/hand and original-note
+identity. It rejects mixed revisions, empty/duplicate IDs and any
+disagreement between the selected hand's graded notes and the semantic
+active IDs. `ScoreReadServices`, `PracticeEngine` and
+`EngineCommands(score.bundle)` expose the same selected source.
+`FutureScore` uses the very same compiler and retains its bounded
+background lookahead/adoption.
+
+The active Godot `ScoreAssetSession` now requests that bundle once,
+checks both halves *before* installing it, and preserves the native
+retained-CanvasItem readiness requirement before `score_ready`.
+`ScoreAssetQueue` is one request slot, not separate layout/model
+requests and retry clocks. The embedded `native_bridge_smoke.gd`
+checks real native layout and original semantic notes through that same
+bundle. The old `score.native_layout` and `score.semantic` Python
+read endpoints remain available to current headless diagnostics/behavior
+tests; they are no longer the production native preparation protocol.
+Added `tests/test_score_bundle.py` for version/source, original IDs,
+read isolation and current-source changes. Same-HEAD Godot execution,
+repertoire, fingering corrections and prepared-stage promotion still
+need verification; A4 is **not accepted** without those.
+
+**A5 — presentation contract safety:** Python state validation and
+its generated Godot counterpart now refuse nonfinite numerical
+transport/visual coordinates and nonfinite target beats. The generator
+and generated file have matching source changes; the prior
+`target has no source_beat` error text remains compatible. Added
+`tests/test_state_contract_number_validation.py`. A5 still requires
+the complete scene/callback policy audit and one physical score-surface
+interface.
+
+**A6 — duplicate native readiness removed:** The active score asset
+session no longer owns separate pending flags, semantic-model revision
+or retry state. The native diagnostic path reports one
+`bundle_pending` fact. No supported course, warm-up or stored-data
+format was removed. Other A0 inventory entries, old orchestration
+composition and library/persistence migrations still require a full
+reachability audit before A6 closure.
+
+**Verification and release gate:** All above changes are committed on
+`main` but **have not been executed** in Python, Godot, embedded
+native or physical MIDI/audio. CI stays manual-only and has not been
+triggered. A0–A7 are not falsely marked complete; A7 needs the same
+final HEAD for `bash scripts/test.sh --coverage` and
+`bash scripts/verify-embedded-production-local.sh`, then the
+owner's connected CA49, audible count-in, visual continuity,
+Pathétique II (only if provided), repertoire and relocated-package
+acceptance.
+
 ### A2 receipt replay and publication boundary — 2026-11-22
 
 A selected `TakeResult` captures immutable original MIDI
