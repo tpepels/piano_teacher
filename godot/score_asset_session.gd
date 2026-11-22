@@ -201,8 +201,6 @@ func status() -> Dictionary:
     elif _loaded:
         if layout_pending or layout_revision != revision:
             text = "Preparing notation geometry…"
-        elif timeline_model_pending or timeline_model_revision != revision:
-            text = "Preparing note timing and positions…"
         else:
             text = "Compiling sheet music…"
     else:
@@ -214,10 +212,7 @@ func status() -> Dictionary:
 func poll(now_ms: int) -> void:
     if not _loaded or not score_error.is_empty():
         return
-    if timeline_model_revision != revision and not timeline_model_pending and \
-            now_ms >= timeline_model_retry_after_ms:
-        request_model()
-    elif timeline_model_revision == revision and rendered_revision != revision and \
+    if timeline_model_revision == revision and rendered_revision != revision and \
             _retained_started_ms >= 0 and \
             now_ms - _retained_started_ms >= RETAINED_INK_TIMEOUT_MS:
         _fail("Retained notation did not finish compiling. Retry the score.")
@@ -260,10 +255,7 @@ func request_start_result(kind: String, request_id: int, error: int, now_ms: int
     if not _request_is_current(request):
         _drain_stale(kind,now_ms)
         return
-    if kind == "layout":
-        _fail("Cannot request score geometry from the practice engine")
-    else:
-        _retry_model(now_ms,"Cannot load semantic score")
+    _fail("Cannot request the complete score bundle from the practice engine")
 
 func complete_response(kind: String, request_id: int, code: int,
         body: PackedByteArray, now_ms: int) -> void:
@@ -273,10 +265,10 @@ func complete_response(kind: String, request_id: int, code: int,
     if not _request_is_current(request):
         _drain_stale(kind,now_ms)
         return
-    if kind == "layout":
-        _complete_layout(code,body)
-    else:
-        _complete_model(code,body,now_ms)
+    if kind != "bundle":
+        _fail("Unknown score bundle operation")
+        return
+    _complete_bundle(code,body,now_ms)
 
 func _begin_request(kind: String, path: String, timeout: float) -> void:
     _next_request_id += 1
@@ -295,68 +287,52 @@ func _request_is_current(request: Dictionary) -> bool:
     return _loaded and int(request["generation"]) == _generation and \
         int(request["revision"]) == revision and str(request["fingerprint"]) == _fingerprint
 
-func _drain_stale(kind: String, now_ms: int) -> void:
-    if kind == "layout":
-        request_layout()
-    else:
-        poll(now_ms)
+func _drain_stale(_kind: String, _now_ms: int) -> void:
+    request_layout()
 
-func _complete_layout(code: int, body: PackedByteArray) -> void:
+func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
     if code != 0:
         _fail(_command_failure(code,body))
         return
-    var parsed: Variant = _decode_json(body)
-    if not parsed is Dictionary or not parsed.has("anchors"):
-        _fail("The engraving engine returned invalid note positions")
+    var bundle: Variant = _decode_json(body)
+    if not bundle is Dictionary:
+        _fail("Practice engine returned no source-bound score bundle")
         return
-    if not parsed.has("revision") or int(parsed["revision"]) != revision:
-        # A failed revision match must terminate this request. The next
-        # authoritative state snapshot selects the actual server revision,
-        # at which point update_context restarts the layout lifecycle.
-        # Silently returning here leaves a permanent "Preparing..." panel.
-        _fail("Engraving response revision differs from selected score. Retry the score.")
+    var layout: Variant = bundle.get("layout")
+    var model: Variant = bundle.get("model")
+    var source_ids: Variant = bundle.get("source_note_ids")
+    # Reject both halves before touching a retained renderer.
+    if (str(bundle.get("status","")) != "ready" or
+            int(bundle.get("revision",-1)) != revision or
+            str(bundle.get("fingerprint","")) != _fingerprint or
+            str(bundle.get("hand","")) != str(_state.get("hand","")) or
+            str(bundle.get("stage_key","")).is_empty() or
+            not source_ids is Array or source_ids.is_empty() or
+            not layout is Dictionary or not layout.has("anchors") or
+            int(layout.get("revision",-1)) != revision or
+            not model is Dictionary or int(model.get("revision",-1)) != revision):
+        _fail("Score bundle source, revision, notation or MIDI identity differs")
         return
     if not is_instance_valid(_renderer):
         return
-    var installed: Dictionary = NativeScoreAssets.install(_renderer, parsed)
+    var installed: Dictionary = NativeScoreAssets.install(_renderer, layout)
     if not bool(installed.get("ok",false)):
         _fail(str(installed.get("error","Authentic engraving unavailable")))
         return
-    _layout = installed["layout"]
-    layout_revision = revision
-    timeline_model_revision = -1
-    score_error = ""
-    layout_published.emit(revision,layout_snapshot())
-    _publish_status()
-    request_model()
-
-func _complete_model(code: int, body: PackedByteArray, now_ms: int) -> void:
-    if not is_instance_valid(_renderer) or layout_revision != revision or not score_error.is_empty():
-        return
-    if code != 0:
-        var message: String = _command_failure(code,body)
-        if code == 3 and message.contains("deadline"):
-            _retry_model(now_ms,message)
-        else:
-            _fail(message)
-        return
-    var candidate: Variant = _decode_json(body)
-    if not candidate is Dictionary:
-        _fail("Practice engine returned an invalid semantic score")
-        return
-    if int(candidate.get("revision",-1)) != revision:
-        _retry_model(now_ms,"Semantic score revision changed during loading")
-        return
-    if not _renderer.load_score(candidate):
+    if not _renderer.load_score(model):
         _fail(str(_renderer.failure_reason))
         return
-    native_score_piece_fingerprint = _fingerprint
+    _layout = installed["layout"]
+    layout_revision = revision
     timeline_model_revision = revision
+    native_score_piece_fingerprint = _fingerprint
     _retained_started_ms = now_ms
     _renderer.visible = true
     if is_instance_valid(_feedback):
         _feedback.bind_score(_renderer,revision)
         _feedback.present(_state.duplicate(true))
+    layout_published.emit(revision,layout_snapshot())
+    _publish_status()
     _finish_native_score()
 
 func _finish_native_score() -> void:
@@ -389,17 +365,6 @@ func _finish_native_score() -> void:
     if str(_state.get("phase","")) == "loading" and \
             int(_state.get("awaiting_score_revision",-1)) == revision and is_ready():
         action_requested.emit({"action":"score_ready","revision":revision})
-
-func _retry_model(now_ms: int, notice: String) -> void:
-    _model_failures += 1
-    if _model_failures >= MODEL_MAX_ATTEMPTS:
-        _fail("Semantic score failed after %d attempts: %s" % [MODEL_MAX_ATTEMPTS, notice])
-        return
-    timeline_model_retry_after_ms = now_ms + MODEL_RETRY_MS * _model_failures
-    if is_instance_valid(_renderer):
-        _renderer.notice = "%s (attempt %d/%d)" % [notice, _model_failures + 1, MODEL_MAX_ATTEMPTS]
-        _renderer.queue_redraw()
-    _publish_status()
 
 func _reset_assets() -> bool:
     # Supersede both in-flight operations immediately on score change or Retry.
