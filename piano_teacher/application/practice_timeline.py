@@ -20,7 +20,7 @@ class PracticeTimeline:
     def __init__(self, *, source_identity, notices,
                  visual_transport, playback_session, playback,
                  attempt_settlement, attempt, transport_timing, timed_playback,
-                 score_read, outcome_effects, lesson_execution,
+                 score_read, lesson_execution,
                  recovery_workflows, completion_continuations,
                  live_feedback_workflows, live_assessment, measurement,
                  policy_registry, library, teaching_decisions,
@@ -32,7 +32,7 @@ class PracticeTimeline:
         self.visual_transport, self.playback_session, self.playback = visual_transport, playback_session, playback
         self.attempt_settlement, self.attempt = attempt_settlement, attempt
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
-        self.score_read, self.outcome_effects = score_read, outcome_effects
+        self.score_read = score_read
         self.lesson_execution, self.recovery_workflows = lesson_execution, recovery_workflows
         self.completion_continuations = completion_continuations
         self.live_feedback_workflows, self.live_assessment = live_feedback_workflows, live_assessment
@@ -88,7 +88,7 @@ class PracticeTimeline:
             layout_for_feedback=self.score_read.completed_take_layout,
             mode=self.playback_session.mode,review_end_beat=self.attempt.review_end_beat,
             automatic_remedial_review=self.attempt.automatic_remedial_review,
-            performance_review=self.outcome_effects.performance_review,
+            performance_review=self.completion_continuations.performance_review,
             prepare_decision=self.teaching_decisions.prepare,
             plan=self.source_identity.plan,binding=self.teaching_decisions.binding(),now=now,
             score_revision=self.source_identity.revision,
@@ -115,9 +115,9 @@ class PracticeTimeline:
         if effect.action == "response":
             self.recovery_workflows.apply_policy_response(effect.response,now=now,visual_from=completed_visual)
         elif effect.action == "perform":
-            self.outcome_effects.finish_performance_review(phrase,result)
+            self.completion_continuations.finish_performance_review(phrase,result)
         elif effect.action == "section_review":
-            self.outcome_effects.finish_section_review(result)
+            self.completion_continuations.finish_section_review(result)
         elif effect.action == "stop_review":
             self.playback_session.stop_automatic()
             self.visual_transport.cancel_preparation()
@@ -126,7 +126,7 @@ class PracticeTimeline:
         elif effect.action == "exposure":
             self.lesson_execution.enter_selected_exposure(effect.exposure)
         elif effect.action == "partial_recovery":
-            self.outcome_effects.finish_partial_recovery(result,now,exposure=effect.exposure)
+            self.completion_continuations.finish_partial_recovery(result,now,exposure=effect.exposure)
         else:
             return self.finish_full_passage(result,total_beats,duration,now)
         return False

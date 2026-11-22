@@ -55,7 +55,6 @@ from .midi_key_shortcuts import MidiKeyShortcuts
 from .playback_coordinator import PlaybackCoordinator
 from .playback_session import PlaybackSession
 from .policy_registry import PolicyRegistry
-from .post_assessment_effects import PostAssessmentEffects
 from .practice_session import PracticeSession
 from .transport_actions import TransportActions
 from .learning_actions import LearningActions
@@ -284,17 +283,6 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         live_assessment=r.live_assessment,
         transport_timing=r.transport_timing, clock=r.now)
 
-    r.outcome_effects = PostAssessmentEffects(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
-        notices=r.notices, attempt_settlement=r.attempt_settlement,
-        teaching_decisions=r.teaching_decisions, clock=r.now,
-        teaching_continuation=r.teaching_continuation, library=r.library,
-        visual_transport=r.visual_transport, attempt=r.attempt,
-        lesson_execution=r.lesson_execution, playback_session=r.playback_session,
-        score_artifact_registry=r.score_artifact_registry,
-        transport_timing=r.transport_timing, assessment=r.assessment,
-        feedback_seconds=r.feedback_seconds)
-
     r.recovery_workflows = RecoveryWorkflows(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
         notices=r.notices, attempt=r.attempt,
@@ -318,7 +306,10 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         flow_session=r.flow_session, lesson_execution=r.lesson_execution,
         transport_timing=r.transport_timing, score_read=r.score_read,
         recovery_workflows=r.recovery_workflows,
-        timed_playback=r.timed_playback, outcome_effects=r.outcome_effects)
+        timed_playback=r.timed_playback, lesson_cursor=r.lesson_cursor,
+        teaching_decisions=r.teaching_decisions, clock=r.now,
+        library=r.library, score_artifact_registry=r.score_artifact_registry,
+        assessment=r.assessment, feedback_seconds=r.feedback_seconds)
 
     r.score_preload = ScorePreloadWorkflow(
         source_identity=r.source_identity, lock=r.lock,
@@ -360,7 +351,8 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         attempt=r.attempt, attempt_settlement=r.attempt_settlement, clock=r.now,
         exposure_workflows=r.exposure_workflows, feedback_seconds=r.feedback_seconds, guided_session=r.guided_session,
         lesson_cursor=r.lesson_cursor, lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
-        listen=r.listen, notices=r.notices, outcome_effects=r.outcome_effects,
+        listen=r.listen, notices=r.notices,
+        completion_continuations=r.completion_continuations,
         playback=r.playback, playback_session=r.playback_session, read_models=r.read_models,
         recovery_workflows=r.recovery_workflows, score_artifact_registry=r.score_artifact_registry, score_read=r.score_read,
         source_identity=r.source_identity, teaching_decisions=r.teaching_decisions,
@@ -383,7 +375,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         playback_session=r.playback_session, playback=r.playback,
         attempt_settlement=r.attempt_settlement, attempt=r.attempt,
         transport_timing=r.transport_timing, timed_playback=r.timed_playback,
-        score_read=r.score_read, outcome_effects=r.outcome_effects,
+        score_read=r.score_read,
         lesson_execution=r.lesson_execution, recovery_workflows=r.recovery_workflows,
         completion_continuations=r.completion_continuations,
         live_feedback_workflows=r.live_feedback_workflows,

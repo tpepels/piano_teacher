@@ -12,7 +12,7 @@ class TransportActions:
     def __init__(self, *,
                  attempt, attempt_settlement, clock, exposure_workflows,
                  feedback_seconds, guided_session, lesson_cursor, lesson_execution,
-                 lifecycle, listen, notices, outcome_effects,
+                 lifecycle, listen, notices, completion_continuations,
                  playback, playback_session, read_models, recovery_workflows,
                  score_artifact_registry, score_read, source_identity,
                  teaching_decisions, timed_playback, transport_timing, visual_transport):
@@ -27,7 +27,7 @@ class TransportActions:
         self.lifecycle = lifecycle
         self.listen = listen
         self.notices = notices
-        self.outcome_effects = outcome_effects
+        self.completion_continuations = completion_continuations
         self.playback = playback
         self.playback_session = playback_session
         self.read_models = read_models
@@ -216,7 +216,7 @@ class TransportActions:
         """Start a take or schedule a seamless retry under the control lock."""
         if self.attempt.settlement_failed:
             revision = self.source_identity.revision
-            self.notices.feedback = self.outcome_effects.commit_pending() or "Assessment saved"
+            self.notices.feedback = self.completion_continuations.commit_pending() or "Assessment saved"
             if self.source_identity.revision != revision:
                 self.playback_session.await_score(self.source_identity.revision)
             self.notices.next_action = "Press Play when the score is ready."
