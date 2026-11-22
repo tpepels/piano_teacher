@@ -24,6 +24,12 @@ class ClockAdvanced:
 
 
 @dataclass(frozen=True, slots=True)
+class MidiShortcut:
+    """Accepted keyboard-control gesture, not a grading event."""
+    effect: object
+
+
+@dataclass(frozen=True, slots=True)
 class PhysicalMidi:
     message: object
     received_at: float | None = None
@@ -93,7 +99,7 @@ class SessionClosed:
     """Close ledger/device after the final active-take interruption."""
 
 
-PracticeEvent = (UserCommand | ClockAdvanced | PhysicalMidi |
+PracticeEvent = (UserCommand | ClockAdvanced | PhysicalMidi | MidiShortcut |
                  PresentationRequired | PlaybackReserved | PlaybackPresented |
                  PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
                  SettingsChanged | DeviceSelected | PreloadReady | PreloadFailed |
@@ -147,62 +153,61 @@ class PracticeSession:
                 changes, pause_current=self.timed_playback.pause)
 
     def _apply_command(self, action: str, **kwargs) -> dict:
-        with self.lock:
-            if action in UI_INTENTS:
-                ready = kwargs.pop("score_ready", None)
-                error = kwargs.pop("score_error", "")
-                score_revision = kwargs.pop("score_revision", None)
-                score_fingerprint = kwargs.pop("score_fingerprint", None)
-                if action not in ("ui_suspend","ui_stop") and (
-                        type(ready) is not bool or type(error) is not str
-                        or type(score_revision) is not int
-                        or type(score_fingerprint) is not str):
-                    raise ValueError("UI control requires source-bound renderer readiness")
-                current = self.read_models.control_snapshot()
-                if action == "ui_review_previous":
-                    # The dialog retains a snapshot only to identify the
-                    # source that was offered. Python selects the actual
-                    # previous step from the current lesson, never the
-                    # outdated step number on the screen.
-                    context_revision = kwargs.pop("context_revision", None)
-                    context_fingerprint = kwargs.pop("context_fingerprint", None)
-                    if (type(context_revision) is not int
-                            or type(context_fingerprint) is not str
-                            or context_revision != current.get("revision")
-                            or context_fingerprint != current.get("piece_fingerprint")):
-                        raise ValueError("Resume prompt belongs to an obsolete lesson")
-                if action not in ("ui_suspend","ui_stop") and ready and (
-                        score_revision != current.get("revision")
-                        or score_fingerprint != current.get("piece_fingerprint")):
-                    raise ValueError("Displayed score belongs to an earlier source revision")
-                resolved, options = resolve_ui_intent(
-                    action, current, score_ready=bool(ready), score_error=error)
-                if resolved is None:
-                    return project_command_outcome(None)
-                action = resolved
-                kwargs.update(options)
-            with self.session_commands.reason(action):
-                before = {"fingerprint": self.source_identity.fingerprint,
-                          "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                          "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
-                effect = self.session_commands.active
-                route = ControlDispatcher.route(action)
-                if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
-                    change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
-                              if route == "stage" else None)
-                    effect = self.teaching_decisions.prepare("manual", manual=change,
-                        action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
-                with self.session_commands.executing(effect):
-                    result = self._dispatch_control(action, route, **kwargs)
-                    self.read_models.prepare_score_presentation()
-                    if action not in ("score_ready", "demo_ready", "reset_path"):
-                        self.measurement.event("manual_action", {"action": action,
-                            "fingerprint": before["fingerprint"] or None,
-                            "parameters": kwargs, "before": before,
-                            "after": {"fingerprint": self.source_identity.fingerprint,
-                                      "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                                      "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
-                    return project_command_outcome(action)
+        if action in UI_INTENTS:
+            ready = kwargs.pop("score_ready", None)
+            error = kwargs.pop("score_error", "")
+            score_revision = kwargs.pop("score_revision", None)
+            score_fingerprint = kwargs.pop("score_fingerprint", None)
+            if action not in ("ui_suspend","ui_stop") and (
+                    type(ready) is not bool or type(error) is not str
+                    or type(score_revision) is not int
+                    or type(score_fingerprint) is not str):
+                raise ValueError("UI control requires source-bound renderer readiness")
+            current = self.read_models.control_snapshot()
+            if action == "ui_review_previous":
+                # The dialog retains a snapshot only to identify the
+                # source that was offered. Python selects the actual
+                # previous step from the current lesson, never the
+                # outdated step number on the screen.
+                context_revision = kwargs.pop("context_revision", None)
+                context_fingerprint = kwargs.pop("context_fingerprint", None)
+                if (type(context_revision) is not int
+                        or type(context_fingerprint) is not str
+                        or context_revision != current.get("revision")
+                        or context_fingerprint != current.get("piece_fingerprint")):
+                    raise ValueError("Resume prompt belongs to an obsolete lesson")
+            if action not in ("ui_suspend","ui_stop") and ready and (
+                    score_revision != current.get("revision")
+                    or score_fingerprint != current.get("piece_fingerprint")):
+                raise ValueError("Displayed score belongs to an earlier source revision")
+            resolved, options = resolve_ui_intent(
+                action, current, score_ready=bool(ready), score_error=error)
+            if resolved is None:
+                return project_command_outcome(None)
+            action = resolved
+            kwargs.update(options)
+        with self.session_commands.reason(action):
+            before = {"fingerprint": self.source_identity.fingerprint,
+                      "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                      "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
+            effect = self.session_commands.active
+            route = ControlDispatcher.route(action)
+            if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
+                change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
+                          if route == "stage" else None)
+                effect = self.teaching_decisions.prepare("manual", manual=change,
+                    action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
+            with self.session_commands.executing(effect):
+                result = self._dispatch_control(action, route, **kwargs)
+                self.read_models.prepare_score_presentation()
+                if action not in ("score_ready", "demo_ready", "reset_path"):
+                    self.measurement.event("manual_action", {"action": action,
+                        "fingerprint": before["fingerprint"] or None,
+                        "parameters": kwargs, "before": before,
+                        "after": {"fingerprint": self.source_identity.fingerprint,
+                                  "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
+                                  "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
+                return project_command_outcome(action)
 
     def _dispatch_control(self, action: str, route: str, **kwargs) -> None:
         """Dispatch within the existing outer command transaction and lock."""
@@ -249,6 +254,17 @@ class PracticeSession:
                     corrected_at=event.corrected_at, deferred=event.deferred)
             if isinstance(event, ClockAdvanced):
                 return self._advance_tick()
+            if isinstance(event, MidiShortcut):
+                effect = event.effect
+                if effect.completed_range is not None:
+                    ranges = self.settings_workflows.library.settings["midi_key_ranges"].copy()
+                    ranges[self.midi.device] = list(effect.completed_range)
+                    self.settings_workflows.update(
+                        {"midi_key_ranges": ranges},
+                        pause_current=self.timed_playback.pause)
+                if effect.action:
+                    return self._apply_command(effect.action)
+                return None
             if isinstance(event, PresentationRequired):
                 return self.transport_commands.enable_presentation()
             if isinstance(event, PlaybackReserved):
@@ -292,6 +308,9 @@ class PracticeSession:
     def on_midi(self, message, *, received_at=None, corrected_at=None,
                 deferred=False) -> None:
         self.apply(PhysicalMidi(message, received_at, corrected_at, deferred))
+
+    def on_shortcut(self, effect) -> None:
+        self.apply(MidiShortcut(effect))
 
     def advance(self) -> int:
         began = time.perf_counter()

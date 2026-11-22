@@ -81,35 +81,30 @@ class MidiApplicationInput:
                 if self.playback.intent is not None else None))
 
     def apply_midi_shortcut(self, effect) -> None:
-        if effect.completed_range is not None:
-            ranges = self.library.settings["midi_key_ranges"].copy()
-            ranges[self.midi.device] = list(effect.completed_range)
-            self.settings_workflows.update(
-                {"midi_key_ranges": ranges},pause_current=self.timed_playback.pause)
-        if effect.action:
-            if self._session is None:
-                raise RuntimeError("MIDI shortcut before session binding")
-            self._session.control(effect.action)
+        # The input adapter cannot change settings or select a lesson action.
+        # Route accepted shortcuts through the same serialized session event.
+        if self._session is None:
+            raise RuntimeError("MIDI shortcut before session binding")
+        self._session.on_shortcut(effect)
 
     def _deliver_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
         now = self.clock() if received_at is None else received_at
-        with self.lock:
-            facts = MidiInputFacts(self.source_identity.fingerprint,self.source_identity.revision,
-                self.source_identity.plan.identity if self.source_identity.plan else "",self.source_identity.plan.active_phrase if self.source_identity.plan else None,
-                self.source_identity.plan.hand if self.source_identity.plan else "both",self.source_identity.plan.bpm if self.source_identity.plan else 60.,
-                self.playback_session.mode,self.playback_session.running,self.visual_transport.paused,self.playback_session.preview_only,
-                self.visual_transport.play_from_beat,self.visual_transport.run_at,self.playback_session.transport_id,
-                self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.guided_session.controller is not None))
-            self.midi_ingress.dispatch(
-                message,facts=facts,received_at=now,
-                corrected_at=corrected_at,deferred=deferred,
-                midi_offset_seconds=self.library.settings["midi_offset_ms"]/1000.0,
-                apply_shortcut=self.apply_midi_shortcut,
-                transport_facts=self.midi_transport_facts,
-                musical_seconds=self.transport_timing.musical_seconds,
-                recorder=lambda: self.attempt.recorder,
-                teaching=lambda: self.guided_session.controller,
-                feedback_take=self.live_feedback_workflows.feedback_take)
+        facts = MidiInputFacts(self.source_identity.fingerprint,self.source_identity.revision,
+            self.source_identity.plan.identity if self.source_identity.plan else "",self.source_identity.plan.active_phrase if self.source_identity.plan else None,
+            self.source_identity.plan.hand if self.source_identity.plan else "both",self.source_identity.plan.bpm if self.source_identity.plan else 60.,
+            self.playback_session.mode,self.playback_session.running,self.visual_transport.paused,self.playback_session.preview_only,
+            self.visual_transport.play_from_beat,self.visual_transport.run_at,self.playback_session.transport_id,
+            self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.guided_session.controller is not None))
+        self.midi_ingress.dispatch(
+            message,facts=facts,received_at=now,
+            corrected_at=corrected_at,deferred=deferred,
+            midi_offset_seconds=self.library.settings["midi_offset_ms"]/1000.0,
+            apply_shortcut=self.apply_midi_shortcut,
+            transport_facts=self.midi_transport_facts,
+            musical_seconds=self.transport_timing.musical_seconds,
+            recorder=lambda: self.attempt.recorder,
+            teaching=lambda: self.guided_session.controller,
+            feedback_take=self.live_feedback_workflows.feedback_take)
 
     def poll_midi_connection(self):
         if self.midi.closed:
