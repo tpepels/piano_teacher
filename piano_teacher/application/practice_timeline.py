@@ -284,6 +284,7 @@ class PracticeTimeline:
             self.recovery_workflows.assess_rolling_boundary, self.transport_timing.elapsed_seconds,
             exact_repeats=self.lesson_execution.flow_active())
         self.visual_transport.advance_boundary(step.next_boundary)
+        followup = False
         if step.action == "recovery":
             self.recovery_workflows.apply_rolling_recovery(
                 step.recovery, phrase, step.grid, score_beat, now)
