@@ -185,6 +185,29 @@ The source-audit record is in [docs/architecture.md](docs/architecture.md#a0-run
   **45017492022 on 1c1b98e** as the last full green suite; its success
   predates all later commits, including this audit.
 
+**Additional A0 progress (2026-11-22):**
+- [9ec6936](https://github.com/tpepels/piano_teacher/commit/9ec6936c421775c96098a1e9e5ad7c996a269407)
+  adds `scripts/audit-a0-reachability.py`, a **read-only, conservative**
+  static graph of Python imports, Godot resources, declared classes and
+  project roots. It separates production entrypoints from test references
+  and reports unresolved computed loads. Usage:
+  `python3 scripts/audit-a0-reachability.py --json --output /tmp/piano-a0-reachability.json`.
+  A path absent from its static graph **cannot** be deleted on that basis;
+  class-name matching, reflection, dynamic sources and execution still
+  require manual confirmation. The script has not been executed against
+  a complete checkout of this exact revision in this environment.
+- [cc00718](https://github.com/tpepels/piano_teacher/commit/cc00718c59d13160f8bfbd7d408579790a3e58ac)
+  documents the current command, MIDI, tick, source-load, physical
+  reserve/attestation and snapshot APIs and proposed A1 typed-event
+  conversion in [architecture](docs/architecture.md#a0-reproducible-reachability-method-and-concrete-a1-contract).
+  A session commit and asynchronous physical acknowledgement are distinct:
+  no grading/sound starts until exact attested presentation is accepted.
+- Confirmed live imports: PracticeScreen uses ChallengeFlow and
+  TempoVocabulary; PracticeChrome constructs advanced Pause/review UI;
+  DemoPlayer uses ListenSync; NavigationSession uses NavigationPolicy.
+  The ChallengeFlow three-run fallback must be checked against a valid
+  course-specific backend count. This is an audit warning, **not** a
+  reproduced failure.
 **Open A0 exit gates:** Every candidate's *runtime* call/writer reachability
 must be proved (including dynamically loaded native scenes and registered
 generators); full source-to-transaction/async edge coverage and exact HEAD
