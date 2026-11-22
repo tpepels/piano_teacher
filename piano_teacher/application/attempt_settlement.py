@@ -205,6 +205,11 @@ class AttemptSettlement:
         r = self._rolling
         return (r.decision,r.phrase,r.grid,r.score_beat,r.sampled_at) if r else None
 
+    @property
+    def rolling_record(self) -> RollingTake | None:
+        """One recorded rolling result including its original source and take."""
+        return self._rolling
+
     def finish_rolling_publication(self) -> None:
         self._rolling = None
 
@@ -247,7 +252,6 @@ class AttemptSettlement:
         # must still match before any presentation effect is replayed.
         if (score_revision != take.score_revision or
                 binding.fingerprint != take.binding.fingerprint or
-                binding.stage_key != take.binding.stage_key or
                 binding.transport_id != take.binding.transport_id or
                 binding.cancellation_generation != take.binding.cancellation_generation or
                 hand != take.hand or bpm != take.bpm or
@@ -255,8 +259,17 @@ class AttemptSettlement:
                 decision.end_beat != take.end_beat or
                 completed.phrase is not phrase):
             raise ValueError("Rolling take source or timing changed before settlement")
-        if completed.pending.receipt is None and binding != take.binding:
-            raise ValueError("Rolling take authority changed before durable settlement")
+        if completed.pending.receipt is None:
+            if binding != take.binding:
+                raise ValueError("Rolling take authority changed before durable settlement")
+        else:
+            # An already-committed slowdown/lesson change legitimately
+            # increments the authority revision and may change the active
+            # stage. The selected durable progress must still be exact.
+            if (plan.teaching_progress() != completed.pending.decision.progress_after
+                    or (binding.stage_key != take.binding.stage_key
+                        and not completed.pending.receipt.stage_changed)):
+                raise ValueError("Committed rolling take changed before publication retry")
         if completed.transition is None:
             # No interruption and no durable assessment; keep recording the
             # same exposure, rather than leaving a selected stale decision.

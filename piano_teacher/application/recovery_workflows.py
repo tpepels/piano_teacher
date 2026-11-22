@@ -98,16 +98,29 @@ class RecoveryWorkflows:
         scored_end = self.visual_transport.run_at + (
             self.transport_timing.elapsed_seconds(decision.end_beat) -
             self.transport_timing.elapsed_seconds(self.visual_transport.play_from_beat))
+        hand = self.source_identity.plan.hand
+        notes = self.attempt.recorder.presses if self.attempt.recorder else ()
+        from_beat = self.visual_transport.play_from_beat
+        score_revision = self.source_identity.revision
+        saved = self.attempt_settlement.rolling_record
+        if saved is not None:
+            # A durable decision may already have lowered BPM or changed
+            # the stage before visual continuation failed. Resume exactly
+            # its original graded take, never reassess a new source/cursor.
+            decision, phrase, grid = saved.decision, saved.phrase, saved.grid
+            score_beat = saved.score_beat
+            outgoing_bpm, scored_end = saved.outgoing_bpm, saved.scored_end
+            hand, notes = saved.take.hand, saved.take.played
+            from_beat, score_revision = saved.take.from_beat, saved.take.score_revision
         try:
             completed = self.attempt_settlement.complete_rolling(
                 decision=decision,phrase=phrase,grid=grid,score_beat=score_beat,
-                now=now,bpm=outgoing_bpm,scored_end=scored_end,hand=self.source_identity.plan.hand,
-                played=self.attempt.recorder.presses if self.attempt.recorder else (),
-                from_beat=self.visual_transport.play_from_beat,
+                now=now,bpm=outgoing_bpm,scored_end=scored_end,hand=hand,
+                played=notes,from_beat=from_beat,
                 tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
                 prepare_decision=self.teaching_decisions.prepare,plan=self.source_identity.plan,
                 binding=self.teaching_decisions.binding(),
-                score_revision=self.source_identity.revision,
+                score_revision=score_revision,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
         except Exception:
             self.playback_session.finish_take()
