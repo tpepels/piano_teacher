@@ -661,3 +661,63 @@ def test_explicit_primary_recovers_after_terminal_automatic_admission_failure(pr
     assert attempted["playback_intent"]["attempt"] == 0
     assert attempted["playback_timeline"]["state"] == "awaiting_admission"
     assert not attempted["running"]
+
+
+def test_navigation_suspend_preserves_pending_take_and_never_resumes_on_reentry(practice_session):
+    """Real desktop admission: leaving during Play is a one-way Pause gesture."""
+    session = practice_session(bars=1)
+    pending = desktop_tempo(session)
+    visible = session.snapshot()
+    assert visible["phase"] == "admitting"
+    assert visible["controls"]["pause"]["action"] == "pause"
+    assert visible["controls"]["stop"]["enabled"]
+    # The command is resolved against the SAME status as the screen, under
+    # the engine lock. No renderer revision/readiness is needed to suspend.
+    held = session.command("ui_suspend")
+    assert held["paused"] and held["playback_intent"] is None
+    assert not held["running"]
+    assert session.engine.playback_session.paused_intent is not None
+    assert held["controls"]["pause"]["action"] == "resume"
+    again = session.command("ui_suspend")
+    assert again["paused"] and again["playback_intent"] is None
+    assert again["transport_id"] == held["transport_id"]
+    # A deliberate Resume produces a new physical intent for the identical
+    # selected musical take; leaving Practice did not auto-resume it.
+    reopened = session.command(
+        "ui_pause",score_ready=True,score_revision=again["revision"],
+        score_fingerprint=again["piece_fingerprint"])
+    assert not reopened["paused"]
+    renewed = reopened["playback_intent"]
+    assert renewed is not None and renewed["attempt"] == 0
+    assert renewed["intent_id"] != pending["intent_id"]
+    assert renewed["from_beat"] == pending["from_beat"]
+
+
+def test_stop_cancels_unpresented_playback_without_renderer_identity(practice_session):
+    """The S/Stop safety gesture survives a missing or obsolete score view."""
+    session = practice_session(bars=1)
+    pending = desktop_tempo(session)
+    assert session.snapshot()["phase"] == "admitting"
+    stopped = session.command("ui_stop")
+    assert not stopped["running"] and not stopped["paused"]
+    assert stopped["playback_intent"] is None
+    assert stopped["controls"]["primary"]["enabled"]
+    assert pending["intent_id"] != (
+        stopped["playback_intent"] or {}).get("intent_id")
+    # A delayed physical reserve from the canceled take must not start
+    # grading after Stop, even when the renderer produces a valid witness.
+    rejected(session,"playback.reserve",**physical_offer(session,pending))
+    assert session.snapshot()["playback_intent"] is None
+
+
+def test_source_independent_stop_halts_authorized_playback(practice_session):
+    """Stop remains actionable when the native renderer has failed."""
+    session = practice_session(bars=1)
+    pending = desktop_tempo(session)
+    receipt = reserve(session,pending)
+    assert present(session,pending,receipt)["authorized"]
+    assert session.snapshot()["running"]
+    stopped = session.command("ui_stop")
+    assert not stopped["running"] and not stopped["paused"]
+    assert stopped["playback_intent"] is None
+    assert stopped["feedback"] == "Stopped"
