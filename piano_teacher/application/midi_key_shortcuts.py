@@ -52,6 +52,19 @@ class MidiKeyShortcuts:
             "captured_low": self.capture_low if self.capture_device == device else None,
         }
 
+    def discard_stale_release(self, message) -> None:
+        """Release obsolete shortcut suppression without executing an action.
+
+        A note_off captured for the previous transport can arrive after Stop
+        while the worker holds the session lock. It must not become a new
+        lesson command, but the corresponding held shortcut key must be free.
+        """
+        kind = getattr(message, "type", "")
+        on = kind == "note_on" and getattr(message, "velocity", 0) > 0
+        pitch = getattr(message, "note", -1)
+        if kind in ("note_on", "note_off") and not on and type(pitch) is int:
+            self.suppressed_releases.discard(pitch)
+
     def accept(self, message, *, device: str, exercise_pitches: frozenset[int],
                can_pause: bool, paused: bool) -> KeyDecision:
         kind = getattr(message, "type", "")

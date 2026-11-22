@@ -254,6 +254,12 @@ class PracticeSession:
                     not self._same_midi_epoch(
                         event.arrival, event.received_at,
                         event.corrected_at)):
+                # Stale keys may update hardware observation/release hygiene,
+                # but never current-take grading, calibration or shortcuts.
+                # A late release must not leave a shortcut permanently
+                # suppressed after Stop/source replacement.
+                self.midi_key_shortcuts.discard_stale_release(event.message)
+                self.midi.observe(event.message, now=event.received_at)
                 return None
             return self.midi_application_input._deliver_message(
                 event.message, received_at=event.received_at,

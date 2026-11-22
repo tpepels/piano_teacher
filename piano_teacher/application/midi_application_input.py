@@ -65,8 +65,10 @@ class MidiApplicationInput:
             # beat or an adjacent take.
             arrival = self._session.midi_arrival()
             received_at = self.clock()
+            # The callback cannot hold onto a mutable driver-owned message
+            # while it waits for the session's lock.
             self._session.on_midi(
-                message, received_at=received_at, arrival=arrival)
+                message.copy(), received_at=received_at, arrival=arrival)
         finally:
             self.runtime_timings.midi_ms.append(
                 (time.perf_counter()-began)*1000.0)
