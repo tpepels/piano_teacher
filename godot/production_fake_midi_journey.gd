@@ -234,19 +234,28 @@ func _process(_delta: float) -> bool:
                 _fail("Timed source has no authenticated practice-window duration")
                 return true
             var actual_source_count := 0
+            var active_take_strips := 0
+            var active_key: String = "%s|%d|%d|%s" % [
+                str(state.get("piece_fingerprint","")),
+                int(state.get("revision",-1)),
+                int(state.get("transport_id",-1)),
+                str(state.get("mode","practice"))]
             for strip in renderer.diagnostic_stream_snapshot():
                 if str(strip.get("kind","")) != "source":
                     continue
                 actual_source_count += 1
+                if str(strip.get("take_key","")) == active_key:
+                    active_take_strips += 1
                 if (float(strip.get("source_floor",-INF)) < -.0001 or
                         float(strip.get("source_ceiling",INF)) > source_bound+.0001):
                     _fail("Native score queue contains measures outside selected passage")
                     return true
-            if actual_source_count == 0:
-                _fail("Timed source started without its selected measure")
+            if actual_source_count == 0 or active_take_strips != 1:
+                _fail("Timed one-bar take has missing or duplicate physically authorized ink")
                 return true
             print("FULL_SCENE_SELECTED_WINDOW_OK duration=",source_bound,
-                " admitted_sources=",actual_source_count)
+                " admitted_sources=",actual_source_count,
+                " bound_source_strips=",active_take_strips)
             initial_transport = int(state.get("transport_id",-1))
             if initial_transport <= 0:
                 _fail("Tempo has no published transport identity")
@@ -264,8 +273,9 @@ func _process(_delta: float) -> bool:
         "repeat":
             if int(state.get("transport_id",-1)) == initial_transport:
                 return false
-            if step != "tempo" or int(state.get("bpm",0)) != 40 or \
-                    int(state.get("lesson_steps_mastered",0)) != 0:
+            if (int(state.get("transport_id",-1)) != initial_transport+1 or
+                    step != "tempo" or int(state.get("bpm",0)) != 40 or
+                    int(state.get("lesson_steps_mastered",0)) != 0):
                 _fail("Wrong MIDI did not cause one failed same-tempo repeat")
                 return true
             failed_take_seen = true
@@ -286,9 +296,10 @@ func _process(_delta: float) -> bool:
         "faster":
             if int(state.get("transport_id",-1)) <= initial_transport+1:
                 return false
-            if not failed_take_seen or not played_first or not played_second or \
-                    int(state.get("bpm",0)) != 48 or \
-                    int(state.get("lesson_steps_mastered",0)) != 0:
+            if (int(state.get("transport_id",-1)) != initial_transport+2 or
+                    not failed_take_seen or not played_first or not played_second or
+                    int(state.get("bpm",0)) != 48 or
+                    int(state.get("lesson_steps_mastered",0)) != 0):
                 _fail("Two real MIDI attacks did not produce a clean 40->48 BPM repeat")
                 return true
             print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause resume wrong_tempo auto_repeat clean_tempo")

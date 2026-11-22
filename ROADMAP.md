@@ -1119,6 +1119,22 @@ semantics. Hidden/disabled controls cannot bypass policy via another
 entrypoint. Existing settings, library, source picker, corrections and
 history screens still function.
 
+### V6 one physical take per worker acknowledgement (2026-11-22)
+
+The full-scene synthetic-keyboard journey now checks the
+canonical `fingerprint|revision|transport|mode` source binding
+against the actual native queue. At first one-bar Tempo it
+requires **exactly one active source strip** for that authorized
+take, with the complete selected-window bounds; old
+Listen-source strips may exist independently. The failed
+same-tempo automatic retry must allocate exactly the next
+transport ID, and the following clean 40→48 BPM repeat
+must allocate exactly one more. These assertions also
+run during the injected lost-reserve and lost-present
+ACK scenarios, detecting duplicate score admission or
+double-executed worker transitions that a generic
+`running=true` result would miss.
+
 ### V6 real worker lost-ACK recovery fault injection (2026-11-22)
 
 Added a strictly opt-in test seam in `InprocessRequest.complete`
