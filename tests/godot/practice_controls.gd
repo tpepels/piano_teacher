@@ -1,6 +1,7 @@
 extends SceneTree
 ## Snapshot presentation only; MIDI/audio/physical layout need piano acceptance.
 const Screen := preload("res://practice_screen.gd")
+const Lessons := preload("res://lesson_session.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -89,6 +90,29 @@ func run() -> void:
     view.metronome_switch.button_pressed = true
     check(actions == ["transport","listen",true],"Practice controls dispatch one intent per user action")
     check(free.controls.listen.action == "listen","Listen again is a published action")
+    # The real LessonSession caches the backend's course overview, but
+    # a graded mastery result may unlock a new stage with the same piece.
+    # No new user command is required to refresh that read-only overview.
+    var lesson_cache := Lessons.new()
+    var selected := {"loaded":true,"piece_fingerprint":"warmup",
+        "lesson_step":1,"lesson_steps_mastered":0,"revision":1}
+    lesson_cache.update_context(selected,0)
+    lesson_cache.complete_response({"piece_fingerprint":"warmup",
+        "steps":[{"number":1,"available":true},
+                 {"number":2,"available":false}]}, "",1)
+    check(not lesson_cache.pending and lesson_cache.snapshot()["steps"][1]["available"] == false,
+        "Lesson Path initially displays the backend's locked next stage")
+    selected["lesson_step"] = 2
+    selected["lesson_steps_mastered"] = 1
+    selected["revision"] = 2
+    lesson_cache.update_context(selected,2)
+    check(lesson_cache.pending and lesson_cache.snapshot().is_empty(),
+        "Earned mastery invalidates an obsolete Lesson Path selection snapshot")
+    lesson_cache.complete_response({"piece_fingerprint":"warmup",
+        "steps":[{"number":1,"available":true},
+                 {"number":2,"available":true}]}, "",3)
+    check(not lesson_cache.pending and lesson_cache.snapshot()["steps"][1]["available"] == true,
+        "Newly unlocked warm-up step is available without reopening the piece")
     view.free()
     print("PRACTICE_CONTROLS_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
