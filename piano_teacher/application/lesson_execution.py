@@ -17,7 +17,7 @@ class LessonExecution:
                  exposure_workflows, exposure_installer, flow_session,
                  playback_session, guided_session, attempt, learner_progress,
                  progress, lifecycle, recovery_streak, visual_transport,
-                 attempt_settlement, measurement, library, clock, session_commands):
+                 attempt_settlement, measurement, library, clock):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
         self.notices, self.teaching_decisions = notices, teaching_decisions
         self.exposure_workflows, self.exposure_installer = exposure_workflows, exposure_installer
@@ -27,10 +27,10 @@ class LessonExecution:
         self.lifecycle, self.recovery_streak = lifecycle, recovery_streak
         self.visual_transport, self.attempt_settlement = visual_transport, attempt_settlement
         self.measurement, self.library = measurement, library
-        self.clock, self.session_commands = clock, session_commands
+        self.clock = clock
 
     def _stop(self, *, reason=None, preserve_episode=False, persist_evidence=True) -> None:
-        self.lifecycle.stop(reason=reason or self.session_commands.action_reason,
+        self.lifecycle.stop(reason=reason or "transition",
             preserve_episode=preserve_episode, persist_evidence=persist_evidence)
 
     def _save(self) -> None:
@@ -153,7 +153,7 @@ class LessonExecution:
         key = effect.decision.next_exposure.stage_key
         candidate = next(step for step in self.source_identity.plan.lesson_steps if step.key == key)
         self.learner_progress.mark_prior_steps_placed(self.source_identity.plan, fingerprint=self.source_identity.fingerprint, candidate=candidate)
-        self._stop()
+        self._stop(reason="place_original")
         selected = self.teaching_decisions.install_command(effect)
         self.reset_trouble()
         self.lesson_cursor.set_course_guided(True)
@@ -167,7 +167,7 @@ class LessonExecution:
         effect = self.teaching_decisions.manual_effect(
             "revisit_trouble", from_beat=start_beat,
             values={"stage_key":stage_key}, effect=effect)
-        self._stop()
+        self._stop(reason="revisit_trouble")
         selected = self.teaching_decisions.install_command(effect)
         self.reset_trouble()
         self.learner_progress.reactivate_trouble(fingerprint=self.source_identity.fingerprint, stage_key=selected.stage_key)

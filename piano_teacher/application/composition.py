@@ -225,7 +225,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         attempt=r.attempt, playback_session=r.playback_session,
         guided_session=r.guided_session, visual_transport=r.visual_transport,
         midi=r.midi, listen=r.listen, evidence_context=r.evidence_context,
-        session_commands=r.session_commands, clock=r.now)
+        clock=r.now)
     r.exposure_workflows = ExposureWorkflows(
         source_identity=r.source_identity, flow_session=r.flow_session,
         teaching_decisions=r.teaching_decisions,
@@ -243,7 +243,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         progress=r.progress, lifecycle=r.session_lifecycle,
         recovery_streak=r.recovery_streak, visual_transport=r.visual_transport,
         attempt_settlement=r.attempt_settlement, measurement=r.measurement,
-        library=r.library, clock=r.now, session_commands=r.session_commands)
+        library=r.library, clock=r.now)
 
     r.score_read = ScoreReadServices(
         source_identity=r.source_identity, attempt=r.attempt,
@@ -355,7 +355,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         exposure_workflows=r.exposure_workflows, flow_session=r.flow_session, guided_session=r.guided_session,
         lesson_cursor=r.lesson_cursor, lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
         measurement=r.measurement, notices=r.notices, playback_session=r.playback_session,
-        progress=r.progress, session_commands=r.session_commands, source_identity=r.source_identity,
+        progress=r.progress, source_identity=r.source_identity,
         teaching_decisions=r.teaching_decisions)
 
     r.transport_commands = TransportActions(

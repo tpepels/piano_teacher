@@ -12,7 +12,7 @@ class LearningActions:
                  attempt, attempt_settlement, clock, exposure_workflows,
                  flow_session, guided_session, lesson_cursor, lesson_execution,
                  lifecycle, measurement, notices, playback_session,
-                 progress, session_commands, source_identity, teaching_decisions):
+                 progress, source_identity, teaching_decisions):
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
         self.clock = clock
@@ -26,7 +26,6 @@ class LearningActions:
         self.notices = notices
         self.playback_session = playback_session
         self.progress = progress
-        self.session_commands = session_commands
         self.source_identity = source_identity
         self.teaching_decisions = teaching_decisions
 
@@ -98,7 +97,7 @@ class LearningActions:
     def open_selected_measure(self, kwargs: dict, *, effect=None):
         effect = self.teaching_decisions.manual_effect(
             "open_at", values=kwargs, effect=effect)
-        self.lifecycle.stop(reason=self.session_commands.action_reason)
+        self.lifecycle.stop(reason="open_at")
         selected = self.teaching_decisions.install_command(effect)
         self.lesson_execution.reset_trouble()
         self.lesson_cursor.set_course_guided(selected.mode == "learn")
@@ -126,7 +125,7 @@ class LearningActions:
         was_guided = self.playback_session.mode == "learn"
         guided_return = self.guided_session.return_context
         guided_retry_range = self.attempt.retry_range
-        self.lifecycle.stop(reason=self.session_commands.action_reason)
+        self.lifecycle.stop(reason=action)
         self.lesson_execution.reset_trouble()
         # Preserve the original ordering of the source opening reset.
         if action in ("select_step", "next", "previous"):

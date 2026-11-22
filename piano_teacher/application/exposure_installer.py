@@ -13,7 +13,7 @@ class ExposureInstaller:
     def __init__(self, *, source_identity, lesson_cursor, notices, lifecycle,
                  learner_progress, progress, score_state_publisher,
                  attempt, playback_session, guided_session, visual_transport,
-                 midi, listen, evidence_context, session_commands, clock):
+                 midi, listen, evidence_context, clock):
         self.source_identity = source_identity
         self.lesson_cursor = lesson_cursor
         self.notices = notices
@@ -28,13 +28,12 @@ class ExposureInstaller:
         self.midi = midi
         self.listen = listen
         self.evidence_context = evidence_context
-        self.session_commands = session_commands
         self.clock = clock
 
     def apply(self, prepared:
               GuidedPreparation | TimedPreparation | ListenPreparation,
               *, reason: str | None = None) -> None:
-        action_reason = self.session_commands.action_reason if reason is None else reason
+        action_reason = reason or "transition"
         if isinstance(prepared, GuidedPreparation):
             fragment = prepared.fragment
             self.learner_progress.save_resume(

@@ -33,7 +33,7 @@ class ExposureWorkflows:
             self.source_identity.warmup,
             self.flow_session.active(selected, warmup=self.source_identity.warmup))
 
-    def prepare_practice(self, *, exposure=None, effect=None, reason=None):
+    def prepare_practice(self, *, exposure=None, effect=None, reason="transition"):
         selected_plan = self.source_identity.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
@@ -52,7 +52,7 @@ class ExposureWorkflows:
             return_context=self.guided_session.return_context,
             retry_range=self.attempt.retry_range), reason=reason)
 
-    def prepare_listen(self, *, effect=None, reason=None) -> None:
+    def prepare_listen(self, *, effect=None, reason="transition") -> None:
         selected_plan = self.source_identity.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
@@ -65,7 +65,7 @@ class ExposureWorkflows:
                 selected_plan.active_stage, selected_plan.bpm)), reason=reason)
 
     def prepare_perform(self, *, scope: str = "current", exposure=None,
-                        effect=None, reason=None) -> None:
+                        effect=None, reason="transition") -> None:
         if self.source_identity.plan is None:
             raise ValueError("Open a piece first")
         effect = (None if exposure is not None else
