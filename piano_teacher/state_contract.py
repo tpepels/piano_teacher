@@ -12,6 +12,8 @@ Bump VERSION whenever a key is removed, renamed or changes meaning.
 """
 from __future__ import annotations
 
+import math
+
 VERSION = 5
 
 # Values that do not change frame to frame. They travel in command replies
@@ -196,6 +198,8 @@ def problems(state: dict) -> list[str]:
             found.append(f"unknown key {key!r}")
         elif kind_of(value) not in allowed:
             found.append(f"{key!r} is {kind_of(value)}, expected {'|'.join(allowed)}")
+        elif kind_of(value) == "number" and not math.isfinite(value):
+            found.append(f"{key!r} must be finite")
     controls = state.get("controls")
     if isinstance(controls, dict):
         for key in CONTROL_ACTIONS:
