@@ -264,6 +264,19 @@ class PracticeTimeline:
         consumed, followup = self.run_pre_assessment_transition(now)
         if consumed or followup:
             return followup
+        # A rolling boundary is admitted once. Its original MIDI evidence,
+        # decision and settlement receipt remain authoritative if SQLite or
+        # a presentation effect failed after the boundary was advanced.
+        # Do not ask the grader to assess that boundary again, or silently
+        # continue to a later measure at the newly selected tempo.
+        rolling = self.attempt_settlement.rolling_record
+        if (rolling is not None and rolling.transition is not None
+                and self.playback_session.running
+                and not self.visual_transport.paused):
+            self.recovery_workflows.apply_rolling_recovery(
+                rolling.decision, rolling.phrase, rolling.grid,
+                rolling.score_beat, now)
+            return False
         if (self.playback_session.running and self.visual_transport.grading_is_frozen(
                     now,grading_after=self.midi_ingress.resume_grading_after)):
             # The canonical recorder and live-assessment clock stand at the
