@@ -500,6 +500,70 @@ This inventory is not a dynamic import graph.
 | visual_transport.py | Cross-cutting source support | Review at actual call site |
 | warmups.py | Cross-cutting source support | Review at actual call site |
 
+### A0 production transition and acceptance matrix (source-traced)
+
+All paths below refer to the actual embedded runtime, not a parallel
+simulator. The named tests are **existing witnesses**, but were last
+verified on an older source revision; their presence is not proof they
+pass on the A0 evidence revision. A1–A5 must collapse the execution
+chain without changing the chosen result.
+
+| Trigger and current path | Authoritative decision and state write | Native or durable effect | Existing witness and unresolved edge |
+| --- | --- | --- | --- |
+| Library selection → godot LibraryCatalog → InProcessBus library.open → EngineCommands → PracticeEngine.load → SourceWorkflows/SourcePreparationSession | Build original MIDI fingerprint and LearningPlan outside short lock; SourceIdentity/lesson cursor install it under lock | ScoreLibrary last piece, progress restore, finger model, new score revision; ScoreAssetSession fetches Verovio geometry/model | test_score_import, test_library_and_settings; confirm concurrent source switch and stale fingering worker |
+| Fresh default Practice Flow stage → PracticeFlowCourseSession/PracticeFlow reducer → ExposureWorkflows/Installer | Course selects exact moving window, hand and Listen step; no whole-piece opening | New source/score projection; Listen audio waits for real source readiness | test_practice_course; Godot production_ui_smoke, source-specific first-bar visibility |
+| Listen requested → PracticeControls → LearningActions → ListenSession/TimedPlayback → PlaybackCoordinator | Backend chooses selected source and original target tempo; intent/receipt controls authorization | Godot physical reserve/arm/present; audio and ungraded lighting after accepted segment | test_desktop_playback listen cases; fake MIDI and UI smoke |
+| Listen ends → PracticeTimeline and PracticeFlowCourseSession.listen_finished | Lesson switches to Free without grading or progress credit | Same selected original notes, stationary target at playhead | test_practice_timeline listen_again; test_practice_course Free progression |
+| Free MIDI note → native MIDI callback → MidiApplicationInput/MidiIngress → GuidedSession TeachingController | Original-source pitch/position matching: correct next, wrong waits; Free is untimed | Feedback/hint and next-target motion; no extra neighboring measures or early progress | test_state_transition_journeys wrong Free, test_practice_course; physical latency still open |
+| Free completed → guided completion → FlowCourseSession/PracticeFlow free_completed → TimedPlayback/PlaybackCoordinator | One transition to Tempo at 50% target BPM | Fresh full-meter count-in and exact source-bound admission, score advances only after auth | test_practice_course, test_practice_timeline; native fake MIDI journey |
+| Tempo note attack/release → MidiIngress, recorder, AssessmentService/AssessmentVerdict | Onset tolerance and optional hold grading; original note-ID evidence retained | Green/red per-note feedback and durable signed evidence | test_note_feedback, test_state_transition_journeys release setting |
+| Tempo window end → PracticeTimeline → AttemptSettlement → TeachingDecisions/Continuation | One clean/failed verdict, current window tempo ladder, streak, recovery, next hand/window decision | Rolling/full passage evidence and progress persist; next announced score prepared without extra rest | test_practice_course ladder/floor, test_desktop_playback automatic repeat |
+| Failed floor Tempo twice → PracticeFlow and TeachingDecisions → Coda/Fukuda generator | Return to original Free; second qualifying return chooses real source-safe simplified aid | Announced different exercise and eventually exact original window again; no aid mastery credit | test_practice_resume, test_state_transition_journeys remediation; real original-score acceptance open |
+| Two target-tempo clean takes → LessonDefinition/LearningPlan → AttemptSettlement | Complete current hand/window; move to next trailing range, or whole-piece final; persist exact stage identity | Preload next authenticated stage; native outgoing ink continues | test_practice_course complete course, test_state_transition_journeys full mastery |
+| Pause command, button or MIDI gesture → PracticeControls → TransportActions/TimedPlayback/PlaybackSession | Session-authorized stop of grading and musical advance; preserve current take and exposed source | Godot holds notation, stops cues, restores only after explicit Resume and fresh authorization | test_desktop_playback paused count-in; production_ui_smoke, production_fake_midi_journey |
+| Resume from Pause → transport_commands.resume_timing → PlaybackCoordinator fresh intent | Same take identity, fresh complete authored count-in, new future physical source; no truncated 5/4 | ScoreAdmissionGateway protects predecessor ink, re-arms, attests and publishes deadline | test_practice_timeline 5/4, Moonlight native journey; later changes unverified |
+| User Stop or screen exit while command pending → raw ui_stop/ui_suspend → PracticeControls under lock | Stop cancels source and queued actions; one-way suspend can Pause but never Resume | Native command queue prioritizes Stop; cancels unconfirmed cue/source | test_state_transition_journeys stop/suspend, test_desktop_playback terminal Stop |
+| Native reserve/present reply lost or stale → ScoreAdmissionGateway → playback.status and reconciliation | PlaybackCoordinator checks current source/attempt/take/segment, rejects replay after failure, cannot shift known ink | Provisional queue either matches attested receipt or is safely withdrawn/reported failed | test_desktop_playback lost-ACK/stale source; production_fake_midi_journey drop reserve/present |
+| Lost MIDI connection during a take → MidiConnection/MidiApplicationInput/DeviceWorkflows | Reject progress and suspend/fail current attempt; no missing attacks fabricated as success | UI device notice and fresh note-edge gate on reconnect | test_midi_devices; test_state_transition_journeys disconnect |
+| Score compilation/preload failure → FutureScore/TeachingContinuation or ScoreAssetSession/ScoreRunway | Source/revision-keyed terminal failure, retry or explicit user recovery; no unearned stage | No partial prepared renderer or authorization; outgoing ink retained | test_score_import; test_desktop_playback bounded failure; verifier checks SCRIPT ERROR |
+| Saved reopening → ProgressRepository and LearningPlan restore → PracticeFlowCourseSession | Same window/hand restored; Free warmup, then 50% tempo, not a half-completed MIDI chord | Source revision and score reloaded; no duplicate mastery or pending physical take | test_practice_resume and test_learning_history |
+| Metronome/voice display → backend authorized PlaybackCoordinator snapshot → MetronomeFrameCoordinator/CountInAudioSession | Backend deadline, meter and tempo define cue source; no local music timing decision | Native beat numbers and sound once per segment | test_practice_timeline; real audible/latency acceptance pending |
+| Persist settings/history/delete/fingering → EngineCommands → SettingsWorkflows/HistoryManagement/SourceWorkflows | Validate source/history scope and changes under lock; actual file/database commit is authoritative | Godot refreshes only after accepted result | test_learning_history, test_fingering, test_library_and_settings |
+
+### A0 state-writer and dependency ownership checks
+
+The inspected current source shows the following distinct mutable roots.
+They are not necessarily independent *decisions*: the audit must preserve
+legitimate ephemeral physical state and remove duplicated musical state.
+The **migrate** column names the authoritative *target*; it is not a
+claim that all current writers have already moved.
+
+| Current mutable root | Concrete state / writer | Intended sole owner and migration rule |
+| --- | --- | --- |
+| SourceIdentity / LessonCursor | fingerprint, revision, current plan, source selection and selected beat | PracticeSession source/lesson aggregate; ScoreBundle binds exact immutable identity |
+| GuidedSession / PracticeFlowCourseSession / LearningPlan | Free target, lesson stage, hand, tempo, failed/clean and aid counters | One selected LessonDomain state with a pure reducer; score projection reads, never writes |
+| AttemptRuntime / AttemptSettlement | current attempt and recorder, pending take/rolling/full settlement, cancellation generations | Assessment evidence and one lesson settlement; recover atomically on failure |
+| RecoveryStreak / LearnerProgress / teaching continuation | recovery counters, future selection and deferred choice | One LessonDomain decision and one explicit scheduled effect; do not create a second choice |
+| PlaybackSession | mode, running, authorization, count-in, paused-context, awaiting score | One TransportDomain aggregate; a derived UI phase is not a second mutable owner |
+| PlaybackCoordinator | pending PlaybackIntent, ScoreReceipt, playback enum, take/segment/deadline, failure | Same TransportDomain aggregate; reserve/present/reconcile remain authenticated |
+| VisualTransport / MidiIngress | display authorization epoch/hold, transport score beat, grading resume gate/deferred notes | TransportDomain timeline plus device ingress boundary; no separate decision clock |
+| TeachingContinuation / FutureScore | prepared/acknowledged future stage, schedule, failed generation, cache/worker state | ScoreBundle prep pipeline owns assets; LessonDomain owns which next stage is selected |
+| ScoreAssetSession / ScoreRunway | current revision/renderer/model/layout, future renderer/ACK, outgoing tails | One source-keyed preparation/adoption contract; retained ink remains native |
+| ScoreAdmissionGateway / ScoreStreamController / ScoreStreamQueue | physical offer/receipt/reconciliation and immutable committed strips | One native physical surface; preserve single existing ledger and physical truth |
+| SessionReadModels / ScoreStatePublisher / state_projection | independently assembled controls, phase, motion and pending transport facts | One pure versioned presentation projection after session commit |
+| ScoreLibrary / ProgressRepository / LearningLedger / cache files | persisted settings, stage progress and evidence, imported/fingered artifacts | Explicit persistence and source-cache ports; migrations confined to storage boundaries |
+
+**Dependency rules for A1–A6:** Input adapters call PracticeSession only;
+PracticeSession calls cohesive domain interfaces; pure lesson/assessment
+policy has no knowledge of Godot, Python bridge or storage; ScoreBundle
+build and physical geometry do not make teaching choices; transport
+may consume immutable physical evidence but never a Godot business policy;
+presentation reads a committed snapshot and cannot mutate the model;
+persistence receives explicit transactions/effects and publishes no hidden
+lesson transitions. Retain one monotonic source clock and bounded threaded
+workers. This map forbids coordinator-to-coordinator backreferences and
+self-mutating projection getters.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or
