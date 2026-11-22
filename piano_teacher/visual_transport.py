@@ -445,7 +445,7 @@ class VisualTransport:
                        automatic_feedback: bool, grading_after: float, mode: str,
                        pause_context: str | None, bpm: float | None,
                        count_in_beats: float, full_count_in_beats: float, bar_beats: float,
-                       reading_lead_seconds: float, reuse_pending_score: bool,
+                       reading_lead_seconds: float,
                        midi_connected: bool, preview: bool,
                        scheduled_deadline: float | None):
         """Validate, shift and authorize the resumed source clock once."""
@@ -454,11 +454,6 @@ class VisualTransport:
             preview_pending=self.preview_loop_pending,
             automatic_feedback=automatic_feedback)
         paused_at, previous_origin = self.paused_at,self.run_at
-        if reuse_pending_score and (
-                reading_lead_seconds <= 0.0 or not (shift and running
-                and mode in ("practice", "perform"))
-                or pause_context != "count_in" or self.run_at <= paused_at):
-            raise ValueError("Cannot reuse a passage after graded notes began")
         frozen = self._pause_floor
         had_reading_lead = grading_after > paused_at
         self.resume(now=now,shift_run_at=shift)
@@ -472,7 +467,6 @@ class VisualTransport:
             pause_context=pause_context,bpm=bpm,count_in_beats=count_in_beats,
             full_count_in_beats=full_count_in_beats,
             bar_beats=bar_beats,reading_lead_seconds=reading_lead_seconds,
-            reuse_pending_score=reuse_pending_score,
             midi_connected=midi_connected,preview=preview,
             scheduled_deadline=scheduled_deadline)
         self.run_at = timing.origin

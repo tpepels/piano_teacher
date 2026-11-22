@@ -100,7 +100,6 @@ class ResumeRequest:
     full_count_in_beats: float
     midi_connected: bool
     reading_lead_seconds: float = 0.0
-    reuse_pending_score: bool = False
     scheduled_deadline: float | None = None
 
 

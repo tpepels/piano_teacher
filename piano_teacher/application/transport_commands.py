@@ -41,7 +41,7 @@ def resume_timing(*, now: float, origin: float, previous_origin: float,
                   shift_run_at: bool, running: bool, mode: str,
                   pause_context: str | None, bpm: float | None,
                   count_in_beats: float, full_count_in_beats: float, bar_beats: float,
-                  reading_lead_seconds: float, reuse_pending_score: bool,
+                  reading_lead_seconds: float,
                   midi_connected: bool, preview: bool,
                   scheduled_deadline: float | None) -> ResumeTiming:
     """Apply the existing scheduler to the single shifted source epoch."""
@@ -53,8 +53,7 @@ def resume_timing(*, now: float, origin: float, previous_origin: float,
             origin, grading_after = SCHEDULER.resume_playing(
                 now=now,origin=origin,bpm=bpm,count_in_beats=count_in_beats,
                 reading_lead_seconds=reading_lead_seconds,
-                already_waiting=max(0.,grading_after-now),
-                reuse=reuse_pending_score)
+                already_waiting=max(0.,grading_after-now))
         elif (midi_connected and not preview and pause_context == "playing"
               and not had_reading_lead and origin <= now):
             count_in_beats = max(1.0,min(4.0,bar_beats))

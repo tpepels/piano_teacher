@@ -135,7 +135,6 @@ class TimedPlayback:
             self.guided_session.controller.pause(now=now)
 
     def resume(self, *, presentation_lead_seconds: float = 0.0,
-                                reuse_pending_score: bool = False,
                                 reuse_announced_score: bool = False,
                                 scheduled_deadline: float | None = None):
         resumed = self.playback_session.resume_timeline(ResumeRequest(
@@ -143,7 +142,7 @@ class TimedPlayback:
             bpm=self.source_identity.plan.bpm if self.source_identity.plan is not None else None,
             full_count_in_beats=self.transport_timing.next_count_in_beats(),
             midi_connected=self.midi.connected,reading_lead_seconds=presentation_lead_seconds,
-            reuse_pending_score=reuse_pending_score,scheduled_deadline=scheduled_deadline))
+            scheduled_deadline=scheduled_deadline))
         if resumed.learning:
             self.guided_session.controller.resume(now=resumed.now)
         announced = self.visual_transport.announced_continuation

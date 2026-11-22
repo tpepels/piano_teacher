@@ -381,16 +381,13 @@ class MusicalScheduler:
     @classmethod
     def resume_playing(cls, *, now: float, origin: float, bpm: float,
                        count_in_beats: float, reading_lead_seconds: float,
-                       already_waiting: float, reuse: bool) -> tuple[float, float]:
+                       already_waiting: float) -> tuple[float, float]:
         """Move a paused graded take and its one count-in together.
 
-        Resuming a still-unused source binds its exact reserved world
-        origin. Otherwise only the missing reading lead is added; a lead
-        that was already published is never charged twice.
+        Only the missing reading lead is added; a lead already
+        published is never charged twice. Every physical Resume
+        creates a new source and full-bar preparation count-in.
         """
-        if reuse:
-            deadline = now+reading_lead_seconds
-            return deadline,deadline
         total_lead = max(cls.beats_seconds(count_in_beats,bpm),
                          reading_lead_seconds)
         additional = max(0.0,total_lead-already_waiting)

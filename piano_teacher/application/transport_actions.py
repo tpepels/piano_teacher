@@ -61,7 +61,6 @@ class TransportActions:
             elif authorized.action == "resume":
                 self.resume_current_session(
                     presentation_lead_seconds=max(0.0,authorized.deadline-self.clock()),
-                    reuse_pending_score=False,
                     scheduled_deadline=authorized.deadline)
             elif authorized.action in ("auto","score_ready"):
                 with self.session_commands.executing(None):
@@ -188,7 +187,6 @@ class TransportActions:
                     mode=self.playback_session.mode, from_beat=from_beat)
             else:
                 self.resume_current_session(presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs),
-                    reuse_pending_score=kwargs.get("reuse_pending_score",False) is True,
                     reuse_announced_score=kwargs.get("reuse_announced_score",False) is True)
 
     def start_or_restart(self, action: str, *,
@@ -248,12 +246,10 @@ class TransportActions:
         return
 
     def resume_current_session(self, *, presentation_lead_seconds=0.0,
-                                reuse_pending_score=False,
                                 reuse_announced_score=False,
                                 scheduled_deadline=None):
         completed = self.timed_playback.resume(
             presentation_lead_seconds=presentation_lead_seconds,
-            reuse_pending_score=reuse_pending_score,
             reuse_announced_score=reuse_announced_score,
             scheduled_deadline=scheduled_deadline)
         if completed.deferred_score_revision is not None:

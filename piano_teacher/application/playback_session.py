@@ -415,7 +415,6 @@ class PlaybackSession:
             full_count_in_beats=request.full_count_in_beats,
             bar_beats=self.count_in_bar_beats,
             reading_lead_seconds=request.reading_lead_seconds,
-            reuse_pending_score=request.reuse_pending_score,
             midi_connected=request.midi_connected,preview=self.preview_only,
             scheduled_deadline=request.scheduled_deadline)
         self._midi.authorize_grading_after(timing.grading_after)
