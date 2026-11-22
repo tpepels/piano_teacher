@@ -40,7 +40,7 @@ The separate final examination uses the whole original piece.
 
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
-**Status: PLANNED — A0–A7 have not been implemented or verified.** This is
+**Status: IN PROGRESS — A0 source baseline and transition inventory committed; A0 exit and all A1–A7 implementation/verification remain open.** This is
 the next development track. The V0–V7 implementation/acceptance work and
 older S0–S7 decomposition remain below as historical evidence and open
 verification requirements, **not** as a requirement to keep all existing
@@ -153,6 +153,46 @@ selected window bounds, real-source Coda/Fukuda changes, saved evidence,
 asynchronous engraving and texture prewarming are preserved. The live
 hardware/visual constraints justify these safeguards even if individual
 intermediate wrappers can be eliminated.
+
+### A0 implementation checkpoint — 2026-11-22
+
+**Source commits:** [005b8b6](https://github.com/tpepels/piano_teacher/commit/005b8b63d6a08c3d1aa524c926c6fcdedf4d74bb) and
+[08a1f6e](https://github.com/tpepels/piano_teacher/commit/08a1f6e5da98e0f4c4dbafe5bdefeaf1f0c71a0b).
+The source-audit record is in [docs/architecture.md](docs/architecture.md#a0-runtime-and-ownership-baseline--source-inspection-2026-11-22).
+
+**Completed source-stage work:**
+- Inventory of all **79 Python application modules**, **120 other Python source
+  modules**, and **146 Godot GDScript modules** outside the developer addon,
+  with tentative phase homes and disposition classifications. This is a
+  path-complete static inventory, **not a claim of fully proven reachability**.
+- Trace of the native C++/embedded Python command/tick/asset workers,
+  Godot state/command interfaces, MIDI ingress, application lock and
+  source-mutation/fingering/prefetch threads, persistence and physical
+  reservation/reconciliation boundaries.
+- Source-backed risk register and **19 production scenario/acceptance
+  traces** for source opening, Listen, Free, Tempo, repeated takes,
+  Coda/Fukuda, mastery, Pause/Resume/Stop, stale/lost ACK, disconnect,
+  preparation failure, saved reopening, cues and settings/history/fingering.
+- Explicit legacy candidates: recursive publication emulation; distinct
+  normal/preloaded score lifecycle; distributed transport state; continuation
+  and snapshot coordinator chains. Retained-ink admission, physical evidence,
+  full-meter count-in, async engraving and real source identities remain
+  required safeguards.
+- Confirmed current user-selectable practice-flow and coda-fukuda-midi
+  strategies, with source-progression used by warm-ups. No supported course
+  or saved-data format was removed or declared obsolete by assumption.
+- Verified latest available GitHub Actions run record still shows
+  **45017492022 on 1c1b98e** as the last full green suite; its success
+  predates all later commits, including this audit.
+
+**Open A0 exit gates:** Every candidate's *runtime* call/writer reachability
+must be proved (including dynamically loaded native scenes and registered
+generators); full source-to-transaction/async edge coverage and exact HEAD
+core/native/repertoire/relocated-package execution must be recorded. The
+current connected source environment cannot run Python 3.14/Godot 4.7.2
+or dispatch a new workflow. Consequently A0 is **IN PROGRESS** rather than
+complete. No A1 production code, behavior, tests or physical MIDI acceptance
+has been changed by this checkpoint; CI is still manual-only.
 
 ### A0 — Complete dependency, behavior and legacy audit
 
@@ -389,7 +429,7 @@ and speakers, including the original Pathétique source and readability.
 
 | Phase | Required result | Status |
 | --- | --- | --- |
-| A0 | Full source/runtime/feature audit and migration/deletion map | Not started |
+| A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
 | A1 | One authoritative PracticeSession and event processing path | Not started |
 | A2 | Unified lesson/assessment/settlement/recovery | Not started |
 | A3 | Unified transport clock and physical playback transaction | Not started |
