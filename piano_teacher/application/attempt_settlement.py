@@ -128,6 +128,7 @@ class AttemptSettlement:
         self._completion = None
         self._full_completion: PendingFullCompletion | None = None
         self._rolling = None
+        self._rolling_effects_applied: set[str] = set()
         self.authority_revision = 0
         self.course_revision = 0
         self.cancellation_generation = 0
@@ -223,20 +224,45 @@ class AttemptSettlement:
         """One recorded rolling result including its original source and take."""
         return self._rolling
 
-    def finish_rolling_publication(self, completed: RollingTake) -> None:
-        """Acknowledge one durable rolling recovery after presentation effects.
+    def rolling_effect(self, completed: RollingTake, name: str, action) -> None:
+        """Run each decided recovery presentation effect at most once.
 
-        A failed effect leaves the original graded take and receipt available
-        for retry. An obsolete or unsettled recovery cannot be published.
+        The callback is invoked only after durable progress/evidence settled.
+        A successful effect is acknowledged under the application session
+        lock; a failed effect leaves the receipt and all earlier successful
+        effects intact for an explicit Retry or worker continuation.
         """
         if (self._rolling is not completed or
                 self.pending is not completed.pending or
                 completed.transition is None or
                 completed.pending.receipt is None or
                 completed.pending.phase != "settled"):
+            raise ValueError("Cannot apply an unsettled or superseded rolling effect")
+        if name not in self._rolling_effects_applied:
+            action()
+            self._rolling_effects_applied.add(name)
+
+    def finish_rolling_publication(self, completed: RollingTake) -> None:
+        """Publish only after every required recovery effect was applied."""
+        if (self._rolling is not completed or
+                self.pending is not completed.pending or
+                completed.transition is None or
+                completed.pending.receipt is None or
+                completed.pending.phase != "settled"):
             raise ValueError("Cannot publish an unsettled or superseded rolling recovery")
+        transition = completed.transition
+        required = {"tempo", "prepare", "streak", "attempt", "notices"}
+        if transition.uses_completed_rest:
+            required.add("take_end")
+        if transition.guided:
+            required.add("withdraw")
+        if transition.action == "pause":
+            required.update(("stop_auto", "cancel_preparation", "cancel_continuation"))
+        if not required.issubset(self._rolling_effects_applied):
+            raise ValueError("Cannot publish rolling recovery with unapplied source effects")
         completed.pending.phase = "published"
         self._rolling = None
+        self._rolling_effects_applied.clear()
 
     def complete_rolling(self, *, decision, phrase, grid, score_beat,
                          now, bpm, scored_end, hand, played, from_beat,
@@ -244,6 +270,7 @@ class AttemptSettlement:
                          policy, score_revision: int) -> RollingTake:
         """Retain original source/tempo facts through rolling storage retries."""
         if self._rolling is None:
+            self._rolling_effects_applied.clear()
             original_notes = tuple(played)
             assessed = policies.select(tempo).grade(
                 phrase,hand=hand,bpm=bpm,played=original_notes,from_beat=from_beat,
@@ -312,6 +339,7 @@ class AttemptSettlement:
             # same exposure, rather than leaving a selected stale decision.
             self.pending = None
             self._rolling = None
+            self._rolling_effects_applied.clear()
             return completed
         # A source-bound rolling result may already have been durably sealed
         # before a later recovery presentation effect failed. Reuse that
@@ -674,4 +702,5 @@ class AttemptSettlement:
         self._completion = None
         self._full_completion = None
         self._rolling = None
+        self._rolling_effects_applied.clear()
         self.cancellation_generation += 1
