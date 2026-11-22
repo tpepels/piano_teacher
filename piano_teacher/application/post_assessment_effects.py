@@ -28,6 +28,13 @@ class PostAssessmentEffects:
         if self.attempt_settlement.pending_result is None or self.source_identity.plan is None:
             return ""
         pending = self.attempt_settlement.pending
+        if pending.phase == "effects_applied":
+            # The teaching receipt and its score/revision effects already
+            # committed. A later continuation failure may retry from that
+            # receipt, but must never replay stage adoption or rewind.
+            if finish_publication:
+                self.attempt_settlement.finish_publication()
+            return pending.publication.receipt.message
         decision = pending.decision
         try:
             committed = self.attempt_settlement.commit_full_passage(
@@ -59,6 +66,7 @@ class PostAssessmentEffects:
         except BaseException:
             self.attempt.publication_failed()
             raise
+        self.attempt_settlement.effects_applied(pending)
         if finish_publication:
             self.attempt_settlement.finish_publication()
         self.attempt.publication_finished()

@@ -135,6 +135,18 @@ class AttemptSettlement:
         if self.pending is not None:
             self.pending.phase = "published"
 
+    def effects_applied(self, pending: PendingTeachingDecision) -> None:
+        """Acknowledge post-commit source effects exactly once per receipt.
+
+        Durably settled progress can outlive a failed next-step handoff.
+        The following retry must not adopt the same stage, rewind or reset
+        transport presentation twice; only the continuation remains pending.
+        """
+        if pending is not self.pending or pending.receipt is None or pending.publication is None:
+            raise ValueError("Post-commit effects require the current durable receipt")
+        if pending.phase not in ("effects_applied", "published"):
+            pending.phase = "effects_applied"
+
     @property
     def pending_full_completion(self) -> PendingFullCompletion | None:
         return self._full_completion
