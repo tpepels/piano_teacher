@@ -217,5 +217,5 @@ def problems(state: dict) -> list[str]:
             elif kind == "target" and (
                     kind_of(directive.get("source_beat")) != "number"
                     or not math.isfinite(directive["source_beat"])):
-                found.append("presentation_directive target has no finite source_beat")
+                found.append("presentation_directive target has no source_beat or has a nonfinite source_beat")
     return found
