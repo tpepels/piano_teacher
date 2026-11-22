@@ -9,6 +9,7 @@ var tick_ms := 0
 var pending := false
 var request_started_ms := 0
 const Reply := preload("res://inprocess_request.gd")
+const StateContract := preload("res://state_contract.gd")
 var _commands
 var _practice
 var _presentation
@@ -40,8 +41,17 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
     if not accepted.has("state"):
         return
     var parsed: Dictionary = accepted["state"]
+    var violations: Array[String] = StateContract.problems(parsed)
+    if not violations.is_empty():
+        # The previously accepted source remains untouched. Unknown or
+        # incomplete backend snapshots never reach presentation, physical
+        # admission, input policy or the published controls.
+        _logger.check_contract(parsed)
+        push_error("STATE_CONTRACT_REJECTED: " + "; ".join(violations))
+        _practice.present_message(
+            "Practice state incompatible with this application; controls blocked",true)
+        return
     var received_ms: int = int(accepted["received_ms"])
-    _logger.check_contract(parsed)
     _statistics.update_context(str(parsed.get("piece_fingerprint","")))
     var assets = _presentation.score_session
     _logger.record_transition(parsed,received_ms,request_started_ms,

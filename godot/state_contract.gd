@@ -5,6 +5,10 @@ extends RefCounted
 
 const VERSION := 5
 const STATIC_KEYS := ["import_warnings"]
+const REQUIRED := ["schema_version", "loaded", "controls"]
+const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "presentation_directive", "playback_timeline"]
+const CONTROL_ACTIONS := ["primary", "pause", "retry", "listen", "previous", "review_previous", "skip", "path_skip", "passage_previous", "passage_next", "stop", "hints", "midi_start", "tempo_up", "tempo_down"]
+const MOTION_KINDS := ["hold", "target", "retain", "run"]
 const SCHEMA := {
     "auto": ["bool"],
     "automatic_tempo_steps": ["number"],
@@ -157,10 +161,33 @@ static func problems(state: Dictionary) -> Array[String]:
     if int(state.get("schema_version", -1)) != VERSION:
         found.append("schema_version %s, expected %d" % [
             str(state.get("schema_version")), VERSION])
+    for key in REQUIRED:
+        if not state.has(key):
+            found.append("missing required key '%s'" % key)
+    if state.get("loaded",false) == true:
+        for key in LOADED_REQUIRED:
+            if not state.has(key):
+                found.append("missing required key '%s'" % key)
     for key in state:
         if not SCHEMA.has(key):
             found.append("unknown key '%s'" % key)
         elif kind_of(state[key]) not in SCHEMA[key]:
             found.append("'%s' is %s, expected %s" % [
                 key, kind_of(state[key]), "|".join(SCHEMA[key])])
+    var controls: Variant = state.get("controls")
+    if controls is Dictionary:
+        for key in CONTROL_ACTIONS:
+            var choice: Variant = controls.get(key)
+            if not choice is Dictionary or \
+                    kind_of(choice.get("enabled")) != "bool" or \
+                    kind_of(choice.get("action")) != "string":
+                found.append("controls.%s lacks an action/enabled projection" % key)
+    if state.get("loaded",false) == true:
+        var directive: Variant = state.get("presentation_directive")
+        if directive is Dictionary:
+            var kind: Variant = directive.get("kind")
+            if kind not in MOTION_KINDS:
+                found.append("invalid presentation_directive.kind %s" % str(kind))
+            elif kind == "target" and kind_of(directive.get("source_beat")) != "number":
+                found.append("presentation_directive target has no source_beat")
     return found

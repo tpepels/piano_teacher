@@ -19,6 +19,21 @@ VERSION = 5
 STATIC_KEYS = ("import_warnings",)
 
 KINDS = ("bool", "number", "string", "list", "dict", "null")
+# Required production read ports. An unloaded state has no selected
+# score/phase, but it always has a version, load bit and control model.
+REQUIRED = ("schema_version", "loaded", "controls")
+LOADED_REQUIRED = (
+    "mode", "phase", "running", "paused", "revision", "transport_id",
+    "piece_fingerprint", "presentation_directive", "playback_timeline",
+)
+# Buttons and native shortcuts must never supply their own action meaning.
+# These names are presentation ports, generated to Godot from this owner.
+CONTROL_ACTIONS = (
+    "primary", "pause", "retry", "listen", "previous", "review_previous",
+    "skip", "path_skip", "passage_previous", "passage_next", "stop",
+    "hints", "midi_start", "tempo_up", "tempo_down",
+)
+MOTION_KINDS = ("hold", "target", "retain", "run")
 
 SCHEMA: dict[str, tuple[str, ...]] = {
     "auto": ('bool',),
@@ -168,12 +183,34 @@ def kind_of(value: object) -> str:
 
 
 def problems(state: dict) -> list[str]:
-    """Contract violations of one snapshot (empty when it conforms)."""
+    """Missing, incompatible and ill-formed snapshot ports."""
     found = []
+    if type(state.get("schema_version")) is not int or state["schema_version"] != VERSION:
+        found.append(f"schema_version {state.get('schema_version')!r}, expected {VERSION}")
+    for key in (*REQUIRED, *(LOADED_REQUIRED if state.get("loaded") is True else ())):
+        if key not in state:
+            found.append(f"missing required key {key!r}")
     for key, value in state.items():
         allowed = SCHEMA.get(key)
         if allowed is None:
             found.append(f"unknown key {key!r}")
         elif kind_of(value) not in allowed:
             found.append(f"{key!r} is {kind_of(value)}, expected {'|'.join(allowed)}")
+    controls = state.get("controls")
+    if isinstance(controls, dict):
+        for key in CONTROL_ACTIONS:
+            choice = controls.get(key)
+            if (not isinstance(choice, dict)
+                    or type(choice.get("enabled")) is not bool
+                    or not isinstance(choice.get("action"), str)):
+                found.append(f"controls.{key} lacks an action/enabled projection")
+    if state.get("loaded") is True:
+        directive = state.get("presentation_directive")
+        if isinstance(directive, dict):
+            kind = directive.get("kind")
+            if kind not in MOTION_KINDS:
+                found.append(f"invalid presentation_directive.kind {kind!r}")
+            elif kind == "target" and (
+                    kind_of(directive.get("source_beat")) != "number"):
+                found.append("presentation_directive target has no source_beat")
     return found
