@@ -58,20 +58,47 @@ class CompletionContinuations:
         # The assessment is durable, but the selected successor has not
         # yet been applied. Retain its visible note feedback until the
         # exact source-bound continuation is successfully installed.
-        publication = self.teaching_continuation.finish_feedback(transaction,SettledSourceFacts(
-            fingerprint=self.source_identity.fingerprint,stage_key=self.source_identity.plan.identity,revision=self.source_identity.revision,
-            now=now,bpm=self.source_identity.plan.bpm,presentation_bpm=self.transport_timing.presentation_bpm(),
-            count_in_beats=self.transport_timing.next_count_in_beats(),automatic=self.playback_session.auto,
-            flow_active=self.lesson_execution.flow_active()))
-        if publication.flow_outcome is not None:
-            self.flow_session.settle_decided(publication.flow_outcome,plan=self.source_identity.plan,
-                message=publication.message,decision_id=transaction.decision_id)
-        self.dispatch_effect(publication.effect,now)
-        # Only a fully applied continuation may retire the old note marks
-        # and acknowledge the once-only publication. If presentation fails,
-        # the sealed assessment and its feedback remain visible for retry.
-        self.attempt.clear_feedback()
-        self.attempt_settlement.finish_publication()
+        try:
+            publication = self.teaching_continuation.finish_feedback(
+                transaction, SettledSourceFacts(
+                    fingerprint=self.source_identity.fingerprint,
+                    stage_key=self.source_identity.plan.identity,
+                    revision=self.source_identity.revision,
+                    now=now, bpm=self.source_identity.plan.bpm,
+                    presentation_bpm=self.transport_timing.presentation_bpm(),
+                    count_in_beats=self.transport_timing.next_count_in_beats(),
+                    automatic=self.playback_session.auto,
+                    flow_active=self.lesson_execution.flow_active()))
+            if publication.flow_outcome is not None:
+                self.flow_session.settle_decided(
+                    publication.flow_outcome, plan=self.source_identity.plan,
+                    message=publication.message, decision_id=transaction.decision_id)
+            self.dispatch_effect(publication.effect, now)
+            # Visible marks are retained until the exact physical/source
+            # continuation has been installed successfully.
+            self.attempt.clear_feedback()
+            self.attempt_settlement.finish_publication()
+        except Exception as exc:
+            # The settled take and receipt remain committed. Make an
+            # explicit Retry re-enter this selected transaction; do not
+            # silently select a new source or grade a second attempt.
+            self.attempt.publication_failed()
+            self.playback_session.stop_automatic()
+            self.notices.feedback = "Could not apply the settled continuation"
+            self.notices.next_action = (
+                "Press Retry to apply the same saved result without grading again.")
+            print("CONTINUATION_EFFECT_FAILED:", type(exc).__name__, str(exc), flush=True)
+
+    def retry_failed_publication(self, *, now: float) -> str:
+        """Retry the original full result, including its retained effects."""
+        pending = self.attempt_settlement.pending
+        if (pending is None or pending.event.kind != "full_result"
+                or pending.phase == "published"):
+            raise ValueError("No interrupted full-passage settlement to retry")
+        self.advance_pending_feedback(now, force_early=True)
+        if pending.phase != "published" or pending.receipt is None:
+            raise RuntimeError("Selected assessment continuation is still pending")
+        return pending.receipt.message
 
     def publish_feedback_fault(self, fault: FeedbackFault, now: float) -> None:
         self.playback_session.apply_feedback_fault(fault,now=now)
