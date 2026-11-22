@@ -111,6 +111,9 @@ class RecoveryWorkflows:
         from_beat = self.visual_transport.play_from_beat
         score_revision = self.source_identity.revision
         if saved is not None:
+            if self.source_identity.revision != saved.take.score_revision:
+                raise ValueError(
+                    "Rolling take score revision changed before publication retry")
             # A durable decision may already have lowered BPM or changed
             # the stage before visual continuation failed. Resume exactly
             # its original graded take, never reassess a new source/cursor.
