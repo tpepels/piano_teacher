@@ -792,6 +792,21 @@ triggered. **A2 remains IN PROGRESS until these gates pass.**
 **Exit A2:** One take result yields one lesson decision and one durable
 settlement. No other owner can independently grade, advance or select tempo.
 
+**Follow-up A3 epoch reconciliation:** Idempotent `playback.present`
+replies are accepted only for the same active source fingerprint,
+stage, revision, hand, end-beat, physical transport ID **and mode**.
+Terminal `complete`, `failed` or `idle` cannot resurface an old
+authorization. The existing bounded lost-ACK reconciliation remains
+in force; `tests/test_physical_present_epoch.py` also covers the
+terminal/mode cases. Source-inspection only, no actual physical ACK
+fault injection has run on this HEAD.
+
+**A4 identity correction:** Both current and future bundles now use
+`music.source_note_id(note,index)`, the same canonical original/legacy
+note-ID rule used by `display_envelope` and native semantic notation.
+This keeps supported sources without explicit IDs readable while
+rejecting duplicate/mismatched graded attack identities.
+
 ### A3–A6 integrated development checkpoint — 2026-11-22
 
 **A3 — physical receipt replay hardened (source integration):**
