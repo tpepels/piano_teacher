@@ -208,34 +208,14 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
             _reject_fixed_intent(intent,
                 "Cannot admit the direct repeat at its one-bar deadline")
             return
-    elif action == "resume" and partial > 0.0:
-        # Pure feasibility only. Never touch the paused or future queue
-        # until Python has reserved its one admissible downbeat.
-        var partial_floor: float = backend_now + \
-            TempoTimeline.seconds_from_beats(partial,tempo)*1000.0+420.0
-        var partial_world: float = flow.project_authored_future(
-            frame_ms+roundi(partial_floor-backend_now),frame_ms,
-            float(state.get("clock_beat",0.0)),tempo,authored)
-        var partial_slot: float = maxf(partial,partial_world-world)
-        var preview: Dictionary = TransportReservation.plan(
-            view,"resume",world,opening,partial_slot)
-        if bool(preview.get("ok",false)) and \
-                str(preview.get("mode","")) == "reuse":
-            # A paused take's original ink cannot move. Reuse only if its
-            # existing physical downbeat can ALSO satisfy the remaining
-            # backend-authored count-in and reservation latency. Otherwise
-            # a new full-bar Resume must preserve the old source as a
-            # predecessor instead of retiming or repeatedly rejecting it.
-            var reused_travel_ms: float = flow.physical_travel_ms_to(
-                float(preview["start_world"]),frame_ms,
-                float(state.get("clock_beat",0.0)),tempo,authored)
-            var required_reuse_ms: float = \
-                TempoTimeline.seconds_from_beats(
-                    partial,float(intent.get("bpm",tempo)))*1000.0+420.0
-            if is_finite(reused_travel_ms) and \
-                    reused_travel_ms >= required_reuse_ms:
-                planned = preview
-                physical_action = "resume"
+    # A frozen Pause cannot make an earlier printed source's absolute
+    # downbeat future again. Its travel measurement is taken before the
+    # asynchronous backend reservation; while held, that travel stays
+    # constant as real time advances. Reusing the old physical origin
+    # therefore always invalidates the deadline by the reserve round trip.
+    # Resume instead creates a fresh backend-owned full-bar countdown and
+    # retains the paused predecessor's unexpired immutable ink. The
+    # semantic transport ID and lesson progress are unchanged.
     if planned.is_empty():
         planned = TransportReservation.plan(
             view,physical_action,world,opening,required_slot,NAN,
@@ -279,9 +259,11 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         _cancel_provisional()
         return
     current["world_origin"] = start_world
-    current["reused_count_in"] = (
-        action == "resume" and partial > 0.0
-        and str(planned.get("mode","")) == "reuse")
+    # The visual source clock is held during every Pause. Reuse of its
+    # original absolute countdown is physically impossible after an
+    # asynchronous reserve; native Resume always admits a fresh future
+    # count-in without moving the paused source.
+    current["reused_count_in"] = false
     # Preserve the same physical action selected by read-only
     # preflight. Python's semantic Resume stays unchanged; a new full
     # count-in still retains the paused source through its unexpired ink.
