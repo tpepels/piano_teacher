@@ -622,3 +622,17 @@ def test_delayed_automatic_ack_cannot_replace_matching_unpresented_take(
     assert session.engine.playback.sequence == prior_sequence
     assert session.snapshot()["playback_intent"] == previous
     assert not session.snapshot()["running"]
+
+
+def test_physical_key_instruction_uses_only_available_backend_action():
+    from piano_teacher.application.control_projection import project_controls
+    active = {"loaded":True, "device":"Test piano",
+              "phase":"guided_complete","mode":"learn",
+              "running":False,"paused":False}
+    solo = project_controls(active)["midi_start"]
+    assert solo["enabled"] and solo["action"] == "practice"
+    course = project_controls({**active,"flow":{
+        "step":"free","status":"Idea complete"}})["midi_start"]
+    # The default Practice Flow transitions automatically: it must not
+    # print a physical "press any key" instruction with no enabled action.
+    assert not course["enabled"] and course["action"] == ""

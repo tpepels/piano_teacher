@@ -348,13 +348,19 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_text += " · %d unpositioned note(s)" % unpositioned
-    if (not learning and phase in ["ready", "performance_complete"]
-            and not str(parsed.get("device", "")).is_empty()):
-        instruction_text = "Play any piano key to start the count-in. Release it, then play after the count-in."
-    elif learning and phase == "guided_complete" and not str(parsed.get("device", "")).is_empty():
-        instruction_text = "Idea complete · play one new piano key to continue."
-    elif phase == "feedback" and not bool(parsed.get("auto", false)) and not str(parsed.get("device", "")).is_empty():
-        instruction_text = "Review the red notes · play a new piano key to retry."
+    # The screen does not independently infer what a physical MIDI key
+    # can do from lesson phase, mode or automatic-retry settings. Its
+    # instruction follows the same canonical action projection consumed
+    # by ApplicationInputSession and the in-process PracticeControls.
+    var physical_control: Dictionary = _control("midi_start")
+    if bool(physical_control.get("enabled",false)):
+        match str(physical_control.get("action","")):
+            "start":
+                instruction_text = "Play any piano key to start the count-in. Release it, then play after the count-in."
+            "restart":
+                instruction_text = "Review the red notes · play a new piano key to retry."
+            "learn_next", "practice":
+                instruction_text = "Idea complete · play one new piano key to continue."
     if not learning:
         var needed_runs: int = int(parsed.get("clean_runs_required", 3))
         progress_text = "Accepted passes %d of %d at %d BPM" % [

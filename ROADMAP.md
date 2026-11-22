@@ -1238,6 +1238,22 @@ This closes another independent native application-policy path.
 Actual MIDI input debouncing remains a physical-adapter concern.
 Native production acceptance is still required.
 
+### V5 MIDI shortcut instructions now follow backend availability (2026-11-22)
+
+`PracticeScreen` previously rebuilt an implicit MIDI
+Start/Retry/Next teaching policy from phase/mode/auto/device
+conditions merely to display "play one key" instructions,
+despite the input adapter already consuming backend-owned
+`controls.midi_start`. It now displays those hints only
+when that exact accepted control is enabled, and formats
+copy from its resolved action rather than guessing from
+lesson state. This also removes a misleading "play one
+key to continue" prompt in default Practice Flow's
+automatically advancing Free completion, where the
+backend correctly authorizes no such MIDI shortcut.
+A canonical projection regression distinguishes
+explicit standalone Learn from auto-advancing course Free.
+
 ### Phase V5 - Reduce Godot screens to presentation and raw intents
 
 **Implement:** Change `PracticeScreen` and `PracticeChrome` to render the
