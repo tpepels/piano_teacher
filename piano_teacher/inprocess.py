@@ -132,7 +132,12 @@ class EngineCommands:
             elif operation == "library.health.start":
                 return self._reply(OK, engine.start_library_health())
             elif operation == "settings.update":
-                engine.set_preferences(**values)
+                # Settings preferences must correspond to the same committed
+                # action, not an interleaved MIDI shortcut/settings update.
+                # Retain the existing *public* settings response schema.
+                with engine.lock:
+                    engine.set_preferences(**values)
+                    return self._reply(OK, engine.preferences())
             elif operation == "midi.device.select":
                 engine.connect(values.get("name", ""))
             elif operation == "hardware.action":
@@ -154,7 +159,7 @@ class EngineCommands:
             else:
                 return self._reply(UNKNOWN, {"error": f"Unknown operation: {operation}"})
             return self._reply(
-                OK, engine.preferences() if operation == "settings.update" else engine.state())
+                OK, engine.state())
         except (KeyError, ValueError, TypeError, RuntimeError) as exc:
             return self._reply(INVALID, {"error": str(exc)})
         except Exception as exc:

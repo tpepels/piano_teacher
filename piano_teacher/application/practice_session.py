@@ -227,6 +227,10 @@ class PracticeSession:
         if (not arrival.automatic or not current.automatic or
                 not self.playback_session.running or self.visual_transport.paused):
             return False
+        if received_at is None:
+            # An unspecified hardware timestamp can never authorize a
+            # previous take's queued key in a newer transport epoch.
+            return False
         adjusted_at = self.midi_application_input.corrected_time(
             received_at, corrected_at)
         return adjusted_at >= self.visual_transport.run_at
@@ -339,7 +343,9 @@ class PracticeSession:
                 deferred=False, arrival=None) -> None:
         # Direct/headless adapters default to the most recently committed
         # epoch; physical callback adapters supply the one sampled at arrival.
-        self.apply(PhysicalMidi(message, received_at, corrected_at, deferred,
+        sampled = (self.midi_application_input.clock()
+                   if received_at is None else received_at)
+        self.apply(PhysicalMidi(message, sampled, corrected_at, deferred,
                                 self.midi_arrival() if arrival is None else arrival))
 
     def on_shortcut(self, effect) -> None:
