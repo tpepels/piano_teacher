@@ -91,17 +91,22 @@ func present_overview(values: Dictionary) -> void:
             int(step.get("first_bar",1)),int(step.get("last_bar",1)),
             reader_hand(str(step.get("hand",""))),
             reader_level(str(step.get("stage_label",step.get("level",""))))])
+        var available: bool = bool(step.get("available",true))
+        picker.set_item_disabled(picker.item_count - 1,not available)
         picker.set_item_tooltip(picker.item_count - 1,
-            "%s · %s · %s" % [str(step.get("stage_family","Practice")),
-                str(step.get("stage_label",step.get("level",""))),
-                str(step.get("stage_change",""))])
+            ("Complete preceding warm-up stages first" if not available
+             else "%s · %s · %s" % [str(step.get("stage_family","Practice")),
+                 str(step.get("stage_label",step.get("level",""))),
+                 str(step.get("stage_change",""))]))
     _present()
 
 func _present() -> void:
     var ready: bool = _loaded and _fingerprint == _current_fingerprint and not entries.is_empty()
     picker.disabled = _busy or not ready
-    previous_button.disabled = _busy or not ready or _current <= 1
-    next_button.disabled = _busy or not ready or _current >= entries.size()
+    previous_button.disabled = _busy or not ready or _current <= 1 or \
+        (_current > 1 and not bool(entries[_current-2].get("available",true)))
+    next_button.disabled = _busy or not ready or _current >= entries.size() or \
+        (_current < entries.size() and not bool(entries[_current].get("available",true)))
     if ready and _current >= 1 and _current <= picker.item_count:
         picker.select(_current - 1)
         picker.text = "Step %d / %d · %s" % [
@@ -113,7 +118,8 @@ func _present() -> void:
             str(entries[_current - 1].get("stage_label", ""))]
 
 func _select(number: int) -> void:
-    if not picker.disabled and number != _current and number >= 1 and number <= entries.size():
+    if not picker.disabled and number != _current and number >= 1 and \
+            number <= entries.size() and bool(entries[number-1].get("available",true)):
         step_requested.emit(number)
 
 func apply_viewport(view_size: Vector2, scale: float) -> void:

@@ -88,6 +88,11 @@ def project_controls(s: Mapping) -> dict:
     passage_previous = bool(s.get("loaded")) and int(s.get("exercise", 1)) > 1
     passage_next = (bool(s.get("loaded")) and
                     int(s.get("exercise", 1)) < int(s.get("exercise_count", 1)))
+    if passage_next and s.get("warmup"):
+        # The next warm-up passage opens only after every stage of this
+        # exercise has been earned. The same rule is checked by the course.
+        passage_next = bool(s.get("hand_stages")) and all(
+            row.get("complete",False) for row in s["hand_stages"])
     mode = s.get("mode")
     phase = s.get("phase")
     stop_enabled = bool(s.get("loaded")) and (

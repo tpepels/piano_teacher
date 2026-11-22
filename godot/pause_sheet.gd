@@ -186,6 +186,14 @@ func present(state: Dictionary) -> void:
             hand_choice.set_item_metadata(index, available)
             if available == state.get("hand"):
                 hand_choice.select(index)
+    var hand_actions: Dictionary = controls.get("hands",{})
+    var available_hand := false
+    for index in range(hand_choice.item_count):
+        var next_hand: String = str(hand_choice.get_item_metadata(index))
+        var enabled: bool = bool(hand_actions.get(next_hand,{}).get("enabled",false))
+        hand_choice.set_item_disabled(index,not enabled)
+        available_hand = available_hand or enabled
+    hand_choice.disabled = not available_hand
     var seek_range: Dictionary = state.get("seek_range", {}) if state.get("seek_range") is Dictionary else {}
     bar_choice.min_value = int(seek_range.get("first_bar", state.get("first_bar", 1)))
     bar_choice.max_value = int(seek_range.get("last_bar", state.get("last_bar", 1)))
