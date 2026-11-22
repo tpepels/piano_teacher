@@ -311,10 +311,25 @@ class AttemptSettlement:
         pending = self.pending
         if pending.publication is not None:
             committed = pending.publication
+            original = pending.state.binding
             expected_piece = (committed.selection.piece if committed.selection
                               else pending.state.course.piece)
-            if (binding.fingerprint != pending.state.binding.fingerprint
+            expected_stage = (committed.selection.stage_key if committed.selection
+                              else original.stage_key)
+            # A committed result can be replayed after a failed physical
+            # adoption, but it cannot be claimed by another run, learner,
+            # course epoch or cancellation. The lesson progress was already
+            # installed by the durable transaction and must still be exact.
+            if (binding.run_id != original.run_id
+                    or binding.session_id != original.session_id
+                    or binding.fingerprint != original.fingerprint
+                    or binding.cancellation_generation != original.cancellation_generation
+                    or binding.authority_revision != original.authority_revision + 1
+                    or binding.course_revision != original.course_revision
+                        + int(committed.receipt.source_changed)
+                    or binding.stage_key != expected_stage
                     or plan.piece is not expected_piece
+                    or plan.teaching_progress() != pending.decision.progress_after
                     or score_revision not in (committed.source_revision,
                         committed.selection.revision if committed.selection
                         else committed.source_revision)):
