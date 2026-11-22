@@ -9,7 +9,7 @@ import hashlib
 import json
 import math
 from .lesson_contracts import LessonPlanDefinition, lesson_hands
-from .lesson_settings import SETTINGS
+from .lesson_settings import SETTINGS, course_rules
 from .music import Piece
 from .tempo_difficulty import suggested_start_bpm
 from .repeated_passages import exact_repetition_signature
@@ -55,10 +55,7 @@ class CourseState:
 
     @property
     def clean_runs_required(self):
-        if self.definition.generator_name == "practice-flow":
-            from .application.practice_flow import CLEAN_TAKES_AT_TARGET
-            return CLEAN_TAKES_AT_TARGET
-        return SETTINGS.clean_runs_to_master
+        return course_rules(self.definition.generator_name, warmup=self.warmup).clean_runs_to_master
 
     @property
     def stages(self):
@@ -97,6 +94,11 @@ def steps(course):
 
 def start_bpm(course):
     p = course.progress
+    if course.profile == "practice-flow" and not course.warmup:
+        # The default course has no independent generic 40-BPM start.
+        # Its authoritative ladder starts at 50% of the source tempo.
+        from .application.practice_flow import floor_bpm
+        return floor_bpm(int(p.target_bpm))
     if course.warmup:
         return min(p.target_bpm, course.piece.bpm)
     baseline = min(p.target_bpm, max(SETTINGS.minimum_bpm, SETTINGS.start_tempo_bpm))
@@ -217,7 +219,7 @@ def _require_warmup_cursor(course, cursor) -> None:
     number = next((i for i, step in enumerate(options, start=1)
                    if step[:3] == cursor), None)
     if number is None or number > warmup_unlocked_step(course):
-        raise ValueError("Complete three clean passes to unlock the next warm-up step")
+        raise ValueError(f"Complete {course.clean_runs_required} clean passes to unlock the next warm-up step")
 
 
 def manual_progress(course, action, *, number=None, hand=None, bpm=None):
@@ -324,9 +326,9 @@ def assessed_progress(course, *, correct, total, extras=0, accepted=None, select
         return course.with_progress(bpm=bpm, streak=0, failures=0,
             stage_tempos=tuple(sorted(tempos.items())), transferable_tempos=transferable), f"Tempo increased to {bpm} BPM"
     course = course.with_progress(failures=0, streak=p.streak+1, transferable_tempos=transferable)
-    if course.progress.streak < SETTINGS.clean_runs_to_master:
+    if course.progress.streak < course.clean_runs_required:
         label = "Clean" if correct == total and extras == 0 else "Accepted"
-        return course, f"{label} pass {course.progress.streak}/{SETTINGS.clean_runs_to_master} - repeat"
+        return course, f"{label} pass {course.progress.streak}/{course.clean_runs_required} - repeat"
     previous = course.key
     tempos, mastered = dict(p.stage_tempos), dict(p.mastered)
     tempos[previous], mastered[previous] = p.bpm, p.target_bpm
