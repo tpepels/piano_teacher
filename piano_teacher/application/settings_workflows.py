@@ -48,11 +48,18 @@ class SettingsWorkflows:
         prior_hold_grading = self.library.settings["grade_note_holds"]
         updated = self.library.update(**changes)
         if updated["grade_note_holds"] != prior_hold_grading:
-            self.lifecycle.stop(reason="grading_rule_changed")
+            # Hold grading applies to timed attempts, not Listen or Free.
+            # Stopping an ungraded exposure cancels its asynchronous audio
+            # preparation and leaves the learner waiting for an invalidated
+            # source. Preserve those exposures; new Tempo takes use the
+            # newly installed rule. Invalidate any graded attempt/continuation
+            # so an existing recorder cannot mix two grading policies.
+            if self.playback_session.mode in ("practice", "perform"):
+                self.lifecycle.stop(reason="grading_rule_changed")
+                self.notices.publish(
+                    "Note-hold grading changed",
+                    "Press Play to start a new attempt.")
             self.policy_registry.apply_hold_rule(updated["grade_note_holds"])
-            self.notices.publish(
-                "Note-hold grading changed",
-                "Press Play to start a new attempt.")
         if "midi_key_ranges" in changes:
             self.midi_key_shortcuts.configure(updated["midi_key_ranges"])
         self.measurement.event("settings_applied", {
