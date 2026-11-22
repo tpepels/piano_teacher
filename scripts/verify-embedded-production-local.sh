@@ -313,10 +313,27 @@ check "Embedded Godot + Python registration and real score" verify_bridge || :
 check "Production UI / Play / Pause / Resume" verify_fixture_ui || :
 check "Real Godot practice transitions with synthetic physical MIDI" verify_fake_midi_ui || :
 check "Moonlight Sonata / retry / Listen / lesson navigation" verify_moonlight || :
-check "Peace Piece native score" verify_real_source peace \
-  'Peace_Piece_-_Bill_Evans_(Piano_Solo).midi' || :
-check "Chopin Nocturne native score" verify_real_source chopin \
-  'Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi' || :
+# Every checked-in MIDI source is part of the real native acceptance
+# corpus. Do not quietly narrow the scope to a few handpicked pieces:
+# source-specific ties, meters, multipage layouts, long rests and
+# release tails can break admission even when a small fixture passes.
+# Moonlight is exercised separately by its deeper lesson-navigation
+# journey above, so do not rerun it with the generic UI workflow.
+CORPUS_CHECKED=0
+CORPUS_CASE=0
+while IFS= read -r -d '' midi_file; do
+  score="${midi_file#midi/}"
+  [[ "$score" == "Moonlight_Sonata_I.midi" ]] && continue
+  CORPUS_CASE=$((CORPUS_CASE+1))
+  check "Native repertoire ${CORPUS_CASE}: ${score}" \
+    verify_real_source "corpus-${CORPUS_CASE}" "$score" || :
+  CORPUS_CHECKED=$((CORPUS_CHECKED+1))
+done < <(find midi -maxdepth 1 -type f -name '*.midi' -print0 | sort -z)
+if ((CORPUS_CHECKED == 0)); then
+  echo "FAIL  Native repertoire corpus is empty" >&2
+  FAILED_CASES+=("Native repertoire corpus is empty")
+fi
+printf 'NATIVE_REPERTOIRE_CORPUS_CHECKED=%d\n' "$CORPUS_CHECKED"
 if [[ "$MODE" == full ]]; then
   check "Relocated standalone runtime package audit" audit_package || :
 else

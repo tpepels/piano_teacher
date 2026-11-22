@@ -1139,6 +1139,27 @@ ownership sweep finds no remaining legacy practice policy/clock/deadline
 owner in UI scripts. Update `docs/architecture.md`, `docs/development.md`
 and this table with exact evidence and deleted paths.
 
+### V7 complete checked-in MIDI native-source audit (2026-11-22)
+
+Expanded `scripts/verify-embedded-production-local.sh` to
+automatically execute `production_ui_smoke.gd` (real Godot scene,
+embedded Python, native Verovio engraving, immutable source queue
+and Play/Pause/Resume) for **every checked-in `midi/*.midi` source**
+in stable filename order. This replaces the limited Peace Piece
+and Chopin generic list; Moonlight retains its separate, more
+demanding real lesson-navigation journey. Each corpus source
+receives a separate isolated XDG state and case log, continues
+after a failed source instead of silently skipping the remainder,
+and is included in the strict aggregated native gate result.
+The script emits `NATIVE_REPERTOIRE_CORPUS_CHECKED` for auditability
+and fails an empty corpus rather than appearing green.
+
+This is a broader actual production renderer/queue audit,
+not a claim that the user's separate Pathétique source or
+physical Kawai keyboard is available in the checked-in corpus.
+Final/full native CI must pass on this revision before
+repertoire coverage is accepted.
+
 ### Phase V7 - Integrated release and connected-piano acceptance
 
 **Implement/verify:** Run `bash scripts/test.sh --coverage`, the complete
