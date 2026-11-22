@@ -190,6 +190,8 @@ static func problems(state: Dictionary) -> Array[String]:
             var kind: Variant = directive.get("kind")
             if kind not in MOTION_KINDS:
                 found.append("invalid presentation_directive.kind %s" % str(kind))
-            elif kind == "target" and kind_of(directive.get("source_beat")) != "number":
-                found.append("presentation_directive target has no source_beat")
+            elif kind == "target" and (
+                    kind_of(directive.get("source_beat")) != "number" or
+                    not is_finite(float(directive.get("source_beat", NAN)))):
+                found.append("presentation_directive target has no finite source_beat")
     return found
