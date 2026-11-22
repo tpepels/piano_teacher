@@ -1,7 +1,9 @@
-"""Commit this file's companion JSON to tune the lesson algorithm.
+"""Validated lesson tuning and explicitly scoped course rules.
 
-These are course rules, not UI preferences. Restart the Python backend after
-editing lesson_settings.json; the loaded settings are stable for a session.
+The flat JSON format is retained for existing installations and developer tuning.
+Its historical focus and mastery values belong to source-progression,
+warm-ups and the Coda/Fukuda alternative. Practice Flow uses its own moving
+window and two-clean-target-pass contract. These are not UI preferences.
 """
 from __future__ import annotations
 
@@ -84,3 +86,38 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
 
 
 SETTINGS = load_lesson_settings()
+
+
+@dataclass(frozen=True, slots=True)
+class CourseRules:
+    """Resolved rules for one generator; never a mutable lesson progress owner."""
+
+    name: str
+    clean_runs_to_master: int
+    focus_measures: int
+    focus_min_onsets: int
+    focus_max_measures: int
+    focus_max_attacks: int
+    recovery_errors_in_window: int
+
+
+def course_rules(name: str, *, warmup: bool = False) -> CourseRules:
+    """Select course rules by the installed generator, not a global default.
+
+    The saved lesson generator and its course version remain the persistence
+    identity. Flat lesson_settings.json tuning remains effective for the
+    legacy source-based course, Coda/Fukuda and built-in warm-ups.
+    """
+    if name == "practice-flow" and not warmup:
+        from .application.practice_flow import CLEAN_TAKES_AT_TARGET
+        from .practice_windows import MAX_PRACTICE_BARS
+        return CourseRules(
+            name, CLEAN_TAKES_AT_TARGET, 1, 1, MAX_PRACTICE_BARS,
+            SETTINGS.focus_max_attacks, SETTINGS.recovery_errors_in_window)
+    return CourseRules(
+        name, SETTINGS.clean_runs_to_master,
+        SETTINGS.focus_measures, SETTINGS.focus_min_onsets,
+        SETTINGS.focus_max_measures, SETTINGS.focus_max_attacks,
+        SETTINGS.warmup_recovery_errors if warmup
+        else SETTINGS.recovery_errors_in_window)
+
