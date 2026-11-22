@@ -1,50 +1,42 @@
 extends RefCounted
-## Score layout and model commands. Revision checks prevent stale publication.
-var layout_request
-var model_request
+## One in-process ScoreBundle request for the exact source and revision.
+## Current and future scores use the same layout plus original-note contract.
+var bundle_request
 var _owner
-var _request_ids := {"layout": -1, "model": -1}
+var _request_id := -1
 
 func attach(host: Node, owner, bus: Node) -> void:
     _owner = owner
-    layout_request = preload("res://inprocess_request.gd").new()
-    model_request = preload("res://inprocess_request.gd").new()
-    layout_request.configure(bus)
-    model_request.configure(bus)
-    layout_request.timeout = 90.0
-    model_request.timeout = 5.0
-    host.add_child(layout_request)
-    host.add_child(model_request)
-    layout_request.request_completed.connect(
+    bundle_request = preload("res://inprocess_request.gd").new()
+    bundle_request.configure(bus)
+    bundle_request.timeout = 90.0
+    host.add_child(bundle_request)
+    bundle_request.request_completed.connect(
         func(code: int, body: PackedByteArray):
-            deliver("layout", code, body))
-    model_request.request_completed.connect(
-        func(code: int, body: PackedByteArray):
-            deliver("model", code, body))
+            deliver(code, body))
     owner.request_requested.connect(start)
 
 func start(kind: String, request_id: int, path: String,
         timeout_seconds: float) -> void:
-    var request = layout_request if kind == "layout" else model_request
-    if request == null:
+    if kind != "bundle" or path != "score.bundle" or bundle_request == null:
         _owner.request_start_result(kind, request_id, ERR_UNAVAILABLE,
             Time.get_ticks_msec())
         return
-    # A cancelled or outdated response cannot publish a different revision.
-    if int(_request_ids.get(kind, -1)) != -1:
-        request.cancel_request()
-    _request_ids[kind] = request_id
-    request.timeout = timeout_seconds
-    var error: Error = request.request(path)
+    # An obsolete reply cannot install a model for a newer stage revision.
+    if _request_id >= 0:
+        bundle_request.cancel_request()
+    _request_id = request_id
+    bundle_request.timeout = timeout_seconds
+    var error: Error = bundle_request.request(path)
     if error != OK:
-        _request_ids[kind] = -1
+        _request_id = -1
         _owner.request_start_result(kind, request_id, error,
             Time.get_ticks_msec())
 
-func deliver(kind: String, code: int, body: PackedByteArray) -> void:
-    var request_id: int = int(_request_ids.get(kind, -1))
+func deliver(code: int, body: PackedByteArray) -> void:
+    var request_id: int = _request_id
     if request_id < 0:
         return
-    _request_ids[kind] = -1
-    _owner.complete_response(kind, request_id, code, body,
+    _request_id = -1
+    _owner.complete_response("bundle", request_id, code, body,
         Time.get_ticks_msec())
