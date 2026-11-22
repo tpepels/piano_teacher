@@ -221,6 +221,45 @@ The source-audit record is in [docs/architecture.md](docs/architecture.md#a0-run
   corrected the auditor's dynamic-load detection so whitespace before
   literal Godot paths is not mistaken for computed loading. The auditor
   remains conservative; full-repository runtime execution is pending.
+**Owner-run A0 audit and regression correction (2026-11-22):**
+
+- The owner ran `bash scripts/test.sh --coverage` locally against
+  the previous audit revision: **159 passed, 4 failed (27.04 s)**.
+  Three failures shared the missing required
+  `playback_timeline` in headless session snapshots. The fourth
+  exercised `grade_note_holds=True` while Listen audio was preparing;
+  `SettingsWorkflows.update` stopped the entire lifecycle and
+  cancelled the ungraded Listen render before the fixture could use it.
+- [3726c45](https://github.com/tpepels/piano_teacher/commit/3726c45f00d38e20a69ed67ed45f6ef256e7f1bc)
+  restores the real coordinator's `playback_timeline` to the
+  headless published state. It also brings the full state snapshot into
+  agreement with the existing lightweight locked control projection.
+  No fake physical receipt was added.
+- [6f6ea2e](https://github.com/tpepels/piano_teacher/commit/6f6ea2e7bba5eb7b073aa1b2d932e412a5408b6c)
+  preserves existing Listen and Free preparation when the optional
+  hold-grading rule changes; changing the rule during a graded
+  practice/perform exposure still invalidates that take.
+- The owner's reachability report listed **nine statically unreached
+  files**, but manual source resolution classified all nine:
+  four are launched by native Godot verification scripts; five are
+  implicit Python package initializer files. The one flagged
+  dynamic Godot load resolves to the four tracked spoken-count-in
+  Ogg assets, not executable code. **No deletion is justified.**
+  [835613a](https://github.com/tpepels/piano_teacher/commit/835613a81ebb4a1f2462e6c5100ab4dd4dc756d0)
+  improves the auditor to account for implicit package dependencies
+  and test-harness `--script` entrypoints.
+- Detailed failure analysis, code-path evidence and candidate
+  disposition are in
+  [docs/architecture.md](docs/architecture.md#a0-observed-local-baseline-and-reconciled-reachability-2026-11-22).
+
+**A0 checkpoint outcome:** The source-backed reported reachability
+candidates are reconciled and both observed regression causes have
+production-code fixes committed to `main`. **Neither fix has yet been
+locally re-tested on the resulting HEAD.** Full-core, Godot behavior,
+embedded fake-MIDI, source repertoire and package gates remain open.
+A0 is still **IN PROGRESS**; do not mark it accepted or begin A1
+based solely on old test results.
+
 **Open A0 exit gates:** Every candidate's *runtime* call/writer reachability
 must be proved (including dynamically loaded native scenes and registered
 generators); full source-to-transaction/async edge coverage and exact HEAD
