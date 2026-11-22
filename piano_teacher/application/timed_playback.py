@@ -39,7 +39,7 @@ class TimedPlayback:
             if loop_continuation and pending is not None and pending.receipt is not None:
                 selected = pending.decision.next_exposure
             elif decided:
-                selected = self.source_identity.selected_exposure()
+                selected = self.teaching_decisions.selected_exposure()
                 if selected is None:
                     raise ValueError("No current source-bound exposure is ready for playback")
             if effect is None and not decided and not loop_continuation and scheduled_deadline is None:

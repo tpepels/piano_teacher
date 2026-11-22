@@ -227,6 +227,7 @@ class PracticeSession:
             if isinstance(event, SourceCommitted):
                 resumed = self.source_workflows.install(
                     event.prepared, warmup=event.warmup)
+                self.teaching_decisions.source_installed()
                 if resumed is not None:
                     self.lesson_execution.flow_open(resumed=resumed)
                 if event.opened_identifier is not None:

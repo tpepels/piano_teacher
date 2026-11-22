@@ -43,7 +43,7 @@ class ExposureWorkflows:
         entry = self.flow_session.tempo_entry(
             selected_plan, warmup=self.source_identity.warmup, bpm=selected.bpm)
         if entry.active:
-            self.source_identity.prepare_exposure(selected)
+            self.teaching_decisions.prepare_exposure(selected)
         if entry.clear_guided_return:
             self.guided_session.discard_return()
         self.installer.apply(prepare_timed(
