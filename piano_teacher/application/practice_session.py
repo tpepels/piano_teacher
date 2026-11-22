@@ -290,10 +290,29 @@ class PracticeSession:
         # using the new take identity, then publish a single final state.
         self.timeline.settle_transitions()
         while self.midi_ingress.deferred:
-            message, received_at, corrected_at, _transport = self.midi_ingress.deferred.popleft()
+            item = self.midi_ingress.deferred.popleft()
+            selected = self.source_identity.plan
+            # A callback may have been deferred just before a manual source
+            # switch or automatic stage/hand advance. Never replay hardware
+            # from the old engraving against the new learner's notes.
+            if (selected is None or
+                    item.fingerprint != self.source_identity.fingerprint or
+                    item.score_revision != self.source_identity.revision or
+                    item.stage_key != selected.identity or
+                    item.hand != selected.hand):
+                continue
+            if item.transport_id != self.playback_session.transport_id:
+                # A same-source automatic repeat can legitimately advance
+                # the take epoch. Only notes arriving at/after the actual
+                # new playback onset may enter that newly authorized take.
+                # Releases/attacks in the preceding rest remain ungraded.
+                if (not self.playback_session.running or
+                        self.visual_transport.paused or
+                        item.corrected_at < self.visual_transport.run_at):
+                    continue
             self.midi_application_input._deliver_message(
-                message, received_at=received_at,
-                corrected_at=corrected_at, deferred=True)
+                item.message, received_at=item.received_at,
+                corrected_at=item.corrected_at, deferred=True)
         self.timeline.publish_settled()
         if self.source_identity.plan is None or self.visual_transport.paused:
             return 250

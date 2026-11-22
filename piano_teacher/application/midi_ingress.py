@@ -49,6 +49,23 @@ class InputTransportFacts:
 
 
 @dataclass(frozen=True, slots=True)
+class DeferredMidi:
+    """Original authorization context for a boundary-crossing MIDI event.
+
+    Same-score automatic repeats may move to a later transport epoch;
+    source revisions, stage or hand changes may not inherit that note.
+    """
+    message: object
+    received_at: float
+    corrected_at: float
+    fingerprint: str
+    score_revision: int
+    stage_key: str
+    hand: str
+    transport_id: int
+
+
+@dataclass(frozen=True, slots=True)
 class MidiIngressEffect:
     consumed: bool = False
     action: str | None = None
@@ -190,8 +207,10 @@ class MidiIngress:
                 deadline=finish,lead_beats=transport.visual_gap_beats,
                 bpm=facts.bpm)
         if due or self.deferred:
-            self.deferred.append((
-                message.copy(),received_at,corrected_at,facts.transport_id))
+            self.deferred.append(DeferredMidi(
+                message.copy(), received_at, corrected_at,
+                facts.fingerprint, facts.score_revision, facts.stage_key,
+                facts.hand, facts.transport_id))
             return True
         return False
 
