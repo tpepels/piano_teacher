@@ -215,6 +215,7 @@ def problems(state: dict) -> list[str]:
             if kind not in MOTION_KINDS:
                 found.append(f"invalid presentation_directive.kind {kind!r}")
             elif kind == "target" and (
-                    kind_of(directive.get("source_beat")) != "number"):
-                found.append("presentation_directive target has no source_beat")
+                    kind_of(directive.get("source_beat")) != "number"
+                    or not math.isfinite(directive["source_beat"])):
+                found.append("presentation_directive target has no finite source_beat")
     return found
