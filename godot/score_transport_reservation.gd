@@ -21,7 +21,7 @@ static func plan(renderer, action: String, world: float,
 static func plan_facts(facts: Dictionary, action: String, world: float,
         source_opening: float, count_in_beats: float,
         exact_start_world: float = NAN) -> Dictionary:
-    if action not in ["start","resume","resume_fresh","restart","auto"]:
+    if action not in ["start","resume_fresh","restart","auto"]:
         return _refuse("unsupported_action")
     if not is_finite(world) or not is_finite(source_opening):
         return _refuse("invalid_transport_coordinate")
@@ -50,7 +50,7 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     # Fresh Resume has Start's full-bar slot but the SAME protected
     # predecessor as an ordinary Resume. A new source cannot withdraw
     # the paused take's first still-unexpired physical strip.
-    if action in ["resume","resume_fresh"] and facts.has("resume_protected_strip"):
+    if action == "resume_fresh" and facts.has("resume_protected_strip"):
         protected_strip = int(facts["resume_protected_strip"])
         if not facts.has("resume_withdrawn"):
             return _refuse("missing_paused_source_withdrawal_preview")
@@ -98,15 +98,11 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
             "empty_strip":empty,"remaining_count":survivors.size(),
             "withdraw_owners":withdrawn["owners"].duplicate(),
             "reason":"authoritative_one_bar_repeat"}
-    var was_paused: bool = bool(facts.get("was_paused",false))
-    var paused_source: float = float(facts.get("paused_source",0.0))
-    var paused_owner: int = int(facts.get("paused_owner",-1))
-    var last_take: String = str(facts.get("last_take",""))
     # Owner decision 2026-11-08: Play or Resume on an empty strip opens one
     # count-in bar ahead of the playhead. A hidden READY take was never
     # seen, so it is withdrawn rather than reused from beyond the right edge.
     var near_onset: float = NAN
-    if action in ["start","resume","resume_fresh"]:
+    if action in ["start","resume_fresh"]:
         near_onset = Admission.empty_strip_start(survivors,preview_world,
             count_in_beats,header,peer_floor,density,staff_gap,duration)
     # A prepared, fully offscreen take is the cheapest valid reservation
@@ -116,51 +112,15 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
             not bool(facts.get("display_context_required",false)):
         reusable = Admission.select(online,"ready",
             source_opening,preview_world,right,header)
-    elif action == "resume":
-        if was_paused and absf(source_opening-paused_source) < .0001:
-            reusable = Admission.select(online,"paused",
-                source_opening,preview_world,0.0,0.0,
-                last_take)
-            if reusable < 0 and paused_owner >= 0:
-                # A Pause snapshot can arrive before Play's ACK binds the
-                # backend transport key. The provisional ARMED source is
-                # still authoritative, and must not be retracted.
-                for index in range(online.size()):
-                    var item: Dictionary = online[index]
-                    if str(item.get("kind","")) != "source" or \
-                            int(item.get("take_owner",-1)) != \
-                                paused_owner:
-                        continue
-                    var key: String = str(item.get("take_key",""))
-                    var onset: float = float(item["world_origin"]) + source_opening
-                    if key.begins_with("armed:") and \
-                            absf(float(item.get("source_floor",-1))-
-                                source_opening) < .00001 and \
-                            onset >= preview_world+Admission.PAUSED_REUSE_EPSILON_BEATS:
-                        reusable = index
-                        break
     if reusable >= 0 and float(online[reusable]["world_origin"]) + \
             source_opening < preview_world+count_in_beats-.0001:
         reusable = -1
     if reusable >= 0:
         var reused_world: float = float(online[reusable]["world_origin"]) + source_opening
-        # Native future projection samples integer milliseconds. A
-        # previously admitted paused origin is immutable, so tolerate only
-        # sub-frame quantization here; the gateway must also attest the
-        # physical deadline to the backend within five milliseconds.
-        var reuse_tolerance: float = .005 if action == "resume" else .0001
         if is_finite(exact_start_world) and \
-                absf(exact_start_world-reused_world) > reuse_tolerance:
-            # A prepared READY source is provisional and may be retracted
-            # with the same future-only suffix rule as any other plan.
-            # The backend has already chosen a later exact downbeat: do
-            # not insist on a stale prepared placement or spin forever
-            # attempting to bind the same obsolete queue slot.
-            #
-            # A paused, authorized source is immutable. It may never be
-            # silently moved to accommodate a different count-in.
-            if action != "start":
-                return _refuse("immutable_reuse_differs_from_backend_deadline")
+                absf(exact_start_world-reused_world) > .0001:
+            # READY ink is uncommitted; the exact backend proposal
+            # supersedes its future location without moving visible ink.
             reusable = -1
         else:
             return {"ok":true,"mode":"reuse","action":action,

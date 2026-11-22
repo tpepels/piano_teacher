@@ -25,13 +25,8 @@ static func reserve_action(stream, facts: StreamGeometry, preflight: Dictionary,
     var mode: String = str(planned["mode"])
     var before: Array = stream.online_snapshot()
     if mode == "reuse":
-        if action == "resume":
-            # The SAME preflight that chose this source identifies the
-            # protected owner. Never run a second, independent selection
-            # procedure against a partially modified queue.
-            stream.trim(facts,"resume_reuse",int(planned["protected_take"]))
         var existing: Dictionary = stream.arm_take(facts,
-            world,opening,right,header,NAN,action == "resume",false)
+            world,opening,right,header,NAN,false,false)
         var removed: Array = before.slice(stream.online_size())
         if existing.is_empty():
             push_error("SCORE_TRANSPORT_COMMIT: preflight reusable owner vanished")

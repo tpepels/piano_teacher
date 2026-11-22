@@ -180,15 +180,13 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
     var count_in: float = float(intent.get("count_in_beats", 0.0))
     var required_slot: float = maxf(count_in, floor_world-world)
     var action: String = str(intent.get("action", "start"))
-    var reservation_action: String = (
-        "resume" if action == "resume" else
-        "restart" if action == "restart" else "start")
     # Resume with no reusable paused count-in admits a new full-bar
     # source but still protects the preceding paused take's immutable ink.
     # This is one physical queue action used identically by both preflight
     # and commit. Python continues to own the semantic Resume transition.
     var physical_action: String = (
-        "resume_fresh" if action == "resume" else reservation_action)
+        "resume_fresh" if action == "resume" else
+        "restart" if action == "restart" else "start")
     var opening: float = float(intent.get("from_beat",0.0))
     var planned: Dictionary = {}
     var fixed: Variant = intent.get("fixed_deadline_ms")
@@ -432,30 +430,11 @@ func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
     var nominal: float = float(current.get("projection_bpm",NAN))
     var segments: Array = current.get("projection_segments",[])
     var source_beat: float = float(current.get("projection_source_beat",NAN))
-    # Reused Pause ink has an already-committed world origin. Backend
-    # accepted the physical witness at that origin; converting its returned
-    # millisecond deadline to an integer frame and then projecting a NEW
-    # origin silently changes the source geometry. Preserve the original
-    # location and verify its physical arrival without another choice.
-    var reused_source: bool = bool(current.get("reused_count_in",false))
-    var exact_world: float
-    if reused_source:
-        exact_world = float(current.get("world_origin",NAN))
-    else:
-        exact_world = flow.project_authored_future(
-            at_ms+roundi(deadline-backend_now),at_ms,
-            source_beat,nominal,segments)
+    var exact_world: float = flow.project_authored_future(
+        at_ms+roundi(deadline-backend_now),at_ms,source_beat,nominal,segments)
     if not is_finite(exact_world) or exact_world <= at_world:
         _cancel_provisional()
         return
-    if reused_source:
-        var original_travel_ms: float = flow.physical_travel_ms_to(
-            exact_world,at_ms,source_beat,nominal,segments)
-        if not is_finite(original_travel_ms) or \
-                absf(backend_now+original_travel_ms-deadline) > 5.0:
-            _report_problem("Paused score cannot meet the admitted musical downbeat")
-            _cancel_provisional()
-            return
     var opening: float = float(current.get("from_beat",0.0))
     var count_in: float = float(current.get("count_in_beats",0.0))
     var exact_action: String = str(current.get("reservation_action","start"))
@@ -464,22 +443,12 @@ func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
         committed = renderer.reserve_continuation_at(
             at_world,opening,exact_world,count_in)
     else:
-        var slot_beats: float = (
-            float(current.get("resume_remaining_beats",0.0))
-            if bool(current.get("reused_count_in",false)) else count_in)
         committed = renderer.reserve_transport_action(
-            exact_action,at_world,opening,slot_beats,
+            exact_action,at_world,opening,count_in,
             str(current.get("mode","")) == "listen",exact_world)
-    # Converting a monotonic millisecond deadline to the renderer's
-    # integer frame sample rounds by at most one millisecond. A REUSED
-    # source keeps its immutable original world origin: validate that
-    # quantization in physical time below, never relocate its printed ink.
-    var reused_world_tolerance: float = (
-        .005 if bool(current.get("reused_count_in",false)) else .0001)
     if committed.is_empty() or not is_finite(float(committed.get("start_world",NAN))) or \
-            absf(float(committed["start_world"])-exact_world) > reused_world_tolerance or \
-            bool(committed.get("reused_unplayed_count_in",false)) != \
-                bool(current.get("reused_count_in",false)):
+            absf(float(committed["start_world"])-exact_world) > .0001 or \
+            bool(committed.get("reused_unplayed_count_in",false)):
         _cancel_provisional()
         return
     var physical_world: float = float(committed["start_world"])
@@ -684,8 +653,7 @@ func _confirm_authorized(data: Dictionary) -> void:
             deadline_local,float(current.get("from_beat",0.0)),
             float(current.get("bpm",60.0)),
             current.get("tempo_segments",[]),expected)
-    if not current.is_empty() and float(current.get("count_in_beats",0.0)) > 0.0 and \
-            not bool(current.get("reused_count_in",false)):
+    if not current.is_empty() and float(current.get("count_in_beats",0.0)) > 0.0:
         metronome.reserve_count_in(
             deadline_local, float(current.get("bpm",60.0)),
             float(current.get("count_in_beats",0.0)),

@@ -85,7 +85,7 @@ func run() -> void:
     paused_mismatch["last_take"] = "active"
     paused_mismatch["paused_owner"] = 42
     var paused_relocate: Dictionary = Reservation.plan_facts(
-        paused_mismatch,"resume",0.0,0.0,4.0,20.0)
+        paused_mismatch,"resume_fresh",0.0,0.0,4.0,20.0)
     check(not bool(paused_relocate.get("ok",false)) or
         str(paused_relocate.get("mode","")) != "reuse",
         "A genuinely paused authorized source cannot be moved to a new backend deadline")
@@ -113,14 +113,19 @@ func run() -> void:
     # The owning presentation session freezes that input beat on Pause.
     check(first.clip.position.x+first.segment.position.x < before_x,
         "Source projects forward for increasing world time without moving its binding")
-    var resume: Dictionary = Reservation.plan_facts(facts(controller,2.5),"resume",2.5,0.0,4.0)
-    check(bool(resume.get("ok",false)),"Resume can reserve new ink without moving exposed music")
+    var resume: Dictionary = Reservation.plan_facts(facts(controller,2.5),"resume_fresh",2.5,0.0,4.0)
+    check(bool(resume.get("ok",false)) and str(resume.get("mode","")) == "append",
+        "A frozen Resume reserves fresh future ink rather than retiming the paused take")
+    controller.trim(geometry(2.5),"user_resume_fresh_replace_unseen",-1,
+        int(resume.get("protected_strip",-1)))
     var resumed: Dictionary = controller.arm_take(geometry(2.5),2.5,0.0,6.7,0.4,
-        float(resume.start_world),true,false,4.0)
+        float(resume.start_world),false,false,
+        4.0 if bool(resume.get("empty_strip",false)) else 0.0,true)
     check(not resumed.is_empty(),"Resume commits its reserved source")
     acknowledge(controller,2.5,"piece|7|10|practice","resume")
     var after_resume: Array = controller.online_snapshot()
-    check(fixed_music(after_resume).slice(0,music.size()) == music,"Resume leaves the scrolling prefix at its original positions")
+    check(fixed_music(after_resume).slice(0,1) == music.slice(0,1),
+        "Resume preserves the original paused source while replacing its invisible rest")
     check(controller.visible_take_keys().has("piece|7|10|practice"),"Resume retains the attempt's performance identity")
     # Retry always allocates a future copy; it cannot re-anchor the old one.
     var retry: Dictionary = Reservation.plan_facts(facts(controller,3.0),"restart",3.0,0.0,4.0)
@@ -132,8 +137,8 @@ func run() -> void:
         float(retry.start_world),false,true,0.0,false,false,float(retry.get("leading_rest_beats",0.0)))
     check(not restarted.is_empty(),"Retry commits the future reservation")
     acknowledge(controller,3.0,"piece|7|11|practice","retry")
-    check(fixed_music(controller.online_snapshot()).slice(0,music.size()) == music,
-        "Retry preserves exposed original notes and their written rest")
+    check(fixed_music(controller.online_snapshot()).slice(0,1) == music.slice(0,1),
+        "Retry preserves the original exposed source without relocating it")
     check(controller.visible_take_keys().has("piece|7|10|practice")
         and controller.visible_take_keys().has("piece|7|11|practice"),"Old and retried score copies keep separate results")
     # A real one-bar printed rest must reserve the following native header
