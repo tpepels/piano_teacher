@@ -93,6 +93,10 @@ class SessionReadModels:
         """
         now = self.clock()
         state = project_session_state(self.capture_snapshot(sampled_at=now))
+        # Commands and visible buttons must observe the same authoritative
+        # transaction outcome. A terminal reservation failure can leave
+        # phase="loading" until the next explicit user action.
+        state["playback_timeline"] = self.playback.snapshot()[1]
         if self.lesson_execution.flow_active():
             state["flow"] = self.lesson_execution.flow_state()
         return state

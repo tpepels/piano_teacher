@@ -11,6 +11,13 @@ SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
 
 
 def active(s: Mapping) -> bool:
+    # The musical phase may still be "loading" after the bounded physical
+    # admission budget is exhausted. That pending-score phase must not
+    # offer Pause when the transaction has no live take or future intent.
+    timeline = s.get("playback_timeline")
+    if (isinstance(timeline, Mapping) and timeline.get("state") == "failed"
+            and not s.get("running")):
+        return False
     return bool(s.get("running")) or s.get("phase") in (PAUSABLE_PHASES | {"paused"})
 
 
