@@ -398,8 +398,15 @@ class PlaybackCoordinator:
             renderer_generation=physical_renderer_generation)
         arrived_ms = committed.physical_deadline(
             now_ms=facts.now * 1000.0, revision=intent.revision)
+        # The preliminary world was measured BEFORE the native queue was
+        # armed. During an authorized frozen canvas its hypothetical
+        # future destination shrinks as real time advances, even though the
+        # exact musical deadline does not move. Comparing the later world
+        # coordinate against the earlier feasibility coordinate was
+        # therefore invalid and rejected every genuinely correct native
+        # Listen/Start admission. Physical arrival time, source revision,
+        # queue generation and the native bound segment are the checks.
         if (abs(arrived_ms-receipt.deadline_ms) > 5.0
-                or committed.world_origin + 1e-5 < receipt.world_origin
                 or committed.queue_generation < receipt.queue_generation):
             raise ValueError("Physical score arm does not match reserved downbeat")
         from dataclasses import replace

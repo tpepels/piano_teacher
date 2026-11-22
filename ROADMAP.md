@@ -734,6 +734,36 @@ with safe withdrawal, and paused-source nonrelocation using
 the real source preflight owner. This is a source-geometry
 fix only; Python remains the only author of musical time.
 
+### V3 native failure: elapsed-time world comparison was invalid (2026-11-22)
+
+The first backend-first native run
+[`44980830938`](https://github.com/tpepels/piano_teacher/actions/runs/44980830938)
+failed every timed scene: the actual 120 BPM frozen-canvas
+preflight offered world 5.574, and its post-arm physical
+attestation 33 ms later correctly measured world 5.510.
+Both corresponded to the **same** 483.353-second absolute
+downbeat (within 1 ms), and the queue generation advanced
+from 498 to 499. The Python `PlaybackCoordinator.present`
+nevertheless rejected the valid frame because it compared
+the two relative world positions as though they must be
+monotonically ordered. After each failed authorization
+the scene repeatedly retried admission (167 Listen attempts),
+never starting music; the native UI and fake MIDI journeys
+timed out, while the embedded bridge and relocated package
+continued to pass.
+
+That invalid spatial comparison is removed. `present`
+still requires a new, fresh physical arm witness, the
+correct source revision, nondecreasing queue generation,
+the exact backend-chosen physical **arrival timestamp**,
+and the same bound segment in the native gateway. A new
+real worker regression advances the clock 50 ms between
+preflight and arm, submits the correctly decreased world
+and requires the single accepted downbeat/segment to
+publish that actual committed position. This is a measured
+failure correction, not a relaxed MIDI grade/timing policy.
+Full native production must be rerun on this new source.
+
 ### V3 integrated native production acceptance requested (2026-11-22)
 
 Backend-first V3 transaction code is now integrated across Python and

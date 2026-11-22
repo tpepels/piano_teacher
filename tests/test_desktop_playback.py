@@ -524,3 +524,29 @@ def test_python_chooses_later_deadline_than_earliest_physical_clearance(practice
     assert reserved["deadline_ms"] > minimum["sampled_at_ms"]+minimum["travel_ms"]+1000
     assert not session.snapshot()["running"]
     assert present(session,intent,reserved,physical_world_origin=101.0)["authorized"]
+
+
+def test_frozen_canvas_physical_world_can_shrink_as_deadline_approaches(practice_session):
+    """World coordinates sampled in different frames are not ordered deadlines."""
+    session = practice_session(bars=1)
+    intent = desktop_tempo(session)
+    offered = physical_offer(session, intent)
+    receipt = session.ask("playback.reserve", **offered)
+    assert not session.snapshot()["running"]
+    # During Pause/Free/initial idle, the ink holds still but a candidate
+    # future destination is expressed relative to the present frame.
+    # Its remaining *world distance* shrinks as the same absolute
+    # downbeat approaches. The accepted receipt must use the real
+    # post-arm coordinate, not insist on increasing the old estimate.
+    session.clock.at += .05
+    fresh = physical_attestation(
+        session, intent, receipt,
+        physical_world_origin=receipt["world_origin"]-.05*intent["bpm"]/60.0)
+    result = session.ask("playback.present",
+        intent_id=intent["intent_id"],attempt=intent["attempt"],
+        segment_id=receipt["segment_id"],**fresh)
+    assert result["authorized"]
+    active = session.snapshot()["playback_timeline"]["current"]
+    assert active["world_origin"] == pytest.approx(fresh["physical_world_origin"])
+    assert active["deadline_ms"] == receipt["deadline_ms"]
+    assert active["segment_id"] == receipt["segment_id"]

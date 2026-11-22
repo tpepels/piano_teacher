@@ -451,6 +451,20 @@ modal suppression and source-readiness checks remain physical
 and view-owned. The exact accepted action comes back through
 the existing versioned command outcome envelope.
 
+### V3 physical proof compares one absolute downbeat, not sampled world magnitude
+
+The preflight world coordinate is measured in an earlier frame.
+Under a held canvas, the relative world destination for the same
+future downbeat decreases while wall-clock time advances. Comparing
+`physical_world_origin >= preview_world_origin` incorrectly
+rejected correctly admitted score strips. `PlaybackCoordinator.present`
+now authenticates the final **wall-clock arrival**, revision,
+queue generation and native segment binding, while publishing
+the final actual world placement into the authorized segment.
+A frozen Free/Pause canvas can therefore remain still during
+the backend-first reservation handshake without deadlocking
+the physical playback.
+
 ## Current embedded Python application boundaries (2026-11-21)
 
 The facade at `55e31dd2` has **343 lines** and delegates to the explicit
