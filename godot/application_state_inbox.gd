@@ -60,7 +60,7 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
     _statistics.update_context(str(parsed.get("piece_fingerprint","")))
     var assets = _presentation.score_session
     _logger.record_transition(parsed,received_ms,request_started_ms,
-        assets.is_ready(),assets.layout_pending,assets.timeline_model_pending,
+        assets.is_ready(),assets.layout_pending,
         _presentation.frame_diagnostics)
     if _practice.is_source_picker_open():
         _input.suppress_midi_start(int(parsed.get("midi_input_count",0)))
