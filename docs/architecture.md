@@ -14,6 +14,508 @@ retains the original six findings as historical evidence. The corresponding
 correction commits and software verification are recorded below; physical
 MIDI, audio and visual acceptance remain separate.
 
+## A0 runtime and ownership baseline — source inspection (2026-11-22)
+
+**Evidence revision:** 4a80beed2ab6d973eb7afb8477e5391f1522fd61.
+**Status:** source inventory and critical paths inspected; **A0 not yet
+accepted** because the source-to-runtime reachability trace, all remaining
+individual module behavior, and same-HEAD core/native execution are open.
+The following complete *file-path inventory* is from GitHub's recursive
+repository tree, not proof that every listed file is loaded at runtime.
+Every disposition is a **migration hypothesis** until its callers, data
+writers and actual behavior have been verified. No production behavior
+was changed in this audit.
+
+### Runtime architecture actually entered
+
+- `godot/main.tscn` loads `main.gd`; `InProcessBus` loads the
+  native `PianoNative` GDExtension. The native C++ bridge initializes
+  embedded CPython and creates `piano_teacher.inprocess.EngineCommands`.
+  Its command worker serializes the request queue and monotonic Python
+  `tick`; a separate asset worker handles expensive score operations.
+  Native real MIDI callbacks enter the Python MIDI connection/ingress path,
+  not a Godot grading engine.
+- `EngineCommands.request` exposes state, source, library, MIDI device,
+  preferences, history, score, playback reserve/present/withdraw/failure,
+  stage-ready/failure, lesson controls, Listen audio and fingering correction.
+  `PracticeEngine` delegates to composition-built services, acquiring
+  `r.lock` for authoritative state and command mutations. A separate
+  source-mutation lock prevents source replacement races while expensive
+  MIDI import/fingering preparation runs outside `r.lock`.
+- Raw Godot gestures/shortcut intents reach `PracticeCommandCoordinator`
+  → `practice.command` → `PracticeControls`. The accepted command
+  returns an outcome **and** authoritative versioned state; Godot only
+  publishes effects after checking both. Polling uses
+  `ApplicationStateInbox` and `StateContract`; native control projections
+  must not independently decide lesson transitions.
+- Actual MIDI flows through `MidiConnection` callbacks and
+  `MidiApplicationInput`/`MidiIngress` to the active recorder/guided
+  controller; `PracticeTimeline` assesses progress on worker ticks.
+  `AttemptSettlement` and learning repositories record decisions,
+  `TeachingContinuation` coordinates preloaded next stages, and
+  `PlaybackCoordinator` owns playback intent/receipt authorization.
+- `ScoreAssetSession` requests initial native layout and semantic score
+  separately; `FutureScore`/`ScoreRunway` prepare the next stage as
+  a bundle and acknowledge it independently. `ScoreAdmissionGateway`
+  gathers physical clearance, asks Python to reserve the only musical
+  deadline, arms the native immutable stream and reports attestation.
+  `ScoreStreamQueue` owns physical online/offline strip retention.
+  `PracticePresentationSession`, visual clock, metronome and practice
+  frame coordinator paint accepted motion and trigger local cues.
+- Persistence edges are `ScoreLibrary` JSON settings, preprocessing
+  and fingering caches, `ProgressRepository` / learner history /
+  `LearningLedger` SQLite, and source-specific error evidence.
+  Migration code still has a legitimate purpose for existing data.
+
+### Known concurrent and timing boundaries
+
+| Boundary | Observed mechanism | Why A1–A5 must preserve it |
+| --- | --- | --- |
+| C++ → embedded Python | Native command worker and independent asset worker; GIL around embedded requests/ticks | A long engraving command cannot starve the musical tick |
+| Application state | Single Python RLock in composition; locked commands and snapshots | Command eligibility, transport and settlement see one state |
+| Source preparation | Source mutation lock and separate fingering ThreadPoolExecutor | Expensive import/model inference cannot hold the musical lock |
+| Future scores | FutureScore bounded background worker, source/revision-keyed cache and retries | Async results from a former piece cannot become active |
+| Native physical admission | Godot frame clock supplies *physical* travel/clearance; Python scheduler chooses final absolute downbeat | No duplicate musical deadline, immutable source movement or speculative grading |
+| Native retained notation | Renderer generation, texture prewarming, queue/tail retention | Protect rendered ink across transition and resize, avoid frame stalls |
+| Godot state delivery | Versioned state inbox, command reply contract, lost-ACK status reconciliation | Invalid/stale/canceled operations cannot partially apply UI or audio |
+
+### Source-backed legacy and complexity findings
+
+| Candidate | Evidence | Proposed fate | Verification before deletion |
+| --- | --- | --- | --- |
+| Recursive-update preservation | `PracticeTimeline.update` loops through nested requests and deliberately repeats publications to imitate the previous recursive update flow | **Remove/replace** in A1 with ordered events and exactly one publication | Check MIDI feedback/event ordering and automatic rest/retry transitions |
+| Repeated score preparation state machines | Initial `ScoreAssetSession` layout→semantic requests vs bundled future `FutureScore` and `ScoreRunway`, each with generations, retries and success ACKs | **Merge** in A4 as immutable ScoreBundle lifecycle | Normal load, stage handoff, source change, resizing, retained tails, stale worker |
+| Distributed playback lifecycle | `PlaybackSession` stores running/mode/count-in; `PlaybackCoordinator` stores intent/receipt/state/deadline; `VisualTransport` stores pause/epoch/visual rest; `SessionPhase` derives phase | **Merge mutable authority**, retain pure projection and physical evidence in A3 | Pause/Resume/Listen/Free/Tempo/failure/lost ACK/odd-meter count-in |
+| Long continuation chain | `PracticeTimeline` → settlement/effects/continuation → exposure execution → transport and score preparation; each has overlapping references | **Merge orchestration** in A1–A2; retain pure graded policy and persistence | Rolling and full take, remediation, fixed rest, source switch, interruption |
+| Multiple read-side passes | SessionSnapshotBuilder → project_session_state → ScoreStatePublisher/control_projection; separately constructed locked command snapshot | **Merge** to one pure committed-state projection in A5 | Button availability matches same command authorization during admitting/failure |
+| Alternative teaching courses | Both practice-flow and coda-fukuda-midi remain selectable in ExerciseStrategies/ScoreLibrary; source-progression is warm-up route | **Retain unless owner retires**; place all supported course policies in A2 | Existing saved alternate course, selectable settings and migrations |
+| Old lesson tuning defaults | lesson_settings.json includes clean_runs_to_master=3 and focus_measures=2; practice_flow reducer requires 2 clean target passes and 4-bar moving windows | **Investigate**, remove duplicate authority but retain other-course configuration | Verify call sites and policy-dependent use; do not change Practice Flow |
+| Headless projection and research helpers | headless_score_projection is an explicit fixture contract; active Coda curriculum imports modules under research/ | **Not automatically dead** despite names; evaluate test and production reachability | Check every importer including dynamic generator registrations |
+| Third-party Godot MCP addon | under godot/addons; explicit release packaging removes it | **Keep development-only** or separately remove by owner choice | Verify no runtime autoload and no packed dependency |
+| State contract generated checker | generated Godot state_contract.gd and Python state_contract.py | **Keep** as one cross-language schema, not two independent policies | Schema/checker version and error response parity |
+
+### Current test baseline and non-executable gates
+
+- GitHub Actions `Tests` currently uses **manual workflow_dispatch**
+  with core/full options; there is no push-triggered current-HEAD run.
+  The latest full success reported in Actions is **run 45017492022**
+  at **1c1b98e** (2026-11-22), preceding the present source revisions.
+  Earlier failure witnesses: 45016371433 at ed9e11b (Moonlight
+  pause-in-count-in resume), and 45015311868 at d32cb13.
+  **None verifies 4a80bee or later A0 documentation edits.**
+- The local baseline commands are
+  `bash scripts/test.sh --coverage` and
+  `bash scripts/verify-embedded-production-local.sh`.
+  Full verifier requires **Python 3.14**, **Godot 4.7.2**, a working native
+  GDExtension, Verovio/mido/rtmidi, and (for the full package) Node.js.
+  This connected GitHub source environment provides neither an installed
+  runtime nor a new workflow-dispatch operation; no new CI execution
+  or result is claimed.
+- The embedded suite covers real-scene Play/Pause/Resume, fake physical
+  MIDI success/failure/repeats, lost reserve/present ACK, Moonlight and
+  all 16 versioned MIDI repertoire files; the optional exact Pathétique
+  case requires `PIANO_PATHETIQUE_II_MIDI`. Physical CA49 timestamps,
+  actual speaker/click/voice, visual readability and an independent
+  clean machine remain owner acceptance, separate from A0 source audit.
+
+### Risk and migration ordering
+
+| Risk | Consequence | Owning phase and required check |
+| --- | --- | --- |
+| Command/order collapse | Stop or Pause lost behind admitted future request | A1: real command/worker fake MIDI, stale response and queued Stop |
+| Lesson state projection drift | Wrong bar/hand/tempo or lost recovery progress | A2: exact saved reopening, Coda/Fukuda and alternate-course cases |
+| Cross-language deadline authority | Count-in incorrect, grading starts before ink, lost ACK leaves live source | A3: same-epoch physical receipt and failure/reconciliation journeys |
+| Preparation unification | Blank score, frozen UI, stale source published or texture stall | A4: bundle source binding, real Verovio and prewarm/retained-ink tests |
+| Native UI policy resurfacing | Captions contradict backend intent or unseen stage starts | A5: versioned command/state contract and full scene input/navigation |
+| Incomplete retirement | Duplicate service writer remains and defects recur | A6: imports/scene/package reachability and state-writer closure |
+| Stale acceptance claim | Architecture appears done with broken current HEAD | A7: exact-SHA core, native repertoire, relocated package and separate hardware handoff |
+
+### A0 static module disposition inventory
+
+The following inventory is **path-complete** for the Python application and
+non-addon Godot GDScript files at the evidence revision. It gives the
+proposed A-phase home and preliminary disposition; each A1–A6 phase must
+replace provisional labels with a proved retain/merge/delete choice and
+list all actual migrated callers. The complete non-application Python
+module list is appended separately to avoid hiding domain utilities.
+This inventory is not a dynamic import graph.
+
+**Python application modules (79)**
+
+| Relative path under piano_teacher/application | Intended home | Preliminary disposition |
+| --- | --- | --- |
+| __init__.py | A1 session and input | Package marker |
+| application_worker.py | A1 session and input | Merge orchestration; migrate all callers |
+| assessment_settlement.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| assessment_verdict.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| attempt_progression.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| attempt_runtime.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| attempt_settlement.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| coda_midi_curriculum.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| completion_continuations.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| composition.py | A1 session and input | Merge orchestration; migrate all callers |
+| control_dispatch.py | A1 session and input | Merge orchestration; migrate all callers |
+| control_projection.py | A5 state and presentation | Merge orchestration; migrate all callers |
+| device_workflows.py | A1 session and input | Merge orchestration; migrate all callers |
+| exposure_installer.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| exposure_preparation.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| exposure_workflows.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| flow_course_session.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| future_score.py | A4 source and preparation | Merge orchestration; migrate all callers |
+| guided_fragment.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| guided_session.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| headless_score_projection.py | A5 state and presentation | Test/headless contract—verify caller |
+| history_management.py | A6 persistence and settings | Retain policy/model/edge; audit writers |
+| learner_progress.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| learning_actions.py | A1 session and input | Merge orchestration; migrate all callers |
+| learning_capture.py | A6 persistence and settings | Retain policy/model/edge; audit writers |
+| learning_evidence_session.py | A6 persistence and settings | Retain policy/model/edge; audit writers |
+| lesson_cursor.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| lesson_execution.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| lesson_snapshot.py | A5 state and presentation | Retain policy/model/edge; audit writers |
+| listen_session.py | A3 transport and playback | Retain policy/model/edge; audit writers |
+| live_feedback_workflows.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| midi_application_input.py | A1 session and input | Merge orchestration; migrate all callers |
+| midi_connection.py | A1 session and input | Retain policy/model/edge; audit writers |
+| midi_ingress.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| midi_key_shortcuts.py | A1 session and input | Retain policy/model/edge; audit writers |
+| mistake_responses.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| musical_scheduler.py | A3 transport and playback | Retain policy/model/edge; audit writers |
+| passage_outcome_presenter.py | A5 state and presentation | Retain policy/model/edge; audit writers |
+| physical_admission.py | A3 transport and playback | Retain policy/model/edge; audit writers |
+| playback_coordinator.py | A3 transport and playback | Merge orchestration; migrate all callers |
+| playback_facts.py | A3 transport and playback | Retain policy/model/edge; audit writers |
+| playback_session.py | A3 transport and playback | Merge orchestration; migrate all callers |
+| playback_transitions.py | A3 transport and playback | Retain policy/model/edge; audit writers |
+| policy_registry.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| post_assessment_effects.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| practice_assessment.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| practice_controls.py | A1 session and input | Merge orchestration; migrate all callers |
+| practice_flow.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| practice_timeline.py | A1 session and input | Merge orchestration; migrate all callers |
+| practice_transitions.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| recovery_streak.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| recovery_workflows.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| rolling_recovery.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| score_ack.py | A4 source and preparation | Retain policy/model/edge; audit writers |
+| score_artifact_registry.py | A4 source and preparation | Merge orchestration; migrate all callers |
+| score_artifacts.py | A4 source and preparation | Retain policy/model/edge; audit writers |
+| score_preload_workflow.py | A4 source and preparation | Merge orchestration; migrate all callers |
+| score_preparation.py | A4 source and preparation | Retain policy/model/edge; audit writers |
+| score_read_services.py | A4 source and preparation | Merge orchestration; migrate all callers |
+| score_state_publisher.py | A5 state and presentation | Merge orchestration; migrate all callers |
+| session_commands.py | A1 session and input | Merge orchestration; migrate all callers |
+| session_evidence_context.py | A6 persistence and settings | Retain policy/model/edge; audit writers |
+| session_lifecycle.py | A1 session and input | Retain policy/model/edge; audit writers |
+| session_notices.py | A5 state and presentation | Merge orchestration; migrate all callers |
+| session_phase.py | A5 state and presentation | Merge orchestration; migrate all callers |
+| session_read_models.py | A5 state and presentation | Merge orchestration; migrate all callers |
+| session_snapshot_builder.py | A5 state and presentation | Merge orchestration; migrate all callers |
+| settings_workflows.py | A6 persistence and settings | Merge orchestration; migrate all callers |
+| source_identity.py | A4 source and preparation | Retain policy/model/edge; audit writers |
+| source_preparation_session.py | A4 source and preparation | Retain policy/model/edge; audit writers |
+| source_workflows.py | A4 source and preparation | Merge orchestration; migrate all callers |
+| stage_change.py | A2 lesson and assessment | Retain policy/model/edge; audit writers |
+| teaching_continuation.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| teaching_workflows.py | A2 lesson and assessment | Merge orchestration; migrate all callers |
+| tempo_map_cache.py | A3 transport and playback | Retain policy/model/edge; audit writers |
+| timed_playback.py | A3 transport and playback | Merge orchestration; migrate all callers |
+| transport_actions.py | A1 session and input | Merge orchestration; migrate all callers |
+| transport_commands.py | A3 transport and playback | Retain policy/model/edge; audit writers |
+| transport_timing.py | A3 transport and playback | Merge orchestration; migrate all callers |
+
+**Godot GDScript files excluding developer addon (146)**
+
+| Relative path under godot | Intended home | Preliminary disposition |
+| --- | --- | --- |
+| action_button.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| application_event_router.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| application_input_session.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| application_poll_session.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| application_state_inbox.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| calibration_beat_pulse.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| challenge_flow.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| command_failure_presenter.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| command_request_state.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| command_success_effects.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| command_success_policy.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| command_success_presenter.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| continuous_score_flow.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| countin_audio_session.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| countin_cue_timeline.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| countin_voice_player.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| debug_session_logger.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| demo_player.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| feedback_event_inbox.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| frame_meter.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| game_backdrop.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| game_countin.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| game_input_indicator.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| game_phase_cue.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| game_stage.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| game_streak.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| game_transport_button.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| guided_presentation_session.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| hint_keyboard.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| home_screen.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| inprocess_bus.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| inprocess_request.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| learning_statistics_coordinator.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| learning_statistics_view.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| lesson_screen.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| lesson_session.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| library_catalog_coordinator.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| library_row.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| library_screen.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| listen_sync.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| live_midi_feedback.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| living_score.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| main.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| metronome_frame_coordinator.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| midi_device_coordinator.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| mint_glow_field.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| moving_meter_grid.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| native_bridge_smoke.gd | A0/A7 harness | Retain if exercised by native verifier |
+| native_score_assets.gd | A4 score preparation | Merge preparation/adoption; keep rendering |
+| native_score_feedback.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| navigation_drawer.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| navigation_policy.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| navigation_session.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| notation/native/ambient_meter_geometry.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/barline_layout.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/beam_sprite_plan.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/connector_geometry.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/context_painter.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/cursor_ink_clearance.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/engraving_readiness.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/event_window.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/fingering_annotations.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/fingering_obstacles.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/fingering_placement.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/fingering_spatial_layout.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/geometry.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/ghost_note_painter.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/glyph_assets.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/glyph_head_masks.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/glyphs.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/ink_geometry.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/ink_spacing.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/notation_clip_planner.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/note_status_layer.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/render_pass.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/rest_lane_layout.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/rest_lane_planning.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/retained_annotation_overlay.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/retained_notation_pool.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/retained_note_projection.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/retained_segment.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/score_engraving.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/score_index.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/score_layout.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/score_painter.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/score_stream_controller.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| notation/native/slur_sprite_plan.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/source_pass_painter.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/source_span_index.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/source_spans.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/stream_admission_executor.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| notation/native/stream_geometry.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| notation/native/stream_lifecycle.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| notation/native/stream_recovery_planner.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| notation/native/stream_take_binding.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| notation/native/symbol_painter.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/view.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/viewport_fit.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/native/voice_layout.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/shared/spacing_policy.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/shared/timeline.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| notation/shared/view_base.gd | A5 notation renderer | Retain authentic engraving/geometry unless proven dead |
+| note_status_ink.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| note_status_registry.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| pause_sheet.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| performance_review_strip.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_caption_layout.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_chrome.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_command_coordinator.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| practice_feedback_session.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_frame_coordinator.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| practice_metrics.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_objective_glyph.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_presentation_session.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| practice_score_stage.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_screen.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_state_presenter.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| practice_step_selector.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| practice_theme.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| presentation_timeline.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| production_fake_midi_journey.gd | A0/A7 harness | Retain if exercised by native verifier |
+| production_session_journey.gd | A0/A7 harness | Retain if exercised by native verifier |
+| production_ui_smoke.gd | A0/A7 harness | Retain if exercised by native verifier |
+| review_sheet.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| score_admission_gateway.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| score_asset_queue.gd | A4 score preparation | Merge preparation/adoption; keep rendering |
+| score_asset_session.gd | A4 score preparation | Merge preparation/adoption; keep rendering |
+| score_effects.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| score_runway.gd | A4 score preparation | Merge preparation/adoption; keep rendering |
+| score_scene_controller.gd | A4 score preparation | Merge preparation/adoption; keep rendering |
+| score_step_timeline.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| score_stream_admission.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| score_stream_archive.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| score_stream_queue.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| score_stream_window_cuts.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| score_transport_reservation.gd | A3/A5 physical surface | Consolidate admission API; keep immutable queue |
+| settings_interaction_session.gd | A1/A5 adapter | Merge transaction/presentation orchestration |
+| settings_screen.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| source_measure_picker.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| state_contract.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| status_head_preloader.gd | A4 score preparation | Merge preparation/adoption; keep rendering |
+| status_ink_warmup.gd | A4 score preparation | Merge preparation/adoption; keep rendering |
+| tempo_timeline.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+| tempo_vocabulary.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| ui_factory.gd | A5 UI or local effect | Retain UI effect; verify no domain decision |
+| visual_transport_clock.gd | A3/A5 presentation | Keep local cues/painting; merge state coordination |
+
+**Other piano_teacher Python modules (120)**
+
+| Relative path under piano_teacher | Intended home | Preliminary disposition |
+| --- | --- | --- |
+| __init__.py | Cross-cutting source support | Review at actual call site |
+| __main__.py | A1 application boundary | Keep embedded protocol; shrink coordinator |
+| adaptive_hybrid_curriculum.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| assessment_clock.py | Cross-cutting source support | Review at actual call site |
+| assessment_service.py | Cross-cutting source support | Review at actual call site |
+| clock.py | Cross-cutting source support | Review at actual call site |
+| completion_route.py | Cross-cutting source support | Review at actual call site |
+| course_navigation.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| demo.py | Cross-cutting source support | Review at actual call site |
+| diagnosis_policies.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| engraving/__init__.py | A4 score model/engraving | Retain authentic notation |
+| engraving/engraving.py | A4 score model/engraving | Retain authentic notation |
+| engraving/geometry.py | A4 score model/engraving | Retain authentic notation |
+| engraving/spacing.py | A4 score model/engraving | Retain authentic notation |
+| exercise_contracts.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| exercise_generator.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| exercise_pipeline.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| exercise_strategies.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| feedback.py | Cross-cutting source support | Review at actual call site |
+| feedback_events.py | Cross-cutting source support | Review at actual call site |
+| fingering/__init__.py | A4 fingering | Retain inference and manual correction |
+| fingering/lumikey.py | A4 fingering | Retain inference and manual correction |
+| fingering/projection.py | A4 fingering | Retain inference and manual correction |
+| fingering/service.py | A4 fingering | Retain inference and manual correction |
+| fingering/types.py | A4 fingering | Retain inference and manual correction |
+| fukuda_midi.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| fukuda_mistake_store.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| grading_tolerance.py | Cross-cutting source support | Review at actual call site |
+| grouped_variants.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| hardware_probe.py | Cross-cutting source support | Review at actual call site |
+| importing/__init__.py | Cross-cutting source support | Review at actual call site |
+| importing/pieces.py | Cross-cutting source support | Review at actual call site |
+| inprocess.py | A1 application boundary | Keep embedded protocol; shrink coordinator |
+| learner_state.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_ledger.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_ledger_common.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_ledger_export.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_ledger_retention.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_ledger_schema.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_statistics.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_statistics_facts.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_statistics_metrics.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| learning_statistics_query.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| lesson_contracts.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| lesson_generators.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| lesson_settings.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| lesson_source_planner.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| lesson_stage_semantics.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| lesson_timing.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| lesson_validation.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| library.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| library_health.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| live_assessment_publisher.py | Cross-cutting source support | Review at actual call site |
+| live_feedback.py | Cross-cutting source support | Review at actual call site |
+| live_input_view.py | Cross-cutting source support | Review at actual call site |
+| measure_grid.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| midi_calibration.py | Cross-cutting source support | Review at actual call site |
+| music.py | Cross-cutting source support | Review at actual call site |
+| musical_groups.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| notation/__init__.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/__init__.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/beams.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/chords.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/glyphs.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/notes.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/runtime.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/slurs.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/ties.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/tuplet_recovery.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/tuplets.py | A4 score model/engraving | Retain authentic notation |
+| notation/assets/vector_art.py | A4 score model/engraving | Retain authentic notation |
+| notation/display_envelope.py | A4 score model/engraving | Retain authentic notation |
+| notation/expressions.py | A4 score model/engraving | Retain authentic notation |
+| notation/lesson.py | A4 score model/engraving | Retain authentic notation |
+| notation/midi_beaming.py | A4 score model/engraving | Retain authentic notation |
+| notation/model.py | A4 score model/engraving | Retain authentic notation |
+| notation/musicxml.py | A4 score model/engraving | Retain authentic notation |
+| notation/piano_registers.py | A4 score model/engraving | Retain authentic notation |
+| notation/practice_timeline.py | A4 score model/engraving | Retain authentic notation |
+| notation/rhythm_safety.py | A4 score model/engraving | Retain authentic notation |
+| practice.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| practice_flow_course.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| practice_history.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| practice_windows.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| preprocessing_cache.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| progress_repository.py | A2/A6 learning/persistence | Retain durable model/migrations |
+| recovery.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| recovery_projection.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| remediation.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| repeated_passages.py | A2 teaching/music | Retain supported policy; audit course reachability |
+| research/__init__.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_author_catalog.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_auto_chord_levels.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_matrix.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_midi_grid.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_midi_sparse.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_notation_hierarchy.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_reference_exercises.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_reference_matrix.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_source_connectors.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_source_metadata.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| research/coda_written_rests.py | A2 source-backed algorithms | Do not assume test-only: Coda imports research modules |
+| runtime_timings.py | A1 application boundary | Keep embedded protocol; shrink coordinator |
+| sample_piano.py | Cross-cutting source support | Review at actual call site |
+| server.py | A1 application boundary | Keep embedded protocol; shrink coordinator |
+| source_attack_index.py | Cross-cutting source support | Review at actual call site |
+| source_svg.py | Cross-cutting source support | Review at actual call site |
+| sqlite_transaction.py | Cross-cutting source support | Review at actual call site |
+| state_contract.py | Cross-cutting source support | Review at actual call site |
+| state_projection.py | Cross-cutting source support | Review at actual call site |
+| teaching.py | Cross-cutting source support | Review at actual call site |
+| teaching_course.py | Cross-cutting source support | Review at actual call site |
+| teaching_decisions.py | Cross-cutting source support | Review at actual call site |
+| teaching_manual.py | Cross-cutting source support | Review at actual call site |
+| tempo_difficulty.py | Cross-cutting source support | Review at actual call site |
+| timed_assessment.py | Cross-cutting source support | Review at actual call site |
+| transport_projection.py | Cross-cutting source support | Review at actual call site |
+| visual_transport.py | Cross-cutting source support | Review at actual call site |
+| warmups.py | Cross-cutting source support | Review at actual call site |
+
+### A0 remaining evidence required before marking complete
+
+1. Recheck source/runtime reachability for each preliminary **merge** or
+   **remove** candidate, including dynamic Godot script creation,
+   Python generator registrations, optional policy settings and package
+   script inclusion. Record actual callers and state writes rather than
+   inferring dead code from filename or static import absence.
+2. Trace and record the complete scenario-to-owner transition matrix
+   and every asynchronous success/failure edge against the exact source
+   revision, including persistence rollback and next-stage art adoption.
+3. Obtain a complete exact-HEAD local baseline run for both core/Godot
+   behavior and embedded-production/repertoire/package. Record failures
+   and correct the roadmap's gate status from evidence, not prior green runs.
+4. Obtain the owner's explicit decision *only if* retiring a still
+   supported selectable course, policy or durable data type is proposed.
+
 ### Composition closure audit — 2026-11-21
 
 The pre-audit composition file retained many direct imports from the
