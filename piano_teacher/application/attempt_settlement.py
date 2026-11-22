@@ -386,8 +386,14 @@ class AttemptSettlement:
         pending = completed.pending
         if pending.receipt is not None and completed.route != "full_passage":
             if (pending is not self.pending
+                    or binding.run_id != take.binding.run_id
+                    or binding.session_id != take.binding.session_id
                     or binding.fingerprint != take.binding.fingerprint
+                    or binding.transport_id != take.binding.transport_id
                     or binding.cancellation_generation != take.binding.cancellation_generation
+                    or binding.authority_revision != take.binding.authority_revision + 1
+                    or binding.course_revision != (
+                        take.binding.course_revision + int(pending.receipt.source_changed))
                     or plan.teaching_progress() != pending.decision.progress_after
                     or (binding.stage_key != take.binding.stage_key
                         and not pending.receipt.stage_changed)):
