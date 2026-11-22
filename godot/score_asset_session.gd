@@ -10,9 +10,6 @@ signal score_failed(message: String)
 signal status_changed(values: Dictionary)
 signal action_requested(command: Dictionary)
 
-const MODEL_RETRY_MS := 2000
-const MODEL_MAX_ATTEMPTS := 3
-const MODEL_TIMEOUT_SECONDS := 30.0
 const RETAINED_INK_TIMEOUT_MS := 45000
 const SLOW_PREPARATION_MS := 10000
 const NativeScoreAssets := preload("res://native_score_assets.gd")
@@ -26,13 +23,12 @@ var layout_revision := -1
 var requested_layout_revision := -1
 var timeline_model_revision := -1
 var rendered_revision := -1
-var timeline_model_retry_after_ms := 0
 var native_score_piece_fingerprint := ""
 var score_error := ""
 var layout_pending: bool:
-    get: return _requests.has("layout")
+    get: return _requests.has("bundle")
 var timeline_model_pending: bool:
-    get: return _requests.has("model")
+    get: return layout_pending
 var score_layout: Dictionary:
     get: return layout_snapshot()
 
@@ -43,7 +39,6 @@ var _fingerprint := ""
 var _state: Dictionary = {}
 var _layout: Dictionary = {}
 var _generation := 0
-var _model_failures := 0
 # Retry is a genuine replay of the same source/layout request. If a
 # deterministic native failure repeats unchanged, surface that fact and
 # keep Browse visible rather than presenting an identical mysterious Retry.
@@ -54,7 +49,7 @@ var _retained_started_ms := -1
 var _published_retained_generation := -1
 var _preparing_since_ms := -1
 var _next_request_id := 0
-# Exactly two in-process command slots: native layout and semantic model.
+# One source-bound request owns the layout and original MIDI-note model.
 var _requests: Dictionary = {}
 
 func _init(renderer, native_feedback = null) -> void:
@@ -155,7 +150,6 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     rendered_revision = revision
     _published_retained_generation = _renderer.retained_generation()
     native_score_piece_fingerprint = _fingerprint
-    _model_failures = 0
     _retained_started_ms = -1
     _preparing_since_ms = -1
     score_error = ""
@@ -241,16 +235,7 @@ func request_layout() -> bool:
     if layout_pending or not _loaded or not score_error.is_empty():
         return false
     requested_layout_revision = revision
-    _begin_request("layout","score.native_layout",90.0)
-    return true
-
-func request_model() -> bool:
-    # Semantic source must wait for this revision's actual authentic atlas.
-    if timeline_model_pending or not _loaded or not score_error.is_empty() or \
-            layout_revision != revision or not is_instance_valid(_renderer) or \
-            not _renderer.glyphs.ready():
-        return false
-    _begin_request("model","score.semantic",MODEL_TIMEOUT_SECONDS)
+    _begin_request("bundle","score.bundle",90.0)
     return true
 
 func retry(now_ms: int) -> bool:
@@ -367,7 +352,6 @@ func _complete_model(code: int, body: PackedByteArray, now_ms: int) -> void:
         return
     native_score_piece_fingerprint = _fingerprint
     timeline_model_revision = revision
-    _model_failures = 0
     _retained_started_ms = now_ms
     _renderer.visible = true
     if is_instance_valid(_feedback):
@@ -426,14 +410,12 @@ func _reset_assets() -> bool:
         # atlas/model may overwrite the source whose journal could not close.
         _fail(str(_renderer.failure_reason),false)
         return false
-    _model_failures = 0
     _retained_started_ms = -1
     _layout.clear()
     layout_revision = -1
     timeline_model_revision = -1
     rendered_revision = -1
     _published_retained_generation = -1
-    timeline_model_retry_after_ms = 0
     native_score_piece_fingerprint = ""
     score_error = ""
     assets_invalidated.emit(revision)
