@@ -115,7 +115,7 @@ class RollingTake:
     transition: object
     outgoing_bpm: float
     scored_end: float
-
+    take: TakeResult
 
 
 class AttemptSettlement:
@@ -211,11 +211,12 @@ class AttemptSettlement:
     def complete_rolling(self, *, decision, phrase, grid, score_beat,
                          now, bpm, scored_end, hand, played, from_beat,
                          tempo, policies, prepare_decision, plan, binding,
-                         policy) -> RollingTake:
+                         policy, score_revision: int) -> RollingTake:
         """Retain original source/tempo facts through rolling storage retries."""
         if self._rolling is None:
+            original_notes = tuple(played)
             assessed = policies.select(tempo).grade(
-                phrase,hand=hand,bpm=bpm,played=played,from_beat=from_beat,
+                phrase,hand=hand,bpm=bpm,played=original_notes,from_beat=from_beat,
                 end_beat=decision.end_beat,tempo=tempo)
             pending = prepare_decision("rolling_result",assessed,
                 rolling=decision,end_beat=decision.end_beat)
@@ -229,17 +230,42 @@ class AttemptSettlement:
                     before_bpm=pending.state.route.performed_bpm,now=now,
                     same_stage=chosen.key == pending.state.binding.stage_key,
                     source_duration=phrase.end-phrase.start))
+            take = TakeResult(
+                binding=binding, score_revision=score_revision,
+                attempt_id=pending.event.attempt_id, mode="practice",
+                hand=hand, from_beat=from_beat, end_beat=decision.end_beat,
+                bpm=bpm, played=original_notes, assessment=assessed,
+                source_note_ids=tuple(
+                    entry.note.source_id for entry in assessed.notes))
             self._rolling = RollingTake(decision,phrase,grid,score_beat,now,
-                pending,transition,bpm,scored_end)
+                pending,transition,bpm,scored_end,take)
         completed = self._rolling
+        take = completed.take
+        # On a persistence retry use the original scored notes, not a
+        # recorder mutated by a later MIDI note. After a durable receipt
+        # the authority counter can advance, but the source/take identity
+        # must still match before any presentation effect is replayed.
+        if (score_revision != take.score_revision or
+                binding.fingerprint != take.binding.fingerprint or
+                binding.stage_key != take.binding.stage_key or
+                binding.transport_id != take.binding.transport_id or
+                binding.cancellation_generation != take.binding.cancellation_generation or
+                hand != take.hand or bpm != take.bpm or
+                from_beat != take.from_beat or
+                decision.end_beat != take.end_beat or
+                completed.phrase is not phrase):
+            raise ValueError("Rolling take source or timing changed before settlement")
+        if completed.pending.receipt is None and binding != take.binding:
+            raise ValueError("Rolling take authority changed before durable settlement")
         if completed.transition is None:
             # No interruption and no durable assessment; keep recording the
             # same exposure, rather than leaving a selected stale decision.
             self.pending = None
             self._rolling = None
             return completed
-        self.seal_rolling_recovery(completed.pending,played=played,
-            result=completed.pending.assessment,end_beat=completed.decision.end_beat,
+        self.seal_rolling_recovery(
+            completed.pending,played=take.played,
+            result=take.assessment,end_beat=take.end_beat,
             plan=plan,binding=binding,now=now,policy=policy)
         return completed
 

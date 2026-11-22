@@ -107,6 +107,7 @@ class RecoveryWorkflows:
                 tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
                 prepare_decision=self.teaching_decisions.prepare,plan=self.source_identity.plan,
                 binding=self.teaching_decisions.binding(),
+                score_revision=self.source_identity.revision,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
         except Exception:
             self.playback_session.finish_take()
