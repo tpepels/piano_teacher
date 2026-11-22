@@ -25,6 +25,7 @@ from .session_events import (
     FingeringCorrectionCommitted,
     SettingsChanged,
     DeviceSelected,
+    MidiPortsRequested,
     PreloadReady,
     PreloadFailed,
     CalibrationRequested,
@@ -237,6 +238,8 @@ class PracticeSession:
             if isinstance(event, SettingsChanged):
                 return self.settings_workflows.update(
                     event.changes, pause_current=self.timed_playback.pause)
+            if isinstance(event, MidiPortsRequested):
+                return self.midi_application_input.ports()
             if isinstance(event, DeviceSelected):
                 return self.midi_application_input.connect(event.name)
             if isinstance(event, PreloadReady):

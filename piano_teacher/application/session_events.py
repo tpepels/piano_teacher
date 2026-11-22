@@ -82,6 +82,11 @@ class SettingsChanged:
 
 
 @dataclass(frozen=True, slots=True)
+class MidiPortsRequested:
+    """Probe MIDI ports and reconcile a disconnected/preferred device."""
+
+
+@dataclass(frozen=True, slots=True)
 class DeviceSelected:
     name: str
 
@@ -136,7 +141,8 @@ PracticeEvent = (TimedStartRequested | UserCommand | ClockAdvanced |
                  PhysicalMidi | MidiShortcut |
                  PresentationRequired | PlaybackReserved | PlaybackPresented |
                  PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
-                 FingeringCorrectionCommitted | SettingsChanged | DeviceSelected |
+                 FingeringCorrectionCommitted | SettingsChanged |
+                 MidiPortsRequested | DeviceSelected |
                  PreloadReady | PreloadFailed |
                  SessionClosed | CalibrationRequested | HardwareRequested |
                  HistoryExported | PieceHistoryDeleted | LearnerHistoryDeleted)

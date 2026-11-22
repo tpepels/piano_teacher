@@ -14,7 +14,7 @@ from .application.session_events import (
     TimedStartRequested, PresentationRequired, PlaybackReserved, PlaybackPresented,
     PlaybackWithdrawn, PlaybackFailed, SourceCommitted,
     FingeringCorrectionCommitted, SettingsChanged,
-    DeviceSelected, PreloadReady, PreloadFailed, SessionClosed,
+    DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed, SessionClosed,
     CalibrationRequested, HardwareRequested, HistoryExported,
     PieceHistoryDeleted, LearnerHistoryDeleted)
 from .application.practice_assessment import PracticeAssessmentPolicies
@@ -164,7 +164,7 @@ class PracticeEngine:
         return self.practice_session.apply(PlaybackFailed(values))
 
     def ports(self) -> list[str]:
-        return self.midi_application_input.ports()
+        return self.practice_session.apply(MidiPortsRequested())
 
     def connect(self, name: str):
         return self.practice_session.apply(DeviceSelected(name))

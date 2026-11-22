@@ -1,7 +1,7 @@
 """Mutable lifetime of the one practice/listening transport.
 
-PlaybackCoordinator alone authorizes graphical takes; SessionCommands alone
-selects exposures. This owner applies those decisions to transport lifetime.
+PlaybackCoordinator alone authorizes graphical takes; TeachingDecisions alone
+selects and validates lesson exposures. This owner applies those decisions to transport lifetime.
 It has no application engine reference and never selects teaching progress.
 """
 from __future__ import annotations
