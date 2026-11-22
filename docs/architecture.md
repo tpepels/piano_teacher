@@ -952,7 +952,8 @@ Python/Godot or physical acceptance**.
 - `lesson_settings.course_rules(generator_name, warmup=...)` returns immutable,
   selected `CourseRules`. Practice Flow gets its two-target-pass requirement
   from the existing pure reducer, its four-bar cap from `practice_windows`,
-  and an independent 50%-of-target start. Source-progression, selectable
+  and a 50%-of-target first graded Tempo step after Listen/Free.
+  Initial Listen remains at the prepared source tempo. Source-progression, selectable
   Coda/Fukuda and built-in warm-ups retain the previously configured flat
   `lesson_settings.json` values (three clean runs and two-bar source focus
   by default). The flat on-disk tuning format was not changed.
