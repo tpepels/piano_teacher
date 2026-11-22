@@ -307,8 +307,7 @@ func _screen(name: String) -> MarginContainer:
 
 
 func _navigate(screen: String) -> void:
-    navigation_session.navigate(
-        screen,state_inbox.current,command_coordinator.state)
+    navigation_session.navigate(screen,state_inbox.current)
 
 
 func _resize_overlay_drawer() -> void:
