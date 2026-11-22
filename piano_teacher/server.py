@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .application.composition import compose_application
 from .application.practice_session import (
-    PresentationRequired, PlaybackReserved, PlaybackPresented,
+    TimedStartRequested, PresentationRequired, PlaybackReserved, PlaybackPresented,
     PlaybackWithdrawn, PlaybackFailed, SourceCommitted, SettingsChanged,
     DeviceSelected, PreloadReady, PreloadFailed, SessionClosed,
     CalibrationRequested, HardwareRequested, HistoryExported,
@@ -267,11 +267,12 @@ class PracticeEngine:
               loop_continuation: bool = False, scheduled_deadline: float | None = None,
               presentation_lead_seconds: float = 0.0, decided: bool = False,
               count_in_plan=None):
-        return self.timed_playback.start(
-            from_beat=from_beat, mode=mode, loop_continuation=loop_continuation,
-            scheduled_deadline=scheduled_deadline,
-            presentation_lead_seconds=presentation_lead_seconds,
-            decided=decided, count_in_plan=count_in_plan)
+        return self.practice_session.apply(TimedStartRequested({
+            "from_beat": from_beat, "mode": mode,
+            "loop_continuation": loop_continuation,
+            "scheduled_deadline": scheduled_deadline,
+            "presentation_lead_seconds": presentation_lead_seconds,
+            "decided": decided, "count_in_plan": count_in_plan}))
 
     def control(self, action: str, **kwargs) -> None:
         return self.practice_session.control(action, **kwargs)

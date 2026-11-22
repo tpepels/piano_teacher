@@ -13,6 +13,11 @@ from .stage_change import prepare_stage_change
 
 
 @dataclass(frozen=True, slots=True)
+class TimedStartRequested:
+    arguments: dict
+
+
+@dataclass(frozen=True, slots=True)
 class UserCommand:
     action: str
     parameters: dict
@@ -126,7 +131,8 @@ class SessionClosed:
     """Close ledger/device after the final active-take interruption."""
 
 
-PracticeEvent = (UserCommand | ClockAdvanced | PhysicalMidi | MidiShortcut |
+PracticeEvent = (TimedStartRequested | UserCommand | ClockAdvanced |
+                 PhysicalMidi | MidiShortcut |
                  PresentationRequired | PlaybackReserved | PlaybackPresented |
                  PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
                  SettingsChanged | DeviceSelected | PreloadReady | PreloadFailed |
@@ -274,6 +280,8 @@ class PracticeSession:
         protocols; their adoption events will migrate separately.
         """
         with self.lock:
+            if isinstance(event, TimedStartRequested):
+                return self.timed_playback.start(**event.arguments)
             if isinstance(event, UserCommand):
                 return self._apply_command(event.action, **event.parameters)
             if isinstance(event, PhysicalMidi):
