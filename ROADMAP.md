@@ -745,6 +745,21 @@ and two actual worker-reply-loss fault injections. Core
 CI and the complete native result must both pass on the
 same revision before any V0–V6 phase is reported complete.
 
+### V6 core regression aligns physical evidence rejection with absolute timing (2026-11-22)
+
+Core run
+[`44982059687`](https://github.com/tpepels/piano_teacher/actions/runs/44982059687)
+found one old rejection fixture still asserting that a smaller
+`physical_world_origin` must be invalid. Under the fixed
+backend-first protocol, such a coordinate is legitimate for
+the same future downbeat after the relative physical forecast
+has advanced. The malformed-evidence test now sends an
+**unparseable world coordinate**, while separately retaining
+the new acceptance scenario for a valid decreasing coordinate.
+Queue-generation, source-revision and actual-deadline mismatch
+remain rejection cases. The application protocol and physical
+authorization timing have not been loosened further.
+
 ### V3 native failure: elapsed-time world comparison was invalid (2026-11-22)
 
 The first backend-first native run

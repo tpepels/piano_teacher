@@ -497,7 +497,7 @@ def test_backend_exclusively_decides_midi_start_gesture(
 
 
 @pytest.mark.parametrize("mutation", [
-    {"physical_world_origin": -1.0},
+    {"physical_world_origin": "not-a-world-coordinate"},
     {"physical_queue_generation": -1},
     {"physical_renderer_generation": -1},
     {"physical_travel_ms": 0.0},
