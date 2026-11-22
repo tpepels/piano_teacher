@@ -128,6 +128,34 @@ class ScoreArtifacts:
                     selected.piece.fingering_plan)
             return deepcopy(self._projected_model)
 
+    def bundle(self, selected: ScoreSelection) -> dict:
+        """Prepare one source/revision-keyed physical score contract.
+
+        The current source and future preloads use this same compilation
+        boundary. Authentic layout/ink and projected original MIDI note
+        identities must agree *before* the native renderer may admit the
+        source. No live lesson, transport or UI state is read here.
+        """
+        with self._engraving_lock:
+            layout = self._geometry(selected)
+            model = self.semantic_score(selected)
+            if (layout.get("revision") != selected.revision
+                    or model.get("revision") != selected.revision):
+                raise ValueError("Score bundle contains mixed revisions")
+            source_ids = tuple(note.source_id for note in selected.phrase.notes)
+            if (not source_ids or len(source_ids) != len(set(source_ids))):
+                raise ValueError("Score bundle has missing or duplicate source note IDs")
+            return {
+                "status": "ready",
+                "fingerprint": selected.fingerprint,
+                "revision": selected.revision,
+                "stage_key": selected.stage_key,
+                "hand": selected.hand,
+                "source_note_ids": list(source_ids),
+                "layout": layout,
+                "model": model,
+            }
+
     def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
         """Feedback may read only ink belonging to this exact source selection.
 
