@@ -174,6 +174,8 @@ static func problems(state: Dictionary) -> Array[String]:
         elif kind_of(state[key]) not in SCHEMA[key]:
             found.append("'%s' is %s, expected %s" % [
                 key, kind_of(state[key]), "|".join(SCHEMA[key])])
+        elif kind_of(state[key]) == "number" and not is_finite(float(state[key])):
+            found.append("'%s' must be finite" % key)
     var controls: Variant = state.get("controls")
     if controls is Dictionary:
         for key in CONTROL_ACTIONS:
