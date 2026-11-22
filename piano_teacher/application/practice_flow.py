@@ -1,11 +1,10 @@
-"""The practice flow lesson state machine (docs/architecture.md#practice-state-and-timing).
+"""Pure selected Practice Flow policy (docs/architecture.md#practice-state-and-timing).
 
-The only owner of "where in the lesson": which step (Listen, Free, Tempo) of
-which course stage, at what tempo, and how many takes failed or were clean.
-Every change is one of the transition functions below; each returns the new
-state and the short message the learner sees. The functions are pure: the
-engine executes the returned state (start Listen, Free or a Tempo take) and
-persists the counters through its course progress.
+These reducers calculate the next Listen/Free/Tempo step and the outcome
+of one accepted, source-bound graded take. Durable BPM, failures, clean
+passes and mastery belong to LearningPlan, not this stateless module.
+PracticeFlowCourseSession only retains a transient phase keyed to the
+installed lesson; this module never mutates or stores application state.
 """
 from __future__ import annotations
 

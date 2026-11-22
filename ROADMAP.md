@@ -606,6 +606,50 @@ journeys. **No Python, Godot/native, package or physical keyboard tests
 have executed on this HEAD.** A0 exact-HEAD and A1 acceptance remain
 open; GitHub CI was not triggered.
 
+### A2 durable receipt and continuation effect checkpoint — 2026-11-22
+
+**Integrated on `main`, after the canonical Practice Flow progress change:**
+
+- [04ab481](https://github.com/tpepels/piano_teacher/commit/04ab48106dd1d1488a7c8ff2c74b3d812d990d74)
+  reuses the **original durable receipt** for focused/performance take
+  presentation retries. The original `TakeResult` is not regraded,
+  resealed or granted additional mastery after its stage already advanced.
+- [20fc805](https://github.com/tpepels/piano_teacher/commit/20fc805bc6de11aea8d9d851098ac64eb550b48d)
+  strengthens this replay gate: current run/session/source, physical
+  transport and cancellation identity must match, as must the exact
+  acknowledged authority/course revision advancement and previously
+  committed canonical lesson progress. Different source, take, learner
+  or further progress cannot inherit the original receipt.
+- [6936fdc](https://github.com/tpepels/piano_teacher/commit/6936fdc75d04a8ba4f992230f595ad4be073347d)
+  makes `CompletionContinuations.dispatch_effect` acknowledge an
+  exact typed successor effect only **after** the complete dispatch
+  succeeds. A replay of the same decided effect is a no-op; a conflicting
+  effect under the same identity is rejected. A failed physical
+  continuation start is still retried with its original receipt.
+- [01b6d43](https://github.com/tpepels/piano_teacher/commit/01b6d435771331c33a4bd1de555a0410b70d873e)
+  requires a durable receipt and installed source effects before
+  `finish_publication` can mark a teaching result published.
+  [d4bb831](https://github.com/tpepels/piano_teacher/commit/d4bb831e8c9928f0e856fe8c0c8b9b9eec4e1899)
+  rejects superseded decisions at settlement and enforces one-way
+  receipt phases: `settled → effects_applied → published`.
+- The `practice_flow.py` module contract now identifies the pure
+  reducer as policy and `LearningPlan` as the durable owner of
+  counters/BPM. This removes a misleading legacy ownership claim;
+  no lesson rule or stage sequence was changed.
+
+**Scope and open verification:** These are production source changes,
+not a current-HEAD runtime acceptance pass. The existing 16 Python test
+modules and embedding/build workflow were not executed in this
+environment; no tests were added and GitHub CI was not triggered.
+A2 still requires focused/final/rolling fake-MIDI failed-persistence
+journeys, settlement after Stop/source revision changes, conditional
+effect-retry acceptance, course-scoped policy/settings consolidation,
+and removal of any remaining redundant recovery coordination.
+The policy invariants of four-bar trailing windows, RH → LH → Both,
+per-stage Listen → Free → Tempo, original final and Coda/Fukuda and
+warm-up course behavior remain obligations for A2 acceptance.
+**A2 stays IN PROGRESS.**
+
 ### A2 — Unified lesson, assessment and durable settlement
 
 - [ ] Give the lesson domain one course/window/hand/step, BPM, mastery and
@@ -789,7 +833,7 @@ and speakers, including the original Pathétique source and readability.
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
 | A1 | One authoritative PracticeSession and event processing path | **In progress** — event input and return-state atomicity, cancellation/device-bound callback epochs, bounded transition queue and fail-closed Stop persistence integrated; old router modules deleted; native queued-Stop latency, full event/settlement ownership and same-HEAD behavior verification remain open |
-| A2 | Unified lesson/assessment/settlement/recovery | **In progress** — frozen full/rolling TakeResult, receipt-gated retries, unified completion effects, and Practice Flow phase-only projection keyed to installed plan; remaining course-scoped settings, recovery ownership and runtime verification open |
+| A2 | Unified lesson/assessment/settlement/recovery | **In progress** — frozen full/rolling TakeResult, receipt-keyed focused retries, one-shot continuation effects and enforced settlement→effects→publication phases; Practice Flow progress from LearningPlan; course-scoped policy audit, recovery consolidation and runtime verification still open |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
 | A5 | Thin Godot UI and single native physical-surface interface | Not started |

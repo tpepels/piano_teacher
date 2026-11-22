@@ -945,6 +945,42 @@ Course-scoped settings and behavior tests for all source strategies
 remain open. All of the above is source inspection, **not tested
 Python/Godot or physical acceptance**.
 
+### A2 receipt replay and publication boundary — 2026-11-22
+
+A selected `TakeResult` captures immutable original MIDI
+`PlayedNote` evidence, original source-note IDs and the run/session,
+source/revision, stage/hand, transport, attempt, tempo, window and
+cancellation identity. `AttemptSettlement` is the only durable receipt
+owner. It now recognizes an already-committed focused/performance
+assessment and reuses that receipt only if the original input and
+acknowledged canonical progress can still be verified. No second
+assessment or evidence seal is selected on that retry.
+
+Once that receipt exists, its state moves from `settled` to
+`effects_applied` after the accepted source, revision and score assets
+have been installed, and to `published` only when the selected
+continuation successfully finishes. A stale/superseded pending decision
+cannot be settled or marked as published. In the continuation owner,
+the exact `ContinuationIdentity` is acknowledged only after the whole
+dispatched effect succeeds; an identical later call does nothing and
+conflicting effects under the same identity fail closed. The existing
+`PlaybackSession` still owns its separate physical transport
+attestation. These changes consolidate publication idempotence without
+inventing an additional teaching coordinator.
+
+`PracticeFlowCourseSession` only keeps transient Listen/Free/Tempo
+phase, keyed to the installed plan; the canonical `LearningPlan`
+owns BPM, streak, failures, mastery and returns-to-Free. Pure
+`practice_flow` functions remain the selected practice-flow policy
+rather than a second mutable lesson owner. Warm-ups and
+non-practice-flow courses retain their existing policy paths.
+
+**Unverified:** No executable Godot, embedded native, fake MIDI,
+SQLite fault-injection or physical keyboard acceptance on this HEAD.
+Atomicity of every partial side effect, exact course-scoped
+settings/policy binding and removal of all legacy recovery flows
+remain A2 exit gates.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or
