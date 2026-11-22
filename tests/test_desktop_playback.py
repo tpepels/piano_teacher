@@ -156,8 +156,9 @@ def test_paused_count_in_resumes_the_same_take_and_rejects_lead_in_notes(practic
     session.tick(30)
     resumed = session.command("resume")["playback_intent"]
     assert resumed["take_id"] == intent["take_id"]
-    assert resumed["resume_remaining_beats"] == pytest.approx(2)
-    fresh = reserve(session, resumed, reused_count_in=True)
+    assert resumed["count_in_beats"] == pytest.approx(4)
+    assert resumed["earliest_deadline_ms"] > session.clock()*1000
+    fresh = reserve(session, resumed)
     present(session, resumed, fresh)
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0

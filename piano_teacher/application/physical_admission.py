@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
+from .musical_scheduler import SCHEDULER
 
 MAX_EVIDENCE_AGE_MS = 1800.0
 MAX_FUTURE_CLOCK_SKEW_MS = 25.0
@@ -43,28 +43,20 @@ class PhysicalAdmissionEvidence:
         return self.sampled_at_ms + self.travel_ms
 
 
-def choose_admission_deadline(intent, facts, evidence: PhysicalAdmissionEvidence,
-                              *, reused_count_in: bool) -> float:
+def choose_admission_deadline(intent, facts, evidence: PhysicalAdmissionEvidence) -> float:
     """Select the earliest feasible musical deadline before physical arming.
 
     The physical measurement is an *earliest bound*, not a chosen timestamp.
     If music requires more lead, Python may select a later instant; Godot
     must then arm the exact corresponding world or explicitly withdraw.
     """
-    if reused_count_in and not (
-            intent.action == "resume" and intent.resume_remaining_beats > 0):
-        raise ValueError("Only a paused count-in can reuse its spoken beats")
     physical_ms = evidence.physical_deadline(
         now_ms=facts.now * 1000.0, revision=intent.revision)
-    required_beats = (
-        intent.resume_remaining_beats if reused_count_in else
-        0.0 if intent.fixed_deadline_ms is not None else
-        intent.count_in_beats)
+    # Every physical Resume has a new full count-in and its own immutable
+    # source. The preceding paused source remains protected in native ink.
+    required_beats = (0.0 if intent.fixed_deadline_ms is not None
+                      else intent.count_in_beats)
     earliest_ms = intent.earliest_deadline_ms
-    if reused_count_in:
-        earliest_ms = (intent.requested_at + SNAPSHOT_LATENCY_SECONDS
-                       + SCHEDULER.beats_seconds(
-                           intent.resume_remaining_beats, intent.bpm)) * 1000.0
     if intent.fixed_deadline_ms is not None:
         # An announced repeat has one immutable downbeat. Native geometry
         # may be feasible earlier; an actual printed arm is allowed only
@@ -77,14 +69,6 @@ def choose_admission_deadline(intent, facts, evidence: PhysicalAdmissionEvidence
         count_in_beats=required_beats, latency=0.0,
         physical_at=physical_ms / 1000.0,
         earliest_at=earliest_ms / 1000.0).run_at * 1000.0
-    if reused_count_in:
-        # This origin is an already-printed, paused take. It cannot be
-        # shifted to a newly calculated deadline, even if the ordinary
-        # scheduler reports a later earliest bound. The renderer must
-        # offer a fresh full-bar Resume instead when reuse is too soon.
-        if deadline > physical_ms + FIXED_WORLD_ROUNDING_MS:
-            raise ValueError("Paused count-in cannot meet immutable source deadline")
-        return float(physical_ms)
     if intent.fixed_deadline_ms is not None:
         if deadline > intent.fixed_deadline_ms + FIXED_WORLD_ROUNDING_MS:
             raise ValueError("Count-in cannot meet immutable repeat deadline")

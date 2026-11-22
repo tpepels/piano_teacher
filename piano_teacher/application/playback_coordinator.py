@@ -55,7 +55,6 @@ class PlaybackIntent:
     bpm: float
     tempo_segments: tuple[tuple[float, float, float], ...]
     count_in: CountInPlan
-    resume_remaining_beats: float
     earliest_deadline_ms: float
     requested_at: float
     transition: PlaybackTransition | None = None
@@ -88,7 +87,6 @@ class ScoreReceipt:
     renderer_generation: int
     evidence_sampled_at_ms: float
     evidence_travel_ms: float
-    reused_count_in: bool
 
 
 class PlaybackCoordinator:
@@ -238,14 +236,6 @@ class PlaybackCoordinator:
         bpm = source.bpm
         count_plan = CountInPlan.create(bar_beats=bar,meter=meter,bpm=bpm,beats=count_in)
         source_segments = source.tempo_segments
-        resume_remaining = 0.0
-        if (action == "resume" and facts.pause_context == "count_in"
-                and facts.running and facts.paused
-                and facts.run_at >
-                    facts.paused_at):
-            resume_remaining = min(count_in, SCHEDULER.seconds_beats(
-                facts.run_at -
-                facts.paused_at, bpm))
         # Admission must complete before the ENTIRE last bar begins. A
         # longer preceding silent runway is allowed, never an extra bar.
         earliest = max(
@@ -276,7 +266,6 @@ class PlaybackCoordinator:
             end_beat=float(source.end_beat), bpm=bpm,
             tempo_segments=source_segments,
             count_in=count_plan,
-            resume_remaining_beats=resume_remaining,
             earliest_deadline_ms=earliest * 1000.0,
             requested_at=now,
             transition=transition,
@@ -323,7 +312,7 @@ class PlaybackCoordinator:
                 revision: int, hand: str, source_from_beat: float,
                 source_end_beat: float, sampled_at_ms: float, travel_ms: float,
                 world_origin: float, queue_generation: int,
-                renderer_generation: int, reused_count_in: bool = False) -> dict:
+                renderer_generation: int) -> dict:
         """Reserve the backend-chosen musical deadline *before* ink is armed.
 
         This physical witness is a read-only earliest-feasible position.
@@ -355,12 +344,10 @@ class PlaybackCoordinator:
                     and receipt.queue_generation == evidence.queue_generation
                     and receipt.renderer_generation == evidence.renderer_generation
                     and receipt.evidence_sampled_at_ms == evidence.sampled_at_ms
-                    and receipt.evidence_travel_ms == evidence.travel_ms
-                    and receipt.reused_count_in == reused_count_in):
+                    and receipt.evidence_travel_ms == evidence.travel_ms):
                 return self._receipt_response(receipt)
             raise ValueError("Conflicting score reservation for the same intent")
-        deadline_ms = choose_admission_deadline(
-            intent, facts, evidence, reused_count_in=reused_count_in)
+        deadline_ms = choose_admission_deadline(intent, facts, evidence)
         self.receipt = ScoreReceipt(
             intent_id=intent_id, attempt=attempt, take_id=take_id,
             fingerprint=fingerprint, stage_key=stage_key, revision=revision,
@@ -371,8 +358,7 @@ class PlaybackCoordinator:
             queue_generation=evidence.queue_generation,
             renderer_generation=evidence.renderer_generation,
             evidence_sampled_at_ms=evidence.sampled_at_ms,
-            evidence_travel_ms=evidence.travel_ms,
-            reused_count_in=bool(reused_count_in))
+            evidence_travel_ms=evidence.travel_ms)
         self.state = PlaybackState.RESERVED
         return self._receipt_response(self.receipt)
 
@@ -396,7 +382,6 @@ class PlaybackCoordinator:
             "renderer_generation": receipt.renderer_generation,
             "sampled_at_ms": receipt.evidence_sampled_at_ms,
             "travel_ms": receipt.evidence_travel_ms,
-            "reused_count_in": receipt.reused_count_in,
             "reserved": True,
         }
 
@@ -426,8 +411,8 @@ class PlaybackCoordinator:
                 or receipt.intent_id != intent_id or receipt.attempt != attempt):
             raise ValueError("No matching score reservation to present")
         now = facts.now
-        remaining = (intent.resume_remaining_beats if receipt.reused_count_in
-                     else 0.0 if intent.fixed_deadline_ms is not None else intent.count_in_beats)
+        remaining = (0.0 if intent.fixed_deadline_ms is not None
+                     else intent.count_in_beats)
         count_in_seconds = SCHEDULER.beats_seconds(remaining, intent.bpm)
         if receipt.deadline_ms / 1000.0 < now + count_in_seconds - 1e-4:
             self._expire(message="Score admission expired before its count-in")
@@ -523,7 +508,6 @@ class PlaybackCoordinator:
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
             "count_in_plan": intent.count_in.snapshot(),
-            "reused_count_in": receipt.reused_count_in,
             "tempo_segments":[{"start_beat":start,"end_beat":end,"bpm":rate}
                 for start,end,rate in intent.tempo_segments],
             "deadline_ms": receipt.deadline_ms,
@@ -633,7 +617,6 @@ class PlaybackCoordinator:
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
             "count_in_plan": intent.count_in.snapshot(),
-            "resume_remaining_beats":intent.resume_remaining_beats,
             "earliest_deadline_ms": intent.earliest_deadline_ms,
             "fixed_deadline_ms": intent.fixed_deadline_ms,
             "status": self.state.value,

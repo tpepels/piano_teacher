@@ -257,11 +257,6 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         _cancel_provisional()
         return
     current["world_origin"] = start_world
-    # The visual source clock is held during every Pause. Reuse of its
-    # original absolute countdown is physically impossible after an
-    # asynchronous reserve; native Resume always admits a fresh future
-    # count-in without moving the paused source.
-    current["reused_count_in"] = false
     # Preserve the same physical action selected by read-only
     # preflight. Python's semantic Resume stays unchanged; a new full
     # count-in still retains the paused source through its unexpired ink.
@@ -285,7 +280,6 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         "world_origin": start_world,
         "queue_generation": view.admission_queue_generation(),
         "renderer_generation": int(intent["revision"]),
-        "reused_count_in": bool(current["reused_count_in"]),
     }
     # This witness is immutable for the life of the provisional arm.
     # A lost reserve response is recovered from the backend ledger only
@@ -405,9 +399,7 @@ func _matches_reservation(reply: Dictionary) -> bool:
         and absf(float(reply.get("sampled_at_ms",NAN)) -
             float(offer.get("sampled_at_ms",NAN))) <= .001
         and absf(float(reply.get("travel_ms",NAN)) -
-            float(offer.get("travel_ms",NAN))) <= .001
-        and bool(reply.get("reused_count_in",false)) ==
-            bool(offer.get("reused_count_in",false)))
+            float(offer.get("travel_ms",NAN))) <= .001)
 
 
 func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
@@ -449,8 +441,7 @@ func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
             exact_action,at_world,opening,count_in,
             str(current.get("mode","")) == "listen",exact_world)
     if committed.is_empty() or not is_finite(float(committed.get("start_world",NAN))) or \
-            absf(float(committed["start_world"])-exact_world) > .0001 or \
-            bool(committed.get("reused_unplayed_count_in",false)):
+            absf(float(committed["start_world"])-exact_world) > .0001:
         _cancel_provisional()
         return
     var physical_world: float = float(committed["start_world"])

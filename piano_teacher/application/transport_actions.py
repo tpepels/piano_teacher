@@ -61,7 +61,7 @@ class TransportActions:
             elif authorized.action == "resume":
                 self.resume_current_session(
                     presentation_lead_seconds=max(0.0,authorized.deadline-self.clock()),
-                    reuse_pending_score=receipt.reused_count_in,
+                    reuse_pending_score=False,
                     scheduled_deadline=authorized.deadline)
             elif authorized.action in ("auto","score_ready"):
                 with self.session_commands.executing(None):

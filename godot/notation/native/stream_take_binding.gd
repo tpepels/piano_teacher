@@ -246,8 +246,7 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
     for item in queue.online:
         if int(item.get("serial",-1)) == candidate_serial:
             return {"start_world":float(item["world_origin"])+opening,
-                "opening":opening,"reused":false,
-                "reused_unplayed_count_in":false}
+                "opening":opening}
     cancel.call(facts,facts.world)
     return {}
 
