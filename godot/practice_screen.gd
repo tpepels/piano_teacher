@@ -416,6 +416,20 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         var transformation: String = str(parsed.get("stage_label", ""))
         if not transformation.is_empty():
             passage_text += " · " + transformation
+    # A bounded physical admission can fail while the prior lesson phase
+    # still says "loading" or "admitting". Present the transaction result,
+    # never an indefinite progress caption. Recovery is projected by the
+    # backend controls model; this view only renders its published action.
+    var playback_timeline: Variant = parsed.get("playback_timeline")
+    var admission_failed: bool = (playback_timeline is Dictionary and
+        str(playback_timeline.get("state","")) == "failed")
+    if admission_failed:
+        feedback_text = str(playback_timeline.get("failure",""))
+        if feedback_text.is_empty():
+            feedback_text = "The score could not be presented"
+        var retry_control: Dictionary = _control("primary")
+        if bool(retry_control.get("enabled",false)):
+            instruction_text = "Select %s to retry." % str(retry_control.get("label","Play"))
     title_label.tooltip_text = passage_text
     details_caption.text = passage_text
     progress_label.text = progress_text
@@ -444,9 +458,9 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var busy_music: bool = phase in ["playing", "count_in"] and not learning
     var audio_problem: bool = _audio_error
     feedback_label.visible = not busy_music or bool(parsed.get("preview_only", false)) \
-        or audio_problem or unpositioned > 0
+        or audio_problem or unpositioned > 0 or admission_failed
     lesson_info_label.visible = (learning or not busy_music
-        or bool(parsed.get("guided_recovery", false)))
+        or bool(parsed.get("guided_recovery", false)) or admission_failed)
     feedback_label.tooltip_text = feedback_label.text
     lesson_info_label.tooltip_text = lesson_info_label.text
     # One short verb belongs on the central game control. Shortcuts and
