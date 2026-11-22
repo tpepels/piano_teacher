@@ -92,6 +92,7 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
     pending = owner.attempt_settlement.pending
     pending.event = SimpleNamespace(kind="full_result")
     pending.receipt = SimpleNamespace(message="Original assessed result")
+    pending.state = SimpleNamespace(route=SimpleNamespace(automatic=True))
     owner.attempt_settlement.finish_publication = (
         lambda: setattr(pending, "phase", "published"))
     owner.attempt = SimpleNamespace(
@@ -100,7 +101,7 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
         publication_failed=lambda: None)
     owner.teaching_continuation = SimpleNamespace(
         begin_feedback=lambda *args, **kwargs: SimpleNamespace(
-            decision_id=effect.identity.decision_id),
+            decision_id=effect.identity.decision_id, pending=pending),
         finish_feedback=lambda *args, **kwargs: SettledPublication(
             effect, None, "Original assessed result"))
     owner.commit_pending = lambda **kwargs: "Original assessed result"
@@ -114,10 +115,13 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
     owner.clock = lambda: 110.0
     owner.playback_session.auto = False
     owner.playback_session.stop_automatic = lambda: None
+    owner.playback_session.continue_course = lambda: setattr(
+        owner.playback_session, "auto", True)
 
     assert owner.retry_failed_publication(now=110.0) == "Original assessed result"
     assert pending.phase == "published"
     assert applied == [effect]
+    assert owner.playback_session.auto is True
 
 
 def test_failed_committed_effect_does_not_publish_or_clear_feedback():
@@ -125,7 +129,9 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
     pending = owner.attempt_settlement.pending
     pending.event = SimpleNamespace(kind="full_result")
     pending.receipt = SimpleNamespace(message="Original assessed result")
-    selected = SimpleNamespace(decision_id=effect.identity.decision_id)
+    pending.state = SimpleNamespace(route=SimpleNamespace(automatic=True))
+    selected = SimpleNamespace(
+        decision_id=effect.identity.decision_id, pending=pending)
     owner.teaching_continuation = SimpleNamespace(
         begin_feedback=lambda *args, **kwargs: selected,
         finish_feedback=lambda *args, **kwargs: SettledPublication(
@@ -140,6 +146,7 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
     owner.playback_session.auto = True
     stopped = []
     owner.playback_session.stop_automatic = lambda: stopped.append(True)
+    owner.playback_session.continue_course = lambda: None
     state = []
     owner.attempt = SimpleNamespace(
         clear_feedback=lambda: state.append("cleared"),
