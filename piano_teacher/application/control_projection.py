@@ -93,9 +93,9 @@ def project_controls(s: Mapping) -> dict:
     stop_enabled = bool(s.get("loaded")) and (
         phase not in ("ready", "guided_complete", "disconnected")
         if mode == "learn" else
-        bool(s.get("running")) or phase in (
-            "count_in", "playing", "paused", "feedback",
-            "recovering", "loading", "preview_gap"))
+        bool(s.get("running")) or isinstance(s.get("playback_intent"),Mapping)
+        or phase in ("count_in", "playing", "paused", "feedback",
+                     "recovering", "loading", "admitting", "preview_gap"))
     # Lesson Path exposes explicit exploration even while Flow hides
     # compact manual navigation. Keep its availability independent.
     path_skip = bool(s.get("loaded")) and bool(s.get("skip_available"))
