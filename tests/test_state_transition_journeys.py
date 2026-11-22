@@ -284,3 +284,80 @@ def test_fake_keyboard_disconnection_during_take_cannot_award_lesson_progress(pr
     reopened = state_at(session, step="free", mode="learn", hand="right")
     assert reopened["teaching"]["target_index"] == 0
     assert reopened["mastered"] == 0
+
+def test_navigation_suspend_is_one_way_and_preserves_the_real_paused_take(practice_session):
+    """Leaving Practice must not accidentally Resume or advance a take."""
+    session = practice_session(bars=1)
+    session.finish_listen()
+    session.finish_free()
+    active = session.ready_score()
+    assert active["running"] and active["controls"]["pause"]["action"] == "pause"
+    before = active["transport_id"]
+    first = session.command("ui_suspend")
+    assert first["paused"] and first["transport_id"] == before
+    assert first["controls"]["pause"]["action"] == "resume"
+    session.tick(30)
+    repeated = session.command("ui_suspend")
+    assert repeated["paused"] and repeated["transport_id"] == before
+    assert repeated["midi_notes"] == first["midi_notes"]
+    assert repeated["mastered"] == first["mastered"]
+
+
+def test_stop_without_renderer_witness_cancels_unpresented_source(practice_session):
+    """A damaged/unavailable native renderer may never disable emergency Stop."""
+    session = practice_session(bars=1)
+    session.finish_listen()
+    session.commands.require_presentation()
+    session.finish_free()
+    state = session.ready_score()
+    assert state["playback_intent"] and not state["running"], state
+    assert state["controls"]["stop"]["enabled"]
+    stopped = session.command("ui_stop")  # Deliberately no score_* fields.
+    assert not stopped["running"] and not stopped["paused"]
+    assert stopped["playback_intent"] is None
+    assert stopped["mastered"] == 0
+    session.strike(72)
+    assert session.snapshot()["midi_notes"] == 0
+
+
+def test_real_lesson_passage_shortcuts_keep_exercise_not_skip_semantics(practice_session):
+    session = practice_session(bars=3)
+    session.finish_listen()
+    original = session.snapshot()
+    assert original["exercise"] == 1 and original["exercise_count"] > 1
+    assert not original["controls"]["passage_previous"]["enabled"]
+    assert original["controls"]["passage_next"]["action"] == "next"
+    forward = session.command(
+        "ui_passage_next", score_ready=False,
+        score_revision=original["revision"],
+        score_fingerprint=original["piece_fingerprint"])
+    assert forward["exercise"] == 2
+    assert forward["controls"]["passage_previous"]["enabled"]
+    assert forward["mastered"] == original["mastered"]
+    back = session.command(
+        "ui_passage_previous", score_ready=False,
+        score_revision=forward["revision"],
+        score_fingerprint=forward["piece_fingerprint"])
+    assert back["exercise"] == 1
+    assert back["mastered"] == original["mastered"]
+    assert back["controls"]["passage_previous"]["action"] == ""
+
+
+def test_real_state_rejects_missing_control_and_invalid_motion_contract(practice_session):
+    """A malformed published snapshot must not be consumed by Godot."""
+    from copy import deepcopy
+    from piano_teacher.state_contract import problems
+
+    session = practice_session(bars=1)
+    session.finish_listen()
+    valid = session.snapshot()
+    assert not problems(valid), problems(valid)
+    missing = deepcopy(valid)
+    del missing["controls"]["primary"]["enabled"]
+    assert any("controls.primary" in issue for issue in problems(missing))
+    missing = deepcopy(valid)
+    del missing["presentation_directive"]
+    assert any("presentation_directive" in issue for issue in problems(missing))
+    missing = deepcopy(valid)
+    missing["presentation_directive"] = {"kind":"target"}  # No target beat.
+    assert any("target has no source_beat" in issue for issue in problems(missing))
