@@ -44,9 +44,9 @@ class PracticeTimeline:
         self.read_models, self.clock, self.poll_midi = read_models, clock, poll_midi
         self.teaching_continuation, self.exposure_workflows = teaching_continuation, exposure_workflows
         self.feedback_seconds = feedback_seconds
-        # An accepted continuation can request another transition in this
-        # same locked tick, never another nested worker/tick invocation.
-        self._pending_immediate_transitions = 0
+        # Complete any immediate follow-up inside the same locked tick.
+        # Publishing remains one operation after the final transition.
+        self._followup_requested = False
 
     def complete_attempt(self, phrase: Phrase, ending: float,
                           total_beats: float, duration: float, now: float) -> None:
@@ -226,26 +226,26 @@ class PracticeTimeline:
         return decision.consumed
 
     def _request_immediate_transition(self) -> None:
-        """Defer a nested completion/preview update to this worker's loop."""
-        self._pending_immediate_transitions += 1
+        """Schedule one follow-up transition in the current locked worker tick."""
+        self._followup_requested = True
 
     def update(self) -> None:
-        # Two continuation cases used to recursively call update() while the
-        # single native musical tick was already executing. Drain those
-        # requests before publishing, preserving their deepest-first publish
-        # order. Bound anomalous cycles instead of growing the Python stack.
-        nested = 0
+        """Settle same-tick transitions, then publish the resulting state once.
+
+        An automatic repeat or a committed completion can immediately make
+        another transition eligible. There is no nested worker invocation
+        and no intermediate state publication: consumers must see the final
+        authorized take, not a historical chain of provisional snapshots.
+        """
         try:
-            while True:
-                self._pending_immediate_transitions = 0
+            for _ in range(17):
+                self._followup_requested = False
                 self.update_transition()
-                requests = self._pending_immediate_transitions
-                if requests == 0:
+                if not self._followup_requested:
                     break
-                nested += requests
-                if nested > 16:
-                    raise RuntimeError(
-                        "Practice transitions exceeded the bounded same-tick handoff")
+            else:
+                raise RuntimeError(
+                    "Practice transitions exceeded the bounded same-tick handoff")
         except Exception:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=self.clock())
@@ -254,17 +254,16 @@ class PracticeTimeline:
                 "Check storage or the reported error, then Resume to retry this same take.")
             raise
 
-        # Previously each recursively entered update published on the way out,
-        # then its caller published again. Apply that same number of outer
-        # publications without re-running a command/tick or another clock.
-        for _ in range(nested + 1):
-            self.playback.advance(self.transport_timing.playback_facts())
-            self.read_models.prepare_score_presentation()
-            try:
-                self.live_feedback_workflows.publish_live()
-            except Exception:
-                logging.getLogger(__name__).exception(
-                    "Live assessment publication failed; skipping this tick")
+        # Only the settled transaction can advance admission status or
+        # publish live feedback. Repeating these writes for former recursive
+        # frames duplicates side effects and exposes intermediate lifecycles.
+        self.playback.advance(self.transport_timing.playback_facts())
+        self.read_models.prepare_score_presentation()
+        try:
+            self.live_feedback_workflows.publish_live()
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Live assessment publication failed; skipping this tick")
 
     def update_transition(self) -> None:
         """Advance the backend clock under its existing session lock."""
