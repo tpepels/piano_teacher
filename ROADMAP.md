@@ -704,6 +704,19 @@ in the same development sequence. Do not accept this phase
 or deploy the interim contract before the complete native and
 core CI transaction checks pass.
 
+### V3 Resume feasibility uses the same commit route (2026-11-22)
+
+Corrected a preflight/commit mismatch: when a paused source can
+be reused ahead of the playhead, the gateway consistently uses
+the Resume geometry path and the backend's partial spoken
+count-in. Otherwise, both the pure native preflight and the
+physical arm now use the fresh Start geometry, including the
+complete new count-in and protected prior ink. Previously it
+preflighted the Resume clearance but committed through Start,
+which could author a deadline Start could not physically meet.
+Python still owns the semantic Resume action, take identity and
+deadline; no second native musical scheduler was introduced.
+
 ### V3 prepared-source exact-deadline reconciliation (2026-11-22)
 
 Corrected a pure native `ScoreTransportReservation.plan_facts`

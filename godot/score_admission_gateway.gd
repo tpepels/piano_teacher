@@ -180,6 +180,11 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
     var reservation_action: String = (
         "resume" if action == "resume" else
         "restart" if action == "restart" else "start")
+    # Resume with no immutable unexposed source to reuse is a fresh
+    # physical admission with a full bar. Its pure preflight and actual
+    # queue commit MUST use the same Start geometry/withdrawal contract.
+    var physical_action: String = (
+        "start" if action == "resume" else reservation_action)
     var opening: float = float(intent.get("from_beat",0.0))
     var planned: Dictionary = {}
     var partial: float = float(intent.get("resume_remaining_beats",0.0))
@@ -212,9 +217,10 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
         if bool(preview.get("ok",false)) and \
                 str(preview.get("mode","")) == "reuse":
             planned = preview
+            physical_action = "resume"
     if planned.is_empty():
         planned = TransportReservation.plan(
-            view,reservation_action,world,opening,required_slot,NAN,
+            view,physical_action,world,opening,required_slot,NAN,
             str(intent.get("mode","")) == "listen")
     if not bool(planned.get("ok",false)):
         _report_problem("Cannot preflight authentic source notation for playback")
@@ -237,16 +243,12 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
     current["reused_count_in"] = (
         action == "resume" and partial > 0.0
         and str(planned.get("mode","")) == "reuse")
-    # A paused take whose immutable old owner cannot be reused must
-    # allocate a fresh future strip. Running the physical "resume" route
-    # for that fallback can rediscover the paused old source and falsely
-    # claim partial count-in reuse after Python already selected a FULL
-    # new count-in. Its backend action remains "resume"; only the native
-    # physical queue admission mode is "start" in that case.
+    # Preserve the same physical action selected by read-only
+    # preflight. The Python action remains Resume even when the native
+    # queue must admit a fresh full-count-in source after an expired or
+    # withdrawn paused strip.
     current["reservation_action"] = (
-        "auto" if fixed != null else
-        "start" if action == "resume" and
-            not bool(current["reused_count_in"]) else reservation_action)
+        "auto" if fixed != null else physical_action)
     current["projection_bpm"] = tempo
     current["projection_segments"] = authored.duplicate(true)
     current["projection_source_beat"] = float(state.get("clock_beat",0.0))
