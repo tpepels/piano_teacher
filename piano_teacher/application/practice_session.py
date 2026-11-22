@@ -98,6 +98,7 @@ class PracticeSession:
         # read it without waiting for the lock, then validate the original
         # epoch when their event is finally executed under that same lock.
         self._committed_midi_arrival = self._current_midi_arrival()
+        self._event_depth = 0
         self.notices = notices
         self.clock = clock
 
@@ -258,10 +259,16 @@ class PracticeSession:
         score adoption, cancellation and hardware input commit under it.
         """
         with self.lock:
+            self._event_depth += 1
             try:
                 return self._dispatch(event)
             finally:
-                self._committed_midi_arrival = self._current_midi_arrival()
+                self._event_depth -= 1
+                # MIDI shortcuts can re-enter this same RLock through a
+                # second typed event. Nested events cannot publish their
+                # intermediate callback epoch before the parent commits.
+                if self._event_depth == 0:
+                    self._committed_midi_arrival = self._current_midi_arrival()
 
     def _dispatch(self, event: PracticeEvent) -> dict | int | None:
         """Execute a previously locked, typed session action."""
