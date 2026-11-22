@@ -174,27 +174,21 @@ class PracticeFlowCourseSession:
         stage_key = (self._phase.stage_key
                      if done and self._phase is not None
                      and self._phase.plan is plan else plan.identity)
-        self.settle(
-            outcome,stage_key=stage_key,
-            final=plan.exercise.kind == "perform",
-            bpm=int(plan.bpm),target_bpm=int(plan.target_bpm),
-            failures=progress.failures,clean=progress.streak,message=message)
-        self._settled_decision_id = decision_id
-        return self.state
-
-    def settle(self, outcome: practice_flow.Outcome, *, stage_key: str,
-               final: bool, bpm: int, target_bpm: int, failures: int,
-               clean: int, message: str) -> practice_flow.FlowState:
         current = self.state
         if current is None:
             raise ValueError("No active Practice Flow stage to settle")
+        # The pure course reducer determines the next Listen/Free/Tempo
+        # phase. Its counters are derived only from the installed plan;
+        # callers cannot supply a second mutable BPM/mastery snapshot.
         projected = practice_flow.settle(
-            current,outcome,stage_key=stage_key,final=final,
-            bpm=bpm,target_bpm=target_bpm,failures=failures,clean=clean)
-        self._phase = FlowPhase(
-            self._source_identity.plan,projected.stage_key,
-            projected.final,projected.step)
+            current,outcome,stage_key=stage_key,
+            final=plan.exercise.kind == "perform",
+            bpm=int(plan.bpm),target_bpm=int(plan.target_bpm),
+            failures=progress.failures,clean=progress.streak)
+        self._phase = FlowPhase(plan,projected.stage_key,
+                                projected.final,projected.step)
         self.say(message)
+        self._settled_decision_id = decision_id
         return self.state
 
     def status(self, plan, mode: str) -> dict:
