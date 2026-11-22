@@ -630,7 +630,7 @@ and speakers, including the original Pathétique source and readability.
 | Phase | Required result | Status |
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
-| A1 | One authoritative PracticeSession and event processing path | **In progress** — single settled tick publication, deferred MIDI replay before publish, unified transport projection, atomic command outcome/state reply; typed unified event processor and old-router deletion still open |
+| A1 | One authoritative PracticeSession and event processing path | **In progress** — typed PracticeSession integrated with command, MIDI, tick, physical admission, source and persistence events; old PracticeControls and ApplicationWorker deleted, 79 application-module refs audited; SessionCommands effect context, remaining async owners and same-HEAD verification open |
 | A2 | Unified lesson/assessment/settlement/recovery | Not started |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
