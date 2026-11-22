@@ -148,6 +148,10 @@ class LearningPlan:
     def minimum_stage_bpm(self) -> int:
         return course_policy.minimum_bpm(self.course_state())
 
+    @property
+    def maximum_stage_bpm(self) -> int:
+        return course_policy.maximum_bpm(self.course_state())
+
     def carried_bpm(self) -> int | None:
         return course_policy.carried_bpm(self.course_state())
 
