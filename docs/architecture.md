@@ -692,6 +692,49 @@ requires two target-tempo clean passes; confirm the backend always
 provides the correct course-specific value before replacing its UI
 status fallback. This is an audit warning, **not** a reproduced bug.
 
+### A0 observed local baseline and reconciled reachability (2026-11-22)
+
+**Owner-supplied exact invocation:** `bash scripts/test.sh --coverage` on
+the prior audit source. Result: **159 passing, 4 failing Python tests in
+27.04 seconds**; therefore Godot syntax/behavior stages did not execute
+and the local core gate did **not** pass.
+
+| Failure | Source cause traced | Corrective main commit | Validation state |
+| --- | --- | --- | --- |
+| `test_real_state_contract_includes_authoritative_motion_directive` | Non-presenting `SessionReadModels.snapshot` skipped the required `playback_timeline` field because `ScoreStatePublisher.publish` returns early without a desktop intent | [3726c45](https://github.com/tpepels/piano_teacher/commit/3726c45f00d38e20a69ed67ed45f6ef256e7f1bc) | Corrected source, local rerun still required |
+| `test_command_reply_carries_backend_resolved_action_outside_state` | Same incomplete **committed** snapshot was returned in a successful command envelope | 3726c45 | Corrected source, local rerun still required |
+| `test_real_state_rejects_missing_control_and_invalid_motion_contract` | Same missing required playback timeline in the loaded state snapshot | 3726c45 | Corrected source, local rerun still required |
+| `test_real_midi_release_setting_changes_tempo_credit[strict-held-release]` | `SettingsWorkflows.update(grade_note_holds=True)` unconditionally called `SessionLifecycle.stop`, cancelling the *ungraded* opening Listen's asynchronous audio. The fixture then waited five seconds for an intentionally cancelled token | [6f6ea2e](https://github.com/tpepels/piano_teacher/commit/6f6ea2e7bba5eb7b073aa1b2d932e412a5408b6c) | Preserve Listen/Free; invalidate graded practice/perform; local rerun still required |
+
+**Architectural consequences:** The state contract applies to *all* session
+projections, not only physically presented sessions. A selected settings
+change should invalidate the **smallest affected active domain transaction**;
+canceling an unrelated async source job caused this regression. Both
+observations directly inform A1's typed event routing and single committed
+presentation contract. No new test doubles, alternative score engine,
+compatibility projection or test deletion was added.
+
+**Complete reconciliation of the nine source-report "unreached" candidates:**
+
+| Reported paths | Evidence / correct classification |
+| --- | --- |
+| `godot/native_bridge_smoke.gd` | Native verification launcher: `scripts/verify-native-bridge.sh` passes this script to Godot with `--script` |
+| `godot/production_fake_midi_journey.gd`, `production_session_journey.gd`, `production_ui_smoke.gd` | Real-scene native test harnesses: `scripts/verify-embedded-production-local.sh` executes each with Godot `--script` |
+| `piano_teacher/engraving/__init__.py`, `importing/__init__.py`, `notation/__init__.py`, `notation/assets/__init__.py`, `research/__init__.py` | Python package markers, implicitly loaded when the corresponding production submodule is imported. The first version of the static graph did not model these implicit edges |
+| `godot/countin_voice_player.gd` computed load | Live module constructs `res://assets/countin/%s.ogg` for `ichi, ni, san, shi`. All four Ogg recordings are checked into `godot/assets/countin`; this is **asset lookup**, not dynamic code selection |
+
+[835613a](https://github.com/tpepels/piano_teacher/commit/835613a81ebb4a1f2462e6c5100ab4dd4dc756d0)
+amends the read-only reachability auditor so it models implicit Python
+package initializers and classifies shell-invoked Godot smoke scripts as
+**verification-harness references**, without treating them as runtime
+production roots. **No file has been proved dead** by this static report.
+Run the amended audit again locally to confirm the expected categories.
+
+**Still required:** Run the full existing Python+Godot test suite, embedded
+fake MIDI/native package verifier and corrected A0 auditor on the **same
+final commit**. The submitted log predates both source fixes and does not
+establish a passing state. No physical CA49 acceptance is claimed.
+
 ### A0 remaining evidence required before marking complete
 
 1. Recheck source/runtime reachability for each preliminary **merge** or
