@@ -111,12 +111,12 @@ continuation or partial grading.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | V0 | Full transition/ownership audit and reproducible failure witnesses | Source audit extended across native action emitters and display-only state readers; remaining complete graph/witness acceptance and local CI open |
-| V1 | Deterministic end-to-end MIDI/Godot simulation harness | In progress; real backend fake-MIDI matrix and production-scene synthetic MIDI integrated, final native gate pending |
+| V1 | Deterministic end-to-end MIDI/Godot simulation harness | Source implemented; real engine MIDI transitions and production Godot fake-MIDI Play/Pause/Resume/failure/repeat/Stop/lost-ACK paths integrated; current-HEAD native execution pending |
 | V2 | Canonical transition, action and presentation contracts | In progress; backend-owned passage, Stop, advanced Pause, lesson modes/hints/hands and navigation gesture projections now integrated; local native acceptance pending |
-| V3 | Unify graphical admission and playback transaction decisions | In progress; immutable physical receipts, Python deadline authorization, retry/recovery, malformed-geometry refusal and outgoing-tempo fixed rest; current-HEAD native acceptance pending |
+| V3 | Unify graphical admission and playback transaction decisions | Source implemented; one Python deadline, post-arm attestation, bounded failure, immutable native queue, and fresh full-bar Resume contract; current-HEAD native acceptance pending |
 | V4 | Single authorization-driven visual timeline and Pause/Free semantics | In progress; backend-owned hold/target directives, frozen idle and frame-stepped Godot checks pass core CI; connected native acceptance open |
 | V5 | Strip application decisions out of Godot UI and effect coordinators | Source ownership sweep completed: native control emitters updated; passive presentation/physical adapters distinguished; current-HEAD native gate open |
-| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Dead paused-ink reuse removed; fake-MIDI and lost-ACK journeys verified only at 1c1b98e, current-HEAD matrix/local CI still open |
+| V6 | Exhaustive player-visible transition matrix, CI gates and legacy cleanup | Expanded real-engine and native fake-MIDI success/failure/Pause/Stop cases; shortened-Resume alternatives removed; software gates have not run on current HEAD |
 | V7 | Integrated production/package verification and physical acceptance | In progress; full embedded production and packaging passed on 1c1b98e (run 45017492022); final code cleanup and physical keyboard/audio acceptance open |
 
 ### Latest verified gates and remaining constraints (2026-11-22)
@@ -131,6 +131,27 @@ continuation or partial grading.
 The graphical controls now read the terminal backend admission result under the same command lock (`2cd9e64`) and display a recoverable, explicit failure (`68b1bca`). Physical preflight retains only the measured arm round-trip clearance rather than delaying the first audible count-in (`c4a3bf1`, corrected by `d32cb13`).
 Native Resume always protects the paused source and schedules a distinct full count-in after a frozen pause (`91f5c0a`, revised by `1c1b98e`). Its accepted snapshot synchronously binds authorized notation; Python rejects deadline retiming of genuinely reused paused ink, and native preflight tolerates only integer-frame quantization (`d32cb13`). An attempted reused-origin correction (`ed9e11b`) still failed the Moonlight Pause-in-count-in native scenario: the paused world's time remains frozen during the asynchronous reservation. Production consequently always selects a **fresh, backend-authorized Resume slot** (`1c1b98e`), with the paused predecessor physically protected. Audible cue deduplication is keyed by the authorized segment. The full native rerun is pending.
 No replacement UI state machine, second musical clock or software-only claim of physical acceptance was introduced. On 2026-11-22 the GitHub workflow was changed to `workflow_dispatch` only, with `core` (default) and `full` scopes: commits and pull requests no longer launch CI. Manual verification is available from Actions → Tests. A running workflow cannot be canceled through the available GitHub connector; its existing run completed successfully before the manual-only change.
+
+### V1/V2/V3/V5/V6 integrated source follow-up — 2026-11-22 (awaiting owner CI)
+
+The following fixes are committed on `main` and have **not** yet passed the
+owner's local CI. The old passing native run `45017492022` predates them.
+
+- [`44bf2a8`](https://github.com/tpepels/piano_teacher/commit/44bf2a8c1231ee2a278b05eb3d5e12f6da8476c7) unifies the transport-intent/admitting/terminal-failure projection consumed by the rendered frame **and** by locked `ui_*` command resolution. Previously the command-side snapshot lacked `playback_intent`, so a visible `admitting` state could resolve Stop or Pause against a different phase.
+- [`44d9e18`](https://github.com/tpepels/piano_teacher/commit/44d9e18b1eaf4561493e9995f47d33e8a6614166) extends the existing real `PracticeEngine` desktop checks with admission-time navigation suspension, idempotent re-suspension, Stop without renderer identity, refusal of a late reserve, and Stop of an authorized take. The existing `tests/test_state_transition_journeys.py` also exercises simulated wrong/correct MIDI, grade boundaries, recovery, disconnection and saved progression through real production owners.
+- [`26208b1`](https://github.com/tpepels/piano_teacher/commit/26208b1c8c1cb0104a474aa3072e55ea7f4bac75) extends the **actual embedded Godot / Python / native queue / synthetic-device** journey: after the original Free/wrong-key/Pause tests, it pauses and resumes a timed take, checks stationary immutable ink and same transport identity, completes a failed repeat and clean tempo advance, then executes the production Stop command and checks for delayed reentry. The native gate still runs lost reserve/present ACK variants separately; these additions are unexecuted.
+- [`5839e98`](https://github.com/tpepels/piano_teacher/commit/5839e98732ebeeaf8d5bd7178321f63af8b2a58f) removes the no-longer-produced `reused_count_in` receipt, partial-count-in scheduling branch and `resume_remaining_beats` API field from Python reservation/authorization and Godot; the existing paused-count-in regression now requires a fresh full count-in with the same take identity.
+- [`8c07d02`](https://github.com/tpepels/piano_teacher/commit/8c07d02a4f3bca93ea13a7854c608cc96b93650b) removes the remaining shortened/physical-reuse timing path from `VisualTransport`, `PlaybackSession`, `TransportActions`, `TimedPlayback`, `ResumeRequest` and `MusicalScheduler`. The legitimate announced-rest reuse mechanism for an already-authorized automatic continuation remains; it is not a paused-source relocation.
+- The separate exact-source Pathétique II native acceptance was integrated in [`d010536`](https://github.com/tpepels/piano_teacher/commit/d01053673) as opt-in `PIANO_PATHETIQUE_II_MIDI`, without committing private MIDI. [`ac61332`](https://github.com/tpepels/piano_teacher/commit/ac61332e1) adds real MIDI progression checks for pedal-friendly and strict release grading. Neither establishes real keyboard/speaker acceptance.
+
+**Next owner-run gate on the exact same HEAD:** `bash scripts/test.sh --coverage`
+then `PIANO_PATHETIQUE_II_MIDI=/absolute/path/to/source.mid bash scripts/verify-embedded-production-local.sh`
+(or omit the environment variable and leave the Pathétique-specific check pending).
+Review parser errors, complete native scenario outcomes, no stuck admission,
+actual selected bar bounds and package contents. Only after successful local
+core/native results may V0–V6 be considered software-verified. Physical
+CA49, speaker/headphone, Pathétique visual and independent installation
+acceptance remain separate open V7 requirements.
 
 ### V0/V2/V3/V5 secondary entrypoint implementation — 2026-11-22
 
@@ -959,8 +980,9 @@ No speculative grading, sound, admission of another source, or mutation of
 committed ink.
 
 **Keep:** Full one-bar count-in for fresh attempts; exact one-bar fixed
-auto-repeat without extra gap; safe partial count-in reuse only when still
-unexposed; irreversible ink protection; full cross-bar releases; differing
+auto-repeat without extra gap; a fresh, full authored count-in on every
+physical Resume (including Pause during count-in), preserving previously
+exposed ink without reusing its absolute origin; full cross-bar releases; differing
 tempo maps; long score/slow engraving; temporary unready assets; loss of
 reserve/present/status responses. Remove the old gateway deadline
 inversion and competing retry/resume decisions after migrating all callers.

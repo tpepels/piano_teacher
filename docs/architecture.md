@@ -286,9 +286,14 @@ The separate Lesson Path passage controls and S/Stop gesture now resolve
 through the Python projection. Returning from a rejected lesson navigation
 does not change the screen. Source-published activity, hand, hint and
 explicit Lesson Path Skip eligibility replace local modal phase/locking rules.
-The native binder no longer has a physical paused-source reuse branch;
-a fresh authorized Resume is the only physical reservation route, with
-paused ink still protected as an immutable predecessor. See the
+The native binder and backend reservation protocol no longer have a physical
+paused-source reuse branch, shortened-count-in option or old receipt flag.
+A fresh full-bar count-in and immutable future source are required for every
+physical Resume; paused predecessor ink remains protected in the same ledger.
+Announced, already-authorized automatic continuation rests retain their
+separate valid reuse contract. The lightweight locked command snapshot
+and the rendered snapshot share one pure transport-status projection;
+both observe the same pending intent, admitting state and terminal failure. See the
 2026-11-22 source commits and status in [ROADMAP](../ROADMAP.md).
 
 The ownership scan distinguishes display-only phase readers (`GameStage`,
