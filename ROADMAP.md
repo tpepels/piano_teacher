@@ -760,6 +760,21 @@ Queue-generation, source-revision and actual-deadline mismatch
 remain rejection cases. The application protocol and physical
 authorization timing have not been loosened further.
 
+### V3 terminal failure cannot mutate automatic continuation preparation (2026-11-22)
+
+`TimedPlayback.continue_at` now consults
+`PlaybackCoordinator.automatic_request_blocked` before
+`PlaybackSession.prepare_admitted_continuation`. Previously,
+even when the canonical admission owner refused an automatic
+repeat after exhausting attempts, the caller could clear
+scheduled-rest context and overwrite the visible failure
+with "Preparing the next passage". The pure early guard
+retains the failed transaction/notice until the user
+explicitly restarts or a source selection invalidates it.
+The existing real fake-MIDI workflow regression checks
+there is no new intent, mutation of notice or extra
+automatic attempt.
+
 ### V3 terminal automatic-admission latch (2026-11-22)
 
 The 44980830938 physical trace exposed a separate structural

@@ -81,8 +81,19 @@ class TimedPlayback:
     def continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Continue only through the unified score-admission gate."""
         if self.playback.presentation_required:
+            # Check the canonical terminal admission latch BEFORE changing
+            # visual-transport or preparation state. Repeated automatic
+            # callbacks after exhaustion must leave a visible FAILED
+            # transaction, not silently clear the old rest schedule and
+            # replace the failure with "Preparing the next passage".
+            if self.playback.automatic_request_blocked(
+                    self.transport_timing.playback_facts(from_beat=from_beat),
+                    action="auto", mode=self.playback_session.mode,
+                    from_beat=from_beat):
+                return
             self.playback_session.prepare_admitted_continuation()
-            self.transport_timing.request_playback( action="auto", mode=self.playback_session.mode,
+            self.transport_timing.request_playback(
+                action="auto", mode=self.playback_session.mode,
                 from_beat=from_beat, earliest_deadline=deadline,
                 fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
             self.visual_transport.clear_scheduled_start()

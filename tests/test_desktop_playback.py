@@ -310,6 +310,14 @@ def test_three_failed_physical_attempts_end_admitting(practice_session):
         assert later["playback_timeline"]["state"] == "failed"
         assert not later["running"]
     assert session.engine.playback.sequence == sequence
+    # The existing automatic continuation workflow must stop before
+    # clearing a stale published schedule or mutating the learner notice.
+    failure_text = session.engine.notices.feedback
+    session.engine.timed_playback.continue_at(
+        session.clock()+10.0, from_beat=0.0)
+    assert session.engine.notices.feedback == failure_text
+    assert session.engine.playback.sequence == sequence
+    assert session.snapshot()["playback_intent"] is None
 
 
 def test_unready_score_timeout_does_not_leave_endless_admitting(practice_session):
