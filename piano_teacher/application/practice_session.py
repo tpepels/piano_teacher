@@ -109,6 +109,12 @@ class PracticeSession:
                 changes, pause_current=self.timed_playback.pause)
 
     def _apply_command(self, action: str, **kwargs) -> dict:
+        # Explicit Stop is a one-way cancellation, including while Godot
+        # is replaying a queued Stop after a delayed command acknowledgement.
+        # It must not require a healthy score/read-model projection or an
+        # unrelated curriculum decision to invalidate an active take.
+        if action == "ui_stop":
+            action = "stop"
         if action in UI_INTENTS:
             ready = kwargs.pop("score_ready", None)
             error = kwargs.pop("score_error", "")
@@ -147,7 +153,15 @@ class PracticeSession:
                   "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
         effect = None
         route = _COMMAND_ROUTES.get(action, "stage")
-        if self.source_identity.plan is not None and route in ("listening", "learning", "transport", "stage") and not (action in ("start","restart") and (self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None)):
+        # Stop/Pause/Resume only mutate transport state. The selected lesson
+        # never consumes their teaching effect, so they cannot be blocked by
+        # curriculum generators, learner-history reads or stale evidence.
+        needs_teaching = action not in ("stop", "pause", "resume")
+        if (needs_teaching and self.source_identity.plan is not None
+                and route in ("listening", "learning", "transport", "stage")
+                and not (action in ("start","restart")
+                         and (self.attempt.settlement_failed
+                              or self.attempt_settlement.pending_rolling is not None))):
             change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
                       if route == "stage" else None)
             effect = self.teaching_decisions.prepare("manual", manual=change,
