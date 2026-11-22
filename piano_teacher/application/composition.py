@@ -30,7 +30,6 @@ from ..progress_repository import ProgressRepository
 from ..runtime_timings import RuntimeTimings
 from ..visual_transport import VisualTransport
 
-from .application_worker import ApplicationWorker
 from .attempt_progression import AttemptProgression
 from .attempt_runtime import AttemptRuntime
 from .attempt_settlement import AttemptSettlement
@@ -57,7 +56,7 @@ from .playback_coordinator import PlaybackCoordinator
 from .playback_session import PlaybackSession
 from .policy_registry import PolicyRegistry
 from .post_assessment_effects import PostAssessmentEffects
-from .practice_controls import PracticeControls
+from .practice_session import PracticeSession
 from .transport_actions import TransportActions
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
@@ -370,15 +369,6 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         session_commands=r.session_commands, source_identity=r.source_identity, teaching_decisions=r.teaching_decisions,
         timed_playback=r.timed_playback, transport_timing=r.transport_timing, visual_transport=r.visual_transport)
 
-    r.practice_controls = PracticeControls(
-        attempt=r.attempt, attempt_settlement=r.attempt_settlement, device_workflows=r.device_workflows,
-        exposure_workflows=r.exposure_workflows, history_management=r.history_management, learning_commands=r.learning_commands,
-        lock=r.lock, measurement=r.measurement, midi=r.midi,
-        midi_key_shortcuts=r.midi_key_shortcuts, playback_session=r.playback_session, read_models=r.read_models,
-        session_commands=r.session_commands, settings_workflows=r.settings_workflows, source_identity=r.source_identity,
-        teaching_decisions=r.teaching_decisions, timed_playback=r.timed_playback, transport_commands=r.transport_commands,
-        visual_transport=r.visual_transport)
-
     r.midi_application_input = MidiApplicationInput(
         source_identity=r.source_identity, visual_transport=r.visual_transport,
         playback_session=r.playback_session, attempt_settlement=r.attempt_settlement,
@@ -388,7 +378,7 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         settings_workflows=r.settings_workflows, library=r.library,
         midi_ingress=r.midi_ingress, transport_timing=r.transport_timing,
         live_feedback_workflows=r.live_feedback_workflows,
-        guided_session=r.guided_session, practice_controls=r.practice_controls,
+        guided_session=r.guided_session,
         timed_playback=r.timed_playback, clock=r.now)
 
     r.practice_timeline = PracticeTimeline(
@@ -411,13 +401,17 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         exposure_workflows=r.exposure_workflows,
         clock=r.now, poll_midi=r.midi_application_input.poll_midi_connection,
         feedback_seconds=r.feedback_seconds)
-    r.application_worker = ApplicationWorker(
-        lock=r.lock, timeline=r.practice_timeline,
-        midi_ingress=r.midi_ingress,
-        midi_application_input=r.midi_application_input,
-        source_identity=r.source_identity,
-        visual_transport=r.visual_transport,
-        playback_session=r.playback_session,
-        attempt_settlement=r.attempt_settlement,
-        runtime_timings=r.runtime_timings)
+    r.practice_session = PracticeSession(
+        attempt=r.attempt, attempt_settlement=r.attempt_settlement,
+        device_workflows=r.device_workflows, exposure_workflows=r.exposure_workflows,
+        history_management=r.history_management, learning_commands=r.learning_commands,
+        lock=r.lock, measurement=r.measurement, midi=r.midi,
+        midi_key_shortcuts=r.midi_key_shortcuts, playback_session=r.playback_session,
+        read_models=r.read_models, session_commands=r.session_commands,
+        settings_workflows=r.settings_workflows, source_identity=r.source_identity,
+        teaching_decisions=r.teaching_decisions, timed_playback=r.timed_playback,
+        transport_commands=r.transport_commands, visual_transport=r.visual_transport,
+        timeline=r.practice_timeline, midi_ingress=r.midi_ingress,
+        midi_application_input=r.midi_application_input, runtime_timings=r.runtime_timings)
+    r.midi_application_input.bind_session(r.practice_session)
     return vars(r).copy()

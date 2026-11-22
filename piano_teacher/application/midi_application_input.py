@@ -1,7 +1,7 @@
 """Single source-bound native MIDI callback, device hot-plug and shortcut route.
 
 MidiIngress remains the sole calibrated timing/grading input boundary;
-commands use the actual PracticeControls operation and one application lock.
+all events enter PracticeSession under the single application lock.
 """
 from __future__ import annotations
 import time
@@ -13,7 +13,7 @@ class MidiApplicationInput:
                  attempt_settlement, attempt, playback, midi, lock,
                  runtime_timings, device_workflows, teaching_decisions,
                  settings_workflows, library, midi_ingress, transport_timing,
-                 live_feedback_workflows, guided_session, practice_controls,
+                 live_feedback_workflows, guided_session,
                  timed_playback, clock):
         self.source_identity, self.visual_transport = source_identity, visual_transport
         self.playback_session, self.attempt_settlement, self.attempt = playback_session, attempt_settlement, attempt
@@ -22,8 +22,14 @@ class MidiApplicationInput:
         self.teaching_decisions, self.settings_workflows = teaching_decisions, settings_workflows
         self.library, self.midi_ingress = library, midi_ingress
         self.transport_timing, self.live_feedback_workflows = transport_timing, live_feedback_workflows
-        self.guided_session, self.practice_controls = guided_session, practice_controls
+        self.guided_session = guided_session
         self.timed_playback, self.clock = timed_playback, clock
+        self._session = None
+
+    def bind_session(self, session) -> None:
+        if self._session is not None:
+            raise RuntimeError("MIDI adapter already bound")
+        self._session = session
 
     def midi_lost(self, reason: str = "device_disconnected") -> None:
         if self.source_identity.plan is not None:
@@ -51,7 +57,9 @@ class MidiApplicationInput:
     def receive(self, message):
         began = time.perf_counter()
         try:
-            self.receive_message(message)
+            if self._session is None:
+                raise RuntimeError("MIDI event before session binding")
+            self._session.on_midi(message)
         finally:
             self.runtime_timings.midi_ms.append(
                 (time.perf_counter()-began)*1000.0)
@@ -79,9 +87,11 @@ class MidiApplicationInput:
             self.settings_workflows.update(
                 {"midi_key_ranges": ranges},pause_current=self.timed_playback.pause)
         if effect.action:
-            self.practice_controls.control(effect.action)
+            if self._session is None:
+                raise RuntimeError("MIDI shortcut before session binding")
+            self._session.control(effect.action)
 
-    def receive_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
+    def _deliver_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
         now = self.clock() if received_at is None else received_at
         with self.lock:
             facts = MidiInputFacts(self.source_identity.fingerprint,self.source_identity.revision,

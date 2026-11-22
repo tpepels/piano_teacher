@@ -291,11 +291,11 @@ class PracticeEngine:
             decided=decided, count_in_plan=count_in_plan)
 
     def control(self, action: str, **kwargs) -> None:
-        return self.practice_controls.control(action, **kwargs)
+        return self.practice_session.control(action, **kwargs)
 
     def advance_clock(self) -> int:
         """Advance the embedded native worker's monotonic application tick."""
-        return self.application_worker.advance()
+        return self.practice_session.advance()
 
     def state(self) -> dict:
         """Full snapshot, including static values; returned by commands."""
