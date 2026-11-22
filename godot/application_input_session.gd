@@ -18,6 +18,7 @@ var _practice
 var _library
 var _last_midi_input_count := -1
 var _last_midi_action := ""
+var _last_midi_phase := ""
 var _last_midi_revision := -1
 
 func configure(practice, library) -> void:
@@ -35,6 +36,10 @@ func observe_midi_state(state: Dictionary, sampled: bool, screen: String,
         busy: bool, score_ready: bool) -> void:
     var count: int = int(state.get("midi_input_count",0))
     var revision: int = int(state.get("revision",-1))
+    # Phase is an input-edge generation, not a source of musical policy.
+    # A key that caused a transition may not automatically start the next
+    # stage even when two states happen to publish the same action string.
+    var phase: String = str(state.get("phase",""))
     var controls: Dictionary = state.get("controls",{})
     var choice: Variant = controls.get("midi_start",{})
     var action: String = str(choice.get("action","")) \
@@ -44,9 +49,10 @@ func observe_midi_state(state: Dictionary, sampled: bool, screen: String,
     var fresh: bool = _last_midi_input_count >= 0 and \
         count > _last_midi_input_count
     var stable: bool = _last_midi_action == action and \
-        _last_midi_revision == revision
+        _last_midi_phase == phase and _last_midi_revision == revision
     _last_midi_input_count = count
     _last_midi_action = action
+    _last_midi_phase = phase
     _last_midi_revision = revision
     if not fresh or not stable or not enabled or not sampled or \
             screen != "practice" or busy or not score_ready or \

@@ -1049,6 +1049,17 @@ This is a cross-language contract replacement, not a relocation
 of the native navigation branch. Core and native acceptance on
 this revision remain outstanding.
 
+### V5 preserve raw MIDI edge suppression across lesson transitions (2026-11-22)
+
+After moving the action decision into Python, `ApplicationInputSession`
+now retains the prior **phase identity as an input-debounce generation**
+alongside the accepted action/revision. A single key that completes a
+lesson transition cannot be mistaken for a separate Start gesture
+when the previous and next phases happen to publish an identical
+action label. The phase string is only compared for input freshness;
+it never selects Start, Retry, Pause or teaching progression in
+Godot. Python remains the sole source of `controls.midi_start`.
+
 ### V5 physical MIDI-start shortcuts are backend-owned - 2026-11-21
 
 `ApplicationInputSession.observe_midi_state` no longer inspects
