@@ -202,7 +202,7 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
             count_in,exact_world)
         if not bool(planned.get("ok",false)):
             _reject_fixed_intent(intent,
-                "Cannot admit the direct repeat at its one-bar deadline")
+                "Cannot admit direct repeat: " + str(planned.get("reason","physical_clearance_refused")))
             return
     # A frozen Pause cannot make an earlier printed source's absolute
     # downbeat future again. Its travel measurement is taken before the
@@ -217,7 +217,8 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
             view,physical_action,world,opening,required_slot,NAN,
             str(intent.get("mode","")) == "listen")
     if not bool(planned.get("ok",false)):
-        _report_problem("Cannot preflight authentic source notation for playback")
+        _report_problem("Cannot preflight score: " +
+            str(planned.get("reason","physical_clearance_refused")))
         return
     if fixed == null and str(planned.get("mode","")) == "append":
         # A read-only preflight is sampled BEFORE the Python reservation
@@ -238,7 +239,8 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
             float(planned["start_world"])+arm_budget_world,
             str(intent.get("mode","")) == "listen")
         if not bool(planned.get("ok",false)):
-            _report_problem("Cannot reserve a safe physical arm window")
+            _report_problem("Cannot reserve a safe physical arm window: " +
+                str(planned.get("reason","physical_clearance_refused")))
             return
     # No physical strip is armed yet. Python chooses the exact musical
     # deadline from this read-only earliest-feasible renderer witness.

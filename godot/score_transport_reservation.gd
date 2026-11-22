@@ -31,11 +31,23 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
     if duration <= 0.0 or source_opening < 0.0 or source_opening >= duration:
         return _refuse("invalid_source_interval")
     for field in ["source_exists","online","right","header",
-            "preview_world","withdrawn","peer_floor"]:
+            "preview_world","withdrawn","peer_floor","density","gap",
+            "width","rest_gap","bpm","duration","playhead"]:
         if not facts.has(field):
             return _refuse("incomplete_physical_preflight_facts")
     if not bool(facts["source_exists"]):
         return _refuse("no_source_measures")
+    # Native snapshots can arrive during viewport replacement. Malformed
+    # geometry must fail closed at this physical boundary, not raise a
+    # Godot SCRIPT ERROR after the backend has offered a timed take.
+    if not facts["online"] is Array or not facts["withdrawn"] is Dictionary:
+        return _refuse("malformed_physical_preflight_facts")
+    for field in ["right","header","preview_world","density","gap",
+            "width","rest_gap","bpm","duration","playhead"]:
+        if not is_finite(float(facts[field])):
+            return _refuse("nonfinite_physical_preflight_facts")
+    if is_nan(float(facts["peer_floor"])):
+        return _refuse("nonfinite_physical_preflight_facts")
     var density: float = float(facts["density"])
     var staff_gap: float = float(facts["gap"])
     var width: float = float(facts["width"])
@@ -57,6 +69,8 @@ static func plan_facts(facts: Dictionary, action: String, world: float,
         withdrawn = facts["resume_withdrawn"]
     if not withdrawn.has("remaining") or not withdrawn.has("owners"):
         return _refuse("incomplete_physical_preflight_facts")
+    if not withdrawn["remaining"] is Array or not withdrawn["owners"] is Array:
+        return _refuse("malformed_physical_preflight_facts")
     var survivors: Array = withdrawn["remaining"]
     var peer_floor: float = float(facts["peer_floor"])
     if action == "auto":
