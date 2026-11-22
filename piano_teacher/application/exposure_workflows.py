@@ -33,7 +33,7 @@ class ExposureWorkflows:
             self.source_identity.warmup,
             self.flow_session.active(selected, warmup=self.source_identity.warmup))
 
-    def prepare_practice(self, *, exposure=None, effect=None):
+    def prepare_practice(self, *, exposure=None, effect=None, reason=None):
         selected_plan = self.source_identity.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
@@ -50,9 +50,9 @@ class ExposureWorkflows:
             self.source(), selected,
             mode="practice", revision=self.source_identity.revision,
             return_context=self.guided_session.return_context,
-            retry_range=self.attempt.retry_range))
+            retry_range=self.attempt.retry_range), reason=reason)
 
-    def prepare_listen(self, *, effect=None) -> None:
+    def prepare_listen(self, *, effect=None, reason=None) -> None:
         selected_plan = self.source_identity.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
@@ -62,10 +62,10 @@ class ExposureWorkflows:
             self.source(), revision=self.source_identity.revision,
             bpm=selected_plan.bpm,
             tempo_map=self.tempo_map_cache.get(
-                selected_plan.active_stage, selected_plan.bpm)))
+                selected_plan.active_stage, selected_plan.bpm)), reason=reason)
 
     def prepare_perform(self, *, scope: str = "current", exposure=None,
-                        effect=None) -> None:
+                        effect=None, reason=None) -> None:
         if self.source_identity.plan is None:
             raise ValueError("Open a piece first")
         effect = (None if exposure is not None else
@@ -74,7 +74,7 @@ class ExposureWorkflows:
         selected = exposure or self.teaching_decisions.install_command(effect)
         self.installer.apply(prepare_timed(
             self.source(), selected,
-            mode="perform", revision=self.source_identity.revision))
+            mode="perform", revision=self.source_identity.revision), reason=reason)
 
     def apply_listen_failure(self) -> None:
         failure = self.listen.take_failure()

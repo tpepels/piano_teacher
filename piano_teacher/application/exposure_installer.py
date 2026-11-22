@@ -32,7 +32,9 @@ class ExposureInstaller:
         self.clock = clock
 
     def apply(self, prepared:
-              GuidedPreparation | TimedPreparation | ListenPreparation) -> None:
+              GuidedPreparation | TimedPreparation | ListenPreparation,
+              *, reason: str | None = None) -> None:
+        action_reason = self.session_commands.action_reason if reason is None else reason
         if isinstance(prepared, GuidedPreparation):
             fragment = prepared.fragment
             self.learner_progress.save_resume(
@@ -44,7 +46,7 @@ class ExposureInstaller:
             self.progress.save(
                 self.source_identity.plan, self.source_identity.fingerprint)
             self.lifecycle.stop(
-                reason=prepared.stop_reason or self.session_commands.action_reason,
+                reason=prepared.stop_reason or action_reason,
                 preserve_episode=prepared.recovery)
             self.score_state_publisher.reset_guided()
             self.attempt.assign_remediation(prepared.remediation)
@@ -69,7 +71,7 @@ class ExposureInstaller:
             timed = isinstance(prepared, TimedPreparation)
             self.lifecycle.stop(
                 reason=("reintegration" if timed and prepared.mode == "practice"
-                        else self.session_commands.action_reason),
+                        else action_reason),
                 preserve_episode=timed and prepared.preserve_episode)
             if not timed or prepared.mode == "practice":
                 self.visual_transport.select_opening(
