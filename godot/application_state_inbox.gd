@@ -8,6 +8,7 @@ var current: Dictionary = {}
 var tick_ms := 0
 var pending := false
 var request_started_ms := 0
+var _last_contract_error := ""
 const Reply := preload("res://inprocess_request.gd")
 const StateContract := preload("res://state_contract.gd")
 var _commands
@@ -47,10 +48,16 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
         # incomplete backend snapshots never reach presentation, physical
         # admission, input policy or the published controls.
         _logger.check_contract(parsed)
-        push_error("STATE_CONTRACT_REJECTED: " + "; ".join(violations))
+        var detail: String = "; ".join(violations)
+        if detail != _last_contract_error:
+            _last_contract_error = detail
+            push_error("STATE_CONTRACT_REJECTED: " + detail)
+        # No new control action may start from a rejected snapshot.
+        _practice.present_busy(true)
         _practice.present_message(
-            "Practice state incompatible with this application; controls blocked",true)
+            "Invalid practice state; waiting for an authoritative update",true)
         return
+    _last_contract_error = ""
     var received_ms: int = int(accepted["received_ms"])
     _statistics.update_context(str(parsed.get("piece_fingerprint","")))
     var assets = _presentation.score_session
