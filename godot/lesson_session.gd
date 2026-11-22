@@ -9,6 +9,9 @@ var _request
 var pending := false
 var _loaded := false
 var _fingerprint := ""
+var _step := -1
+var _mastered_steps := -1
+var _score_revision := -1
 var _generation := 0
 var _requested_generation := -1
 var _requested_fingerprint := ""
@@ -31,9 +34,20 @@ func on_overview(code: int, body: PackedByteArray) -> void:
 func update_context(state: Dictionary, now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))
     var fingerprint: String = str(state.get("piece_fingerprint",""))
-    if loaded != _loaded or fingerprint != _fingerprint:
+    var step: int = int(state.get("lesson_step",-1))
+    var mastered: int = int(state.get("lesson_steps_mastered",-1))
+    var revision: int = int(state.get("revision",-1))
+    if (loaded != _loaded or fingerprint != _fingerprint
+            or step != _step or mastered != _mastered_steps
+            or revision != _score_revision):
+        # A finished take may unlock the next warm-up stage without
+        # changing the piece fingerprint. Never keep old selection flags
+        # or stale generated step descriptions in the Lesson Path cache.
         _loaded = loaded
         _fingerprint = fingerprint
+        _step = step
+        _mastered_steps = mastered
+        _score_revision = revision
         invalidate()
     ensure_current(now_ms)
 
