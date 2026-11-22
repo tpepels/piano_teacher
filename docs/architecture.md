@@ -934,9 +934,13 @@ for callers of the deleted service and none were found.
 
 Pure Practice Flow policy remains the only graded pace decision;
 `practice_windows.moving_windows` contains the authored one-bar then
-cumulative trailing-four-window rule. The current
-`PracticeFlowCourseSession._state` mirrors stage/BPM/clean counters also
-in `LearningPlan` and still needs a complete consumer migration.
+cumulative trailing-four-window rule. `PracticeFlowCourseSession` now retains only a source-plan-keyed
+`FlowPhase` (stage plus Listen/Free/Tempo). Its public `FlowState`
+projected BPM, failures, clean runs and returns-to-Free are derived under
+the application lock from the canonical `LearningPlan`. Opening another
+piece with the same authored-window identifier does not reuse its old
+phase; the transition reducer, public flow status and existing action
+names are retained.
 Course-scoped settings and behavior tests for all source strategies
 remain open. All of the above is source inspection, **not tested
 Python/Godot or physical acceptance**.

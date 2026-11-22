@@ -586,7 +586,25 @@ No parallel command router, active legacy engine or recursive handoff remains.
 - [63347d3](https://github.com/tpepels/piano_teacher/commit/63347d341e1ad12281bcc7eb2c2dedbe53bca659) also prevents nested typed MIDI shortcut events from publishing an intermediate source/take epoch before the outer event commits (A1).
 - Verified in source: `practice_windows.moving_windows` enumerates each authored measure alone then trailing windows up to four; Practice Flow retains 50% starting tempo and two clean target passes, and preserves the full original final piece. This **has not been executed** on the new commits.
 
-**A2 remaining:** Remove redundant Practice Flow projection counters without losing Listen → Free → Tempo; consolidate residual recovery/settlement effect ownership and course-scoped policy settings, preserve alternative Coda/Fukuda/warm-up behavior, and verify actual failure/Stop/source-change/MIDI journeys. These items are not complete. A0 exact-HEAD and A1 acceptance are also open. No Python, Godot, native package, or physical keyboard execution was performed, and GitHub CI was not triggered.
+**Additional A2 source integration:** [c9a15bb](https://github.com/tpepels/piano_teacher/commit/c9a15bbf82caee94574b66cf40b2cc419f93e968)
+removes mirrored BPM, failure, clean-pass and Free-return counters from
+`PracticeFlowCourseSession`. It now owns only a transient
+Listen/Free/Tempo `FlowPhase` and projects all counters from
+`LearningPlan`, preserving its existing public `FlowState` interface.
+[eba9c64](https://github.com/tpepels/piano_teacher/commit/eba9c64a93a40bc4b33bab1c261e5006fca1bb43)
+reads that projection under the application lock, and
+[719fd33](https://github.com/tpepels/piano_teacher/commit/719fd33f461ca61c76b5cdc24fd6d1ca1d61b348)
+keys the transient phase to the *installed LearningPlan instance* so
+a different piece with the same window key cannot inherit stale Listen,
+Free or Tempo state.
+
+**A2 remaining:** Resolve any residual duplicate recovery/settlement
+ownership and make the course policy/settings explicitly scoped without
+changing persisted alternative Coda/Fukuda/warm-up behavior. Then verify
+actual failed-persistence, Stop/source-change and physical/MIDI lesson
+journeys. **No Python, Godot/native, package or physical keyboard tests
+have executed on this HEAD.** A0 exact-HEAD and A1 acceptance remain
+open; GitHub CI was not triggered.
 
 ### A2 — Unified lesson, assessment and durable settlement
 
@@ -771,7 +789,7 @@ and speakers, including the original Pathétique source and readability.
 | --- | --- | --- |
 | A0 | Full source/runtime/feature audit and migration/deletion map | **In progress** — file-path inventory, source-traced critical transitions, state-owner and risk maps committed; complete reachability and exact-HEAD run pending |
 | A1 | One authoritative PracticeSession and event processing path | **In progress** — event input and return-state atomicity, cancellation/device-bound callback epochs, bounded transition queue and fail-closed Stop persistence integrated; old router modules deleted; native queued-Stop latency, full event/settlement ownership and same-HEAD behavior verification remain open |
-| A2 | Unified lesson/assessment/settlement/recovery | **In progress** — immutable TakeResult for completed and rolling takes, original MIDI evidence and receipt retry, unified completion coordinator; mirrored flow state, course-scoped settings and integrated verification still open |
+| A2 | Unified lesson/assessment/settlement/recovery | **In progress** — frozen full/rolling TakeResult, receipt-gated retries, unified completion effects, and Practice Flow phase-only projection keyed to installed plan; remaining course-scoped settings, recovery ownership and runtime verification open |
 | A3 | Unified transport clock and physical playback transaction | Not started |
 | A4 | One immutable ScoreBundle pipeline for current and future sources | Not started |
 | A5 | Thin Godot UI and single native physical-surface interface | Not started |
