@@ -110,7 +110,8 @@ class MidiApplicationInput:
             self.playback_session.mode,self.playback_session.running,self.visual_transport.paused,self.playback_session.preview_only,
             self.visual_transport.play_from_beat,self.visual_transport.run_at,self.playback_session.transport_id,
             self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.guided_session.controller is not None),
-            self.attempt_settlement.cancellation_generation)
+            self.attempt_settlement.cancellation_generation,
+            self.midi.device)
         self.midi_ingress.dispatch(
             message,facts=facts,received_at=now,
             corrected_at=corrected_at,deferred=deferred,

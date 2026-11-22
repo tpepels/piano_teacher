@@ -197,7 +197,8 @@ class PracticeSession:
         """Current accepted epoch; caller holds the existing session lock."""
         plan = self.source_identity.plan
         return MidiArrival(
-            self.source_identity.fingerprint, self.source_identity.revision,
+            self.midi.device, self.source_identity.fingerprint,
+            self.source_identity.revision,
             plan.identity if plan is not None else "",
             plan.hand if plan is not None else "both",
             self.playback_session.transport_id,
@@ -213,7 +214,8 @@ class PracticeSession:
         current = self._current_midi_arrival()
         # Stop, source replacement, new engraved revision, a new lesson
         # stage/hand, or explicit take cancellation invalidate queued keys.
-        if (arrival.fingerprint != current.fingerprint or
+        if (arrival.device != current.device or
+                arrival.fingerprint != current.fingerprint or
                 arrival.revision != current.revision or
                 arrival.stage_key != current.stage_key or
                 arrival.hand != current.hand or
@@ -262,8 +264,9 @@ class PracticeSession:
                 # but never current-take grading, calibration or shortcuts.
                 # A late release must not leave a shortcut permanently
                 # suppressed after Stop/source replacement.
-                self.midi_key_shortcuts.discard_stale_release(event.message)
-                self.midi.observe(event.message, now=event.received_at)
+                if event.arrival.device == self.midi.device:
+                    self.midi_key_shortcuts.discard_stale_release(event.message)
+                    self.midi.observe(event.message, now=event.received_at)
                 return None
             return self.midi_application_input._deliver_message(
                 event.message, received_at=event.received_at,

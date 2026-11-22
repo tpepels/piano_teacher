@@ -31,6 +31,7 @@ class MidiInputFacts:
     tempo_map: object
     can_pause: bool
     cancellation_generation: int = 0
+    device: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,9 +208,10 @@ class MidiIngress:
         if due or self.deferred:
             self.deferred.append(DeferredMidi(
                 message.copy(), received_at, corrected_at,
-                MidiArrival(facts.fingerprint, facts.score_revision,
-                            facts.stage_key, facts.hand, facts.transport_id,
-                            facts.cancellation_generation, transport.automatic)))
+                MidiArrival(facts.device, facts.fingerprint,
+                            facts.score_revision, facts.stage_key, facts.hand,
+                            facts.transport_id, facts.cancellation_generation,
+                            transport.automatic)))
             return True
         return False
 

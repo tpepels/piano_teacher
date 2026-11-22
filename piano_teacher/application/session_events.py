@@ -37,7 +37,8 @@ class MidiShortcut:
 
 @dataclass(frozen=True, slots=True)
 class MidiArrival:
-    """Committed source/take epoch observed when hardware called back."""
+    """Committed device/source/take epoch sampled at physical callback."""
+    device: str
     fingerprint: str
     revision: int
     stage_key: str
