@@ -28,7 +28,7 @@ var _last_timing_revision := -1
 
 func record_transition(state: Dictionary, now_ms: int,
         request_started_ms: int, score_ready: bool,
-        layout_pending: bool, model_pending: bool, enabled: bool) -> void:
+        bundle_pending: bool, enabled: bool) -> void:
     if not enabled:
         return
     var phase_name: String = str(state.get("phase",""))
@@ -40,8 +40,7 @@ func record_transition(state: Dictionary, now_ms: int,
     print("TRANSPORT_TRANSITION:",JSON.stringify({
         "phase":phase_name, "transport_id":attempt, "revision":revision,
         "state_request_ms":now_ms-request_started_ms,
-        "score_ready":score_ready,"layout_pending":layout_pending,
-        "model_pending":model_pending,
+        "score_ready":score_ready,"bundle_pending":bundle_pending,
         "awaiting_score_revision":state.get("awaiting_score_revision"),
         "visual_scroll_beat":state.get("visual_scroll_beat"),
         "visual_scroll_speed":state.get("visual_scroll_speed")}))
