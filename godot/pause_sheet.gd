@@ -54,31 +54,27 @@ func _ready() -> void:
     detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _separator(content)
 
-    resume_button = _button("Resume  ·  Space", {"action": "resume"}, content, true)
+    resume_button = _button("Resume  ·  Space", {"action": "ui_primary"}, content, true)
     resume_button.custom_minimum_size.y = 62
     var main_actions := HBoxContainer.new()
     main_actions.add_theme_constant_override("separation", 10)
     content.add_child(main_actions)
-    retry_button = _button("Retry from start", {}, main_actions, false, "review")
-    retry_button.pressed.connect(func():
-        chosen.emit({"action": "learn_retry" if current.get("mode") == "learn"
-            else "listen" if current.get("mode") == "listen" else "restart"}))
-    listen_button = _button("Listen", {"action": "listen"}, main_actions, false, "listen")
+    retry_button = _button("Retry from start", {"action":"ui_retry"},
+        main_actions, false, "review")
+    listen_button = _button("Listen", {"action":"ui_listen"},
+        main_actions, false, "listen")
 
     _label("TEMPO", 16, Design.SLATE, true, content)
     var tempo_row := HBoxContainer.new()
     tempo_row.add_theme_constant_override("separation", 10)
     content.add_child(tempo_row)
-    slower_button = _button("Slower -10%", {}, tempo_row, false, "utility")
-    slower_button.pressed.connect(func():
-        chosen.emit({"action":"tempo", "bpm":maxi(12, roundi(float(current.get("bpm",80)) * 0.9))}))
+    slower_button = _button("Slower", {"action":"ui_tempo_down"},
+        tempo_row, false, "utility")
     tempo_value = _label("68 BPM", 20, Design.STONE, true, tempo_row)
     tempo_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     tempo_value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    faster_button = _button("Faster +10%", {}, tempo_row, false, "utility")
-    faster_button.pressed.connect(func():
-        chosen.emit({"action":"tempo", "bpm":mini(300,
-            maxi(int(current.get("bpm",80))+1, roundi(float(current.get("bpm",80)) * 1.1)))}))
+    faster_button = _button("Faster", {"action":"ui_tempo_up"},
+        tempo_row, false, "utility")
 
     _label("HAND", 16, Design.SLATE, true, content)
     hand_choice = OptionButton.new()
@@ -163,6 +159,25 @@ func present(state: Dictionary) -> void:
     detail_label.text = "%s  ·  Measures %d-%d" % [
         hand_text, int(state.get("first_bar", 1)), int(state.get("last_bar", 1))]
     tempo_value.text = "%d BPM" % int(state.get("bpm", 80))
+    var controls: Dictionary = state.get("controls",{}) \
+        if state.get("controls") is Dictionary else {}
+    var primary: Dictionary = controls.get("primary",{})
+    var retry: Dictionary = controls.get("retry",{})
+    var listen: Dictionary = controls.get("listen",{})
+    var down: Dictionary = controls.get("tempo_down",{})
+    var up: Dictionary = controls.get("tempo_up",{})
+    var step: int = maxi(1,int(state.get("manual_tempo_step_bpm",5)))
+    resume_button.text = str(primary.get("label","Resume")) + "  ·  Space"
+    resume_button.disabled = not bool(primary.get("enabled",false)) or \
+        str(primary.get("action","")) != "resume"
+    retry_button.disabled = not bool(retry.get("enabled",false))
+    retry_button.text = "Listen again" if str(retry.get("action","")) == "listen" else "Retry from start"
+    listen_button.text = str(listen.get("label","Listen"))
+    listen_button.disabled = not bool(listen.get("enabled",false))
+    slower_button.text = "Slower −%d BPM" % step
+    slower_button.disabled = not bool(down.get("enabled",false))
+    faster_button.text = "Faster +%d BPM" % step
+    faster_button.disabled = not bool(up.get("enabled",false))
     if opening:
         hand_choice.clear()
         for available in state.get("hands", []):

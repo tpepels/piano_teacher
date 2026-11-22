@@ -73,7 +73,8 @@ def project_controls(s: Mapping) -> dict:
         s.get("phase") in ("guided_wait", "paused")))) else None
     if course and not moving and not s.get("paused"):
         pause = None
-    retry = ("learn_retry" if s.get("mode") == "learn" else "restart") if s.get("loaded") else None
+    retry = ("learn_retry" if s.get("mode") == "learn" else
+             "listen" if s.get("mode") == "listen" else "restart") if s.get("loaded") else None
     retry_allowed = retry is not None and s.get("phase") not in ("admitting", "loading")
     tempo_allowed = bool(s.get("loaded")) and s.get("phase") not in (
         "count_in", "playing", "loading", "admitting")
