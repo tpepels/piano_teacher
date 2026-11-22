@@ -15,8 +15,6 @@ const OFFSCREEN_MARGIN_BEATS := 0.12
 # Use a short admission cushion; committed world origins never change.
 const READY_TRAVEL_BEATS := 0.30
 const REST_GAP_BEATS := 1.0
-# "Strictly ahead of the playhead" for reusing a paused take.
-const PAUSED_REUSE_EPSILON_BEATS := .001
 # Listen/Perform may open on an empty strip only when the one-count-in-bar
 # slot computed here (empty_strip_start) matches the engine's first-note
 # deadline to within this many beats: one display frame of clock jitter,
@@ -82,16 +80,9 @@ static func _future_start(passes: Array, world: float,
 static func select(passes: Array, purpose: String, opening: float,
         world: float, right_beats: float = 0.0,
         header_beats: float = 0.0, identity: String = "") -> int:
-    assert(purpose in ["ready","idle","paused","bound"])
+    assert(purpose in ["ready","idle","bound"])
     var earliest: float = world + maxf(MIN_READING_BEATS,
         right_beats+header_beats+OFFSCREEN_MARGIN_BEATS)
-    if purpose == "paused":
-        # A paused take's immutable ink is already placed; reusing it pops
-        # nothing in. It only has to be strictly ahead of the playhead. A
-        # reading floor here stranded Pause-in-count-in -> Resume behind an
-        # offscreen append once the opening is one count-in bar ahead
-        # (Task 2b review, owner decision 2026-11-08).
-        earliest = world + PAUSED_REUSE_EPSILON_BEATS
     var chosen := -1
     var closest := -INF if purpose == "bound" else INF
     for index in range(passes.size()):
@@ -106,9 +97,6 @@ static func select(passes: Array, purpose: String, opening: float,
         match purpose:
             "ready","idle":
                 matches = pending and not armed and key == "prepared" and \
-                    absf(float(item.get("source_floor",-INF))-opening)<.00001
-            "paused":
-                matches = key == identity and not pending and \
                     absf(float(item.get("source_floor",-INF))-opening)<.00001
             "bound":
                 matches = key == identity and not pending

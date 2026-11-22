@@ -81,7 +81,6 @@ func run() -> void:
     paused_mismatch["online"][0]["armed"] = true
     paused_mismatch["online"][0]["take_key"] = "active"
     paused_mismatch["was_paused"] = true
-    paused_mismatch["paused_source"] = 0.0
     paused_mismatch["last_take"] = "active"
     paused_mismatch["paused_owner"] = 42
     var paused_relocate: Dictionary = Reservation.plan_facts(
@@ -91,7 +90,7 @@ func run() -> void:
         "A genuinely paused authorized source cannot be moved to a new backend deadline")
 
     var armed: Dictionary = controller.arm_take(geometry(0.0),0.0,0.0,6.7,0.4,
-        float(plan.start_world),false,false,4.0)
+        float(plan.start_world),false,4.0)
     check(not armed.is_empty(),"The physical source accepts the planned start")
     acknowledge(controller,0.0,"piece|7|10|practice","first")
     var original: Array = controller.online_snapshot()
@@ -119,7 +118,7 @@ func run() -> void:
     controller.trim(geometry(2.5),"user_resume_fresh_replace_unseen",-1,
         int(resume.get("protected_strip",-1)))
     var resumed: Dictionary = controller.arm_take(geometry(2.5),2.5,0.0,6.7,0.4,
-        float(resume.start_world),false,false,
+        float(resume.start_world),false,
         4.0 if bool(resume.get("empty_strip",false)) else 0.0,true)
     check(not resumed.is_empty(),"Resume commits its reserved source")
     acknowledge(controller,2.5,"piece|7|10|practice","resume")
@@ -134,7 +133,7 @@ func run() -> void:
     controller.trim(geometry(3.0),"retry")
     controller.retry_placement_enabled(true)
     var restarted: Dictionary = controller.arm_take(geometry(3.0),3.0,0.0,6.7,0.4,
-        float(retry.start_world),false,true,0.0,false,false,float(retry.get("leading_rest_beats",0.0)))
+        float(retry.start_world),true,0.0,false,false,float(retry.get("leading_rest_beats",0.0)))
     check(not restarted.is_empty(),"Retry commits the future reservation")
     acknowledge(controller,3.0,"piece|7|11|practice","retry")
     check(fixed_music(controller.online_snapshot()).slice(0,1) == music.slice(0,1),
@@ -168,7 +167,7 @@ func run() -> void:
     if bool(auto_plan.get("ok",false)):
         var next_armed: Dictionary = automatic_controller.arm_take(
             geometry(9.0),9.0,0.0,6.7,0.4,12.0,
-            false,false,4.0,true)
+            false,4.0,true)
         check(not next_armed.is_empty(),
             "A fixed one-bar repeat that passes physical preflight commits")
     automatic_canvas.free()

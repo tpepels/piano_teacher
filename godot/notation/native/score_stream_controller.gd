@@ -458,12 +458,12 @@ func reject_candidate(facts: StreamGeometry, owner_serial: int, before_serial: i
 
 func arm_take(facts: StreamGeometry, world: float, opening: float, right: float,
         header: float, planned_start_world: float = NAN,
-        resuming_paused: bool = false, retrying: bool = false,
-        empty_strip_count_in: float = 0.0, exact_authorized: bool = false,
+        retrying: bool = false, empty_strip_count_in: float = 0.0,
+        exact_authorized: bool = false,
         display_context: bool = false, leading_rest_beats: float = 0.0) -> Dictionary:
     return _binding.arm(facts,serial,allocate_source.bind(display_context,leading_rest_beats),reserve_ready,
         reject_candidate,cancel_arm,empty_strip_onset,retry_placement,
-        world,opening,right,header,planned_start_world,resuming_paused,
+        world,opening,right,header,planned_start_world,
         retrying,empty_strip_count_in,exact_authorized)
 
 func allocate_source(facts: StreamGeometry, source_beat: float, start_world: float,

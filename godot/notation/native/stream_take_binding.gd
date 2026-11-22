@@ -8,7 +8,6 @@ const StreamLifecycle := preload("res://notation/native/stream_lifecycle.gd")
 var queue
 var last_take := ""
 var was_paused := false
-var paused_source := 0.0
 var paused_owner := -1
 var live_serial := -1
 var armed_serial := -1
@@ -24,7 +23,6 @@ func _init(stream_queue) -> void:
 func reset() -> void:
     last_take = ""
     was_paused = false
-    paused_source = 0.0
     paused_owner = -1
     live_serial = -1
     armed_serial = -1
@@ -89,7 +87,6 @@ func observe_transport(facts: StreamGeometry, world: float, opening: float,
         withdraw_future: Callable, cancel: Callable) -> void:
     if paused_now:
         if not was_paused:
-            paused_source = maxf(opening,opening+graded_beat)
             paused_owner = transport_owner(opening,world,running_reported)
         # Never withdraw the paused musical take's own unexpired source
         # strips. Its authenticated owner is protected even when the
@@ -174,8 +171,8 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
         reject: Callable, cancel: Callable, empty_onset: Callable, retry_placement: bool,
         world: float, opening: float, right: float,
         header: float, planned_start_world: float = NAN,
-        resuming_paused: bool = false, retrying: bool = false,
-        empty_strip_count_in: float = 0.0, exact_authorized: bool = false) -> Dictionary:
+        retrying: bool = false, empty_strip_count_in: float = 0.0,
+        exact_authorized: bool = false) -> Dictionary:
     # The common future-only admission route owns a rollback snapshot until
     # the backend confirms the newly armed transport. Failure returns all
     # source/rest clip roles to their exact original state.
@@ -184,32 +181,9 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
     var old_live: int = live_serial
     var serial_before: int = generation
     var candidate_serial := -1
-    var reused := false
-    var reused_unplayed := false
-    if resuming_paused and was_paused and \
-            absf(opening-paused_source) < .0001:
-        var paused_index: int = Admission.select(queue.online,"paused",
-            opening,facts.world,0.0,0.0,last_take)
-        if paused_index < 0 and paused_owner >= 0:
-            # Pause can precede the preceding Play's transport ACK. In that
-            # race the armed owner's key is provisional, but its immutable
-            # source and future location are already authoritative.
-            for index in range(queue.online.size()):
-                var candidate: Dictionary = queue.online[index]
-                if str(candidate.get("kind","")) != "source" or \
-                        int(candidate.get("take_owner",-1)) != paused_owner:
-                    continue
-                if str(candidate.get("take_key","")).begins_with("armed:") and \
-                        absf(float(candidate.get("source_floor",-1))-opening) < .00001 and \
-                        float(candidate["world_origin"])+opening >= \
-                            facts.world+Admission.PAUSED_REUSE_EPSILON_BEATS:
-                    paused_index = index
-                    break
-        if paused_index >= 0:
-            candidate_serial = int(queue.online[paused_index].get("take_owner",
-                queue.online[paused_index]["serial"]))
-            reused = true
-            reused_unplayed = true
+    # Paused musical identity is protected by the immutable queue's
+    # predecessor owner, never physically restarted at its frozen origin.
+    # Resume always appends a fresh backend-authorized count-in source.
     if candidate_serial < 0 and is_finite(planned_start_world):
         var checked: float = planned_start_world if exact_authorized else Admission.position(queue.online,
             facts.world,right,
@@ -272,8 +246,8 @@ func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Call
     for item in queue.online:
         if int(item.get("serial",-1)) == candidate_serial:
             return {"start_world":float(item["world_origin"])+opening,
-                "opening":opening,"reused":reused,
-                "reused_unplayed_count_in":reused_unplayed}
+                "opening":opening,"reused":false,
+                "reused_unplayed_count_in":false}
     cancel.call(facts,facts.world)
     return {}
 
@@ -320,7 +294,7 @@ func status(generation: int) -> Dictionary:
         "bound_segment_id":live_segment_id}
 
 func preflight() -> Dictionary:
-    return {"was_paused":was_paused,"paused_source":paused_source,
+    return {"was_paused":was_paused,
         "paused_owner":paused_owner,"last_take":last_take}
 
 func observe_state(facts: StreamGeometry, state: Dictionary, graded_beat: float,

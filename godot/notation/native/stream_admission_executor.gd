@@ -26,7 +26,7 @@ static func reserve_action(stream, facts: StreamGeometry, preflight: Dictionary,
     var before: Array = stream.online_snapshot()
     if mode == "reuse":
         var existing: Dictionary = stream.arm_take(facts,
-            world,opening,right,header,NAN,false,false)
+            world,opening,right,header,NAN,false)
         var removed: Array = before.slice(stream.online_size())
         if existing.is_empty():
             push_error("SCORE_TRANSPORT_COMMIT: preflight reusable owner vanished")
@@ -51,7 +51,7 @@ static func reserve_action(stream, facts: StreamGeometry, preflight: Dictionary,
         return {}
     stream.retry_placement_enabled(action == "restart")
     var admitted: Dictionary = stream.arm_take(facts,
-        world,opening,right,header,intended,false,false,
+        world,opening,right,header,intended,false,
         count_in_beats if bool(planned.get("empty_strip",false)) else 0.0,
         is_finite(exact_start_world),display_context,
         float(planned.get("leading_rest_beats",0.0)))
