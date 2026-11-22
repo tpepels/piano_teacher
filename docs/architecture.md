@@ -79,6 +79,50 @@ was changed in this audit.
 | Native retained notation | Renderer generation, texture prewarming, queue/tail retention | Protect rendered ink across transition and resize, avoid frame stalls |
 | Godot state delivery | Versioned state inbox, command reply contract, lost-ACK status reconciliation | Invalid/stale/canceled operations cannot partially apply UI or audio |
 
+### A0 measured composition coupling (source baseline 4a80bee)
+
+The 63 explicit `r.name = Class(...)` constructions in
+`application/composition.py` include **21 services with at least ten**
+distinct `r.*` injected dependencies and **14 with at least fifteen**.
+These count direct constructor references, not a complete runtime call
+graph or implicit callback dependencies. The largest are:
+
+| Constructed service | Distinct composition dependencies |
+| --- | ---: |
+| `PracticeTimeline` | 33 |
+| `SessionReadModels` | 25 |
+| `TransportActions` | 24 |
+| `SourceWorkflows` | 20 |
+| `LessonExecution` | 20 |
+| `MidiApplicationInput` | 20 |
+| `TimedPlayback` | 19 |
+| `RecoveryWorkflows` | 19 |
+| `PracticeControls` | 19 |
+| `TeachingDecisions` | 16 |
+
+`godot/main.gd` references **42 unique preloaded resources**
+and has **44 `.new(` call sites**; neither number equals the total
+independent runtime coordinators. The embedded `inprocess.py` protocol
+has distinct reads, commands, score-readiness operations and physical
+reserve/present/reconcile operations. Its public names are not by
+themselves a source of excess business authority.
+
+The coupling problem is concrete: action-oriented services depend on
+most mutable session roots. Simply adding more injected wrappers
+would worsen it. A1 must replace the execution chain with one
+serialized event transaction and narrow domain inputs, without
+creating a 63-field `PracticeSession` god object. A2–A5 must remove
+old injected owners after their full behavior and callers migrate.
+Treat these counts as diagnostics, never arbitrary pass/fail targets.
+
+**Real-time worker constraint:** The native C++ bridge sends
+`score.native_layout`, `score.semantic` and `learning.statistics`
+to its separate asset worker; other commands and the musical tick
+use the session worker. Each embedded Python call obtains the GIL;
+application and artifact locks separately protect state. A1/A4
+must not move heavy layout/statistics work into the real-time tick
+or hold the session lock during fingering inference.
+
 ### Source-backed legacy and complexity findings
 
 | Candidate | Evidence | Proposed fate | Verification before deletion |
