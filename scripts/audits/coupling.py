@@ -17,6 +17,14 @@ HOLDERS = ["visual_transport", "playback_session", "playback", "source_identity"
            "lesson_cursor", "teaching_decisions", "guided_session", "attempt",
            "attempt_settlement", "score_artifact_registry"]
 
+# Modules inside each holder's own domain may use its internals.
+DOMAIN_MODULES = {
+    "source_identity": {"lesson", "teaching_workflows"},
+    "lesson_cursor": {"lesson", "teaching_workflows"},
+    "guided_session": {"lesson", "teaching_workflows"},
+    "teaching_decisions": {"lesson"},
+    "score_artifact_registry": {"score", "score_read_services"},
+}
 files = sorted(APP.rglob("*.py")) + [ROOT / "piano_teacher" / "server.py"]
 fan = {}
 reach = defaultdict(set)
@@ -28,7 +36,7 @@ for f in files:
                 a = fn.args
                 fan[cls.name] = max(fan.get(cls.name, 0), len(a.args) - 1 + len(a.kwonlyargs))
     for h in HOLDERS:
-        if re.search(rf"self\.{h}\.", src):
+        if re.search(rf"self\.{h}\.", src) and f.stem not in DOMAIN_MODULES.get(h, ()):
             reach[h].add(f.relative_to(APP.parent).with_suffix("").as_posix())
 
 over = sorted(((n, c) for n, c in fan.items() if c > LIMIT), key=lambda x: -x[1])
