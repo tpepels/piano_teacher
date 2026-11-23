@@ -16,6 +16,10 @@ const SCORE_INK := Color("#EEF5F1")
 const SCORE_MUTED := Color("#A0B9AD")
 const STAFF_INK := Color.WHITE
 const STAFF_MUTED := Color("#81918B")
+## Dimmed notation ink: STAFF_MUTED at 46% over the score's STAGE fill,
+## pre-blended to one opaque colour. Translucent ink drawn as separate
+## heads, stems, beams and ledger lines stacked into darker overlaps.
+const NOTE_DIMMED := Color("#415852")
 const SCORE_ACCENT := Color("#3CD2A0")
 const HIGHLIGHT := Color("#A7F8DC")
 const SCORE_PROGRESS := SCORE_ACCENT
