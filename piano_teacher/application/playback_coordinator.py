@@ -592,14 +592,18 @@ class PlaybackCoordinator:
             return
         if not self.active_take_id:
             return
-        if facts.paused:
-            self.state = PlaybackState.PAUSED
-        elif facts.running:
-            activation = max(facts.run_at,
-                             facts.resume_grading_after)
-            self.state = (PlaybackState.COUNT_IN if facts.now < activation
-                          else PlaybackState.PLAYING)
+        if facts.running:
+            if facts.paused:
+                self.state = PlaybackState.PAUSED
+            else:
+                activation = max(facts.run_at,
+                                 facts.resume_grading_after)
+                self.state = (PlaybackState.COUNT_IN if facts.now < activation
+                              else PlaybackState.PLAYING)
         elif facts.pending_result:
+            # A paused, no-longer-running take has no live authorization.
+            # Keep its evidence settlement visible, but do not advertise
+            # the old segment as a resumable physical performance.
             self.state = PlaybackState.SETTLING
         elif self.state not in (PlaybackState.FAILED, PlaybackState.IDLE):
             self.state = PlaybackState.COMPLETE
