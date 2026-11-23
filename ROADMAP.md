@@ -880,6 +880,37 @@ owner's connected CA49, audible count-in, visual continuity,
 Pathétique II (only if provided), repertoire and relocated-package
 acceptance.
 
+### A3/A4/A5 source-identity integration — 2026-11-23
+
+**Source changes on `main`, not native/runtime acceptance:**
+
+- [`7e61b3d`](https://github.com/tpepels/piano_teacher/commit/7e61b3dd6acda2cb7933a81493392b4e948a1af8)
+  binds the selected `stage_key` to the same committed command/frame
+  projection, current native score requests, installed renderer readiness,
+  and physical intent validation. A response for another stage or hand
+  now fails closed even when fingerprint/revision coincide. Prepared renderer
+  promotion also disconnects obsolete retained-ink notifications without
+  erasing old physical ink.
+- [`5d0caac`](https://github.com/tpepels/piano_teacher/commit/5d0caacb90a8f38fdfb4cd8e930c2e5c55a43e9f)
+  adds this identity to the authoritative Python snapshot schema and its
+  generated Godot copy, with contract version 6. The loaded snapshot
+  requires `stage_key`; this is a single application source fact,
+  not a separate Godot learner-phase decision.
+- [`4d5ae3f`](https://github.com/tpepels/piano_teacher/commit/4d5ae3ffe8507f5fd413bd218a684d55ecef484c)
+  rejects idempotent `playback.present` replay after same-revision
+  BPM, passage-origin or tempo-map changes. The existing source, mode,
+  transport, stage and terminal-status checks remain in force.
+
+**Verification:** Source-contract counterpart fields and native admission
+guards were inspected on the committed files. No Python/Godot tests,
+embedded native execution, packaging or real MIDI/audio verification
+has run on these commits. The exact-HEAD generator check
+(`python3 scripts/generate_state_contract.py --check`), core behavior suite,
+Godot score loading and stale-response/future-stage promotion, interrupted
+physical receipt/reconciliation and standalone packaging remain open.
+GitHub Actions remains manual `workflow_dispatch` only; none was triggered.
+A3–A5 are still **IN PROGRESS**, and A6/A7 are not accepted.
+
 ### A3 — Single transport state and physical playback protocol
 
 - [ ] Consolidate running, paused, pending, terminal-failure and source
