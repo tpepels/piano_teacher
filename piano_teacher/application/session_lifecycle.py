@@ -30,7 +30,6 @@ class SessionLifecycle:
     def stop(self, *, reason: str, preserve_episode: bool = False,
              persist_evidence: bool = True) -> None:
         self.playback.invalidate(reason)
-        self.playback_session.cancel_suspended_admission()
         played = (self.attempt.recorder.presses
                   if self.attempt.recorder is not None
                   else self.measurement.guided.presses)

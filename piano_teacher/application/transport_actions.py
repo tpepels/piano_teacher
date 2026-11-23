@@ -185,13 +185,16 @@ class TransportActions:
                     presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs))
         elif action == "pause":
             self.timed_playback.pause(
-                pending_admission=self.playback_session.suspend_admission(self.playback))
+                pending_admission=self.playback.suspend_pending(
+                    self.transport_timing.playback_facts()))
         elif action == "resume":
             self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self.transport_timing.update_short_rest(kwargs)
             if self.playback.presentation_required:
-                suspended = self.playback_session.take_suspended_admission()
+                suspended = self.playback.take_suspended(
+                    self.transport_timing.playback_facts())
                 if suspended is not None:
+                    self.playback_session.resume_suspended_admission()
                     self.transport_timing.request_playback(action=suspended.action,
                         mode=suspended.mode,from_beat=suspended.from_beat,
                         transition=suspended.transition)

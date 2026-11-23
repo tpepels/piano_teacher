@@ -40,7 +40,6 @@ class PlaybackSession:
     awaiting_score_revision: int | None = None
     pause_context: str | None = None
     authorizing: bool = False
-    paused_intent: object | None = None
     deferred_score_ack: int | None = None
     _pending_guided_capture: dict | None = field(default=None,repr=False)
     _full_completion: tuple[str, PassageCompletion] | None = field(default=None,repr=False)
@@ -347,23 +346,12 @@ class PlaybackSession:
         self._transport.clear_grading_floor()
         self.schedule_preparation(request)
 
-    def suspend_admission(self, coordinator) -> bool:
-        pending = coordinator.intent
-        if pending is not None:
-            self.paused_intent = pending if not self.running else None
-            coordinator.cancel_pending("paused_before_admission")
-        return pending is not None
-
-    def take_suspended_admission(self):
-        if not self._transport.paused:
-            raise ValueError("Cannot resume an unpaused passage")
-        if self.running or self.paused_intent is None:
-            return None
-        suspended = self.paused_intent
-        self.paused_intent = None
+    def resume_suspended_admission(self) -> None:
+        """Release the stationary clock only after physical source validation."""
+        if not self._transport.paused or self.running:
+            raise ValueError("Cannot resume an unpaused pending admission")
         self._transport.resume(now=self._clock(),shift_run_at=False)
         self.pause_context = None
-        return suspended
 
     def wait_for_player(self) -> None:
         self.awaiting_score_revision = None
@@ -390,9 +378,6 @@ class PlaybackSession:
     def prepare_section_review(self) -> None:
         self.awaiting_score_revision = None
         self.auto = False
-
-    def cancel_suspended_admission(self) -> None:
-        self.paused_intent = None
 
     def prepare_admitted_continuation(self) -> None:
         self._transport.cancel_continuation()
@@ -567,7 +552,6 @@ class PlaybackSession:
         self._pending_guided_capture = None
         self._full_completion = None
         self._applied_continuation = None
-        self.paused_intent = None
         self.pause_context = None
         self.deferred_score_ack = None
         self.running = False

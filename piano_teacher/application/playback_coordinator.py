@@ -105,6 +105,8 @@ class PlaybackCoordinator:
         self.sequence = 0
         self.intent: PlaybackIntent | None = None
         self.receipt: ScoreReceipt | None = None
+        # The single retained suspended offer belongs to the admission owner.
+        self._suspended: tuple[PlaybackIntent, int] | None = None
         self.active_take_id = ""
         self.active_segment_id = ""
         self.active_deadline_ms = 0.0
@@ -151,6 +153,7 @@ class PlaybackCoordinator:
         self.generation += 1
         self.intent = None
         self.receipt = None
+        self._suspended = None
         self.state = PlaybackState.IDLE
         self.active_take_id = ""
         self.active_segment_id = ""
@@ -168,6 +171,36 @@ class PlaybackCoordinator:
         self.failure = reason
         self.state = (PlaybackState.PAUSED if self.active_take_id
                       else PlaybackState.IDLE)
+
+    def suspend_pending(self, facts: PlaybackRuntimeFacts) -> bool:
+        """Cancel unarmed ink while retaining only its source-bound Resume offer."""
+        intent = self.intent
+        if intent is None:
+            return False
+        self._suspended = ((intent, facts.transport_id)
+                           if not facts.running else None)
+        self.cancel_pending("paused_before_admission")
+        return True
+
+    def take_suspended(self, facts: PlaybackRuntimeFacts) -> PlaybackIntent | None:
+        """Consume a paused admission only under the same transport and source."""
+        stored = self._suspended
+        self._suspended = None
+        if stored is None:
+            return None
+        intent, transport_id = stored
+        source = facts.source
+        if (facts.running or source is None
+                or transport_id != facts.transport_id
+                or source.fingerprint != intent.fingerprint
+                or source.stage_key != intent.stage_key
+                or source.revision != intent.revision
+                or source.hand != intent.hand
+                or abs(source.bpm-intent.bpm) > 1e-7
+                or abs(source.end_beat-intent.end_beat) > 1e-7
+                or tuple(source.tempo_segments) != intent.tempo_segments):
+            return None
+        return intent
 
     def _valid_source(self, facts: PlaybackRuntimeFacts,
                       intent: PlaybackIntent) -> bool:
@@ -251,6 +284,7 @@ class PlaybackCoordinator:
             # meter and countdown inputs have been validated. A malformed
             # manual request must not unlock another automatic retry.
             self._terminal_automatic_source = None
+        self._suspended = None
         self.sequence += 1
         attempt = 0
         take_id = (self.active_take_id if action == "resume"
