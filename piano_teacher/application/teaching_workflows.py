@@ -12,7 +12,6 @@ from ..teaching_decisions import (
 from ..teaching_manual import ManualFacts
 from ..diagnosis_policies import LearnerSnapshot
 from ..completion_route import completion_route
-from .mistake_responses import resolve_mistake_policy
 from .learning_capture import identifier
 
 
@@ -24,11 +23,50 @@ class CommandEffect:
     decision: object
 
 
+class LearnerEvidence:
+    """Reads of the learner's stored history and the learning policies."""
+
+    def __init__(self, *, policy_registry, fukuda_mistakes, learner_progress,
+                 learning_evidence):
+        self.policy_registry = policy_registry
+        self.fukuda_mistakes = fukuda_mistakes
+        self.learner_progress = learner_progress
+        self.learning_evidence = learning_evidence
+
+    @property
+    def policies(self):
+        """The learning policy bundle (diagnosis, learner model, history)."""
+        return self.policy_registry.learning
+
+    def recent(self, fingerprint: str, stage_key: str):
+        if not fingerprint:
+            return LearnerSnapshot(stage_key, ())
+        return self.policies.store.recent(fingerprint, stage_key)
+
+    def fukuda(self, fingerprint: str) -> tuple:
+        if not fingerprint:
+            return ()
+        return tuple(sorted(self.fukuda_mistakes.evidence(fingerprint).items()))
+
+    def credits(self, fingerprint: str):
+        return self.learner_progress.teaching_credits(fingerprint)
+
+    def trouble_spots(self, plan, *, fingerprint: str,
+                      stage_key: str | None = None) -> list[dict]:
+        return self.learner_progress.valid_trouble_spots(
+            plan, fingerprint=fingerprint, stage_key=stage_key)
+
+    def retry_context(self, result, *, plan, fingerprint: str,
+                      from_beat: float, end_beat=None):
+        return self.learning_evidence.adaptive_context(
+            result, plan=plan, fingerprint=fingerprint,
+            from_beat=from_beat, end_beat=end_beat)
+
+
 class TeachingDecisions:
     def __init__(self, *, source_identity, lesson_cursor, take, measurement,
                           transport, guided_session, recovery_streak,
-                          policy_registry, library, fukuda_mistakes,
-                          learner_progress, learning_evidence, clock):
+                          evidence, mistake_policy, clock):
         self.source_identity = source_identity
         self.lesson_cursor = lesson_cursor
         self.take = take
@@ -36,23 +74,21 @@ class TeachingDecisions:
         self.transport = transport
         self.guided_session = guided_session
         self.recovery_streak = recovery_streak
-        self.policy_registry = policy_registry
-        self.library = library
-        self.fukuda_mistakes = fukuda_mistakes
-        self.learner_progress = learner_progress
+        self.evidence = evidence
+        self.mistake_policy = mistake_policy
         self._last_applied_command = None
-        self.learning_evidence = learning_evidence
         self.clock = clock
 
     def retry_context(self, result, *, end_beat=None):
-        return self.learning_evidence.adaptive_context(
-            result, plan=self.source_identity.plan, fingerprint=self.source_identity.fingerprint,
-            from_beat=self.transport.play_from_beat,
-            end_beat=end_beat)
+        return self.evidence.retry_context(
+            result, plan=self.source_identity.plan,
+            fingerprint=self.source_identity.fingerprint,
+            from_beat=self.transport.play_from_beat, end_beat=end_beat)
 
     def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
-        return self.learner_progress.valid_trouble_spots(
-            self.source_identity.plan, fingerprint=self.source_identity.fingerprint, stage_key=stage_key)
+        return self.evidence.trouble_spots(
+            self.source_identity.plan,
+            fingerprint=self.source_identity.fingerprint, stage_key=stage_key)
 
     def binding(self):
         owner = self.take
@@ -74,11 +110,10 @@ class TeachingDecisions:
             full_from_beat=p.active_phrase.first_attack_beat)
         if self.take.automatic_remedial_review and scope == "section_review":
             scope = "partial_recovery"
-        policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
-        history = (self.policy_registry.learning.store.recent(self.source_identity.fingerprint, p.identity)
-                   if self.source_identity.fingerprint else LearnerSnapshot(p.identity, ()))
+        policy = self.mistake_policy()
+        history = self.evidence.recent(self.source_identity.fingerprint, p.identity)
         state = TeachingState(1, self.binding(), p.course_state(), policy,
-            tuple(sorted(self.fukuda_mistakes.evidence(self.source_identity.fingerprint).items())) if self.source_identity.fingerprint else (),
+            self.evidence.fukuda(self.source_identity.fingerprint),
             history, self.retry_context(result, end_beat=end_beat) if result is not None and (policy.whole_handler is not None or policy.rolling_handler is not None) else None,
             TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto, warmup=self.source_identity.warmup,
                 preview_only=self.transport.preview_only, assistance_used=self.measurement.assistance_used,
@@ -90,9 +125,9 @@ class TeachingDecisions:
                 remediation_active=self.take.remediation_active is not None,
                 trouble_key=self.recovery_streak.key, trouble_count=self.recovery_streak.count,
                 parent_decision_id=self.measurement.parent_decision),
-            self.policy_registry.learning.diagnosis, self.policy_registry.learning.learner,
+            self.evidence.policies.diagnosis, self.evidence.policies.learner,
             getattr(p.lesson_generator, "catalog", None),
-            ManualFacts(credits=self.learner_progress.teaching_credits(self.source_identity.fingerprint),
+            ManualFacts(credits=self.evidence.credits(self.source_identity.fingerprint),
                 trouble=tuple((unit["stage_key"],unit["start_beat"],unit["end_beat"],tuple(unit["source_indices"]))
                     for unit in self.valid_trouble_spots()),
                 review=tuple((u["first_bar"],u["last_bar"],u["start_beat"],u["end_beat"],u["errors"])

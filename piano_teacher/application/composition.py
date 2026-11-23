@@ -90,7 +90,7 @@ from .source_preparation_session import SourcePreparationSession
 from .source_workflows import SourcePreparationWorkflow, SourceInstallation, LibraryOpening
 from .listen_outcomes import ListenOutcomes
 from .teaching_continuation import TeachingContinuation
-from .teaching_workflows import TeachingDecisions
+from .teaching_workflows import TeachingDecisions, LearnerEvidence
 from .tempo_map_cache import TempoMapCache
 from .timed_playback import TimedStart, PlaybackContinuation, PauseResume
 from .lesson import Lesson
@@ -259,9 +259,12 @@ def _lesson_source_and_settings_workflows(r) -> None:
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
         take=r.take, measurement=r.measurement, transport=r.transport,
         guided_session=r.guided_session, recovery_streak=r.recovery_streak,
-        policy_registry=r.policy_registry, library=r.library,
-        fukuda_mistakes=r.fukuda_mistakes, learner_progress=r.learner_progress,
-        learning_evidence=r.learning_evidence, clock=r.now)
+        evidence=LearnerEvidence(
+            policy_registry=r.policy_registry,
+            fukuda_mistakes=r.fukuda_mistakes,
+            learner_progress=r.learner_progress,
+            learning_evidence=r.learning_evidence),
+        mistake_policy=r.mistake_policy, clock=r.now)
     r.lesson.attach_decisions(r.teaching_decisions)
     r.evidence_context = SessionEvidenceContext(
         lesson=r.lesson, transport=r.transport,
