@@ -28,7 +28,11 @@ def _authorized():
         "source": {"fingerprint": source.fingerprint,
                    "stage_key": source.stage_key,
                    "revision": source.revision, "hand": source.hand,
-                   "end_beat": source.end_beat},
+                   "from_beat": 0.0, "end_beat": source.end_beat},
+        "bpm": source.bpm,
+        "tempo_segments": [
+            {"start_beat": start, "end_beat": end, "bpm": bpm}
+            for start, end, bpm in source.tempo_segments],
         "transport_id": 19}
     receipt = {"intent_id": "intent", "attempt": 0, "take_id": "take",
                "segment_id": "segment", "authorized": True}
