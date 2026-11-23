@@ -5,6 +5,7 @@ mode. The approved lesson and source identity are consumed, never reselected.
 """
 from __future__ import annotations
 from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, RestResumeFacts
+from .musical_scheduler import SCHEDULER
 
 
 class TimedPlayback:
@@ -89,6 +90,20 @@ class TimedPlayback:
             fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
         self.transport.clear_scheduled_start()
         self.notices.feedback = "Preparing the next passage"
+
+    def continue_measured(self, deadline: float, *, from_beat: float = 0.0):
+        """Continue from `from_beat` at the scheduler's measured continuation."""
+        self.continue_at(SCHEDULER.continuation(
+            self.transport_timing.collect_continuation_measurement(deadline, from_beat),
+            now=self.clock(), bpm=self.transport_timing.presentation_bpm()),
+            from_beat=from_beat)
+
+    def continue_preview(self):
+        """Advance a preview loop by one source stride and continue it."""
+        deadline = self.transport.next_at
+        self.transport.advance_source_stride(
+            self.score.source_model()["practice_timeline"]["stride_beats"])
+        self.continue_measured(deadline)
 
     def begin_listen_if_ready(self):
         self.exposure_workflows.apply_listen_failure()

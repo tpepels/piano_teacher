@@ -54,6 +54,10 @@ from .playback_coordinator import PlaybackCoordinator
 from .playback_session import PlaybackSession
 from .policy_registry import PolicyRegistry
 from .practice_session import PracticeSession
+from .command_router import CommandRouter
+from .midi_epoch import MidiEpoch
+from .session_routes import command_routes, event_handlers
+from .tick_worker import TickWorker
 from .transport_actions import TransportActions
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
@@ -346,26 +350,47 @@ def _event_boundary(r) -> None:
     r.practice_timeline = PracticeTimeline(
         lesson=r.lesson, notices=r.notices, transport=r.transport, take=r.take,
         transport_timing=r.transport_timing, timed_playback=r.timed_playback,
-        score=r.score, lesson_execution=r.lesson_execution,
+        lesson_execution=r.lesson_execution,
         recovery_workflows=r.recovery_workflows,
         completion_continuations=r.completion_continuations,
         live_feedback_workflows=r.live_feedback_workflows,
-        measurement=r.measurement, midi_input=r.midi_input, listen=r.listen,
+        measurement=r.measurement, midi_input=r.midi_input,
         attempt_progression=r.attempt_progression, read_models=r.read_models,
         exposure_workflows=r.exposure_workflows, clock=r.now,
         poll_midi=r.midi_application_input.poll_midi_connection)
-    r.practice_session = PracticeSession(
-        take=r.take, device_workflows=r.device_workflows,
+    r.midi_epoch = MidiEpoch(
+        lesson=r.lesson, transport=r.transport, take=r.take,
+        midi_input=r.midi_input,
+        corrected_time=r.midi_application_input.corrected_time)
+    r.command_router = CommandRouter(
+        lesson=r.lesson, transport=r.transport, take=r.take,
+        read_models=r.read_models, measurement=r.measurement,
         exposure_workflows=r.exposure_workflows,
-        history_management=r.history_management,
-        learning_commands=r.learning_commands, lock=r.lock,
-        measurement=r.measurement, midi_input=r.midi_input,
-        transport=r.transport, read_models=r.read_models,
-        settings_workflows=r.settings_workflows, lesson=r.lesson,
-        timed_playback=r.timed_playback,
-        transport_commands=r.transport_commands, timeline=r.practice_timeline,
+        routes=command_routes(
+            device_workflows=r.device_workflows,
+            settings_workflows=r.settings_workflows, midi_input=r.midi_input,
+            transport=r.transport, timed_playback=r.timed_playback,
+            history_management=r.history_management,
+            transport_commands=r.transport_commands,
+            learning_commands=r.learning_commands))
+    r.tick_worker = TickWorker(
+        timeline=r.practice_timeline, transport=r.transport, take=r.take,
+        lesson=r.lesson, midi_input=r.midi_input, epoch=r.midi_epoch,
+        deliver=r.midi_application_input.deliver, notices=r.notices,
+        clock=r.now)
+    r.practice_session = PracticeSession(
+        lock=r.lock, epoch=r.midi_epoch,
+        runtime_timings=r.runtime_timings, clock=r.now)
+    r.practice_session.bind_handlers(event_handlers(
+        commands=r.command_router, tick=r.tick_worker, epoch=r.midi_epoch,
+        midi_input=r.midi_input,
         midi_application_input=r.midi_application_input,
-        runtime_timings=r.runtime_timings, source_workflows=r.source_workflows,
+        settings_workflows=r.settings_workflows,
+        timed_playback=r.timed_playback,
+        transport_commands=r.transport_commands,
+        source_workflows=r.source_workflows, lesson=r.lesson,
         lesson_execution=r.lesson_execution, score_preload=r.score_preload,
-        lifecycle=r.session_lifecycle, notices=r.notices, clock=r.now)
+        device_workflows=r.device_workflows,
+        history_management=r.history_management,
+        lifecycle=r.session_lifecycle))
     r.midi_application_input.bind_session(r.practice_session)

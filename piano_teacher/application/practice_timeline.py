@@ -10,28 +10,25 @@ from .playback_facts import TimedTakeSource
 from .practice_transitions import TransitionContext, decide_transition
 from .attempt_progression import AttemptTick
 from .learning_capture import CapturePhaseFacts
-from .musical_scheduler import SCHEDULER
 from . import practice_flow
 
 
 class PracticeTimeline:
     def __init__(self, *, lesson, notices, transport, take, transport_timing,
-                          timed_playback, score, lesson_execution,
+                          timed_playback, lesson_execution,
                           recovery_workflows, completion_continuations,
                           live_feedback_workflows, measurement, midi_input,
-                          listen, attempt_progression, read_models,
+                          attempt_progression, read_models,
                           exposure_workflows, clock, poll_midi):
         self.notices = notices
         self.lesson = lesson
         self.transport = transport
         self.take = take
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
-        self.score = score
         self.lesson_execution, self.recovery_workflows = lesson_execution, recovery_workflows
         self.completion_continuations = completion_continuations
         self.live_feedback_workflows = live_feedback_workflows
         self.measurement = measurement
-        self.listen = listen
         self.midi_input = midi_input
         self.attempt_progression = attempt_progression
         self.read_models, self.clock, self.poll_midi = read_models, clock, poll_midi
@@ -61,21 +58,12 @@ class PracticeTimeline:
             self.lesson.advance_guided(connected=self.midi_input.connected, now=now)
             self.lesson_execution.save_guided_preparation()
         elif decision.action == "listening":
-            if self.transport.running and self.listen.finished(now=now, run_at=self.transport.run_at):
-                self.transport.finish_take()
-                self.notices.feedback = "Example complete"
-                self.notices.next_action = (
-                    "Choose Learn to find the notes, or Practice to play the rhythm.")
+            if self.exposure_workflows.finish_listen(now):
                 if (self.lesson_execution.flow_active() and self.lesson.flow_state is not None
                         and self.lesson.flow_state.step is practice_flow.Step.LISTEN):
                     self.lesson_execution.flow_execute(self.lesson.flow_listen_finished())
         elif decision.action == "preview_due":
-            deadline = self.transport.next_at
-            self.transport.advance_source_stride(self.score.source_model()[
-                "practice_timeline"]["stride_beats"])
-            self.timed_playback.continue_at(SCHEDULER.continuation(
-                    self.transport_timing.collect_continuation_measurement(deadline, 0.0),
-                    now=self.clock(),bpm=self.transport_timing.presentation_bpm()))
+            self.timed_playback.continue_preview()
         elif decision.action == "feedback":
             publication = self.take.pending_full_completion
             if publication is not None:
@@ -88,12 +76,8 @@ class PracticeTimeline:
                 self.lesson_execution.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,
                     exposure=self.take.pending.decision.next_exposure)
             else:
-                target = self.transport.pending_rewind
-                self.timed_playback.continue_at(
-                    SCHEDULER.continuation(
-                    self.transport_timing.collect_continuation_measurement(self.transport.next_at, target),
-                    now=self.clock(),bpm=self.transport_timing.presentation_bpm()),
-                    from_beat=target)
+                self.timed_playback.continue_measured(
+                    self.transport.next_at, from_beat=self.transport.pending_rewind)
         return decision.consumed, followup
 
     def publish_failed_transition(self) -> None:

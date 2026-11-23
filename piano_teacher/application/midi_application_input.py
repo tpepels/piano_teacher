@@ -102,7 +102,7 @@ class MidiApplicationInput:
         return (received_at - self.library.settings["midi_offset_ms"]/1000.0
                 if corrected_at is None else corrected_at)
 
-    def _deliver_message(self, message, *, received_at=None, corrected_at=None, deferred=False):
+    def deliver(self, message, *, received_at=None, corrected_at=None, deferred=False):
         now = self.clock() if received_at is None else received_at
         facts = MidiInputFacts(self.lesson.fingerprint,self.lesson.revision,
             self.lesson.plan.identity if self.lesson.plan else "",self.lesson.plan.active_phrase if self.lesson.plan else None,

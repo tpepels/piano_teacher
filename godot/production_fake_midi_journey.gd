@@ -105,7 +105,7 @@ func _process(_delta: float) -> bool:
     var now_ms: int = Time.get_ticks_msec()
     if now_ms-last_heartbeat_ms >= 5000:
         last_heartbeat_ms = now_ms
-        print("FULL_SCENE_MIDI_HEARTBEAT:", JSON.stringify({
+        var beat: Dictionary = {
             "phase":phase,"elapsed_ms":now_ms-begun_ms,
             "phase_elapsed_ms":now_ms-phase_ms,
             "native_started":app.native_started,
@@ -117,7 +117,17 @@ func _process(_delta: float) -> bool:
             "paused":state.get("paused"),"running":state.get("running"),
             "command_pending":app.command_coordinator.state.pending,
             "score_ready":app.score_session.is_ready(),
-            "admission_problem":app.score_admission._last_problem}))
+            "admission_problem":app.score_admission._last_problem}
+        if phase == "free":
+            # A stall waiting for the first Free target shows which
+            # condition (guided world, held target, projection, painted
+            # staff) never settled.
+            beat["free_world"] = str(app.presentation_session.guided.world)
+            beat["hold_world"] = str(app.presentation_session.score_flow.hold_world)
+            beat["projected"] = str(app.presentation_session.score_flow.project(now_ms))
+            beat["painted"] = str(app.practice_view.stage.renderer.stream_world_beat)
+            beat["targets"] = state.get("teaching",{}).get("expected_notes",[]).size()
+        print("FULL_SCENE_MIDI_HEARTBEAT:", JSON.stringify(beat))
     if not app.native_started or not app.startup_last_music_checked or \
             not bool(state.get("loaded",false)):
         return false

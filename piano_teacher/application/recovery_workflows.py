@@ -65,11 +65,8 @@ class RecoveryWorkflows:
                     from_beat=prepared.start, recovery=True,
                     exposure=self.take.pending.decision.next_exposure)
             elif prepared.action == "continue":
-                self.timed_playback.continue_at(SCHEDULER.continuation(
-                    self.transport_timing.collect_continuation_measurement(
-                        deadline, prepared.start),
-                    now=self.clock(), bpm=self.transport_timing.presentation_bpm()),
-                    from_beat=prepared.start)
+                self.timed_playback.continue_measured(
+                    deadline, from_beat=prepared.start)
             elif prepared.action == "prepare":
                 if prepared.assignment is None:
                     self.transport_timing.schedule_preparation(

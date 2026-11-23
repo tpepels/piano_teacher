@@ -83,6 +83,17 @@ class ExposureWorkflows:
             self.source(), selected,
             mode="perform", revision=self.lesson.revision), reason=reason)
 
+    def finish_listen(self, now: float) -> bool:
+        """End a running Listen example whose audio has finished."""
+        if not (self.transport.running
+                and self.listen.finished(now=now, run_at=self.transport.run_at)):
+            return False
+        self.transport.finish_take()
+        self.notices.feedback = "Example complete"
+        self.notices.next_action = (
+            "Choose Learn to find the notes, or Practice to play the rhythm.")
+        return True
+
     def apply_listen_failure(self) -> None:
         failure = self.listen.take_failure()
         if failure is not None:
