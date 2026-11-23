@@ -7,11 +7,11 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, replace
 from math import isfinite
-from .teaching_course import (PlanProgress, CourseState, assessed_progress, manual_progress,
-    refresh_course, revisit_course, minimum_bpm, steps, preserve_mastered)
+from .teaching_course import (
+    PlanProgress, CourseState, assessed_progress, refresh_course, revisit_course, minimum_bpm, steps, preserve_mastered,
+)
 from .lesson_contracts import LessonPlanDefinition
 from .practice import Assessment
-from .music import Piece
 from .diagnosis_policies import (LearnerSnapshot, AssessmentEvidence,
     ErrorFamilyDiagnosis, RepeatedErrorPolicy)
 from .remediation import RemedialAssignment, RemediationPlanner

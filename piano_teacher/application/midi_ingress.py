@@ -92,13 +92,6 @@ class MidiIngress:
             raise ValueError("Resume grading deadline must be finite and nonnegative")
         self.resume_grading_after = float(deadline)
 
-    def shift_resume_gate(self, paused_seconds: float) -> None:
-        """Preserve held-key suppression across a paused reading lead."""
-        if not math.isfinite(paused_seconds) or paused_seconds < 0.0:
-            raise ValueError("Paused duration must be finite and nonnegative")
-        self.authorize_grading_after(
-            self.resume_grading_after+paused_seconds)
-
     def dispatch(self, message, *, facts: MidiInputFacts,
                  received_at: float, corrected_at: float | None,
                  deferred: bool, midi_offset_seconds: float,

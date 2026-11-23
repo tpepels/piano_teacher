@@ -263,13 +263,6 @@ class VisualTransport:
             return None
         return announced[1]
 
-    def announced_bpm(self) -> float | None:
-        """The announced next take's start BPM while the announcement holds."""
-        announced = self.announced_continuation
-        if announced is None or self.announced_deadline(announced[0]) is None:
-            return None
-        return announced[2]
-
     def reset_for_stop(self, *, rewind_seconds: float) -> None:
         """Forget the visible attempt but retain the loaded score's gap duration."""
         self.running = False

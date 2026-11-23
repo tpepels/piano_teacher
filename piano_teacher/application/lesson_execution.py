@@ -36,10 +36,6 @@ class LessonExecution:
     def _save(self) -> None:
         self.progress.save(self.source_identity.plan, self.source_identity.fingerprint)
 
-    def learner_saved(self, stage_key: str | None = None) -> dict:
-        return self.learner_progress.saved(
-            self.source_identity.plan, fingerprint=self.source_identity.fingerprint, stage_key=stage_key)
-
     def guided_unit(self) -> dict | None:
         return self.learner_progress.guided_unit(
             self.source_identity.plan, mode=self.playback_session.mode, guided_range=self.guided_session.beat_range)
@@ -92,9 +88,6 @@ class LessonExecution:
 
     def flow_active(self) -> bool:
         return self.flow_session.active(self.source_identity.plan,warmup=self.source_identity.warmup)
-
-    def flow_stage_entry(self, *, resumed: bool = False) -> practice_flow.Transition:
-        return self.flow_session.stage_entry(self.source_identity.plan,resumed=resumed)
 
     def flow_execute(self, transition: practice_flow.Transition, *, reason=None) -> None:
         """Execute the selected course step; the session owns flow state."""

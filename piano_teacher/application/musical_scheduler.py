@@ -344,28 +344,6 @@ class MusicalScheduler:
         return max(.05,lead_seconds-rest_seconds)
 
     @classmethod
-    def handoff(cls, *, now: float, previous_deadline: float,
-                lead_beats: float, clear_beats: float | None,
-                count_in_beats: float, bpm: float,
-                rest_take_end: tuple[float,float] | None,
-                latency: float) -> MusicalDeadline:
-        if clear_beats is None or rest_take_end is None:
-            return cls.initial(now=previous_deadline,bpm=bpm,count_in_beats=0.0,
-                reserved_at=cls.offscreen(
-                    deadline=max(previous_deadline,now),
-                    lead_beats=lead_beats,bpm=bpm),
-                continuation=True)
-        source_end,outgoing_bpm = rest_take_end
-        # Preserve the published physical reservation: the rest is
-        # measured from its graded end, not from an arbitrary poll instant.
-        remaining = max(0.,(clear_beats+lead_beats)-
-                        cls.seconds_beats(max(0.,now-source_end),outgoing_bpm))
-        physical = now+cls.beats_seconds(remaining,bpm)
-        return cls.resolve("handoff",now=now,bpm=bpm,
-            count_in_beats=count_in_beats,latency=latency,
-            physical_at=physical)
-
-    @classmethod
     def fresh_resume(cls, *, now: float, old_deadline: float,
                      reading_lead_seconds: float, horizon_beats: float,
                      bpm: float, short_rest_at: float | None,
@@ -421,11 +399,5 @@ class MusicalScheduler:
             raise ValueError("Invalid recovery feedback duration")
         return max(feedback_seconds,
                    min(4.0,cls.beats_seconds(passage_beats,bpm)/3.0))
-
-    @classmethod
-    def late_ready(cls, *, now: float, outgoing_bpm: float,
-                   extra_beats: float = 2.0) -> float:
-        return cls.offscreen(deadline=now,lead_beats=extra_beats,bpm=outgoing_bpm)
-
 
 SCHEDULER = MusicalScheduler()

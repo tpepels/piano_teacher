@@ -125,11 +125,6 @@ class PreloadFailed:
 
 
 @dataclass(frozen=True, slots=True)
-class CalibrationRequested:
-    action: str
-
-
-@dataclass(frozen=True, slots=True)
 class HardwareRequested:
     action: str
 
@@ -163,7 +158,7 @@ PracticeEvent = (TimedStartRequested | UserCommand | ClockAdvanced |
                  FingeringCorrectionCommitted | SettingsChanged |
                  MidiPortsRequested | DeviceSelected |
                  PreloadReady | PreloadFailed |
-                 SessionClosed | CalibrationRequested | HardwareRequested |
+                 SessionClosed | HardwareRequested |
                  HistoryExported | PieceHistoryDeleted | LearnerHistoryDeleted)
 
 

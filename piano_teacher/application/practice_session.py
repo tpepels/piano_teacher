@@ -31,7 +31,6 @@ from .session_events import (
     MidiPortsRequested,
     PreloadReady,
     PreloadFailed,
-    CalibrationRequested,
     HardwareRequested,
     HistoryExported,
     PieceHistoryDeleted,
@@ -340,8 +339,6 @@ class PracticeSession:
             return self.score_preload.report_preload_failure(
                 fingerprint=event.fingerprint,step_number=event.step_number,
                 revision=event.revision,error=event.error)
-        if isinstance(event, CalibrationRequested):
-            return self.calibration_action(event.action)
         if isinstance(event, HardwareRequested):
             return self.device_workflows.hardware_action(event.action)
         if isinstance(event, HistoryExported):

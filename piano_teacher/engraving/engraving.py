@@ -1,11 +1,8 @@
 """Canonical Verovio source engraving and identity-preserving page geometry."""
 from __future__ import annotations
 
-from dataclasses import replace
-import json
 import math
 import re
-from pathlib import Path
 from dataclasses import dataclass
 
 from .geometry import layout_from_pages
@@ -41,9 +38,7 @@ def _pitches_from_verovio(toolkit, events: list[dict]) -> dict[str, int]:
 
 
 # Single canonical Verovio runtime shared by native notation and offline proof.
-from ..notation.assets.runtime import (
-    create_verovio_toolkit, verovio_resources, verovio_object,
-)
+from ..notation.assets.runtime import create_verovio_toolkit, verovio_object
 
 
 def _fade_inactive_staff(svg: str, hand: str, *, note_bindings: dict | None = None) -> str:

@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..exercise_generator import ExerciseVariant
-from .guided_fragment import select_guided_fragment
 from ..music import Phrase, source_note_id
 from ..measure_grid import phrase_grid
 from ..teaching import TeachingConfig, TeachingController
@@ -26,21 +25,6 @@ class GuidedFragment:
     @property
     def beat_range(self) -> tuple[float, float]:
         return self.start_beat, self.end_beat
-
-
-def select_fragment(variant: ExerciseVariant, boundaries: tuple[float, ...],
-                    *, from_beat: float) -> GuidedFragment:
-    """Validate before canceling a live session; skip only empty guided ideas."""
-    phrase = variant.phrase
-    choice = select_guided_fragment(phrase, boundaries, from_beat)
-    first, last = choice.first_index, choice.end_index
-    start, end = choice.start, choice.end
-    absolute_start, absolute_end = phrase.start+start, phrase.start+end
-    display = Phrase(phrase.number, phrase.first_bar+first, phrase.first_bar+last-1,
-        absolute_start, absolute_end,
-        tuple(note for note in phrase.notes
-              if absolute_start-1e-7 <= note.start < absolute_end-1e-7))
-    return GuidedFragment(variant, start, end, display)
 
 
 def materialize_fragment(variant, boundaries, *, start, end):

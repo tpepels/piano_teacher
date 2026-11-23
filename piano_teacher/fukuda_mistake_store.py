@@ -8,7 +8,6 @@ mistake, so exercises can recover toward the full original score.
 """
 from __future__ import annotations
 
-from collections import Counter
 import sqlite3
 
 from .practice import Assessment

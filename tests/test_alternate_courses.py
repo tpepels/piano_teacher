@@ -4,6 +4,7 @@ from pathlib import Path
 from piano_teacher.importing.pieces import import_piece
 from piano_teacher.learning import LearningPlan
 from piano_teacher.lesson_generators import lesson_hands
+from piano_teacher.teaching_course import manual_progress
 from piano_teacher.practice import Recorder, evaluate, note_dimensions
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,12 +37,19 @@ def test_source_progression_tools_allow_manual_tempo_and_selected_step():
     piece = import_piece(ROOT / "tests" / "fixtures" / "musical_fidelity" / "midi_mixed_meter.mid")
     plan = LearningPlan(piece, exercise_strategy="source-progression")
     first = plan.lesson_step_number
-    plan.set_practice_bpm(72)
+
+    def manual(action, **values):
+        # The same pure lesson decision the session installs for learner tools.
+        course = manual_progress(plan.course_state(), action, **values)
+        plan.apply_teaching_progress(course.progress, definition=course.definition,
+                                     expected=plan.teaching_progress())
+
+    manual("tempo", bpm=72)
     assert plan.bpm == 72
     assert plan.lesson_step_number == first
-    plan.select_step(len(plan.lesson_steps))
+    manual("select_step", number=len(plan.lesson_steps))
     assert {n.source_id for n in plan.active_phrase.notes} == {n.source_id for n in piece.notes}
-    plan.select_step(first)
+    manual("select_step", number=first)
     assert plan.bpm == 72
     assert not plan.mastered
 

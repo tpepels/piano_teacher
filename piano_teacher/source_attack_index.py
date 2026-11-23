@@ -1,5 +1,5 @@
 """One original-order source attack index for all passage policies."""
-from bisect import bisect_left, bisect_right
+from bisect import bisect_left
 from .music import Piece
 
 class SourceAttackIndex:

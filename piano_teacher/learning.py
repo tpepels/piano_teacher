@@ -1,21 +1,13 @@
 """A compact course with variable focus length for sparse musical material."""
 from __future__ import annotations
-from bisect import bisect_right
-from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Mapping
-import hashlib
-import json
-import math
 from .exercise_strategies import WARMUP_STRATEGY, resolve_strategy
 from .exercise_pipeline import ExerciseStage
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant
-from .musical_groups import grouping_for_piece, MusicalGrouping
-from .lesson_settings import SETTINGS
+from .musical_groups import grouping_for_piece
 from . import teaching_course as course_policy
-from .tempo_difficulty import suggested_start_bpm
-from .repeated_passages import exact_repetition_signature
 from .lesson_contracts import LessonGenerator, LessonPlanDefinition, lesson_hands
 from .lesson_source_planner import Exercise
 from .lesson_generators import (
@@ -187,49 +179,6 @@ class LearningPlan:
         """Generators opt in through a common immutable feedback hook."""
         return callable(getattr(self.lesson_generator, "with_feedback", None))
 
-    def feedback_changes_generator(self, evidence: Mapping[str, str]) -> bool:
-        """Whether refresh_from_feedback(evidence) would rebuild the course.
-
-        Only the immutable feedback hook runs (microseconds); the rebuild
-        itself is left to refresh_from_feedback.
-        """
-        hook = getattr(self.lesson_generator, "with_feedback", None)
-        return callable(hook) and hook(
-            evidence, self.lesson_definition) is not self.lesson_generator
-
-    def refresh_from_feedback(
-        self, evidence: Mapping[str, str], *, prefer_repair: bool = True,
-        focus_ids: frozenset[str] | None = None,
-    ) -> bool:
-        """Rebuild selected stages from actual original-attack error families."""
-        if not isinstance(evidence, Mapping) or any(
-                not isinstance(k, str) or not isinstance(v, str)
-                for k, v in evidence.items()):
-            raise TypeError("Generator needs source-identified MIDI feedback")
-        if focus_ids is not None and (
-                not isinstance(focus_ids, frozenset)
-                or not focus_ids <= evidence.keys()):
-            raise ValueError("Focus must identify currently failed source attacks")
-        # Previously stored errors may belong to another passage. Never
-        # relocate the learner for old evidence during a new assessment.
-        target_ids = ((frozenset(evidence) if focus_ids is None else focus_ids)
-                      if prefer_repair else frozenset())
-        hook = getattr(self.lesson_generator, "with_feedback", None)
-        if callable(hook):
-            updated = hook(evidence, self.lesson_definition)
-            return self._refresh_generator(updated, focus_ids=target_ids)
-        return False
-
-    def _refresh_generator(
-        self, updated: LessonGenerator, *, focus_ids: frozenset[str],
-    ) -> bool:
-        if updated is self.lesson_generator:
-            return False
-        course = course_policy.refresh_course(self.course_state(), updated.generate(self.piece), focus_ids=focus_ids)
-        self._install_course(course)
-        self.lesson_generator = updated
-        return True
-
     def _preserve_mastered_stages(
         self, definition: LessonPlanDefinition, previous: LessonPlanDefinition,
         keys: Mapping[str, int],
@@ -257,14 +206,6 @@ class LearningPlan:
             self._install_definition(definition)
             self.variant_index = next(i for i, stage in enumerate(self.stages)
                                       if stage.variant.level == level)
-
-    def revisit_source_errors(self, ids: frozenset[str]) -> bool:
-        before = self.course_state()
-        chosen = course_policy.revisit_course(before, ids)
-        if chosen is before:
-            return False
-        self._install_course(chosen)
-        return True
 
     def _pipeline_stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
         """Read the generated course; never choose passages on navigation."""
@@ -368,47 +309,11 @@ class LearningPlan:
         self.variant_index = next((i for i, variant in enumerate(self.variants) if variant.level == level), 0)
         self.bpm = self._tempo_for_current_stage()
 
-    def jump(self, amount: int) -> None:
-        self.select(min(len(self.exercises) - 1, max(0, self.index + amount)))
-
-    def select_step(self, number: int) -> None:
-        self._install_course(course_policy.manual_progress(self.course_state(), "select_step", number=number))
-
     def select(self, index: int) -> None:
         self._install_course(course_policy.manual_progress(self.course_state(), "select", number=index))
 
     def set_hand(self, hand: str) -> None:
         self._install_course(course_policy.manual_progress(self.course_state(), "hand", hand=hand))
 
-    def set_practice_bpm(self, bpm: int) -> None:
-        """Practice flow: change the practice tempo, keep the target tempo."""
-        course = self.course_state()
-        self._install_course(course.with_progress(bpm=bpm, streak=0, failures=0))
-
-    def set_bpm(self, bpm: int) -> None:
-        self._install_course(course_policy.manual_progress(self.course_state(), "tempo", bpm=bpm))
-
     def tempo_rungs(self) -> tuple[int, ...]:
         return course_policy.tempo_rungs(self.course_state())
-
-    def _next_automatic_bpm(self) -> int:
-        return course_policy.next_bpm(self.course_state())
-
-    def decrease_tempo(self) -> int:
-        self._install_course(course_policy.manual_progress(self.course_state(), "tempo_down"))
-        return self.bpm
-
-    def increase_tempo(self) -> int:
-        self._install_course(course_policy.manual_progress(self.course_state(), "tempo_up"))
-        return self.bpm
-
-    def bpm_after(self, accepted: bool) -> float:
-        return course_policy.next_bpm(self.course_state()) if accepted and self.bpm < self.target_bpm else self.bpm
-
-    def apply_result(self, *, correct: int, total: int, extras: int = 0,
-                     accepted: bool | None = None,
-                     next_bpm: float | None = None) -> str:
-        course, message = course_policy.assessed_progress(self.course_state(), correct=correct,
-            total=total, extras=extras, accepted=accepted, selected_bpm=next_bpm)
-        self._install_course(course)
-        return message

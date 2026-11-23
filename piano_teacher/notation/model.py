@@ -54,10 +54,8 @@ class ScoreMeasure:
     right_barline: dict | None = None
 
 
-# Compatibility names retained for existing tests and callers.
-# Both source import and semantic model use the independent parser.
-from .musicxml import BARLINE_STYLES, parse_barline
-_barline_data = parse_barline
+# Source import and the semantic model share the independent parser.
+from .musicxml import parse_barline
 
 
 @dataclass(frozen=True)
@@ -157,7 +155,7 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
             ticks_in_bar = round((grid[bar_index + 1] - grid[bar_index]) * divisions)
             local_barlines: dict[str, dict] = {}
             for tag in measure.findall("barline"):
-                location, mark = _barline_data(tag)
+                location, mark = parse_barline(tag)
                 if location in local_barlines and local_barlines[location] != mark:
                     raise ValueError("Conflicting barlines within a MusicXML measure")
                 local_barlines[location] = mark

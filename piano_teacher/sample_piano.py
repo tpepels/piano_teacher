@@ -11,7 +11,6 @@ import ctypes.util
 from dataclasses import dataclass
 import os
 from pathlib import Path
-import sys
 import wave
 
 from .application.musical_scheduler import SCHEDULER

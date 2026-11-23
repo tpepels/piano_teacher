@@ -97,13 +97,6 @@ def listen_finished(state: FlowState) -> Transition:
                       "Now without tempo")
 
 
-def free_completed(state: FlowState) -> Transition:
-    _require(state, Step.FREE)
-    tempo = replace(state, step=Step.TEMPO, bpm=floor_bpm(state.target_bpm),
-                    failures=0, clean_at_target=0)
-    return Transition(tempo, f"Now in tempo · {tempo.tempo_percent}%")
-
-
 def take_graded(state: FlowState, *, passed: bool) -> Transition:
     """docs/practice-flow.md 2c, one graded Tempo take."""
     _require(state, Step.TEMPO)

@@ -15,14 +15,12 @@ from .application.session_events import (
     PlaybackWithdrawn, PlaybackFailed, SourceCommitted,
     FingeringCorrectionCommitted, SettingsChanged,
     DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed, SessionClosed,
-    CalibrationRequested, HardwareRequested, HistoryExported,
+    HardwareRequested, HistoryExported,
     PieceHistoryDeleted, LearnerHistoryDeleted)
-from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.score_artifacts import ScoreArtifacts
 from .clock import Clock
 from .feedback_events import FeedbackEventLog
 from .learning import LearningPlan
-from .practice_history import PracticePolicyService
 from .engraving.engraving import EngravedScore
 from .music import Phrase
 from .warmups import is_warmup
@@ -34,14 +32,6 @@ class PracticeEngine:
     @property
     def plan(self) -> LearningPlan | None:
         return self.source_identity.plan
-
-    @property
-    def assessment_policies(self) -> PracticeAssessmentPolicies:
-        return self.policy_registry.grading
-
-    @property
-    def practice_policy(self) -> PracticePolicyService:
-        return self.policy_registry.learning
 
     @property
     def score_artifacts(self) -> ScoreArtifacts:
@@ -185,9 +175,6 @@ class PracticeEngine:
 
     def start_library_health(self) -> dict:
         return self.source_workflows.start_library_health()
-
-    def midi_calibration_action(self, action: str) -> None:
-        return self.practice_session.apply(CalibrationRequested(action))
 
     def preferences(self) -> dict:
         with self.lock:

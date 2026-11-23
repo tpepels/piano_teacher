@@ -151,18 +151,6 @@ def _pcm_chunks(voices: tuple[_Voice, ...], frames: int, sample_rate: int,
         yield samples.tobytes()
 
 
-def iter_pcm_chunks(variant: ExerciseVariant, bpm: Real, *, sample_rate: int = 44100,
-                    chunk_frames: int = 4096) -> Iterator[bytes]:
-    """Yield little-endian mono PCM16, with bounded waveform buffers.
-
-    Time zero is phrase.start. The length includes its final silent bars and
-    any source note held past phrase.end. Each yielded chunk has at most
-    chunk_frames samples. No whole-passage waveform is allocated.
-    """
-    _, frames, voices = _prepare(variant, bpm, sample_rate, chunk_frames)
-    yield from _pcm_chunks(voices, frames, sample_rate, chunk_frames)
-
-
 class DemoAudioCache:
     """An on-disk WAV cache with bounded retention.
 

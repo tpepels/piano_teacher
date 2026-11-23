@@ -14,8 +14,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from .diagnosis_policies import AssessmentEvidence, LearnerSnapshot
 from .learning_ledger_common import (
-    SCHEMA_VERSION, LearningLedgerLimitError, _compact, _context_summary,
-    _hash, _identifier, _json, _object, _utc,
+    SCHEMA_VERSION, _compact, _context_summary, _hash, _identifier, _json, _object, _utc,
 )
 from .learning_ledger_export import LearningHistoryExporter
 from .learning_ledger_retention import LearningDetailRetention

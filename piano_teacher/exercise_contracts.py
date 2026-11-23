@@ -13,7 +13,6 @@ from typing import Protocol
 
 from .exercise_generator import ExerciseVariant
 from .music import Phrase
-from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
 from .application.musical_scheduler import SCHEDULER
 
 
@@ -56,16 +55,6 @@ class TimingPlan:
                     or event.exercise_end <= event.exercise_start
                     or event.exercise_end > self.duration_beats + 1e-7):
                 raise ValueError("Timing plan exceeds exercise timeline")
-
-    @property
-    def exercise_phrase(self) -> Phrase:
-        """Independent timed phrase used only by timing-aware playback/grading."""
-        p = self.original.phrase
-        return Phrase(p.number, p.first_bar, p.last_bar, 0, self.duration_beats,
-                      tuple(replace(note, start=event.exercise_start,
-                                    end=event.exercise_end)
-                            for note, event in zip(self.original.notes, self.events)))
-
 
 def _events(variant: ExerciseVariant) -> tuple[TimingEvent, ...]:
     origin = variant.phrase.start
@@ -183,53 +172,3 @@ class TempoStrategy(Protocol):
     def ladder_bpm(self, effective_bpm: float) -> float: ...
 
 
-@dataclass(frozen=True)
-class ConstantTempo:
-    name: str = "constant-tempo"
-    is_identity: bool = True
-
-    def effective_bpm(self, bpm: float) -> float:
-        return float(bpm)
-
-    def ladder_bpm(self, effective_bpm: float) -> float:
-        return float(effective_bpm)
-
-    def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap:
-        return TempoMap(self.name, (TempoSegment(0, plan.duration_beats, float(target_bpm)),))
-
-
-@dataclass(frozen=True)
-class TimingAssessment:
-    """Assessment of the transformed target, with original note identity."""
-    timing_name: str
-    assessment: Assessment
-    timed_notes: tuple[NoteAssessment, ...]
-    tempo_name: str = "constant-tempo"
-
-
-def assess_timed(plan: TimingPlan, hand: str, bpm: float,
-                 played: list[PlayedNote], *, tempo_map: TempoMap | None = None) -> TimingAssessment:
-    """Assess transformed beats, then rebind annotations to original notes.
-
-    This never credits source mastery by itself: the caller must distinguish
-    the transformed stage from the mandatory original stage.
-    """
-    phrase = plan.exercise_phrase
-    if tempo_map is None:
-        timed = evaluate(phrase, hand, bpm, played)
-    else:
-        if abs(tempo_map.duration_beats - plan.duration_beats) > 1e-7:
-            raise ValueError("Tempo map must cover the whole timed exercise")
-        from .assessment_clock import expected_note_seconds
-        timed = evaluate(
-            phrase, hand, bpm, played,
-            expected_seconds=expected_note_seconds(phrase, tempo_map))
-    # Assessment only returns notes for the selected hand, in phrase order.
-    originals = [n for n in plan.original.notes if hand == "both" or n.hand == hand]
-    if len(timed.notes) != len(originals):
-        raise ValueError("Grader lost transformed source correspondence")
-    bound = tuple(replace(entry, note=note)
-                  for entry, note in zip(timed.notes, originals))
-    return TimingAssessment(plan.name, Assessment(bound, timed.extra_notes,
-                                                   timed.unmatched_played), timed.notes,
-                            tempo_map.name if tempo_map is not None else "constant-tempo")

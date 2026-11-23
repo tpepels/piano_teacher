@@ -98,11 +98,6 @@ class ScoreArtifacts:
             self._projected_model = None
         return self._notation
 
-    def notation_musicxml(self, selected: ScoreSelection) -> str:
-        """The exact selected lesson XML, shared with model and engraving."""
-        with self._model_lock:
-            return self._selected_notation(selected).musicxml
-
     def source_model(self, selected: ScoreSelection) -> dict:
         """Internal source contract; the command queue publishes a semantic snapshot."""
         with self._model_lock:

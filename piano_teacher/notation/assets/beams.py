@@ -297,16 +297,6 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
     return output
 
 
-BASE_RASTER_WIDTH = 1600
-MIN_STAFF_SPACE_PX = 4.5     # below this a rasterized beam is not legible
-TARGET_STAFF_SPACE_PX = 8.0
-MAX_RASTER_WIDTH = 24000
-
-
-class BeamExtractionError(Exception):
-    """A required beam cannot be extracted; never publish a silent empty atlas."""
-
-
 def beam_fragments(svgs, model, cache=None, cache_identity="") -> dict:
     key = (cache.key("real-verovio-beams",VERSION,cache_identity)
            if cache is not None and cache_identity else None)

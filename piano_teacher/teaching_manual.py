@@ -3,9 +3,8 @@
 Inputs are immutable source-local credits and validated scalar intent. This
 module does not know about an engine, database, clock or renderer.
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from .teaching_course import manual_progress, steps, select_cursor
-from .lesson_contracts import lesson_hands
 from .learner_state import guided_units
 from .course_navigation import choose_source_opening
 from .measure_grid import phrase_grid

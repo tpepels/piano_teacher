@@ -23,11 +23,6 @@ class StageChange:
     def tempo_only(self) -> bool:
         return self.action in ("tempo", "tempo_up", "tempo_down")
 
-    @property
-    def resets_open_position(self) -> bool:
-        return self.action in ("select_step", "next", "previous", "hand")
-
-
 def _require_hand_change(plan, requested: str, *, warmup: bool) -> None:
     if requested not in plan.hands:
         raise ValueError(f"Hand {requested!r} unavailable")

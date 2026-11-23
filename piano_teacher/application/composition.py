@@ -11,7 +11,6 @@ from pathlib import Path
 from types import SimpleNamespace
 import os
 import threading
-import time
 
 from ..assessment_service import AssessmentService
 from ..clock import Clock

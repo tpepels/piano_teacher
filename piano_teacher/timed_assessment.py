@@ -14,7 +14,7 @@ from .feedback import project_assessment
 from .live_feedback import live_assessment
 from .measure_grid import chunk_start_at_end
 from .music import Phrase
-from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
+from .practice import Assessment, PlayedNote, evaluate
 from .recovery import RecoveryDecision, rolling_recovery_verdict
 
 

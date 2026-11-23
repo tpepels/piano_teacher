@@ -13,7 +13,7 @@ from collections import defaultdict
 from .diagnosis_policies import PracticeRecommendation
 from .exercise_generator import ExerciseVariant
 from .measure_grid import phrase_grid, two_bar_chunks
-from .music import Note, Phrase
+from .music import Phrase
 from .practice import Assessment
 
 

@@ -6,7 +6,6 @@ mode. The approved lesson and source identity are consumed, never reselected.
 from __future__ import annotations
 from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, RestResumeFacts
 from .playback_transitions import CountInPlan
-from .musical_scheduler import SCHEDULER
 
 
 class TimedPlayback:

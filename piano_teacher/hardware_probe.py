@@ -6,7 +6,6 @@ and none of these events enter the assessment, mastery or transport clock.
 """
 from __future__ import annotations
 
-import math
 from .clock import Clock, monotonic
 
 MAX_EVENTS = 512

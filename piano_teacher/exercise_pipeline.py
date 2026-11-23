@@ -24,10 +24,6 @@ class ExerciseStage:
     technique: str = ""
     display_name: str = ""
 
-    @property
-    def shaped_tempo(self) -> bool:
-        return self.tempo_policy is not None
-
     def effective_bpm(self, bpm: float) -> float:
         """Tempo this stage actually sounds at for a selected (ladder) BPM."""
         if self.tempo_policy is None:
