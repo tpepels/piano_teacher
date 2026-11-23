@@ -900,6 +900,14 @@ acceptance.
   rejects idempotent `playback.present` replay after same-revision
   BPM, passage-origin or tempo-map changes. The existing source, mode,
   transport, stage and terminal-status checks remain in force.
+- [`225df0e`](https://github.com/tpepels/piano_teacher/commit/225df0ef43230d34b882c1a0b0e34b5b0a446d69)
+  removes the native prepared-score fallback that treated a matching
+  lesson ordinal as equivalent to the selected source identity. Preloaded
+  stage promotion now requires the committed `stage_key` with matching
+  fingerprint, revision and hand even before a playback intent exists.
+  Manual renderer handoffs use the same installed score identity, so
+  a changed stage/hand cannot clear or reuse the old renderer on merely
+  equal fingerprint/revision. Exposed old ink remains retained.
 
 **Verification:** Source-contract counterpart fields and native admission
 guards were inspected on the committed files. No Python/Godot tests,
