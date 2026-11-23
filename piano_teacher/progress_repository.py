@@ -198,8 +198,11 @@ class ProgressRepository:
                 (fingerprint,p.profile,p.index,p.hand,p.bpm,p.streak,p.target_bpm,
                  p.variant_index,p.route_version,p.identity,p.exercise.phrase.first_bar,
                  p.exercise.phrase.last_bar,p.active_variant.level,p.exercise.kind))
-            p.stage_tempos[p.identity] = p.bpm
-            for key, bpm in p.stage_tempos.items():
+            # Persist the current stage's tempo for reopening without
+            # mutating the plan: its progress is the lesson decision's
+            # immutable result, and a committed receipt replays against it.
+            tempos = {**p.stage_tempos, p.identity: p.bpm}
+            for key, bpm in tempos.items():
                 self.db.execute("INSERT OR REPLACE INTO stage_tempos VALUES (?,?,?)",
                                 (fingerprint,key,bpm))
             for key in p.transferable_tempos:
