@@ -76,41 +76,21 @@ class PlaybackSession:
         """One live-take bit, owned by the same timeline as Pause and onset."""
         return self._transport.running
 
-    @running.setter
-    def running(self, value: bool) -> None:
-        self._transport.running = bool(value)
-
     @property
     def transport_id(self) -> int:
         return self._transport.transport_id
-
-    @transport_id.setter
-    def transport_id(self, value: int) -> None:
-        self._transport.transport_id = int(value)
 
     @property
     def count_in_beats(self) -> float:
         return self._transport.count_in_beats
 
-    @count_in_beats.setter
-    def count_in_beats(self, value: float) -> None:
-        self._transport.count_in_beats = float(value)
-
     @property
     def count_in_bar_beats(self) -> float:
         return self._transport.count_in_bar_beats
 
-    @count_in_bar_beats.setter
-    def count_in_bar_beats(self, value: float) -> None:
-        self._transport.count_in_bar_beats = float(value)
-
     @property
     def count_in_meter(self) -> list[int]:
         return self._transport.count_in_meter
-
-    @count_in_meter.setter
-    def count_in_meter(self, value: list[int]) -> None:
-        self._transport.count_in_meter = list(value)
 
     def require_authorized_start(self) -> None:
         if not self.authorizing:
@@ -143,7 +123,7 @@ class PlaybackSession:
         self.preview_only = not request.connected
         self._transport.begin_take(loop_continuation=request.loop_continuation)
         self.open_take(phrase=source.phrase,recording=True)
-        self.running = True
+        self._transport.running = True
         self.auto = request.automatic and not self.preview_only
         self.awaiting_score_revision = None
         scheduled = self._progression.schedule_start(
@@ -152,9 +132,9 @@ class PlaybackSession:
             position=request.position,loop_continuation=request.loop_continuation,
             preview=self.preview_only,now=self._clock(),
             count_in_plan=request.count_in_plan)
-        self.count_in_bar_beats = scheduled.count_in_bar_beats
-        self.count_in_meter = list(scheduled.count_in_meter)
-        self.count_in_beats = scheduled.count_in_beats
+        self._transport.count_in_bar_beats = scheduled.count_in_bar_beats
+        self._transport.count_in_meter = list(scheduled.count_in_meter)
+        self._transport.count_in_beats = scheduled.count_in_beats
         deadline = SCHEDULER.initial(
             now=scheduled.run_at-SCHEDULER.beats_seconds(
                 scheduled.count_in_beats,source.bpm),
@@ -178,7 +158,7 @@ class PlaybackSession:
         try:
             self._measurement.begin(context)
         except Exception:
-            self.running = False
+            self._transport.running = False
             self._attempt.suspend_recording()
             self.auto = False
             raise
@@ -243,10 +223,10 @@ class PlaybackSession:
     def _activate_listen(self, start, *, deadline: float) -> None:
         self.awaiting_score_revision = None
         self.open_take()
-        self.running = True
-        self.count_in_bar_beats = start.count_in_bar_beats
-        self.count_in_meter = list(start.count_in_meter)
-        self.count_in_beats = start.count_in_beats
+        self._transport.running = True
+        self._transport.count_in_bar_beats = start.count_in_bar_beats
+        self._transport.count_in_meter = list(start.count_in_meter)
+        self._transport.count_in_beats = start.count_in_beats
         self._transport.install_timed_origin(
             from_beat=start.from_beat,
             run_at=deadline,
@@ -292,9 +272,9 @@ class PlaybackSession:
                     request.target,self._transport.next_at,request.bpm)
         else:
             self._transport.withdraw_announcement()
-        self.running = False
+        self._transport.running = False
         self._attempt.suspend_recording()
-        self.count_in_beats = 0.0
+        self._transport.count_in_beats = 0.0
         self._measurement.phase_changed("preparation",request.now)
 
     def resume_suspended_admission(self) -> None:
@@ -397,7 +377,7 @@ class PlaybackSession:
             midi_connected=request.midi_connected,preview=self.preview_only,
             scheduled_deadline=request.scheduled_deadline)
         self._midi.authorize_grading_after(timing.grading_after)
-        self.count_in_beats = timing.count_in_beats
+        self._transport.count_in_beats = timing.count_in_beats
         return ResumedTimeline(now,request.learning,previous,shift)
 
     def finish_resume(self, resumed: ResumedTimeline) -> ResumeCompletion:
@@ -512,15 +492,15 @@ class PlaybackSession:
         self._applied_continuation = None
         self.pause_context = None
         self.deferred_score_ack = None
-        self.running = False
+        self._transport.running = False
         self.auto = False
         self.preview_only = False
-        self.count_in_beats = 0.0
+        self._transport.count_in_beats = 0.0
         self.awaiting_score_revision = None
 
     def finish_take(self) -> None:
-        self.running = False
+        self._transport.running = False
 
     def begin_epoch(self) -> int:
-        self.transport_id += 1
+        self._transport.transport_id += 1
         return self.transport_id
