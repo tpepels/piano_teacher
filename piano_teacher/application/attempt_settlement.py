@@ -16,7 +16,6 @@ from ..practice import Assessment, PlayedNote
 from ..exercise_contracts import TempoMap
 from .practice_assessment import PracticeAssessmentPolicies
 from .score_artifacts import ScoreSelection
-from .rolling_recovery import project_rolling_response
 
 
 @dataclass(slots=True)
@@ -105,20 +104,6 @@ class PendingFullCompletion:
         return self.pending.assessment
 
 
-@dataclass(frozen=True, slots=True)
-class RollingTake:
-    decision: object
-    phrase: Phrase
-    grid: tuple
-    score_beat: float
-    sampled_at: float
-    pending: PendingTeachingDecision
-    transition: object
-    outgoing_bpm: float
-    scored_end: float
-    take: TakeResult
-
-
 class AttemptSettlement:
     def __init__(self, repository, capture, source_feedback, learner_progress):
         self.repository = repository
@@ -128,8 +113,6 @@ class AttemptSettlement:
         self.pending = None
         self._completion = None
         self._full_completion: PendingFullCompletion | None = None
-        self._rolling = None
-        self._rolling_effects_applied: set[str] = set()
         # An effect may enter a selected successor via the ordinary source
         # installer, whose Stop/new-take cleanup must not discard the old
         # durable receipt until that effect has been fully acknowledged.
@@ -244,146 +227,6 @@ class AttemptSettlement:
     def command_applied(self) -> None:
         """Invalidate bindings after one accepted manual progress mutation."""
         self.authority_revision += 1
-
-    @property
-    def pending_rolling(self):
-        r = self._rolling
-        return (r.decision,r.phrase,r.grid,r.score_beat,r.sampled_at) if r else None
-
-    @property
-    def rolling_record(self) -> RollingTake | None:
-        """One recorded rolling result including its original source and take."""
-        return self._rolling
-
-    @staticmethod
-    def _required_rolling_effects(transition) -> frozenset[str]:
-        required = {"tempo", "prepare", "streak", "attempt", "notices"}
-        if transition.uses_completed_rest:
-            required.add("take_end")
-        if transition.guided:
-            required.add("withdraw")
-        if transition.action == "pause":
-            required.update(("stop_auto", "cancel_preparation", "cancel_continuation"))
-        return frozenset(required)
-
-    def rolling_effect(self, completed: RollingTake, name: str, action) -> None:
-        """Acknowledge a selected recovery presentation effect exactly once."""
-        if (self._rolling is not completed or
-                self.pending is not completed.pending or
-                completed.transition is None or
-                completed.pending.receipt is None or
-                completed.pending.phase not in ("settled", "effects_applied")):
-            raise ValueError("Cannot apply an unsettled or superseded rolling effect")
-        required = self._required_rolling_effects(completed.transition)
-        if name not in required:
-            raise ValueError("Unselected rolling recovery effect")
-        if name not in self._rolling_effects_applied:
-            action()
-            self._rolling_effects_applied.add(name)
-        if required.issubset(self._rolling_effects_applied):
-            completed.pending.phase = "effects_applied"
-
-    def finish_rolling_publication(self, completed: RollingTake) -> None:
-        """Publish only after every source effect of this receipt completed."""
-        if (self._rolling is not completed or
-                self.pending is not completed.pending or
-                completed.transition is None or
-                completed.pending.receipt is None):
-            raise ValueError("Cannot publish an unsettled or superseded rolling recovery")
-        if (completed.pending.phase != "effects_applied" or
-                not self._required_rolling_effects(completed.transition).issubset(
-                    self._rolling_effects_applied)):
-            raise ValueError("Cannot publish rolling recovery with unapplied source effects")
-        completed.pending.phase = "published"
-        self._rolling = None
-        self._rolling_effects_applied.clear()
-
-    def complete_rolling(self, *, decision, phrase, grid, score_beat,
-                         now, bpm, scored_end, hand, played, from_beat,
-                         tempo, policies, prepare_decision, plan, binding,
-                         policy, score_revision: int) -> RollingTake:
-        """Retain original source/tempo facts through rolling storage retries."""
-        if self._rolling is None:
-            self._rolling_effects_applied.clear()
-            original_notes = tuple(played)
-            assessed = policies.select(tempo).grade(
-                phrase,hand=hand,bpm=bpm,played=original_notes,from_beat=from_beat,
-                end_beat=decision.end_beat,tempo=tempo)
-            pending = prepare_decision("rolling_result",assessed,
-                rolling=decision,end_beat=decision.end_beat)
-            response = pending.decision.response
-            chosen = replace(pending.state.course,
-                definition=pending.decision.definition_after,
-                progress=pending.decision.progress_after)
-            transition = (None if response.action == "continue" else
-                project_rolling_response(response,decision,grid=grid,
-                    first_bar=phrase.first_bar,
-                    before_bpm=pending.state.route.performed_bpm,now=now,
-                    same_stage=chosen.key == pending.state.binding.stage_key,
-                    source_duration=phrase.end-phrase.start))
-            take = TakeResult(
-                binding=binding, score_revision=score_revision,
-                attempt_id=pending.event.attempt_id, mode="practice",
-                hand=hand, from_beat=from_beat, end_beat=decision.end_beat,
-                bpm=bpm, played=original_notes, assessment=assessed,
-                source_note_ids=tuple(
-                    entry.note.source_id for entry in assessed.notes))
-            self._rolling = RollingTake(decision,phrase,grid,score_beat,now,
-                pending,transition,bpm,scored_end,take)
-        completed = self._rolling
-        take = completed.take
-        # On a persistence retry use the original scored notes, not a
-        # recorder mutated by a later MIDI note. After a durable receipt
-        # the authority counter can advance, but the source/take identity
-        # must still match before any presentation effect is replayed.
-        original = take.binding
-        if (completed.pending is not self.pending
-                or completed.pending.phase not in ("decided", "settled", "effects_applied")
-                or score_revision != take.score_revision
-                or binding.run_id != original.run_id
-                or binding.session_id != original.session_id
-                or binding.fingerprint != original.fingerprint
-                or binding.transport_id != original.transport_id
-                or binding.cancellation_generation != original.cancellation_generation
-                or plan.piece is not completed.pending.state.course.piece
-                or hand != take.hand or bpm != take.bpm
-                or from_beat != take.from_beat
-                or decision.end_beat != take.end_beat
-                or completed.phrase is not phrase):
-            raise ValueError("Rolling take source or timing changed before settlement")
-        if completed.pending.receipt is None:
-            if binding != original:
-                raise ValueError("Rolling take authority changed before durable settlement")
-        else:
-            # A durable result advances these counters exactly once. The
-            # installed stage may change only when the decision actually
-            # changed it; no source, transport or learner takeover is valid.
-            chosen = replace(completed.pending.state.course,
-                definition=completed.pending.decision.definition_after,
-                progress=completed.pending.decision.progress_after)
-            if (binding.authority_revision != original.authority_revision + 1
-                    or binding.course_revision != original.course_revision
-                        + int(completed.pending.receipt.source_changed)
-                    or binding.stage_key != chosen.key
-                    or plan.lesson_definition != completed.pending.decision.definition_after
-                    or plan.teaching_progress() != completed.pending.decision.progress_after):
-                raise ValueError("Committed rolling take changed before publication retry")
-        if completed.transition is None:
-            # No interruption and no durable assessment; keep recording the
-            # same exposure, rather than leaving a selected stale decision.
-            self.pending = None
-            self._rolling = None
-            self._rolling_effects_applied.clear()
-            return completed
-        # A source-bound rolling result may already have been durably sealed
-        # before a later recovery presentation effect failed. Reuse that
-        # receipt; do not call capture.seal() again on the same attempt.
-        if completed.pending.receipt is None:
-            self.seal_rolling_recovery(
-                completed.pending,played=take.played,
-                result=take.assessment,end_beat=take.end_beat,
-                plan=plan,binding=binding,now=now,policy=policy)
-        return completed
 
     def commit_full_passage(self, *, plan, binding, now: float,
                             continuation, policy, score_revision: int,
@@ -663,15 +506,6 @@ class AttemptSettlement:
     def checkpoint(self, played, *, boundary: float) -> None:
         self.capture.checkpoint(played,boundary=boundary)
 
-    def seal_rolling_recovery(self, pending, *, played, result,
-                              end_beat: float, plan, binding, now,
-                              policy) -> None:
-        """One evidence writer for interrupted rolling-window recovery."""
-        self.capture.seal(
-            played,state="interrupted",reason="rolling_recovery",
-            result=result,extra={"assessed_end_beat":end_beat})
-        self.settle(pending,plan=plan,binding=binding,now=now,policy=policy)
-
     def seal_guided_preparation(self, pending, *, guidance: dict,
                                 plan, binding, now, policy) -> None:
         """Atomically finish a completed guided attempt and its decision.
@@ -722,6 +556,4 @@ class AttemptSettlement:
             self.pending = None
         self._completion = None
         self._full_completion = None
-        self._rolling = None
-        self._rolling_effects_applied.clear()
         self.cancellation_generation += 1

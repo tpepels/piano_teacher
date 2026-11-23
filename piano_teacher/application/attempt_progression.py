@@ -55,7 +55,6 @@ class AttemptStep:
     action: str
     next_boundary: float
     grid: tuple[float, ...]
-    recovery: Any = None
     ending: float = 0.0
     duration: float = 0.0
 
@@ -218,7 +217,7 @@ class AttemptProgression:
         return now >= finish-1e-7
 
     def inspect(self, tick: AttemptTick,
-                recover: Callable[[float, tuple[float, ...]], Any],
+                checkpoint: Callable[[float], None],
                 seconds_at: Callable[[float], float], *, exact_repeats: bool = False) -> AttemptStep:
         """Decide the next transition without modifying transport or learner state."""
         grid = self.grid_for(tick.phrase,tick.boundaries)
@@ -227,9 +226,8 @@ class AttemptProgression:
         while (tick.mode == "practice" and tick.review_end is None
                and not tick.preview
                and boundary and tick.score_beat >= boundary):
-            decision = recover(boundary,grid)
-            if decision is not None:
-                return AttemptStep("recovery",boundary,grid,recovery=decision)
+            # Persist the played prefix at each bar (evidence durability).
+            checkpoint(boundary)
             previous_boundary = boundary
             boundary = next_chunk_end(grid,previous_boundary)
             if boundary <= previous_boundary+1e-7:

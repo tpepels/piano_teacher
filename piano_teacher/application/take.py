@@ -145,7 +145,7 @@ class Take:
     def checkpoint_failed_streak(self, *args, **kwargs):
         return self._settlement.checkpoint_failed_streak(*args, **kwargs)
 
-    def checkpoint_rolling(self, *args, **kwargs):
+    def checkpoint_boundary(self, *args, **kwargs):
         return self._settlement.checkpoint(*args, **kwargs)
 
     def command_applied(self, *args, **kwargs):
@@ -154,8 +154,6 @@ class Take:
     def commit_full_passage(self, *args, **kwargs):
         return self._settlement.commit_full_passage(*args, **kwargs)
 
-    def complete_rolling(self, *args, **kwargs):
-        return self._settlement.complete_rolling(*args, **kwargs)
 
     def complete_take(self, *args, **kwargs):
         return self._settlement.complete_take(*args, **kwargs)
@@ -176,8 +174,6 @@ class Take:
     def finish_publication(self, *args, **kwargs):
         return self._settlement.finish_publication(*args, **kwargs)
 
-    def finish_rolling_publication(self, *args, **kwargs):
-        return self._settlement.finish_rolling_publication(*args, **kwargs)
 
     def interrupt_current(self, *args, **kwargs):
         return self._settlement.interrupt_current(*args, **kwargs)
@@ -198,9 +194,6 @@ class Take:
     def pending_result(self):
         return self._settlement.pending_result
 
-    @property
-    def pending_rolling(self):
-        return self._settlement.pending_rolling
 
     def prepare_settlement(self, *args, **kwargs):
         return self._settlement.prepare(*args, **kwargs)
@@ -211,12 +204,7 @@ class Take:
     def reset_piece_path(self, *args, **kwargs):
         return self._settlement.reset_piece_path(*args, **kwargs)
 
-    def rolling_effect(self, *args, **kwargs):
-        return self._settlement.rolling_effect(*args, **kwargs)
 
-    @property
-    def rolling_record(self):
-        return self._settlement.rolling_record
 
     def seal_guided_preparation(self, *args, **kwargs):
         return self._settlement.seal_guided_preparation(*args, **kwargs)

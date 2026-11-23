@@ -71,7 +71,7 @@ from .transport_actions import (
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
 from .recovery_streak import RecoveryStreak
-from .recovery_workflows import SelectedRecovery, RollingRecovery
+from .recovery_workflows import SelectedRecovery
 from .score_artifact_registry import ScoreArtifactRegistry
 from .score_artifacts import ScoreArtifacts
 from .score_preload_workflow import ScorePreloadWorkflow
@@ -341,11 +341,6 @@ def _transport_and_completion(r) -> None:
         transport_timing=r.transport_timing, continuation=r.continuation,
         course=r.course,
         exposure_workflows=r.exposure_workflows, clock=r.now)
-    r.rolling_recovery = RollingRecovery(
-        lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
-        transport_timing=r.transport_timing, grading=r.take_grading,
-        recovery_streak=r.recovery_streak,
-        live_feedback_workflows=r.live_feedback_workflows, clock=r.now)
 
     r.settlement = SettlementContinuation(
         lesson=r.lesson, notices=r.notices, score=r.score, take=r.take,
@@ -415,8 +410,7 @@ def _event_boundary(r) -> None:
         presentation=r.score_presentation, notices=r.notices, clock=r.now)
     r.retained_replay = RetainedResultReplay(
         lesson=r.lesson, take=r.take, transport=r.transport,
-        settlement=r.settlement, rolling_recovery=r.rolling_recovery,
-        notices=r.notices, clock=r.now)
+        settlement=r.settlement, notices=r.notices, clock=r.now)
     r.route_commands = RouteCommands(
         lesson=r.lesson, transport=r.transport,
         exposure_workflows=r.exposure_workflows,
@@ -459,8 +453,8 @@ def _event_boundary(r) -> None:
             lesson=r.lesson, transport=r.transport, take=r.take,
             midi_input=r.midi_input, transport_timing=r.transport_timing,
             attempt_progression=r.attempt_progression,
-            rolling_recovery=r.rolling_recovery,
-            completion=r.completion_continuations,))
+            completion=r.completion_continuations, notices=r.notices,
+            clock=r.now))
     r.tick_publisher = TickPublisher(
         transport=r.transport, transport_timing=r.transport_timing,
         presentation=r.score_presentation,

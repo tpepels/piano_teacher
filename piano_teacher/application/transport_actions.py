@@ -124,22 +124,20 @@ class PlaybackAuthorization:
 
 
 class RetainedResultReplay:
-    def __init__(self, *, lesson, take, transport, settlement,
-                 rolling_recovery, notices, clock):
+    def __init__(self, *, lesson, take, transport, settlement, notices, clock):
         self.lesson = lesson
         self.take = take
         self.transport = transport
         self.settlement = settlement
-        self.rolling_recovery = rolling_recovery
         self.notices = notices
         self.clock = clock
 
     def pending(self) -> bool:
-        """A failed save or rolling recovery is waiting to be replayed."""
-        return self.take.settlement_failed or self.take.pending_rolling is not None
+        """A result whose save failed is waiting to be replayed."""
+        return self.take.settlement_failed
 
     def replay(self) -> None:
-        """Play after a failed save or rolling recovery replays that same result."""
+        """Play after a failed save replays that same result."""
         if self.take.settlement_failed:
             revision = self.lesson.revision
             # Drop the failure instruction; the replayed continuation
@@ -150,11 +148,6 @@ class RetainedResultReplay:
                     now=self.clock()) or "Assessment saved")
             if self.lesson.revision != revision:
                 self.transport.await_score(self.lesson.revision)
-            return
-        if self.take.pending_rolling is not None:
-            decision, phrase, grid, score_beat, _old_now = self.take.pending_rolling
-            self.rolling_recovery.apply_rolling_recovery(decision, phrase, grid, score_beat, self.clock())
-            self.transport.clear_pause_for_restart()
             return
         raise ValueError("No retained result to replay")
 
