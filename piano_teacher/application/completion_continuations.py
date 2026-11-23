@@ -4,6 +4,7 @@ Accepts the sole AttemptSettlement receipt; applies typed, already-decided
 successor effects. Does not choose an alternate stage, deadline or grade.
 """
 from __future__ import annotations
+from .playback_facts import FullPassageFacts
 from ..music import Phrase
 from .mistake_responses import resolve_mistake_policy
 from .passage_outcome_presenter import performance_next_action
@@ -18,7 +19,10 @@ class CompletionContinuations:
     def __init__(self, *, lesson, notices, score, take, transport,
                           lesson_execution, transport_timing,
                           recovery_workflows, timed_playback, clock, library,
-                          assessment, feedback_seconds):
+                          assessment, feedback_seconds, policy_registry,
+                          live_assessment, live_feedback_workflows, measurement):
+        self.policy_registry, self.live_assessment = policy_registry, live_assessment
+        self.live_feedback_workflows, self.measurement = live_feedback_workflows, measurement
         self.notices = notices
         self.lesson = lesson
         self.score = score
@@ -120,6 +124,108 @@ class CompletionContinuations:
     def publish_feedback_fault(self, fault: FeedbackFault, now: float) -> None:
         self.transport.apply_feedback_fault(fault,now=now)
         self.notices.feedback,self.notices.next_action = fault.feedback,fault.next_action
+
+    def complete_take(self, phrase: Phrase, ending: float,
+                          total_beats: float, duration: float, now: float) -> bool:
+        """Apply post-performance state after the score's settlement interval.
+
+        Called from PracticeSession's locked event drain. Assessment
+        and grading occur only after a completed non-preview take.
+        Returns whether another same-tick transition must be queued.
+        """
+        self.transport.record_take_end(
+            at=self.transport.run_at + duration,
+            bpm=self.lesson.plan.bpm)
+        if self.transport.preview_only:
+            # Disconnected MIDI: repeat as an ungraded preview, never create
+            # fake notes, misses, accepted passes or mastery.
+            self.take.finish_preview()
+            self.transport.finish_take()
+            self.transport.schedule_preview_repeat(
+                source_seconds=duration,source_bpm=self.lesson.plan.bpm,
+                presentation_bpm=self.transport_timing.presentation_bpm(),
+                rest_measurement=self.transport_timing.collect_rest_measurement(
+                    from_beat=0.0,
+                    source_end=self.transport.run_at+duration),
+                now=now,reading_horizon_beats=self.transport.continuous_horizon_beats)
+            self.notices.feedback = "Timing preview - repeating after one empty measure"
+            self.notices.next_action = "Connect your MIDI piano to earn progress."
+            # The next preview must be admitted during the rest, not at
+            # the previous retry deadline after its count-in is over.
+            self.timed_playback.continue_at(self.transport.next_at,
+                from_beat=0.0)
+            return False
+        completed_visual = self.transport_timing.visual_motion(now)[0]
+        completed = self.take.complete_take(
+            phrase=phrase,hand=self.lesson.plan.hand,bpm=self.lesson.plan.bpm,
+            played=(self.take.recorder.presses
+                    if self.take.recorder else ()),
+            from_beat=self.transport.play_from_beat,end_beat=ending,
+            tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
+            layout_for_feedback=self.score.completed_take_layout,
+            mode=self.transport.mode,review_end_beat=self.take.review_end_beat,
+            automatic_remedial_review=self.take.automatic_remedial_review,
+            performance_review=self.performance_review,
+            prepare_decision=self.lesson.prepare_decision,
+            plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
+            score_revision=self.lesson.revision,
+            policy=resolve_mistake_policy(
+                self.library.settings["mistake_response_strategy"]))
+        assessed = completed.assessed
+        result,summary = assessed.result,completed.summary
+        if completed.settled:
+            self.transport.note_tempo(
+            stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
+        self.take.publish_completion(
+            marks=assessed.marks,unmapped=assessed.unmapped)
+        # The completed take's settled grades, before any transition below can
+        # start another transport.
+        self.live_assessment.publish(self.take.feedback_marks, self.live_feedback_workflows.feedback_take(),
+                                     final=True)
+        self.notices.feedback = assessed.feedback
+        self.transport.finish_take()
+        self.take.finish_review(summary,self.lesson.plan.identity)
+        self.measurement.phase_changed("feedback", now)
+        if not self.apply_focused(
+                completed.effect, phrase=phrase, result=result, now=now,
+                visual_from=completed_visual):
+            return self.finish_full_passage(result,total_beats,duration,now)
+        return False
+
+    def finish_full_passage(self, result, total_beats: float, duration: float, now: float):
+        publication = self.take.begin_full_completion(
+            result,total_beats=total_beats,duration=duration)
+        pending = publication.pending
+        total_beats,duration = publication.total_beats,publication.duration
+        self.take.checkpoint_failed_streak(pending,plan=self.lesson.plan,now=now)
+        self.transport.note_tempo(
+            stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
+        exposure = pending.decision.next_exposure
+        target = exposure.from_beat if exposure is not None else self.transport.play_from_beat
+        completion = self.transport.finish_full_passage(FullPassageFacts(
+            pending=pending,stage_key=self.lesson.plan.identity,bpm=self.lesson.plan.bpm,
+            target_bpm=self.lesson.plan.target_bpm,
+            assessed_bpm=self.take.pending_assessed_bpm,
+            total_beats=total_beats,duration=duration,now=now,
+            visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
+            source_model=self.score.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
+            horizon_beats=self.transport.continuous_horizon_beats,warmup=self.lesson.warmup,
+            short_rest_enabled=self.transport.short_rest is not None,
+            retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
+            repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,
+                source_end=self.transport.run_at+duration),
+            assets_ready=self.score.decision_assets_ready(pending,
+                revision=self.lesson.revision,fingerprint=self.lesson.fingerprint),
+            exact_repeats=self.lesson_execution.flow_active()))
+        if completion.next_action is not None:
+            self.notices.next_action = completion.next_action
+        if completion.advance_feedback:
+            self.advance_pending_feedback(now,force_early=completion.force_early)
+        elif completion.update_clock:
+            self.take.finish_full_completion(publication)
+            return True
+        self.take.finish_full_completion(publication)
+        return False
 
     def apply_focused(self, effect, *, phrase, result, now: float,
                       visual_from: float) -> bool:

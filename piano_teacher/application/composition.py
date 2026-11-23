@@ -298,7 +298,10 @@ def _transport_and_completion(r) -> None:
         transport_timing=r.transport_timing,
         recovery_workflows=r.recovery_workflows,
         timed_playback=r.timed_playback, clock=r.now, library=r.library,
-        assessment=r.assessment, feedback_seconds=r.feedback_seconds)
+        assessment=r.assessment, feedback_seconds=r.feedback_seconds,
+        policy_registry=r.policy_registry, live_assessment=r.live_assessment,
+        live_feedback_workflows=r.live_feedback_workflows,
+        measurement=r.measurement)
 
     r.score_preload = ScorePreloadWorkflow(
         lesson=r.lesson, lock=r.lock, transport=r.transport, score=r.score,
@@ -348,13 +351,10 @@ def _event_boundary(r) -> None:
         recovery_workflows=r.recovery_workflows,
         completion_continuations=r.completion_continuations,
         live_feedback_workflows=r.live_feedback_workflows,
-        live_assessment=r.live_assessment, measurement=r.measurement,
-        policy_registry=r.policy_registry, library=r.library,
-        midi_input=r.midi_input, listen=r.listen,
+        measurement=r.measurement, midi_input=r.midi_input, listen=r.listen,
         attempt_progression=r.attempt_progression, read_models=r.read_models,
         exposure_workflows=r.exposure_workflows, clock=r.now,
-        poll_midi=r.midi_application_input.poll_midi_connection,
-        feedback_seconds=r.feedback_seconds)
+        poll_midi=r.midi_application_input.poll_midi_connection)
     r.practice_session = PracticeSession(
         take=r.take, device_workflows=r.device_workflows,
         exposure_workflows=r.exposure_workflows,
