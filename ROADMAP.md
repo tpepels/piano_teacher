@@ -38,6 +38,64 @@ The separate final examination uses the whole original piece.
 | 2026-11-21 | Pause freezes the visible score even in Free/Listen/count-in; render only the selected practice measure window, retaining full sounding tails but no visible neighboring bars. |
 | 2026-11-22 | Adopt A0–A7 architectural unification: one serialized PracticeSession; cohesive lesson, assessment, transport and score domains; one score preparation pipeline; physical Godot adapters; and complete migration/removal of redundant orchestration. Preserve supported features and real physical invariants; CI remains manual. |
 
+## Structural decoupling plan (R1–R8, adopted 2026-11-23)
+
+**Why:** A0–A7 removed duplicate owners and parallel paths, but the
+application layer is still tightly coupled. Measured on `7618737`: the
+largest constructors take 32 (`PracticeTimeline`, `SessionReadModels`),
+29 (`PracticeSession`) and 23 (`TransportActions`) collaborators;
+`PlaybackSession` is used by 22 modules, `SourceIdentity` by 19,
+`VisualTransport`, `AttemptRuntime` and `GuidedSession` by 16–17. Most
+uses read one or two fields or repeat the same multi-call sequence, so a
+small behavioural tweak ripples through many files. Goal: a change to one
+behaviour touches one domain module and, at most, its call site.
+
+**Target shape:** a few domains, each the *only* owner of its state, with a
+narrow public interface: `facts()` returns a frozen read snapshot;
+intention-named operations perform writes (one method per behaviour, never
+a sequence of setter calls at the caller). Orchestration lives in small
+event handlers that depend on domains, not on their internals.
+
+| Domain | Owns (internal) | Replaces direct use of |
+| --- | --- | --- |
+| Transport | timeline (`VisualTransport`), session intent (`PlaybackSession`), physical admission (`PlaybackCoordinator`) | `visual_transport`, `playback_session`, `playback` |
+| Lesson | source/plan identity, lesson cursor, teaching decisions, flow, guided selection | `source_identity`, `lesson_cursor`, `teaching_decisions`, `flow_session`, `guided_session` |
+| Take | attempt runtime, recorder, settlement, rolling and completion receipts | `attempt`, `attempt_settlement` |
+| Score | artifacts, bundle, successor preparation, read services | `score_artifact_registry`, `teaching_continuation` (assets), `score_read` |
+| Session | event boundary, tick worker, notices, read model | `PracticeSession`, `PracticeTimeline`, `SessionReadModels` |
+
+**Measurable exit (all on one HEAD, gates green):**
+1. No application class takes more than 10 constructor collaborators.
+2. Outside its domain module, no code references a domain's internal
+   state holder; reads go through `facts()`, writes through named operations.
+3. No multi-step state sequence is repeated at more than one call site.
+4. The read model is built from domain `facts()` only.
+5. Tests reach the engine only through its public operations
+   (`EngineCommands` / the session harness), except pure-function tests.
+6. `bash scripts/test.sh --coverage` and
+   `bash scripts/verify-embedded-production-local.sh` pass on that HEAD;
+   no learner-visible behaviour changes.
+
+**Order (each step is committed green before the next):**
+- **R1 Transport.** Introduce `TransportFacts`; route all external reads
+  through it; add named operations for every external write sequence; then
+  hide the three holders behind `Transport`.
+- **R2 Lesson.** Same for source/plan identity, cursor, teaching decisions,
+  flow and guided selection; merge `LearningActions`/`LessonExecution`/
+  `ExposureWorkflows` behaviour into Lesson operations where it only
+  manipulates lesson state.
+- **R3 Take.** Same for attempt runtime and settlement; one completion API.
+- **R4 Score.** Same for artifacts, bundle, preload and read services.
+- **R5 Read model.** Build the snapshot from domain `facts()`.
+- **R6 Handlers.** Reduce `PracticeSession`, `PracticeTimeline`,
+  `TransportActions`, `CompletionContinuations`, `RecoveryWorkflows` and
+  peers to handlers over domains (≤ 10 collaborators); delete layers that
+  become pass-through.
+- **R7 Tests and Godot.** Move tests onto public operations; apply the same
+  review to Godot admission/stream orchestration.
+- **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
+  docs/architecture.md.
+
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
 **Status: SOFTWARE COMPLETE, PHYSICAL ACCEPTANCE PENDING. Software state on `7618737`: every A0–A7 item is complete in software, with evidence in the 2026-11-23 checkpoints and docs/architecture.md. Physical acceptance at the piano (and the Pathétique II native case, whose source was not supplied) is pending. See the A2/A3 executed verification checkpoint.** This is
