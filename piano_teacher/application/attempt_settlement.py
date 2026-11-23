@@ -476,11 +476,18 @@ class AttemptSettlement:
         # advanced original teaching binding or re-seal the same evidence.
         pending = completed.pending
         if pending.receipt is not None and completed.route != "full_passage":
+            chosen = replace(pending.state.course,
+                definition=pending.decision.definition_after,
+                progress=pending.decision.progress_after)
+            # These arguments now describe the selected successor rather
+            # than the original graded take. Replay only its frozen receipt,
+            # and validate the installed, already-committed lesson instead.
             if (pending is not self.pending
-                    or score_revision != take.score_revision
+                    or score_revision not in (
+                        take.score_revision,
+                        take.score_revision + int(pending.receipt.stage_changed))
                     or plan.piece is not pending.state.course.piece
-                    or hand != take.hand or mode != take.mode or bpm != take.bpm
-                    or from_beat != take.from_beat or end_beat != take.end_beat
+                    or plan.lesson_definition != pending.decision.definition_after
                     or binding.run_id != take.binding.run_id
                     or binding.session_id != take.binding.session_id
                     or binding.fingerprint != take.binding.fingerprint
@@ -490,8 +497,7 @@ class AttemptSettlement:
                     or binding.course_revision != (
                         take.binding.course_revision + int(pending.receipt.source_changed))
                     or plan.teaching_progress() != pending.decision.progress_after
-                    or (binding.stage_key != take.binding.stage_key
-                        and not pending.receipt.stage_changed)):
+                    or binding.stage_key != chosen.key):
                 raise ValueError("Committed focused take changed before publication retry")
             self._completion = replace(completed,settled=True)
             return self._completion
