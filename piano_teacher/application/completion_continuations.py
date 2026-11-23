@@ -123,6 +123,35 @@ class CompletionContinuations:
         self.playback_session.apply_feedback_fault(fault,now=now)
         self.notices.feedback,self.notices.next_action = fault.feedback,fault.next_action
 
+    def apply_focused(self, effect, *, phrase, result, now: float,
+                      visual_from: float) -> bool:
+        """Apply one immediately settled focused/performance consequence.
+
+        Returns False for a full passage, whose consequence is applied by
+        dispatch_effect only after its durable successor boundary.
+        """
+        if effect.action == "response":
+            self.recovery_workflows.apply_policy_response(
+                effect.response,now=now,visual_from=visual_from)
+        elif effect.action == "perform":
+            self.finish_performance_review(phrase,result)
+        elif effect.action == "section_review":
+            self.finish_section_review(result)
+        elif effect.action == "stop_review":
+            self.playback_session.stop_automatic()
+            self.visual_transport.cancel_preparation()
+            self.visual_transport.cancel_continuation()
+            self.notices.next_action = "Review this section before starting another take."
+        elif effect.action == "exposure":
+            self.lesson_execution.enter_selected_exposure(effect.exposure)
+        elif effect.action == "partial_recovery":
+            self.finish_partial_recovery(result,now,exposure=effect.exposure)
+        elif effect.action == "full_passage":
+            return False
+        else:
+            raise ValueError(f"Unknown completion consequence {effect.action!r}")
+        return True
+
     def dispatch_effect(self, effect, now: float) -> None:
         """Apply a committed successor only to its exact installed source.
 

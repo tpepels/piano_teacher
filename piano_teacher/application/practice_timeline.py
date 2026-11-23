@@ -106,23 +106,9 @@ class PracticeTimeline:
         self.playback_session.finish_take()
         self.attempt.finish_review(summary,self.source_identity.plan.identity)
         self.measurement.phase_changed("feedback", now)
-        effect = completed.effect
-        if effect.action == "response":
-            self.recovery_workflows.apply_policy_response(effect.response,now=now,visual_from=completed_visual)
-        elif effect.action == "perform":
-            self.completion_continuations.finish_performance_review(phrase,result)
-        elif effect.action == "section_review":
-            self.completion_continuations.finish_section_review(result)
-        elif effect.action == "stop_review":
-            self.playback_session.stop_automatic()
-            self.visual_transport.cancel_preparation()
-            self.visual_transport.cancel_continuation()
-            self.notices.next_action = "Review this section before starting another take."
-        elif effect.action == "exposure":
-            self.lesson_execution.enter_selected_exposure(effect.exposure)
-        elif effect.action == "partial_recovery":
-            self.completion_continuations.finish_partial_recovery(result,now,exposure=effect.exposure)
-        else:
+        if not self.completion_continuations.apply_focused(
+                completed.effect, phrase=phrase, result=result, now=now,
+                visual_from=completed_visual):
             return self.finish_full_passage(result,total_beats,duration,now)
         return False
 
