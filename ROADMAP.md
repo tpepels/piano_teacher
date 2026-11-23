@@ -96,6 +96,47 @@ event handlers that depend on domains, not on their internals.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
 
+### R1–R8 completion — 2026-11-23 (same-HEAD gates on `2cd6eade`)
+
+**Owner-reported defects fixed (Pathétique II, right hand):** at 50%
+(16 BPM, 2/4) the count-in clicked 3.75 s apart and keys played during it
+were silently ignored, so the take then ran over an apparently idle staff.
+`CountInPlan` keeps one authored bar but subdivides its pulse while a
+click would exceed 1.5 s; Godot uses only the authorized `pulse_beats`
+(its own meter rule, which also disagreed for 2/2 and 3/8, is deleted);
+a key during the count-in shows "Too early – wait for the count-in, then
+play". Screen glitching: the suspended Practice screen stayed visible
+under Library/Settings/Lesson; only the active screen is now drawn.
+**Adaptive tempo (owner decision):** a secure clean take (every onset
+within half its timing window) skips a step (+20% of target);
+docs/practice-flow.md updated; ladder tests updated to the new rule.
+
+**Decoupling result:** Transport, Lesson, Take, Score and MidiInput are
+domain objects whose internals no outside module references (0 in
+`scripts/audits/coupling.py`); cross-domain internal links were replaced
+by domain interfaces (PlaybackSession, Stop, settlement reservation
+port); repeated transport sequences are named operations; everything
+after a take ends lives in CompletionContinuations; tests use public
+operations (`playback.status` gained `intents_issued`; engine close joins
+the Listen worker). Constructor fan-in > 10: 13 classes, max 23
+(was 19, max 32). Exit criterion 1 (≤ 10 for every class) is **not**
+met: the event boundary (23) and tick worker (19) coordinate every
+handler, and the remaining workflows use each collaborator for real work;
+grouping them only to reach the number was rejected as cosmetic.
+
+**Gates on `2cd6eade`:** `bash scripts/test.sh --coverage` 235 passed,
+Godot syntax and 5 behaviour scenarios 0 failures, coverage 76.3% lines /
+56.3% branches; `bash scripts/verify-embedded-production-local.sh` with
+`PIANO_PATHETIQUE_II_MIDI` supplied: 26 PASS including the native
+Pathétique II case. **Intermittent observed:** on `f09ab536` the
+lost-present-ACK fake-MIDI scenario once stalled waiting for the first
+Free target to settle (no error logged); it passed on the rerun and on
+every earlier commit. Watch for it at the piano (Free after Listen).
+
+**Piano checklist additions:** slow pieces count in audibly in
+subdivisions; a key during count-in shows the "Too early" notice; precise
+clean takes skip a tempo step; switching screens shows no score behind.
+
 ### R progress — 2026-11-23 (HEAD after R6 step; 235 Python tests green)
 
 Done: R1 Transport, R2 Lesson, R3 Take, R4 Score and MidiInput domains
