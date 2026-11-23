@@ -96,6 +96,43 @@ event handlers that depend on domains, not on their internals.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
 
+### R1–R8 exit criteria met — 2026-11-23 (same-HEAD gates on `223fc503`)
+
+1. **Fan-in ≤ 10:** met for every application class (was 12 classes
+   above 10, max 17). Each split follows a real event family; see the
+   ownership table in docs/architecture.md (completion → grading /
+   immediate consequences / settlement; tick → observations /
+   transitions / progression / publication; transport → authorization /
+   commands / replay / routes; timed playback → start / continuation /
+   pause-resume; MIDI → callback / delivery / device; read model →
+   capture / presentation / extras / snapshot; recovery → selected /
+   rolling; source → preparation / installation / library opening;
+   history → reads / deletion; exposures → guided / timed installers;
+   teaching → decisions + LearnerEvidence).
+2. **No outside access to domain internals:** 0 (the audit now excludes a
+   domain's own modules, which it had counted).
+3. **No repeated multi-step sequences:** named the shared ones (Listen
+   outcomes, plan adoption ×3, measured continuation ×3, Free-target
+   arrival ×2, mistake policy ×4, terminal admission failure ×2, active
+   segment reset ×2, course restart ×3); a 3-statement duplicate scan of
+   application modules finds none.
+4. **Read model from domain interfaces:** it reads only domain objects'
+   public properties and read ports (wired once in composition), never
+   internals; there is no single `facts()` object per domain.
+5. **Tests use public operations:** Python as in R7; the native Godot
+   journeys now use public app/gateway operations too.
+6. **Gates on `223fc503`:** `bash scripts/test.sh --coverage` 235 passed,
+   Godot syntax + 5 behaviour scenarios 0 failures, 76.6% lines / 56.1%
+   branches; embedded verifier with Pathétique II 26 PASS.
+
+**R2 merge:** pure lesson reads (`flow_active`, `display_phrase`) are
+Lesson operations; LessonExecution's course flow and navigation are
+separate owners; LearningActions only routes. **R7 Godot review:** no
+cross-object private access in production Godot code, no duplicated
+admission/stream blocks; `_admit`'s guards are named (a NaN timeline
+duration now fails closed). No learner-visible behaviour changed in this
+step. Physical piano acceptance pending.
+
 ### Owner piano report fixes — 2026-11-23 (`abe746d5`)
 
 - **Free accepted keys before the notes were on screen.** The guided

@@ -47,8 +47,12 @@ Adding an event or command family means adding its type and one entry in
   prepares the lesson decision and runs the command family's route
   (`session_routes.command_routes`).
 - `TickWorker` runs `PracticeTimeline.update_transition` in a bounded
-  same-tick loop, replays MIDI deferred during the handoff and chooses the
-  next tick interval.
+  same-tick loop, replays MIDI deferred during the handoff, publishes
+  through `TickPublisher` and chooses the next tick interval.
+  `PracticeTimeline` only orders one tick: `TickObservations` (device,
+  calibration, Listen failure, evidence phase), `TakeProgression`
+  (rolling replay, boundary inspection, completion) and
+  `PreAssessmentTransitions` (Free, Listen end, preview, feedback, rewind).
 - `MidiEpoch` is the stale-key gate: a physical key counts only for the
   device, source, revision, stage, hand, take and cancellation it arrived
   in (or a later automatic repeat of the same source after its start).
@@ -101,18 +105,27 @@ Pure policy and services outside these domains:
 | Assessment | `practice.py`, `AssessmentService`, `practice_assessment` | original-note matching, onset/release evidence, verdict, `secure` timing |
 | Scheduling | `MusicalScheduler` (`SCHEDULER`), `CountInPlan` | every deadline/count-in/rest calculation; count-in pulse (subdivided when a click would exceed 1.5 s) |
 | Persistence | `ProgressRepository`, `LearningLedger`, `LearnerProgress` on one SQLite connection | progress, evidence, history; migrations at the load boundary only |
-| Projection | `SessionReadModels`, `control_projection`, `state_projection` | one snapshot and control set from committed state |
+| Projection | `SessionCapture`, `ScorePresentation`, `SnapshotExtras`, `SessionReadModels`, `control_projection`, `state_projection` | one snapshot and control set from committed state |
 
-Workflows coordinate domains for one event family each:
-`CompletionContinuations` (everything after a take ends),
-`RecoveryWorkflows`, `ExposureWorkflows`, `LessonExecution`,
-`LearningActions`, `TransportActions`, `SourceWorkflows`,
-`SettingsWorkflows`, `DeviceWorkflows`, `HistoryManagement`.
+Workflows coordinate domains for one event family each (every class
+has at most 10 constructor collaborators):
+
+| Event family | Owners |
+| --- | --- |
+| Learner commands | `CommandRouter`; `LearningActions` (listening/learning routes); `TransportCommands` (Start, Restart, Pause, Resume); `RouteCommands` (Listen/Learn/reload routes, Practice, Stop) |
+| Course and navigation | `CourseFlow` (Listen → Free → Tempo, Free, guided preparation, selected exposure); `LessonNavigation` (skip, place, trouble, section review, weak spots, seek, open measure, stage/tempo change) |
+| Exposures | `ExposureWorkflows` (prepare Practice/Listen/Perform), `GuidedExposureInstall`, `TimedExposureInstall`, `ListenOutcomes` (Listen finished/failed) |
+| Physical playback | `PlaybackAuthorization` (reserve/present/withdraw/fail, authorized commit, score/audio ACKs, resume); `TimedStart`, `PlaybackContinuation`, `PauseResume` |
+| After a take | `TakeGrading` (assess, publish final marks); `TakeCompletion` (preview, immediate consequences); `SettlementContinuation` (full passage: feedback, commit, exactly-once effect); `RetainedResultReplay` |
+| Recovery | `SelectedRecovery` (chosen response/remediation); `RollingRecovery` (mid-take checkpoint, durable effects) |
+| Teaching | `TeachingDecisions` (inside Lesson) with `LearnerEvidence` (stored history and learning policies); one mistake-policy callable |
+| Source | `SourcePreparationWorkflow` (off-lock), `SourceInstallation`, `LibraryOpening`, `PlanReinstallation` (adopt a plan at its first step) |
+| MIDI | `MidiCallback` (arrival stamp), `MidiDelivery` (ingress routing), `MidiDeviceConnection`, `MidiEpoch` |
+| History, settings, devices | `HistoryManagement`, `HistoryReads`, `SettingsWorkflows`, `DeviceWorkflows` |
+
 `TransportTiming` samples transport facts (no state; arithmetic in
-`MusicalScheduler`); `TimedPlayback` opens the take a physical receipt
-authorized and never chooses a deadline; it also owns measured,
-preview and rewind continuations. `PracticeTimeline` detects tick
-transitions and delegates each one to its owner.
+`MusicalScheduler`). `TimedStart` opens the take a physical receipt
+authorized and never chooses a deadline.
 
 ## Physical playback protocol
 
@@ -126,7 +139,7 @@ Production has exactly one transport: physical score presentation.
 3. Godot arms immutable ink and calls `playback.present` with its
    attestation; Python validates source, stage, revision, hand, mode, BPM,
    rate map and transport epoch, then starts the take
-   (`TransportActions.commit_playback_intent` → `TimedPlayback.start`).
+   (`PlaybackAuthorization.commit_playback_intent` → `TimedStart.start`).
 4. Grading is enabled only for the presented segment. Stale, duplicated or
    reordered replies fail closed; lost ACKs reconcile through
    `playback.status`; three failed admissions end in a visible failure.
@@ -171,10 +184,10 @@ projected label and action; it makes no lesson, grading or timing decision.
 - **Three transport internals behind one `Transport`.** Timeline facts,
   session intent and the physical receipt ledger are disjoint; the domain
   object is the only access path.
-- **Two completion vocabularies, one applier.** Focused/performance takes
-  settle immediately (`CompletionEffect`); full passages settle at their
-  successor boundary (typed, source-bound effects). Both are applied only
-  by `CompletionContinuations`.
+- **Two completion vocabularies.** Focused/performance takes settle
+  immediately (`CompletionEffect`, applied by `TakeCompletion`); full
+  passages settle at their successor boundary (typed, source-bound
+  effects, applied only by `SettlementContinuation`).
 - **Publication lease and source-mutation guard.** Scoped guards that keep
   a durable receipt alive through its own successor installation and keep
   expensive source preparation outside the application lock.
@@ -187,9 +200,8 @@ projected label and action; it makes no lesson, grading or timing decision.
   forward-only ledger.
 
 `scripts/audits/coupling.py` reports constructor fan-in and any access to
-domain internals from outside a domain (must stay zero). The widest
-remaining fan-in is in the workflows that coordinate several domains for
-one event family (CompletionContinuations, PracticeTimeline: 17).
+domain internals from outside a domain (must stay zero). Constructor
+fan-in is at most 10 for every application class.
 
 The composition root builds the graph in six ordered stages (session
 state; devices, library and score; persistence and settlement; workflows;
