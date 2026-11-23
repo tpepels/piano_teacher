@@ -596,25 +596,25 @@ class PlaybackCoordinator:
                 self.state = PlaybackState.FAILED
                 self.failure = "The score could not be prepared for playback; retry the lesson"
             return
-        if not self.active_take_id:
-            return
+        # Live play/pause/count-in/completion are derived at read time from
+        # PlaybackSession and its musical timeline. This protocol owner
+        # only mutates physical admission, terminal failure and receipts.
+
+    def observed_state(self, facts: PlaybackRuntimeFacts) -> PlaybackState:
+        """Read the live take state without an independently ticking phase."""
+        if (self.state in (PlaybackState.FAILED, PlaybackState.IDLE)
+                or self.intent is not None or not self.active_take_id):
+            return self.state
         if facts.running:
             if facts.paused:
-                self.state = PlaybackState.PAUSED
-            else:
-                activation = max(facts.run_at,
-                                 facts.resume_grading_after)
-                self.state = (PlaybackState.COUNT_IN if facts.now < activation
-                              else PlaybackState.PLAYING)
-        elif facts.pending_result:
-            # A paused, no-longer-running take has no live authorization.
-            # Keep its evidence settlement visible, but do not advertise
-            # the old segment as a resumable physical performance.
-            self.state = PlaybackState.SETTLING
-        elif self.state not in (PlaybackState.FAILED, PlaybackState.IDLE):
-            self.state = PlaybackState.COMPLETE
+                return PlaybackState.PAUSED
+            activation = max(facts.run_at, facts.resume_grading_after)
+            return (PlaybackState.COUNT_IN if facts.now < activation
+                    else PlaybackState.PLAYING)
+        return (PlaybackState.SETTLING if facts.pending_result
+                else PlaybackState.COMPLETE)
 
-    def status(self) -> dict:
+    def status(self, facts: PlaybackRuntimeFacts | None = None) -> dict:
         """Read-only transaction reconciliation, including lost responses.
 
         The worker can complete an authorization after its Godot request
@@ -622,8 +622,9 @@ class PlaybackCoordinator:
         """
         intent = self.intent
         receipt = self.receipt
+        observed = self.observed_state(facts) if facts is not None else self.state
         return {
-            "state": self.state.value,
+            "state": observed.value,
             "generation": self.generation,
             "intent_id": intent.intent_id if intent else "",
             "attempt": intent.attempt if intent else -1,
@@ -639,7 +640,8 @@ class PlaybackCoordinator:
             "active": dict(self.active_segment) if self.active_segment else None,
         }
 
-    def snapshot(self) -> tuple[dict | None, dict]:
+    def snapshot(self, facts: PlaybackRuntimeFacts | None = None) -> tuple[dict | None, dict]:
+        observed = self.observed_state(facts) if facts is not None else self.state
         intent = self.intent
         request = None if intent is None else {
             "intent_id": intent.intent_id, "take_id": intent.take_id,
@@ -657,9 +659,9 @@ class PlaybackCoordinator:
             "count_in_plan": intent.count_in.snapshot(),
             "earliest_deadline_ms": intent.earliest_deadline_ms,
             "fixed_deadline_ms": intent.fixed_deadline_ms,
-            "status": self.state.value,
+            "status": observed.value,
         }
-        timeline = {"state": self.state.value, "take_id": self.active_take_id,
+        timeline = {"state": observed.value, "take_id": self.active_take_id,
                     "segment_id": self.active_segment_id,
                     "deadline_ms": self.active_deadline_ms,
                     "current": dict(self.active_segment) if self.active_segment else None,
