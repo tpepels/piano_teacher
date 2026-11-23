@@ -80,10 +80,23 @@ from .timed_playback import TimedPlayback
 from .transport_timing import TransportTiming
 
 
+
 def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
                         feedback_events: FeedbackEventLog | None = None,
                         clock: Clock | None = None) -> dict:
+    """Assemble the graph in dependency order, one cohesive stage at a time."""
     r = SimpleNamespace()
+    _session_state(r, clock=clock, feedback_events=feedback_events)
+    _devices_library_and_score(r, enable_midi=enable_midi, data_dir=data_dir)
+    _persistence_and_settlement(r)
+    _lesson_source_and_settings_workflows(r)
+    _transport_and_completion(r)
+    _event_boundary(r)
+    return vars(r).copy()
+
+
+def _session_state(r, *, clock, feedback_events) -> None:
+    """Clock, lock and the authoritative session/transport state holders."""
     # The one monotonic clock of this session; collaborators receive it.
     r.now: Clock = clock if clock is not None else monotonic
     r.lock = threading.RLock()
@@ -111,6 +124,10 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
     # One short on-screen message at a time: (serial, text, engine time).
     r.guided_session.clear_selection()
     r.guided_session.set_hints(False,now=r.now())
+
+
+def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
+    """MIDI device, library and settings, Listen audio and score artifacts."""
     r.midi = MidiConnection(enabled=enable_midi, clock=r.now)
     r.live_input = LiveInputView()
     r.assessment = AssessmentService()
@@ -129,7 +146,11 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
     # The untimed guided engine owns repeat presentation epochs; no
     # Godot-side guess about missed notes or lesson progression.
     r.score_state_publisher = ScoreStatePublisher()
-    r.progress = ProgressRepository(data_dir / "progress.db")
+
+
+def _persistence_and_settlement(r) -> None:
+    """One SQLite connection: progress, evidence, learner state, settlement."""
+    r.progress = ProgressRepository(r._data_dir / "progress.db")
     # Keep the public db handle for LearnerStateStore and existing clients.
     r.db = r.progress.db
     r.measurement = LearningCapture(r.progress.ledger, clock=r.now)
@@ -162,6 +183,10 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         continuation=r.teaching_continuation,
         guided_session=r.guided_session, live_input=r.live_input,
         listen=r.listen, measurement=r.measurement, clock=r.now)
+
+
+def _lesson_source_and_settings_workflows(r) -> None:
+    """Lesson decisions, exposures, source/settings/device workflows."""
     r.history_management = HistoryManagement(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
         notices=r.notices, progress=r.progress, measurement=r.measurement,
@@ -256,6 +281,10 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         guided_session=r.guided_session, midi_ingress=r.midi_ingress,
         attempt=r.attempt, attempt_settlement=r.attempt_settlement)
 
+
+
+def _transport_and_completion(r) -> None:
+    """Timed playback, live feedback, recovery, completion and read models."""
     r.timed_playback = TimedPlayback(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
         notices=r.notices, playback_session=r.playback_session,
@@ -333,6 +362,10 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         presentation_bpm=r.transport_timing.presentation_bpm,
         playback_facts=r.transport_timing.playback_facts)
 
+
+
+def _event_boundary(r) -> None:
+    """Command routers, MIDI input, the transition worker and PracticeSession."""
     r.learning_commands = LearningActions(
         attempt=r.attempt, attempt_settlement=r.attempt_settlement, clock=r.now,
         exposure_workflows=r.exposure_workflows, flow_session=r.flow_session, guided_session=r.guided_session,
@@ -400,4 +433,3 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         score_preload=r.score_preload, lifecycle=r.session_lifecycle,
         progress=r.progress, notices=r.notices, clock=r.now)
     r.midi_application_input.bind_session(r.practice_session)
-    return vars(r).copy()
