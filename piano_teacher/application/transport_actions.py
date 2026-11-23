@@ -9,6 +9,7 @@ handles Practice and Stop.
 """
 from __future__ import annotations
 from .playback_transitions import PlaybackTransition
+from .transport_timing import NO_PIANO
 
 
 class PlaybackAuthorization:
@@ -97,6 +98,11 @@ class PlaybackAuthorization:
                 self.pause_resume.begin_listen_if_ready()
             elif decision == "learn":
                 self.lesson.guided_controller.start(now=self.clock())
+            elif decision == "practice" and not self.transport_timing.piano_connected():
+                # The score is ready but nothing can be graded: wait visibly
+                # instead of leaving the exposure stuck awaiting its score.
+                self.transport.wait_for_player()
+                self.notices.publish(NO_PIANO, "Connect a piano in Settings, then press Play.")
             elif decision == "practice":
                 position = (self.transport.pending_rewind
                     if self.transport.pending_rewind is not None else self.lesson.opening_beat)

@@ -9,6 +9,9 @@ from .playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts, Preparati
 from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasurement
 
 
+
+NO_PIANO = "Connect your MIDI piano to play in tempo."
+
 class TransportTiming:
     def __init__(self, *, lesson, transport, score, attempt_progression, take,
                           midi_input, clock):
@@ -49,10 +52,14 @@ class TransportTiming:
                 tempo_segments=segments)
         return self.transport.facts(source)
 
+    def piano_connected(self) -> bool:
+        """Timed (graded) playback needs a connected MIDI piano."""
+        return self.midi_input.connected
+
     def request_playback(self, *, from_beat: float, **kwargs):
         if (str(kwargs.get("mode", "")) in ("practice", "perform")
-                and not self.midi_input.connected):
-            raise ValueError("Connect your MIDI piano to play in tempo.")
+                and not self.piano_connected()):
+            raise ValueError(NO_PIANO)
         facts = self.playback_facts(from_beat=from_beat)
         if self.transport.automatic_request_blocked(
                 facts, action=str(kwargs.get("action", "")),

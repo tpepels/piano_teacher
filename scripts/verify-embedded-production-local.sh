@@ -217,7 +217,17 @@ verify_moonlight() {
   set_case moonlight
   cp midi/Moonlight_Sonata_I.midi "$HOME/Music/Piano Teacher/"
   seed Moonlight_Sonata_I.midi
-  timeout 180s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
+  # Timed Play/Pause/Retry needs a connected piano: the same synthetic
+  # keyboard as the fake-MIDI journey (no keys are played here).
+  "$PYTHON" - <<'PY'
+from piano_teacher.library import ScoreLibrary
+ScoreLibrary().update(midi_device="CI Synthetic Keyboard")
+PY
+  local port
+  port="$("$PYTHON" -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+  timeout 180s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+    PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
+    "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
     --script res://production_session_journey.gd
 }
 verify_real_source() {
