@@ -50,8 +50,7 @@ class SessionLifecycle:
                 # Stop already invalidated its playback authorization.
                 self.playback_session.finish_take()
                 self.midi_ingress.deferred.clear()
-                if not self.visual_transport.paused:
-                    self.visual_transport.pause(at=self.clock())
+                self.playback_session.freeze_after_fault(self.clock())
                 raise
         self.settlement.cancel(reason=reason, now=self.clock())
         self.midi_ingress.deferred.clear()

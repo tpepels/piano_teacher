@@ -126,6 +126,7 @@ class TimedPlayback:
             rest=(self.transport_timing.collect_rest_measurement(from_beat=announced[0],source_end=0.0)
                 if announced is not None else None)))
         completion = self.playback_session.finish_resume(resumed)
+        self.notices.clear_fault()
         if completion.feedback is not None:
             self.notices.feedback = completion.feedback
         return completion

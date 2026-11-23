@@ -58,10 +58,9 @@ class LessonExecution:
                 policy=resolve_mistake_policy(
                     self.library.settings["mistake_response_strategy"]))
         except Exception:
-            if not self.visual_transport.paused:
-                self.visual_transport.pause(at=self.clock())
-            self.notices.feedback = "Could not save the guided preparation"
-            self.notices.next_action = "Check storage, then Resume to save this same exposure."
+            self.playback_session.freeze_after_fault(self.clock())
+            self.notices.fault("Could not save the guided preparation",
+                "Check storage, then Resume to save this same exposure.")
             raise
         self.guided_session.finish_preparation(remediation_active=pending.state.route.remediation_active)
         if pending.decision.next_exposure is not None:

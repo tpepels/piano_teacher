@@ -160,10 +160,9 @@ class RecoveryWorkflows:
         except Exception:
             self.playback_session.finish_take()
             self.playback_session.stop_automatic()
-            if not self.visual_transport.paused:
-                self.visual_transport.pause(at=now)
-            self.notices.feedback = "Could not save the retry evidence"
-            self.notices.next_action = "Check storage, then press Retry to save this same attempt."
+            self.playback_session.freeze_after_fault(now)
+            self.notices.fault("Could not save the retry evidence",
+                "Check storage, then Resume to save this same attempt.")
             raise
         if completed.transition is None:
             from ..measure_grid import next_chunk_end
@@ -178,10 +177,9 @@ class RecoveryWorkflows:
             # Explicit Retry replays only unacknowledged effect names.
             self.playback_session.finish_take()
             self.playback_session.stop_automatic()
-            if not self.visual_transport.paused:
-                self.visual_transport.pause(at=now)
-            self.notices.feedback = "Could not apply the saved recovery"
-            self.notices.next_action = "Press Play to finish this same saved recovery."
+            self.playback_session.freeze_after_fault(now)
+            self.notices.fault("Could not apply the saved recovery",
+                "Press Resume to finish this same saved recovery.")
             raise
         return
 
@@ -232,10 +230,9 @@ class RecoveryWorkflows:
                 self.attempt.recorder.presses if self.attempt.recorder else (),
                 boundary=boundary)
         except Exception:
-            if not self.visual_transport.paused:
-                self.visual_transport.pause(at=self.clock())
-            self.notices.feedback = "Could not save the recording checkpoint"
-            self.notices.next_action = "Check storage, then Resume to retry this boundary."
+            self.playback_session.freeze_after_fault(self.clock())
+            self.notices.fault("Could not save the recording checkpoint",
+                "Check storage, then Resume to retry this boundary.")
             raise
         if self.lesson_execution.flow_active() or not resolve_mistake_policy(
                 self.library.settings["mistake_response_strategy"]).interrupt_rolling:

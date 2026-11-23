@@ -389,14 +389,12 @@ class PracticeSession:
                 if self.timeline.update_transition():
                     immediate.append(ImmediateTransition())
         except Exception:
-            if not self.visual_transport.paused:
-                self.visual_transport.pause(at=self.clock())
+            self.playback_session.freeze_after_fault(self.clock())
             # A failing transition bypasses the normal publish_settled()
             # tail. Reconcile the original physical take's current paused
             # status without reentering assessment or successor effects.
             self.timeline.publish_failed_transition()
-            self.notices.feedback = "Could not save or finish the practice transition"
-            self.notices.next_action = (
+            self.notices.fault("Could not save or finish the practice transition",
                 "Check storage or the reported error, then Resume to retry this same take.")
             raise
         while self.midi_ingress.deferred:

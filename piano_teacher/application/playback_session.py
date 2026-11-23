@@ -363,6 +363,18 @@ class PlaybackSession:
         self._transport.wait_for_continuation(now)
         return now
 
+    def freeze_after_fault(self, now: float) -> None:
+        """Hold the timeline after a failed save or transition, like Pause.
+
+        Grading freezes as for a learner Pause, so a key released while the
+        failure is shown cannot be graded as a longer hold.
+        """
+        if self._transport.paused:
+            return
+        self._transport.pause(at=now,freeze_grading=self.running,
+            grading_after=self._midi.resume_grading_after)
+        self._measurement.phase_changed("pause",now)
+
     def pause(self, *, context: str, now: float) -> None:
         require_pausable(paused=self._transport.paused,phase=context)
         self.pause_context = context
@@ -448,7 +460,7 @@ class PlaybackSession:
 
     def apply_feedback_fault(self, fault: FeedbackFault, *, now: float) -> None:
         if fault.pause:
-            self._transport.pause(at=now)
+            self.freeze_after_fault(now)
         if fault.stop_automatic:
             self.auto = False
         self._transport.cancel_continuation()
