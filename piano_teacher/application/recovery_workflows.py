@@ -59,9 +59,7 @@ class RecoveryWorkflows:
             self.lesson_cursor.select_opening(prepared.start)
             self.attempt.prepare_recovery(prepared)
             if prepared.action == "pause":
-                self.transport.stop_automatic()
-                self.transport.cancel_preparation()
-                self.transport.cancel_continuation()
+                self.transport.halt_continuation()
             elif prepared.action == "guided":
                 self.lesson_execution.begin_learn(
                     from_beat=prepared.start, recovery=True,
@@ -158,9 +156,7 @@ class RecoveryWorkflows:
                 score_revision=score_revision,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
         except Exception:
-            self.transport.finish_take()
-            self.transport.stop_automatic()
-            self.transport.freeze_after_fault(now)
+            self.transport.halt_take_after_fault(now)
             self.notices.fault("Could not save the retry evidence",
                 "Check storage, then Resume to save this same attempt.")
             raise
@@ -175,9 +171,7 @@ class RecoveryWorkflows:
             # A durable receipt may already have installed some source
             # effects. Stop the old graded clock and keep its pending receipt.
             # Explicit Retry replays only unacknowledged effect names.
-            self.transport.finish_take()
-            self.transport.stop_automatic()
-            self.transport.freeze_after_fault(now)
+            self.transport.halt_take_after_fault(now)
             self.notices.fault("Could not apply the saved recovery",
                 "Press Resume to finish this same saved recovery.")
             raise

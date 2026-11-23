@@ -139,9 +139,7 @@ class CompletionContinuations:
         elif effect.action == "section_review":
             self.finish_section_review(result)
         elif effect.action == "stop_review":
-            self.transport.stop_automatic()
-            self.transport.cancel_preparation()
-            self.transport.cancel_continuation()
+            self.transport.halt_continuation()
             self.notices.next_action = "Review this section before starting another take."
         elif effect.action == "exposure":
             self.lesson_execution.enter_selected_exposure(effect.exposure)
