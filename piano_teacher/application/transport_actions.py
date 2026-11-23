@@ -73,8 +73,11 @@ class TransportActions:
         """Apply source effects at the coordinator's single authorization gate."""
         with self.playback_session.authorization(intent,receipt) as authorized:
             if authorized.action in ("start","restart"):
-                selected = self.teaching_decisions.install_command(authorized.transition.effect)
-                authorized.validate_installed(selected,intent)
+                selected = authorized.transition.exposure
+                authorized.validate_selected(selected,intent)
+                # TimedPlayback installs this exact decision ONCE as part of
+                # the authorized start. Do not preinstall its lesson mutation
+                # in a second transport command adapter.
                 self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,
                     scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in,
                     effect=authorized.transition.effect,reason=authorized.action)

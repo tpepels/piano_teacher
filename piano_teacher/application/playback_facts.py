@@ -207,7 +207,7 @@ class PlaybackAuthorization:
     deadline: float
     transition: Any = None
 
-    def validate_installed(self, selected, intent) -> None:
+    def validate_selected(self, selected, intent) -> None:
         expected = self.transition.exposure
         if (selected != expected or selected.stage_key != intent.stage_key
                 or selected.hand != intent.hand
