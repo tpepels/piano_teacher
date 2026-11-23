@@ -9,13 +9,12 @@ from ..live_feedback import live_scope
 
 
 class LiveFeedbackWorkflows:
-    def __init__(self, *, lesson, transport, score_artifact_registry,
-                          score_read, policy_registry, library, take,
-                          live_assessment, transport_timing, clock):
+    def __init__(self, *, lesson, transport, score, policy_registry, library,
+                          take, live_assessment, transport_timing, clock):
         self.lesson = lesson
         self.transport = transport
-        self.score_artifact_registry = score_artifact_registry
-        self.score_read, self.policy_registry = score_read, policy_registry
+        self.score = score
+        self.policy_registry = policy_registry
         self.library, self.live_assessment = library, live_assessment
         self.take = take
         self.transport_timing, self.clock = transport_timing, clock
@@ -54,7 +53,7 @@ class LiveFeedbackWorkflows:
         plan = self.lesson.plan
         if plan is None or self.transport.preview_only or not self.transport.running:
             return []
-        engraved = self.score_artifact_registry.current.cached_layout(self.score_read.selection())
+        engraved = self.score.current_artifacts.cached_layout(self.score.selection())
         if engraved is None:
             return []
         return self.policy_registry.grading.live_projection(

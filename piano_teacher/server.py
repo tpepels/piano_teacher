@@ -172,14 +172,14 @@ class PracticeEngine:
         return self.practice_session.apply(PreloadReady(stage_key, revision))
 
     def semantic_score(self) -> dict:
-        return self.score_read.semantic_score()
+        return self.score.semantic_score()
 
     def geometry(self) -> dict:
-        return self.score_read.geometry()
+        return self.score.geometry()
 
     def score_bundle(self) -> dict:
-        return self.score_read.bundle()
+        return self.score.bundle()
 
     def lesson_overview(self) -> dict:
         with self.lock:
-            return self.score_read.lesson_overview()
+            return self.score.lesson_overview()

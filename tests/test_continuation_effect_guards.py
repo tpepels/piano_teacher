@@ -101,7 +101,7 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
         clear_feedback=lambda: None,
         publication_finished=lambda: None,
         publication_failed=lambda: None)
-    owner.teaching_continuation = SimpleNamespace(
+    owner.score = SimpleNamespace(
         begin_feedback=lambda *args, **kwargs: SimpleNamespace(
             decision_id=effect.identity.decision_id, pending=pending),
         finish_feedback=lambda *args, **kwargs: SettledPublication(
@@ -133,7 +133,7 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
     pending.state = SimpleNamespace(route=SimpleNamespace(automatic=True))
     selected = SimpleNamespace(
         decision_id=effect.identity.decision_id, pending=pending)
-    owner.teaching_continuation = SimpleNamespace(
+    owner.score = SimpleNamespace(
         begin_feedback=lambda *args, **kwargs: selected,
         finish_feedback=lambda *args, **kwargs: SettledPublication(
             effect, None, "Original assessed result"))
@@ -166,7 +166,7 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
 def test_stopped_auto_worker_does_not_spin_on_failed_effect():
     owner, _effect, _applied = _subject()
     owner.transport.auto = False
-    owner.teaching_continuation = SimpleNamespace(
+    owner.score = SimpleNamespace(
         begin_feedback=lambda *args, **kwargs: pytest.fail(
             "Stopped playback must require explicit user Retry"))
     owner.advance_pending_feedback(now=120.0, force_early=True)

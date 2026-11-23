@@ -11,8 +11,8 @@ class TransportActions:
     def __init__(self, *, take, clock, exposure_workflows, feedback_seconds,
                           lesson, lesson_execution, lifecycle, listen, notices,
                           completion_continuations, transport, read_models,
-                          recovery_workflows, score_artifact_registry,
-                          score_read, timed_playback, transport_timing):
+                          recovery_workflows, score, timed_playback,
+                          transport_timing):
         self.take = take
         self.clock = clock
         self.exposure_workflows = exposure_workflows
@@ -26,8 +26,8 @@ class TransportActions:
         self.transport = transport
         self.read_models = read_models
         self.recovery_workflows = recovery_workflows
-        self.score_artifact_registry = score_artifact_registry
-        self.score_read = score_read
+        self.score = score
+
 
         self.timed_playback = timed_playback
         self.transport_timing = transport_timing
@@ -135,7 +135,7 @@ class TransportActions:
             effect = effect or self.lesson.manual_effect(action)
             transition = PlaybackTransition.from_effect(
                 effect,action=action,source_changed=(
-                    self.score_artifact_registry.current.source_bpm_changed(self.lesson.plan.piece.bpm)
+                    self.score.current_artifacts.source_bpm_changed(self.lesson.plan.piece.bpm)
                     if self.transport.mode not in ("listen", "learn") else False))
             if transition.route in ("listen", "prepare_practice",
                                     "reload_score", "learn"):

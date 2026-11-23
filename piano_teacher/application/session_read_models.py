@@ -13,12 +13,11 @@ from ..state_projection import SessionSnapshot, project_session_state
 class SessionReadModels:
     def __init__(self, *, lesson, notices, take, transport, library, midi,
                           midi_ingress, midi_key_shortcuts, midi_calibration,
-                          attempt_progression, score_state_publisher,
-                          lesson_execution, score_read, listen, live_input,
-                          live_assessment, lock, clock, phase, elapsed_beat,
-                          visual_motion, tempo_map, next_count_in_beats,
-                          next_count_in_meter, start_rate_bpm,
-                          presentation_bpm, playback_facts):
+                          attempt_progression, score, lesson_execution, listen,
+                          live_input, live_assessment, lock, clock, phase,
+                          elapsed_beat, visual_motion, tempo_map,
+                          next_count_in_beats, next_count_in_meter,
+                          start_rate_bpm, presentation_bpm, playback_facts):
         self.lesson = lesson
         self.notices = notices
         self.take = take
@@ -27,8 +26,8 @@ class SessionReadModels:
         self.midi, self.midi_ingress = midi, midi_ingress
         self.midi_key_shortcuts, self.midi_calibration = midi_key_shortcuts, midi_calibration
         self.attempt_progression = attempt_progression
-        self.score_state_publisher = score_state_publisher
-        self.lesson_execution, self.score_read = lesson_execution, score_read
+        self.score = score
+        self.lesson_execution = lesson_execution
         self.listen, self.live_input, self.live_assessment = listen, live_input, live_assessment
         self.lock, self.clock = lock, clock
         self.phase, self.elapsed_beat = phase, elapsed_beat
@@ -77,7 +76,7 @@ class SessionReadModels:
         now = self.clock()
         state = project_session_state(self.capture_snapshot(sampled_at=now))
         pending, timeline = self.transport.snapshot(self.playback_facts())
-        self.score_state_publisher.prepare_guided(
+        self.score.prepare_guided_score(
             state,self.score_facts(pending,timeline),now=now)
 
     def _committed_base(self, now: float) -> tuple[dict, dict | None, dict]:
@@ -88,7 +87,7 @@ class SessionReadModels:
         """
         state = project_session_state(self.capture_snapshot(sampled_at=now))
         pending, timeline = self.transport.snapshot(self.playback_facts())
-        self.score_state_publisher.project_transport_state(
+        self.score.project_transport_state(
             state, pending, timeline,
             running=self.transport.running,
             paused=self.transport.paused)
@@ -110,7 +109,7 @@ class SessionReadModels:
             now = self.clock()
             state, pending, timeline = self._committed_base(now)
             facts = self.score_facts(pending,timeline)
-            self.score_state_publisher.publish(state, facts)
+            self.score.publish_score_state(state, facts)
             if self.take.pending_result is not None:
                 state["bpm"] = self.presentation_bpm()
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
@@ -208,12 +207,12 @@ class SessionReadModels:
             learner_snapshot=self.lesson_execution.learner_snapshot,
             elapsed_beat=self.elapsed_beat,
             phase=self.phase,
-            source_model=self.score_read.source_model,
+            source_model=self.score.source_model,
             live_feedback=self.live_marks,
             visual_motion=self.visual_motion,
             active_tempo_map=self.tempo_map,
             display_phrase=self.lesson_execution.display_phrase,
-            guided_marks=self.score_read.guided_marks,
+            guided_marks=self.score.guided_marks,
             listen_snapshot=self.listen.snapshot,
             live_input_snapshot=self.live_input.snapshot,
             preparation_schedule=self.transport.preparation_schedule,

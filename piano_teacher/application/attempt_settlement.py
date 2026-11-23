@@ -578,7 +578,7 @@ class AttemptSettlement:
         if plan.teaching_progress() != expected:
             raise ValueError("Stale teaching progress at settlement")
         before = plan.capture_teaching_state()
-        continuation_before = continuation.capture_state() if continuation is not None else None
+        continuation_before = continuation.capture_successor_state() if continuation is not None else None
         if continuation is not None:
             continuation.validate_reservation(pending)
         try:
@@ -649,7 +649,7 @@ class AttemptSettlement:
         except BaseException:
             plan.restore_teaching_state(before)
             if continuation is not None:
-                continuation.restore_state(continuation_before)
+                continuation.restore_successor_state(continuation_before)
             raise
         changed = plan.identity != state.binding.stage_key
         receipt = SettlementReceipt(decision, state.binding.stage_key, state.route.performed_bpm,

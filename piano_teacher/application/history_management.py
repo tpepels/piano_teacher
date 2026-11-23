@@ -12,9 +12,8 @@ from ..learning import LearningPlan
 
 class HistoryManagement:
     def __init__(self, *, lesson, notices, progress, measurement,
-                          recovery_streak, lifecycle, take, transport,
-                          score_artifact_registry, learning_evidence, clock,
-                          data_dir):
+                          recovery_streak, lifecycle, take, transport, score,
+                          learning_evidence, clock, data_dir):
         self.lesson = lesson
         self.notices = notices
         self.progress = progress
@@ -23,7 +22,7 @@ class HistoryManagement:
         self.lifecycle = lifecycle
         self.take = take
         self.transport = transport
-        self.score_artifact_registry = score_artifact_registry
+        self.score = score
         self.learning_evidence = learning_evidence
         self.clock = clock
         self.data_dir = data_dir
@@ -59,7 +58,7 @@ class HistoryManagement:
         self.lesson.select_opening(0.0)
         self.transport.select_source()
         self.lesson.clear_guided_selection()
-        self.score_artifact_registry.invalidate()
+        self.score.invalidate_artifacts()
         self.lesson.advance_revision()
         self.notices.feedback = feedback
         self.lesson.set_course_guided(False)
@@ -109,7 +108,7 @@ class HistoryManagement:
         self.lesson.set_course_guided(False)
         self.transport.select_source()
         self.lesson.clear_guided_selection()
-        self.score_artifact_registry.invalidate()
+        self.score.invalidate_artifacts()
         self.lesson.advance_revision()
         self.transport.wait_for_player()
         self.notices.publish(

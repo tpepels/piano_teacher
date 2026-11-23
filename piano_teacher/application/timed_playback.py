@@ -9,7 +9,7 @@ from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, R
 
 class TimedPlayback:
     def __init__(self, *, lesson, notices, transport, take, exposure_workflows,
-                          midi, score_read, evidence_context, transport_timing,
+                          midi, score, evidence_context, transport_timing,
                           lesson_execution, clock, lock, phase):
         self.lesson = lesson
         self.notices = notices
@@ -17,7 +17,8 @@ class TimedPlayback:
         self.take = take
         self.exposure_workflows = exposure_workflows
         self.midi = midi
-        self.score_read, self.evidence_context = score_read, evidence_context
+        self.evidence_context = evidence_context
+        self.score = score
         self.transport_timing, self.lesson_execution = transport_timing, lesson_execution
         self.clock, self.lock, self.phase = clock, lock, phase
 
@@ -49,7 +50,7 @@ class TimedPlayback:
             started = self.transport.begin_timed(
                 TimedTakeSource(p.active_phrase,p.piece.bar_boundaries,
                     p.piece.time_signatures,p.bpm,
-                    self.score_read.source_model()["practice_timeline"]["gap"]["duration_beats"]),
+                    self.score.source_model()["practice_timeline"]["gap"]["duration_beats"]),
                 TimedStartRequest(mode=mode,
                     position=self.lesson.opening_beat if from_beat is None else from_beat,
                     automatic=selected.automatic if selected is not None else mode == "practice",

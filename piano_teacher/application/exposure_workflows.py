@@ -13,22 +13,21 @@ from .exposure_preparation import (
 
 
 class ExposureWorkflows:
-    def __init__(self, *, lesson, take, tempo_map_cache, transport, listen,
-                          notices, lifecycle, learner_progress, progress,
-                          score_state_publisher, midi, evidence_context, clock):
+    def __init__(self, *, lesson, take, score, transport, listen, notices,
+                          lifecycle, learner_progress, progress, midi,
+                          evidence_context, clock):
         self.lesson = lesson
 
 
 
         self.take = take
-        self.tempo_map_cache = tempo_map_cache
+        self.score = score
         self.transport = transport
         self.listen = listen
         self.notices = notices
         self.lifecycle = lifecycle
         self.learner_progress = learner_progress
         self.progress = progress
-        self.score_state_publisher = score_state_publisher
         self.midi = midi
         self.evidence_context = evidence_context
         self.clock = clock
@@ -69,7 +68,7 @@ class ExposureWorkflows:
         self.install(prepare_listen(
             self.source(), revision=self.lesson.revision,
             bpm=selected_plan.bpm,
-            tempo_map=self.tempo_map_cache.get(
+            tempo_map=self.score.tempo_map(
                 selected_plan.active_stage, selected_plan.bpm)), reason=reason)
 
     def prepare_perform(self, *, scope: str = "current", exposure=None,
@@ -107,7 +106,7 @@ class ExposureWorkflows:
             self.lifecycle.stop(
                 reason=prepared.stop_reason or action_reason,
                 preserve_episode=prepared.recovery)
-            self.score_state_publisher.reset_guided()
+            self.score.reset_guided_score()
             self.take.assign_remediation(prepared.remediation)
             if prepared.recovery:
                 self.take.restore_retry(prepared.retry_range)

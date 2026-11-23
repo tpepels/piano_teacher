@@ -10,11 +10,11 @@ from .playback_facts import PreloadedFeedbackSource
 
 
 class ScorePreloadWorkflow:
-    def __init__(self, *, lesson, lock, transport, teaching_continuation, take,
+    def __init__(self, *, lesson, lock, transport, score, take,
                           transport_timing, completion_continuations):
         self.lock = lock
         self.lesson = lesson
-        self.teaching_continuation = teaching_continuation
+        self.score = score
         self.transport = transport
         self.transport_timing = transport_timing
         self.take = take
@@ -23,33 +23,33 @@ class ScorePreloadWorkflow:
     def decided_selection(self):
         if not self.transport.auto:
             return None
-        return self.teaching_continuation.selection(self.take.pending,
+        return self.score.successor_selection(self.take.pending,
             revision=self.lesson.revision,fingerprint=self.lesson.fingerprint)
 
     def next_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:
         if self.lesson.plan is None or self.lesson.warmup or self.transport.mode != "practice":
             return None
         decided = self.decided_selection() if offset == 1 else None
-        return self.teaching_continuation.choose_ahead(
+        return self.score.choose_ahead(
             self.lesson.plan,fingerprint=self.lesson.fingerprint,revision=self.lesson.revision,
             offset=offset,decided=decided)
 
     def next_stage_score(self) -> bytes:
         with self.lock:
-            return self.teaching_continuation.ensure_next(
+            return self.score.ensure_next_score(
                 self.next_selection())
 
     def report_preload_failure(self, *, fingerprint: str, step_number: int,
                                revision: int, error: str) -> dict:
         with self.lock:
-            return self.teaching_continuation.report_native_failure(
+            return self.score.report_native_failure(
                 self.next_selection(),fingerprint=fingerprint,
                 step_number=step_number,revision=revision,error=error)
 
     def acknowledge_preloaded_stage(self, *, stage_key: str,
                                     revision: int) -> dict:
         with self.lock:
-            accepted = self.teaching_continuation.acknowledge_stage(
+            accepted = self.score.acknowledge_successor_stage(
                 self.next_selection(),stage_key=stage_key,revision=revision)
             source = (PreloadedFeedbackSource(
                 self.lesson.plan.active_phrase.sounding_end-self.lesson.plan.active_phrase.start,
@@ -58,7 +58,7 @@ class ScorePreloadWorkflow:
                 revision=self.lesson.revision,fingerprint=self.lesson.fingerprint)
             if released_at is not None:
                 self.completion_continuations.advance_pending_feedback(released_at)
-            self.teaching_continuation.warm_more(
+            self.score.warm_more(
                 self.next_selection(offset=2))
             return accepted
 

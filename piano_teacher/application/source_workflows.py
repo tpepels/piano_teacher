@@ -13,17 +13,16 @@ from ..importing.pieces import import_piece
 
 class SourceWorkflows:
     def __init__(self, *, lesson, notices, lifecycle, recovery_streak,
-                          transport, source_preparation,
-                          score_artifact_registry, take, listen, preprocessing,
-                          fingering, progress, fukuda_mistakes, library,
-                          library_health, lock):
+                          transport, source_preparation, score, take, listen,
+                          preprocessing, fingering, progress, fukuda_mistakes,
+                          library, library_health, lock):
         self.lesson = lesson
         self.notices = notices
         self.lifecycle = lifecycle
         self.recovery_streak = recovery_streak
         self.transport = transport
         self.source_preparation = source_preparation
-        self.score_artifact_registry = score_artifact_registry
+        self.score = score
         self.take = take
         self.listen = listen
         self.preprocessing = preprocessing
@@ -53,7 +52,7 @@ class SourceWorkflows:
             plan=prepared.plan, source=str(prepared.path),
             fingerprint=prepared.fingerprint, warmup=warmup)
         self.lesson.select_opening(0.0)
-        self.score_artifact_registry.invalidate()
+        self.score.invalidate_artifacts()
         self.source_preparation.source_installed()
         self.transport.select_source()
         self.lesson.clear_guided_selection()
@@ -100,7 +99,7 @@ class SourceWorkflows:
             score_revision=self.lesson.revision)
         self._apply_listen_failure()
         selected.piece = installed.piece
-        self.score_artifact_registry.invalidate()
+        self.score.invalidate_artifacts()
         self.lesson.publish_revision(installed.score_revision)
         if self.transport.source_revised(self.lesson.revision):
             self.listen.retarget_score(self.lesson.revision)

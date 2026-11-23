@@ -15,21 +15,19 @@ from .teaching_continuation import (
 
 
 class CompletionContinuations:
-    def __init__(self, *, lesson, notices, teaching_continuation, take,
-                          transport, lesson_execution, transport_timing,
-                          score_read, recovery_workflows, timed_playback,
-                          clock, library, score_artifact_registry, assessment,
-                          feedback_seconds):
+    def __init__(self, *, lesson, notices, score, take, transport,
+                          lesson_execution, transport_timing,
+                          recovery_workflows, timed_playback, clock, library,
+                          assessment, feedback_seconds):
         self.notices = notices
         self.lesson = lesson
-        self.teaching_continuation = teaching_continuation
+        self.score = score
         self.take = take
         self.transport = transport
         self.lesson_execution, self.transport_timing = lesson_execution, transport_timing
-        self.score_read, self.recovery_workflows = score_read, recovery_workflows
+        self.recovery_workflows = recovery_workflows
         self.timed_playback = timed_playback
         self.clock, self.library = clock, library
-        self.score_artifact_registry = score_artifact_registry
         self.assessment, self.feedback_seconds = assessment, feedback_seconds
         # Successful effects are consumed by their exact durable identity.
         # A continuation dispatch error leaves the receipt retryable.
@@ -42,7 +40,7 @@ class CompletionContinuations:
         # may re-enter that already-selected feedback transaction.
         if not self.transport.auto and not explicit_retry:
             return
-        transaction = self.teaching_continuation.begin_feedback(
+        transaction = self.score.begin_feedback(
             self.take.pending, now=now,
             automatic=self.transport.auto or explicit_retry,
             force_early=force_early, revision=self.lesson.revision,
@@ -60,7 +58,7 @@ class CompletionContinuations:
             stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
             pending = self.take.pending
-            self.publish_feedback_fault(self.teaching_continuation.settlement_failure(
+            self.publish_feedback_fault(self.score.settlement_failure(
                 exc,saved=pending is not None and pending.receipt is not None),now)
             if not isinstance(exc,UnpreparedNextStage):
                 print("ASSESSMENT_SETTLEMENT_FAILED:",type(exc).__name__,str(exc),flush=True)
@@ -69,7 +67,7 @@ class CompletionContinuations:
         # yet been applied. Retain its visible note feedback until the
         # exact source-bound continuation is successfully installed.
         try:
-            publication = self.teaching_continuation.finish_feedback(
+            publication = self.score.finish_feedback(
                 transaction, SettledSourceFacts(
                     fingerprint=self.lesson.fingerprint,
                     stage_key=self.lesson.plan.identity,
@@ -185,7 +183,7 @@ class CompletionContinuations:
                 applied = self.transport.apply_continuation(effect,
                     measurement=self.transport_timing.collect_continuation_measurement(
                         effect.deadline,effect.exposure.from_beat),
-                    source_stride_beats=self.score_read.source_model()["practice_timeline"]["stride_beats"])
+                    source_stride_beats=self.score.source_model()["practice_timeline"]["stride_beats"])
             else:
                 applied = self.transport.apply_continuation(effect)
             if applied.feedback is not None:
@@ -212,7 +210,7 @@ class CompletionContinuations:
         try:
             committed = self.take.commit_full_passage(
                 plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=self.clock(),
-                continuation=self.teaching_continuation,
+                continuation=self.score,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
                 score_revision=self.lesson.revision,
                 visual_offset=self.transport.visual_offset_beats)
@@ -224,17 +222,17 @@ class CompletionContinuations:
                 self.lesson.select_opening(0.0)
                 self.lesson.publish_revision(committed.selection.revision)
                 self.transport.wait_for_player()
-                prebuilt = self.teaching_continuation.consume_committed_asset(
+                prebuilt = self.score.consume_committed_asset(
                     committed.prepared,changed=True,auto=self.transport.auto,
                     selection=committed.selection)
                 if prebuilt is not None:
-                    self.score_artifact_registry.adopt(prebuilt)
+                    self.score.adopt_artifacts(prebuilt)
                 else:
-                    self.score_artifact_registry.current.invalidate()
+                    self.score.current_artifacts.invalidate()
                 self.transport.adopt_committed_stage(
                     committed,preserved=prebuilt is not None)
             else:
-                self.teaching_continuation.consume_committed_asset(
+                self.score.consume_committed_asset(
                     None,changed=False,auto=self.transport.auto,selection=None)
         except BaseException:
             self.take.publication_failed()

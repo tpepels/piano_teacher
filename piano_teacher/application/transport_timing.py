@@ -10,13 +10,12 @@ from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasureme
 
 
 class TransportTiming:
-    def __init__(self, *, lesson, transport, tempo_map_cache,
-                          attempt_progression, take, score_read, midi_ingress,
-                          clock):
+    def __init__(self, *, lesson, transport, score, attempt_progression, take,
+                          midi_ingress, clock):
         self.lesson = lesson
         self.transport = transport
-        self.tempo_map_cache, self.attempt_progression = tempo_map_cache, attempt_progression
-        self.score_read = score_read
+        self.attempt_progression = attempt_progression
+        self.score = score
         self.take = take
         self.midi_ingress, self.clock = midi_ingress, clock
 
@@ -70,7 +69,7 @@ class TransportTiming:
         """
         if self.lesson.plan is None or self.transport.mode not in ("practice", "listen"):
             return None
-        return self.tempo_map_cache.get(self.lesson.plan.active_stage, self.lesson.plan.bpm)
+        return self.score.tempo_map(self.lesson.plan.active_stage, self.lesson.plan.bpm)
 
     def elapsed_beat(self, elapsed_seconds: float) -> float:
         return SCHEDULER.elapsed_beats(
@@ -117,7 +116,7 @@ class TransportTiming:
         """Authored tempo-map rate at a take's first beat, at this BPM."""
         if self.lesson.plan is None or bpm <= 0 or self.transport.mode not in ("practice", "listen"):
             return float(bpm)
-        tempo = self.tempo_map_cache.get(self.lesson.plan.active_stage, bpm)
+        tempo = self.score.tempo_map(self.lesson.plan.active_stage, bpm)
         return float(tempo.bpm_at(from_beat)) if tempo is not None else float(bpm)
 
     def schedule_preparation(self, target: float, *, now: float,
@@ -126,7 +125,7 @@ class TransportTiming:
                               announce: bool = True,
                               short_deadline: float | None = None):
         self.transport.schedule_preparation(PreparationRequest(
-            self.score_read.source_model(),target,now,from_visual,reverse_seconds,
+            self.score.source_model(),target,now,from_visual,reverse_seconds,
             self.presentation_bpm(),self.transport.continuous_horizon_beats,
             reading_lead_included,announce,short_deadline))
 

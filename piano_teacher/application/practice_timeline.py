@@ -18,20 +18,19 @@ from . import practice_flow
 
 class PracticeTimeline:
     def __init__(self, *, lesson, notices, transport, take, transport_timing,
-                          timed_playback, score_read, lesson_execution,
+                          timed_playback, score, lesson_execution,
                           recovery_workflows, completion_continuations,
                           live_feedback_workflows, live_assessment,
                           measurement, policy_registry, library, midi, listen,
                           midi_ingress, midi_calibration, attempt_progression,
-                          read_models, teaching_continuation,
-                          exposure_workflows, clock, poll_midi,
+                          read_models, exposure_workflows, clock, poll_midi,
                           feedback_seconds):
         self.notices = notices
         self.lesson = lesson
         self.transport = transport
         self.take = take
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
-        self.score_read = score_read
+        self.score = score
         self.lesson_execution, self.recovery_workflows = lesson_execution, recovery_workflows
         self.completion_continuations = completion_continuations
         self.live_feedback_workflows, self.live_assessment = live_feedback_workflows, live_assessment
@@ -40,7 +39,7 @@ class PracticeTimeline:
         self.midi, self.listen, self.midi_ingress = midi, listen, midi_ingress
         self.midi_calibration, self.attempt_progression = midi_calibration, attempt_progression
         self.read_models, self.clock, self.poll_midi = read_models, clock, poll_midi
-        self.teaching_continuation, self.exposure_workflows = teaching_continuation, exposure_workflows
+        self.exposure_workflows = exposure_workflows
         self.feedback_seconds = feedback_seconds
 
     def complete_attempt(self, phrase: Phrase, ending: float,
@@ -80,7 +79,7 @@ class PracticeTimeline:
                     if self.take.recorder else ()),
             from_beat=self.transport.play_from_beat,end_beat=ending,
             tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
-            layout_for_feedback=self.score_read.completed_take_layout,
+            layout_for_feedback=self.score.completed_take_layout,
             mode=self.transport.mode,review_end_beat=self.take.review_end_beat,
             automatic_remedial_review=self.take.automatic_remedial_review,
             performance_review=self.completion_continuations.performance_review,
@@ -126,13 +125,13 @@ class PracticeTimeline:
             assessed_bpm=self.take.pending_assessed_bpm,
             total_beats=total_beats,duration=duration,now=now,
             visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
-            source_model=self.score_read.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
+            source_model=self.score.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
             horizon_beats=self.transport.continuous_horizon_beats,warmup=self.lesson.warmup,
             short_rest_enabled=self.transport.short_rest is not None,
             retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
             repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,
                 source_end=self.transport.run_at+duration),
-            assets_ready=self.teaching_continuation.decision_assets_ready(pending,
+            assets_ready=self.score.decision_assets_ready(pending,
                 revision=self.lesson.revision,fingerprint=self.lesson.fingerprint),
             exact_repeats=self.lesson_execution.flow_active()))
         if completion.next_action is not None:
@@ -179,7 +178,7 @@ class PracticeTimeline:
                     self.lesson_execution.flow_execute(self.lesson.flow_listen_finished())
         elif decision.action == "preview_due":
             deadline = self.transport.next_at
-            self.transport.advance_source_stride(self.score_read.source_model()[
+            self.transport.advance_source_stride(self.score.source_model()[
                 "practice_timeline"]["stride_beats"])
             self.timed_playback.continue_at(SCHEDULER.continuation(
                     self.transport_timing.collect_continuation_measurement(deadline, 0.0),
