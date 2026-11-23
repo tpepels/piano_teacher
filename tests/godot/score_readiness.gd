@@ -43,11 +43,19 @@ func check(ok: bool, message: String) -> void:
 
 func state(revision: int) -> Dictionary:
     return {"loaded":true,"revision":revision,"piece_fingerprint":"piece-%d" % revision,
+        "stage_key":"stage-%d" % revision,"hand":"right",
         "phase":"loading","awaiting_score_revision":revision}
 
-func reply(session, kind: String, revision: int, at_ms: int = 0) -> void:
-    var data := {"revision":revision,"anchors":[{"id":"head"}],"notes":[{"id":"source"}]}
-    session.complete_response(kind,session.pending_id(kind),0,JSON.stringify(data).to_utf8_buffer(),at_ms)
+func bundle(revision: int) -> PackedByteArray:
+    # One source-bound bundle carries both engraving and original-note model.
+    return JSON.stringify({"status":"ready","fingerprint":"piece-%d" % revision,
+        "revision":revision,"hand":"right","stage_key":"stage-%d" % revision,
+        "source_note_ids":["source"],
+        "layout":{"revision":revision,"anchors":[{"id":"head"}]},
+        "model":{"revision":revision,"active_note_ids":["source"]}}).to_utf8_buffer()
+
+func reply(session, revision: int, at_ms: int = 0) -> void:
+    session.complete_response("bundle",session.pending_id("bundle"),0,bundle(revision),at_ms)
 
 func _initialize() -> void:
     print("SCORE_READINESS: expected SCORE_ASSET_FAILURE logs exercise rejection and recovery")
@@ -56,37 +64,34 @@ func _initialize() -> void:
     var actions: Array = []
     session.action_requested.connect(func(value: Dictionary): actions.append(value))
     session.update_context(state(1),0)
-    var old_layout: int = session.pending_id("layout")
+    var old_failure: int = session.pending_id("bundle")
     session.update_context(state(2),1)
-    session.complete_response("layout",old_layout,3,JSON.stringify({"error":"old failure"}).to_utf8_buffer(),2)
+    session.complete_response("bundle",old_failure,3,JSON.stringify({"error":"old failure"}).to_utf8_buffer(),2)
     check(session.score_error.is_empty() and not session.is_ready(),"A previous piece's delayed failure cannot poison the selected music")
-    reply(session,"layout",2)
-    var old_model: int = session.pending_id("model")
+    var old_bundle: int = session.pending_id("bundle")
     session.update_context(state(3),3)
-    session.complete_response("model",old_model,0,JSON.stringify({"revision":2}).to_utf8_buffer(),4)
-    check(not session.is_ready() and actions.is_empty(),"A previous piece's timing result cannot authorize playback")
-    reply(session,"layout",3)
-    reply(session,"model",3)
+    session.complete_response("bundle",old_bundle,0,bundle(2),4)
+    check(not session.is_ready() and actions.is_empty(),"A previous piece's score cannot authorize playback")
+    reply(session,3)
     check(not session.is_ready() and actions.is_empty(),"Available note data cannot start music before retained notation finishes")
     assets.compiled = true
     assets.retained_ink_compiled.emit()
     check(session.is_ready() and not session.status().visible
         and actions == [{"action":"score_ready","revision":3}],"The complete selected score unblocks playback and clears preparation")
     session.update_context(state(4),5)
-    var before_retry: int = session.pending_id("layout")
+    var before_retry: int = session.pending_id("bundle")
     check(session.retry(5),"Retry can supersede a preparation that is still pending")
-    session.complete_response("layout",before_retry,1,
+    session.complete_response("bundle",before_retry,1,
         JSON.stringify({"error":"Obsolete preparation failed"}).to_utf8_buffer(),6)
     check(session.score_error.is_empty(),"A late result from before Retry cannot reinstate its old error")
-    session.complete_response("layout",session.pending_id("layout"),1,
+    session.complete_response("bundle",session.pending_id("bundle"),1,
         JSON.stringify({"error":"Cannot engrave this source"}).to_utf8_buffer(),6)
     check(not session.is_ready() and not session.status().error.is_empty()
         and session.status().retry_visible and session.status().browse_visible,
         "A failed score blocks playback and offers Retry or different music")
     check(actions.size() == 1,"Failed preparation cannot authorize an attempt")
     check(session.retry(7),"The learner can retry failed score preparation")
-    reply(session,"layout",4)
-    reply(session,"model",4)
+    reply(session,4)
     assets.compiled = true
     assets.retained_ink_compiled.emit()
     check(session.is_ready() and session.score_error.is_empty()
@@ -96,7 +101,7 @@ func _initialize() -> void:
     var native := Native.new()
     var native_session := Session.new(native)
     native_session.update_context(state(5),0)
-    reply(native_session,"layout",5)
+    reply(native_session,5)
     check(not native_session.is_ready() and not native_session.score_error.is_empty()
         and native_session.status().retry_visible,"The real native renderer rejects absent authentic glyphs visibly")
     session.replace_renderer(null)

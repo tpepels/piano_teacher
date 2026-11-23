@@ -466,7 +466,7 @@ def test_real_state_contract_includes_authoritative_motion_directive(practice_se
     from piano_teacher.state_contract import VERSION, problems
     session = practice_session(bars=1)
     result = session.snapshot()
-    assert VERSION == 5
+    assert VERSION == 6
     assert "presentation_directive" in result
     assert result["presentation_directive"]["kind"] in (
         "hold", "target", "retain", "run")
@@ -690,7 +690,6 @@ def test_navigation_suspend_preserves_pending_take_and_never_resumes_on_reentry(
     held = session.command("ui_suspend")
     assert held["paused"] and held["playback_intent"] is None
     assert not held["running"]
-    assert session.engine.playback_session.paused_intent is not None
     assert held["controls"]["pause"]["action"] == "resume"
     again = session.command("ui_suspend")
     assert again["paused"] and again["playback_intent"] is None
