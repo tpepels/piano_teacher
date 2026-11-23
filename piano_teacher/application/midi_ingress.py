@@ -119,7 +119,7 @@ class MidiIngress:
                 received_at=received_at,corrected_at=adjusted,
                 replaying=deferred):
             return
-        self.deliver(
+        return self.deliver(
             message,facts=facts,received_at=received_at,
             corrected_at=adjusted,musical_at=musical_seconds(adjusted),
             recorder=recorder(),teaching=teaching(),
@@ -207,16 +207,20 @@ class MidiIngress:
         return False
 
     def deliver(self,message,*,facts,received_at,corrected_at,musical_at,recorder,teaching,feedback_take):
+        """Route one key; return True when an attack came during the count-in."""
         if message.type not in ("note_on","note_off"):
-            return
+            return False
         is_on = message.type == "note_on" and message.velocity > 0
         recorded = None
+        early = False
         if facts.running and recorder and facts.mode not in ("learn", "listen"):
             spb = SCHEDULER.seconds_per_beat(
                 facts.tempo_map.bpm_at(facts.from_beat)
                 if facts.tempo_map is not None else facts.bpm)
             if not is_on or not facts.paused and musical_at >= -onset_tolerance(spb):
                 recorded = recorder.add(message.note,is_on,musical_at)
+            elif is_on and not facts.paused:
+                early = True
         judgement = None
         if (recorded is not None and facts.phrase is not None
                 and not facts.paused and not facts.preview):
@@ -241,6 +245,6 @@ class MidiIngress:
                 if self.capture.attempt_id is not None:
                     self.capture.guided.add(message.note,is_on,
                         received_at-self.capture.origin-self.capture.context["monotonic_start"])
-            return
+            return early
         if facts.mode == "listen":
-            return
+            return early

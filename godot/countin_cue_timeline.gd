@@ -38,15 +38,6 @@ const WHOLE_BAR := -1.0
 # deadline Godot knows in advance, so its cues are on their beats anyway.
 const LATE_CUE_BEATS := 0.2
 
-# Owner decision M3 (2026-11-11): compound meters count their main pulse,
-# the dotted quarter, evenly across the one count-in bar: 6/8 "Ichi Ni",
-# 9/8 "Ichi Ni San", 12/8 "Ichi Ni San Shi". Beats are quarter notes.
-static func pulse_beats(meter: Variant) -> float:
-    if meter is Array and meter.size() >= 2 and int(meter[1]) == 8 and \
-            int(meter[0]) in [6,9,12]:
-        return 1.5
-    return 1.0
-
 # A count-in reading (beat, bar, count_in) in pulse units: only the
 # count-in before beat 0 is re-expressed; the take's own beats stay beats.
 static func in_pulses(beat: float, bar_beats: float, count_in_beats: float,

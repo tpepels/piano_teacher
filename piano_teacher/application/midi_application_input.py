@@ -12,7 +12,8 @@ class MidiApplicationInput:
     def __init__(self, *, lesson, transport, take, midi_input, lock,
                           runtime_timings, device_workflows,
                           settings_workflows, library, transport_timing,
-                          live_feedback_workflows, timed_playback, clock):
+                          live_feedback_workflows, timed_playback, notices,
+                          clock):
         self.lesson = lesson
         self.transport = transport
         self.take = take
@@ -23,6 +24,7 @@ class MidiApplicationInput:
         self.library = library
         self.transport_timing, self.live_feedback_workflows = transport_timing, live_feedback_workflows
         self.timed_playback, self.clock = timed_playback, clock
+        self.notices = notices
         self._session = None
 
     def bind_session(self, session) -> None:
@@ -110,7 +112,7 @@ class MidiApplicationInput:
             self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
             self.take.cancellation_generation,
             self.midi_input.device)
-        self.midi_input.dispatch_midi(
+        early = self.midi_input.dispatch_midi(
             message,facts=facts,received_at=now,
             corrected_at=corrected_at,deferred=deferred,
             midi_offset_seconds=self.library.settings["midi_offset_ms"]/1000.0,
@@ -120,6 +122,10 @@ class MidiApplicationInput:
             recorder=lambda: self.take.recorder,
             teaching=lambda: self.lesson.guided_controller,
             feedback_take=self.live_feedback_workflows.feedback_take)
+        if early:
+            # A key during the count-in earns no credit; say so instead of
+            # silently ignoring it.
+            self.notices.feedback = "Too early – wait for the count-in, then play"
 
     def poll_midi_connection(self):
         if self.midi_input.device_closed:

@@ -342,7 +342,7 @@ def _event_boundary(r) -> None:
         settings_workflows=r.settings_workflows, library=r.library,
         transport_timing=r.transport_timing,
         live_feedback_workflows=r.live_feedback_workflows,
-        timed_playback=r.timed_playback, clock=r.now)
+        timed_playback=r.timed_playback, notices=r.notices, clock=r.now)
 
     r.practice_timeline = PracticeTimeline(
         lesson=r.lesson, notices=r.notices, transport=r.transport, take=r.take,

@@ -69,6 +69,13 @@ func acknowledge_reserved_count_in(now_ms: int) -> void:
     if not _reserved.is_empty():
         _reserved["acked_ms"] = float(now_ms)
 
+## The current authorized take's count-in pulse, published by the backend.
+static func authorized_pulse(state: Dictionary) -> float:
+    var timeline: Variant = state.get("playback_timeline")
+    var current: Variant = timeline.get("current") if timeline is Dictionary else null
+    var plan: Variant = current.get("count_in_plan") if current is Dictionary else null
+    return float(plan.get("pulse_beats",NAN)) if plan is Dictionary else NAN
+
 static func engine_count_in_deadline_ms(state: Dictionary, action: String,
         offset_ms: float) -> float:
     # The coordinator's authorized segment is the exact epoch for Start,
@@ -110,7 +117,10 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
             float(now_ms)-float(stopped["deadline_ms"]),
             float(stopped["bpm"]))
         var token: String = str(stopped["token"])
-        var pulse: float = CueTimeline.pulse_beats(stopped["meter"])
+        var pulse: float = float(stopped["plan"].get("pulse_beats",NAN))
+        if not is_finite(pulse) or pulse <= 0.0:
+            _reserved.clear()
+            return true
         _cues.hold(token,sample/pulse)
         practice_view.stage.count_in.present(0.0,4,false,true)
         _reserved.clear()
@@ -203,9 +213,11 @@ func _count_in(token: String, beat: float, bar_beats: float, meter: Variant,
         paused: bool = false, drop_late: bool = false,
         authored_pulse: float = NAN) -> void:
     # One place turns a count-in reading into circles and cues, in the
-    # meter's main pulse (M3); simple meters are unchanged.
-    var pulse: float = (authored_pulse if is_finite(authored_pulse)
-        and authored_pulse > 0.0 else CueTimeline.pulse_beats(meter))
+    # backend's authorized pulse (meter pulse, subdivided at slow tempi).
+    if not is_finite(authored_pulse) or authored_pulse <= 0.0:
+        push_error("COUNT_IN_PLAN: missing authorized pulse")
+        return
+    var pulse: float = authored_pulse
     var units: Array = CueTimeline.in_pulses(beat,bar_beats,count_in_beats,
         pulse)
     practice_view.stage.count_in.present(float(units[0]),int(units[1]),true,
@@ -302,7 +314,7 @@ func update(state: Dictionary, state_tick_ms: int,
                             float(plan.get("bar_beats",4.0)),
                             plan.get("meter",[4,4]),true,
                             float(plan.get("beats",0.0)),paused,paused,
-                            float(plan.get("pulse_beats",1.0)))
+                            float(plan.get("pulse_beats",NAN)))
                         return
                     if bool(state.get("running",false)):
                         # Source-time metronome is still permitted AFTER
@@ -310,7 +322,7 @@ func update(state: Dictionary, state_tick_ms: int,
                         _count_in(token,sampled_beat,
                             float(plan.get("bar_beats",4.0)),
                             plan.get("meter",[4,4]),false,0.0,paused,
-                            false,float(plan.get("pulse_beats",1.0)))
+                            false,float(plan.get("pulse_beats",NAN)))
                         return
         practice_view.stage.count_in.present(0.0,4,false,false)
         # Preserve the heard-beat token if a paused take still owns it;
@@ -344,7 +356,9 @@ func update(state: Dictionary, state_tick_ms: int,
                 else float(transport_beat_at.call(now_ms))
             var running_token: String = "running:%d:%d" % [
                 int(state.get("revision",-1)),int(state.get("transport_id",0))]
-            var pulse: float = CueTimeline.pulse_beats(state.get("count_in_meter"))
+            var pulse: float = authorized_pulse(state)
+            if not is_finite(pulse) or pulse <= 0.0:
+                return
             var continued: bool = is_finite(transport_beat) and \
                 absf(transport_beat-resume_beat) < .05 and \
                 _cues.continues(running_token,resume_beat/pulse)
@@ -353,7 +367,8 @@ func update(state: Dictionary, state_tick_ms: int,
                 int(state.get("transport_id",0))]
             _count_in(resume_token,resume_beat,
                 float(state.get("count_in_bar_beats",4)),
-                state.get("count_in_meter"),true,count_in_beats,false,true)
+                state.get("count_in_meter"),true,count_in_beats,false,true,
+                pulse)
             return
     if state.is_empty() or not bool(state.get("running",false)):
         practice_view.stage.count_in.present(0.0,4,false,false)
@@ -366,4 +381,5 @@ func update(state: Dictionary, state_tick_ms: int,
     var token: String = "running:%d:%d" % [
         int(state.get("revision",-1)),int(state.get("transport_id",0))]
     _count_in(token,beat,float(state.get("count_in_bar_beats",4)),
-        state.get("count_in_meter"),false,count_in_beats,paused)
+        state.get("count_in_meter"),false,count_in_beats,paused,false,
+        authorized_pulse(state))

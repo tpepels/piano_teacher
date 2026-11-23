@@ -10,6 +10,9 @@ from dataclasses import dataclass
 import math
 
 
+MAX_COUNT_IN_PULSE_SECONDS = 1.5
+
+
 @dataclass(frozen=True, slots=True)
 class CountInPlan:
     bar_beats: float
@@ -31,6 +34,14 @@ class CountInPlan:
                 float(bar_beats), n*4/d, rel_tol=0, abs_tol=1e-6):
             raise ValueError("Count-in must use authored meter")
         pulse = 1.5 if d == 8 and n in (6, 9, 12) else 4.0/d
+        # Still exactly one authored bar, but a click slower than this is
+        # not heard as a count-in: subdivide (compound pulses into thirds,
+        # simple pulses into halves) while the bar divides evenly.
+        while pulse*60.0/float(bpm) > MAX_COUNT_IN_PULSE_SECONDS:
+            finer = pulse/3.0 if math.isclose(pulse, 1.5) else pulse/2.0
+            if not math.isclose(beats/finer, round(beats/finer), abs_tol=1e-6):
+                break
+            pulse = finer
         count = round(beats/pulse)
         if not math.isclose(beats, count*pulse, rel_tol=0, abs_tol=1e-6):
             raise ValueError("Count-in has a partial unspoken pulse")
