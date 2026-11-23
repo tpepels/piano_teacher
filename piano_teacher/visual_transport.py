@@ -44,6 +44,9 @@ class VisualTransport:
     run_at: float = 0.0
     play_from_beat: float = 0.0
     pending_rewind: float | None = None
+    # The same musical timeline owns running and paused. PlaybackSession's
+    # public running property delegates here; no separate active flag.
+    running: bool = False
     paused: bool = False
     paused_at: float = 0.0
     next_at: float = 0.0
@@ -263,6 +266,7 @@ class VisualTransport:
 
     def reset_for_stop(self, *, rewind_seconds: float) -> None:
         """Forget the visible attempt but retain the loaded score's gap duration."""
+        self.running = False
         self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0

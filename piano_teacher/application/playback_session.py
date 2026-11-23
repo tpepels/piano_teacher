@@ -34,7 +34,6 @@ from .musical_scheduler import ContinuationMeasurement
 
 @dataclass(slots=True)
 class PlaybackSession:
-    running: bool = False
     mode: str = "practice"
     auto: bool = False
     preview_only: bool = False
@@ -76,6 +75,15 @@ class PlaybackSession:
         self._progression = progression
         self._listen = listen
         self._clock = clock
+
+    @property
+    def running(self) -> bool:
+        """One live-take bit, owned by the same timeline as Pause and onset."""
+        return self._transport.running
+
+    @running.setter
+    def running(self, value: bool) -> None:
+        self._transport.running = bool(value)
 
     def require_authorized_start(self, presentation_required: bool) -> None:
         if presentation_required and not self.authorizing:
