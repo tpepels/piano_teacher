@@ -11,16 +11,15 @@ from ..state_projection import SessionSnapshot, project_session_state
 
 
 class SessionReadModels:
-    def __init__(self, *, lesson, notices, take, transport, library,
-                          midi_input, attempt_progression, score,
-                          lesson_execution, listen, live_assessment, lock,
-                          clock, phase, elapsed_beat, visual_motion, tempo_map,
-                          next_count_in_beats, next_count_in_meter,
-                          start_rate_bpm, presentation_bpm, playback_facts):
+    def __init__(self, *, lesson, notices, take, transport, timing, phase,
+                 library, midi_input, attempt_progression, score,
+                 lesson_execution, listen, live_assessment, lock, clock):
         self.lesson = lesson
         self.notices = notices
         self.take = take
         self.transport = transport
+        self.timing = timing
+        self.session_phase = phase
         self.library = library
         self.midi_input = midi_input
         self.attempt_progression = attempt_progression
@@ -28,11 +27,6 @@ class SessionReadModels:
         self.lesson_execution = lesson_execution
         self.listen, self.live_assessment = listen, live_assessment
         self.lock, self.clock = lock, clock
-        self.phase, self.elapsed_beat = phase, elapsed_beat
-        self.visual_motion, self.tempo_map = visual_motion, tempo_map
-        self.next_count_in_beats, self.next_count_in_meter = next_count_in_beats, next_count_in_meter
-        self.start_rate_bpm, self.presentation_bpm = start_rate_bpm, presentation_bpm
-        self.playback_facts = playback_facts
 
     def live_marks(self, _elapsed_seconds: float) -> list[dict]:
         return (list(self.live_assessment.latest_marks)
@@ -51,7 +45,7 @@ class SessionReadModels:
             paused=self.transport.paused,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             bpm=float(plan.bpm) if plan is not None else 0.0,
-            presentation_bpm=float(self.presentation_bpm()),
+            presentation_bpm=float(self.timing.presentation_bpm()),
             run_at=self.transport.run_at,
             play_from_beat=self.transport.play_from_beat,
             announced=announced,
@@ -60,8 +54,8 @@ class SessionReadModels:
             announcement_serial=self.transport.announce_serial,
             scheduled_start=self.transport.scheduled_start,
             timeline={"intent":pending,"current":timeline},
-            next_count_in_beats=self.next_count_in_beats(),
-            next_count_in_meter=tuple(self.next_count_in_meter()),
+            next_count_in_beats=self.timing.next_count_in_beats(),
+            next_count_in_meter=tuple(self.timing.next_count_in_meter()),
             continuous_horizon_beats=self.transport.continuous_horizon_beats,
             duration_beats=(self.lesson_execution.display_phrase().end-self.lesson_execution.display_phrase().start
                             if plan is not None else 0.0),
@@ -73,7 +67,7 @@ class SessionReadModels:
             return
         now = self.clock()
         state = project_session_state(self.capture_snapshot(sampled_at=now))
-        pending, timeline = self.transport.snapshot(self.playback_facts())
+        pending, timeline = self.transport.snapshot(self.timing.playback_facts())
         self.score.prepare_guided_score(
             state,self.score_facts(pending,timeline),now=now)
 
@@ -84,7 +78,7 @@ class SessionReadModels:
         about admission, failure or the currently authorized segment.
         """
         state = project_session_state(self.capture_snapshot(sampled_at=now))
-        pending, timeline = self.transport.snapshot(self.playback_facts())
+        pending, timeline = self.transport.snapshot(self.timing.playback_facts())
         self.score.project_transport_state(
             state, pending, timeline,
             running=self.transport.running,
@@ -109,17 +103,17 @@ class SessionReadModels:
             facts = self.score_facts(pending,timeline)
             self.score.publish_score_state(state, facts)
             if self.take.pending_result is not None:
-                state["bpm"] = self.presentation_bpm()
+                state["bpm"] = self.timing.presentation_bpm()
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self.lesson.plan is not None:
                 epoch = self.transport.tempo_epoch_for(
-                    stage=self.lesson.plan.identity,bpm=self.presentation_bpm())
+                    stage=self.lesson.plan.identity,bpm=self.timing.presentation_bpm())
                 if epoch is not None:
                     state["tempo_epoch_ms"] = epoch*1000.0
             if self.lesson.plan is not None:
                 beat = self.lesson.plan.active_phrase.start + self.transport.play_from_beat
                 if self.transport.running and now >= self.transport.run_at:
-                    beat += self.elapsed_beat(now - self.transport.run_at)
+                    beat += self.timing.elapsed_beat(now - self.transport.run_at)
                 keys = [key for key in self.lesson.plan.piece.key_signatures
                         if key.beat <= beat + 1e-7
                         and key.hand in ("both", self.lesson.plan.hand)]
@@ -130,8 +124,8 @@ class SessionReadModels:
             calibration_sample_at = now
             state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
-            state["next_count_in_beats"] = self.next_count_in_beats()
-            state["next_count_in_meter"] = self.next_count_in_meter()
+            state["next_count_in_beats"] = self.timing.next_count_in_beats()
+            state["next_count_in_meter"] = self.timing.next_count_in_meter()
             state["short_rest_latency_seconds"] = SNAPSHOT_LATENCY_SECONDS
             state["resume_count_in_beat"] = (
                 SCHEDULER.seconds_beats(
@@ -203,12 +197,12 @@ class SessionReadModels:
         reads = SnapshotReadPorts(
             seek_grid=self.lesson_execution.seek_grid,
             learner_snapshot=self.lesson_execution.learner_snapshot,
-            elapsed_beat=self.elapsed_beat,
-            phase=self.phase,
+            elapsed_beat=self.timing.elapsed_beat,
+            phase=self.session_phase.at,
             source_model=self.score.source_model,
             live_feedback=self.live_marks,
-            visual_motion=self.visual_motion,
-            active_tempo_map=self.tempo_map,
+            visual_motion=self.timing.visual_motion,
+            active_tempo_map=self.timing.active_tempo_map,
             display_phrase=self.lesson_execution.display_phrase,
             guided_marks=self.score.guided_marks,
             listen_snapshot=self.listen.snapshot,

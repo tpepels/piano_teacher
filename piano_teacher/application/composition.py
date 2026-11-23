@@ -307,18 +307,11 @@ def _transport_and_completion(r) -> None:
 
     r.read_models = SessionReadModels(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
+        timing=r.transport_timing, phase=r.session_phase,
         library=r.library, midi_input=r.midi_input,
         attempt_progression=r.attempt_progression, score=r.score,
         lesson_execution=r.lesson_execution, listen=r.listen,
-        live_assessment=r.live_assessment, lock=r.lock, clock=r.now,
-        phase=r.session_phase.at, elapsed_beat=r.transport_timing.elapsed_beat,
-        visual_motion=r.transport_timing.visual_motion,
-        tempo_map=r.transport_timing.active_tempo_map,
-        next_count_in_beats=r.transport_timing.next_count_in_beats,
-        next_count_in_meter=r.transport_timing.next_count_in_meter,
-        start_rate_bpm=r.transport_timing.start_rate_bpm,
-        presentation_bpm=r.transport_timing.presentation_bpm,
-        playback_facts=r.transport_timing.playback_facts)
+        live_assessment=r.live_assessment, lock=r.lock, clock=r.now)
 
 
 
