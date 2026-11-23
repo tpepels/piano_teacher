@@ -61,7 +61,7 @@ class PracticeSession:
                           settings_workflows, lesson, timed_playback,
                           transport_commands, timeline, midi_application_input,
                           runtime_timings, source_workflows, lesson_execution,
-                          score_preload, lifecycle, progress, notices, clock):
+                          score_preload, lifecycle, notices, clock):
         self.take = take
         self.device_workflows = device_workflows
         self.exposure_workflows = exposure_workflows
@@ -83,7 +83,6 @@ class PracticeSession:
         self.lesson_execution = lesson_execution
         self.score_preload = score_preload
         self.lifecycle = lifecycle
-        self.progress = progress
         # One atomically published immutable epoch. Physical callbacks can
         # read it without waiting for the lock, then validate the original
         # epoch when their event is finally executed under that same lock.
@@ -339,7 +338,6 @@ class PracticeSession:
                 confirm=event.confirm)
         if isinstance(event, SessionClosed):
             return self.lifecycle.shutdown(
-                progress=self.progress,
                 receive=self.midi_application_input.receive)
         raise TypeError("Unsupported practice session event")
 

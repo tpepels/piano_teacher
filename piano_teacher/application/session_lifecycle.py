@@ -12,7 +12,7 @@ from ..lesson_settings import SETTINGS
 
 class SessionLifecycle:
     def __init__(self, *, transport, take, midi_input, score, lesson,
-                 listen, measurement, clock):
+                 listen, measurement, clock, progress):
         self.transport = transport
         self.take = take
         self.midi_input = midi_input
@@ -21,6 +21,7 @@ class SessionLifecycle:
         self.listen = listen
         self.measurement = measurement
         self.clock = clock
+        self.progress = progress
 
     def stop(self, *, reason: str, preserve_episode: bool = False,
              persist_evidence: bool = True) -> None:
@@ -60,7 +61,7 @@ class SessionLifecycle:
         self.midi_input.reset_live_input()
         self.listen.cancel()
 
-    def shutdown(self, *, progress, receive) -> None:
+    def shutdown(self, *, receive) -> None:
         """Close the active evidence/device/database once, in established order."""
         if self.measurement.closed:
             return
@@ -68,4 +69,4 @@ class SessionLifecycle:
         self.measurement.close()
         with self.midi_input.selecting_device("", callback=receive):
             pass
-        progress.close()
+        self.progress.close()

@@ -195,7 +195,7 @@ def _persistence_and_settlement(r) -> None:
     r.session_lifecycle = SessionLifecycle(
         transport=r.transport, take=r.take, midi_input=r.midi_input,
         score=r.score, lesson=r.lesson, listen=r.listen,
-        measurement=r.measurement, clock=r.now)
+        measurement=r.measurement, clock=r.now, progress=r.progress)
 
 
 def _lesson_source_and_settings_workflows(r) -> None:
@@ -327,9 +327,8 @@ def _event_boundary(r) -> None:
         notices=r.notices, transport=r.transport, progress=r.progress)
     r.transport_commands = TransportActions(
         take=r.take, clock=r.now, exposure_workflows=r.exposure_workflows,
-        feedback_seconds=r.feedback_seconds, lesson=r.lesson,
-        lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
-        listen=r.listen, notices=r.notices,
+        lesson=r.lesson, lesson_execution=r.lesson_execution,
+        lifecycle=r.session_lifecycle, listen=r.listen, notices=r.notices,
         completion_continuations=r.completion_continuations,
         transport=r.transport, read_models=r.read_models,
         recovery_workflows=r.recovery_workflows, score=r.score,
@@ -368,6 +367,5 @@ def _event_boundary(r) -> None:
         midi_application_input=r.midi_application_input,
         runtime_timings=r.runtime_timings, source_workflows=r.source_workflows,
         lesson_execution=r.lesson_execution, score_preload=r.score_preload,
-        lifecycle=r.session_lifecycle, progress=r.progress, notices=r.notices,
-        clock=r.now)
+        lifecycle=r.session_lifecycle, notices=r.notices, clock=r.now)
     r.midi_application_input.bind_session(r.practice_session)

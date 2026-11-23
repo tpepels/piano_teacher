@@ -8,15 +8,14 @@ from .playback_transitions import PlaybackTransition
 
 
 class TransportActions:
-    def __init__(self, *, take, clock, exposure_workflows, feedback_seconds,
-                          lesson, lesson_execution, lifecycle, listen, notices,
+    def __init__(self, *, take, clock, exposure_workflows, lesson,
+                          lesson_execution, lifecycle, listen, notices,
                           completion_continuations, transport, read_models,
                           recovery_workflows, score, timed_playback,
                           transport_timing):
         self.take = take
         self.clock = clock
         self.exposure_workflows = exposure_workflows
-        self.feedback_seconds = feedback_seconds
         self.lesson = lesson
         self.lesson_execution = lesson_execution
         self.lifecycle = lifecycle
