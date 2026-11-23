@@ -40,7 +40,7 @@ The separate final examination uses the whole original piece.
 
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
-**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; A1 integration has begun but is not accepted; A2–A7 remain open. On 2026-11-23 the full local suite and embedded production verification passed (software only); see the A2/A3 executed verification checkpoint.** This is
+**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; A1 integration has begun but is not accepted. A2 and A3 exit criteria are met in software on `bbb96ba` (one remaining structural item each, below); A4–A6 have open structural items; A7 software gates pass on `bbb96ba`; all physical acceptance is pending. See the A2/A3 executed verification checkpoint.** This is
 the next development track. The V0–V7 implementation/acceptance work and
 older S0–S7 decomposition remain below as historical evidence and open
 verification requirements, **not** as a requirement to keep all existing
@@ -765,27 +765,27 @@ triggered. **A2 remains IN PROGRESS until these gates pass.**
 
 ### A2 — Unified lesson, assessment and durable settlement
 
-- [ ] Give the lesson domain one course/window/hand/step, BPM, mastery and
+- [x] Give the lesson domain one course/window/hand/step, BPM, mastery and
   recovery authority. Reuse pure Practice Flow decisions and real-source
   Coda/Fukuda generators; eliminate mirrored course-phase and alternate
   progression state for the **same** selected course.
-- [ ] Produce a typed immutable TakeResult with original MIDI note IDs,
+- [x] Produce a typed immutable TakeResult with original MIDI note IDs,
   timing and release evidence, source, hand, passage and attempt identity.
   Only the selected lesson policy decides repeat/faster/slower/Free/aid/
   next window/final completion.
-- [ ] Integrate rolling checkpoints, complete-take settlement, feedback,
+- [x] Integrate rolling checkpoints, complete-take settlement, feedback,
   recovery, automatic continuation and ledger writes in **one ordered,
   atomic and idempotent path**. Handle interrupted/failed persistence and
   partial take cancellation without double mastery or lost events.
 - [ ] Replace redundant Exposure*, Recovery*, Completion*, TeachingContinuation
   and settlement orchestration only after migrating every active rule and
   effect; retain useful pure policy, storage and source-generation components.
-- [ ] Preserve the practice-flow contract exactly: each new authored bar
+- [x] Preserve the practice-flow contract exactly: each new authored bar
   alone then trailing windows to four, RH → LH → Both, own Listen → Free →
   Tempo, 50% initial tempo, two target clean passes, held-note tails, graded
   onsets with optional hold grading, floor-failure Free recovery, explicit
   source-bound aid and whole-original-piece final.
-- [ ] Make settings explicitly course-scoped; eliminate conflicting generic
+- [x] Make settings explicitly course-scoped; eliminate conflicting generic
   defaults without changing supported alternative/warm-up behavior or
   breaking existing persisted sessions.
 
@@ -1079,6 +1079,79 @@ acceptance.
 **Physical acceptance:** none. Connected-piano MIDI, audio and visual behaviour has
 not been tested. A2 and A3 stay **IN PROGRESS**. GitHub CI remains manual-only.
 
+#### Continuation — later 2026-11-23 (final software HEAD `bbb96ba`)
+
+**Play/Pause:** the primary control shows **Pause** only while learning or
+playing is running or automatically scheduled (take, count-in, Listen,
+Free, scheduled continuation, admission) and **Play** otherwise, including
+after a failed save and after the piece is mastered. Godot only displays
+the backend projection.
+
+**A2 defects fixed (production path):**
+- `ProgressRepository.save` wrote the current stage BPM into the plan
+  (`stage_tempos`), a second writer of lesson state. After a durable save
+  whose next-stage installation then failed, Play could never replay the
+  committed receipt and the learner was stuck until Stop. Persistence no
+  longer edits the plan; Play now continues from the same saved result.
+- Recovery messages named a Retry button the Flow screen does not show and
+  said "Could not save" when progress had been saved; they now state what
+  happened and point to Play.
+- A restored clean-pass streak was clamped by the generic three-pass
+  default instead of the course's own rule (Practice Flow: two).
+
+**A3: one transport.** The native bridge always enabled presentation, but
+a headless start/timing path (presentation flag, headless score_ready
+start and timing, default count-in, headless Listen start,
+`score_queue_next` projection, direct `PracticeEngine.start`, headless
+rewind/decided starts, reuse-announced Resume) remained for the Python
+fixture only. It is removed (contract v7; C++ bridge call removed). Every
+Python journey now reaches takes through Listen, Free and reserve →
+present like the desktop. Correction: the first "next hand cannot start"
+fix of this session was in that headless path, not production.
+
+**Owners after this work:** `VisualTransport` (musical timeline facts,
+written only by `PlaybackSession`), `PlaybackSession` (mode, automatic
+intent, awaited score, pause context) and `PlaybackCoordinator` (physical
+intent/receipt ledger) hold distinct facts; `TransportTiming` and
+`TimedPlayback` are stateless (timing arithmetic only in
+`MusicalScheduler`). No transport fact has two writers.
+
+**A6 progress:** about 1,600 further lines removed (unreferenced Python
+and 39 Godot functions, the headless transport) and
+`docs/architecture.md` now describes only the live architecture
+(2,600-line checkpoint log retired to Git).
+
+**Fault probes executed (scratch, not committed):** failed save on the
+mastering take (rollback, Play replays once); failure while installing
+the next stage after a durable save (Play continues, mastery once); same
+with Stop; failed save without a stage change; opening other music during
+a failed save (unsaved take discarded, reopen resumes the saved window);
+completing the whole course (Piece mastered, Play offered).
+
+**Same-HEAD verification on `bbb96ba`:** `bash scripts/test.sh --coverage`
+235 passed, Godot syntax and all 5 behaviour scenarios 0 failures,
+coverage 75.6% lines / 56.2% branches (informational);
+`bash scripts/verify-embedded-production-local.sh` PASS: native build,
+real-scene Play/Pause/Resume, synthetic-MIDI transitions, lost reserve
+and present ACK recovery, Moonlight navigation, all 16 repertoire pieces,
+relocated package.
+
+**Remaining structural items (not required by the exit criteria;
+deliberately left because each is a large refactor with regression risk
+that only piano acceptance can judge):**
+- A2: Exposure*, Recovery*, CompletionContinuations and TeachingContinuation
+  remain separate collaborators around the one settlement receipt.
+- A3: the three transport owners above are separate classes rather than
+  one aggregate. They hold distinct facts; merging them is an owner decision.
+- A6: the flat 66-service composition graph is not regrouped.
+- A0/A1 acceptance write-ups were not revisited.
+
+**Owner piano checklist:** Play/Pause label in every state; next hand and
+final start after mastery; one-bar repeat and count-in timing; Pause/Resume
+during count-in and playing; lost-ACK behaviour on real hardware;
+storage-failure recovery message (optional, by making the data directory
+read-only); saved reopen; audible metronome/voice; visual continuity.
+
 ### A3 — Single transport state and physical playback protocol
 
 - [ ] Consolidate running, paused, pending, terminal-failure and source
@@ -1089,14 +1162,14 @@ not been tested. A2 and A3 stay **IN PROGRESS**. GitHub CI remains manual-only.
   PlaybackCoordinator, VisualTransport, TransportTiming and TimedPlayback.
   Delete duplicate flags, independent time calculations and redundant
   state holders once their full responsibilities are integrated.
-- [ ] Implement one explicit intent → physical evidence → Python deadline
+- [x] Implement one explicit intent → physical evidence → Python deadline
   reservation → native immutable arm → attested present → authorized start
   transaction, plus typed failure/withdraw/reconciliation transitions.
-- [ ] Integrate Listen, untimed stationary Free, Tempo, automatic faster/
+- [x] Integrate Listen, untimed stationary Free, Tempo, automatic faster/
   same/slower repeats, exact one-bar gap, full-meter count-in, Pause/
   fresh-future Resume, Stop, disconnection, source change, and bounded
   failed-admission recovery in that one model.
-- [ ] Drive grading enablement, visual epoch/hold, audible count-in/voice
+- [x] Drive grading enablement, visual epoch/hold, audible count-in/voice
   and cue deduplication from the **same authorized segment**. Preserve
   outgoing ink and existing genuinely authorized rest reuse; eliminate any
   remaining obsolete paused-source reuse or shortened-count-in paths.
