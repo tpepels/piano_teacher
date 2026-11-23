@@ -10,6 +10,7 @@ from .musical_scheduler import SCHEDULER
 
 class TimedPlayback:
     def __init__(self, *, lesson, notices, transport, take, exposure_workflows,
+                          listen_outcomes,
                           midi_input, score, evidence_context,
                           transport_timing, lesson_execution, clock, lock,
                           phase):
@@ -18,6 +19,7 @@ class TimedPlayback:
         self.transport = transport
         self.take = take
         self.exposure_workflows = exposure_workflows
+        self.listen_outcomes = listen_outcomes
         self.midi_input = midi_input
         self.evidence_context = evidence_context
         self.score = score
@@ -106,7 +108,7 @@ class TimedPlayback:
         self.continue_measured(deadline)
 
     def begin_listen_if_ready(self):
-        self.exposure_workflows.apply_listen_failure()
+        self.listen_outcomes.apply_failure()
         activation = self.transport.begin_listen_if_ready(
             revision=self.lesson.revision)
         if activation.requested_count_in is not None:

@@ -10,14 +10,14 @@ from . import practice_flow
 
 class PreAssessmentTransitions:
     def __init__(self, *, lesson, transport, take, midi_input,
-                 lesson_execution, exposure_workflows, timed_playback,
+                 lesson_execution, listen_outcomes, timed_playback,
                  settlement):
         self.lesson = lesson
         self.transport = transport
         self.take = take
         self.midi_input = midi_input
         self.lesson_execution = lesson_execution
-        self.exposure_workflows = exposure_workflows
+        self.listen_outcomes = listen_outcomes
         self.timed_playback = timed_playback
         self.settlement = settlement
 
@@ -45,7 +45,7 @@ class PreAssessmentTransitions:
             self.lesson.advance_guided(connected=self.midi_input.connected, now=now)
             self.lesson_execution.save_guided_preparation()
         elif decision.action == "listening":
-            if self.exposure_workflows.finish_listen(now):
+            if self.listen_outcomes.finish(now):
                 if (self.lesson_execution.flow_active() and self.lesson.flow_state is not None
                         and self.lesson.flow_state.step is practice_flow.Step.LISTEN):
                     self.lesson_execution.flow_execute(self.lesson.flow_listen_finished())

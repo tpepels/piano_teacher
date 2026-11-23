@@ -55,7 +55,7 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
 
 def event_handlers(*, commands, tick, epoch, midi_input, midi_application_input,
                    settings_workflows, timed_playback, transport_commands,
-                   source_workflows, lesson, lesson_execution, score_preload,
+                   source_installation, library_opening, lesson, lesson_execution, score_preload,
                    device_workflows, history_management, lifecycle):
     """Event type -> handler(event)."""
     def physical(event):
@@ -82,12 +82,12 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_application_input,
         return commands.apply(effect.action) if effect.action else None
 
     def source(event):
-        resumed = source_workflows.install(event.prepared, warmup=event.warmup)
+        resumed = source_installation.install(event.prepared, warmup=event.warmup)
         lesson.forget_source_decisions()
         if resumed is not None:
             lesson_execution.flow_open(resumed=resumed)
         if event.opened_identifier is not None:
-            source_workflows.mark_library_opened(
+            library_opening.mark_opened(
                 event.opened_identifier, warmup=event.warmup)
         return resumed
 
@@ -102,7 +102,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_application_input,
         PlaybackFailed: lambda e: transport_commands.fail_physical(**e.failure),
         SourceCommitted: source,
         FingeringCorrectionCommitted: lambda e:
-            source_workflows.install_fingering_correction(e.corrected),
+            source_installation.install_fingering_correction(e.corrected),
         SettingsChanged: lambda e: settings_workflows.update(
             e.changes, pause_current=timed_playback.pause),
         MidiPortsRequested: lambda e: midi_application_input.ports(),

@@ -28,13 +28,13 @@ _TEACHING_ROUTES = ("listening", "learning", "transport", "stage")
 
 class CommandRouter:
     def __init__(self, *, lesson, transport, take, read_models, measurement,
-                 exposure_workflows, routes):
+                 listen_outcomes, routes):
         self.lesson = lesson
         self.transport = transport
         self.take = take
         self.read_models = read_models
         self.measurement = measurement
-        self.exposure_workflows = exposure_workflows
+        self.listen_outcomes = listen_outcomes
         missing = set(COMMAND_ROUTES.values()) | {"stage"}
         missing -= set(routes)
         if missing:
@@ -107,7 +107,7 @@ class CommandRouter:
                       if route == "stage" else None)
             effect = self.lesson.prepare_decision("manual", manual=change,
                 action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
-        self.exposure_workflows.apply_listen_failure()
+        self.listen_outcomes.apply_failure()
         self.routes[route](action, kwargs, effect)
         self.read_models.prepare_score_presentation()
         if action not in ("score_ready", "demo_ready", "reset_path"):

@@ -9,12 +9,12 @@ from .learning_capture import CapturePhaseFacts
 
 class TickObservations:
     def __init__(self, *, lesson, transport, take, midi_input,
-                 exposure_workflows, measurement, poll_midi, clock):
+                 listen_outcomes, measurement, poll_midi, clock):
         self.lesson = lesson
         self.transport = transport
         self.take = take
         self.midi_input = midi_input
-        self.exposure_workflows = exposure_workflows
+        self.listen_outcomes = listen_outcomes
         self.measurement = measurement
         self.poll_midi = poll_midi
         self.clock = clock
@@ -22,7 +22,7 @@ class TickObservations:
     def observe(self) -> float:
         self.poll_midi()
         self.midi_input.advance_calibration(self.clock())
-        self.exposure_workflows.apply_listen_failure()
+        self.listen_outcomes.apply_failure()
         now = self.clock()
         learning = self.transport.mode == "learn"
         guided_completed = bool(

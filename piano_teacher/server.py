@@ -62,13 +62,13 @@ class PracticeEngine:
 
     def library_listing(self) -> dict:
         with self.lock:
-            return self.source_workflows.library_listing()
+            return self.library.scan()
 
     def library_health_status(self) -> dict:
-        return self.source_workflows.library_health_status()
+        return self.library_health.snapshot()
 
     def start_library_health(self) -> dict:
-        return self.source_workflows.start_library_health()
+        return self.library_health.start()
 
     def preferences(self) -> dict:
         with self.lock:
@@ -104,7 +104,7 @@ class PracticeEngine:
 
     def load_library(self, identifier: str) -> None:
         with self.lock:
-            path = self.source_workflows.resolve_library(identifier)
+            path = self.library.resolve(identifier)
         warmup = is_warmup(identifier)
         self.load(str(path), warmup=warmup, opened_identifier=identifier)
 

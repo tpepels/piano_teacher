@@ -82,7 +82,8 @@ from .session_read_models import SessionReadModels
 from .settings_workflows import SettingsWorkflows
 from .source_identity import SourceIdentity
 from .source_preparation_session import SourcePreparationSession
-from .source_workflows import SourceWorkflows
+from .source_workflows import SourcePreparationWorkflow, SourceInstallation, LibraryOpening
+from .listen_outcomes import ListenOutcomes
 from .teaching_continuation import TeachingContinuation
 from .teaching_workflows import TeachingDecisions
 from .tempo_map_cache import TempoMapCache
@@ -216,13 +217,21 @@ def _lesson_source_and_settings_workflows(r) -> None:
         lifecycle=r.session_lifecycle, take=r.take, transport=r.transport,
         score=r.score, learning_evidence=r.learning_evidence, clock=r.now,
         data_dir=r._data_dir)
-    r.source_workflows = SourceWorkflows(
+    r.listen_outcomes = ListenOutcomes(
+        listen=r.listen, transport=r.transport, notices=r.notices)
+    r.source_workflows = SourcePreparationWorkflow(
+        lesson=r.lesson, source_preparation=r.source_preparation,
+        preprocessing=r.preprocessing, fingering=r.fingering,
+        progress=r.progress, fukuda_mistakes=r.fukuda_mistakes,
+        library=r.library, listen_outcomes=r.listen_outcomes, lock=r.lock)
+    r.source_installation = SourceInstallation(
         lesson=r.lesson, notices=r.notices, lifecycle=r.session_lifecycle,
         recovery_streak=r.recovery_streak, transport=r.transport,
         source_preparation=r.source_preparation, score=r.score, take=r.take,
-        listen=r.listen, preprocessing=r.preprocessing, fingering=r.fingering,
-        progress=r.progress, fukuda_mistakes=r.fukuda_mistakes,
-        library=r.library, library_health=r.library_health, lock=r.lock)
+        listen=r.listen, listen_outcomes=r.listen_outcomes)
+    r.library_opening = LibraryOpening(
+        lesson=r.lesson, notices=r.notices, transport=r.transport,
+        progress=r.progress, library=r.library)
     r.settings_workflows = SettingsWorkflows(
         library=r.library, measurement=r.measurement,
         lifecycle=r.session_lifecycle, notices=r.notices,
@@ -279,7 +288,8 @@ def _transport_and_completion(r) -> None:
     """Timed playback, live feedback, recovery, completion and read models."""
     r.timed_playback = TimedPlayback(
         lesson=r.lesson, notices=r.notices, transport=r.transport, take=r.take,
-        exposure_workflows=r.exposure_workflows, midi_input=r.midi_input,
+        exposure_workflows=r.exposure_workflows,
+        listen_outcomes=r.listen_outcomes, midi_input=r.midi_input,
         score=r.score, evidence_context=r.evidence_context,
         transport_timing=r.transport_timing,
         lesson_execution=r.lesson_execution, clock=r.now, lock=r.lock,
@@ -366,14 +376,14 @@ def _event_boundary(r) -> None:
     r.practice_timeline = PracticeTimeline(
         observations=TickObservations(
             lesson=r.lesson, transport=r.transport, take=r.take,
-            midi_input=r.midi_input, exposure_workflows=r.exposure_workflows,
+            midi_input=r.midi_input, listen_outcomes=r.listen_outcomes,
             measurement=r.measurement,
             poll_midi=r.midi_application_input.poll_midi_connection,
             clock=r.now),
         transitions=PreAssessmentTransitions(
             lesson=r.lesson, transport=r.transport, take=r.take,
             midi_input=r.midi_input, lesson_execution=r.lesson_execution,
-            exposure_workflows=r.exposure_workflows,
+            listen_outcomes=r.listen_outcomes,
             timed_playback=r.timed_playback, settlement=r.settlement),
         progression=TakeProgression(
             lesson=r.lesson, transport=r.transport, take=r.take,
@@ -393,7 +403,7 @@ def _event_boundary(r) -> None:
     r.command_router = CommandRouter(
         lesson=r.lesson, transport=r.transport, take=r.take,
         read_models=r.read_models, measurement=r.measurement,
-        exposure_workflows=r.exposure_workflows,
+        listen_outcomes=r.listen_outcomes,
         routes=command_routes(
             device_workflows=r.device_workflows,
             settings_workflows=r.settings_workflows, midi_input=r.midi_input,
@@ -417,7 +427,8 @@ def _event_boundary(r) -> None:
         settings_workflows=r.settings_workflows,
         timed_playback=r.timed_playback,
         transport_commands=r.transport_commands,
-        source_workflows=r.source_workflows, lesson=r.lesson,
+        source_installation=r.source_installation,
+        library_opening=r.library_opening, lesson=r.lesson,
         lesson_execution=r.lesson_execution, score_preload=r.score_preload,
         device_workflows=r.device_workflows,
         history_management=r.history_management,
