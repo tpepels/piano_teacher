@@ -419,7 +419,7 @@ class PlaybackCoordinator:
                         or abs(source.end_beat - active_source.get("end_beat", -1)) > 1e-7
                         or abs(source.bpm - self.active_segment.get("bpm", -1)) > 1e-7
                         or abs(facts.play_from_beat -
-                               active_source.get("from_beat", -1)) > 1e-7
+                               self.active_segment.get("transport_origin_beat", -1)) > 1e-7
                         or tuple(source.tempo_segments) != tuple(
                             (segment["start_beat"], segment["end_beat"], segment["bpm"])
                             for segment in self.active_segment.get("tempo_segments", ()))):
@@ -535,6 +535,9 @@ class PlaybackCoordinator:
             "deadline_ms": receipt.deadline_ms,
             "world_origin": receipt.world_origin,
             "transport_id": post.transport_id,
+            # Resume may admit a future source beat while retaining the
+            # original graded transport origin and frozen musical clock.
+            "transport_origin_beat": post.play_from_beat,
         }
         self.intent = None
         self.receipt = None
