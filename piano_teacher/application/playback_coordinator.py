@@ -414,7 +414,15 @@ class PlaybackCoordinator:
                         or source.stage_key != active_source.get("stage_key")
                         or source.revision != active_source.get("revision")
                         or source.hand != active_source.get("hand")
-                        or abs(source.end_beat - active_source.get("end_beat", -1)) > 1e-7):
+                        or abs(source.end_beat - active_source.get("end_beat", -1)) > 1e-7
+                        or abs(source.bpm - self.active_segment.get("bpm", -1)) > 1e-7
+                        or abs(facts.play_from_beat -
+                               active_source.get("from_beat", -1)) > 1e-7
+                        or tuple(source.tempo_segments) != tuple(
+                            (segment["start_beat"], segment["end_beat"], segment["bpm"])
+                            for segment in self.active_segment.get("tempo_segments", ()))):
+                    # A stale acknowledgement cannot reuse an older BPM,
+                    # tempo map or passage origin under the same revision.
                     raise ValueError("Playback authorization has been superseded")
                 return dict(result)
         intent = self._require_intent(facts, intent_id, attempt)
