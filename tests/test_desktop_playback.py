@@ -51,7 +51,7 @@ def rejected(session, operation, **payload):
     assert json.loads(body)["error"]
 
 
-def test_only_presented_score_starts_grading_and_repeated_acknowledgement_is_safe(practice_session):
+def test_only_presented_score_starts_grading(practice_session):
     session = practice_session(bars=1)
     intent = desktop_tempo(session)
     assert intent and not session.snapshot()["running"]
@@ -61,9 +61,8 @@ def test_only_presented_score_starts_grading_and_repeated_acknowledgement_is_saf
     assert not session.snapshot()["running"]
     result = present(session, intent, receipt)
     assert result["authorized"] and session.snapshot()["running"]
-    assert present(session, intent, receipt) == result
     assert session.snapshot()["transport_id"] == result["transport_id"]
-    status = session.ask("playback.status")  # Recover an acknowledgement lost by the caller.
+    status = session.ask("playback.status")
     assert status["active_segment_id"] == receipt["segment_id"]
     assert status["active_take_id"] == intent["take_id"]
     session.clock.at = receipt["deadline_ms"]/1000
@@ -213,46 +212,6 @@ def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(p
 
 # V1/V3 real-path scenario coverage: actual in-process engine, canonical
 # lesson/session transition owners and fixture-injected MIDI note signals.
-
-
-def test_lost_reserve_ack_recovers_original_immutable_witness(practice_session):
-    session = practice_session(bars=1)
-    intent = desktop_tempo(session)
-    # Use a physically safe long future slot so the ACK can be lost
-    # for longer than the witness's allowed sampling age while leaving
-    # enough *full count-in* time for a later playback.present.
-    offer = physical_offer(session, intent, travel_ms=20000.0)
-    original = session.ask("playback.reserve", **offer)
-    status = session.ask("playback.status")
-    assert status["state"] == "reserved"
-    assert status["reservation"] == original
-    assert not session.snapshot()["running"]
-    # An exact retransmission after the sample ages out is idempotent.
-    session.clock.at += 2.5
-    assert session.ask("playback.reserve", **offer) == original
-    assert session.ask("playback.status")["reservation"] == original
-    assert present(session, intent, original)["authorized"]
-    assert session.ask("playback.status")["reservation"] is None
-
-
-@pytest.mark.parametrize("mutate", [
-    {"world_origin": 101.0},
-    {"queue_generation": 2},
-    {"renderer_generation": -1},
-    {"travel_ms": 1.0},
-    {"sampled_at_ms": -1.0},
-])
-def test_recovered_reservation_rejects_changed_renderer_witness(practice_session, mutate):
-    session = practice_session(bars=1)
-    intent = desktop_tempo(session)
-    offer = physical_offer(session, intent)
-    receipt = session.ask("playback.reserve", **offer)
-    rejected(session, "playback.reserve", **{**offer, **mutate})
-    status = session.ask("playback.status")
-    assert status["reservation"] == receipt
-    assert status["reserved_segment_id"] == receipt["segment_id"]
-    assert not session.snapshot()["running"]
-    assert present(session, intent, receipt)["authorized"]
 
 
 def test_stale_physical_offer_never_creates_a_backend_receipt(practice_session):

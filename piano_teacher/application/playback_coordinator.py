@@ -7,7 +7,6 @@ adapter; they do not pretend a score was drawn.
 """
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass
 from typing import Callable
 from .playback_facts import PlaybackRuntimeFacts
@@ -110,7 +109,6 @@ class PlaybackCoordinator:
         self.active_segment_id = ""
         self.active_deadline_ms = 0.0
         self.active_segment: dict = {}
-        self._completed: deque[tuple[str, dict]] = deque(maxlen=16)
         self.failure = ""
         # Terminal automatic admission failures are scoped to the exact
         # source/exposure. A repeated score_ready or completed Listen-audio
@@ -369,20 +367,7 @@ class PlaybackCoordinator:
             queue_generation=queue_generation,
             renderer_generation=renderer_generation)
         if self.receipt is not None:
-            # A lost native ACK may retransmit the identical physical
-            # reservation after its measurement has aged out. The receipt
-            # already binds this exact source/attempt/witness, so returning
-            # it is safe. Different evidence must never replace ink under
-            # the same intent or negotiate a second musical deadline.
-            receipt = self.receipt
-            if (receipt.intent_id == intent_id and receipt.attempt == attempt
-                    and receipt.world_origin == evidence.world_origin
-                    and receipt.queue_generation == evidence.queue_generation
-                    and receipt.renderer_generation == evidence.renderer_generation
-                    and receipt.evidence_sampled_at_ms == evidence.sampled_at_ms
-                    and receipt.evidence_travel_ms == evidence.travel_ms):
-                return self._receipt_response(receipt)
-            raise ValueError("Conflicting score reservation for the same intent")
+            raise ValueError("This intent already has a score reservation")
         deadline_ms = choose_admission_deadline(intent, facts, evidence)
         self.receipt = ScoreReceipt(
             intent_id=intent_id, attempt=attempt, take_id=take_id,
@@ -430,39 +415,6 @@ class PlaybackCoordinator:
                 physical_travel_ms: float | None = None,
                 physical_queue_generation: int | None = None,
                 physical_renderer_generation: int | None = None) -> dict:
-        for past_id, result in self._completed:
-            if past_id == segment_id and result["intent_id"] == intent_id:
-                # Idempotence applies only while the same authorization
-                # remains the active source. A stale present retry must
-                # never re-authorize notation from an earlier lesson/take.
-                active_source = self.active_segment.get("source", {})
-                source = facts.source
-                if (result["attempt"] != attempt
-                        or self.active_segment_id != segment_id
-                        or self.active_take_id != result["take_id"]
-                        or self.state not in (PlaybackState.AUTHORIZED,
-                                              PlaybackState.COUNT_IN,
-                                              PlaybackState.PLAYING,
-                                              PlaybackState.PAUSED)
-                        or not facts.running
-                        or source is None
-                        or facts.mode != self.active_segment.get("mode")
-                        or facts.transport_id != self.active_segment.get("transport_id")
-                        or source.fingerprint != active_source.get("fingerprint")
-                        or source.stage_key != active_source.get("stage_key")
-                        or source.revision != active_source.get("revision")
-                        or source.hand != active_source.get("hand")
-                        or abs(source.end_beat - active_source.get("end_beat", -1)) > 1e-7
-                        or abs(source.bpm - self.active_segment.get("bpm", -1)) > 1e-7
-                        or abs(facts.play_from_beat -
-                               self.active_segment.get("transport_origin_beat", -1)) > 1e-7
-                        or tuple(source.tempo_segments) != tuple(
-                            (segment["start_beat"], segment["end_beat"], segment["bpm"])
-                            for segment in self.active_segment.get("tempo_segments", ()))):
-                    # A stale acknowledgement cannot reuse an older BPM,
-                    # tempo map or passage origin under the same revision.
-                    raise ValueError("Playback authorization has been superseded")
-                return dict(result)
         intent = self._require_intent(facts, intent_id, attempt)
         receipt = self.receipt
         if (receipt is None or receipt.segment_id != segment_id
@@ -584,7 +536,6 @@ class PlaybackCoordinator:
             "take_id": receipt.take_id, "segment_id": segment_id,
             "deadline_ms": receipt.deadline_ms,
             "transport_id": post.transport_id, "authorized": True}
-        self._completed.append((segment_id, dict(result)))
         return result
 
     def withdraw(self, facts: PlaybackRuntimeFacts, *, intent_id: str, attempt: int,

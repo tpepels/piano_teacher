@@ -10,7 +10,6 @@ var _deadline_ms := 0
 var _operation := ""
 # Test stimulus at the actual embedded-worker reply seam. No production
 # lesson, queue, clock or grading policy is replaced by this injector.
-static var _test_dropped_operations: Dictionary = {}
 
 static func decode_reply(body: PackedByteArray) -> Variant:
     return JSON.parse_string(body.get_string_from_utf8()) if not body.is_empty() else null
@@ -66,21 +65,7 @@ func cancel_request() -> void:
 func complete(identifier: int, status: int, body: PackedByteArray) -> void:
     if identifier != _pending_id:
         return
-    var completed_operation: String = _operation
     _pending_id = -1
     _operation = ""
     set_process(false)
-    # The worker has ALREADY executed the real transaction and returned
-    # success. Dropping only its first reply tests lost ACK reconciliation
-    # without changing the application operation or physical queue.
-    var drop: String = OS.get_environment("PIANO_TEST_DROP_REPLY_ONCE")
-    if (status == OK and not drop.is_empty()
-            and completed_operation == drop
-            and not _test_dropped_operations.has(drop)):
-        _test_dropped_operations[drop] = true
-        print("NATIVE_TEST_DROPPED_REPLY:",drop)
-        request_completed.emit(3,JSON.stringify({
-            "error":"Simulated lost in-process reply after worker commit"
-        }).to_utf8_buffer())
-        return
     request_completed.emit(status, body)
