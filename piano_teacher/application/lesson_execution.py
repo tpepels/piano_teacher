@@ -14,13 +14,13 @@ from .mistake_responses import resolve_mistake_policy
 
 class LessonExecution:
     def __init__(self, *, source_identity, lesson_cursor, notices, teaching_decisions,
-                 exposure_workflows, exposure_installer, flow_session,
+                 exposure_workflows, flow_session,
                  playback_session, guided_session, attempt, learner_progress,
                  progress, lifecycle, recovery_streak, visual_transport,
                  attempt_settlement, measurement, library, clock):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
         self.notices, self.teaching_decisions = notices, teaching_decisions
-        self.exposure_workflows, self.exposure_installer = exposure_workflows, exposure_installer
+        self.exposure_workflows = exposure_workflows
         self.flow_session, self.playback_session = flow_session, playback_session
         self.guided_session, self.attempt = guided_session, attempt
         self.learner_progress, self.progress = learner_progress, progress
@@ -199,7 +199,7 @@ class LessonExecution:
         prepared = prepare_guided(self.exposure_workflows.source(),selected,
             revision=self.source_identity.revision,bump_revision=bump_revision,
             recovery=recovery,remediation=remediation,retry_range=self.attempt.retry_range)
-        self.exposure_installer.apply(prepared,reason=reason)
+        self.exposure_workflows.install(prepared,reason=reason)
 
     def review_retry(self, first_bar, last_bar, *, effect=None):
         effect = self.teaching_decisions.manual_effect(

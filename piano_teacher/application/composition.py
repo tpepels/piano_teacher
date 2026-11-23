@@ -34,7 +34,6 @@ from .attempt_runtime import AttemptRuntime
 from .attempt_settlement import AttemptSettlement
 from .completion_continuations import CompletionContinuations
 from .device_workflows import DeviceWorkflows
-from .exposure_installer import ExposureInstaller
 from .exposure_workflows import ExposureWorkflows
 from .flow_course_session import PracticeFlowCourseSession
 from .future_score import FutureScore
@@ -213,27 +212,22 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
     r.evidence_context = SessionEvidenceContext(
         source_identity=r.source_identity, playback_session=r.playback_session,
         guided_session=r.guided_session, learning_evidence=r.learning_evidence)
-    r.exposure_installer = ExposureInstaller(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
-        notices=r.notices, lifecycle=r.session_lifecycle,
-        learner_progress=r.learner_progress, progress=r.progress,
-        score_state_publisher=r.score_state_publisher,
-        attempt=r.attempt, playback_session=r.playback_session,
-        guided_session=r.guided_session, visual_transport=r.visual_transport,
-        midi=r.midi, listen=r.listen, evidence_context=r.evidence_context,
-        clock=r.now)
     r.exposure_workflows = ExposureWorkflows(
-        source_identity=r.source_identity, flow_session=r.flow_session,
-        teaching_decisions=r.teaching_decisions,
+        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
+        flow_session=r.flow_session, teaching_decisions=r.teaching_decisions,
         guided_session=r.guided_session, attempt=r.attempt,
         tempo_map_cache=r.tempo_map_cache, playback_session=r.playback_session,
-        listen=r.listen, notices=r.notices, installer=r.exposure_installer)
+        listen=r.listen, notices=r.notices, lifecycle=r.session_lifecycle,
+        learner_progress=r.learner_progress, progress=r.progress,
+        score_state_publisher=r.score_state_publisher,
+        visual_transport=r.visual_transport, midi=r.midi,
+        evidence_context=r.evidence_context, clock=r.now)
 
     r.lesson_execution = LessonExecution(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
         notices=r.notices, teaching_decisions=r.teaching_decisions,
         exposure_workflows=r.exposure_workflows,
-        exposure_installer=r.exposure_installer, flow_session=r.flow_session,
+        flow_session=r.flow_session,
         playback_session=r.playback_session, guided_session=r.guided_session,
         attempt=r.attempt, learner_progress=r.learner_progress,
         progress=r.progress, lifecycle=r.session_lifecycle,
