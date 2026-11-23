@@ -111,7 +111,8 @@ event handlers that depend on domains, not on their internals.
   Confirmed before/after in a windowed real-scene capture on an isolated
   HOME (not a pixel test).
 - Not changed: a timed take still credits an attack up to one onset
-  tolerance (max 150 ms, a sixteenth) before the downbeat.
+  tolerance before the downbeat: the larger of 150 ms and a sixteenth
+  (about 0.9 s at 16 BPM, i.e. inside the last count-in click).
 - Observation: a hidden window is throttled to ~1 FPS by the compositor;
   admission then exceeds its 150 ms arm budget and Listen fails after
   three attempts. A visible window admits in milliseconds.
