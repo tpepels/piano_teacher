@@ -304,7 +304,8 @@ func observe(state: Dictionary, frame_ms: int) -> void:
     if (not pending_segment.is_empty() and active_segment == pending_segment
             and bool(state.get("running",false))
             and str(timeline.get("state","")) in [
-                "authorized","count_in","playing","paused"]):
+                "authorized","count_in","playing","paused"]
+            and _matches_authorized_source(timeline.get("current"))):
         # The published active timeline intentionally has no request ID
         # or attempt. The segment matched our previously verified receipt,
         # so confirm with that immutable receipt, never with the reduced
@@ -380,6 +381,32 @@ func _matches_intent(reply: Dictionary, expected: Dictionary) -> bool:
     return (str(reply.get("intent_id","")) == str(expected.get("intent_id",""))
         and int(reply.get("attempt",-1)) == int(expected.get("attempt",-2))
         and str(reply.get("take_id","")) == str(expected.get("take_id","")))
+
+func _matches_authorized_source(active: Variant) -> bool:
+    # Status queries and frame polls must prove the selected musical source,
+    # rate map and original deadline. A segment label alone is not authority.
+    if not active is Dictionary or current.is_empty() or receipt.is_empty():
+        return false
+    var source: Variant = active.get("source")
+    if not source is Dictionary:
+        return false
+    return (str(active.get("segment_id","")) == str(receipt.get("segment_id",""))
+        and str(active.get("take_id","")) == str(receipt.get("take_id",""))
+        and str(active.get("mode","")) == str(current.get("mode",""))
+        and str(source.get("fingerprint","")) == str(current.get("fingerprint",""))
+        and str(source.get("stage_key","")) == str(current.get("stage_key",""))
+        and int(source.get("revision",-1)) == int(current.get("revision",-2))
+        and str(source.get("hand","")) == str(current.get("hand",""))
+        and absf(float(source.get("from_beat",-1.0)) -
+            float(current.get("from_beat",-2.0))) <= 0.000001
+        and absf(float(source.get("end_beat",-1.0)) -
+            float(current.get("end_beat",-2.0))) <= 0.000001
+        and absf(float(active.get("bpm",-1.0)) -
+            float(current.get("bpm",-2.0))) <= 0.000001
+        and absf(float(active.get("deadline_ms",-1.0)) -
+            float(receipt.get("deadline_ms",-2.0))) <= 0.001
+        and active.get("tempo_segments",[]) == current.get("tempo_segments",[]))
+
 
 func _matches_reservation(reply: Dictionary) -> bool:
     if current.is_empty() or not _matches_intent(reply,current) or \
@@ -589,7 +616,8 @@ func _status_received(code: int, body: PackedByteArray) -> void:
             str(status.get("active_take_id","")) ==
                 str(receipt.get("take_id","")) and
             str(status.get("state","")) in [
-                "authorized","count_in","playing","paused"]):
+                "authorized","count_in","playing","paused"] and
+            _matches_authorized_source(status.get("active"))):
         _confirm_authorized(receipt)
         return
     if (ledger_offer is Dictionary and
