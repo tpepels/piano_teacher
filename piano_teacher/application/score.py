@@ -133,3 +133,17 @@ class Score:
 
     def tempo_map(self, *args, **kwargs):
         return self._tempo_maps.get(*args, **kwargs)
+
+    # --- successor schedule used by the transport domain
+    def announce_successor(self, *args, **kwargs):
+        return self._successor.announce(*args, **kwargs)
+
+    def cancel_successor(self, *args, **kwargs):
+        return self._successor.cancel(*args, **kwargs)
+
+    def stop_successor(self) -> None:
+        self._successor.stop()
+
+    @property
+    def successor_schedule(self):
+        return self._successor.schedule

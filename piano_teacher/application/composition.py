@@ -189,14 +189,12 @@ def _persistence_and_settlement(r) -> None:
         r.midi_calibration)
     r.source_preparation = SourcePreparationSession()
     r.playback_session.bind_transport(transport=r.visual_transport,
-        midi=r.midi_ingress,attempt=r.attempt,
-        settlement=r.attempt_settlement,measurement=r.measurement,
-        continuation=r.teaching_continuation,live_input=r.live_input,
-        assessment=r.live_assessment,progression=r.attempt_progression,
-        listen=r.listen,clock=r.now)
+        take=r.take, score=r.score, midi_input=r.midi_input,
+        measurement=r.measurement, assessment=r.live_assessment,
+        progression=r.attempt_progression, listen=r.listen, clock=r.now)
     r.session_lifecycle = SessionLifecycle(
         transport=r.transport, take=r.take, midi_input=r.midi_input,
-        continuation=r.teaching_continuation, lesson=r.lesson, listen=r.listen,
+        score=r.score, lesson=r.lesson, listen=r.listen,
         measurement=r.measurement, clock=r.now)
 
 

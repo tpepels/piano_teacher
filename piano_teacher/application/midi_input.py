@@ -141,3 +141,7 @@ class MidiInput:
 
     def reset_live_input(self, *args, **kwargs):
         return self._live.reset_attempt(*args, **kwargs)
+
+    # --- grading gate used by the transport domain
+    def authorize_grading_after(self, *args, **kwargs):
+        return self._ingress.authorize_grading_after(*args, **kwargs)

@@ -11,12 +11,12 @@ from ..lesson_settings import SETTINGS
 
 
 class SessionLifecycle:
-    def __init__(self, *, transport, take, midi_input, continuation, lesson,
-                          listen, measurement, clock):
+    def __init__(self, *, transport, take, midi_input, score, lesson,
+                 listen, measurement, clock):
         self.transport = transport
         self.take = take
         self.midi_input = midi_input
-        self.continuation = continuation
+        self.score = score
         self.lesson = lesson
         self.listen = listen
         self.measurement = measurement
@@ -52,7 +52,7 @@ class SessionLifecycle:
         self.midi_input.clear_resume_gate()
         self.transport.clear_grading_floor()
         # Precompiled successors remain valid only for their source identity.
-        self.continuation.stop()
+        self.score.stop_successor()
         self.lesson.stop_guided()
         self.transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)

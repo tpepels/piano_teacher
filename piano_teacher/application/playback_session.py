@@ -45,27 +45,24 @@ class PlaybackSession:
     _full_completion: tuple[str, PassageCompletion] | None = field(default=None,repr=False)
     _applied_continuation: tuple[object, AppliedContinuation] | None = field(default=None,repr=False)
     _transport: Any = field(init=False, repr=False)
-    _midi: Any = field(init=False, repr=False)
-    _attempt: Any = field(init=False, repr=False)
-    _settlement: Any = field(init=False, repr=False)
+    _take: Any = field(init=False, repr=False)
+    _score: Any = field(init=False, repr=False)
+    _midi_input: Any = field(init=False, repr=False)
     _measurement: Any = field(init=False, repr=False)
-    _continuation: Any = field(init=False, repr=False)
-    _input: Any = field(init=False, repr=False)
     _assessment: Any = field(init=False, repr=False)
     _progression: Any = field(init=False, repr=False)
     _listen: Any = field(init=False, repr=False)
     _clock: Any = field(init=False, repr=False)
 
-    def bind_transport(self, *, transport, midi, attempt, settlement,
-                       measurement, continuation, live_input, assessment,
-                       progression, listen, clock) -> None:
+    def bind_transport(self, *, transport, take, score, midi_input,
+                       measurement, assessment, progression, listen,
+                       clock) -> None:
+        """Bind the timeline and the domain interfaces this lifecycle uses."""
         self._transport = transport
-        self._midi = midi
-        self._attempt = attempt
-        self._settlement = settlement
+        self._take = take
+        self._score = score
+        self._midi_input = midi_input
         self._measurement = measurement
-        self._continuation = continuation
-        self._input = live_input
         self._assessment = assessment
         self._progression = progression
         self._listen = listen
@@ -99,14 +96,14 @@ class PlaybackSession:
     def open_take(self, *, phrase: Phrase | None = None,
                   recording: bool = False) -> int:
         """Reset exactly one take epoch across existing input/evidence owners."""
-        self._settlement.cancel(reason="new_exposure",now=self._clock())
+        self._take.cancel_settlement(reason="new_exposure",now=self._clock())
         self._full_completion = None
         self._applied_continuation = None
-        self._continuation.cancel()
+        self._score.cancel_successor()
         self.begin_epoch()
-        self._input.reset_attempt()
+        self._midi_input.reset_live_input()
         self._transport.clear_grading_floor()
-        self._attempt.begin_take(recording=recording)
+        self._take.begin_take(recording=recording)
         self._assessment.clear()
         return self.transport_id
 
@@ -114,12 +111,12 @@ class PlaybackSession:
                     request: TimedStartRequest) -> StartedTake:
         """Apply one chosen timed exposure, preserving its admitted deadline."""
         if self._measurement.attempt_id is not None:
-            self._settlement.interrupt_current(reason="restart",played=(
-                self._attempt.recorder.presses if self._attempt.recorder else ()))
-        self._midi.clear_resume_gate()
+            self._take.interrupt_current(reason="restart",played=(
+                self._take.recorder.presses if self._take.recorder else ()))
+        self._midi_input.clear_resume_gate()
         self._transport.clear_grading_floor()
         self.mode = request.mode
-        self._attempt.begin_timed_review()
+        self._take.begin_timed_review()
         self.preview_only = not request.connected
         self._transport.begin_take(loop_continuation=request.loop_continuation)
         self.open_take(phrase=source.phrase,recording=True)
@@ -147,11 +144,11 @@ class PlaybackSession:
             run_at=deadline,gap_beats=source.visual_gap_beats)
         scope = ("preview" if self.preview_only else
             "perform" if request.mode == "perform" else
-            "partial" if self._attempt.automatic_remedial_review else
-            "section_review" if self._attempt.review_end_beat is not None else
+            "partial" if self._take.automatic_remedial_review else
+            "section_review" if self._take.review_end_beat is not None else
             "partial" if scheduled.from_beat > source.phrase.first_attack_beat+1e-7 else "full")
         return StartedTake(scope,scheduled.from_beat,
-            self._attempt.review_end_beat or source.phrase.sounding_end-source.phrase.start,
+            self._take.review_end_beat or source.phrase.sounding_end-source.phrase.start,
             scheduled.next_boundary_beat,deadline,scheduled.next_action)
 
     def capture_start(self, context: dict) -> None:
@@ -159,7 +156,7 @@ class PlaybackSession:
             self._measurement.begin(context)
         except Exception:
             self._transport.running = False
-            self._attempt.suspend_recording()
+            self._take.suspend_recording()
             self.auto = False
             raise
         self._measurement.phase_changed(
@@ -190,9 +187,9 @@ class PlaybackSession:
         self.authorizing = True
         try:
             if intent.action in ("start","restart"):
-                if self._settlement.pending_result is not None:
-                    self._settlement.cancel(reason="restart",now=self._clock())
-                    self._continuation.cancel()
+                if self._take.pending_result is not None:
+                    self._take.cancel_settlement(reason="restart",now=self._clock())
+                    self._score.cancel_successor()
                     self._transport.cancel_continuation()
                 if intent.transition is None:
                     raise ValueError("Manual playback lacks the original selected transition")
@@ -237,9 +234,9 @@ class PlaybackSession:
             running=self.running,paused=self._transport.paused,
             run_at=self._transport.run_at,paused_at=self._transport.paused_at,
             play_from_beat=self._transport.play_from_beat,
-            resume_grading_after=self._midi.resume_grading_after,
+            resume_grading_after=self._midi_input.resume_grading_after,
             pause_context=self.pause_context,preview_only=self.preview_only,
-            pending_result=self._settlement.feedback_pending,
+            pending_result=self._take.feedback_pending,
             transport_id=self.transport_id)
 
     def score_acknowledged(self, revision: int, *, current_revision: int,
@@ -264,16 +261,16 @@ class PlaybackSession:
             reading_lead_included=request.reading_lead_included,
             short_deadline=request.short_deadline,announce=request.announce)
         if request.announce:
-            pending = self._settlement.pending
+            pending = self._take.pending
             if pending is not None and pending.receipt is None:
-                self._continuation.announce(pending,deadline=self._transport.next_at)
+                self._score.announce_successor(pending,deadline=self._transport.next_at)
             else:
                 self._transport.announce_continuation(
                     request.target,self._transport.next_at,request.bpm)
         else:
             self._transport.withdraw_announcement()
         self._transport.running = False
-        self._attempt.suspend_recording()
+        self._take.suspend_recording()
         self._transport.count_in_beats = 0.0
         self._measurement.phase_changed("preparation",request.now)
 
@@ -328,10 +325,10 @@ class PlaybackSession:
 
     def activate_preloaded_feedback(self, source: PreloadedFeedbackSource | None, *,
                                     revision: int, fingerprint: str) -> float | None:
-        if (source is None or self._settlement.pending_result is None or not self.auto
+        if (source is None or self._take.pending_result is None or not self.auto
                 or self.running or self._transport.paused):
             return None
-        if self._continuation.selection(self._settlement.pending,
+        if self._score.successor_selection(self._take.pending,
                 revision=revision,fingerprint=fingerprint) is None:
             return None
         now = self._clock()
@@ -352,14 +349,14 @@ class PlaybackSession:
         if self._transport.paused:
             return
         self._transport.pause(at=now,freeze_grading=self.running,
-            grading_after=self._midi.resume_grading_after)
+            grading_after=self._midi_input.resume_grading_after)
         self._measurement.phase_changed("pause",now)
 
     def pause(self, *, context: str, now: float) -> None:
         require_pausable(paused=self._transport.paused,phase=context)
         self.pause_context = context
         self._transport.pause(at=now,freeze_grading=self.running,
-            grading_after=self._midi.resume_grading_after)
+            grading_after=self._midi_input.resume_grading_after)
         self._measurement.phase_changed("pause",now)
 
     def resume_timeline(self, request: ResumeRequest) -> ResumedTimeline:
@@ -367,8 +364,8 @@ class PlaybackSession:
         now = self._clock()
         previous,shift,timing = self._transport.resume_attempt(
             now=now,learning=request.learning,running=self.running,
-            automatic_feedback=self._settlement.feedback_pending and self.auto,
-            grading_after=self._midi.resume_grading_after,
+            automatic_feedback=self._take.feedback_pending and self.auto,
+            grading_after=self._midi_input.resume_grading_after,
             mode=self.mode,pause_context=self.pause_context,bpm=request.bpm,
             count_in_beats=self.count_in_beats,
             full_count_in_beats=request.full_count_in_beats,
@@ -376,21 +373,21 @@ class PlaybackSession:
             reading_lead_seconds=request.reading_lead_seconds,
             midi_connected=request.midi_connected,preview=self.preview_only,
             scheduled_deadline=request.scheduled_deadline)
-        self._midi.authorize_grading_after(timing.grading_after)
+        self._midi_input.authorize_grading_after(timing.grading_after)
         self._transport.count_in_beats = timing.count_in_beats
         return ResumedTimeline(now,request.learning,previous,shift)
 
     def finish_resume(self, resumed: ResumedTimeline) -> ResumeCompletion:
-        pending = self._settlement.pending
+        pending = self._take.pending
         announced = self._transport.announced_continuation
-        if pending is not None and self._continuation.schedule is not None and announced is not None:
-            self._continuation.announce(pending,deadline=announced[1])
+        if pending is not None and self._score.successor_schedule is not None and announced is not None:
+            self._score.announce_successor(pending,deadline=announced[1])
         self._measurement.event("timeline_resume",{
             "scheduled_origin_before":resumed.previous_origin-self._measurement.origin,
             "scheduled_origin_after":self._transport.run_at-self._measurement.origin,
             "shift_run_at":resumed.shift_run_at})
         count_in = self.running and (resumed.now < self._transport.run_at
-            or resumed.now < self._midi.resume_grading_after)
+            or resumed.now < self._midi_input.resume_grading_after)
         self._measurement.phase_changed("guided" if resumed.learning else
             "count_in" if count_in else "active",resumed.now)
         self.pause_context = None
@@ -425,7 +422,7 @@ class PlaybackSession:
             result = PassageCompletion(next_action=plan.next_action)
         elif plan.action in ("announce","wait"):
             if plan.action == "announce":
-                self._continuation.announce(facts.pending,deadline=plan.deadline)
+                self._score.announce_successor(facts.pending,deadline=plan.deadline)
             else:
                 self._transport.withdraw_announcement()
                 self._transport.wait_for_continuation(plan.deadline)

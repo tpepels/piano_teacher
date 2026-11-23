@@ -220,3 +220,13 @@ class Take:
 
     def seal_guided_preparation(self, *args, **kwargs):
         return self._settlement.seal_guided_preparation(*args, **kwargs)
+
+    # --- take lifecycle used by the transport domain
+    def begin_take(self, *args, **kwargs):
+        return self._runtime.begin_take(*args, **kwargs)
+
+    def begin_timed_review(self, *args, **kwargs):
+        return self._runtime.begin_timed_review(*args, **kwargs)
+
+    def suspend_recording(self, *args, **kwargs):
+        return self._runtime.suspend_recording(*args, **kwargs)
