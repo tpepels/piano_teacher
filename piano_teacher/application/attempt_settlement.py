@@ -134,10 +134,17 @@ class AttemptSettlement:
         self.cancellation_generation = 0
 
     def prepare(self, *, event, state, generator):
-        if self.pending is not None and self.pending.event.event_id == event.event_id:
-            if self.pending.event != event or self.pending.state != state:
-                raise ValueError("Conflicting pending teaching event")
-            return self.pending
+        if self.pending is not None:
+            if self.pending.event.event_id == event.event_id:
+                if self.pending.event != event or self.pending.state != state:
+                    raise ValueError("Conflicting pending teaching event")
+                return self.pending
+            # A different event must never overwrite a durable but not yet
+            # published settlement. Stop/source replacement explicitly calls
+            # cancel() and advances the cancellation epoch before new work.
+            if (self.pending.receipt is not None
+                    and self.pending.phase != "published"):
+                raise ValueError("A committed teaching receipt awaits publication")
         decision = generator.decide_teaching(event, state)
         validate_teaching_decision(decision, event=event, state=state)
         pending = PendingTeachingDecision(event, state, decision)
@@ -307,7 +314,7 @@ class AttemptSettlement:
         # must still match before any presentation effect is replayed.
         original = take.binding
         if (completed.pending is not self.pending
-                or completed.pending.phase not in ("decided", "settled")
+                or completed.pending.phase not in ("decided", "settled", "effects_applied")
                 or score_revision != take.score_revision
                 or binding.run_id != original.run_id
                 or binding.session_id != original.session_id
@@ -378,6 +385,7 @@ class AttemptSettlement:
             if (binding.run_id != original.run_id
                     or binding.session_id != original.session_id
                     or binding.fingerprint != original.fingerprint
+                    or binding.transport_id != original.transport_id
                     or binding.cancellation_generation != original.cancellation_generation
                     or binding.authority_revision != original.authority_revision + 1
                     or binding.course_revision != original.course_revision
@@ -469,6 +477,10 @@ class AttemptSettlement:
         pending = completed.pending
         if pending.receipt is not None and completed.route != "full_passage":
             if (pending is not self.pending
+                    or score_revision != take.score_revision
+                    or plan.piece is not pending.state.course.piece
+                    or hand != take.hand or mode != take.mode or bpm != take.bpm
+                    or from_beat != take.from_beat or end_beat != take.end_beat
                     or binding.run_id != take.binding.run_id
                     or binding.session_id != take.binding.session_id
                     or binding.fingerprint != take.binding.fingerprint
