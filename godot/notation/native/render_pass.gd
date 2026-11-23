@@ -54,17 +54,24 @@ func span_visible(first: Dictionary, last: Dictionary) -> bool:
     # buffers, so the visible half is painted by each independent strip.
     var begin: float = float(first.get("beat",first.get("start_beat",0.0)))
     var end: float = float(last.get("beat",last.get("end_beat",begin)))
+    if str(first.get("display_role","")) == "context" and \
+            str(last.get("display_role","")) == "context":
+        # A beam, tie or slur wholly inside an adjacent (context) bar is
+        # not exercise ink, like its hidden notes; drawing its clipped
+        # start left a stray beam stub after the closing barline. Only a
+        # connector arching across the whole selected window remains.
+        return begin < source_floor and end > source_ceiling
     return end >= source_floor-.25 and begin <= source_ceiling+.25
 
 func ink(hand: String) -> Color:
     if not focused_staff.is_empty() and hand != focused_staff:
         return Color.TRANSPARENT
     var selected: bool = (active_hand == "both" or active_hand == hand) and context_role != "context"
-    return Design.SCORE_INK if selected else Color(Design.STAFF_MUTED,.46)
+    return Design.SCORE_INK if selected else Design.NOTE_DIMMED
 
 func event_ink(score_layout, event: Dictionary) -> Color:
     if str(event.get("display_role","")) in ["context","inactive_hand"]:
-        return Color(Design.STAFF_MUTED,.46)
+        return Design.NOTE_DIMMED
     return ink(score_layout.performing_hand(event))
 
 func record_notehead(event: Dictionary, point: Vector2, viewport_width: float,
