@@ -4,6 +4,7 @@ Accepts the sole AttemptSettlement receipt; applies typed, already-decided
 successor effects. Does not choose an alternate stage, deadline or grade.
 """
 from __future__ import annotations
+from ..music import Phrase
 from .mistake_responses import resolve_mistake_policy
 from .passage_outcome_presenter import performance_next_action
 from .teaching_continuation import (

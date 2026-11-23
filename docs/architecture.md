@@ -40,6 +40,30 @@ owning domain, and published as one versioned state snapshot
 `PracticeTimeline` advances musical deadlines on worker ticks through an
 ordered, bounded in-worker transition loop.
 
+## Entry points and state writers
+
+Every state change enters `PracticeSession.apply` as one typed event:
+
+| Origin | Operation / callback | Event |
+| --- | --- | --- |
+| Learner gesture, MIDI shortcut | `practice.command` | `UserCommand` / `MidiShortcut` |
+| Native worker | `tick` | `ClockAdvanced` |
+| MIDI callback | arrival-stamped message | `PhysicalMidi` |
+| Score admission | `playback.reserve` / `present` / `withdraw` / `failure` | `PlaybackReserved` / `Presented` / `Withdrawn` / `Failed` |
+| Library, fingering | `library.open`, `fingering.correct` | `SourceCommitted`, `FingeringCorrectionCommitted` |
+| Settings, devices | `settings.update`, `midi.devices`, `midi.device.select`, `hardware.action` | `SettingsChanged`, `MidiPortsRequested`, `DeviceSelected`, `HardwareRequested` |
+| Successor score | `score.stage_ready` / `score.stage_failed` | `PreloadReady` / `PreloadFailed` |
+| History | `learning.export` / `delete_piece` / `delete_learner` | `HistoryExported` / `PieceHistoryDeleted` / `LearnerHistoryDeleted` |
+| Shutdown | `close` | `SessionClosed` |
+
+Reads take the application lock and never mutate session state:
+`state.snapshot`, `lesson.overview`, `library.catalog`,
+`library.health_status`, `settings.snapshot`, `learning.status`,
+`learning.statistics`, `score.bundle`, `score.semantic`,
+`score.native_layout`, `score.next_stage`, `playback.status`,
+`feedback.events`, `listen.audio`, `performance.diagnostics`.
+`library.health.start` only starts the background library scan.
+
 ## Domains and their sole owners
 
 | Domain | Owner (Python) | Owns |
@@ -111,6 +135,33 @@ projected label and action; it makes no lesson, grading or timing decision.
   ink is never retimed.
 - Presentation, metronome, count-in voice and feedback paint the
   authorized segment only.
+
+## Remaining complexity and why it stays
+
+- **Three transport classes.** `VisualTransport` (timeline facts),
+  `PlaybackSession` (session intent; the only writer of timeline facts,
+  exposed read-only) and `PlaybackCoordinator` (physical receipt ledger)
+  hold disjoint facts. Merging them would create a monolith without
+  removing any duplicate fact.
+- **Two completion vocabularies, one applier.** Focused/performance takes
+  settle immediately (`CompletionEffect`); full passages settle at their
+  successor boundary (typed, source-bound effects). Both are applied only
+  by `CompletionContinuations`.
+- **Publication lease and source-mutation guard.** Scoped guards that keep
+  a durable receipt alive through its own successor installation and keep
+  expensive source preparation outside the application lock.
+- **Persistence migrations.** Saved-progress and ledger upgrades live only
+  in the repository/ledger load paths.
+- **Godot admission files.** `ScoreAdmissionGateway` is the one adapter to
+  Python; the renderer (`view.gd`) is the one physical score surface it
+  drives (reserve, arm, bind, cancel); `ScoreRunway` prepares the
+  successor renderer; queue and stream files implement the immutable
+  forward-only ledger.
+
+The composition root builds the graph in six ordered stages (session
+state; devices, library and score; persistence and settlement; workflows;
+transport and completion; event boundary). Every service receives explicit
+constructor dependencies; no service locator is injected.
 
 ## Tests
 

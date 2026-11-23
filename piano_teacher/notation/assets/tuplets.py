@@ -71,7 +71,6 @@ def semantic_tuplets(model: dict) -> dict[tuple[str,...],dict]:
     return groups
 
 
-# Compatibility import for existing extraction callers.
 from ...source_svg import isolate
 
 
