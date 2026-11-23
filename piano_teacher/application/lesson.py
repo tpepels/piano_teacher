@@ -164,6 +164,19 @@ class Lesson:
     def flow_applies(self, *args, **kwargs):
         return self._flow.active(*args, **kwargs)
 
+    @property
+    def flow_active(self) -> bool:
+        """Practice Flow governs the selected source (not the warm-up)."""
+        return self._flow.active(self.plan, warmup=self.warmup)
+
+    def display_phrase(self, *, learning: bool):
+        """The phrase shown on the staff: Free's window while learning."""
+        plan = self.plan
+        if plan is None:
+            raise ValueError("Open a piece first")
+        return self.guided_display_phrase(
+            plan.active_phrase, plan.piece.bar_boundaries, active=learning)
+
     def flow_guided_entry(self, *args, **kwargs):
         return self._flow.guided_entry(*args, **kwargs)
 

@@ -112,7 +112,7 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
     owner.transport_timing = SimpleNamespace(
         presentation_bpm=lambda: 72,
         next_count_in_beats=lambda: 4)
-    owner.lesson_execution = SimpleNamespace(flow_active=lambda: False)
+    owner.lesson.flow_active = False
     owner.clock = lambda: 110.0
     owner.transport.auto = False
     owner.transport.stop_automatic = lambda: None
@@ -142,7 +142,7 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
     owner.lesson.plan.bpm = 72
     owner.transport_timing = SimpleNamespace(
         presentation_bpm=lambda: 72, next_count_in_beats=lambda: 4)
-    owner.lesson_execution = SimpleNamespace(flow_active=lambda: False)
+    owner.lesson.flow_active = False
     owner.transport.auto = True
     stopped = []
     owner.transport.stop_automatic = lambda: stopped.append(True)

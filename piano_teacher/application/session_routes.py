@@ -19,7 +19,7 @@ from .session_events import (
 def command_routes(*, device_workflows, settings_workflows, midi_input,
                    transport, pause_resume, history_management,
                    transport_commands, playback_authorization,
-                   learning_commands):
+                   learning_commands, navigation):
     """Route family -> handler(action, kwargs, effect)."""
     def calibration(action, kwargs, effect):
         changes = device_workflows.calibrate(action, stop_reason=action)
@@ -50,14 +50,14 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
         "transport": lambda action, kwargs, effect:
             transport_commands.control_transport(action, kwargs, effect=effect),
         "stage": lambda action, kwargs, effect:
-            learning_commands.change_stage(action, kwargs, effect=effect),
+            navigation.change_stage(action, kwargs, effect=effect),
     }
 
 
 def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    midi_device, midi_callback,
                    settings_workflows, pause_resume, playback_authorization,
-                   source_installation, library_opening, lesson, lesson_execution, score_preload,
+                   source_installation, library_opening, lesson, course, score_preload,
                    device_workflows, history_management, lifecycle):
     """Event type -> handler(event)."""
     def physical(event):
@@ -87,7 +87,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         resumed = source_installation.install(event.prepared, warmup=event.warmup)
         lesson.forget_source_decisions()
         if resumed is not None:
-            lesson_execution.flow_open(resumed=resumed)
+            course.flow_open(resumed=resumed)
         if event.opened_identifier is not None:
             library_opening.mark_opened(
                 event.opened_identifier, warmup=event.warmup)

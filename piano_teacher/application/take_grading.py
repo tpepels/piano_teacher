@@ -7,12 +7,11 @@ marks. It does not choose what happens next; TakeCompletion does.
 from __future__ import annotations
 
 from ..music import Phrase
-from .mistake_responses import resolve_mistake_policy
 
 
 class TakeGrading:
     def __init__(self, *, lesson, take, transport, transport_timing, score,
-                 policy_registry, library, assessment, live_feedback_workflows,
+                 policy_registry, mistake_policy, assessment, live_feedback_workflows,
                  measurement):
         self.lesson = lesson
         self.take = take
@@ -20,7 +19,7 @@ class TakeGrading:
         self.transport_timing = transport_timing
         self.score = score
         self.policy_registry = policy_registry
-        self.library = library
+        self._mistake_policy = mistake_policy
         self.assessment = assessment
         self.live_feedback_workflows = live_feedback_workflows
         self.measurement = measurement
@@ -31,8 +30,7 @@ class TakeGrading:
         return self.policy_registry.grading
 
     def mistake_policy(self):
-        return resolve_mistake_policy(
-            self.library.settings["mistake_response_strategy"])
+        return self._mistake_policy()
 
     def grade(self, phrase: Phrase, ending: float, now: float):
         """Assess the take, publish its final marks, end it; return the result."""

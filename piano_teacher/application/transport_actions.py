@@ -161,11 +161,11 @@ class RetainedResultReplay:
 
 class RouteCommands:
     def __init__(self, *, lesson, transport, exposure_workflows,
-                 lesson_execution, lifecycle, notices):
+                 course, lifecycle, notices):
         self.lesson = lesson
         self.transport = transport
         self.exposure_workflows = exposure_workflows
-        self.lesson_execution = lesson_execution
+        self.course = course
         self.lifecycle = lifecycle
         self.notices = notices
 
@@ -193,7 +193,7 @@ class RouteCommands:
         elif route == "prepare_practice":
             self.exposure_workflows.prepare_practice(exposure=selected,reason=action)
         elif route == "learn":
-            self.lesson_execution.begin_learn(exposure=selected,reason=action)
+            self.course.begin_learn(exposure=selected,reason=action)
         elif route == "reload_score":
             self.lifecycle.stop(reason=action)
             self.lesson.advance_revision()

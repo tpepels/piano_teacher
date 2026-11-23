@@ -35,6 +35,7 @@ from .attempt_settlement import AttemptSettlement
 from .completion_continuations import TakeCompletion
 from .settlement_continuation import SettlementContinuation
 from .take_grading import TakeGrading
+from .mistake_responses import resolve_mistake_policy
 from .device_workflows import DeviceWorkflows
 from .exposure_workflows import ExposureWorkflows
 from .flow_course_session import PracticeFlowCourseSession
@@ -45,7 +46,7 @@ from .learner_progress import LearnerProgress
 from .learning_capture import LearningCapture
 from .learning_evidence_session import LearningEvidenceSession
 from .lesson_cursor import LessonCursor
-from .lesson_execution import LessonExecution
+from .course_flow import CourseFlow, LessonNavigation
 from .listen_session import ListenSession
 from .live_feedback_workflows import LiveFeedbackWorkflows
 from .midi_application_input import MidiCallback, MidiDelivery, MidiDeviceConnection
@@ -157,6 +158,8 @@ def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
     r.live_input = LiveInputView()
     r.assessment = AssessmentService()
     r.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
+    r.mistake_policy = lambda: resolve_mistake_policy(
+        r.library.settings["mistake_response_strategy"])
     r.midi_key_shortcuts = MidiKeyShortcuts(r.library.settings["midi_key_ranges"])
     r.midi_input = MidiInput(midi=r.midi, shortcuts=r.midi_key_shortcuts,
         calibration=r.midi_calibration, live=r.live_input)
@@ -263,15 +266,20 @@ def _lesson_source_and_settings_workflows(r) -> None:
         midi_input=r.midi_input, evidence_context=r.evidence_context,
         clock=r.now)
 
-    r.lesson_execution = LessonExecution(
+    r.course = CourseFlow(
         lesson=r.lesson, notices=r.notices,
         exposure_workflows=r.exposure_workflows, transport=r.transport,
-        take=r.take, learner_progress=r.learner_progress, progress=r.progress,
-        lifecycle=r.session_lifecycle, recovery_streak=r.recovery_streak,
-        measurement=r.measurement, library=r.library, clock=r.now)
+        take=r.take, progress=r.progress, measurement=r.measurement,
+        recovery_streak=r.recovery_streak, mistake_policy=r.mistake_policy,
+        clock=r.now)
+    r.navigation = LessonNavigation(
+        lesson=r.lesson, notices=r.notices,
+        exposure_workflows=r.exposure_workflows, transport=r.transport,
+        take=r.take, learner_progress=r.learner_progress,
+        progress=r.progress, lifecycle=r.session_lifecycle, course=r.course)
 
     r.score_read = ScoreReadServices(
-        lesson=r.lesson, take=r.take, lesson_execution=r.lesson_execution,
+        lesson=r.lesson, take=r.take, transport=r.transport,
         score_artifact_registry=r.score_artifact_registry,
         learner_progress=r.learner_progress, lock=r.lock)
     r.score.attach_read(r.score_read)
@@ -295,7 +303,7 @@ def _transport_and_completion(r) -> None:
         score=r.score, evidence_context=r.evidence_context,
         transport_timing=r.transport_timing, lock=r.lock)
     r.continuation = PlaybackContinuation(
-        lesson_execution=r.lesson_execution, transport=r.transport,
+        lesson=r.lesson, transport=r.transport,
         transport_timing=r.transport_timing, score=r.score,
         notices=r.notices, clock=r.now)
     r.pause_resume = PauseResume(
@@ -313,25 +321,24 @@ def _transport_and_completion(r) -> None:
     r.take_grading = TakeGrading(
         lesson=r.lesson, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, score=r.score,
-        policy_registry=r.policy_registry, library=r.library,
+        policy_registry=r.policy_registry, mistake_policy=r.mistake_policy,
         assessment=r.assessment,
         live_feedback_workflows=r.live_feedback_workflows,
         measurement=r.measurement)
     r.selected_recovery = SelectedRecovery(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, continuation=r.continuation,
-        lesson_execution=r.lesson_execution,
+        course=r.course,
         exposure_workflows=r.exposure_workflows, clock=r.now)
     r.rolling_recovery = RollingRecovery(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, grading=r.take_grading,
         recovery_streak=r.recovery_streak,
-        live_feedback_workflows=r.live_feedback_workflows,
-        lesson_execution=r.lesson_execution, clock=r.now)
+        live_feedback_workflows=r.live_feedback_workflows, clock=r.now)
 
     r.settlement = SettlementContinuation(
         lesson=r.lesson, notices=r.notices, score=r.score, take=r.take,
-        transport=r.transport, lesson_execution=r.lesson_execution,
+        transport=r.transport, course=r.course,
         transport_timing=r.transport_timing,
         selected_recovery=r.selected_recovery,
         continuation=r.continuation,
@@ -340,7 +347,7 @@ def _transport_and_completion(r) -> None:
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, continuation=r.continuation,
         selected_recovery=r.selected_recovery,
-        lesson_execution=r.lesson_execution, grading=r.take_grading,
+        course=r.course, grading=r.take_grading,
         settlement=r.settlement)
 
     r.score_preload = ScorePreloadWorkflow(
@@ -352,15 +359,16 @@ def _transport_and_completion(r) -> None:
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
         library=r.library, midi_input=r.midi_input, score=r.score,
         ports=SnapshotReadPorts(
-            seek_grid=r.lesson_execution.seek_grid,
-            learner_snapshot=r.lesson_execution.learner_snapshot,
+            seek_grid=r.navigation.seek_grid,
+            learner_snapshot=r.navigation.learner_snapshot,
             elapsed_beat=r.transport_timing.elapsed_beat,
             phase=r.session_phase.at,
             source_model=r.score.source_model,
             live_feedback=r.live_feedback_workflows.latest_marks,
             visual_motion=r.transport_timing.visual_motion,
             active_tempo_map=r.transport_timing.active_tempo_map,
-            display_phrase=r.lesson_execution.display_phrase,
+            display_phrase=lambda: r.lesson.display_phrase(
+                learning=r.transport.mode == "learn"),
             guided_marks=r.score.guided_marks,
             listen_snapshot=r.listen.snapshot,
             live_input_snapshot=r.midi_input.live_input_snapshot,
@@ -368,12 +376,11 @@ def _transport_and_completion(r) -> None:
             teaching_snapshot=None, clock=r.now),
         clock=r.now)
     r.score_presentation = ScorePresentation(
-        lesson=r.lesson, transport=r.transport, timing=r.transport_timing,
-        lesson_execution=r.lesson_execution, score=r.score,
+        lesson=r.lesson, transport=r.transport, timing=r.transport_timing, score=r.score,
         capture=r.session_capture, clock=r.now)
     r.read_models = SessionReadModels(
         lesson=r.lesson, transport=r.transport, timing=r.transport_timing,
-        score=r.score, lesson_execution=r.lesson_execution,
+        score=r.score, course=r.course,
         capture=r.session_capture, presentation=r.score_presentation,
         extras=SnapshotExtras(
             lesson=r.lesson, take=r.take, transport=r.transport,
@@ -386,10 +393,9 @@ def _transport_and_completion(r) -> None:
 def _event_boundary(r) -> None:
     """Command routers, MIDI input, the transition worker and PracticeSession."""
     r.learning_commands = LearningActions(
-        take=r.take, clock=r.now, exposure_workflows=r.exposure_workflows,
-        lesson=r.lesson, lesson_execution=r.lesson_execution,
-        lifecycle=r.session_lifecycle, measurement=r.measurement,
-        notices=r.notices, transport=r.transport, progress=r.progress)
+        lesson=r.lesson, transport=r.transport, course=r.course,
+        navigation=r.navigation, exposure_workflows=r.exposure_workflows,
+        measurement=r.measurement, clock=r.now)
     r.playback_authorization = PlaybackAuthorization(
         lesson=r.lesson, transport=r.transport,
         transport_timing=r.transport_timing, timed_start=r.timed_start,
@@ -403,7 +409,7 @@ def _event_boundary(r) -> None:
     r.route_commands = RouteCommands(
         lesson=r.lesson, transport=r.transport,
         exposure_workflows=r.exposure_workflows,
-        lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
+        course=r.course, lifecycle=r.session_lifecycle,
         notices=r.notices)
     r.transport_commands = TransportCommands(
         lesson=r.lesson, transport=r.transport,
@@ -435,7 +441,7 @@ def _event_boundary(r) -> None:
             clock=r.now),
         transitions=PreAssessmentTransitions(
             lesson=r.lesson, transport=r.transport, take=r.take,
-            midi_input=r.midi_input, lesson_execution=r.lesson_execution,
+            midi_input=r.midi_input, course=r.course,
             listen_outcomes=r.listen_outcomes,
             continuation=r.continuation, settlement=r.settlement),
         progression=TakeProgression(
@@ -443,8 +449,7 @@ def _event_boundary(r) -> None:
             midi_input=r.midi_input, transport_timing=r.transport_timing,
             attempt_progression=r.attempt_progression,
             rolling_recovery=r.rolling_recovery,
-            completion=r.completion_continuations,
-            lesson_execution=r.lesson_execution))
+            completion=r.completion_continuations,))
     r.tick_publisher = TickPublisher(
         transport=r.transport, transport_timing=r.transport_timing,
         presentation=r.score_presentation,
@@ -465,7 +470,8 @@ def _event_boundary(r) -> None:
             history_management=r.history_management,
             transport_commands=r.transport_commands,
             playback_authorization=r.playback_authorization,
-            learning_commands=r.learning_commands))
+            learning_commands=r.learning_commands,
+            navigation=r.navigation))
     r.tick_worker = TickWorker(
         timeline=r.practice_timeline, publisher=r.tick_publisher,
         transport=r.transport, take=r.take,
@@ -485,7 +491,7 @@ def _event_boundary(r) -> None:
         playback_authorization=r.playback_authorization,
         source_installation=r.source_installation,
         library_opening=r.library_opening, lesson=r.lesson,
-        lesson_execution=r.lesson_execution, score_preload=r.score_preload,
+        course=r.course, score_preload=r.score_preload,
         device_workflows=r.device_workflows,
         history_management=r.history_management,
         lifecycle=r.session_lifecycle))

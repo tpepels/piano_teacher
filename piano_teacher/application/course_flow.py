@@ -1,7 +1,11 @@
-"""Execute selected lesson stages, guided exposures, navigation and course progress.
+"""The lesson's course flow and the learner's navigation commands.
 
-Only the registered lesson generator selects stages and tempo. The session
-lifecycle and transport retain one physical/authorized take timeline.
+CourseFlow executes the selected course step (Listen, Free, Tempo),
+guided preparation and selected exposures; only the registered lesson
+generator selects stages and tempo. LessonNavigation applies the
+learner's navigation commands (skip, place, revisit trouble, review a
+section, practise weak spots, seek, open a measure, change the stage or
+tempo) and answers the lesson read ports.
 """
 from __future__ import annotations
 from ..music import Phrase
@@ -9,33 +13,25 @@ from ..measure_grid import phrase_grid
 from ..remediation import RemedialAssignment
 from . import practice_flow
 from .exposure_preparation import prepare_guided
-from .mistake_responses import resolve_mistake_policy
+from .stage_change import prepare_stage_change
 
 
-class LessonExecution:
+class CourseFlow:
     def __init__(self, *, lesson, notices, exposure_workflows, transport, take,
-                          learner_progress, progress, lifecycle,
-                          recovery_streak, measurement, library, clock):
+                 progress, measurement, recovery_streak, mistake_policy, clock):
         self.lesson = lesson
         self.notices = notices
         self.exposure_workflows = exposure_workflows
         self.transport = transport
         self.take = take
-        self.learner_progress, self.progress = learner_progress, progress
-        self.lifecycle, self.recovery_streak = lifecycle, recovery_streak
-        self.measurement, self.library = measurement, library
+        self.progress = progress
+        self.measurement = measurement
+        self.recovery_streak = recovery_streak
+        self.mistake_policy = mistake_policy
         self.clock = clock
-
-    def _stop(self, *, reason=None, preserve_episode=False, persist_evidence=True) -> None:
-        self.lifecycle.stop(reason=reason or "transition",
-            preserve_episode=preserve_episode, persist_evidence=persist_evidence)
 
     def _save(self) -> None:
         self.progress.save(self.lesson.plan, self.lesson.fingerprint)
-
-    def guided_unit(self) -> dict | None:
-        return self.learner_progress.guided_unit(
-            self.lesson.plan, mode=self.transport.mode, guided_range=self.lesson.guided_beat_range)
 
     def save_guided_preparation(self):
         guidance = (self.lesson.guided_controller.snapshot(now=self.clock()) if self.transport.mode == "learn" and self.lesson.guided_controller else None)
@@ -52,8 +48,7 @@ class LessonExecution:
             self.take.seal_guided_preparation(
                 pending,guidance=guidance,plan=self.lesson.plan,
                 binding=self.lesson.decision_binding(),now=self.clock(),
-                policy=resolve_mistake_policy(
-                    self.library.settings["mistake_response_strategy"]))
+                policy=self.mistake_policy())
         except Exception:
             self.transport.freeze_after_fault(self.clock())
             self.notices.fault("Could not save the guided preparation",
@@ -63,12 +58,7 @@ class LessonExecution:
         if pending.decision.next_exposure is not None:
             self.enter_selected_exposure(pending.decision.next_exposure)
         if pending.decision.message:
-            self.flow_say(pending.decision.message)
-
-    def learner_snapshot(self) -> dict:
-        return self.learner_progress.snapshot(
-            self.lesson.plan, fingerprint=self.lesson.fingerprint, mode=self.transport.mode,
-            guided_range=self.lesson.guided_beat_range, course_guided=self.lesson.course_guided)
+            self.lesson.flow_say(pending.decision.message)
 
     def enter_selected_exposure(self, selected, *, bump_revision: bool = True, reason=None):
         if selected is None:
@@ -81,9 +71,6 @@ class LessonExecution:
             self.exposure_workflows.prepare_perform(exposure=selected,reason=reason)
         else:
             self.exposure_workflows.prepare_practice(exposure=selected,reason=reason)
-
-    def flow_active(self) -> bool:
-        return self.lesson.flow_applies(self.lesson.plan,warmup=self.lesson.warmup)
 
     def flow_execute(self, transition: practice_flow.Transition, *, reason=None) -> None:
         """Execute the selected course step; the session owns flow state."""
@@ -108,12 +95,6 @@ class LessonExecution:
         self._save()
         self.flow_execute(self.lesson.flow_opening(self.lesson.plan,resumed=resumed))
 
-    def flow_say(self, text: str) -> None:
-        self.lesson.flow_say(text)
-
-    def flow_state(self) -> dict:
-        return self.lesson.flow_status(self.lesson.plan,self.transport.mode)
-
     def begin_course_stage(self, *, bump_revision: bool = True,
                            explicit_learn: bool = False, effect=None,
                            reason=None):
@@ -123,61 +104,8 @@ class LessonExecution:
         if selected is not None:
             self.enter_selected_exposure(selected,bump_revision=bump_revision,reason=reason)
 
-    def skip_stage(self, reason, *, effect=None):
-        effect = self.lesson.manual_effect(
-            "skip_stage", values={"reason":reason}, effect=effect)
-        self.learner_progress.mark_skipped(fingerprint=self.lesson.fingerprint, stage_key=self.lesson.plan.identity, reason=reason)
-        self._stop(reason="skip_stage")
-        selected = self.lesson.install_command(effect)
-        self.reset_trouble()
-        self.lesson.set_course_guided(True)
-        self.enter_selected_exposure(selected,reason="skip_stage")
-        self._save()
-
-    def place_original(self, *, effect=None):
-        if self.lesson.plan is None:
-            raise ValueError("Open a piece first")
-        effect = self.lesson.manual_effect(
-            "place_original", effect=effect)
-        key = effect.decision.next_exposure.stage_key
-        candidate = next(step for step in self.lesson.plan.lesson_steps if step.key == key)
-        self.learner_progress.mark_prior_steps_placed(self.lesson.plan, fingerprint=self.lesson.fingerprint, candidate=candidate)
-        self._stop(reason="place_original")
-        selected = self.lesson.install_command(effect)
-        self.reset_trouble()
-        self.lesson.set_course_guided(True)
-        self.enter_selected_exposure(selected,reason="place_original")
-        self._save()
-
-    def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
-        return self.lesson.valid_trouble_spots(stage_key=stage_key)
-
-    def revisit_trouble(self, stage_key, start_beat, *, effect=None):
-        effect = self.lesson.manual_effect(
-            "revisit_trouble", from_beat=start_beat,
-            values={"stage_key":stage_key}, effect=effect)
-        self._stop(reason="revisit_trouble")
-        selected = self.lesson.install_command(effect)
-        self.reset_trouble()
-        self.learner_progress.reactivate_trouble(fingerprint=self.lesson.fingerprint, stage_key=selected.stage_key)
-        self.lesson.set_course_guided(True)
-        grid = phrase_grid(self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries)
-        self.take.prepare_section(start=selected.from_beat,end=selected.end_beat,
-            first_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.from_beat),
-            last_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.end_beat)-1)
-        self.begin_learn(from_beat=selected.from_beat,recovery=True,exposure=selected,
-            reason="revisit_trouble")
-        self._save()
-
     def reset_trouble(self):
         self.recovery_streak.clear()
-
-    def display_phrase(self) -> Phrase:
-        if self.lesson.plan is None:
-            raise ValueError("Open a piece first")
-        return self.lesson.guided_display_phrase(
-            self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries,
-            active=self.transport.mode == "learn")
 
     def begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
                      recovery: bool = False,
@@ -196,6 +124,78 @@ class LessonExecution:
             revision=self.lesson.revision,bump_revision=bump_revision,
             recovery=recovery,remediation=remediation,retry_range=self.take.retry_range)
         self.exposure_workflows.install(prepared,reason=reason)
+
+
+class LessonNavigation:
+    def __init__(self, *, lesson, notices, exposure_workflows, transport, take,
+                 learner_progress, progress, lifecycle, course):
+        self.lesson = lesson
+        self.notices = notices
+        self.exposure_workflows = exposure_workflows
+        self.transport = transport
+        self.take = take
+        self.learner_progress = learner_progress
+        self.progress = progress
+        self.lifecycle = lifecycle
+        self.course = course
+
+    def _stop(self, *, reason=None, preserve_episode=False, persist_evidence=True) -> None:
+        self.lifecycle.stop(reason=reason or "transition",
+            preserve_episode=preserve_episode, persist_evidence=persist_evidence)
+
+    def _save(self) -> None:
+        self.progress.save(self.lesson.plan, self.lesson.fingerprint)
+
+    def learner_snapshot(self) -> dict:
+        return self.learner_progress.snapshot(
+            self.lesson.plan, fingerprint=self.lesson.fingerprint, mode=self.transport.mode,
+            guided_range=self.lesson.guided_beat_range, course_guided=self.lesson.course_guided)
+
+    def skip_stage(self, reason, *, effect=None):
+        effect = self.lesson.manual_effect(
+            "skip_stage", values={"reason":reason}, effect=effect)
+        self.learner_progress.mark_skipped(fingerprint=self.lesson.fingerprint, stage_key=self.lesson.plan.identity, reason=reason)
+        self._stop(reason="skip_stage")
+        selected = self.lesson.install_command(effect)
+        self.course.reset_trouble()
+        self.lesson.set_course_guided(True)
+        self.course.enter_selected_exposure(selected,reason="skip_stage")
+        self._save()
+
+    def place_original(self, *, effect=None):
+        if self.lesson.plan is None:
+            raise ValueError("Open a piece first")
+        effect = self.lesson.manual_effect(
+            "place_original", effect=effect)
+        key = effect.decision.next_exposure.stage_key
+        candidate = next(step for step in self.lesson.plan.lesson_steps if step.key == key)
+        self.learner_progress.mark_prior_steps_placed(self.lesson.plan, fingerprint=self.lesson.fingerprint, candidate=candidate)
+        self._stop(reason="place_original")
+        selected = self.lesson.install_command(effect)
+        self.course.reset_trouble()
+        self.lesson.set_course_guided(True)
+        self.course.enter_selected_exposure(selected,reason="place_original")
+        self._save()
+
+    def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
+        return self.lesson.valid_trouble_spots(stage_key=stage_key)
+
+    def revisit_trouble(self, stage_key, start_beat, *, effect=None):
+        effect = self.lesson.manual_effect(
+            "revisit_trouble", from_beat=start_beat,
+            values={"stage_key":stage_key}, effect=effect)
+        self._stop(reason="revisit_trouble")
+        selected = self.lesson.install_command(effect)
+        self.course.reset_trouble()
+        self.learner_progress.reactivate_trouble(fingerprint=self.lesson.fingerprint, stage_key=selected.stage_key)
+        self.lesson.set_course_guided(True)
+        grid = phrase_grid(self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries)
+        self.take.prepare_section(start=selected.from_beat,end=selected.end_beat,
+            first_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.from_beat),
+            last_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.end_beat)-1)
+        self.course.begin_learn(from_beat=selected.from_beat,recovery=True,exposure=selected,
+            reason="revisit_trouble")
+        self._save()
 
     def review_retry(self, first_bar, last_bar, *, effect=None):
         effect = self.lesson.manual_effect(
@@ -240,7 +240,7 @@ class LessonExecution:
             "seek",values={"bar":bar},effect=effect)
         selected = self.lesson.install_command(effect)
         if selected.mode == "learn":
-            self.begin_learn(from_beat=selected.from_beat,exposure=selected,reason="seek")
+            self.course.begin_learn(from_beat=selected.from_beat,exposure=selected,reason="seek")
         else:
             self.exposure_workflows.prepare_practice(exposure=selected,reason="seek")
             self.transport.prepare_rewind(selected.from_beat)
@@ -248,4 +248,66 @@ class LessonExecution:
                 end=self.lesson.plan.active_phrase.end-self.lesson.plan.active_phrase.start,
                 first_bar=bar,last_bar=self.lesson.plan.active_phrase.last_bar)
             self.notices.next_action = f"Get ready to play from bar {bar} at {selected.bpm} BPM."
+
+    def open_selected_measure(self, kwargs: dict, *, effect=None):
+        effect = self.lesson.manual_effect(
+            "open_at", values=kwargs, effect=effect)
+        self.lifecycle.stop(reason="open_at")
+        selected = self.lesson.install_command(effect)
+        self.course.reset_trouble()
+        self.lesson.set_course_guided(selected.mode == "learn")
+        self.lesson.select_opening(selected.from_beat)
+        if selected.mode == "learn":
+            self.course.begin_learn(
+                from_beat=selected.from_beat,exposure=selected,reason="open_at")
+        else:
+            self.exposure_workflows.prepare_practice(exposure=selected,reason="open_at")
+            self.transport.wait_for_player()
+            self.notices.feedback = f"Ready to practise from measure {kwargs.get('bar')}"
+            self.notices.next_action = "Press Start to play from the selected measure."
+
+    def change_stage(self, action: str, kwargs: dict, *, effect=None):
+        """Change the active lesson or tempo while preserving scoring state."""
+        p=self.lesson.plan
+        if not p:
+            raise ValueError("Open a piece first")
+        queued = effect
+        change = (queued.event.manual
+                  if queued is not None and queued.event.action == action
+                  and queued.event.manual is not None
+                  else prepare_stage_change(
+                      p, action, kwargs, warmup=self.lesson.warmup))
+        was_guided = self.transport.mode == "learn"
+        guided_return = self.lesson.guided_return_context
+        guided_retry_range = self.take.retry_range
+        self.lifecycle.stop(reason=action)
+        self.course.reset_trouble()
+        # Preserve the original ordering of the source opening reset.
+        if action in ("select_step", "next", "previous"):
+            self.lesson.select_opening(0.0)
+        effect = (queued if queued is not None and queued.event.action == action
+                  else self.lesson.prepare_decision(
+                      "manual", manual=change, action=action, store=False))
+        self.lesson.apply_progress(effect)
+        self.take.command_applied()
+        if action == "hand":
+            self.lesson.select_opening(0.0)
+        # Native notation is engraved in source coordinates: changing
+        # only playback BPM must not invalidate the score/reload Godot.
+        if not change.tempo_only:
+            self.lesson.advance_revision()
+        self.notices.feedback="Ready"
+        self.notices.next_action="Start when you are ready."
+        if was_guided:
+            selected = effect.decision.next_exposure
+            if selected is not None and selected.mode == "learn":
+                recovery = change.tempo_only and guided_return is not None and guided_return[0] == p.identity
+                if recovery:
+                    self.take.restore_retry(guided_retry_range)
+                self.course.begin_learn(
+                from_beat=selected.from_beat,bump_revision=False,
+                recovery=recovery,exposure=selected,reason=action)
+            elif selected is not None:
+                self.course.enter_selected_exposure(selected,reason=action)
+        self.progress.save(self.lesson.plan, self.lesson.fingerprint)
 

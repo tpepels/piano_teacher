@@ -12,7 +12,7 @@ from .attempt_progression import AttemptTick
 class TakeProgression:
     def __init__(self, *, lesson, transport, take, midi_input,
                  transport_timing, attempt_progression, rolling_recovery,
-                 completion, lesson_execution):
+                 completion):
         self.lesson = lesson
         self.transport = transport
         self.take = take
@@ -21,7 +21,6 @@ class TakeProgression:
         self.attempt_progression = attempt_progression
         self.rolling_recovery = rolling_recovery
         self.completion = completion
-        self.lesson_execution = lesson_execution
 
     def replay_rolling(self, now: float) -> bool:
         """Replay an admitted rolling recovery; True when it consumed the tick."""
@@ -63,7 +62,7 @@ class TakeProgression:
             auto=self.transport.auto, mode=self.transport.mode,
             bpm=self.lesson.plan.bpm, gap_beats=self.transport.visual_gap_beats),
             self.rolling_recovery.assess_rolling_boundary, self.transport_timing.elapsed_seconds,
-            exact_repeats=self.lesson_execution.flow_active())
+            exact_repeats=self.lesson.flow_active)
         self.transport.advance_boundary(step.next_boundary)
         followup = False
         if step.action == "recovery":

@@ -17,14 +17,14 @@ from .teaching_continuation import (
 
 class SettlementContinuation:
     def __init__(self, *, lesson, notices, score, take, transport,
-                 lesson_execution, transport_timing, selected_recovery,
+                 course, transport_timing, selected_recovery,
                  continuation, mistake_policy):
         self.lesson = lesson
         self.notices = notices
         self.score = score
         self.take = take
         self.transport = transport
-        self.lesson_execution = lesson_execution
+        self.course = course
         self.transport_timing = transport_timing
         self.selected_recovery = selected_recovery
         self.continuation = continuation
@@ -85,7 +85,7 @@ class SettlementContinuation:
                     presentation_bpm=self.transport_timing.presentation_bpm(),
                     count_in_beats=self.transport_timing.next_count_in_beats(),
                     automatic=transaction.pending.state.route.automatic,
-                    flow_active=self.lesson_execution.flow_active()))
+                    flow_active=self.lesson.flow_active))
             if publication.flow_outcome is not None:
                 self.lesson.settle_flow_decision(
                     publication.flow_outcome, plan=self.lesson.plan,
@@ -154,7 +154,7 @@ class SettlementContinuation:
                 source_end=self.transport.run_at+duration),
             assets_ready=self.score.decision_assets_ready(pending,
                 revision=self.lesson.revision,fingerprint=self.lesson.fingerprint),
-            exact_repeats=self.lesson_execution.flow_active()))
+            exact_repeats=self.lesson.flow_active))
         if completion.next_action is not None:
             self.notices.next_action = completion.next_action
         if completion.advance_feedback:
@@ -189,7 +189,7 @@ class SettlementContinuation:
                 raise ValueError("Conflicting continuation effects for one decision")
             return
         if isinstance(effect,EnterSelectedExposure):
-            self.lesson_execution.enter_selected_exposure(effect.exposure)
+            self.course.enter_selected_exposure(effect.exposure)
         elif isinstance(effect,ApplySelectedResponse):
             self.selected_recovery.apply_policy_response(effect.response,now=now,deadline=effect.deadline)
         elif isinstance(effect,EnterSelectedRemediation):
@@ -234,7 +234,7 @@ class SettlementContinuation:
             outcome = committed.receipt
             self.take.apply_settlement(committed,plan=self.lesson.plan)
             if decision.verdict is not None and decision.verdict.clears_trouble:
-                self.lesson_execution.reset_trouble()
+                self.course.reset_trouble()
             if outcome.stage_changed:
                 self.lesson.select_opening(0.0)
                 self.lesson.publish_revision(committed.selection.revision)

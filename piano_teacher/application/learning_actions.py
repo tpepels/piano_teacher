@@ -1,36 +1,29 @@
-"""User-requested lesson and course navigation.
+"""Route the learner's listening and learning commands to their owners.
 
-Applies generator-approved source progress, guided returns and selected lesson
-positions through current state/persistence owners.
+CourseFlow runs course steps and Free; LessonNavigation applies
+navigation; ExposureWorkflows prepares Listen, Perform and Practice.
 """
 from __future__ import annotations
-from .stage_change import prepare_stage_change
 
 
 class LearningActions:
-    def __init__(self, *, take, clock, exposure_workflows, lesson,
-                          lesson_execution, lifecycle, measurement, notices,
-                          transport, progress):
-        self.take = take
-        self.clock = clock
-        self.exposure_workflows = exposure_workflows
+    def __init__(self, *, lesson, transport, course, navigation,
+                 exposure_workflows, measurement, clock):
         self.lesson = lesson
-        self.lesson_execution = lesson_execution
-        self.lifecycle = lifecycle
-        self.measurement = measurement
-        self.notices = notices
         self.transport = transport
-        self.progress = progress
-
-
+        self.course = course
+        self.navigation = navigation
+        self.exposure_workflows = exposure_workflows
+        self.measurement = measurement
+        self.clock = clock
 
     def control_listening(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "listen":
-            if (self.lesson_execution.flow_active() and self.lesson.flow_state is not None
+            if (self.lesson.flow_active and self.lesson.flow_state is not None
                     and self.lesson.flow_state.stage_key == self.lesson.plan.identity
                     and self.transport.mode != "listen"):
                 # Listen again: the state machine plays it, then Free.
-                self.lesson_execution.flow_execute(self.lesson.flow_listen_again(),reason=action)
+                self.course.flow_execute(self.lesson.flow_listen_again(),reason=action)
             else:
                 self.exposure_workflows.prepare_listen(effect=effect,reason=action)
         elif action == "perform":
@@ -38,116 +31,53 @@ class LearningActions:
                 scope=str(kwargs.get("scope", "current")), effect=effect,
                 reason=action)
         elif action == "practice_weak":
-            self.lesson_execution.practice_weak(effect=effect)
+            self.navigation.practice_weak(effect=effect)
         elif action == "review_retry":
-            self.lesson_execution.review_retry(
+            self.navigation.review_retry(
                 kwargs.get("first_bar"), kwargs.get("last_bar"), effect=effect)
         elif action == "seek":
-            self.lesson_execution.seek(kwargs.get("bar"), effect=effect)
+            self.navigation.seek(kwargs.get("bar"), effect=effect)
 
     def control_learning(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "learn_next":
             if (self.transport.mode != "learn" or self.lesson.guided_controller is None
                     or not self.lesson.guided_controller.snapshot(now=self.clock())["completed"]):
                 raise ValueError("Find the current notes before continuing to the next idea")
-            self.lesson_execution.save_guided_preparation()
+            self.course.save_guided_preparation()
             if self.lesson.guided_return_context is not None:
                 self.exposure_workflows.prepare_practice(effect=effect,reason=action)
             else:
-                self.lesson_execution.begin_course_stage(effect=effect,reason=action)
+                self.course.begin_course_stage(effect=effect,reason=action)
         elif action == "skip_stage":
             if self.lesson.warmup:
                 raise ValueError("Warm-up stages unlock after three clean runs, not skips")
-            self.lesson_execution.skip_stage(kwargs.get("reason"), effect=effect)
+            self.navigation.skip_stage(kwargs.get("reason"), effect=effect)
         elif action == "place_original":
             if self.lesson.warmup:
                 raise ValueError("Warm-up stages unlock after three clean runs")
-            self.lesson_execution.place_original(effect=effect)
+            self.navigation.place_original(effect=effect)
         elif action == "revisit_trouble":
-            self.lesson_execution.revisit_trouble(
+            self.navigation.revisit_trouble(
                 kwargs.get("stage_key"), kwargs.get("start_beat"), effect=effect)
         elif action in ("learn", "learn_retry"):
             if action == "learn":
                 self.lesson.set_course_guided(True)
                 if "from_beat" not in kwargs:
-                    self.lesson_execution.begin_course_stage(
+                    self.course.begin_course_stage(
                         explicit_learn=True, effect=effect, reason=action)
                     return
             previous_start = (self.lesson.guided_beat_range[0]
                               if self.lesson.guided_beat_range else 0.0)
-            self.lesson_execution.begin_learn(
+            self.course.begin_learn(
                 from_beat=float(kwargs.get(
                     "from_beat",
                     previous_start if action == "learn_retry" else 0.0)),
                 recovery=self.lesson.guided_return_context is not None and action == "learn_retry",
                 effect=effect,reason=action)
         elif action == "open_at":
-            self.open_selected_measure(kwargs, effect=effect)
+            self.navigation.open_selected_measure(kwargs, effect=effect)
         elif action == "hints":
             self.lesson.set_hints(
                 bool(kwargs.get("enabled", False)), now=self.clock())
             if kwargs.get("enabled", False) and self.measurement.attempt_id is not None:
                 self.measurement.use_assistance()
-
-    def open_selected_measure(self, kwargs: dict, *, effect=None):
-        effect = self.lesson.manual_effect(
-            "open_at", values=kwargs, effect=effect)
-        self.lifecycle.stop(reason="open_at")
-        selected = self.lesson.install_command(effect)
-        self.lesson_execution.reset_trouble()
-        self.lesson.set_course_guided(selected.mode == "learn")
-        self.lesson.select_opening(selected.from_beat)
-        if selected.mode == "learn":
-            self.lesson_execution.begin_learn(
-                from_beat=selected.from_beat,exposure=selected,reason="open_at")
-        else:
-            self.exposure_workflows.prepare_practice(exposure=selected,reason="open_at")
-            self.transport.wait_for_player()
-            self.notices.feedback = f"Ready to practise from measure {kwargs.get('bar')}"
-            self.notices.next_action = "Press Start to play from the selected measure."
-
-    def change_stage(self, action: str, kwargs: dict, *, effect=None):
-        """Change the active lesson or tempo while preserving scoring state."""
-        p=self.lesson.plan
-        if not p:
-            raise ValueError("Open a piece first")
-        queued = effect
-        change = (queued.event.manual
-                  if queued is not None and queued.event.action == action
-                  and queued.event.manual is not None
-                  else prepare_stage_change(
-                      p, action, kwargs, warmup=self.lesson.warmup))
-        was_guided = self.transport.mode == "learn"
-        guided_return = self.lesson.guided_return_context
-        guided_retry_range = self.take.retry_range
-        self.lifecycle.stop(reason=action)
-        self.lesson_execution.reset_trouble()
-        # Preserve the original ordering of the source opening reset.
-        if action in ("select_step", "next", "previous"):
-            self.lesson.select_opening(0.0)
-        effect = (queued if queued is not None and queued.event.action == action
-                  else self.lesson.prepare_decision(
-                      "manual", manual=change, action=action, store=False))
-        self.lesson.apply_progress(effect)
-        self.take.command_applied()
-        if action == "hand":
-            self.lesson.select_opening(0.0)
-        # Native notation is engraved in source coordinates: changing
-        # only playback BPM must not invalidate the score/reload Godot.
-        if not change.tempo_only:
-            self.lesson.advance_revision()
-        self.notices.feedback="Ready"
-        self.notices.next_action="Start when you are ready."
-        if was_guided:
-            selected = effect.decision.next_exposure
-            if selected is not None and selected.mode == "learn":
-                recovery = change.tempo_only and guided_return is not None and guided_return[0] == p.identity
-                if recovery:
-                    self.take.restore_retry(guided_retry_range)
-                self.lesson_execution.begin_learn(
-                from_beat=selected.from_beat,bump_revision=False,
-                recovery=recovery,exposure=selected,reason=action)
-            elif selected is not None:
-                self.lesson_execution.enter_selected_exposure(selected,reason=action)
-        self.progress.save(self.lesson.plan, self.lesson.fingerprint)
-

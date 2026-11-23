@@ -94,12 +94,11 @@ class SessionCapture:
 class ScorePresentation:
     """Score projection facts and the Free target's presentation plan."""
 
-    def __init__(self, *, lesson, transport, timing, lesson_execution, score,
+    def __init__(self, *, lesson, transport, timing, score,
                  capture, clock):
         self.lesson = lesson
         self.transport = transport
         self.timing = timing
-        self.lesson_execution = lesson_execution
         self.score = score
         self.capture = capture
         self.clock = clock
@@ -129,7 +128,7 @@ class ScorePresentation:
             next_count_in_beats=self.timing.next_count_in_beats(),
             next_count_in_meter=tuple(self.timing.next_count_in_meter()),
             continuous_horizon_beats=self.transport.continuous_horizon_beats,
-            duration_beats=(self.lesson_execution.display_phrase().end-self.lesson_execution.display_phrase().start
+            duration_beats=(self.lesson.display_phrase(learning=self.transport.mode == "learn").end-self.lesson.display_phrase(learning=self.transport.mode == "learn").start
                             if plan is not None else 0.0),
             has_source=plan is not None,
         )
@@ -194,13 +193,13 @@ class SnapshotExtras:
 
 
 class SessionReadModels:
-    def __init__(self, *, lesson, transport, timing, score, lesson_execution,
+    def __init__(self, *, lesson, transport, timing, score, course,
                  capture, presentation, extras, lock, clock):
         self.lesson = lesson
         self.transport = transport
         self.timing = timing
         self.score = score
-        self.lesson_execution = lesson_execution
+        self.course = course
         self.capture = capture
         self.presentation = presentation
         self.extras = extras
@@ -223,8 +222,8 @@ class SessionReadModels:
         # not infer it from a revision or from a mutable frontend hand label.
         plan = self.lesson.plan
         state["stage_key"] = plan.identity if plan is not None else ""
-        if self.lesson_execution.flow_active():
-            state["flow"] = self.lesson_execution.flow_state()
+        if self.lesson.flow_active:
+            state["flow"] = self.lesson.flow_status(self.lesson.plan, self.transport.mode)
         return state, pending, timeline
 
     def control_snapshot(self) -> dict:

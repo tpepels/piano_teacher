@@ -74,9 +74,9 @@ class TimedStart:
 
 
 class PlaybackContinuation:
-    def __init__(self, *, lesson_execution, transport, transport_timing, score,
+    def __init__(self, *, lesson, transport, transport_timing, score,
                  notices, clock):
-        self.lesson_execution = lesson_execution
+        self.lesson = lesson
         self.transport = transport
         self.transport_timing = transport_timing
         self.score = score
@@ -99,7 +99,7 @@ class PlaybackContinuation:
         self.transport_timing.request_playback(
             action="auto", mode=self.transport.mode,
             from_beat=from_beat, earliest_deadline=deadline,
-            fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
+            fixed_deadline=deadline if self.lesson.flow_active else None)
         self.transport.clear_scheduled_start()
         self.notices.feedback = "Preparing the next passage"
 

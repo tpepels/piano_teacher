@@ -10,13 +10,13 @@ from . import practice_flow
 
 class PreAssessmentTransitions:
     def __init__(self, *, lesson, transport, take, midi_input,
-                 lesson_execution, listen_outcomes, continuation,
+                 course, listen_outcomes, continuation,
                  settlement):
         self.lesson = lesson
         self.transport = transport
         self.take = take
         self.midi_input = midi_input
-        self.lesson_execution = lesson_execution
+        self.course = course
         self.listen_outcomes = listen_outcomes
         self.continuation = continuation
         self.settlement = settlement
@@ -43,19 +43,19 @@ class PreAssessmentTransitions:
             self.transport.enter_preparation_phase(decision.preparation_phase)
         if decision.action == "learning":
             self.lesson.advance_guided(connected=self.midi_input.connected, now=now)
-            self.lesson_execution.save_guided_preparation()
+            self.course.save_guided_preparation()
         elif decision.action == "listening":
             if self.listen_outcomes.finish(now):
-                if (self.lesson_execution.flow_active() and self.lesson.flow_state is not None
+                if (self.lesson.flow_active and self.lesson.flow_state is not None
                         and self.lesson.flow_state.step is practice_flow.Step.LISTEN):
-                    self.lesson_execution.flow_execute(self.lesson.flow_listen_finished())
+                    self.course.flow_execute(self.lesson.flow_listen_finished())
         elif decision.action == "preview_due":
             self.continuation.continue_preview()
         elif decision.action == "feedback":
             followup = self.settlement.feedback_due(now)
         elif decision.action == "rewind_due":
             if self.take.guided_recovery_pending:
-                self.lesson_execution.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,
+                self.course.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,
                     exposure=self.take.pending.decision.next_exposure)
             else:
                 self.continuation.continue_measured(

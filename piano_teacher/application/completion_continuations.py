@@ -14,7 +14,7 @@ from .passage_outcome_presenter import performance_next_action
 
 class TakeCompletion:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
-                 continuation, selected_recovery, lesson_execution,
+                 continuation, selected_recovery, course,
                  grading, settlement):
         self.lesson = lesson
         self.notices = notices
@@ -23,7 +23,7 @@ class TakeCompletion:
         self.transport_timing = transport_timing
         self.continuation = continuation
         self.selected_recovery = selected_recovery
-        self.lesson_execution = lesson_execution
+        self.course = course
         self.grading = grading
         self.settlement = settlement
 
@@ -85,7 +85,7 @@ class TakeCompletion:
             self.transport.halt_continuation()
             self.notices.next_action = "Review this section before starting another take."
         elif effect.action == "exposure":
-            self.lesson_execution.enter_selected_exposure(effect.exposure)
+            self.course.enter_selected_exposure(effect.exposure)
         elif effect.action == "partial_recovery":
             self.finish_partial_recovery(result,now,exposure=effect.exposure)
         elif effect.action == "full_passage":

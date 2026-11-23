@@ -191,7 +191,7 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
                 "Previously graded boundary must not be assessed again")),
         rolling_recovery=SimpleNamespace(
             apply_rolling_recovery=lambda *args: applied.append(args)),
-        completion=None, lesson_execution=None)
+        completion=None)
     transitions = SimpleNamespace(run=lambda now: (False, False))
     worker = PracticeTimeline(
         observations=SimpleNamespace(observe=lambda: 110.0),

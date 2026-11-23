@@ -15,14 +15,14 @@ from .musical_scheduler import SCHEDULER
 
 class SelectedRecovery:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
-                 continuation, lesson_execution, exposure_workflows, clock):
+                 continuation, course, exposure_workflows, clock):
         self.lesson = lesson
         self.notices = notices
         self.take = take
         self.transport = transport
         self.transport_timing = transport_timing
         self.continuation = continuation
-        self.lesson_execution = lesson_execution
+        self.course = course
         self.exposure_workflows = exposure_workflows
         self.clock = clock
 
@@ -44,7 +44,7 @@ class SelectedRecovery:
         if prepared.action == "continue" and deadline is None:
             raise ValueError("Timed recovery requires a selected deadline")
         if prepared.action == "guided" and prepared.assignment is not None:
-            self.lesson_execution.begin_learn(
+            self.course.begin_learn(
                 from_beat=prepared.start, recovery=True,
                 remediation=prepared.assignment, exposure=exposure)
         else:
@@ -56,7 +56,7 @@ class SelectedRecovery:
             if prepared.action == "pause":
                 self.transport.halt_continuation()
             elif prepared.action == "guided":
-                self.lesson_execution.begin_learn(
+                self.course.begin_learn(
                     from_beat=prepared.start, recovery=True,
                     exposure=self.take.pending.decision.next_exposure)
             elif prepared.action == "continue":
@@ -105,7 +105,7 @@ class SelectedRecovery:
 class RollingRecovery:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
                  grading, recovery_streak, live_feedback_workflows,
-                 lesson_execution, clock):
+                 clock):
         self.lesson = lesson
         self.notices = notices
         self.take = take
@@ -114,7 +114,6 @@ class RollingRecovery:
         self.grading = grading
         self.recovery_streak = recovery_streak
         self.live_feedback_workflows = live_feedback_workflows
-        self.lesson_execution = lesson_execution
         self.clock = clock
 
     def apply_rolling_recovery(self, decision, phrase: Phrase, grid, score_beat: float, now: float):
@@ -234,7 +233,7 @@ class RollingRecovery:
             self.notices.fault("Could not save the recording checkpoint",
                 "Check storage, then Resume to retry this boundary.")
             raise
-        if (self.lesson_execution.flow_active()
+        if (self.lesson.flow_active
                 or not self.grading.mistake_policy().interrupt_rolling):
             # Practice flow: a take always plays to its end (no mid-take rewind).
             return None
