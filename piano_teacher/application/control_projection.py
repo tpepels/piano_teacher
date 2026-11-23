@@ -5,7 +5,7 @@ from .transport_commands import PAUSABLE_PHASES
 
 UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
-    "ui_previous", "ui_review_previous", "ui_skip",
+    "ui_previous", "ui_review_previous",
     "ui_tempo_up", "ui_tempo_down", "ui_midi_start", "ui_suspend",
     "ui_passage_previous", "ui_passage_next", "ui_stop"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
@@ -90,10 +90,7 @@ def project_controls(s: Mapping) -> dict:
         "count_in", "playing", "loading", "admitting")
     previous_visible = bool(s.get("loaded")) and not course
     previous_enabled = previous_visible and int(s.get("lesson_step", 1)) > 1
-    skip_enabled = previous_visible and bool(s.get("skip_available"))
     # A passage is an exercise group; it may contain several lesson steps.
-    # These exact previous/next passage controls have different semantics
-    # from the previous-step and no-mastery skip actions.
     passage_previous = bool(s.get("loaded")) and int(s.get("exercise", 1)) > 1
     passage_next = (bool(s.get("loaded")) and
                     int(s.get("exercise", 1)) < int(s.get("exercise_count", 1)))
@@ -105,9 +102,6 @@ def project_controls(s: Mapping) -> dict:
         bool(s.get("running")) or isinstance(s.get("playback_intent"),Mapping)
         or phase in ("count_in", "playing", "paused", "feedback",
                      "recovering", "loading", "admitting", "preview_gap"))
-    # Lesson Path exposes explicit exploration even while Flow hides
-    # compact manual navigation. Keep its availability independent.
-    path_skip = bool(s.get("loaded")) and bool(s.get("skip_available"))
     loaded = bool(s.get("loaded"))
     hands = {
         hand: {"enabled": loaded and hand != s.get("hand")}
@@ -160,10 +154,6 @@ def project_controls(s: Mapping) -> dict:
             int(s.get("lesson_step", 1)) > 1 else "",
             "enabled": bool(s.get("loaded")) and
             int(s.get("lesson_step", 1)) > 1},
-        "skip": {"action": "skip_stage" if skip_enabled else "",
-                 "enabled": skip_enabled, "visible": previous_visible},
-        "path_skip": {"action": "skip_stage" if path_skip else "",
-                      "enabled": path_skip},
         "hints": {"action": "hints" if loaded and mode == "learn" and
                    phase != "loading" else "",
                   "enabled": loaded and mode == "learn" and phase != "loading"},
@@ -188,8 +178,7 @@ def project_controls(s: Mapping) -> dict:
 # View effects of the action ACTUALLY executed by the backend, never of a
 # stale raw gesture or a label reconstructed by the Godot screen.
 NAVIGATION_ACTIONS = frozenset((
-    "select_step", "previous", "next", "hand", "skip_stage", "place_original",
-    "revisit_trouble", "learn_next", "open_at"))
+    "select_step", "previous", "next", "hand", "learn_next", "open_at"))
 CALIBRATION_ACTIONS = frozenset(("calibration_apply", "calibration_reset"))
 
 
@@ -221,7 +210,7 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
     choice = project_controls(state)[intent.removeprefix("ui_")]
     action = choice["action"]
     if not action or not choice.get("enabled", False):
-        if intent in ("ui_previous", "ui_review_previous", "ui_skip",
+        if intent in ("ui_previous", "ui_review_previous",
                       "ui_passage_previous", "ui_passage_next",
                       "ui_tempo_up", "ui_tempo_down"):
             raise ValueError("This control is no longer available in the current lesson")
@@ -234,8 +223,6 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
         return action, {"number": int(state["lesson_step"]) - 1}
     if intent == "ui_review_previous":
         return action, {"number": max(1, int(state["lesson_step"]) - 2)}
-    if intent == "ui_skip":
-        return action, {"reason": "Learner skipped to the next lesson from the practice screen"}
     if intent == "ui_listen" and action == "practice" and not flow(state):
         return action, {"wait_for_player": True}
     return action, {}

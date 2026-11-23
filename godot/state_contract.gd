@@ -7,7 +7,7 @@ const VERSION := 7
 const STATIC_KEYS := ["import_warnings"]
 const REQUIRED := ["schema_version", "loaded", "controls"]
 const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline"]
-const CONTROL_ACTIONS := ["primary", "pause", "retry", "listen", "previous", "review_previous", "skip", "path_skip", "passage_previous", "passage_next", "stop", "hints", "midi_start", "tempo_up", "tempo_down"]
+const CONTROL_ACTIONS := ["primary", "pause", "retry", "listen", "previous", "review_previous", "passage_previous", "passage_next", "stop", "hints", "midi_start", "tempo_up", "tempo_down"]
 const MOTION_KINDS := ["hold", "target", "retain", "run"]
 const SCHEMA := {
     "auto": ["bool"],
@@ -86,7 +86,6 @@ const SCHEMA := {
     "phase": ["string"],
     "piece_fingerprint": ["string"],
     "piece_last_bar": ["number"],
-    "placement_available": ["bool"],
     "play_from_beat": ["number"],
     "playback_intent": ["dict", "null"],
     "playback_timeline": ["dict"],
@@ -109,7 +108,6 @@ const SCHEMA := {
     "seek_range": ["dict", "null"],
     "selected_start_bar": ["number"],
     "short_rest_latency_seconds": ["number"],
-    "skip_available": ["bool"],
     "stage_change": ["string"],
     "stage_family": ["string"],
     "stage_key": ["string"],

@@ -17,9 +17,8 @@ COMMAND_ROUTES = {
     **dict.fromkeys(("midi_range_start", "midi_range_cancel"), "device_range"),
     "reset_path": "reset",
     **dict.fromkeys(("score_ready", "demo_ready"), "acknowledgement"),
-    **dict.fromkeys(("listen", "perform", "practice_weak", "review_retry", "seek"), "listening"),
-    **dict.fromkeys(("learn_next", "skip_stage", "place_original",
-                     "revisit_trouble", "learn", "learn_retry",
+    **dict.fromkeys(("listen", "perform", "seek"), "listening"),
+    **dict.fromkeys(("learn_next", "learn", "learn_retry",
                      "open_at", "hints"), "learning"),
     **dict.fromkeys(("practice", "stop", "start", "restart", "pause", "resume"), "transport"),
 }

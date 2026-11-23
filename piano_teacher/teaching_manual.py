@@ -4,7 +4,7 @@ Inputs are immutable source-local credits and validated scalar intent. This
 module does not know about an engine, database, clock or renderer.
 """
 from dataclasses import dataclass
-from .teaching_course import manual_progress, steps, select_cursor
+from .teaching_course import manual_progress
 from .learner_state import guided_units
 from .course_navigation import choose_source_opening
 from .measure_grid import phrase_grid
@@ -21,9 +21,6 @@ class GuidedCredits:
 @dataclass(frozen=True, slots=True)
 class ManualFacts:
     credits: tuple[GuidedCredits, ...] = ()
-    trouble: tuple[tuple, ...] = ()  # stage, start, end, source indices
-    review: tuple[tuple, ...] = ()   # first/last bar, start/end beat, errors
-    review_current: bool = False
     paused: bool = False
     guidance_completed: bool = False
     source_changed: bool = False
@@ -76,43 +73,6 @@ def choose_manual(event, state):
         start = c.piece.bar_boundaries[target.bar-1]-c.stage.variant.phrase.start
         mode = target.mode
         continuation = "guided" if mode == "learn" else "continue"
-    elif action == "skip_stage":
-        options = steps(c)
-        index = next(i for i, step in enumerate(options) if step[3] == c.key)
-        if not isinstance(event.reason, str) or not event.reason.strip() or index+1 >= len(options):
-            raise ValueError("Choose an available next step and explain the skip")
-        c = manual_progress(c, "select_step", number=index+2)
-        # A whole-piece Perform step is an actual performance assessment.
-        # It has no guided note-finding phase, even when reached by explicit
-        # skips from an earlier learning stage.
-        if c.exercise.kind == "perform":
-            mode, continuation, start, end = "perform", "continue", 0., None
-        else:
-            mode, continuation = "learn", "guided"
-            selected = next_guided_range(c, facts.credits)
-            if selected:
-                start, end = selected
-            else:
-                mode, continuation, start = "practice", "continue", 0.
-    elif action == "place_original":
-        if c.stage.variant.level == "original":
-            raise ValueError("You are already playing the original notes")
-        v = next(i for i, stage in enumerate(c.stages) if stage.variant.level == "original")
-        c = select_cursor(c, (*c.progress.cursor[:2], v))
-        mode, continuation = "learn", "guided"
-        selected = next_guided_range(c, facts.credits)
-        if selected:
-            start, end = selected
-        else:
-            mode, continuation, start = "practice", "continue", 0.
-    elif action == "revisit_trouble":
-        entry = next((u for u in facts.trouble if u[0] == event.requested_stage and u[1] == event.from_beat), None)
-        target = next((step for step in steps(c) if step[3] == event.requested_stage), None)
-        if entry is None or target is None:
-            raise ValueError("This trouble spot is no longer available")
-        c = select_cursor(c, target[:3]).with_progress(bpm=state.progress.bpm)
-        start, end = entry[1:3]
-        mode, continuation = "learn", "guided"
     elif action == "perform":
         if event.scope not in (None, "current", "whole"):
             raise ValueError("Choose the current passage or whole piece")
@@ -123,15 +83,6 @@ def choose_manual(event, state):
             variants = c.definition.stages(c.exercise, c.hands[h])
             c = c.with_progress(cursor=(index,h,len(variants)-1), bpm=state.progress.bpm)
         mode = "perform"
-    elif action in ("review_retry", "practice_weak"):
-        if not facts.review_current or not facts.review:
-            raise ValueError("Finish an assessed attempt before retrying a section")
-        selected = (facts.review[0] if action == "practice_weak" else
-            next((u for u in facts.review if u[:2] == (event.first_bar,event.last_bar)), None))
-        if selected is None or selected[4] <= 0:
-            raise ValueError("Choose a difficult section from the latest assessment")
-        start, end = selected[2:4]
-        mode = "practice"
     elif action == "seek":
         if not facts.paused:
             raise ValueError("Pause before choosing a source bar")

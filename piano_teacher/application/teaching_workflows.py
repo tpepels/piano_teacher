@@ -51,11 +51,6 @@ class LearnerEvidence:
     def credits(self, fingerprint: str):
         return self.learner_progress.teaching_credits(fingerprint)
 
-    def trouble_spots(self, plan, *, fingerprint: str,
-                      stage_key: str | None = None) -> list[dict]:
-        return self.learner_progress.valid_trouble_spots(
-            plan, fingerprint=fingerprint, stage_key=stage_key)
-
     def retry_context(self, result, *, plan, fingerprint: str,
                       from_beat: float, end_beat=None):
         return self.learning_evidence.adaptive_context(
@@ -84,11 +79,6 @@ class TeachingDecisions:
             result, plan=self.source_identity.plan,
             fingerprint=self.source_identity.fingerprint,
             from_beat=self.transport.play_from_beat, end_beat=end_beat)
-
-    def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
-        return self.evidence.trouble_spots(
-            self.source_identity.plan,
-            fingerprint=self.source_identity.fingerprint, stage_key=stage_key)
 
     def binding(self):
         owner = self.take
@@ -128,11 +118,6 @@ class TeachingDecisions:
             self.evidence.policies.diagnosis, self.evidence.policies.learner,
             getattr(p.lesson_generator, "catalog", None),
             ManualFacts(credits=self.evidence.credits(self.source_identity.fingerprint),
-                trouble=tuple((unit["stage_key"],unit["start_beat"],unit["end_beat"],tuple(unit["source_indices"]))
-                    for unit in self.valid_trouble_spots()),
-                review=tuple((u["first_bar"],u["last_bar"],u["start_beat"],u["end_beat"],u["errors"])
-                    for u in (self.take.performance_summary or {}).get("sections",())),
-                review_current=self.take.review_stage_identity == p.identity,
                 paused=self.transport.paused,
                 guidance_completed=bool(self.guided_session.controller is not None and self.guided_session.controller.snapshot(now=self.clock())["completed"]),
                 open_from_beat=self.lesson_cursor.opening_beat,pending_rewind=self.transport.pending_rewind))

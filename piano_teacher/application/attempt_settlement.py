@@ -593,43 +593,14 @@ class AttemptSettlement:
                     "wrong_missed_source_ids": [n.note.source_id for n in result.notes if n.status in ("wrong","missed")] if result is not None else [],
                     "origin": "automatic", "state": "applied"}, decision_id=decision.decision_id)
                 self.capture.persist()
-                if result is not None and pending.event.kind == "full_result":
-                    if decision.verdict is not None and decision.verdict.clears_trouble:
-                        self.learner_progress.resolve_trouble(
-                            fingerprint=state.binding.fingerprint,
-                            stage_key=state.binding.stage_key)
                 if pending.event.kind == "guided_completed" and pending.event.completed and not state.route.remediation_active:
                     from ..learner_state import guided_units
                     unit = next((unit for unit in guided_units(plan.active_variant,plan.piece.bar_boundaries)
                         if (unit["start_beat"],unit["end_beat"]) == state.route.guided_range),None)
                     self.learner_progress.record_guided_preparation(fingerprint=state.binding.fingerprint,
                         stage_key=state.binding.stage_key,unit=unit,assisted_count=pending.event.assisted_count)
-                if pending.event.kind == "rolling_result" and state.binding.fingerprint:
-                    from ..learner_state import guided_units
-                    rolling = pending.event.rolling
-                    unit = next((unit for unit in guided_units(plan.active_variant, plan.piece.bar_boundaries)
-                        if unit["start_beat"] == rolling.restart_beat and unit["end_beat"] == rolling.end_beat), None)
-                    if unit is not None:
-                        self.learner_progress.record_rolling_trouble(fingerprint=state.binding.fingerprint,
-                            stage_key=state.binding.stage_key, unit=unit, assessed_notes=result.notes,
-                            phrase_start=state.course.stage.variant.phrase.start)
-                if performance_summary is not None and state.binding.fingerprint:
-                    if (decision.verdict is not None
-                            and decision.verdict.clears_trouble):
-                        self.learner_progress.resolve_trouble(
-                            fingerprint=state.binding.fingerprint,
-                            stage_key=state.binding.stage_key)
-                    else:
-                        for unit in performance_summary["weakest_bars"]:
-                            self.learner_progress.record_saved_trouble(plan,
-                                fingerprint=state.binding.fingerprint,
-                                phrase_start=state.course.stage.variant.phrase.start, assessed_notes=result.notes,
-                                start=unit["start_beat"], end=unit["end_beat"], errors=unit["errors"])
                 plan.apply_teaching_progress(decision.progress_after,
                     definition=decision.definition_after, expected=expected)
-                hook = getattr(plan.lesson_generator, "with_feedback", None)
-                if callable(hook) and decision.feedback_after != state.source_feedback:
-                    plan.lesson_generator = hook(dict(decision.feedback_after), decision.definition_after)
                 if continuation is not None:
                     continuation.validate_reservation(pending)
                 self.repository.save(plan, state.binding.fingerprint)

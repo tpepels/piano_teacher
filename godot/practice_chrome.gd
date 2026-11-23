@@ -39,7 +39,6 @@ var progress_label: Label
 var tempo_down_button: Button
 var tempo_up_button: Button
 var game_streak: Control
-var practice_skip_button: Button
 var practice_previous_button: Button
 var feedback_label: Label
 var performance_review: PerformanceReviewStrip
@@ -67,7 +66,6 @@ var spoken_countin_toggle: CheckButton
 var spoken_countin_status: Label
 var spoken_countin_test_button: Button
 signal previous_requested
-signal skip_requested
 signal dismiss_resume_requested
 signal review_previous_requested
 signal resume_measure_requested
@@ -266,14 +264,6 @@ func build() -> void:
     practice_previous_button.size_flags_horizontal = Control.SIZE_SHRINK_END
     challenge_bar.add_child(practice_previous_button)
     # Navigation stays outside the three fixed transport controls.
-    practice_skip_button = _button("Next lesson", func(): skip_requested.emit(),
-        false, "navigation")
-    practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
-    practice_skip_button.call("set_icon_only",true)
-    practice_skip_button.disabled = true
-    practice_skip_button.visible = false
-    practice_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_END
-    challenge_bar.add_child(practice_skip_button)
     feedback_label = UI.label("Ready", 14, MUTED)
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -353,8 +343,6 @@ func build() -> void:
     # The resume choice above is inline, never a blocking Window.
     review_sheet = preload("res://review_sheet.gd").new()
     modal_layer.add_child(review_sheet)
-    review_sheet.retry_requested.connect(func(first_bar: int, last_bar: int):
-        command_requested.emit({"action":"review_retry","first_bar":first_bar,"last_bar":last_bar}))
 
 func _toggle_details() -> void:
     if details_popup.visible:

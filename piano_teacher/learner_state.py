@@ -67,21 +67,6 @@ def next_guided_unit(variant: ExerciseVariant, boundaries: tuple[float, ...] = (
                  if not any(isinstance(saved, dict) and _same_unit(unit, saved) for saved in completed)), None)
 
 
-def placement_candidate(plan):
-    """Offer the current hand's original notes as an optional placement start.
-
-    This is a suggestion, never a skill inference or automatic exemption. The
-    caller must explicitly select it and record skipped/placed stages. The
-    original stage still needs its normal three clean full target-speed takes.
-    Existing generator rules already omit nearly redundant simplified stages.
-    """
-    if plan.active_variant.level == "original":
-        return None
-    return next((step for step in plan.lesson_steps
-                 if step.exercise_index == plan.index and step.hand == plan.hand
-                 and step.level == "original"), None)
-
-
 def _identity(fingerprint: str, stage_key: str):
     if not all(isinstance(value, str) and value.strip() for value in (fingerprint, stage_key)):
         raise ValueError("A saved learner state needs a piece fingerprint and exact stage key")
@@ -177,36 +162,6 @@ class LearnerStateStore:
                                WHERE fingerprint=? AND stage_key=? AND resume_unit=?""",
                             (fingerprint, stage_key, _json(unit)))
 
-    def record_trouble(self, fingerprint: str, stage_key: str, unit: dict, *, errors: int, pitches=()):
-        _identity(fingerprint, stage_key)
-        unit = _unit(unit)
-        if not isinstance(errors, int) or isinstance(errors, bool) or errors <= 0:
-            raise ValueError("Trouble must describe a positive number of settled errors")
-        if (not isinstance(pitches, (tuple, list, set))
-                or any(not isinstance(pitch, int) or isinstance(pitch, bool) or not 0 <= pitch <= 127 for pitch in pitches)):
-            raise ValueError("Trouble pitches must be valid MIDI note numbers")
-        with sqlite_atomic(self.db):
-            self._ensure_unit(fingerprint, stage_key, unit)
-            key = (fingerprint, stage_key, unit['start_beat'], unit['end_beat'])
-            failures, old_pitches, resolved = self.db.execute("""SELECT failures,pitches,resolved FROM learner_units
-                WHERE fingerprint=? AND stage_key=? AND start_beat=? AND end_beat=?""", key).fetchone()
-            combined = sorted(set(pitches) | (set() if resolved else set(json.loads(old_pitches))))
-            self.db.execute("""UPDATE learner_units SET failures=?,errors=?,pitches=?,resolved=0
-                               WHERE fingerprint=? AND stage_key=? AND start_beat=? AND end_beat=?""",
-                            (1 if resolved else failures+1, errors, _json(combined), *key))
-
-    def resolve_trouble(self, fingerprint: str, stage_key: str, unit: dict | None = None):
-        """Call only after evidence of improvement, e.g. a clean full take."""
-        _identity(fingerprint, stage_key)
-        unit = _unit(unit) if unit is not None else None
-        with sqlite_atomic(self.db):
-            query = "UPDATE learner_units SET resolved=1 WHERE fingerprint=? AND stage_key=?"
-            values = (fingerprint, stage_key)
-            if unit is not None:
-                query += " AND start_beat=? AND end_beat=?"
-                values += (unit['start_beat'], unit['end_beat'])
-            self.db.execute(query, values)
-
     def trouble_for_piece(self, fingerprint: str, *, include_resolved: bool = False) -> list[dict]:
         _identity(fingerprint, "piece-query")
         rows = self.db.execute("""SELECT stage_key,unit,failures,errors,pitches,resolved FROM learner_units
@@ -216,17 +171,3 @@ class LearnerStateStore:
                  "pitches": json.loads(row[4]), "resolved": bool(row[5])}
                 for row in rows if include_resolved or not row[5]]
 
-    def mark_skipped(self, fingerprint: str, stage_key: str, *, reason: str, status: str = "skipped"):
-        _identity(fingerprint, stage_key)
-        if status not in ("skipped", "placed") or not isinstance(reason, str) or not reason.strip():
-            raise ValueError("Skip/placement needs an explicit skipped or placed status and a reason")
-        with sqlite_atomic(self.db):
-            self._ensure_stage(fingerprint, stage_key)
-            self.db.execute("UPDATE learner_stages SET skip_status=?,skip_reason=? WHERE fingerprint=? AND stage_key=?",
-                            (status, reason.strip(), fingerprint, stage_key))
-
-    def reactivate(self, fingerprint: str, stage_key: str):
-        _identity(fingerprint, stage_key)
-        with sqlite_atomic(self.db):
-            self.db.execute("UPDATE learner_stages SET skip_status='active',skip_reason='' WHERE fingerprint=? AND stage_key=?",
-                            (fingerprint, stage_key))

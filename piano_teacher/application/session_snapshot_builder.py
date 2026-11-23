@@ -13,7 +13,6 @@ from ..state_projection import (
     ActivitySnapshot, GuidedSnapshot, SessionSnapshot, TimingSnapshot,
 )
 from .lesson_snapshot import build_lesson_snapshot
-from ..learner_state import placement_candidate
 
 
 @dataclass(frozen=True)
@@ -104,8 +103,6 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     activity = ActivitySnapshot(
         sampled_at=sampled_at,
         learner=reads.learner_snapshot() if p is not None else None,
-        placement_available=(placement_candidate(p) is not None) if p is not None else False,
-        skip_available=(p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
         seek_available=state.paused and seek_grid is not None,
         seek_range=({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
                     if seek_grid is not None else None),

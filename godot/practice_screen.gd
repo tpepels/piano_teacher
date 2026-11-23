@@ -57,8 +57,6 @@ var tempo_up_button: Button:
     get: return _chrome.tempo_up_button
 var game_streak: Control:
     get: return _chrome.game_streak
-var practice_skip_button: Button:
-    get: return _chrome.practice_skip_button
 var practice_previous_button: Button:
     get: return _chrome.practice_previous_button
 var feedback_label: Label:
@@ -139,7 +137,6 @@ func _ready() -> void:
     _chrome.metronome_toggled.connect(func(enabled: bool): metronome_toggled.emit(enabled))
     _chrome.score_retry_requested.connect(func(): score_retry_requested.emit())
     _chrome.previous_requested.connect(_previous_lesson)
-    _chrome.skip_requested.connect(_skip_lesson)
     _chrome.dismiss_resume_requested.connect(_dismiss_resume_hint)
     _chrome.review_previous_requested.connect(_review_previous_steps)
     _chrome.resume_measure_requested.connect(_resume_choose_measure)
@@ -168,7 +165,6 @@ func _present_flow(parsed: Dictionary) -> bool:
             flow_status_label.text = status
     practice_retry_button.visible = bool(_control("retry").get("visible",false))
     practice_previous_button.visible = bool(_control("previous").get("visible",false))
-    practice_skip_button.visible = bool(_control("skip").get("visible",false))
     speed_label.visible = not active
     practice_details_button.visible = not active
     if active:
@@ -260,7 +256,6 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
     var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
     practice_previous_button.disabled = _busy or not bool(_control("previous").get("enabled",false))
-    practice_skip_button.disabled = _busy or not bool(_control("skip").get("enabled",false))
     var progress_text := ""
     var progress_tone: Color = progress_label.get_theme_color("font_color")
     if learning:
@@ -464,7 +459,6 @@ func present_busy(busy: bool) -> void:
     _busy = busy
     tempo_down_button.disabled = busy or not bool(_control("tempo_down").get("enabled",false))
     tempo_up_button.disabled = busy or not bool(_control("tempo_up").get("enabled",false))
-    practice_skip_button.disabled = busy or not bool(_control("skip").get("enabled",false))
     practice_previous_button.disabled = busy or not bool(_control("previous").get("enabled",false))
 
 func present_score(status: Dictionary) -> void:
@@ -490,7 +484,7 @@ func begin_action(requested: String, pending := "") -> void:
         return
     var verb: String = {"listen":"Preparing piano audio","practice":"Returning to practice",
         "start":"Starting count-in","pause":"Pausing","resume":"Resuming","restart":"Restarting the passage",
-        "skip_stage":"Loading next lesson","select_step":"Opening lesson","stop":"Stopping"}.get(requested,"Applying " + requested.replace("_"," "))
+"select_step":"Opening lesson","stop":"Stopping"}.get(requested,"Applying " + requested.replace("_"," "))
     present_message(verb + "…",true)
     stage.practice_playback_banner.text = verb + "…"
     stage.practice_playback_banner.visible = true
@@ -543,13 +537,6 @@ func open_advanced_pause() -> void:
 func _previous_lesson() -> void:
     if not _busy and bool(_control("previous").get("enabled",false)):
         command_requested.emit({"action":"ui_previous"})
-
-func _skip_lesson() -> void:
-    if not _busy and bool(_control("skip").get("enabled",false)):
-        command_requested.emit({"action":"ui_skip"})
-
-## Bind the persistent audio service once, after PracticeScreen _ready().
-## The status stays in More; no new warning strip overlaps the moving score.
 
 func is_source_picker_open() -> bool:
     return open_picker != null and open_picker.visible

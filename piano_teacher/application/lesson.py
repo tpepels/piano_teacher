@@ -93,8 +93,6 @@ class Lesson:
     def prepare_decision(self, *args, **kwargs):
         return self._decisions.prepare(*args, **kwargs)
 
-    def valid_trouble_spots(self, *args, **kwargs):
-        return self._decisions.valid_trouble_spots(*args, **kwargs)
 
 
     # --- Guided (untimed Free) selection -----------------------------

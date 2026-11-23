@@ -23,8 +23,6 @@ var stop_button: Button
 var previous_passage_button: Button
 var next_passage_button: Button
 var hand_buttons: Dictionary = {}
-var skip_button: Button
-var placement_button: Button
 var reset_button: Button
 var reset_confirmation: VBoxContainer
 var _reset_fingerprint := ""
@@ -164,14 +162,6 @@ func _ready() -> void:
             else "More lesson options ▸"),false,"secondary")
     path_options.add_child(more_toggle)
     path_options.add_child(more_options)
-    var course_choices := HFlowContainer.new()
-    course_choices.add_theme_constant_override("separation", 8)
-    more_options.add_child(course_choices)
-    skip_button = _button("Skip this step · no mastery", func(): command_requested.emit({"action": "skip_stage", "reason": "Learner chose to skip this step"}), false, "review")
-    skip_button.custom_minimum_size.x = 220
-    course_choices.add_child(skip_button)
-    placement_button = _button("Try original notes", func(): command_requested.emit({"action": "place_original"}), false, "primary")
-    course_choices.add_child(placement_button)
     # The outer scroll owns the whole path. A nested expanding ScrollContainer
     # has zero minimum height inside it, hiding every lesson stage.
     var advanced := _button("Advanced practice controls", func(): advanced_requested.emit(), false, "settings")
@@ -183,14 +173,14 @@ func _ready() -> void:
         _show_path_reset_confirmation, false, "danger")
     reset_button.disabled = true
     reset_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    reset_button.tooltip_text = "Erase saved mastery, tempo, skipped steps and trouble spots for this song only"
+    reset_button.tooltip_text = "Erase saved mastery and tempo for this song only"
     more_options.add_child(reset_button)
     reset_confirmation = UI.stack(8)
     reset_confirmation.name = "ResetPathConfirmation"
     reset_confirmation.visible = false
     more_options.add_child(reset_confirmation)
     var reset_warning := UI.label(
-        "Reset this song to step 1? All saved tempos, mastery, completed notes and skipped steps for this song will be erased. Other songs are unaffected.",
+        "Reset this song to step 1? All saved tempos, mastery, and completed notes for this song will be erased. Other songs are unaffected.",
         15, INK)
     reset_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     reset_confirmation.add_child(reset_warning)
@@ -250,7 +240,6 @@ func present_context(state: Dictionary, busy: bool) -> void:
     hints_toggle.disabled = _busy or not bool(
         controls.get("hints",{}).get("enabled",false))
     hints_toggle.set_pressed_no_signal(bool(state.get("hints_enabled",false)))
-    placement_button.visible = bool(state.get("placement_available",false))
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
         button.set_selected(str(state.get("hand","")) == hand)
@@ -273,9 +262,6 @@ func present_busy(busy: bool) -> void:
     if stop_button != null:
         stop_button.disabled = busy or not bool(
             controls.get("stop",{}).get("enabled",false))
-    if skip_button != null:
-        skip_button.disabled = busy or not bool(
-            controls.get("path_skip",{}).get("enabled",false))
     if mode_choice != null:
         mode_choice.disabled = busy or not bool(_context.get("loaded",false))
     if hints_toggle != null:
@@ -351,17 +337,6 @@ func present_overview(values: Dictionary) -> void:
     for child in rows.get_children():
         rows.remove_child(child)
         child.queue_free()
-    var trouble: Array = parsed.get("trouble_spots", [])
-    if not trouble.is_empty():
-        rows.add_child(UI.label("Your trouble spots", 18, INK, true))
-        for spot in trouble:
-            var stage_key: String = str(spot.get("stage_key", ""))
-            var from_beat: float = float(spot.get("start_beat", 0))
-            var revisit := _button("Revisit bars %d–%d" % [int(spot.get("first_bar", 1)), int(spot.get("last_bar", 1))],
-                func(): command_requested.emit({"action": "revisit_trouble", "stage_key": stage_key, "start_beat": from_beat}))
-            revisit.call("configure", "review")
-            revisit.tooltip_text = "Find these notes again, then return to rhythm practice"
-            rows.add_child(revisit)
     var groups: Dictionary = {}
     for step in parsed.get("steps", []):
         var key := str(step.get("exercise", 0))
@@ -372,8 +347,6 @@ func present_overview(values: Dictionary) -> void:
         group["complete"] = bool(group["complete"]) and bool(step.get("completed", false))
         group["current"] = bool(group["current"]) or int(step.get("number", 0)) == int(parsed.get("current_step", 0))
         var detail := "%s: %s" % [str(step.get("hand", "")).capitalize(), str(step.get("level", "")).capitalize()]
-        if str(step.get("skip_status", "active")) in ["skipped", "placed"] and not bool(step.get("completed", false)):
-            detail += " (%s; not mastered)" % str(step["skip_status"])
         group["labels"].append(detail)
     # A 600-step course must not draw hundreds of mostly identical panels.
     # Expose the active passage and a short before/after window; the exact

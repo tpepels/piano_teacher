@@ -81,8 +81,6 @@ class ActivitySnapshot(_Snapshot):
     pending_transition: bool = False
     review_pending: bool = False
     learner: Mapping | None = None
-    placement_available: bool = False
-    skip_available: bool = False
     seek_available: bool = False
     seek_range: Mapping | None = None
     next_action: str = ""
@@ -219,8 +217,6 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
     result = {
         "clock_sampled_at_ms": activity.sampled_at * 1000.0,
         "learner": _payload(activity.learner),
-        "placement_available": activity.placement_available,
-        "skip_available": activity.skip_available,
         "seek_available": activity.seek_available,
         "seek_range": _payload(activity.seek_range),
         "next_action": activity.next_action,

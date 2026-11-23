@@ -32,7 +32,7 @@ LOADED_REQUIRED = (
 # These names are presentation ports, generated to Godot from this owner.
 CONTROL_ACTIONS = (
     "primary", "pause", "retry", "listen", "previous", "review_previous",
-    "skip", "path_skip", "passage_previous", "passage_next", "stop",
+    "passage_previous", "passage_next", "stop",
     "hints", "midi_start", "tempo_up", "tempo_down",
 )
 MOTION_KINDS = ("hold", "target", "retain", "run")
@@ -117,7 +117,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "phase": ('string',),
     "piece_fingerprint": ('string',),
     "piece_last_bar": ('number',),
-    "placement_available": ('bool',),
     "play_from_beat": ('number',),
     "presentation_directive": ('dict',),
     "practice_preparation": ('dict', 'null'),
@@ -137,7 +136,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "seek_available": ('bool',),
     "seek_range": ('dict', 'null'),
     "selected_start_bar": ('number',),
-    "skip_available": ('bool',),
     "stage_change": ('string',),
     "stage_family": ('string',),
     "stage_key": ('string',),

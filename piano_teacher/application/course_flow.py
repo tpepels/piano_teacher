@@ -1,11 +1,9 @@
 """The lesson's course flow and the learner's navigation commands.
 
 CourseFlow executes the selected course step (Listen, Free, Tempo),
-guided preparation and selected exposures; only the registered lesson
-generator selects stages and tempo. LessonNavigation applies the
-learner's navigation commands (skip, place, revisit trouble, review a
-section, practise weak spots, seek, open a measure, change the stage or
-tempo) and answers the lesson read ports.
+guided preparation and selected exposures; only the Practice Flow
+generator selects stages and tempo. LessonNavigation applies seek, open
+at a measure and stage/tempo changes, and answers the lesson read ports.
 """
 from __future__ import annotations
 from ..music import Phrase
@@ -150,72 +148,6 @@ class LessonNavigation:
         return self.learner_progress.snapshot(
             self.lesson.plan, fingerprint=self.lesson.fingerprint, mode=self.transport.mode,
             guided_range=self.lesson.guided_beat_range, course_guided=self.lesson.course_guided)
-
-    def skip_stage(self, reason, *, effect=None):
-        effect = self.lesson.manual_effect(
-            "skip_stage", values={"reason":reason}, effect=effect)
-        self.learner_progress.mark_skipped(fingerprint=self.lesson.fingerprint, stage_key=self.lesson.plan.identity, reason=reason)
-        selected = self._restart_course(effect, reason="skip_stage")
-        self.course.enter_selected_exposure(selected,reason="skip_stage")
-        self._save()
-
-    def place_original(self, *, effect=None):
-        if self.lesson.plan is None:
-            raise ValueError("Open a piece first")
-        effect = self.lesson.manual_effect(
-            "place_original", effect=effect)
-        key = effect.decision.next_exposure.stage_key
-        candidate = next(step for step in self.lesson.plan.lesson_steps if step.key == key)
-        self.learner_progress.mark_prior_steps_placed(self.lesson.plan, fingerprint=self.lesson.fingerprint, candidate=candidate)
-        selected = self._restart_course(effect, reason="place_original")
-        self.course.enter_selected_exposure(selected,reason="place_original")
-        self._save()
-
-    def _restart_course(self, effect, *, reason: str):
-        """Stop, install the selected step, clear trouble, resume the course."""
-        self._stop(reason=reason)
-        selected = self.lesson.install_command(effect)
-        self.course.reset_trouble()
-        self.lesson.set_course_guided(True)
-        return selected
-
-    def revisit_trouble(self, stage_key, start_beat, *, effect=None):
-        effect = self.lesson.manual_effect(
-            "revisit_trouble", from_beat=start_beat,
-            values={"stage_key":stage_key}, effect=effect)
-        selected = self._restart_course(effect, reason="revisit_trouble")
-        self.learner_progress.reactivate_trouble(fingerprint=self.lesson.fingerprint, stage_key=selected.stage_key)
-        grid = phrase_grid(self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries)
-        self.take.prepare_section(start=selected.from_beat,end=selected.end_beat,
-            first_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.from_beat),
-            last_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.end_beat)-1)
-        self.course.begin_learn(from_beat=selected.from_beat,recovery=True,exposure=selected,
-            reason="revisit_trouble")
-        self._save()
-
-    def review_retry(self, first_bar, last_bar, *, effect=None):
-        effect = self.lesson.manual_effect(
-            "review_retry",values={"first_bar":first_bar,"last_bar":last_bar},
-            effect=effect)
-        selected = self.lesson.install_command(effect)
-        self.exposure_workflows.prepare_practice(exposure=selected,reason="review_retry")
-        self.lesson.select_opening(selected.from_beat)
-        self.take.prepare_section(start=self.lesson.opening_beat,
-            end=selected.end_beat or self.lesson.plan.active_phrase.end-self.lesson.plan.active_phrase.start,
-            first_bar=first_bar,last_bar=last_bar)
-        self.transport.prepare_section_review()
-        self.notices.feedback = f"Ready to repeat measures {first_bar}-{last_bar}"
-        self.notices.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
-
-    def practice_weak(self, *, effect=None):
-        effect = self.lesson.manual_effect("practice_weak", effect=effect)
-        selected = self.lesson.install_command(effect)
-        self.exposure_workflows.prepare_practice(exposure=selected,reason="practice_weak")
-        self.lesson.select_opening(selected.from_beat)
-        self.take.prepare_section(start=self.lesson.opening_beat,
-            end=selected.end_beat or self.lesson.plan.active_phrase.end-self.lesson.plan.active_phrase.start)
-        self.transport.prepare_section_review()
-        self.notices.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
 
     def seek_grid(self) -> tuple[float, ...] | None:
         if (self.lesson.plan is None or self.transport.mode not in ("learn", "practice", "perform")

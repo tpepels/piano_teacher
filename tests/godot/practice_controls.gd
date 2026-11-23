@@ -52,8 +52,8 @@ func run() -> void:
     check(view.start_button.visible and view.start_button.text == "Pause"
         and view.listen_button.visible and view.listen_button.text == "Listen again"
         and view.metronome_switch.visible,"Free exposes the normal practice controls")
-    check(not view.practice_retry_button.visible and not view.practice_previous_button.visible
-        and not view.practice_skip_button.visible,"Default flow progresses without manual lesson controls")
+    check(not view.practice_retry_button.visible and not view.practice_previous_button.visible,
+        "Default flow progresses without manual lesson controls")
     check(view.flow_status_label.text.contains("2–3") and view.flow_status_label.text.contains("Right hand")
         and view.flow_status_label.text.contains("Free"),"Status identifies the complete window, hand and step")
     check(not view.stage.keyboard.visible,"Thinking in Free does not show a keyboard")

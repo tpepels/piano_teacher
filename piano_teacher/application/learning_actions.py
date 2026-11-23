@@ -30,11 +30,6 @@ class LearningActions:
             self.exposure_workflows.prepare_perform(
                 scope=str(kwargs.get("scope", "current")), effect=effect,
                 reason=action)
-        elif action == "practice_weak":
-            self.navigation.practice_weak(effect=effect)
-        elif action == "review_retry":
-            self.navigation.review_retry(
-                kwargs.get("first_bar"), kwargs.get("last_bar"), effect=effect)
         elif action == "seek":
             self.navigation.seek(kwargs.get("bar"), effect=effect)
 
@@ -48,13 +43,6 @@ class LearningActions:
                 self.exposure_workflows.prepare_practice(effect=effect,reason=action)
             else:
                 self.course.begin_course_stage(effect=effect,reason=action)
-        elif action == "skip_stage":
-            self.navigation.skip_stage(kwargs.get("reason"), effect=effect)
-        elif action == "place_original":
-            self.navigation.place_original(effect=effect)
-        elif action == "revisit_trouble":
-            self.navigation.revisit_trouble(
-                kwargs.get("stage_key"), kwargs.get("start_beat"), effect=effect)
         elif action in ("learn", "learn_retry"):
             if action == "learn":
                 self.lesson.set_course_guided(True)

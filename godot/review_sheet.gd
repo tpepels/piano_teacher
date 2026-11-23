@@ -1,11 +1,9 @@
 extends AcceptDialog
 
 const Design := preload("res://practice_theme.gd")
-const ActionButton := preload("res://action_button.gd")
 
 # Detailed, scrollable explanation of the authoritative note assessment.
 # No timing or scoring decisions are made here.
-signal retry_requested(first_bar: int, last_bar: int)
 
 var summary_label: Label
 var section_list: VBoxContainer
@@ -106,13 +104,6 @@ func open_review(report: Dictionary) -> void:
             content.add_child(_line(_issue_text(issues[issue_index]), 16, true))
         if issues.size() > 10:
             content.add_child(_line("…and %d additional notes" % (issues.size()-10), 15, true))
-        var repeat_button := ActionButton.new()
-        repeat_button.configure("review")
-        repeat_button.text = "Repeat " + measure_text
-        repeat_button.custom_minimum_size.y = 50
-        repeat_button.add_theme_font_size_override("font_size", 17)
-        repeat_button.pressed.connect(_repeat_section.bind(first, last))
-        content.add_child(repeat_button)
     if sections.size() > 15:
         section_list.add_child(_line("%d additional sections not shown here." % (sections.size()-15), 16, true))
     # A freshly populated AcceptDialog can open at the unconstrained
@@ -126,8 +117,3 @@ func open_review(report: Dictionary) -> void:
     max_size = target
     popup_centered(target)
     size = target
-
-
-func _repeat_section(first_bar: int, last_bar: int) -> void:
-    hide()
-    retry_requested.emit(first_bar, last_bar)
