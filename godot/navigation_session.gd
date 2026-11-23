@@ -59,8 +59,9 @@ func navigate(destination: String, state: Dictionary) -> void:
     _practice.set_active(target == "practice")
     for screen in _screens:
         var name: String = str(screen)
-        (_screens[screen] as Control).visible = (
-            name == target or name == "practice" and target != "practice")
+        # Exactly one screen is drawn. Leaving Practice suspends the
+        # session, so its score must not keep painting behind another page.
+        (_screens[screen] as Control).visible = name == target
     if target == "library":
         library_requested.emit()
         _library.call_deferred("focus_search")
