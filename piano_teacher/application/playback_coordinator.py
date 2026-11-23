@@ -621,6 +621,9 @@ class PlaybackCoordinator:
             "active_segment_id": self.active_segment_id,
             "active_take_id": self.active_take_id,
             "active_deadline_ms": self.active_deadline_ms,
+            # The native recovery reader must verify the original source
+            # and tempo, not authorize from the opaque segment ID alone.
+            "active": dict(self.active_segment) if self.active_segment else None,
         }
 
     def snapshot(self) -> tuple[dict | None, dict]:
