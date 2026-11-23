@@ -1,8 +1,9 @@
-"""One transactional application boundary for learner history and path reset.
+"""Learner history: read-only queries, deletion and lesson-path reset.
 
 Deleting durable records and replacing the installed plan are one ordered
 application operation. The musical transport is stopped by SessionLifecycle;
-this service does not own a grading clock, choose lessons or access the engine.
+these services do not own a grading clock, choose lessons or access the
+engine.
 """
 from __future__ import annotations
 
@@ -10,21 +11,11 @@ from pathlib import Path
 from ..learning import LearningPlan
 
 
-class HistoryManagement:
-    def __init__(self, *, lesson, notices, progress, measurement,
-                          recovery_streak, lifecycle, take, transport, score,
-                          learning_evidence, clock, data_dir):
+class HistoryReads:
+    def __init__(self, *, lesson, learning_evidence, progress, data_dir):
         self.lesson = lesson
-        self.notices = notices
-        self.progress = progress
-        self.measurement = measurement
-        self.recovery_streak = recovery_streak
-        self.lifecycle = lifecycle
-        self.take = take
-        self.transport = transport
-        self.score = score
         self.learning_evidence = learning_evidence
-        self.clock = clock
+        self.progress = progress
         self.data_dir = data_dir
 
     def status(self) -> dict:
@@ -41,7 +32,17 @@ class HistoryManagement:
         return self.progress.ledger.export(
             Path(path).expanduser(), include_detail=include_detail)
 
-    def _replacement(self) -> LearningPlan | None:
+
+class PlanReinstallation:
+    """Install a fresh plan for the same piece at its first step."""
+
+    def __init__(self, *, lesson, recovery_streak, transport, score):
+        self.lesson = lesson
+        self.recovery_streak = recovery_streak
+        self.transport = transport
+        self.score = score
+
+    def fresh_plan(self) -> LearningPlan | None:
         selected = self.lesson.plan
         if selected is None:
             return None
@@ -51,24 +52,46 @@ class HistoryManagement:
             exercise_strategy=selected.exercise_strategy.name,
             fukuda_mistakes=frozenset(), feedback={})
 
-    def _publish_deleted(self, replacement: LearningPlan | None, *,
-                         feedback: str) -> dict:
-        self.lesson.replace_plan(replacement)
+    def reinstall(self, replacement: LearningPlan | None) -> None:
+        self.adopt(lambda: self.lesson.replace_plan(replacement))
+
+    def adopt(self, install_plan) -> None:
+        """Install a plan (new source or fresh path) at its first step."""
         self.recovery_streak.clear()
+        install_plan()
         self.lesson.select_opening(0.0)
+        self.lesson.set_course_guided(False)
         self.transport.select_source()
         self.lesson.clear_guided_selection()
         self.score.invalidate_artifacts()
         self.lesson.advance_revision()
+
+
+class HistoryManagement:
+    def __init__(self, *, lesson, notices, progress, measurement, lifecycle,
+                 take, transport, plans, reads, clock):
+        self.lesson = lesson
+        self.notices = notices
+        self.progress = progress
+        self.measurement = measurement
+        self.lifecycle = lifecycle
+        self.take = take
+        self.transport = transport
+        self.plans = plans
+        self.reads = reads
+        self.clock = clock
+
+    def _publish_deleted(self, replacement: LearningPlan | None, *,
+                         feedback: str) -> dict:
+        self.plans.reinstall(replacement)
         self.notices.feedback = feedback
-        self.lesson.set_course_guided(False)
         self.lesson.set_hints(False, now=self.clock())
-        return self.status()
+        return self.reads.status()
 
     def delete_piece(self, fingerprint: str, *, confirm: bool = False) -> dict:
         if confirm is not True or self.lesson.plan is None or fingerprint != self.lesson.fingerprint:
             raise ValueError("Confirm deletion for the currently loaded piece")
-        replacement = self._replacement()
+        replacement = self.plans.fresh_plan()
         with self.measurement.atomic():
             self.progress.ledger.delete_piece(fingerprint)
         self.measurement.discard_deleted()
@@ -79,7 +102,7 @@ class HistoryManagement:
     def delete_learner(self, *, confirm: bool = False) -> dict:
         if confirm is not True:
             raise ValueError("Confirm deletion of all learning history and progress")
-        replacement = self._replacement()
+        replacement = self.plans.fresh_plan()
         with self.measurement.atomic():
             self.progress.ledger.delete_learner()
         self.measurement.discard_deleted()
@@ -95,21 +118,14 @@ class HistoryManagement:
             raise ValueError("Open a piece before resetting its lesson path")
         if confirm is not True or fingerprint != self.lesson.fingerprint:
             raise ValueError("Confirm the reset for the currently loaded piece")
-        replacement = self._replacement()
+        replacement = self.plans.fresh_plan()
         self.take.reset_piece_path(
             fingerprint=fingerprint, replacement=replacement,
             played=(self.take.recorder.presses if self.take.recorder
                     else self.measurement.guided.presses),
             now=self.clock())
         self.lifecycle.stop(reason="lesson_reset", persist_evidence=False)
-        self.recovery_streak.clear()
-        self.lesson.replace_plan(replacement)
-        self.lesson.select_opening(0.0)
-        self.lesson.set_course_guided(False)
-        self.transport.select_source()
-        self.lesson.clear_guided_selection()
-        self.score.invalidate_artifacts()
-        self.lesson.advance_revision()
+        self.plans.reinstall(replacement)
         self.transport.wait_for_player()
         self.notices.publish(
             "Lesson path reset to its first step",

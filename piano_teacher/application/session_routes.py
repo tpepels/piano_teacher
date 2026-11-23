@@ -58,7 +58,8 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    midi_device, midi_callback,
                    settings_workflows, pause_resume, playback_authorization,
                    source_installation, library_opening, lesson, course, score_preload,
-                   device_workflows, history_management, lifecycle):
+                   device_workflows, history_management, history_reads,
+                   lifecycle):
     """Event type -> handler(event)."""
     def physical(event):
         if (event.arrival is not None and not epoch.admits(
@@ -115,7 +116,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
             fingerprint=e.fingerprint, step_number=e.step_number,
             revision=e.revision, error=e.error),
         HardwareRequested: lambda e: device_workflows.hardware_action(e.action),
-        HistoryExported: lambda e: history_management.export(
+        HistoryExported: lambda e: history_reads.export(
             e.path, include_detail=e.include_detail),
         PieceHistoryDeleted: lambda e: history_management.delete_piece(
             e.fingerprint, confirm=e.confirm),

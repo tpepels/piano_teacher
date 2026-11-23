@@ -76,10 +76,10 @@ class PracticeEngine:
 
     def learning_history_status(self) -> dict:
         with self.lock:
-            return self.history_management.status()
+            return self.history_reads.status()
 
     def learning_statistics(self, fingerprint: str | None = None, *, query=None) -> dict:
-        return self.history_management.statistics(fingerprint, query=query)
+        return self.history_reads.statistics(fingerprint, query=query)
 
     def export_learning_history(self, path: str, include_detail: bool = False) -> dict:
         return self.practice_session.apply(HistoryExported(path, include_detail))

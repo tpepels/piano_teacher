@@ -41,7 +41,7 @@ from .exposure_workflows import ExposureWorkflows
 from .flow_course_session import PracticeFlowCourseSession
 from .future_score import FutureScore
 from .guided_session import GuidedSession
-from .history_management import HistoryManagement
+from .history_management import HistoryManagement, HistoryReads, PlanReinstallation
 from .learner_progress import LearnerProgress
 from .learning_capture import LearningCapture
 from .learning_evidence_session import LearningEvidenceSession
@@ -217,12 +217,18 @@ def _persistence_and_settlement(r) -> None:
 
 def _lesson_source_and_settings_workflows(r) -> None:
     """Lesson decisions, exposures, source/settings/device workflows."""
+    r.plans = PlanReinstallation(
+        lesson=r.lesson, recovery_streak=r.recovery_streak,
+        transport=r.transport, score=r.score)
+    r.history_reads = HistoryReads(
+        lesson=r.lesson, learning_evidence=r.learning_evidence,
+        progress=r.progress, data_dir=r._data_dir)
     r.history_management = HistoryManagement(
         lesson=r.lesson, notices=r.notices, progress=r.progress,
-        measurement=r.measurement, recovery_streak=r.recovery_streak,
-        lifecycle=r.session_lifecycle, take=r.take, transport=r.transport,
-        score=r.score, learning_evidence=r.learning_evidence, clock=r.now,
-        data_dir=r._data_dir)
+        measurement=r.measurement, lifecycle=r.session_lifecycle,
+        take=r.take, transport=r.transport,
+        plans=r.plans,
+        reads=r.history_reads, clock=r.now)
     r.listen_outcomes = ListenOutcomes(
         listen=r.listen, transport=r.transport, notices=r.notices)
     r.source_workflows = SourcePreparationWorkflow(
@@ -232,7 +238,7 @@ def _lesson_source_and_settings_workflows(r) -> None:
         library=r.library, listen_outcomes=r.listen_outcomes, lock=r.lock)
     r.source_installation = SourceInstallation(
         lesson=r.lesson, notices=r.notices, lifecycle=r.session_lifecycle,
-        recovery_streak=r.recovery_streak, transport=r.transport,
+        plans=r.plans, transport=r.transport,
         source_preparation=r.source_preparation, score=r.score, take=r.take,
         listen=r.listen, listen_outcomes=r.listen_outcomes)
     r.library_opening = LibraryOpening(
@@ -494,5 +500,6 @@ def _event_boundary(r) -> None:
         course=r.course, score_preload=r.score_preload,
         device_workflows=r.device_workflows,
         history_management=r.history_management,
+        history_reads=r.history_reads,
         lifecycle=r.session_lifecycle))
     r.midi_callback.bind_session(r.practice_session)

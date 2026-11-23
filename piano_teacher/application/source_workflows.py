@@ -58,13 +58,13 @@ class SourcePreparationWorkflow:
 
 
 class SourceInstallation:
-    def __init__(self, *, lesson, notices, lifecycle, recovery_streak,
+    def __init__(self, *, lesson, notices, lifecycle, plans,
                  transport, source_preparation, score, take, listen,
                  listen_outcomes):
         self.lesson = lesson
         self.notices = notices
         self.lifecycle = lifecycle
-        self.recovery_streak = recovery_streak
+        self.plans = plans
         self.transport = transport
         self.source_preparation = source_preparation
         self.score = score
@@ -76,18 +76,11 @@ class SourceInstallation:
         """Called with application lock and source-mutation guard held."""
         self.transport.clear_take_end()
         self.lifecycle.stop(reason="source_changed")
-        self.recovery_streak.clear()
-        self.lesson.set_course_guided(False)
-        self.lesson.install_source(
+        self.plans.adopt(lambda: self.lesson.install_source(
             plan=prepared.plan, source=str(prepared.path),
-            fingerprint=prepared.fingerprint, warmup=warmup)
-        self.lesson.select_opening(0.0)
-        self.score.invalidate_artifacts()
+            fingerprint=prepared.fingerprint, warmup=warmup))
         self.source_preparation.source_installed()
-        self.transport.select_source()
-        self.lesson.clear_guided_selection()
         self.notices.publish("Press Start to practice", "Press Start to practice.")
-        self.lesson.advance_revision()
         self.take.reset_source_presentation()
         if self.lesson.flow_applies(self.lesson.plan, warmup=warmup):
             return prepared.resumed
