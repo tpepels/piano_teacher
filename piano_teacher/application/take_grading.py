@@ -25,6 +25,11 @@ class TakeGrading:
         self.live_feedback_workflows = live_feedback_workflows
         self.measurement = measurement
 
+    @property
+    def policies(self):
+        """The configured grading policies (one per tempo map)."""
+        return self.policy_registry.grading
+
     def mistake_policy(self):
         return resolve_mistake_policy(
             self.library.settings["mistake_response_strategy"])

@@ -14,7 +14,7 @@ from .passage_outcome_presenter import performance_next_action
 
 class TakeCompletion:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
-                 timed_playback, recovery_workflows, lesson_execution,
+                 timed_playback, selected_recovery, lesson_execution,
                  grading, settlement):
         self.lesson = lesson
         self.notices = notices
@@ -22,7 +22,7 @@ class TakeCompletion:
         self.transport = transport
         self.transport_timing = transport_timing
         self.timed_playback = timed_playback
-        self.recovery_workflows = recovery_workflows
+        self.selected_recovery = selected_recovery
         self.lesson_execution = lesson_execution
         self.grading = grading
         self.settlement = settlement
@@ -75,7 +75,7 @@ class TakeCompletion:
         dispatch_effect only after its durable successor boundary.
         """
         if effect.action == "response":
-            self.recovery_workflows.apply_policy_response(
+            self.selected_recovery.apply_policy_response(
                 effect.response,now=now,visual_from=visual_from)
         elif effect.action == "perform":
             self.finish_performance_review(phrase,result)

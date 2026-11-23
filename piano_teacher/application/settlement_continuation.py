@@ -17,7 +17,7 @@ from .teaching_continuation import (
 
 class SettlementContinuation:
     def __init__(self, *, lesson, notices, score, take, transport,
-                 lesson_execution, transport_timing, recovery_workflows,
+                 lesson_execution, transport_timing, selected_recovery,
                  timed_playback, mistake_policy):
         self.lesson = lesson
         self.notices = notices
@@ -26,7 +26,7 @@ class SettlementContinuation:
         self.transport = transport
         self.lesson_execution = lesson_execution
         self.transport_timing = transport_timing
-        self.recovery_workflows = recovery_workflows
+        self.selected_recovery = selected_recovery
         self.timed_playback = timed_playback
         self.mistake_policy = mistake_policy
         # Successful effects are consumed by their exact durable identity.
@@ -191,9 +191,9 @@ class SettlementContinuation:
         if isinstance(effect,EnterSelectedExposure):
             self.lesson_execution.enter_selected_exposure(effect.exposure)
         elif isinstance(effect,ApplySelectedResponse):
-            self.recovery_workflows.apply_policy_response(effect.response,now=now,deadline=effect.deadline)
+            self.selected_recovery.apply_policy_response(effect.response,now=now,deadline=effect.deadline)
         elif isinstance(effect,EnterSelectedRemediation):
-            self.recovery_workflows.start_remedial_assignment(effect.assignment,deadline=effect.deadline,
+            self.selected_recovery.start_remedial_assignment(effect.assignment,deadline=effect.deadline,
                 exposure=effect.exposure)
         else:
             if isinstance(effect,ContinueSelectedScore):

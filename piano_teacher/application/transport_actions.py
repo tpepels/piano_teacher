@@ -11,7 +11,7 @@ class TransportActions:
     def __init__(self, *, take, clock, exposure_workflows, lesson,
                           lesson_execution, lifecycle, listen, notices,
                           settlement, transport, read_models,
-                          recovery_workflows, score, timed_playback,
+                          rolling_recovery, score, timed_playback,
                           transport_timing):
         self.take = take
         self.clock = clock
@@ -24,7 +24,7 @@ class TransportActions:
         self.settlement = settlement
         self.transport = transport
         self.read_models = read_models
-        self.recovery_workflows = recovery_workflows
+        self.rolling_recovery = rolling_recovery
         self.score = score
 
 
@@ -189,7 +189,7 @@ class TransportActions:
             return
         if self.take.pending_rolling is not None:
             decision, phrase, grid, score_beat, _old_now = self.take.pending_rolling
-            self.recovery_workflows.apply_rolling_recovery(decision, phrase, grid, score_beat, self.clock())
+            self.rolling_recovery.apply_rolling_recovery(decision, phrase, grid, score_beat, self.clock())
             self.transport.clear_pause_for_restart()
             return
         raise ValueError("No retained result to replay")

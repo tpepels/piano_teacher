@@ -1,35 +1,30 @@
-"""Apply source-bound recovery and bounded retry decisions.
+"""Apply recovery decisions to the selected source, in two owners.
 
-The configured AssessmentService policy decides recovery and graded boundaries;
-this workflow applies its existing decision to the selected source and
-canonical PlaybackSession/VisualTransport without an alternative clock.
+SelectedRecovery executes an already chosen policy response or remedial
+assignment. RollingRecovery grades a mid-take checkpoint, settles its
+durable decision once and applies its named effects exactly once (a
+retry replays only unacknowledged effects). Neither chooses a policy.
 """
 from __future__ import annotations
 from ..music import Phrase
 from ..remediation import RemedialAssignment
-from ..lesson_settings import course_rules
+from ..lesson_settings import SETTINGS, course_rules
 from .exposure_preparation import prepare_remedial, prepare_response
-from .mistake_responses import resolve_mistake_policy
 from .musical_scheduler import SCHEDULER
 
 
-class RecoveryWorkflows:
+class SelectedRecovery:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
-                          timed_playback, lesson_execution, exposure_workflows,
-                          policy_registry, library, recovery_streak,
-                          live_feedback_workflows, live_assessment, clock,
-                          feedback_seconds):
+                 timed_playback, lesson_execution, exposure_workflows, clock):
         self.lesson = lesson
         self.notices = notices
         self.take = take
         self.transport = transport
-        self.transport_timing, self.timed_playback = transport_timing, timed_playback
-        self.lesson_execution, self.exposure_workflows = lesson_execution, exposure_workflows
-        self.policy_registry = policy_registry
-        self.library, self.recovery_streak = library, recovery_streak
-        self.live_feedback_workflows, self.live_assessment = live_feedback_workflows, live_assessment
+        self.transport_timing = transport_timing
+        self.timed_playback = timed_playback
+        self.lesson_execution = lesson_execution
+        self.exposure_workflows = exposure_workflows
         self.clock = clock
-        self.feedback_seconds = feedback_seconds
 
     def _apply_prepared_recovery(self, prepared, *, now: float,
                                  deadline: float | None = None,
@@ -73,7 +68,7 @@ class RecoveryWorkflows:
                         prepared.start, now=now,
                         from_visual=(self.transport_timing.visual_motion(now)[0]
                                      if visual_from is None else visual_from),
-                        reverse_seconds=self.feedback_seconds)
+                        reverse_seconds=SETTINGS.feedback_seconds)
             else:
                 raise ValueError("Unknown selected recovery action")
         if prepared.feedback:
@@ -106,6 +101,22 @@ class RecoveryWorkflows:
         self._apply_prepared_recovery(
             prepared, now=self.clock(), deadline=deadline, exposure=exposure)
 
+
+class RollingRecovery:
+    def __init__(self, *, lesson, notices, take, transport, transport_timing,
+                 grading, recovery_streak, live_feedback_workflows,
+                 lesson_execution, clock):
+        self.lesson = lesson
+        self.notices = notices
+        self.take = take
+        self.transport = transport
+        self.transport_timing = transport_timing
+        self.grading = grading
+        self.recovery_streak = recovery_streak
+        self.live_feedback_workflows = live_feedback_workflows
+        self.lesson_execution = lesson_execution
+        self.clock = clock
+
     def apply_rolling_recovery(self, decision, phrase: Phrase, grid, score_beat: float, now: float):
         """Apply an accepted source-grid recovery decision atomically."""
         # Capture marks at the performance tempo, not at the slower
@@ -119,9 +130,7 @@ class RecoveryWorkflows:
             self.take.publish_live_marks(
                 self.live_feedback_workflows.live_feedback(
                     now-self.transport.run_at))
-            self.live_assessment.publish(
-                self.take.feedback_marks,
-                self.live_feedback_workflows.feedback_take())
+            self.live_feedback_workflows.publish_frozen(self.take.feedback_marks)
         outgoing_bpm = self.lesson.plan.bpm
         scored_end = self.transport.run_at + (
             self.transport_timing.elapsed_seconds(decision.end_beat) -
@@ -147,11 +156,11 @@ class RecoveryWorkflows:
                 decision=decision,phrase=phrase,grid=grid,score_beat=score_beat,
                 now=now,bpm=outgoing_bpm,scored_end=scored_end,hand=hand,
                 played=notes,from_beat=from_beat,
-                tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
+                tempo=self.transport_timing.active_tempo_map(),policies=self.grading.policies,
                 prepare_decision=self.lesson.prepare_decision,plan=self.lesson.plan,
                 binding=self.lesson.decision_binding(),
                 score_revision=score_revision,
-                policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
+                policy=self.grading.mistake_policy())
         except Exception:
             self.transport.halt_take_after_fault(now)
             self.notices.fault("Could not save the retry evidence",
@@ -193,7 +202,7 @@ class RecoveryWorkflows:
         apply(completed, "prepare", lambda: self.transport_timing.schedule_preparation(
             transition.restart_beat, now=now,
             from_visual=self.transport.visual_offset_beats + score_beat,
-            reverse_seconds=self.feedback_seconds, short_deadline=short_deadline))
+            reverse_seconds=SETTINGS.feedback_seconds, short_deadline=short_deadline))
         apply(completed, "streak", lambda: self.recovery_streak.record(
             transition.trouble_key, transition.trouble_count))
         apply(completed, "attempt", lambda: self.take.apply_recovery(transition))
@@ -225,12 +234,12 @@ class RecoveryWorkflows:
             self.notices.fault("Could not save the recording checkpoint",
                 "Check storage, then Resume to retry this boundary.")
             raise
-        if self.lesson_execution.flow_active() or not resolve_mistake_policy(
-                self.library.settings["mistake_response_strategy"]).interrupt_rolling:
+        if (self.lesson_execution.flow_active()
+                or not self.grading.mistake_policy().interrupt_rolling):
             # Practice flow: a take always plays to its end (no mid-take rewind).
             return None
         tempo_map = self.transport_timing.active_tempo_map()
-        return self.policy_registry.grading.select(tempo_map).recover(
+        return self.grading.policies.select(tempo_map).recover(
             self.lesson.plan.active_phrase, hand=self.lesson.plan.hand, bpm=self.lesson.plan.bpm,
             played=self.take.recorder.presses if self.take.recorder else [],
             from_beat=self.transport.play_from_beat, end_beat=boundary, grid=grid,
@@ -238,4 +247,3 @@ class RecoveryWorkflows:
                 self.lesson.plan.lesson_definition.generator_name,
                 warmup=self.lesson.warmup).recovery_errors_in_window,
             warmup=self.lesson.warmup, tempo=tempo_map)
-

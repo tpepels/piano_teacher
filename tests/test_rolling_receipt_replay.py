@@ -189,7 +189,7 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
         attempt_progression=SimpleNamespace(
             inspect=lambda *args, **kwargs: pytest.fail(
                 "Previously graded boundary must not be assessed again")),
-        recovery_workflows=SimpleNamespace(
+        rolling_recovery=SimpleNamespace(
             apply_rolling_recovery=lambda *args: applied.append(args)),
         completion=None, lesson_execution=None)
     transitions = SimpleNamespace(run=lambda now: (False, False))

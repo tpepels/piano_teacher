@@ -68,7 +68,7 @@ from .transport_actions import TransportActions
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
 from .recovery_streak import RecoveryStreak
-from .recovery_workflows import RecoveryWorkflows
+from .recovery_workflows import SelectedRecovery, RollingRecovery
 from .score_artifact_registry import ScoreArtifactRegistry
 from .score_artifacts import ScoreArtifacts
 from .score_preload_workflow import ScorePreloadWorkflow
@@ -301,17 +301,6 @@ def _transport_and_completion(r) -> None:
         live_assessment=r.live_assessment, transport_timing=r.transport_timing,
         clock=r.now)
 
-    r.recovery_workflows = RecoveryWorkflows(
-        lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
-        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
-        lesson_execution=r.lesson_execution,
-        exposure_workflows=r.exposure_workflows,
-        policy_registry=r.policy_registry, library=r.library,
-        recovery_streak=r.recovery_streak,
-        live_feedback_workflows=r.live_feedback_workflows,
-        live_assessment=r.live_assessment, clock=r.now,
-        feedback_seconds=r.feedback_seconds)
-
     r.take_grading = TakeGrading(
         lesson=r.lesson, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, score=r.score,
@@ -319,17 +308,29 @@ def _transport_and_completion(r) -> None:
         assessment=r.assessment,
         live_feedback_workflows=r.live_feedback_workflows,
         measurement=r.measurement)
+    r.selected_recovery = SelectedRecovery(
+        lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
+        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        lesson_execution=r.lesson_execution,
+        exposure_workflows=r.exposure_workflows, clock=r.now)
+    r.rolling_recovery = RollingRecovery(
+        lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
+        transport_timing=r.transport_timing, grading=r.take_grading,
+        recovery_streak=r.recovery_streak,
+        live_feedback_workflows=r.live_feedback_workflows,
+        lesson_execution=r.lesson_execution, clock=r.now)
+
     r.settlement = SettlementContinuation(
         lesson=r.lesson, notices=r.notices, score=r.score, take=r.take,
         transport=r.transport, lesson_execution=r.lesson_execution,
         transport_timing=r.transport_timing,
-        recovery_workflows=r.recovery_workflows,
+        selected_recovery=r.selected_recovery,
         timed_playback=r.timed_playback,
         mistake_policy=r.take_grading.mistake_policy)
     r.completion_continuations = TakeCompletion(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, timed_playback=r.timed_playback,
-        recovery_workflows=r.recovery_workflows,
+        selected_recovery=r.selected_recovery,
         lesson_execution=r.lesson_execution, grading=r.take_grading,
         settlement=r.settlement)
 
@@ -361,7 +362,7 @@ def _event_boundary(r) -> None:
         lifecycle=r.session_lifecycle, listen=r.listen, notices=r.notices,
         settlement=r.settlement,
         transport=r.transport, read_models=r.read_models,
-        recovery_workflows=r.recovery_workflows, score=r.score,
+        rolling_recovery=r.rolling_recovery, score=r.score,
         timed_playback=r.timed_playback, transport_timing=r.transport_timing)
 
     r.midi_callback = MidiCallback(
@@ -395,7 +396,7 @@ def _event_boundary(r) -> None:
             lesson=r.lesson, transport=r.transport, take=r.take,
             midi_input=r.midi_input, transport_timing=r.transport_timing,
             attempt_progression=r.attempt_progression,
-            recovery_workflows=r.recovery_workflows,
+            rolling_recovery=r.rolling_recovery,
             completion=r.completion_continuations,
             lesson_execution=r.lesson_execution))
     r.tick_publisher = TickPublisher(
