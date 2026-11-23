@@ -908,6 +908,15 @@ acceptance.
   Manual renderer handoffs use the same installed score identity, so
   a changed stage/hand cannot clear or reuse the old renderer on merely
   equal fingerprint/revision. Exposed old ink remains retained.
+- [`cf61ea8`](https://github.com/tpepels/piano_teacher/commit/cf61ea827b5d1ecc14fb67f463eafd910326b4fd)
+  places structural ScoreBundle validation in the existing
+  `NativeScoreAssets` boundary, shared by current score loading and
+  prepared future loading. Both now require a ready source identity,
+  matching layout/model revisions, nonempty unique original MIDI IDs
+  and semantic active IDs drawn from that source. The future path
+  rejects malformed bundles *before* mutating its hidden renderer;
+  the current path also checks the committed exact stage and hand.
+  Python `ScoreArtifacts.bundle` remains the sole compiler.
 
 **Verification:** Source-contract counterpart fields and native admission
 guards were inspected on the committed files. No Python/Godot tests,
