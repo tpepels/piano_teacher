@@ -1,4 +1,5 @@
 """Count-in, repeated attempts and interruption use the published musical time."""
+from session_inputs import take
 import pytest
 
 
@@ -9,20 +10,20 @@ def test_repeat_follows_held_ending_with_exactly_one_bar(practice_session, corre
     session.finish_free()
     before = session.ready_score()
     source = session.ask("score.semantic")
-    outgoing_start = before["score_queue_next"]["deadline_at_ms"]/1000
+    outgoing_start = take(before)["deadline_ms"]/1000
     assert before["play_from_beat"] == .5
     assert source["duration_beats"] == 4
     assert source["practice_timeline"]["sounding_duration_beats"] == 6
     after = session.play_take(correct=correct)
-    incoming = after["score_queue_next"]
+    incoming = take(after)
     # A complete PRINTED rest belongs to the outgoing score clock (40),
     # even when success has selected the next take's faster 48 BPM.
     expected = outgoing_start+(6-.5)*60/40+4*60/40
-    assert incoming["deadline_at_ms"]/1000 == pytest.approx(expected,abs=.001)
+    assert incoming["deadline_ms"]/1000 == pytest.approx(expected,abs=.001)
     assert incoming["transport_id"] == after["transport_id"]
     assert after["transport_id"] != before["transport_id"]
     assert incoming["count_in_beats"] == 4
-    assert incoming["source_from_beat"] == .5
+    assert incoming["source"]["from_beat"] == .5
     assert incoming["bpm"] == (48 if correct else 40)
 
 
@@ -46,11 +47,11 @@ def test_resume_after_playing_preserves_full_authored_five_four_count_in(practic
     active = session.ready_score()
     assert active["count_in_meter"] == [5, 4]
     assert active["count_in_beats"] == 5
-    session.clock.at = active["score_queue_next"]["deadline_at_ms"] / 1000 + .5
+    session.clock.at = take(active)["deadline_ms"] / 1000 + .5
     before = session.snapshot()
     session.command("pause")
     session.tick(1)
-    resumed = session.command("resume")
+    resumed = session.admit(session.command("resume"))
     assert resumed["transport_id"] == before["transport_id"]
     assert resumed["count_in_meter"] == [5, 4]
     assert resumed["count_in_beats"] == 5
@@ -64,13 +65,13 @@ def test_pause_freezes_musical_time_and_resume_ignores_lead_in_keys(practice_ses
     session.finish_listen()
     session.finish_free()
     state = session.ready_score()
-    session.clock.at = state["score_queue_next"]["deadline_at_ms"]/1000+.5
+    session.clock.at = take(state)["deadline_ms"]/1000+.5
     before = session.snapshot()
     session.command("pause")
     paused = session.tick(30)
     assert paused["paused"]
     assert paused["clock_beat"] == pytest.approx(before["clock_beat"])
-    resumed = session.command("resume")
+    resumed = session.admit(session.command("resume"))
     assert resumed["transport_id"] == before["transport_id"]
     assert resumed["resume_count_in_beat"] < 0
     session.strike(72)
@@ -106,7 +107,7 @@ def test_unplug_after_the_last_attack_but_before_the_ending_cannot_award_progres
     session.finish_listen()
     session.finish_free()
     before = session.ready_score()
-    start = before["score_queue_next"]["deadline_at_ms"]/1000
+    start = take(before)["deadline_ms"]/1000
     session.clock.at = start
     session.strike(72)
     session.clock.at = start+4.5
@@ -128,7 +129,7 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
     layout = session.ask("score.native_layout")
     state = session.ready_score()
     source = session.ask("score.semantic")["notes"]
-    start = state["score_queue_next"]["deadline_at_ms"]/1000
+    start = take(state)["deadline_ms"]/1000
     session.clock.at = start
     session.strike(source[0]["midi_pitch"])
     session.tick()

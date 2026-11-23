@@ -1,4 +1,5 @@
 """The normal lesson a learner gets after opening their MIDI file."""
+from session_inputs import take
 def test_open_lists_backward_growing_windows_then_a_separate_final(practice_session):
     session = practice_session()
     state = session.snapshot()
@@ -45,8 +46,8 @@ def test_listen_then_free_waits_for_every_note_of_the_four_bar_window(practice_s
     tempo = session.ready_score()
     assert tempo["flow"]["step"] == "tempo"
     assert tempo["bpm"] == 40
-    assert tempo["score_queue_next"]["transport_id"] == tempo["transport_id"]
-    assert tempo["score_queue_next"]["count_in_beats"] == 4
+    assert take(tempo)["transport_id"] == tempo["transport_id"]
+    assert take(tempo)["count_in_beats"] == 4
 
 
 def test_wrong_free_key_waits_and_correction_does_not_credit_future_notes(practice_session):
@@ -114,7 +115,7 @@ def test_half_speed_retains_the_original_slow_midi_target(practice_session):
     state = session.ready_score()
     assert (state["original_bpm"], state["target_bpm"], state["bpm"]) == (20,20,10)
     assert state["count_in_beats"] == 4
-    deadline = state["score_queue_next"]["deadline_at_ms"]/1000
+    deadline = take(state)["deadline_ms"]/1000
     assert deadline-session.clock() >= 24
     session.clock.at = deadline-24
     assert session.snapshot()["countdown"] == 24

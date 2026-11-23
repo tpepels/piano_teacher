@@ -70,6 +70,13 @@ def write_midi(path, *, bars=5, bpm=80, left=True, chords=False,
     return path
 
 
+def take(state):
+    """The authorized physical take: one deadline Python chose for the receipt."""
+    current = state["playback_timeline"]["current"]
+    assert current is not None, state["playback_timeline"]
+    return current
+
+
 class PracticeSession:
     def __init__(self, directory, monkeypatch, **midi_options):
         self.clock = InputClock()
@@ -91,6 +98,10 @@ class PracticeSession:
         monkeypatch.setattr(mido, "open_input", lambda name, callback: InputPort(callback))
         self.engine = PracticeEngine(self.data, clock=self.clock)
         self.commands = EngineCommands(engine=self.engine)
+        # Exactly as the native bridge: the physical presentation gate is
+        # enabled before the first library or MIDI event.
+        self.commands.require_presentation()
+        self.receipt = None
         self.ask("settings.update", music_dir=str(self.music), exercise_strategy="practice-flow")
         self.ask("midi.device.select", name="Test piano")
         return self.ask("library.open", id=self.path.name)
@@ -130,17 +141,49 @@ class PracticeSession:
             time.sleep(0.005)
         raise AssertionError("Real Listen audio did not prepare within five seconds")
 
-    def ready_score(self):
+    def physical_offer(self, intent, **changes):
+        """The native renderer's immutable physical witness, never a deadline."""
+        values = {key: intent[key] for key in (
+            "intent_id", "attempt", "take_id", "fingerprint", "stage_key", "revision", "hand")}
+        sampled_ms = self.clock() * 1000.0
+        physical_ms = (intent["fixed_deadline_ms"] if intent["fixed_deadline_ms"] is not None
+                       else intent["earliest_deadline_ms"])
+        values.update(source_from_beat=intent["from_beat"], source_end_beat=intent["end_beat"],
+                      sampled_at_ms=sampled_ms, travel_ms=physical_ms-sampled_ms,
+                      world_origin=100.0, queue_generation=1,
+                      renderer_generation=intent["revision"])
+        values.update(changes)
+        return values
+
+    def admit(self, state=None):
+        """Reserve and present the pending physical intent, as Godot does."""
+        state = state or self.snapshot()
+        intent = state.get("playback_intent")
+        if not intent:
+            return state
+        receipt = self.ask("playback.reserve", **self.physical_offer(intent))
+        sampled = self.clock()*1000.0
+        self.ask("playback.present", intent_id=intent["intent_id"],
+                 attempt=intent["attempt"], segment_id=receipt["segment_id"],
+                 physical_world_origin=receipt["world_origin"],
+                 physical_sampled_at_ms=sampled,
+                 physical_travel_ms=receipt["deadline_ms"]-sampled,
+                 physical_queue_generation=receipt["queue_generation"]+1,
+                 physical_renderer_generation=intent["revision"])
+        self.receipt = receipt
+        return self.snapshot()
+
+    def ready_score(self, *, admit=True):
         state = self.snapshot()
         if state.get("awaiting_score_revision") is not None:
             state = self.command("score_ready", revision=state["revision"])
-        return state
+        return self.admit(state) if admit else state
 
     def finish_listen(self):
         demo = self.wait_audio()
         self.ready_score()
-        state = self.command("demo_ready", token=demo["token"])
-        self.clock.at = state["score_queue_next"]["deadline_at_ms"]/1000+demo["duration_seconds"]+.001
+        self.admit(self.command("demo_ready", token=demo["token"]))
+        self.clock.at = self.receipt["deadline_ms"]/1000+demo["duration_seconds"]+.001
         self.tick()
         return self.ready_score()
 
@@ -172,7 +215,7 @@ class PracticeSession:
         assert state["running"] and state["mode"] == "practice", state
         transport = state["transport_id"]
         source = self.ask("score.semantic")
-        start = state["score_queue_next"]["deadline_at_ms"]/1000
+        start = self.receipt["deadline_ms"]/1000
         floor = state["play_from_beat"]
         seconds_per_beat = 60/state["bpm"]
         if correct:
@@ -187,7 +230,7 @@ class PracticeSession:
         sounding = source["practice_timeline"]["sounding_duration_beats"]
         self.clock.at = max(self.clock.at, start+(sounding-floor)*seconds_per_beat+.001)
         for _ in range(300):
-            result = self.tick(.025)
+            result = self.admit(self.tick(.025))
             if (result["transport_id"] != transport or result["mode"] != "practice"
                     or result["lesson_steps_mastered"] > state["lesson_steps_mastered"]):
                 return result

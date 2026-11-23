@@ -12,24 +12,13 @@ from piano_teacher.inprocess import INVALID
 
 def desktop_tempo(session):
     session.finish_listen()
-    session.commands.require_presentation()
     session.finish_free()
-    return session.ready_score()["playback_intent"]
+    return session.ready_score(admit=False)["playback_intent"]
 
 
 def physical_offer(session, intent, **changes):
     """The native renderer's immutable physical witness, never a deadline."""
-    values = {key: intent[key] for key in (
-        "intent_id", "attempt", "take_id", "fingerprint", "stage_key", "revision", "hand")}
-    sampled_ms = session.clock() * 1000.0
-    physical_ms = (intent["fixed_deadline_ms"] if intent["fixed_deadline_ms"] is not None
-                   else intent["earliest_deadline_ms"])
-    values.update(source_from_beat=intent["from_beat"], source_end_beat=intent["end_beat"],
-                  sampled_at_ms=sampled_ms, travel_ms=physical_ms-sampled_ms,
-                  world_origin=100.0, queue_generation=1,
-                  renderer_generation=intent["revision"])
-    values.update(changes)
-    return values
+    return session.physical_offer(intent, **changes)
 
 
 def reserve(session, intent, **changes):
@@ -138,7 +127,7 @@ def test_display_failure_stops_the_take_and_retry_uses_a_new_take(practice_sessi
     assert not stopped["running"] and stopped["mastered"] == 0
     assert stopped["playback_timeline"]["failure"]
     session.command("restart")
-    retry = session.ready_score()["playback_intent"]
+    retry = session.ready_score(admit=False)["playback_intent"]
     fresh = reserve(session, retry)
     present(session, retry, fresh)
     assert session.snapshot()["running"]
@@ -171,7 +160,6 @@ def test_paused_count_in_resumes_the_same_take_and_rejects_lead_in_notes(practic
 
 def test_listen_audio_and_lighting_wait_for_the_presented_score(practice_session):
     session = practice_session(bars=1)
-    session.commands.require_presentation()
     audio = session.wait_audio()
     session.ready_score()
     state = session.command("demo_ready", token=audio["token"])
@@ -594,7 +582,6 @@ def test_frozen_canvas_physical_world_can_shrink_as_deadline_approaches(practice
 def test_repeated_listen_audio_and_score_acks_cannot_reopen_failed_admission(practice_session):
     """The real Listen-ready worker may emit the same acknowledgements again."""
     session = practice_session(bars=1)
-    session.commands.require_presentation()
     session.ready_score()
     demo = session.wait_audio()
     session.command("demo_ready", token=demo["token"])

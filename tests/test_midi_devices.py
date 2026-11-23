@@ -1,4 +1,5 @@
 """Software device-loss and calibration reactions, without attached hardware."""
+from session_inputs import take
 import mido
 import pytest
 
@@ -251,19 +252,19 @@ def test_configured_end_keys_pause_resume_and_retry_without_becoming_wrong_notes
     session.finish_listen()
     session.finish_free()
     initial = session.ready_score()
-    start = initial["score_queue_next"]["deadline_at_ms"]/1000
+    start = take(initial)["deadline_ms"]/1000
     session.clock.at = start+.5
     session.strike(21)
     assert session.snapshot()["paused"]
     session.strike(21)
-    resumed = session.snapshot()
+    resumed = session.admit()
     assert not resumed["paused"] and resumed["transport_id"] == initial["transport_id"]
     session.clock.at += 10
     session.strike(108)
     retry = session.ready_score()
-    incoming = retry["score_queue_next"]
+    incoming = take(retry)
     assert incoming["transport_id"] != initial["transport_id"]
-    session.clock.at = incoming["deadline_at_ms"]/1000
+    session.clock.at = incoming["deadline_ms"]/1000
     retry = session.tick()
     assert retry["transport_id"] == incoming["transport_id"] and retry["running"]
     assert retry["midi_notes"] == 0 and retry["mastered"] == 0

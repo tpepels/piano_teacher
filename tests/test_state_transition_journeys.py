@@ -4,6 +4,7 @@ Fake time and MIDI input are test stimuli only: the engine owns all lesson,
 transport, grading, feedback and persistence decisions. No simulated state
 machine or replacement evaluator is involved.
 """
+from session_inputs import take
 import json
 
 import pytest
@@ -40,8 +41,8 @@ def failed_take(session, *, fault="missed"):
     session.ready_score()
     state = state_at(session, step="tempo", mode="practice", running=True)
     source = session.ask("score.semantic")
-    assert state["score_queue_next"]["transport_id"] == state["transport_id"]
-    start = state["score_queue_next"]["deadline_at_ms"] / 1000
+    assert take(state)["transport_id"] == state["transport_id"]
+    start = take(state)["deadline_ms"] / 1000
     bpm = state["bpm"]
     floor = state["play_from_beat"]
     notes = source["notes"]
@@ -197,9 +198,8 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
 def test_fake_keyboard_presentation_failure_and_resume_never_grade_unpresented_music(practice_session):
     session = practice_session(bars=1)
     session.finish_listen()
-    session.commands.require_presentation()
     session.finish_free()
-    session.ready_score()
+    session.ready_score(admit=False)
     intent = state_at(session, step="tempo", mode="practice", running=False)["playback_intent"]
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0
@@ -266,7 +266,7 @@ def test_fake_keyboard_disconnection_during_take_cannot_award_lesson_progress(pr
     session.finish_free()
     session.ready_score()
     state = state_at(session, step="tempo", running=True)
-    start = state["score_queue_next"]["deadline_at_ms"]/1000
+    start = take(state)["deadline_ms"]/1000
     session.clock.at = start
     port = session.engine.midi.port
     port.send(72, True)
@@ -307,9 +307,8 @@ def test_stop_without_renderer_witness_cancels_unpresented_source(practice_sessi
     """A damaged/unavailable native renderer may never disable emergency Stop."""
     session = practice_session(bars=1)
     session.finish_listen()
-    session.commands.require_presentation()
     session.finish_free()
-    state = session.ready_score()
+    state = session.ready_score(admit=False)
     assert state["playback_intent"] and not state["running"], state
     assert state["controls"]["stop"]["enabled"]
     stopped = session.command("ui_stop")  # Deliberately no score_* fields.
@@ -378,7 +377,7 @@ def test_real_midi_release_setting_changes_tempo_credit(
     assert len(semantic["notes"]) == 1
     note = semantic["notes"][0]
     assert note["duration_beats"] >= 3.0
-    start = active["score_queue_next"]["deadline_at_ms"]/1000
+    start = take(active)["deadline_ms"]/1000
     session.clock.at = start
     session.engine.midi.port.send(int(note["midi_pitch"]),True)
     session.clock.at = start + .15*60/active["bpm"]

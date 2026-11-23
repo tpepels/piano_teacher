@@ -4,7 +4,7 @@ import json
 import pytest
 
 from piano_teacher.inprocess import INVALID
-from session_inputs import write_midi
+from session_inputs import write_midi, take
 
 
 def tempo(session):
@@ -27,7 +27,7 @@ def test_empty_history_reports_unknown_accuracy_and_timing(practice_session):
 def test_statistics_keep_signed_timing_and_distinguish_misses_from_unknowns(practice_session):
     session = practice_session(bars=1)
     state = tempo(session)
-    start = state["score_queue_next"]["deadline_at_ms"]/1000
+    start = take(state)["deadline_ms"]/1000
     for at, pitch in ((start+.1, 72), (start+4.3, 79)):
         session.clock.at = at
         session.key(pitch, after=0)
