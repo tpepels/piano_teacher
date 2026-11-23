@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-VERSION = 5
+VERSION = 6
 
 # Values that do not change frame to frame. They travel in command replies
 # (library.open, practice.command, ...) and are omitted from state.snapshot.
@@ -26,7 +26,7 @@ KINDS = ("bool", "number", "string", "list", "dict", "null")
 REQUIRED = ("schema_version", "loaded", "controls")
 LOADED_REQUIRED = (
     "mode", "phase", "running", "paused", "revision", "transport_id",
-    "piece_fingerprint", "presentation_directive", "playback_timeline",
+    "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline",
 )
 # Buttons and native shortcuts must never supply their own action meaning.
 # These names are presentation ports, generated to Godot from this owner.
@@ -143,6 +143,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "skip_available": ('bool',),
     "stage_change": ('string',),
     "stage_family": ('string',),
+    "stage_key": ('string',),
     "stage_label": ('string',),
     "stage_meaningful": ('bool',),
     "start_bpm": ('number',),
