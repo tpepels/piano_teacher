@@ -12,25 +12,99 @@ from .exposure_preparation import (
     GuidedPreparation, TimedPreparation, ListenPreparation)
 
 
-class ExposureWorkflows:
-    def __init__(self, *, lesson, take, score, transport, listen, notices,
-                          lifecycle, learner_progress, progress, midi_input,
-                          evidence_context, clock):
+class GuidedExposureInstall:
+    """Enter Free: save the resume point, bind guided targets, capture evidence."""
+
+    def __init__(self, *, lesson, take, score, transport, lifecycle,
+                 learner_progress, progress, midi_input, evidence_context,
+                 clock):
         self.lesson = lesson
-
-
-
         self.take = take
         self.score = score
         self.transport = transport
-        self.listen = listen
-        self.notices = notices
         self.lifecycle = lifecycle
         self.learner_progress = learner_progress
         self.progress = progress
         self.midi_input = midi_input
         self.evidence_context = evidence_context
         self.clock = clock
+
+    def install(self, prepared: GuidedPreparation, *, reason: str) -> None:
+        fragment = prepared.fragment
+        self.learner_progress.save_resume(
+            fingerprint=self.lesson.fingerprint,
+            stage_key=prepared.source.stage_key,
+            unit=self.learner_progress.guided_unit(
+                self.lesson.plan, mode="learn",
+                guided_range=fragment.beat_range))
+        self.progress.save(
+            self.lesson.plan, self.lesson.fingerprint)
+        self.lifecycle.stop(
+            reason=prepared.stop_reason or reason,
+            preserve_episode=prepared.recovery)
+        self.score.reset_guided_score()
+        self.take.assign_remediation(prepared.remediation)
+        if prepared.recovery:
+            self.take.restore_retry(prepared.retry_range)
+        self.transport.select_exposure(
+            mode="learn", automatic=False, awaited_revision=None)
+        self.lesson.select_guided(
+            fragment, stage_key=prepared.source.stage_key,
+            recovery=prepared.recovery)
+        self.lesson.publish_revision(prepared.revision)
+        self.transport.open_take()
+        self.lesson.bind_guided_selection(
+            revision=prepared.revision,
+            now=self.clock(), connected=self.midi_input.connected)
+        self.transport.await_score(prepared.revision)
+        self.transport.capture_guided_start(
+            self.evidence_context.build(
+                scope="guided",
+                start=fragment.start_beat, end=fragment.end_beat))
+
+
+class TimedExposureInstall:
+    """Enter a timed take or Listen at its selected opening and revision."""
+
+    def __init__(self, *, lesson, take, transport, lifecycle):
+        self.lesson = lesson
+        self.take = take
+        self.transport = transport
+        self.lifecycle = lifecycle
+
+    def install(self, prepared: TimedPreparation | ListenPreparation, *,
+                reason: str) -> None:
+        timed = isinstance(prepared, TimedPreparation)
+        self.lifecycle.stop(
+            reason=("reintegration" if timed and prepared.mode == "practice"
+                    else reason),
+            preserve_episode=timed and prepared.preserve_episode)
+        if not timed or prepared.mode == "practice":
+            self.transport.select_opening(
+                prepared.from_beat if timed else 0.0)
+        if timed:
+            self.lesson.select_opening(prepared.from_beat)
+            self.take.prepare_timed_exposure(prepared)
+            if prepared.return_context is not None:
+                self.transport.prepare_rewind(prepared.from_beat)
+                self.lesson.select_timed_return(prepared.return_context)
+        self.lesson.clear_guided_selection()
+        self.lesson.publish_revision(prepared.revision)
+        self.transport.select_exposure(
+            mode=prepared.mode if timed else "listen", automatic=False,
+            awaited_revision=(prepared.awaiting_score if timed
+                              else prepared.revision))
+
+
+class ExposureWorkflows:
+    def __init__(self, *, lesson, take, score, listen, notices, guided, timed):
+        self.lesson = lesson
+        self.take = take
+        self.score = score
+        self.listen = listen
+        self.notices = notices
+        self.guided = guided
+        self.timed = timed
 
     def source(self) -> ExposureSource:
         selected = self.lesson.plan
@@ -88,58 +162,9 @@ class ExposureWorkflows:
               *, reason: str | None = None) -> None:
         action_reason = reason or "transition"
         if isinstance(prepared, GuidedPreparation):
-            fragment = prepared.fragment
-            self.learner_progress.save_resume(
-                fingerprint=self.lesson.fingerprint,
-                stage_key=prepared.source.stage_key,
-                unit=self.learner_progress.guided_unit(
-                    self.lesson.plan, mode="learn",
-                    guided_range=fragment.beat_range))
-            self.progress.save(
-                self.lesson.plan, self.lesson.fingerprint)
-            self.lifecycle.stop(
-                reason=prepared.stop_reason or action_reason,
-                preserve_episode=prepared.recovery)
-            self.score.reset_guided_score()
-            self.take.assign_remediation(prepared.remediation)
-            if prepared.recovery:
-                self.take.restore_retry(prepared.retry_range)
-            self.transport.select_exposure(
-                mode="learn", automatic=False, awaited_revision=None)
-            self.lesson.select_guided(
-                fragment, stage_key=prepared.source.stage_key,
-                recovery=prepared.recovery)
-            self.lesson.publish_revision(prepared.revision)
-            self.transport.open_take()
-            self.lesson.bind_guided_selection(
-                revision=prepared.revision,
-                now=self.clock(), connected=self.midi_input.connected)
-            self.transport.await_score(prepared.revision)
-            self.transport.capture_guided_start(
-                self.evidence_context.build(
-                    scope="guided",
-                    start=fragment.start_beat, end=fragment.end_beat))
+            self.guided.install(prepared, reason=action_reason)
         else:
-            timed = isinstance(prepared, TimedPreparation)
-            self.lifecycle.stop(
-                reason=("reintegration" if timed and prepared.mode == "practice"
-                        else action_reason),
-                preserve_episode=timed and prepared.preserve_episode)
-            if not timed or prepared.mode == "practice":
-                self.transport.select_opening(
-                    prepared.from_beat if timed else 0.0)
-            if timed:
-                self.lesson.select_opening(prepared.from_beat)
-                self.take.prepare_timed_exposure(prepared)
-                if prepared.return_context is not None:
-                    self.transport.prepare_rewind(prepared.from_beat)
-                    self.lesson.select_timed_return(prepared.return_context)
-            self.lesson.clear_guided_selection()
-            self.lesson.publish_revision(prepared.revision)
-            self.transport.select_exposure(
-                mode=prepared.mode if timed else "listen", automatic=False,
-                awaited_revision=(prepared.awaiting_score if timed
-                                  else prepared.revision))
+            self.timed.install(prepared, reason=action_reason)
         self.notices.publish(prepared.feedback, prepared.next_action)
         if isinstance(prepared, ListenPreparation):
             self.listen.prepare(prepared.selection)

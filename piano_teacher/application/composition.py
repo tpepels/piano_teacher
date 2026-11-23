@@ -37,7 +37,8 @@ from .settlement_continuation import SettlementContinuation
 from .take_grading import TakeGrading
 from .mistake_responses import resolve_mistake_policy
 from .device_workflows import DeviceWorkflows
-from .exposure_workflows import ExposureWorkflows
+from .exposure_workflows import (
+    ExposureWorkflows, GuidedExposureInstall, TimedExposureInstall)
 from .flow_course_session import PracticeFlowCourseSession
 from .future_score import FutureScore
 from .guided_session import GuidedSession
@@ -266,11 +267,16 @@ def _lesson_source_and_settings_workflows(r) -> None:
         lesson=r.lesson, transport=r.transport,
         learning_evidence=r.learning_evidence)
     r.exposure_workflows = ExposureWorkflows(
-        lesson=r.lesson, take=r.take, score=r.score, transport=r.transport,
-        listen=r.listen, notices=r.notices, lifecycle=r.session_lifecycle,
-        learner_progress=r.learner_progress, progress=r.progress,
-        midi_input=r.midi_input, evidence_context=r.evidence_context,
-        clock=r.now)
+        lesson=r.lesson, take=r.take, score=r.score, listen=r.listen,
+        notices=r.notices,
+        guided=GuidedExposureInstall(
+            lesson=r.lesson, take=r.take, score=r.score, transport=r.transport,
+            lifecycle=r.session_lifecycle, learner_progress=r.learner_progress,
+            progress=r.progress, midi_input=r.midi_input,
+            evidence_context=r.evidence_context, clock=r.now),
+        timed=TimedExposureInstall(
+            lesson=r.lesson, take=r.take, transport=r.transport,
+            lifecycle=r.session_lifecycle))
 
     r.course = CourseFlow(
         lesson=r.lesson, notices=r.notices,
