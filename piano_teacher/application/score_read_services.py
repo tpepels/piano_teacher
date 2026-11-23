@@ -10,27 +10,26 @@ from .score_artifacts import ScoreArtifacts, ScoreSelection
 
 
 class ScoreReadServices:
-    def __init__(self, *, source_identity, attempt, lesson_execution,
-                 guided_session, score_artifact_registry,
+    def __init__(self, *, lesson, attempt, lesson_execution,
+                 score_artifact_registry,
                  learner_progress, lock):
-        self.source_identity = source_identity
+        self.lesson = lesson
         self.attempt = attempt
         self.lesson_execution = lesson_execution
-        self.guided_session = guided_session
         self.score_artifact_registry = score_artifact_registry
         self.learner_progress = learner_progress
         self.lock = lock
 
     def selection(self) -> ScoreSelection:
-        plan = self.source_identity.plan
+        plan = self.lesson.plan
         if plan is None:
             raise ValueError("No piece loaded")
         remediation = self.attempt.remediation_active
         return ScoreSelection(
             piece=plan.piece, phrase=self.lesson_execution.display_phrase(),
             hand=plan.hand, stage_key=plan.identity,
-            revision=self.source_identity.revision,
-            fingerprint=self.source_identity.fingerprint,
+            revision=self.lesson.revision,
+            fingerprint=self.lesson.fingerprint,
             transformed_rhythm=(remediation.transformed_rhythm
                 if remediation is not None else plan.active_stage.transformed_rhythm),
             display_name=remediation.focus if remediation is not None else "")
@@ -68,14 +67,14 @@ class ScoreReadServices:
         return cached.layout
 
     def guided_marks(self, snapshot: dict) -> list[dict]:
-        if self.source_identity.plan is None:
+        if self.lesson.plan is None:
             return []
         engraving = self.score_artifact_registry.current.cached_layout(
             self.selection())
-        return (self.guided_session.marks(snapshot, engraving.layout)
+        return (self.lesson.guided_marks(snapshot, engraving.layout)
                 if engraving is not None else [])
 
     def lesson_overview(self) -> dict:
         return self.learner_progress.lesson_overview(
-            self.source_identity.plan,
-            fingerprint=self.source_identity.fingerprint)
+            self.lesson.plan,
+            fingerprint=self.lesson.fingerprint)

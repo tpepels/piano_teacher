@@ -10,18 +10,17 @@ from .playback_transitions import PlaybackTransition
 class TransportActions:
     def __init__(self, *,
                  attempt, attempt_settlement, clock, exposure_workflows,
-                 feedback_seconds, guided_session, lesson_cursor, lesson_execution,
+                 feedback_seconds, lesson, lesson_execution,
                  lifecycle, listen, notices, completion_continuations,
                  transport, read_models, recovery_workflows,
-                 score_artifact_registry, score_read, source_identity,
-                 teaching_decisions, timed_playback, transport_timing):
+                 score_artifact_registry, score_read,
+                 timed_playback, transport_timing):
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
         self.clock = clock
         self.exposure_workflows = exposure_workflows
         self.feedback_seconds = feedback_seconds
-        self.guided_session = guided_session
-        self.lesson_cursor = lesson_cursor
+        self.lesson = lesson
         self.lesson_execution = lesson_execution
         self.lifecycle = lifecycle
         self.listen = listen
@@ -32,11 +31,10 @@ class TransportActions:
         self.recovery_workflows = recovery_workflows
         self.score_artifact_registry = score_artifact_registry
         self.score_read = score_read
-        self.source_identity = source_identity
-        self.teaching_decisions = teaching_decisions
+
         self.timed_playback = timed_playback
         self.transport_timing = transport_timing
-        
+
 
     def reserve_physical(self, **values) -> dict:
         return self.transport.reserve(self.transport_timing.playback_facts(), **values)
@@ -89,10 +87,10 @@ class TransportActions:
                     transport_id=self.transport.transport_id,
                     from_beat=self.transport.play_from_beat,
                     run_at=self.transport.run_at,
-                    stage_key=self.source_identity.plan.identity,
-                    revision=self.source_identity.revision)
+                    stage_key=self.lesson.plan.identity,
+                    revision=self.lesson.revision)
             elif authorized.action == "listen":
-                self.transport.start_listen(revision=self.source_identity.revision,
+                self.transport.start_listen(revision=self.lesson.revision,
                     count_in=intent.count_in,deadline=authorized.deadline)
                 self.notices.feedback = "Count in, then listen"
 
@@ -104,14 +102,14 @@ class TransportActions:
             self.transport_timing.update_short_rest(kwargs)
             revision = int(kwargs.get("revision",-1))
             decision = self.transport.score_acknowledged(revision,
-                current_revision=self.source_identity.revision,teaching_bound=self.guided_session.controller is not None)
+                current_revision=self.lesson.revision,teaching_bound=self.lesson.guided_controller is not None)
             if decision == "listen":
                 self.timed_playback.begin_listen_if_ready()
             elif decision == "learn":
-                self.guided_session.controller.start(now=self.clock())
+                self.lesson.guided_controller.start(now=self.clock())
             elif decision == "practice":
                 position = (self.transport.pending_rewind
-                    if self.transport.pending_rewind is not None else self.lesson_cursor.opening_beat)
+                    if self.transport.pending_rewind is not None else self.lesson.opening_beat)
                 mode = "perform" if self.transport.mode == "perform" else "practice"
                 self.transport_timing.request_playback(action="score_ready",mode=mode,from_beat=position)
         elif self.transport.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
@@ -137,10 +135,10 @@ class TransportActions:
             if self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None:
                 self.replay_retained_result()
                 return
-            effect = effect or self.teaching_decisions.manual_effect(action)
+            effect = effect or self.lesson.manual_effect(action)
             transition = PlaybackTransition.from_effect(
                 effect,action=action,source_changed=(
-                    self.score_artifact_registry.current.source_bpm_changed(self.source_identity.plan.piece.bpm)
+                    self.score_artifact_registry.current.source_bpm_changed(self.lesson.plan.piece.bpm)
                     if self.transport.mode not in ("listen", "learn") else False))
             if transition.route in ("listen", "prepare_practice",
                                     "reload_score", "learn"):
@@ -183,15 +181,15 @@ class TransportActions:
     def replay_retained_result(self) -> None:
         """Play after a failed save or rolling recovery replays that same result."""
         if self.attempt.settlement_failed:
-            revision = self.source_identity.revision
+            revision = self.lesson.revision
             # Drop the failure instruction; the replayed continuation
             # publishes its own next action (count-in or next passage).
             self.notices.next_action = ""
             self.notices.feedback = (
                 self.completion_continuations.retry_failed_publication(
                     now=self.clock()) or "Assessment saved")
-            if self.source_identity.revision != revision:
-                self.transport.await_score(self.source_identity.revision)
+            if self.lesson.revision != revision:
+                self.transport.await_score(self.lesson.revision)
             return
         if self.attempt_settlement.pending_rolling is not None:
             decision, phrase, grid, score_beat, _old_now = self.attempt_settlement.pending_rolling
@@ -203,7 +201,7 @@ class TransportActions:
     def enter_source_route(self, action: str, transition) -> None:
         """Enter a selected route that changes assets or untimed teaching."""
         effect, route = transition.effect, transition.route
-        selected = self.teaching_decisions.install_command(effect)
+        selected = self.lesson.install_command(effect)
         if route == "listen":
             self.exposure_workflows.prepare_listen(effect=effect,reason=action)
         elif route == "prepare_practice":
@@ -212,8 +210,8 @@ class TransportActions:
             self.lesson_execution.begin_learn(exposure=selected,reason=action)
         elif route == "reload_score":
             self.lifecycle.stop(reason=action)
-            self.source_identity.advance_revision()
-            self.transport.await_score(self.source_identity.revision)
+            self.lesson.advance_revision()
+            self.transport.await_score(self.lesson.revision)
             self.notices.feedback = "Preparing sheet music"
         else:
             raise ValueError(f"Route {route!r} is admitted physically, not entered")

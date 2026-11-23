@@ -14,13 +14,13 @@ from .musical_scheduler import SCHEDULER
 
 
 class RecoveryWorkflows:
-    def __init__(self, *, source_identity, lesson_cursor, notices, attempt,
+    def __init__(self, *, lesson, notices, attempt,
                  transport, transport_timing,
                  timed_playback, lesson_execution, exposure_workflows,
                  attempt_settlement, policy_registry, library, recovery_streak,
-                 live_feedback_workflows, live_assessment, teaching_decisions,
+                 live_feedback_workflows, live_assessment,
                  clock, feedback_seconds):
-        self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
+        self.lesson = lesson
         self.notices, self.attempt = notices, attempt
         self.transport = transport
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
@@ -28,7 +28,7 @@ class RecoveryWorkflows:
         self.attempt_settlement, self.policy_registry = attempt_settlement, policy_registry
         self.library, self.recovery_streak = library, recovery_streak
         self.live_feedback_workflows, self.live_assessment = live_feedback_workflows, live_assessment
-        self.teaching_decisions, self.clock = teaching_decisions, clock
+        self.clock = clock
         self.feedback_seconds = feedback_seconds
 
     def _apply_prepared_recovery(self, prepared, *, now: float,
@@ -56,7 +56,7 @@ class RecoveryWorkflows:
             if prepared.action == "prepare" and prepared.assignment is not None:
                 self.exposure_workflows.prepare_practice(exposure=exposure)
                 self.transport.wait_for_player()
-            self.lesson_cursor.select_opening(prepared.start)
+            self.lesson.select_opening(prepared.start)
             self.attempt.prepare_recovery(prepared)
             if prepared.action == "pause":
                 self.transport.halt_continuation()
@@ -89,8 +89,8 @@ class RecoveryWorkflows:
                               visual_from: float | None = None):
         prepared = prepare_response(
             response,
-            source_duration=(self.source_identity.plan.active_phrase.end
-                             - self.source_identity.plan.active_phrase.start),
+            source_duration=(self.lesson.plan.active_phrase.end
+                             - self.lesson.plan.active_phrase.start),
             has_deadline=deadline is not None)
         self._apply_prepared_recovery(
             prepared, now=now, deadline=deadline, visual_from=visual_from)
@@ -98,7 +98,7 @@ class RecoveryWorkflows:
     def start_remedial_assignment(self, assignment: RemedialAssignment,
                                   *, deadline: float | None = None,
                                   exposure=None) -> None:
-        if self.source_identity.plan is None:
+        if self.lesson.plan is None:
             raise ValueError("Remediation requires an installed lesson source")
         prepared = prepare_remedial(
             self.exposure_workflows.source(), assignment, exposure,
@@ -125,16 +125,16 @@ class RecoveryWorkflows:
             self.live_assessment.publish(
                 self.attempt.feedback_marks,
                 self.live_feedback_workflows.feedback_take())
-        outgoing_bpm = self.source_identity.plan.bpm
+        outgoing_bpm = self.lesson.plan.bpm
         scored_end = self.transport.run_at + (
             self.transport_timing.elapsed_seconds(decision.end_beat) -
             self.transport_timing.elapsed_seconds(self.transport.play_from_beat))
-        hand = self.source_identity.plan.hand
+        hand = self.lesson.plan.hand
         notes = self.attempt.recorder.presses if self.attempt.recorder else ()
         from_beat = self.transport.play_from_beat
-        score_revision = self.source_identity.revision
+        score_revision = self.lesson.revision
         if saved is not None:
-            if self.source_identity.revision != saved.take.score_revision:
+            if self.lesson.revision != saved.take.score_revision:
                 raise ValueError(
                     "Rolling take score revision changed before publication retry")
             # A durable decision may already have lowered BPM or changed
@@ -151,8 +151,8 @@ class RecoveryWorkflows:
                 now=now,bpm=outgoing_bpm,scored_end=scored_end,hand=hand,
                 played=notes,from_beat=from_beat,
                 tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
-                prepare_decision=self.teaching_decisions.prepare,plan=self.source_identity.plan,
-                binding=self.teaching_decisions.binding(),
+                prepare_decision=self.lesson.prepare_decision,plan=self.lesson.plan,
+                binding=self.lesson.decision_binding(),
                 score_revision=score_revision,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
         except Exception:
@@ -183,7 +183,7 @@ class RecoveryWorkflows:
         outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
         apply = self.attempt_settlement.rolling_effect
         apply(completed, "tempo", lambda: self.transport.note_tempo(
-            stage=self.source_identity.plan.identity,
+            stage=self.lesson.plan.identity,
             bpm=self.transport_timing.presentation_bpm(), now=now))
         short_deadline = None
         if transition.uses_completed_rest:
@@ -234,11 +234,11 @@ class RecoveryWorkflows:
             return None
         tempo_map = self.transport_timing.active_tempo_map()
         return self.policy_registry.grading.select(tempo_map).recover(
-            self.source_identity.plan.active_phrase, hand=self.source_identity.plan.hand, bpm=self.source_identity.plan.bpm,
+            self.lesson.plan.active_phrase, hand=self.lesson.plan.hand, bpm=self.lesson.plan.bpm,
             played=self.attempt.recorder.presses if self.attempt.recorder else [],
             from_beat=self.transport.play_from_beat, end_beat=boundary, grid=grid,
             threshold=course_rules(
-                self.source_identity.plan.lesson_definition.generator_name,
-                warmup=self.source_identity.warmup).recovery_errors_in_window,
-            warmup=self.source_identity.warmup, tempo=tempo_map)
+                self.lesson.plan.lesson_definition.generator_name,
+                warmup=self.lesson.warmup).recovery_errors_in_window,
+            warmup=self.lesson.warmup, tempo=tempo_map)
 

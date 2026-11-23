@@ -11,12 +11,11 @@ from ..learning import LearningPlan
 
 
 class HistoryManagement:
-    def __init__(self, *, source_identity, lesson_cursor, notices, progress,
+    def __init__(self, *, lesson, notices, progress,
                  measurement, recovery_streak, lifecycle, attempt_settlement,
-                 attempt, transport, guided_session, score_artifact_registry,
+                 attempt, transport, score_artifact_registry,
                  learning_evidence, clock, data_dir):
-        self.source_identity = source_identity
-        self.lesson_cursor = lesson_cursor
+        self.lesson = lesson
         self.notices = notices
         self.progress = progress
         self.measurement = measurement
@@ -25,7 +24,6 @@ class HistoryManagement:
         self.attempt_settlement = attempt_settlement
         self.attempt = attempt
         self.transport = transport
-        self.guided_session = guided_session
         self.score_artifact_registry = score_artifact_registry
         self.learning_evidence = learning_evidence
         self.clock = clock
@@ -33,7 +31,7 @@ class HistoryManagement:
 
     def status(self) -> dict:
         return self.learning_evidence.history_status(
-            fingerprint=self.source_identity.fingerprint, data_dir=self.data_dir)
+            fingerprint=self.lesson.fingerprint, data_dir=self.data_dir)
 
     def statistics(self, fingerprint: str | None = None, *, query=None) -> dict:
         # The evidence reader uses its own WAL transaction, outside the tick lock.
@@ -46,31 +44,31 @@ class HistoryManagement:
             Path(path).expanduser(), include_detail=include_detail)
 
     def _replacement(self) -> LearningPlan | None:
-        selected = self.source_identity.plan
+        selected = self.lesson.plan
         if selected is None:
             return None
         return LearningPlan(
             selected.piece,
-            warmup=self.source_identity.warmup,
+            warmup=self.lesson.warmup,
             exercise_strategy=selected.exercise_strategy.name,
             fukuda_mistakes=frozenset(), feedback={})
 
     def _publish_deleted(self, replacement: LearningPlan | None, *,
                          feedback: str) -> dict:
-        self.source_identity.replace_plan(replacement)
+        self.lesson.replace_plan(replacement)
         self.recovery_streak.clear()
-        self.lesson_cursor.select_opening(0.0)
+        self.lesson.select_opening(0.0)
         self.transport.select_source()
-        self.guided_session.clear_selection()
+        self.lesson.clear_guided_selection()
         self.score_artifact_registry.invalidate()
-        self.source_identity.advance_revision()
+        self.lesson.advance_revision()
         self.notices.feedback = feedback
-        self.lesson_cursor.set_course_guided(False)
-        self.guided_session.set_hints(False, now=self.clock())
+        self.lesson.set_course_guided(False)
+        self.lesson.set_hints(False, now=self.clock())
         return self.status()
 
     def delete_piece(self, fingerprint: str, *, confirm: bool = False) -> dict:
-        if confirm is not True or self.source_identity.plan is None or fingerprint != self.source_identity.fingerprint:
+        if confirm is not True or self.lesson.plan is None or fingerprint != self.lesson.fingerprint:
             raise ValueError("Confirm deletion for the currently loaded piece")
         replacement = self._replacement()
         with self.measurement.atomic():
@@ -94,10 +92,10 @@ class HistoryManagement:
             replacement, feedback="All learning history and progress deleted")
 
     def reset_current_path(self, *, fingerprint: str, confirm: bool) -> None:
-        selected = self.source_identity.plan
-        if selected is None or not self.source_identity.fingerprint:
+        selected = self.lesson.plan
+        if selected is None or not self.lesson.fingerprint:
             raise ValueError("Open a piece before resetting its lesson path")
-        if confirm is not True or fingerprint != self.source_identity.fingerprint:
+        if confirm is not True or fingerprint != self.lesson.fingerprint:
             raise ValueError("Confirm the reset for the currently loaded piece")
         replacement = self._replacement()
         self.attempt_settlement.reset_piece_path(
@@ -107,13 +105,13 @@ class HistoryManagement:
             now=self.clock())
         self.lifecycle.stop(reason="lesson_reset", persist_evidence=False)
         self.recovery_streak.clear()
-        self.source_identity.replace_plan(replacement)
-        self.lesson_cursor.select_opening(0.0)
-        self.lesson_cursor.set_course_guided(False)
+        self.lesson.replace_plan(replacement)
+        self.lesson.select_opening(0.0)
+        self.lesson.set_course_guided(False)
         self.transport.select_source()
-        self.guided_session.clear_selection()
+        self.lesson.clear_guided_selection()
         self.score_artifact_registry.invalidate()
-        self.source_identity.advance_revision()
+        self.lesson.advance_revision()
         self.transport.wait_for_player()
         self.notices.publish(
             "Lesson path reset to its first step",

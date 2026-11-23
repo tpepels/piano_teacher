@@ -77,6 +77,7 @@ from .teaching_continuation import TeachingContinuation
 from .teaching_workflows import TeachingDecisions
 from .tempo_map_cache import TempoMapCache
 from .timed_playback import TimedPlayback
+from .lesson import Lesson
 from .transport import Transport
 from .transport_timing import TransportTiming
 
@@ -124,6 +125,10 @@ def _session_state(r, *, clock, feedback_events) -> None:
     r.live_assessment = LiveAssessmentPublisher(r.feedback_events)
     r.runtime_timings = RuntimeTimings()
     r.flow_session = PracticeFlowCourseSession(r.now, r.source_identity)
+    # Lesson's decision owner needs settlement and evidence services; it is
+    # attached once below, before any event can reach the session.
+    r.lesson = Lesson(source=r.source_identity, cursor=r.lesson_cursor,
+        guided=r.guided_session, flow=r.flow_session)
     # One short on-screen message at a time: (serial, text, engine time).
     r.guided_session.clear_selection()
     r.guided_session.set_hints(False,now=r.now())
@@ -184,34 +189,33 @@ def _persistence_and_settlement(r) -> None:
         attempt=r.attempt, settlement=r.attempt_settlement,
         midi_ingress=r.midi_ingress,
         continuation=r.teaching_continuation,
-        guided_session=r.guided_session, live_input=r.live_input,
+        lesson=r.lesson, live_input=r.live_input,
         listen=r.listen, measurement=r.measurement, clock=r.now)
 
 
 def _lesson_source_and_settings_workflows(r) -> None:
     """Lesson decisions, exposures, source/settings/device workflows."""
     r.history_management = HistoryManagement(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
+        lesson=r.lesson,
         notices=r.notices, progress=r.progress, measurement=r.measurement,
         recovery_streak=r.recovery_streak, lifecycle=r.session_lifecycle,
         attempt_settlement=r.attempt_settlement, attempt=r.attempt,
-        transport=r.transport, guided_session=r.guided_session,
+        transport=r.transport,
         score_artifact_registry=r.score_artifact_registry,
         learning_evidence=r.learning_evidence, clock=r.now,
         data_dir=r._data_dir)
     r.source_workflows = SourceWorkflows(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
+        lesson=r.lesson,
         notices=r.notices, lifecycle=r.session_lifecycle,
         recovery_streak=r.recovery_streak,
         transport=r.transport,
         source_preparation=r.source_preparation,
-        guided_session=r.guided_session,
         score_artifact_registry=r.score_artifact_registry,
         attempt=r.attempt, listen=r.listen,
         preprocessing=r.preprocessing, fingering=r.fingering,
         progress=r.progress, fukuda_mistakes=r.fukuda_mistakes,
         library=r.library, library_health=r.library_health,
-        flow_session=r.flow_session, lock=r.lock)
+        lock=r.lock)
     r.settings_workflows = SettingsWorkflows(
         library=r.library, measurement=r.measurement,
         lifecycle=r.session_lifecycle, notices=r.notices,
@@ -219,11 +223,11 @@ def _lesson_source_and_settings_workflows(r) -> None:
         midi_key_shortcuts=r.midi_key_shortcuts,
         transport=r.transport,
         progress=r.progress,
-        library_health=r.library_health, source_identity=r.source_identity)
+        library_health=r.library_health, lesson=r.lesson)
     r.device_workflows = DeviceWorkflows(
         midi=r.midi, shortcuts=r.midi_key_shortcuts,
         live_input=r.live_input, lifecycle=r.session_lifecycle,
-        guided_session=r.guided_session, notices=r.notices,
+        lesson=r.lesson, notices=r.notices,
         transport=r.transport,
         calibration=r.midi_calibration, library=r.library,
         clock=r.now)
@@ -236,13 +240,13 @@ def _lesson_source_and_settings_workflows(r) -> None:
         fukuda_mistakes=r.fukuda_mistakes,
         learner_progress=r.learner_progress,
         learning_evidence=r.learning_evidence, clock=r.now)
+    r.lesson.attach_decisions(r.teaching_decisions)
     r.evidence_context = SessionEvidenceContext(
-        source_identity=r.source_identity, transport=r.transport,
-        guided_session=r.guided_session, learning_evidence=r.learning_evidence)
+        lesson=r.lesson, transport=r.transport,
+        learning_evidence=r.learning_evidence)
     r.exposure_workflows = ExposureWorkflows(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
-        flow_session=r.flow_session, teaching_decisions=r.teaching_decisions,
-        guided_session=r.guided_session, attempt=r.attempt,
+        lesson=r.lesson,
+        attempt=r.attempt,
         tempo_map_cache=r.tempo_map_cache, transport=r.transport,
         listen=r.listen, notices=r.notices, lifecycle=r.session_lifecycle,
         learner_progress=r.learner_progress, progress=r.progress,
@@ -251,11 +255,10 @@ def _lesson_source_and_settings_workflows(r) -> None:
         evidence_context=r.evidence_context, clock=r.now)
 
     r.lesson_execution = LessonExecution(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
-        notices=r.notices, teaching_decisions=r.teaching_decisions,
+        lesson=r.lesson,
+        notices=r.notices,
         exposure_workflows=r.exposure_workflows,
-        flow_session=r.flow_session,
-        transport=r.transport, guided_session=r.guided_session,
+        transport=r.transport,
         attempt=r.attempt, learner_progress=r.learner_progress,
         progress=r.progress, lifecycle=r.session_lifecycle,
         recovery_streak=r.recovery_streak,
@@ -263,14 +266,13 @@ def _lesson_source_and_settings_workflows(r) -> None:
         library=r.library, clock=r.now)
 
     r.score_read = ScoreReadServices(
-        source_identity=r.source_identity, attempt=r.attempt,
+        lesson=r.lesson, attempt=r.attempt,
         lesson_execution=r.lesson_execution,
-        guided_session=r.guided_session,
         score_artifact_registry=r.score_artifact_registry,
         learner_progress=r.learner_progress, lock=r.lock)
 
     r.transport_timing = TransportTiming(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
+        lesson=r.lesson,
         transport=r.transport,
         tempo_map_cache=r.tempo_map_cache,
         attempt_progression=r.attempt_progression,
@@ -279,7 +281,7 @@ def _lesson_source_and_settings_workflows(r) -> None:
 
     r.session_phase = SessionPhase(
         transport=r.transport,
-        guided_session=r.guided_session, midi_ingress=r.midi_ingress,
+        lesson=r.lesson, midi_ingress=r.midi_ingress,
         attempt=r.attempt, attempt_settlement=r.attempt_settlement)
 
 
@@ -287,18 +289,17 @@ def _lesson_source_and_settings_workflows(r) -> None:
 def _transport_and_completion(r) -> None:
     """Timed playback, live feedback, recovery, completion and read models."""
     r.timed_playback = TimedPlayback(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
+        lesson=r.lesson,
         notices=r.notices, transport=r.transport,
         attempt_settlement=r.attempt_settlement,
-        teaching_decisions=r.teaching_decisions,
-        exposure_workflows=r.exposure_workflows, guided_session=r.guided_session,
+        exposure_workflows=r.exposure_workflows,
         midi=r.midi,
         score_read=r.score_read, evidence_context=r.evidence_context,
         transport_timing=r.transport_timing, lesson_execution=r.lesson_execution,
         clock=r.now, lock=r.lock, phase=r.session_phase.at)
 
     r.live_feedback_workflows = LiveFeedbackWorkflows(
-        source_identity=r.source_identity, transport=r.transport,
+        lesson=r.lesson, transport=r.transport,
         score_artifact_registry=r.score_artifact_registry,
         score_read=r.score_read, policy_registry=r.policy_registry,
         library=r.library, attempt=r.attempt,
@@ -306,7 +307,7 @@ def _transport_and_completion(r) -> None:
         transport_timing=r.transport_timing, clock=r.now)
 
     r.recovery_workflows = RecoveryWorkflows(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
+        lesson=r.lesson,
         notices=r.notices, attempt=r.attempt,
         transport=r.transport,
         transport_timing=r.transport_timing, timed_playback=r.timed_playback,
@@ -316,25 +317,24 @@ def _transport_and_completion(r) -> None:
         library=r.library, recovery_streak=r.recovery_streak,
         live_feedback_workflows=r.live_feedback_workflows,
         live_assessment=r.live_assessment,
-        teaching_decisions=r.teaching_decisions,
         clock=r.now, feedback_seconds=r.feedback_seconds)
 
     r.completion_continuations = CompletionContinuations(
-        source_identity=r.source_identity, notices=r.notices,
+        lesson=r.lesson, notices=r.notices,
         teaching_continuation=r.teaching_continuation,
         attempt_settlement=r.attempt_settlement,
         transport=r.transport,
         attempt=r.attempt,
-        flow_session=r.flow_session, lesson_execution=r.lesson_execution,
+        lesson_execution=r.lesson_execution,
         transport_timing=r.transport_timing, score_read=r.score_read,
         recovery_workflows=r.recovery_workflows,
-        timed_playback=r.timed_playback, lesson_cursor=r.lesson_cursor,
-        teaching_decisions=r.teaching_decisions, clock=r.now,
+        timed_playback=r.timed_playback,
+        clock=r.now,
         library=r.library, score_artifact_registry=r.score_artifact_registry,
         assessment=r.assessment, feedback_seconds=r.feedback_seconds)
 
     r.score_preload = ScorePreloadWorkflow(
-        source_identity=r.source_identity, lock=r.lock,
+        lesson=r.lesson, lock=r.lock,
         transport=r.transport,
         teaching_continuation=r.teaching_continuation,
         attempt_settlement=r.attempt_settlement,
@@ -342,9 +342,9 @@ def _transport_and_completion(r) -> None:
         completion_continuations=r.completion_continuations)
 
     r.read_models = SessionReadModels(
-        source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
+        lesson=r.lesson,
         notices=r.notices, attempt=r.attempt,
-        guided_session=r.guided_session, transport=r.transport,
+        transport=r.transport,
         attempt_settlement=r.attempt_settlement, library=r.library,
         midi=r.midi, midi_ingress=r.midi_ingress,
         midi_key_shortcuts=r.midi_key_shortcuts, midi_calibration=r.midi_calibration,
@@ -367,37 +367,32 @@ def _event_boundary(r) -> None:
     """Command routers, MIDI input, the transition worker and PracticeSession."""
     r.learning_commands = LearningActions(
         attempt=r.attempt, attempt_settlement=r.attempt_settlement, clock=r.now,
-        exposure_workflows=r.exposure_workflows, flow_session=r.flow_session, guided_session=r.guided_session,
-        lesson_cursor=r.lesson_cursor, lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
+        exposure_workflows=r.exposure_workflows, lesson=r.lesson,
+        lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
         measurement=r.measurement, notices=r.notices, transport=r.transport,
-        progress=r.progress, source_identity=r.source_identity,
-        teaching_decisions=r.teaching_decisions)
-
+        progress=r.progress)
     r.transport_commands = TransportActions(
         attempt=r.attempt, attempt_settlement=r.attempt_settlement, clock=r.now,
-        exposure_workflows=r.exposure_workflows, feedback_seconds=r.feedback_seconds, guided_session=r.guided_session,
-        lesson_cursor=r.lesson_cursor, lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
+        exposure_workflows=r.exposure_workflows, feedback_seconds=r.feedback_seconds, lesson=r.lesson,
+        lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
         listen=r.listen, notices=r.notices,
         completion_continuations=r.completion_continuations,
         transport=r.transport, read_models=r.read_models,
         recovery_workflows=r.recovery_workflows, score_artifact_registry=r.score_artifact_registry, score_read=r.score_read,
-        source_identity=r.source_identity, teaching_decisions=r.teaching_decisions,
         timed_playback=r.timed_playback, transport_timing=r.transport_timing)
 
     r.midi_application_input = MidiApplicationInput(
-        source_identity=r.source_identity, transport=r.transport,
+        lesson=r.lesson, transport=r.transport,
         attempt_settlement=r.attempt_settlement,
         attempt=r.attempt, midi=r.midi, lock=r.lock,
         runtime_timings=r.runtime_timings, device_workflows=r.device_workflows,
-        teaching_decisions=r.teaching_decisions,
         settings_workflows=r.settings_workflows, library=r.library,
         midi_ingress=r.midi_ingress, transport_timing=r.transport_timing,
         live_feedback_workflows=r.live_feedback_workflows,
-        guided_session=r.guided_session,
         timed_playback=r.timed_playback, clock=r.now)
 
     r.practice_timeline = PracticeTimeline(
-        source_identity=r.source_identity, notices=r.notices, transport=r.transport,
+        lesson=r.lesson, notices=r.notices, transport=r.transport,
         attempt_settlement=r.attempt_settlement, attempt=r.attempt,
         transport_timing=r.transport_timing, timed_playback=r.timed_playback,
         score_read=r.score_read,
@@ -406,8 +401,7 @@ def _event_boundary(r) -> None:
         live_feedback_workflows=r.live_feedback_workflows,
         live_assessment=r.live_assessment, measurement=r.measurement,
         policy_registry=r.policy_registry, library=r.library,
-        teaching_decisions=r.teaching_decisions,
-        guided_session=r.guided_session, flow_session=r.flow_session,
+
         midi=r.midi, listen=r.listen, midi_ingress=r.midi_ingress,
         midi_calibration=r.midi_calibration,
         attempt_progression=r.attempt_progression, read_models=r.read_models,
@@ -422,8 +416,8 @@ def _event_boundary(r) -> None:
         lock=r.lock, measurement=r.measurement, midi=r.midi,
         midi_key_shortcuts=r.midi_key_shortcuts, transport=r.transport,
         read_models=r.read_models,
-        settings_workflows=r.settings_workflows, source_identity=r.source_identity,
-        teaching_decisions=r.teaching_decisions, timed_playback=r.timed_playback,
+        settings_workflows=r.settings_workflows, lesson=r.lesson,
+        timed_playback=r.timed_playback,
         transport_commands=r.transport_commands,
         timeline=r.practice_timeline, midi_ingress=r.midi_ingress,
         midi_application_input=r.midi_application_input, runtime_timings=r.runtime_timings,

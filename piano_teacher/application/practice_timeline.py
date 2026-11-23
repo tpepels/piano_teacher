@@ -17,18 +17,19 @@ from . import practice_flow
 
 
 class PracticeTimeline:
-    def __init__(self, *, source_identity, notices,
-                 transport, 
+    def __init__(self, *, lesson, notices,
+                 transport,
                  attempt_settlement, attempt, transport_timing, timed_playback,
                  score_read, lesson_execution,
                  recovery_workflows, completion_continuations,
                  live_feedback_workflows, live_assessment, measurement,
-                 policy_registry, library, teaching_decisions,
-                 guided_session, flow_session, midi, listen, midi_ingress,
+                 policy_registry, library,
+                 midi, listen, midi_ingress,
                  midi_calibration, attempt_progression, read_models,
                  teaching_continuation, exposure_workflows,
                  clock, poll_midi, feedback_seconds):
-        self.source_identity, self.notices = source_identity, notices
+        self.notices = notices
+        self.lesson = lesson
         self.transport = transport
         self.attempt_settlement, self.attempt = attempt_settlement, attempt
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
@@ -37,8 +38,7 @@ class PracticeTimeline:
         self.completion_continuations = completion_continuations
         self.live_feedback_workflows, self.live_assessment = live_feedback_workflows, live_assessment
         self.measurement, self.policy_registry = measurement, policy_registry
-        self.library, self.teaching_decisions = library, teaching_decisions
-        self.guided_session, self.flow_session = guided_session, flow_session
+        self.library = library
         self.midi, self.listen, self.midi_ingress = midi, listen, midi_ingress
         self.midi_calibration, self.attempt_progression = midi_calibration, attempt_progression
         self.read_models, self.clock, self.poll_midi = read_models, clock, poll_midi
@@ -55,14 +55,14 @@ class PracticeTimeline:
         """
         self.transport.record_take_end(
             at=self.transport.run_at + duration,
-            bpm=self.source_identity.plan.bpm)
+            bpm=self.lesson.plan.bpm)
         if self.transport.preview_only:
             # Disconnected MIDI: repeat as an ungraded preview, never create
             # fake notes, misses, accepted passes or mastery.
             self.attempt_settlement.finish_preview()
             self.transport.finish_take()
             self.transport.schedule_preview_repeat(
-                source_seconds=duration,source_bpm=self.source_identity.plan.bpm,
+                source_seconds=duration,source_bpm=self.lesson.plan.bpm,
                 presentation_bpm=self.transport_timing.presentation_bpm(),
                 rest_measurement=self.transport_timing.collect_rest_measurement(
                     from_beat=0.0,
@@ -77,7 +77,7 @@ class PracticeTimeline:
             return False
         completed_visual = self.transport_timing.visual_motion(now)[0]
         completed = self.attempt_settlement.complete_take(
-            phrase=phrase,hand=self.source_identity.plan.hand,bpm=self.source_identity.plan.bpm,
+            phrase=phrase,hand=self.lesson.plan.hand,bpm=self.lesson.plan.bpm,
             played=(self.attempt.recorder.presses
                     if self.attempt.recorder else ()),
             from_beat=self.transport.play_from_beat,end_beat=ending,
@@ -86,16 +86,16 @@ class PracticeTimeline:
             mode=self.transport.mode,review_end_beat=self.attempt.review_end_beat,
             automatic_remedial_review=self.attempt.automatic_remedial_review,
             performance_review=self.completion_continuations.performance_review,
-            prepare_decision=self.teaching_decisions.prepare,
-            plan=self.source_identity.plan,binding=self.teaching_decisions.binding(),now=now,
-            score_revision=self.source_identity.revision,
+            prepare_decision=self.lesson.prepare_decision,
+            plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
+            score_revision=self.lesson.revision,
             policy=resolve_mistake_policy(
                 self.library.settings["mistake_response_strategy"]))
         assessed = completed.assessed
         result,summary = assessed.result,completed.summary
         if completed.settled:
             self.transport.note_tempo(
-            stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
+            stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         self.attempt.publish_completion(
             marks=assessed.marks,unmapped=assessed.unmapped)
         # The completed take's settled grades, before any transition below can
@@ -104,7 +104,7 @@ class PracticeTimeline:
                                      final=True)
         self.notices.feedback = assessed.feedback
         self.transport.finish_take()
-        self.attempt.finish_review(summary,self.source_identity.plan.identity)
+        self.attempt.finish_review(summary,self.lesson.plan.identity)
         self.measurement.phase_changed("feedback", now)
         if not self.completion_continuations.apply_focused(
                 completed.effect, phrase=phrase, result=result, now=now,
@@ -117,25 +117,25 @@ class PracticeTimeline:
             result,total_beats=total_beats,duration=duration)
         pending = publication.pending
         total_beats,duration = publication.total_beats,publication.duration
-        self.attempt_settlement.checkpoint_failed_streak(pending,plan=self.source_identity.plan,now=now)
+        self.attempt_settlement.checkpoint_failed_streak(pending,plan=self.lesson.plan,now=now)
         self.transport.note_tempo(
-            stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
+            stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         exposure = pending.decision.next_exposure
         target = exposure.from_beat if exposure is not None else self.transport.play_from_beat
         completion = self.transport.finish_full_passage(FullPassageFacts(
-            pending=pending,stage_key=self.source_identity.plan.identity,bpm=self.source_identity.plan.bpm,
-            target_bpm=self.source_identity.plan.target_bpm,
+            pending=pending,stage_key=self.lesson.plan.identity,bpm=self.lesson.plan.bpm,
+            target_bpm=self.lesson.plan.target_bpm,
             assessed_bpm=self.attempt_settlement.pending_assessed_bpm,
             total_beats=total_beats,duration=duration,now=now,
             visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
             source_model=self.score_read.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
-            horizon_beats=self.transport.continuous_horizon_beats,warmup=self.source_identity.warmup,
+            horizon_beats=self.transport.continuous_horizon_beats,warmup=self.lesson.warmup,
             short_rest_enabled=self.transport.short_rest is not None,
             retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
             repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,
                 source_end=self.transport.run_at+duration),
             assets_ready=self.teaching_continuation.decision_assets_ready(pending,
-                revision=self.source_identity.revision,fingerprint=self.source_identity.fingerprint),
+                revision=self.lesson.revision,fingerprint=self.lesson.fingerprint),
             exact_repeats=self.lesson_execution.flow_active()))
         if completion.next_action is not None:
             self.notices.next_action = completion.next_action
@@ -152,8 +152,8 @@ class PracticeTimeline:
         if self.transport.intent is not None:
             return True, False
         context = TransitionContext(
-            has_plan=self.source_identity.plan is not None,
-            learning=self.transport.mode == "learn" and self.guided_session.controller is not None,
+            has_plan=self.lesson.plan is not None,
+            learning=self.transport.mode == "learn" and self.lesson.guided_controller is not None,
             paused=self.transport.paused, listening=self.transport.mode == "listen",
             preview_pending=self.transport.preview_loop_pending,
             preparation_pending=self.transport.preparation_pending,
@@ -168,7 +168,7 @@ class PracticeTimeline:
         if decision.preparation_phase is not None:
             self.transport.enter_preparation_phase(decision.preparation_phase)
         if decision.action == "learning":
-            self.guided_session.advance(connected=self.midi.connected, now=now)
+            self.lesson.advance_guided(connected=self.midi.connected, now=now)
             self.lesson_execution.save_guided_preparation()
         elif decision.action == "listening":
             if self.transport.running and self.listen.finished(now=now, run_at=self.transport.run_at):
@@ -176,9 +176,9 @@ class PracticeTimeline:
                 self.notices.feedback = "Example complete"
                 self.notices.next_action = (
                     "Choose Learn to find the notes, or Practice to play the rhythm.")
-                if (self.lesson_execution.flow_active() and self.flow_session.state is not None
-                        and self.flow_session.state.step is practice_flow.Step.LISTEN):
-                    self.lesson_execution.flow_execute(self.flow_session.listen_finished())
+                if (self.lesson_execution.flow_active() and self.lesson.flow_state is not None
+                        and self.lesson.flow_state.step is practice_flow.Step.LISTEN):
+                    self.lesson_execution.flow_execute(self.lesson.flow_listen_finished())
         elif decision.action == "preview_due":
             deadline = self.transport.next_at
             self.transport.advance_source_stride(self.score_read.source_model()[
@@ -237,8 +237,8 @@ class PracticeTimeline:
         now = self.clock()
         learning = self.transport.mode == "learn"
         guided_completed = bool(
-            learning and self.guided_session.controller is not None
-            and self.guided_session.controller.snapshot(now=now)["completed"])
+            learning and self.lesson.guided_controller is not None
+            and self.lesson.guided_controller.snapshot(now=now)["completed"])
         self.measurement.observe_phase(CapturePhaseFacts(
             paused=self.transport.paused,learning=learning,
             awaiting_score=self.transport.awaiting_score_revision is not None,
@@ -275,17 +275,17 @@ class PracticeTimeline:
             # missed attacks, completion or recovery during the admitted
             # continuation's reading/count-in lead.
             return False
-        phrase = self.source_identity.plan.active_phrase
+        phrase = self.lesson.plan.active_phrase
         score_beat = self.transport.play_from_beat + max(
             0.0, self.transport_timing.elapsed_beat(now-self.transport.run_at))
 
         step = self.attempt_progression.inspect(AttemptTick(
-            phrase=phrase, boundaries=self.source_identity.plan.piece.bar_boundaries,
+            phrase=phrase, boundaries=self.lesson.plan.piece.bar_boundaries,
             now=now, score_beat=score_beat, from_beat=self.transport.play_from_beat,
             run_at=self.transport.run_at, next_boundary=self.transport.next_boundary_beat,
             review_end=self.attempt.review_end_beat, preview=self.transport.preview_only,
             auto=self.transport.auto, mode=self.transport.mode,
-            bpm=self.source_identity.plan.bpm, gap_beats=self.transport.visual_gap_beats),
+            bpm=self.lesson.plan.bpm, gap_beats=self.transport.visual_gap_beats),
             self.recovery_workflows.assess_rolling_boundary, self.transport_timing.elapsed_seconds,
             exact_repeats=self.lesson_execution.flow_active())
         self.transport.advance_boundary(step.next_boundary)
@@ -297,8 +297,8 @@ class PracticeTimeline:
             followup = self.complete_attempt(phrase, step.ending,
                 phrase.sounding_end-phrase.start, step.duration, now)
             self.transport.refloor_fresh_announcement(TimedTakeSource(
-                self.source_identity.plan.active_phrase,self.source_identity.plan.piece.bar_boundaries,
-                self.source_identity.plan.piece.time_signatures,self.source_identity.plan.bpm,
+                self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries,
+                self.lesson.plan.piece.time_signatures,self.lesson.plan.bpm,
                 self.transport.visual_gap_beats),
                 physical_rest_enabled=self.transport.short_rest is not None)
         return followup

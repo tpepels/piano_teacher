@@ -9,13 +9,13 @@ from __future__ import annotations
 
 class DeviceWorkflows:
     def __init__(self, *, midi, shortcuts, live_input, lifecycle,
-                 guided_session, notices, transport, calibration,
+                 lesson, notices, transport, calibration,
                  library, clock):
         self.midi = midi
         self.shortcuts = shortcuts
         self.live_input = live_input
         self.lifecycle = lifecycle
-        self.guided_session = guided_session
+        self.lesson = lesson
         self.notices = notices
         self.transport = transport
         self.calibration = calibration
@@ -25,7 +25,7 @@ class DeviceWorkflows:
     def present(self, notice) -> None:
         if notice is None:
             return
-        teaching = self.guided_session.controller
+        teaching = self.lesson.guided_controller
         if notice.connected is not None and teaching is not None:
             teaching.set_connected(
                 notice.connected,
@@ -38,7 +38,7 @@ class DeviceWorkflows:
             self.shortcuts.cancel_capture()
             self.live_input.clear_device()
             self.lifecycle.stop(reason=reason)
-            teaching = self.guided_session.controller
+            teaching = self.lesson.guided_controller
             if teaching is not None:
                 teaching.set_connected(False, now=self.clock())
         self.notices.publish(notice.feedback, notice.next_action)

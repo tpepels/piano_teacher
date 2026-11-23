@@ -59,8 +59,8 @@ class PracticeSession:
                  attempt, attempt_settlement, device_workflows, exposure_workflows,
                  history_management, learning_commands, lock, measurement,
                  midi, midi_key_shortcuts, transport, read_models,
-                 settings_workflows, source_identity, teaching_decisions,
-                 timed_playback, transport_commands, 
+                 settings_workflows, lesson,
+                 timed_playback, transport_commands,
                  timeline, midi_ingress, midi_application_input, runtime_timings,
                  source_workflows, lesson_execution, score_preload,
                  lifecycle, progress, notices, clock):
@@ -77,8 +77,7 @@ class PracticeSession:
         self.transport = transport
         self.read_models = read_models
         self.settings_workflows = settings_workflows
-        self.source_identity = source_identity
-        self.teaching_decisions = teaching_decisions
+        self.lesson = lesson
         self.timed_playback = timed_playback
         self.transport_commands = transport_commands
         self.timeline = timeline
@@ -145,23 +144,23 @@ class PracticeSession:
                 return project_command_outcome(None)
             action = resolved
             kwargs.update(options)
-        before = {"fingerprint": self.source_identity.fingerprint,
-                  "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                  "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.transport.mode}
+        before = {"fingerprint": self.lesson.fingerprint,
+                  "stage_key": self.lesson.plan.identity if self.lesson.plan else None,
+                  "bpm": self.lesson.plan.bpm if self.lesson.plan else None, "mode": self.transport.mode}
         effect = None
         route = _COMMAND_ROUTES.get(action, "stage")
         # Stop/Pause/Resume only mutate transport state. The selected lesson
         # never consumes their teaching effect, so they cannot be blocked by
         # curriculum generators, learner-history reads or stale evidence.
         needs_teaching = action not in ("stop", "pause", "resume")
-        if (needs_teaching and self.source_identity.plan is not None
+        if (needs_teaching and self.lesson.plan is not None
                 and route in ("listening", "learning", "transport", "stage")
                 and not (action in ("start","restart")
                          and (self.attempt.settlement_failed
                               or self.attempt_settlement.pending_rolling is not None))):
-            change = (prepare_stage_change(self.source_identity.plan, action, kwargs, warmup=self.source_identity.warmup)
+            change = (prepare_stage_change(self.lesson.plan, action, kwargs, warmup=self.lesson.warmup)
                       if route == "stage" else None)
-            effect = self.teaching_decisions.prepare("manual", manual=change,
+            effect = self.lesson.prepare_decision("manual", manual=change,
                 action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
         self._dispatch_control(action, route, effect=effect, **kwargs)
         self.read_models.prepare_score_presentation()
@@ -169,9 +168,9 @@ class PracticeSession:
             self.measurement.event("manual_action", {"action": action,
                 "fingerprint": before["fingerprint"] or None,
                 "parameters": kwargs, "before": before,
-                "after": {"fingerprint": self.source_identity.fingerprint,
-                          "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                          "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.transport.mode}})
+                "after": {"fingerprint": self.lesson.fingerprint,
+                          "stage_key": self.lesson.plan.identity if self.lesson.plan else None,
+                          "bpm": self.lesson.plan.bpm if self.lesson.plan else None, "mode": self.transport.mode}})
         return project_command_outcome(action)
 
     def _dispatch_control(self, action: str, route: str, *, effect=None, **kwargs) -> None:
@@ -206,10 +205,10 @@ class PracticeSession:
 
     def _current_midi_arrival(self) -> MidiArrival:
         """Current accepted epoch; caller holds the existing session lock."""
-        plan = self.source_identity.plan
+        plan = self.lesson.plan
         return MidiArrival(
-            self.midi.device, self.source_identity.fingerprint,
-            self.source_identity.revision,
+            self.midi.device, self.lesson.fingerprint,
+            self.lesson.revision,
             plan.identity if plan is not None else "",
             plan.hand if plan is not None else "both",
             self.transport.transport_id,
@@ -308,7 +307,7 @@ class PracticeSession:
         if isinstance(event, SourceCommitted):
             resumed = self.source_workflows.install(
                 event.prepared, warmup=event.warmup)
-            self.teaching_decisions.source_installed()
+            self.lesson.forget_source_decisions()
             if resumed is not None:
                 self.lesson_execution.flow_open(resumed=resumed)
             if event.opened_identifier is not None:
@@ -407,7 +406,7 @@ class PracticeSession:
                 item.message, received_at=item.received_at,
                 corrected_at=item.corrected_at, deferred=True)
         self.timeline.publish_settled()
-        if self.source_identity.plan is None or self.transport.paused:
+        if self.lesson.plan is None or self.transport.paused:
             return 250
         if (self.transport.running
                 or self.transport.preview_loop_pending

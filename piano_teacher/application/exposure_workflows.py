@@ -13,16 +13,15 @@ from .exposure_preparation import (
 
 
 class ExposureWorkflows:
-    def __init__(self, *, source_identity, lesson_cursor, flow_session,
-                 teaching_decisions, guided_session, attempt, tempo_map_cache,
+    def __init__(self, *, lesson,
+                 attempt, tempo_map_cache,
                  transport, listen, notices, lifecycle,
                  learner_progress, progress, score_state_publisher,
                  midi, evidence_context, clock):
-        self.source_identity = source_identity
-        self.lesson_cursor = lesson_cursor
-        self.flow_session = flow_session
-        self.teaching_decisions = teaching_decisions
-        self.guided_session = guided_session
+        self.lesson = lesson
+
+
+
         self.attempt = attempt
         self.tempo_map_cache = tempo_map_cache
         self.transport = transport
@@ -37,55 +36,55 @@ class ExposureWorkflows:
         self.clock = clock
 
     def source(self) -> ExposureSource:
-        selected = self.source_identity.plan
+        selected = self.lesson.plan
         if selected is None:
             raise ValueError("Open a piece first")
         return ExposureSource(
             selected.identity, selected.active_variant,
             selected.piece.bar_boundaries, selected.piece.time_signatures,
-            self.source_identity.warmup,
-            self.flow_session.active(selected, warmup=self.source_identity.warmup))
+            self.lesson.warmup,
+            self.lesson.flow_applies(selected, warmup=self.lesson.warmup))
 
     def prepare_practice(self, *, exposure=None, effect=None, reason="transition"):
-        selected_plan = self.source_identity.plan
+        selected_plan = self.lesson.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
         effect = (None if exposure is not None
-                  else self.teaching_decisions.manual_effect("practice", effect=effect))
-        selected = exposure or self.teaching_decisions.install_command(effect)
-        entry = self.flow_session.tempo_entry(
-            selected_plan, warmup=self.source_identity.warmup, bpm=selected.bpm)
+                  else self.lesson.manual_effect("practice", effect=effect))
+        selected = exposure or self.lesson.install_command(effect)
+        entry = self.lesson.flow_tempo_entry(
+            selected_plan, warmup=self.lesson.warmup, bpm=selected.bpm)
         if entry.clear_guided_return:
-            self.guided_session.discard_return()
+            self.lesson.discard_guided_return()
         self.install(prepare_timed(
             self.source(), selected,
-            mode="practice", revision=self.source_identity.revision,
-            return_context=self.guided_session.return_context,
+            mode="practice", revision=self.lesson.revision,
+            return_context=self.lesson.guided_return_context,
             retry_range=self.attempt.retry_range), reason=reason)
 
     def prepare_listen(self, *, effect=None, reason="transition") -> None:
-        selected_plan = self.source_identity.plan
+        selected_plan = self.lesson.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
-        self.teaching_decisions.install_command(
-            self.teaching_decisions.manual_effect("listen", effect=effect))
+        self.lesson.install_command(
+            self.lesson.manual_effect("listen", effect=effect))
         self.install(prepare_listen(
-            self.source(), revision=self.source_identity.revision,
+            self.source(), revision=self.lesson.revision,
             bpm=selected_plan.bpm,
             tempo_map=self.tempo_map_cache.get(
                 selected_plan.active_stage, selected_plan.bpm)), reason=reason)
 
     def prepare_perform(self, *, scope: str = "current", exposure=None,
                         effect=None, reason="transition") -> None:
-        if self.source_identity.plan is None:
+        if self.lesson.plan is None:
             raise ValueError("Open a piece first")
         effect = (None if exposure is not None else
-                  self.teaching_decisions.manual_effect(
+                  self.lesson.manual_effect(
                       "perform", values={"scope":scope}, effect=effect))
-        selected = exposure or self.teaching_decisions.install_command(effect)
+        selected = exposure or self.lesson.install_command(effect)
         self.install(prepare_timed(
             self.source(), selected,
-            mode="perform", revision=self.source_identity.revision), reason=reason)
+            mode="perform", revision=self.lesson.revision), reason=reason)
 
     def apply_listen_failure(self) -> None:
         failure = self.listen.take_failure()
@@ -100,13 +99,13 @@ class ExposureWorkflows:
         if isinstance(prepared, GuidedPreparation):
             fragment = prepared.fragment
             self.learner_progress.save_resume(
-                fingerprint=self.source_identity.fingerprint,
+                fingerprint=self.lesson.fingerprint,
                 stage_key=prepared.source.stage_key,
                 unit=self.learner_progress.guided_unit(
-                    self.source_identity.plan, mode="learn",
+                    self.lesson.plan, mode="learn",
                     guided_range=fragment.beat_range))
             self.progress.save(
-                self.source_identity.plan, self.source_identity.fingerprint)
+                self.lesson.plan, self.lesson.fingerprint)
             self.lifecycle.stop(
                 reason=prepared.stop_reason or action_reason,
                 preserve_episode=prepared.recovery)
@@ -116,12 +115,12 @@ class ExposureWorkflows:
                 self.attempt.restore_retry(prepared.retry_range)
             self.transport.select_exposure(
                 mode="learn", automatic=False, awaited_revision=None)
-            self.guided_session.select(
+            self.lesson.select_guided(
                 fragment, stage_key=prepared.source.stage_key,
                 recovery=prepared.recovery)
-            self.source_identity.publish_revision(prepared.revision)
+            self.lesson.publish_revision(prepared.revision)
             self.transport.open_take()
-            self.guided_session.bind_selected(
+            self.lesson.bind_guided_selection(
                 revision=prepared.revision,
                 now=self.clock(), connected=self.midi.connected)
             self.transport.await_score(prepared.revision)
@@ -139,13 +138,13 @@ class ExposureWorkflows:
                 self.transport.select_opening(
                     prepared.from_beat if timed else 0.0)
             if timed:
-                self.lesson_cursor.select_opening(prepared.from_beat)
+                self.lesson.select_opening(prepared.from_beat)
                 self.attempt.prepare_timed_exposure(prepared)
                 if prepared.return_context is not None:
                     self.transport.prepare_rewind(prepared.from_beat)
-                    self.guided_session.select_timed_return(prepared.return_context)
-            self.guided_session.clear_selection()
-            self.source_identity.publish_revision(prepared.revision)
+                    self.lesson.select_timed_return(prepared.return_context)
+            self.lesson.clear_guided_selection()
+            self.lesson.publish_revision(prepared.revision)
             self.transport.select_exposure(
                 mode=prepared.mode if timed else "listen", automatic=False,
                 awaited_revision=(prepared.awaiting_score if timed

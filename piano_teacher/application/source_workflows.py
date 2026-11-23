@@ -12,20 +12,18 @@ from ..importing.pieces import import_piece
 
 
 class SourceWorkflows:
-    def __init__(self, *, source_identity, lesson_cursor, notices, lifecycle,
+    def __init__(self, *, lesson, notices, lifecycle,
                  recovery_streak, transport, source_preparation,
-                 guided_session, score_artifact_registry,
+                 score_artifact_registry,
                  attempt, listen, preprocessing, fingering, progress,
-                 fukuda_mistakes, library, library_health, flow_session,
+                 fukuda_mistakes, library, library_health,
                  lock):
-        self.source_identity = source_identity
-        self.lesson_cursor = lesson_cursor
+        self.lesson = lesson
         self.notices = notices
         self.lifecycle = lifecycle
         self.recovery_streak = recovery_streak
         self.transport = transport
         self.source_preparation = source_preparation
-        self.guided_session = guided_session
         self.score_artifact_registry = score_artifact_registry
         self.attempt = attempt
         self.listen = listen
@@ -35,7 +33,6 @@ class SourceWorkflows:
         self.fukuda_mistakes = fukuda_mistakes
         self.library = library
         self.library_health = library_health
-        self.flow_session = flow_session
         self.lock = lock
 
     def prepare(self, path: str, *, warmup: bool, diagnostics: bool):
@@ -52,19 +49,19 @@ class SourceWorkflows:
         self.transport.clear_take_end()
         self.lifecycle.stop(reason="source_changed")
         self.recovery_streak.clear()
-        self.lesson_cursor.set_course_guided(False)
-        self.source_identity.install(
+        self.lesson.set_course_guided(False)
+        self.lesson.install_source(
             plan=prepared.plan, source=str(prepared.path),
             fingerprint=prepared.fingerprint, warmup=warmup)
-        self.lesson_cursor.select_opening(0.0)
+        self.lesson.select_opening(0.0)
         self.score_artifact_registry.invalidate()
         self.source_preparation.source_installed()
         self.transport.select_source()
-        self.guided_session.clear_selection()
+        self.lesson.clear_guided_selection()
         self.notices.publish("Press Start to practice", "Press Start to practice.")
-        self.source_identity.advance_revision()
+        self.lesson.advance_revision()
         self.attempt.reset_source_presentation()
-        if self.flow_session.active(self.source_identity.plan, warmup=warmup):
+        if self.lesson.flow_applies(self.lesson.plan, warmup=warmup):
             return prepared.resumed
         return None
 
@@ -78,36 +75,36 @@ class SourceWorkflows:
         """Capture the exact original MIDI source before asynchronous work."""
         with self.lock:
             self._apply_listen_failure()
-            selected = self.source_identity.plan
+            selected = self.lesson.plan
             return self.source_preparation.capture_correction(
                 piece=selected.piece if selected is not None else None,
-                fingerprint=self.source_identity.fingerprint,
+                fingerprint=self.lesson.fingerprint,
                 requested_fingerprint=fingerprint)
 
     def prepare_fingering_correction(self, identity, *,
                                     source_id: str, finger: int | None):
         """Heavy correction while source_mutation is held; release state lock."""
         with self.lock:
-            selected = self.source_identity.plan
+            selected = self.lesson.plan
             piece = selected.piece if selected is not None else None
-            fingerprint = self.source_identity.fingerprint
+            fingerprint = self.lesson.fingerprint
         return self.source_preparation.correct_fingering(
             identity, piece=piece, fingerprint=fingerprint,
             source_id=source_id, finger=finger, fingering=self.fingering)
 
     def install_fingering_correction(self, corrected) -> None:
         """One source-bound state commit, under session and mutation guards."""
-        selected = self.source_identity.plan
+        selected = self.lesson.plan
         installed = self.source_preparation.correction_install(
             corrected, piece=selected.piece if selected is not None else None,
-            fingerprint=self.source_identity.fingerprint,
-            score_revision=self.source_identity.revision)
+            fingerprint=self.lesson.fingerprint,
+            score_revision=self.lesson.revision)
         self._apply_listen_failure()
         selected.piece = installed.piece
         self.score_artifact_registry.invalidate()
-        self.source_identity.publish_revision(installed.score_revision)
-        if self.transport.source_revised(self.source_identity.revision):
-            self.listen.retarget_score(self.source_identity.revision)
+        self.lesson.publish_revision(installed.score_revision)
+        if self.transport.source_revised(self.lesson.revision):
+            self.listen.retarget_score(self.lesson.revision)
 
     def library_listing(self) -> dict:
         return self.library.scan()
@@ -124,9 +121,9 @@ class SourceWorkflows:
     def mark_library_opened(self, identifier: str, *, warmup: bool) -> None:
         if warmup:
             self.transport.select_source()
-            self.lesson_cursor.set_course_guided(False)
+            self.lesson.set_course_guided(False)
             self.notices.publish(
                 "Warm-up ready - left, right, then both hands",
                 "Three clean passes unlock the next hand.")
-            self.progress.save(self.source_identity.plan, self.source_identity.fingerprint)
+            self.progress.save(self.lesson.plan, self.lesson.fingerprint)
         self.library.mark_opened(identifier)

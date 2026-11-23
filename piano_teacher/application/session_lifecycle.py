@@ -12,14 +12,14 @@ from ..lesson_settings import SETTINGS
 
 class SessionLifecycle:
     def __init__(self, *, transport, attempt, settlement,
-                 midi_ingress, continuation, guided_session,
+                 midi_ingress, continuation, lesson,
                  live_input, listen, measurement, clock):
         self.transport = transport
         self.attempt = attempt
         self.settlement = settlement
         self.midi_ingress = midi_ingress
         self.continuation = continuation
-        self.guided_session = guided_session
+        self.lesson = lesson
         self.live_input = live_input
         self.listen = listen
         self.measurement = measurement
@@ -33,7 +33,7 @@ class SessionLifecycle:
                   else self.measurement.guided.presses)
         if persist_evidence:
             try:
-                guidance = self.guided_session.controller
+                guidance = self.lesson.guided_controller
                 extra = ({"guidance": guidance.snapshot(now=self.clock())}
                          if self.transport.mode == "learn"
                          and guidance is not None else None)
@@ -56,7 +56,7 @@ class SessionLifecycle:
         self.transport.clear_grading_floor()
         # Precompiled successors remain valid only for their source identity.
         self.continuation.stop()
-        self.guided_session.stop()
+        self.lesson.stop_guided()
         self.transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
         self.attempt.reset_for_stop()

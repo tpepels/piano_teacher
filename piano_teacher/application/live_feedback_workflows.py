@@ -9,10 +9,10 @@ from ..live_feedback import live_scope
 
 
 class LiveFeedbackWorkflows:
-    def __init__(self, *, source_identity, transport, 
+    def __init__(self, *, lesson, transport,
                  score_artifact_registry, score_read, policy_registry,
                  library, attempt, live_assessment, transport_timing, clock):
-        self.source_identity = source_identity
+        self.lesson = lesson
         self.transport = transport
         self.score_artifact_registry = score_artifact_registry
         self.score_read, self.policy_registry = score_read, policy_registry
@@ -21,8 +21,8 @@ class LiveFeedbackWorkflows:
 
     def feedback_take(self) -> dict:
         """Immutable identity of the take that the next feedback belongs to."""
-        return {"piece_fingerprint": self.source_identity.fingerprint or "",
-                "revision": int(self.source_identity.revision),
+        return {"piece_fingerprint": self.lesson.fingerprint or "",
+                "revision": int(self.lesson.revision),
                 "transport_id": int(self.transport.transport_id), "mode": self.transport.mode,
                 "release_advisory": not self.library.settings["grade_note_holds"],
                 "graded": (not self.transport.preview_only
@@ -43,14 +43,14 @@ class LiveFeedbackWorkflows:
             return
         elapsed = self.transport_timing.musical_seconds(self.clock())
         marks = self.live_feedback(elapsed)
-        scope, _ = live_scope(self.source_identity.plan.active_phrase,
+        scope, _ = live_scope(self.lesson.plan.active_phrase,
             from_beat=self.transport.play_from_beat,elapsed_seconds=elapsed,
-            bpm=self.source_identity.plan.bpm,tempo=self.transport_timing.active_tempo_map())
+            bpm=self.lesson.plan.bpm,tempo=self.transport_timing.active_tempo_map())
         self.live_assessment.publish(marks, self.feedback_take(),scope_start_beat=scope)
 
     def live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Read the current cached source and ask the single grading owner."""
-        plan = self.source_identity.plan
+        plan = self.lesson.plan
         if plan is None or self.transport.preview_only or not self.transport.running:
             return []
         engraved = self.score_artifact_registry.current.cached_layout(self.score_read.selection())

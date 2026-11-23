@@ -10,11 +10,11 @@ from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasureme
 
 
 class TransportTiming:
-    def __init__(self, *, source_identity, lesson_cursor,
+    def __init__(self, *, lesson,
                  transport, tempo_map_cache,
                  attempt_progression, attempt_settlement, score_read,
                  midi_ingress, clock):
-        self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
+        self.lesson = lesson
         self.transport = transport
         self.tempo_map_cache, self.attempt_progression = tempo_map_cache, attempt_progression
         self.attempt_settlement, self.score_read = attempt_settlement, score_read
@@ -24,14 +24,14 @@ class TransportTiming:
         pending = self.attempt_settlement.pending
         if pending is not None and pending.receipt is None and pending.decision.next_exposure is not None:
             return float(pending.decision.next_exposure.bpm)
-        plan = self.source_identity.plan
+        plan = self.lesson.plan
         return float(plan.bpm) if plan is not None else 0.0
 
     def playback_facts(self, *, from_beat: float | None = None) -> PlaybackRuntimeFacts:
         """Frozen source, meter and transport facts; never hand over the engine."""
         source = None
-        if self.source_identity.plan is not None:
-            plan = self.source_identity.plan
+        if self.lesson.plan is not None:
+            plan = self.lesson.plan
             bar, meter = self.transport.count_in_bar_beats, tuple(self.transport.count_in_meter)
             if from_beat is not None:
                 _, bar, meter = self.attempt_progression.count_in_bar(
@@ -42,8 +42,8 @@ class TransportTiming:
                               float(s["bpm"])) for s in
                              (tempo.as_segments() if tempo is not None else ()))
             source = PlaybackSourceFacts(
-                fingerprint=self.source_identity.fingerprint,stage_key=plan.identity,
-                revision=self.source_identity.revision,hand=plan.hand,bpm=float(plan.bpm),
+                fingerprint=self.lesson.fingerprint,stage_key=plan.identity,
+                revision=self.lesson.revision,hand=plan.hand,bpm=float(plan.bpm),
                 end_beat=plan.active_phrase.sounding_end-plan.active_phrase.start,
                 count_in_bar_beats=float(bar),count_in_meter=tuple(meter),
                 tempo_segments=segments)
@@ -68,27 +68,27 @@ class TransportTiming:
         ExerciseStage.tempo_map() may transform every note, so rebuilding it
         for every clock read creates work proportional to the full passage.
         """
-        if self.source_identity.plan is None or self.transport.mode not in ("practice", "listen"):
+        if self.lesson.plan is None or self.transport.mode not in ("practice", "listen"):
             return None
-        return self.tempo_map_cache.get(self.source_identity.plan.active_stage, self.source_identity.plan.bpm)
+        return self.tempo_map_cache.get(self.lesson.plan.active_stage, self.lesson.plan.bpm)
 
     def elapsed_beat(self, elapsed_seconds: float) -> float:
         return SCHEDULER.elapsed_beats(
             self.active_tempo_map(),self.transport.play_from_beat,
-            elapsed_seconds,self.source_identity.plan.bpm)
+            elapsed_seconds,self.lesson.plan.bpm)
 
     def elapsed_seconds(self, beat: float) -> float:
         tempo = self.active_tempo_map()
-        return SCHEDULER.source_seconds(tempo,beat,self.source_identity.plan.bpm)
+        return SCHEDULER.source_seconds(tempo,beat,self.lesson.plan.bpm)
 
     def next_count_in(self) -> tuple[float,tuple[int,int]]:
-        plan = self.source_identity.plan
+        plan = self.lesson.plan
         return self.attempt_progression.next_count_in(
             phrase=plan.active_phrase if plan is not None else None,
             boundaries=plan.piece.bar_boundaries if plan is not None else (),
             time_signatures=plan.piece.time_signatures if plan is not None else (),
             bpm=float(plan.bpm) if plan is not None else 0.0,
-            start_from=self.lesson_cursor.opening_beat,
+            start_from=self.lesson.opening_beat,
             already_active=self.transport.running or self.transport.paused,
             current_bar_beats=self.transport.count_in_bar_beats,
             current_meter=tuple(self.transport.count_in_meter))
@@ -111,13 +111,13 @@ class TransportTiming:
             rest=self.collect_rest_measurement(
                 from_beat=from_beat,
                 source_end=deadline if self.transport.rest_take_end is None else None),
-            automatic=self.source_identity.plan is not None and self.transport.auto)
+            automatic=self.lesson.plan is not None and self.transport.auto)
 
     def start_rate_bpm(self, from_beat: float, bpm: float) -> float:
         """Authored tempo-map rate at a take's first beat, at this BPM."""
-        if self.source_identity.plan is None or bpm <= 0 or self.transport.mode not in ("practice", "listen"):
+        if self.lesson.plan is None or bpm <= 0 or self.transport.mode not in ("practice", "listen"):
             return float(bpm)
-        tempo = self.tempo_map_cache.get(self.source_identity.plan.active_stage, bpm)
+        tempo = self.tempo_map_cache.get(self.lesson.plan.active_stage, bpm)
         return float(tempo.bpm_at(from_beat)) if tempo is not None else float(bpm)
 
     def schedule_preparation(self, target: float, *, now: float,
@@ -132,9 +132,9 @@ class TransportTiming:
 
     def visual_motion(self, now: float) -> tuple[float, float, float]:
         """Read the one transport projection, including authored tempo and silence."""
-        phrase = self.source_identity.plan.active_phrase
+        phrase = self.lesson.plan.active_phrase
         return self.transport.position(
-            now, phrase_length=phrase.sounding_end-phrase.start, bpm=self.source_identity.plan.bpm,
+            now, phrase_length=phrase.sounding_end-phrase.start, bpm=self.lesson.plan.bpm,
             running=self.transport.running,
             pending_auto_result=(self.attempt_settlement.pending_result is not None and self.transport.auto),
             tempo_map=self.active_tempo_map())
@@ -163,7 +163,7 @@ class TransportTiming:
         This routine has no timing arithmetic. The musical scheduler owns
         the outgoing/incoming tempo conversion, count-in and deadline.
         """
-        if self.transport.short_rest is None or self.source_identity.plan is None or self.presentation_bpm() <= 0:
+        if self.transport.short_rest is None or self.lesson.plan is None or self.presentation_bpm() <= 0:
             return None
         clear, header = self.transport.short_rest
         outgoing_bpm = self.presentation_bpm()
@@ -172,9 +172,9 @@ class TransportTiming:
                 return None
             source_end,outgoing_bpm = self.transport.rest_take_end
         _, bar, _ = self.attempt_progression.count_in_bar(
-            phrase=self.source_identity.plan.active_phrase,
-            boundaries=self.source_identity.plan.piece.bar_boundaries,
-            time_signatures=self.source_identity.plan.piece.time_signatures,
+            phrase=self.lesson.plan.active_phrase,
+            boundaries=self.lesson.plan.piece.bar_boundaries,
+            time_signatures=self.lesson.plan.piece.time_signatures,
             position=from_beat)
         return RestMeasurement(
             source_end=source_end,outgoing_bpm=outgoing_bpm,

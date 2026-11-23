@@ -11,7 +11,7 @@ from .learning_capture import identifier
 class SettingsWorkflows:
     def __init__(self, *, library, measurement, lifecycle, notices,
                  policy_registry, midi_key_shortcuts, transport,
-                 progress, library_health, source_identity):
+                 progress, library_health, lesson):
         self.library = library
         self.measurement = measurement
         self.lifecycle = lifecycle
@@ -21,7 +21,7 @@ class SettingsWorkflows:
         self.transport = transport
         self.progress = progress
         self.library_health = library_health
-        self.source_identity = source_identity
+        self.lesson = lesson
 
     def preferences(self) -> dict:
         return self.library.public_settings()

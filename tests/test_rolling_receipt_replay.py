@@ -185,7 +185,7 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
         mode="practice", running=True, preview_only=False,
         awaiting_score_revision=None, intent=None,
         paused=False, run_at=100.0, preparation_pending=False)
-    worker.guided_session = SimpleNamespace(controller=None)
+    worker.lesson = SimpleNamespace(guided_controller=None)
     worker.midi_ingress = SimpleNamespace(resume_grading_after=0.0)
     worker.attempt_settlement = owner
     worker.attempt = SimpleNamespace(performance_summary=None)

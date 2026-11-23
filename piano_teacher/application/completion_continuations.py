@@ -15,20 +15,20 @@ from .teaching_continuation import (
 
 
 class CompletionContinuations:
-    def __init__(self, *, source_identity, notices, teaching_continuation,
-                 attempt_settlement, transport, 
-                 attempt, flow_session, lesson_execution, transport_timing,
+    def __init__(self, *, lesson, notices, teaching_continuation,
+                 attempt_settlement, transport,
+                 attempt, lesson_execution, transport_timing,
                  score_read, recovery_workflows, timed_playback,
-                 lesson_cursor, teaching_decisions, clock, library,
+                 clock, library,
                  score_artifact_registry, assessment, feedback_seconds):
-        self.source_identity, self.notices = source_identity, notices
+        self.notices = notices
+        self.lesson = lesson
         self.teaching_continuation, self.attempt_settlement = teaching_continuation, attempt_settlement
         self.transport = transport
-        self.attempt, self.flow_session = attempt, flow_session
+        self.attempt = attempt
         self.lesson_execution, self.transport_timing = lesson_execution, transport_timing
         self.score_read, self.recovery_workflows = score_read, recovery_workflows
         self.timed_playback = timed_playback
-        self.lesson_cursor, self.teaching_decisions = lesson_cursor, teaching_decisions
         self.clock, self.library = clock, library
         self.score_artifact_registry = score_artifact_registry
         self.assessment, self.feedback_seconds = assessment, feedback_seconds
@@ -46,8 +46,8 @@ class CompletionContinuations:
         transaction = self.teaching_continuation.begin_feedback(
             self.attempt_settlement.pending, now=now,
             automatic=self.transport.auto or explicit_retry,
-            force_early=force_early, revision=self.source_identity.revision,
-            fingerprint=self.source_identity.fingerprint)
+            force_early=force_early, revision=self.lesson.revision,
+            fingerprint=self.lesson.fingerprint)
         if isinstance(transaction,FeedbackWaiting):
             if transaction.message:
                 self.notices.feedback = transaction.message
@@ -58,7 +58,7 @@ class CompletionContinuations:
         try:
             self.commit_pending(finish_publication=False)
             self.transport.note_tempo(
-            stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
+            stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
             pending = self.attempt_settlement.pending
             self.publish_feedback_fault(self.teaching_continuation.settlement_failure(
@@ -72,17 +72,17 @@ class CompletionContinuations:
         try:
             publication = self.teaching_continuation.finish_feedback(
                 transaction, SettledSourceFacts(
-                    fingerprint=self.source_identity.fingerprint,
-                    stage_key=self.source_identity.plan.identity,
-                    revision=self.source_identity.revision,
-                    now=now, bpm=self.source_identity.plan.bpm,
+                    fingerprint=self.lesson.fingerprint,
+                    stage_key=self.lesson.plan.identity,
+                    revision=self.lesson.revision,
+                    now=now, bpm=self.lesson.plan.bpm,
                     presentation_bpm=self.transport_timing.presentation_bpm(),
                     count_in_beats=self.transport_timing.next_count_in_beats(),
                     automatic=transaction.pending.state.route.automatic,
                     flow_active=self.lesson_execution.flow_active()))
             if publication.flow_outcome is not None:
-                self.flow_session.settle_decided(
-                    publication.flow_outcome, plan=self.source_identity.plan,
+                self.lesson.settle_flow_decision(
+                    publication.flow_outcome, plan=self.lesson.plan,
                     message=publication.message, decision_id=transaction.decision_id)
             if explicit_retry and transaction.pending.state.route.automatic:
                 # Only an explicitly requested retry restores the original
@@ -160,14 +160,14 @@ class CompletionContinuations:
         """
         pending = self.attempt_settlement.pending
         identity = effect.identity
-        plan = self.source_identity.plan
+        plan = self.lesson.plan
         if (pending is None or plan is None
                 or pending.decision.decision_id != identity.decision_id
                 or pending.receipt is None
                 or pending.phase not in ("effects_applied", "published")
-                or identity.fingerprint != self.source_identity.fingerprint
+                or identity.fingerprint != self.lesson.fingerprint
                 or identity.stage_key != plan.identity
-                or identity.revision != self.source_identity.revision):
+                or identity.revision != self.lesson.revision):
             raise ValueError("Stale or unsettled teaching continuation effect")
         previous = self._applied_continuation_effect
         if previous is not None and previous.identity == effect.identity:
@@ -198,7 +198,7 @@ class CompletionContinuations:
         self._applied_continuation_effect = effect
 
     def commit_pending(self, *, finish_publication: bool = True) -> str:
-        if self.attempt_settlement.pending_result is None or self.source_identity.plan is None:
+        if self.attempt_settlement.pending_result is None or self.lesson.plan is None:
             return ""
         pending = self.attempt_settlement.pending
         if pending.phase == "effects_applied":
@@ -212,18 +212,18 @@ class CompletionContinuations:
         decision = pending.decision
         try:
             committed = self.attempt_settlement.commit_full_passage(
-                plan=self.source_identity.plan,binding=self.teaching_decisions.binding(),now=self.clock(),
+                plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=self.clock(),
                 continuation=self.teaching_continuation,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
-                score_revision=self.source_identity.revision,
+                score_revision=self.lesson.revision,
                 visual_offset=self.transport.visual_offset_beats)
             outcome = committed.receipt
-            self.attempt.apply_settlement(committed,plan=self.source_identity.plan)
+            self.attempt.apply_settlement(committed,plan=self.lesson.plan)
             if decision.verdict is not None and decision.verdict.clears_trouble:
                 self.lesson_execution.reset_trouble()
             if outcome.stage_changed:
-                self.lesson_cursor.select_opening(0.0)
-                self.source_identity.publish_revision(committed.selection.revision)
+                self.lesson.select_opening(0.0)
+                self.lesson.publish_revision(committed.selection.revision)
                 self.transport.wait_for_player()
                 prebuilt = self.teaching_continuation.consume_committed_asset(
                     committed.prepared,changed=True,auto=self.transport.auto,
@@ -252,14 +252,14 @@ class CompletionContinuations:
         elapsed_to_beat = (None if tempo is None else
             lambda seconds: tempo.beat_at(tempo.seconds_at(self.transport.play_from_beat)+seconds))
         return self.assessment.review(
-            phrase, result, bar_boundaries=self.source_identity.plan.piece.bar_boundaries,
-            played_from_beat=self.transport.play_from_beat, bpm=self.source_identity.plan.bpm,
+            phrase, result, bar_boundaries=self.lesson.plan.piece.bar_boundaries,
+            played_from_beat=self.transport.play_from_beat, bpm=self.lesson.plan.bpm,
             elapsed_to_beat=elapsed_to_beat)
 
     def finish_performance_review(self, phrase: Phrase, result):
         """Publish review only after its evidence and source feedback commit."""
         self.notices.next_action = performance_next_action(
-            warmup=self.source_identity.warmup,summary=self.attempt.performance_summary)
+            warmup=self.lesson.warmup,summary=self.attempt.performance_summary)
         self.transport.stop_automatic()
 
     def finish_section_review(self, result):
@@ -270,7 +270,7 @@ class CompletionContinuations:
         self.transport.stop_automatic()
         self.attempt.finish_section_review()
         self.transport.finish_rewind()
-        self.lesson_cursor.select_opening(0.0)
+        self.lesson.select_opening(0.0)
         self.notices.feedback = "Section review finished · " + result.summary
         self.notices.next_action = "Review the notes or press Start for the whole passage."
 
@@ -279,8 +279,8 @@ class CompletionContinuations:
         # A clean *partial* recovery cannot confer full passage mastery.
         # Clear the bounded review before the scheduled full-pass retry.
         self.attempt.prepare_full_retry()
-        self.lesson_cursor.select_opening(exposure.from_beat if exposure is not None else 0.0)
-        self.transport_timing.schedule_preparation(self.lesson_cursor.opening_beat, now=now,
+        self.lesson.select_opening(exposure.from_beat if exposure is not None else 0.0)
+        self.transport_timing.schedule_preparation(self.lesson.opening_beat, now=now,
             from_visual=self.transport.visual_offset_beats + self.transport.play_from_beat
                 + self.transport_timing.elapsed_beat(now-self.transport.run_at),
             reverse_seconds=self.feedback_seconds)

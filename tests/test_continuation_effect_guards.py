@@ -14,7 +14,7 @@ from piano_teacher.application.teaching_continuation import (
 def _subject():
     applied = []
     owner = object.__new__(CompletionContinuations)
-    owner.source_identity = SimpleNamespace(
+    owner.lesson = SimpleNamespace(
         fingerprint="score-sha", revision=12,
         plan=SimpleNamespace(identity="next-hand"))
     owner.attempt_settlement = SimpleNamespace(
@@ -54,13 +54,13 @@ def test_obsolete_continuations_cannot_execute(mutation):
     owner, effect, applied = _subject()
     pending = owner.attempt_settlement.pending
     if mutation == "missing_plan":
-        owner.source_identity.plan = None
+        owner.lesson.plan = None
     elif mutation == "different_fingerprint":
-        owner.source_identity.fingerprint = "another-score"
+        owner.lesson.fingerprint = "another-score"
     elif mutation == "different_stage":
-        owner.source_identity.plan.identity = "another-hand"
+        owner.lesson.plan.identity = "another-hand"
     elif mutation == "different_revision":
-        owner.source_identity.revision += 1
+        owner.lesson.revision += 1
     elif mutation == "different_decision":
         pending.decision.decision_id = "other-decision"
     elif mutation == "unsettled":
@@ -108,7 +108,7 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
             effect, None, "Original assessed result"))
     owner.commit_pending = lambda **kwargs: "Original assessed result"
     owner.transport.note_tempo = lambda **kwargs: None
-    owner.source_identity.plan.bpm = 72
+    owner.lesson.plan.bpm = 72
     owner.transport_timing = SimpleNamespace(
         presentation_bpm=lambda: 72,
         next_count_in_beats=lambda: 4)
@@ -139,7 +139,7 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
             effect, None, "Original assessed result"))
     owner.commit_pending = lambda **kwargs: "Original assessed result"
     owner.transport.note_tempo = lambda **kwargs: None
-    owner.source_identity.plan.bpm = 72
+    owner.lesson.plan.bpm = 72
     owner.transport_timing = SimpleNamespace(
         presentation_bpm=lambda: 72, next_count_in_beats=lambda: 4)
     owner.lesson_execution = SimpleNamespace(flow_active=lambda: False)

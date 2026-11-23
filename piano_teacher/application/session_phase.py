@@ -8,19 +8,19 @@ from ..state_projection import PhaseSnapshot, project_phase
 
 
 class SessionPhase:
-    def __init__(self, *, transport, guided_session,
+    def __init__(self, *, transport, lesson,
                  midi_ingress, attempt, attempt_settlement):
         self.transport = transport
-        self.guided_session = guided_session
+        self.lesson = lesson
         self.midi_ingress = midi_ingress
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
 
     def at(self, now: float) -> str:
         teaching_phase = None
-        if not self.transport.paused and self.transport.mode == "learn" and self.guided_session.controller is not None:
+        if not self.transport.paused and self.transport.mode == "learn" and self.lesson.guided_controller is not None:
             teaching_phase = ("loading" if self.transport.awaiting_score_revision is not None
-                              else self.guided_session.controller.snapshot(now=now)["phase"])
+                              else self.lesson.guided_controller.snapshot(now=now)["phase"])
         if (self.transport.running and not self.transport.paused
                 and now < self.midi_ingress.resume_grading_after):
             return "count_in"
