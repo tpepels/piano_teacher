@@ -37,8 +37,21 @@ validated against fresh state under the application lock, executed by the
 owning domain, and published as one versioned state snapshot
 (`state_contract.py`, mirrored by the generated `godot/state_contract.gd`).
 
-`PracticeTimeline` advances musical deadlines on worker ticks through an
-ordered, bounded in-worker transition loop.
+`PracticeSession` only serializes: it looks up the event's handler in the
+one routing table (`session_routes.event_handlers`), runs it under the
+lock and, after the outermost event, publishes the committed MIDI epoch.
+Adding an event or command family means adding its type and one entry in
+`session_routes`; PracticeSession does not change.
+
+- `CommandRouter` validates the displayed score, resolves UI intents,
+  prepares the lesson decision and runs the command family's route
+  (`session_routes.command_routes`).
+- `TickWorker` runs `PracticeTimeline.update_transition` in a bounded
+  same-tick loop, replays MIDI deferred during the handoff and chooses the
+  next tick interval.
+- `MidiEpoch` is the stale-key gate: a physical key counts only for the
+  device, source, revision, stage, hand, take and cancellation it arrived
+  in (or a later automatic repeat of the same source after its start).
 
 ## Entry points and state writers
 
@@ -97,8 +110,9 @@ Workflows coordinate domains for one event family each:
 `SettingsWorkflows`, `DeviceWorkflows`, `HistoryManagement`.
 `TransportTiming` samples transport facts (no state; arithmetic in
 `MusicalScheduler`); `TimedPlayback` opens the take a physical receipt
-authorized and never chooses a deadline. `PracticeSession` routes events
-and `PracticeTimeline` detects tick transitions; both only coordinate.
+authorized and never chooses a deadline; it also owns measured,
+preview and rewind continuations. `PracticeTimeline` detects tick
+transitions and delegates each one to its owner.
 
 ## Physical playback protocol
 
@@ -173,13 +187,13 @@ projected label and action; it makes no lesson, grading or timing decision.
   forward-only ledger.
 
 `scripts/audits/coupling.py` reports constructor fan-in and any access to
-domain internals from outside a domain (must stay zero). The event
-boundary and tick worker coordinate every handler and therefore have the
-widest fan-in.
+domain internals from outside a domain (must stay zero). The widest
+remaining fan-in is in the workflows that coordinate several domains for
+one event family (CompletionContinuations, PracticeTimeline: 17).
 
 The composition root builds the graph in six ordered stages (session
 state; devices, library and score; persistence and settlement; workflows;
-transport and completion; event boundary). Every service receives explicit
+transport and completion; event boundary and its routing table). Every service receives explicit
 constructor dependencies; no service locator is injected.
 
 ## Tests

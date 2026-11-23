@@ -126,7 +126,9 @@ func _process(_delta: float) -> bool:
             beat["hold_world"] = str(app.presentation_session.score_flow.hold_world)
             beat["projected"] = str(app.presentation_session.score_flow.project(now_ms))
             beat["painted"] = str(app.practice_view.stage.renderer.stream_world_beat)
-            beat["targets"] = state.get("teaching",{}).get("expected_notes",[]).size()
+            var heartbeat_teaching: Variant = state.get("teaching")
+            beat["targets"] = (heartbeat_teaching.get("expected_notes",[]).size()
+                if heartbeat_teaching is Dictionary else -1)
         print("FULL_SCENE_MIDI_HEARTBEAT:", JSON.stringify(beat))
     if not app.native_started or not app.startup_last_music_checked or \
             not bool(state.get("loaded",false)):
