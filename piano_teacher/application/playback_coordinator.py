@@ -149,11 +149,25 @@ class PlaybackCoordinator:
         self.receipt = None
         self._suspended = None
         self.state = PlaybackState.IDLE
+        self._clear_active_segment()
+        self.failure = reason
+
+    def _clear_active_segment(self) -> None:
         self.active_take_id = ""
         self.active_segment_id = ""
         self.active_deadline_ms = 0.0
         self.active_segment = {}
-        self.failure = reason
+
+    def _fail_terminally(self, intent, message: str) -> None:
+        """No further admission attempt for this exact automatic source."""
+        self._terminal_automatic_source = (
+            intent.fingerprint, intent.stage_key, intent.revision,
+            intent.hand, intent.end_beat, intent.bpm,
+            intent.mode, round(intent.from_beat, 7))
+        self.intent = None
+        self.receipt = None
+        self.state = PlaybackState.FAILED
+        self.failure = message
 
     def cancel_pending(self, reason: str) -> None:
         """Cancel only the unpresented successor, preserving an older take."""
@@ -321,14 +335,7 @@ class PlaybackCoordinator:
         # Other physical failures have a bounded number of new attempts.
         if (intent.fixed_deadline_ms is not None or
                 intent.attempt + 1 >= MAX_ADMISSION_ATTEMPTS):
-            self._terminal_automatic_source = (
-                intent.fingerprint, intent.stage_key, intent.revision,
-                intent.hand, intent.end_beat, intent.bpm,
-                intent.mode, round(intent.from_beat, 7))
-            self.intent = None
-            self.receipt = None
-            self.state = PlaybackState.FAILED
-            self.failure = message
+            self._fail_terminally(intent, message)
             return
         from dataclasses import replace
         self.intent = replace(intent, attempt=intent.attempt + 1)
@@ -531,10 +538,7 @@ class PlaybackCoordinator:
             finally:
                 self.intent = None
                 self.receipt = None
-                self.active_take_id = ""
-                self.active_segment_id = ""
-                self.active_deadline_ms = 0.0
-                self.active_segment = {}
+                self._clear_active_segment()
                 self.failure = "The admitted score did not match the musical transport"
                 self.state = PlaybackState.FAILED
             raise
@@ -615,15 +619,9 @@ class PlaybackCoordinator:
             elif facts.now - self.intent.requested_at > MAX_ADMISSION_WAIT_SECONDS:
                 # Includes silent physical preflight failures and unavailable
                 # engraving. A dead/admitting UI is not a valid steady state.
-                intent = self.intent
-                self._terminal_automatic_source = (
-                    intent.fingerprint, intent.stage_key, intent.revision,
-                    intent.hand, intent.end_beat, intent.bpm,
-                    intent.mode, round(intent.from_beat, 7))
-                self.intent = None
-                self.receipt = None
-                self.state = PlaybackState.FAILED
-                self.failure = "The score could not be prepared for playback; retry the lesson"
+                self._fail_terminally(
+                    self.intent,
+                    "The score could not be prepared for playback; retry the lesson")
             return
         # Live play/pause/count-in/completion are derived at read time from
         # PlaybackSession and its musical timeline. This protocol owner

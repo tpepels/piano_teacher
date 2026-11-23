@@ -155,10 +155,7 @@ class LessonNavigation:
         effect = self.lesson.manual_effect(
             "skip_stage", values={"reason":reason}, effect=effect)
         self.learner_progress.mark_skipped(fingerprint=self.lesson.fingerprint, stage_key=self.lesson.plan.identity, reason=reason)
-        self._stop(reason="skip_stage")
-        selected = self.lesson.install_command(effect)
-        self.course.reset_trouble()
-        self.lesson.set_course_guided(True)
+        selected = self._restart_course(effect, reason="skip_stage")
         self.course.enter_selected_exposure(selected,reason="skip_stage")
         self._save()
 
@@ -170,25 +167,24 @@ class LessonNavigation:
         key = effect.decision.next_exposure.stage_key
         candidate = next(step for step in self.lesson.plan.lesson_steps if step.key == key)
         self.learner_progress.mark_prior_steps_placed(self.lesson.plan, fingerprint=self.lesson.fingerprint, candidate=candidate)
-        self._stop(reason="place_original")
-        selected = self.lesson.install_command(effect)
-        self.course.reset_trouble()
-        self.lesson.set_course_guided(True)
+        selected = self._restart_course(effect, reason="place_original")
         self.course.enter_selected_exposure(selected,reason="place_original")
         self._save()
 
-    def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
-        return self.lesson.valid_trouble_spots(stage_key=stage_key)
+    def _restart_course(self, effect, *, reason: str):
+        """Stop, install the selected step, clear trouble, resume the course."""
+        self._stop(reason=reason)
+        selected = self.lesson.install_command(effect)
+        self.course.reset_trouble()
+        self.lesson.set_course_guided(True)
+        return selected
 
     def revisit_trouble(self, stage_key, start_beat, *, effect=None):
         effect = self.lesson.manual_effect(
             "revisit_trouble", from_beat=start_beat,
             values={"stage_key":stage_key}, effect=effect)
-        self._stop(reason="revisit_trouble")
-        selected = self.lesson.install_command(effect)
-        self.course.reset_trouble()
+        selected = self._restart_course(effect, reason="revisit_trouble")
         self.learner_progress.reactivate_trouble(fingerprint=self.lesson.fingerprint, stage_key=selected.stage_key)
-        self.lesson.set_course_guided(True)
         grid = phrase_grid(self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries)
         self.take.prepare_section(start=selected.from_beat,end=selected.end_beat,
             first_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.from_beat),
