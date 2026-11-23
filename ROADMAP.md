@@ -40,7 +40,7 @@ The separate final examination uses the whole original piece.
 
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
-**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; Software state on `7618737`: every A0–A7 item is complete in software, with evidence in the 2026-11-23 checkpoints and docs/architecture.md. Physical acceptance at the piano (and the Pathétique II native case, whose source was not supplied) is pending. See the A2/A3 executed verification checkpoint.** This is
+**Status: SOFTWARE COMPLETE, PHYSICAL ACCEPTANCE PENDING. Software state on `7618737`: every A0–A7 item is complete in software, with evidence in the 2026-11-23 checkpoints and docs/architecture.md. Physical acceptance at the piano (and the Pathétique II native case, whose source was not supplied) is pending. See the A2/A3 executed verification checkpoint.** This is
 the next development track. The V0–V7 implementation/acceptance work and
 older S0–S7 decomposition remain below as historical evidence and open
 verification requirements, **not** as a requirement to keep all existing
@@ -1018,8 +1018,8 @@ phase can be marked accepted. Run `bash scripts/test.sh --coverage` and
 `bash scripts/verify-embedded-production-local.sh` on **the same final
 commit**; do not reuse historical green CI as verification.
 
-**Status:** A2 and A3 have substantial integrated source corrections but
-**remain IN PROGRESS until complete behavioral/structural acceptance**.
+**Status (historical, superseded 2026-11-23):** A2 and A3 had integrated
+source corrections; see the executed verification checkpoint below.
 No Python, Godot, embedded, package or physical test is claimed, and GitHub
 CI stays manual-only; no workflow was triggered.
 
