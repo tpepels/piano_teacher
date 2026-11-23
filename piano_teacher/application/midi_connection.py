@@ -168,9 +168,6 @@ class MidiConnection:
             self.input_note = message.note
             self.input_at = now
 
-    def diagnostics_snapshot(self) -> dict:
-        return self.probe.snapshot()
-
     def diagnostics_action(self, action: str, *, running: bool) -> dict:
         if action == "start":
             if not self.connected:

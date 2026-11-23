@@ -22,14 +22,11 @@ FAILED = 3
 class EngineCommands:
     READS = {
         "state.snapshot": "poll_state",
-        "fingering.status": "fingering_status",
         "library.catalog": "library_listing",
         "library.health_status": "library_health_status",
         "lesson.overview": "lesson_overview",
         "settings.snapshot": "preferences",
         "learning.status": "learning_history_status",
-        "exercise.diagnostics": "exercise_diagnostics",
-        "hardware.diagnostics": "hardware_diagnostics",
         "performance.diagnostics": "performance_diagnostics",
         "score.semantic": "semantic_score",
     }

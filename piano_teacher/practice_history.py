@@ -21,16 +21,3 @@ class PracticePolicyService:
         history = self.store.recent(fingerprint, evidence.stage_key)
         return self.learner.recommend(history, self.diagnosis)
 
-    def inspect(self, fingerprint: str, stage_key: str) -> dict:
-        snapshot = self.store.recent(fingerprint, stage_key)
-        recommendation = self.learner.recommend(snapshot, self.diagnosis)
-        return {
-            "diagnosis_strategy": self.diagnosis.name,
-            "learner_strategy": self.learner.name,
-            "attempt_count_window": len(snapshot.recent),
-            "latest_diagnosis": self.diagnosis.diagnose(snapshot.recent[-1]) if snapshot.recent else "unassessed",
-            "recommendation": {
-                "focus": recommendation.focus, "action": recommendation.action,
-                "basis": recommendation.basis,
-            },
-        }

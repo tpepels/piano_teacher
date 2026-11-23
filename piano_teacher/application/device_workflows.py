@@ -67,9 +67,6 @@ class DeviceWorkflows:
             raise
         self.present(selected.notice)
 
-    def hardware_diagnostics(self) -> dict:
-        return self.midi.diagnostics_snapshot()
-
     def hardware_action(self, action: str) -> dict:
         return self.midi.diagnostics_action(
             action, running=self.playback_session.running)

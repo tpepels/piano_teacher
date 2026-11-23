@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass, replace, asdict
+from dataclasses import dataclass, replace
 from pathlib import Path
 import hashlib
 import time
@@ -82,14 +82,6 @@ class SourcePreparationSession:
                 or fingerprint != identity.fingerprint or piece.notes is not identity.notes):
             raise ValueError(_SOURCE_CHANGED)
         return piece
-
-    @staticmethod
-    def fingering_status(piece) -> dict:
-        plan = piece.fingering_plan if piece is not None else None
-        return {"summary":plan.summary() if plan is not None else None,
-                "assignments":{source_id:asdict(assignment)
-                    for source_id,assignment in plan.assignments.items()}
-                    if plan is not None else {}}
 
     def correct_fingering(self, identity: CorrectionIdentity, *,
                           piece: Piece | None, fingerprint: str,

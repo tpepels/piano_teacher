@@ -84,14 +84,3 @@ class SettingsWorkflows:
             self.library_health.reset()
         return updated
 
-    def exercise_diagnostics(self, *, tempo_map) -> dict:
-        selected = self.source_identity.plan
-        if selected is None:
-            return {"loaded": False,
-                    "exercise_strategy": self.library.settings["exercise_strategy"]}
-        return {"loaded": True,
-                "exercise_strategy": selected.exercise_strategy.name,
-                "tempo_segments": tempo_map.as_segments() if tempo_map is not None else (),
-                "stage_key": selected.identity,
-                **self.policy_registry.learning.inspect(
-                    self.source_identity.fingerprint, selected.identity)}

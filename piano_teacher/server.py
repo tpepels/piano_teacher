@@ -57,10 +57,6 @@ class PracticeEngine:
     def connect(self, name: str):
         return self.practice_session.apply(DeviceSelected(name))
 
-    def hardware_diagnostics(self) -> dict:
-        with self.lock:
-            return self.device_workflows.hardware_diagnostics()
-
     def hardware_diagnostics_action(self, action: str) -> dict:
         return self.practice_session.apply(HardwareRequested(action))
 
@@ -100,11 +96,6 @@ class PracticeEngine:
     def set_preferences(self, **changes) -> dict:
         return self.practice_session.apply(SettingsChanged(changes))
 
-    def exercise_diagnostics(self) -> dict:
-        with self.lock:
-            return self.settings_workflows.exercise_diagnostics(
-                tempo_map=self.transport_timing.active_tempo_map())
-
     def load_library(self, identifier: str) -> None:
         with self.lock:
             path = self.source_workflows.resolve_library(identifier)
@@ -128,10 +119,6 @@ class PracticeEngine:
             print("SCORE_LOAD_STAGE: ready",
                   round((time.perf_counter()-began)*1000,1),
                   "ms total",prepared.path.name,flush=True)
-
-    def fingering_status(self) -> dict:
-        with self.lock:
-            return self.source_workflows.fingering_status()
 
     def correct_fingering(self, source_id: str, finger: int | None,
                          *, fingerprint: str | None = None) -> None:

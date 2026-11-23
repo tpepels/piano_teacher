@@ -69,11 +69,6 @@ class SourceWorkflows:
             return prepared.resumed
         return None
 
-    def fingering_status(self) -> dict:
-        selected = self.source_identity.plan
-        return self.source_preparation.fingering_status(
-            selected.piece if selected is not None else None)
-
     def _apply_listen_failure(self) -> None:
         failure = self.listen.take_failure()
         if failure is not None:
