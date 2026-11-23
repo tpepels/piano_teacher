@@ -36,7 +36,6 @@ from .musical_scheduler import ContinuationMeasurement
 class PlaybackSession:
     mode: str = "practice"
     auto: bool = False
-    preview_only: bool = False
     awaiting_score_revision: int | None = None
     pause_context: str | None = None
     authorizing: bool = False
@@ -117,17 +116,16 @@ class PlaybackSession:
         self._transport.clear_grading_floor()
         self.mode = request.mode
         self._take.begin_timed_review()
-        self.preview_only = not request.connected
         self._transport.begin_take(loop_continuation=request.loop_continuation)
         self.open_take(phrase=source.phrase,recording=True)
         self._transport.running = True
-        self.auto = request.automatic and not self.preview_only
+        self.auto = request.automatic
         self.awaiting_score_revision = None
         scheduled = self._progression.schedule_start(
             phrase=source.phrase,boundaries=source.boundaries,
             time_signatures=source.time_signatures,bpm=source.bpm,
             position=request.position,loop_continuation=request.loop_continuation,
-            preview=self.preview_only,now=self._clock(),
+            now=self._clock(),
             count_in_plan=request.count_in_plan)
         self._transport.count_in_bar_beats = scheduled.count_in_bar_beats
         self._transport.count_in_meter = list(scheduled.count_in_meter)
@@ -142,8 +140,7 @@ class PlaybackSession:
             continuation=request.scheduled_deadline is not None).run_at
         self._transport.install_timed_origin(from_beat=scheduled.from_beat,
             run_at=deadline,gap_beats=source.visual_gap_beats)
-        scope = ("preview" if self.preview_only else
-            "perform" if request.mode == "perform" else
+        scope = ("perform" if request.mode == "perform" else
             "partial" if self._take.automatic_remedial_review else
             "section_review" if self._take.review_end_beat is not None else
             "partial" if scheduled.from_beat > source.phrase.first_attack_beat+1e-7 else "full")
@@ -235,7 +232,7 @@ class PlaybackSession:
             run_at=self._transport.run_at,paused_at=self._transport.paused_at,
             play_from_beat=self._transport.play_from_beat,
             resume_grading_after=self._midi_input.resume_grading_after,
-            pause_context=self.pause_context,preview_only=self.preview_only,
+            pause_context=self.pause_context,
             pending_result=self._take.feedback_pending,
             transport_id=self.transport_id)
 
@@ -371,7 +368,7 @@ class PlaybackSession:
             full_count_in_beats=request.full_count_in_beats,
             bar_beats=self.count_in_bar_beats,
             reading_lead_seconds=request.reading_lead_seconds,
-            midi_connected=request.midi_connected,preview=self.preview_only,
+            midi_connected=request.midi_connected,
             scheduled_deadline=request.scheduled_deadline)
         self._midi_input.authorize_grading_after(timing.grading_after)
         self._transport.count_in_beats = timing.count_in_beats
@@ -487,7 +484,6 @@ class PlaybackSession:
         self.deferred_score_ack = None
         self._transport.running = False
         self.auto = False
-        self.preview_only = False
         self._transport.count_in_beats = 0.0
         self.awaiting_score_revision = None
 

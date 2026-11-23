@@ -85,7 +85,7 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
     if stage.effects != null and moving:
         stage.effects.sync_beat(
             beat,maxi(1,int(round(float(state.get("count_in_bar_beats",4))))),
-            bool(state.get("preview_only",false)) or listening)
+            listening)
 
     if state.is_empty() or not moving or not score_ready:
         last_strike_transport = -1
@@ -96,7 +96,7 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
     if last_strike_transport == transport and \
             musical_clock >= last_strike_beat and \
             musical_clock-last_strike_beat <= .5 and \
-            (bool(state.get("preview_only",false)) or listening):
+            listening:
         crossed = LivingScore.groups_crossed(source_groups,last_strike_beat,musical_clock)
     last_strike_transport = transport
     last_strike_beat = musical_clock

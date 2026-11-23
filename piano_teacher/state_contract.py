@@ -121,7 +121,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "presentation_directive": ('dict',),
     "practice_preparation": ('dict', 'null'),
     "practice_timeline": ('dict',),
-    "preview_only": ('bool',),
     "progress": ('number',),
     "recovery_beat": ('null', 'number'),
     "recovery_notice": ('dict', 'null'),

@@ -36,7 +36,6 @@ class CapturePhaseFacts:
     running: bool
     count_in_activation: float
     mode: str
-    preview: bool
     pending_result: bool
     preparation_pending: bool
     performance_complete: bool
@@ -109,8 +108,7 @@ class LearningCapture:
             else:
                 self.phase_changed(
                     "count_in" if now < facts.count_in_activation else
-                    "listen" if facts.mode == "listen" else
-                    "preview" if facts.preview else "active",now)
+                    "listen" if facts.mode == "listen" else "active",now)
         elif facts.pending_result:
             self.phase_changed("feedback",now)
         elif facts.preparation_pending or facts.awaiting_score:

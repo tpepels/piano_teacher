@@ -50,6 +50,9 @@ class TransportTiming:
         return self.transport.facts(source)
 
     def request_playback(self, *, from_beat: float, **kwargs):
+        if (str(kwargs.get("mode", "")) in ("practice", "perform")
+                and not self.midi_input.connected):
+            raise ValueError("Connect your MIDI piano to play in tempo.")
         facts = self.playback_facts(from_beat=from_beat)
         if self.transport.automatic_request_blocked(
                 facts, action=str(kwargs.get("action", "")),

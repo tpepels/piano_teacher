@@ -57,7 +57,7 @@ class TeachingDecisions:
             scope = "partial_recovery"
         state = TeachingState(1, self.binding(), p.course_state(),
             TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto,
-                preview_only=self.transport.preview_only, assistance_used=self.measurement.assistance_used,
+                assistance_used=self.measurement.assistance_used,
                 scope=scope, performed_bpm=self.take.pending_assessed_bpm or p.bpm,
                 from_beat=self.transport.play_from_beat,
                 end_beat=end_beat if end_beat is not None else p.active_phrase.sounding_end-p.active_phrase.start,

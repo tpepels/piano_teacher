@@ -70,7 +70,7 @@ class LearningEvidenceSession:
                 "device_name": self._midi.device,
                 "calibration_ms": self._library.settings["midi_offset_ms"],
                 "calibration_result": self._midi_calibration.result,
-                "calibration_applied_ms": (0 if scope in ("guided", "preview") else
+                "calibration_applied_ms": (0 if scope == "guided" else
                                             self._library.settings["midi_offset_ms"]),
                 "assistance": persistent_hints or scope == "guided"}
 

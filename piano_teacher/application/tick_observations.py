@@ -35,7 +35,7 @@ class TickObservations:
             count_in_activation=max(
                 self.transport.run_at,
                 self.midi_input.resume_grading_after),
-            mode=self.transport.mode,preview=self.transport.preview_only,
+            mode=self.transport.mode,
             pending_result=self.take.pending_result is not None,
             preparation_pending=self.transport.preparation_pending,
             performance_complete=self.take.performance_summary is not None),now)

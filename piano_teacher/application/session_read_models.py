@@ -73,7 +73,6 @@ class SessionCapture:
             plan=self.lesson.plan,
             play_from_beat=self.transport.play_from_beat,
             practice_preparation=self.transport.practice_preparation,
-            preview_only=self.transport.preview_only,
             recovery_notice=self.take.recovery_notice,
             retry_range=self.take.retry_range,
             review_end_beat=self.take.review_end_beat,

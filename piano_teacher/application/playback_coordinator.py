@@ -557,8 +557,7 @@ class PlaybackCoordinator:
                 "hand": intent.hand,
             },
             "mode": intent.mode,
-            "graded": intent.mode in ("practice", "perform")
-                      and not post.preview_only,
+            "graded": intent.mode in ("practice", "perform"),
             "bpm": intent.bpm,
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),

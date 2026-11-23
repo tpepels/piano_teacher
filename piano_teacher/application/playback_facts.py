@@ -30,7 +30,6 @@ class PlaybackRuntimeFacts:
     play_from_beat: float
     resume_grading_after: float
     pause_context: str | None
-    preview_only: bool
     pending_result: bool
     transport_id: int
 

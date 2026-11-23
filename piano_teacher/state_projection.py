@@ -47,7 +47,6 @@ class PhaseSnapshot(_Snapshot):
     run_at: float = 0.0
     teaching_phase: str | None = None
     performance_complete: bool = False
-    preview_loop_pending: bool = False
     review_complete: bool = False
     pending_result: bool = False
     awaiting_score: bool = False
@@ -63,8 +62,6 @@ def project_phase(state: PhaseSnapshot, *, mode: str, now: float) -> str:
         return "count_in" if now < state.run_at else "playing"
     if mode == "perform" and state.performance_complete:
         return "performance_complete"
-    if state.preview_loop_pending:
-        return "preview_gap"
     if mode == "practice" and state.review_complete and state.performance_complete:
         return "review"
     return ("feedback" if state.pending_result else "loading" if state.awaiting_score
@@ -156,7 +153,6 @@ class TimingSnapshot(_Snapshot):
     running: bool = False
     paused: bool = False
     auto: bool = False
-    preview_only: bool = False
     play_from_beat: float = 0.0
     open_from_beat: float = 0.0
     pending_rewind: float | None = None
@@ -320,7 +316,7 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "paused": timing.paused, "awaiting_score_revision": timing.awaiting_score_revision,
         "count_in_beats": timing.count_in_beats if timing.running else 0,
         "count_in_bar_beats": timing.count_in_bar_beats, "count_in_meter": list(timing.count_in_meter),
-        "midi_notes": timing.midi_notes, "preview_only": timing.preview_only,
+        "midi_notes": timing.midi_notes,
         "progress": progress, "duration": (
             sum(SCHEDULER.beats_seconds(
                     min(practice_end,float(segment["end_beat"])) -
@@ -388,7 +384,7 @@ def guided_learning_fields(*, teaching: Mapping, fragment: Mapping, session_id: 
     if phase == "loading":
         feedback = "Preparing a short idea to learn"
     elif phase == "disconnected":
-        feedback = "No piano connected — timed preview only. Connect your piano in Settings to learn notes."
+        feedback = "No piano connected. Connect your piano in Settings to learn notes."
         fields["next_action"] = "Connect your piano in Settings to learn notes."
     elif phase == "guided_complete":
         feedback = "You found every note. Ready to add rhythm?"

@@ -80,10 +80,6 @@ class Transport:
         return self._timeline.preparation_pending
 
     @property
-    def preview_loop_pending(self):
-        return self._timeline.preview_loop_pending
-
-    @property
     def rest_take_end(self):
         return self._timeline.rest_take_end
 
@@ -180,9 +176,6 @@ class Transport:
     def report_rest_geometry(self, *args, **kwargs):
         return self._timeline.report_rest_geometry(*args, **kwargs)
 
-    def schedule_preview_repeat(self, *args, **kwargs):
-        return self._timeline.schedule_preview_repeat(*args, **kwargs)
-
     def select_opening(self, *args, **kwargs):
         return self._timeline.select_opening(*args, **kwargs)
 
@@ -222,10 +215,6 @@ class Transport:
     @property
     def pause_context(self):
         return self._session.pause_context
-
-    @property
-    def preview_only(self):
-        return self._session.preview_only
 
     @property
     def running(self):

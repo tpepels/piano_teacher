@@ -10,7 +10,7 @@ from .musical_scheduler import SCHEDULER
 PAUSABLE_PHASES = frozenset((
     "playing", "count_in", "feedback", "recovering",
     "loading", "guided_wait", "introducing", "disconnected",
-    "preview_gap", "admitting"))
+    "admitting"))
 
 
 def require_pausable(*, paused: bool, phase: str) -> None:
@@ -21,11 +21,11 @@ def require_pausable(*, paused: bool, phase: str) -> None:
 
 
 def resume_timeline(*, paused: bool, learning: bool, running: bool,
-                    preview_pending: bool, automatic_feedback: bool) -> bool:
+                    automatic_feedback: bool) -> bool:
     """Return whether the running count-in deadline must shift."""
     if not paused:
         raise ValueError("Cannot resume unless an exercise is paused")
-    return not learning and (running or preview_pending or automatic_feedback)
+    return not learning and (running or automatic_feedback)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +42,7 @@ def resume_timing(*, now: float, origin: float, previous_origin: float,
                   pause_context: str | None, bpm: float | None,
                   count_in_beats: float, full_count_in_beats: float, bar_beats: float,
                   reading_lead_seconds: float,
-                  midi_connected: bool, preview: bool,
+                  midi_connected: bool,
                   scheduled_deadline: float | None) -> ResumeTiming:
     """Apply the existing scheduler to the single shifted source epoch."""
     if (shift_run_at and running and bpm is not None
@@ -54,7 +54,7 @@ def resume_timing(*, now: float, origin: float, previous_origin: float,
                 now=now,origin=origin,bpm=bpm,count_in_beats=count_in_beats,
                 reading_lead_seconds=reading_lead_seconds,
                 already_waiting=max(0.,grading_after-now))
-        elif (midi_connected and not preview and pause_context == "playing"
+        elif (midi_connected and pause_context == "playing"
               and not had_reading_lead and origin <= now):
             count_in_beats = SCHEDULER.count_in_beats(full_count_in_beats,bpm)
             lead = SCHEDULER.beats_seconds(count_in_beats,bpm)

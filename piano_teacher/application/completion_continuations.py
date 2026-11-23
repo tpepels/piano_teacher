@@ -1,6 +1,6 @@
 """Everything that happens immediately after a take ends.
 
-An ungraded preview repeats; a graded take is assessed by TakeGrading and
+A graded take is assessed by TakeGrading and
 its immediately settled consequence (policy response, performance,
 section or partial-recovery review, selected exposure) is applied here.
 A full passage is handed to SettlementContinuation, which settles it at
@@ -31,31 +31,12 @@ class TakeCompletion:
         """Apply post-performance state after the score's settlement interval.
 
         Called from PracticeSession's locked event drain. Assessment
-        and grading occur only after a completed non-preview take.
+        and grading occur only after a completed take.
         Returns whether another same-tick transition must be queued.
         """
         self.transport.record_take_end(
             at=self.transport.run_at + duration,
             bpm=self.lesson.plan.bpm)
-        if self.transport.preview_only:
-            # Disconnected MIDI: repeat as an ungraded preview, never create
-            # fake notes, misses, accepted passes or mastery.
-            self.take.finish_preview()
-            self.transport.finish_take()
-            self.transport.schedule_preview_repeat(
-                source_seconds=duration,source_bpm=self.lesson.plan.bpm,
-                presentation_bpm=self.transport_timing.presentation_bpm(),
-                rest_measurement=self.transport_timing.collect_rest_measurement(
-                    from_beat=0.0,
-                    source_end=self.transport.run_at+duration),
-                now=now,reading_horizon_beats=self.transport.continuous_horizon_beats)
-            self.notices.feedback = "Timing preview - repeating after one empty measure"
-            self.notices.next_action = "Connect your MIDI piano to earn progress."
-            # The next preview must be admitted during the rest, not at
-            # the previous retry deadline after its count-in is over.
-            self.continuation.continue_at(self.transport.next_at,
-                from_beat=0.0)
-            return False
         completed = self.grading.grade(phrase, ending, now)
         result = completed.assessed.result
         self.notices.feedback = completed.assessed.feedback

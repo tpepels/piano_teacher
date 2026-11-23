@@ -27,7 +27,6 @@ class SessionPhase:
             paused=self.transport.paused, running=self.transport.running, run_at=self.transport.run_at,
             teaching_phase=teaching_phase,
             performance_complete=self.take.performance_summary is not None,
-            preview_loop_pending=self.transport.preview_loop_pending,
             review_complete=self.take.review_session_complete,
             pending_result=self.take.pending_result is not None,
             awaiting_score=self.transport.awaiting_score_revision is not None,

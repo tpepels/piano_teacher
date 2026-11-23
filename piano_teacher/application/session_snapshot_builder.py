@@ -59,7 +59,6 @@ class SnapshotValues:
     plan: Any
     play_from_beat: float
     practice_preparation: Any
-    preview_only: bool
     recovery_notice: Any
     retry_range: Any
     review_end_beat: float | None
@@ -187,7 +186,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         mapped_clock_beat=(reads.elapsed_beat(now-state.run_at)
                            if tempo_map is not None else None),
         running=state.running, paused=state.paused, auto=state.auto,
-        preview_only=state.preview_only, play_from_beat=state.play_from_beat,
+        play_from_beat=state.play_from_beat,
         open_from_beat=state.open_from_beat, pending_rewind=state.pending_rewind,
         review_end_beat=state.review_end_beat,
         awaiting_score_revision=state.awaiting_score_revision,
@@ -208,7 +207,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
                      if state.mode == "practice" and state.pending_result is not None else None),
         feedback_marks=state.feedback_marks, live_marks=live_marks,
         feedback_unmapped=state.feedback_unmapped,
-        scoring_available=(not state.preview_only and state.midi_connected
+        scoring_available=(state.midi_connected
                            and state.mode in ("practice", "perform")),
     )
     guided = None

@@ -168,9 +168,6 @@ class Take:
     def finish_full_completion(self, *args, **kwargs):
         return self._settlement.finish_full_completion(*args, **kwargs)
 
-    def finish_preview(self, *args, **kwargs):
-        return self._settlement.finish_preview(*args, **kwargs)
-
     def finish_publication(self, *args, **kwargs):
         return self._settlement.finish_publication(*args, **kwargs)
 

@@ -92,7 +92,6 @@ const SCHEMA := {
     "practice_preparation": ["dict", "null"],
     "practice_timeline": ["dict"],
     "presentation_directive": ["dict"],
-    "preview_only": ["bool"],
     "progress": ["number"],
     "recovery_beat": ["null", "number"],
     "recovery_notice": ["dict", "null"],

@@ -12,8 +12,7 @@ func record_preview(groups: Array, stage) -> void:
 ## mode discards any graded reaction still on screen. Grading, transport and
 ## score ink are untouched.
 func transition_mode(state: Dictionary, stage) -> void:
-    var ungraded: bool = bool(state.get("preview_only", false)) or \
-        str(state.get("mode", "")) == "listen"
+    var ungraded: bool = str(state.get("mode", "")) == "listen"
     if not ungraded:
         return
     if stage.effects != null and float(stage.effects.impact_energy) != 0.0:

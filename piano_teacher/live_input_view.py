@@ -28,7 +28,7 @@ class LiveInputView:
     def receive(
         self, *, pitch: int, is_on: bool, now: float, phrase: Phrase | None,
         hand: str, bpm: float, from_beat: float, run_at: float,
-        running: bool, paused: bool, preview: bool, mode: str,
+        running: bool, paused: bool, mode: str,
         transport_id: int, tempo_map: TempoMap | None = None,
         at: float | None = None, judgement: NoteAssessment | None = None,
     ) -> dict | None:
@@ -43,7 +43,7 @@ class LiveInputView:
                 self.held[pitch] = remaining
             else:
                 self.held.pop(pitch, None)
-        graded = running and not paused and not preview and mode in ("practice", "perform")
+        graded = running and not paused and mode in ("practice", "perform")
         observation = judgement.observation if judgement is not None and graded else None
         if not is_on:
             if observation is None or observation.pitch_error or observation.actual_release is None:
@@ -58,7 +58,7 @@ class LiveInputView:
         if running and not paused and mode in ("practice", "perform"):
             if at < 0 and judgement is None:
                 status = "count_in"
-            elif not preview:
+            else:
                 status = "unexpected"
                 if observation is not None:
                     if observation.pitch_error:

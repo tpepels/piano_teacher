@@ -30,7 +30,6 @@ class VisualMotionSnapshot:
     rewind_at: float
     rewind_seconds: float
     pending_auto_result: bool
-    preview_loop_pending: bool
     gap_beats: float
     paused: bool
 
@@ -44,7 +43,7 @@ def project_visual_motion(
     Rewind intentionally uses its own phase velocity, not the practice BPM.
     """
     length = state.phrase_length
-    forward_gap = ((state.pending_auto_result or state.preview_loop_pending)
+    forward_gap = (state.pending_auto_result
                    and state.rewind_from is None and not state.preparation_pending)
     if tempo_map is not None and now >= state.run_at and (state.running or forward_gap):
         if abs(tempo_map.duration_beats-length) > 1e-7:
@@ -84,7 +83,7 @@ def project_visual_motion(
         progress = min(1.0, max(0.0, (now-state.rewind_at)/seconds))
         position = state.rewind_from + (target-state.rewind_from)*progress
         speed = (target-state.rewind_from)/seconds if progress < 1 else 0.0
-    elif state.pending_auto_result or state.preview_loop_pending:
+    elif state.pending_auto_result:
         target += state.gap_beats
         # The end of the rest is a scheduled handoff, not an instruction to
         # stop the musical clock. The engine may process that handoff a frame

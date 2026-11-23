@@ -6,11 +6,9 @@ const Design := preload("res://practice_theme.gd")
 # Connected/disconnected and recent input come solely from Python snapshots.
 # A note reception is not a correct-note judgment or a mastery event.
 const READY := Design.MINT
-const QUIET := Design.SLATE
 const MISSING := Design.AMBER
 
 var connected := false
-var is_preview := false
 var label := "NO PIANO"
 var activity := 0.0
 var previous_count := -1
@@ -34,7 +32,6 @@ func _notification(what: int) -> void:
 func present(state: Dictionary) -> void:
     var current_device: String = str(state.get("device", ""))
     var current_connected: bool = not current_device.is_empty()
-    var preview: bool = bool(state.get("preview_only", false))
     var count: int = maxi(0, int(state.get("midi_input_count", 0)))
     var age: Variant = state.get("midi_input_age")
     var recent: bool = (age != null and float(age) >= 0.0
@@ -50,12 +47,9 @@ func present(state: Dictionary) -> void:
     previous_count = count
     previous_device = current_device
     var next_label: String = (
-        "NO PIANO" if not current_connected else
-        "PREVIEW" if preview else "MIDI CONNECTED")
-    if connected != current_connected or is_preview != preview \
-            or next_label != label or new_input:
+        "NO PIANO" if not current_connected else "MIDI CONNECTED")
+    if connected != current_connected or next_label != label or new_input:
         connected = current_connected
-        is_preview = preview
         label = next_label
         tooltip_text = next_label + (" · " + current_device if current_connected else " · Connect a keyboard in Settings")
         queue_redraw()
@@ -70,7 +64,7 @@ func _draw() -> void:
     if size.x < 35.0 or size.y < 15.0:
         return
     var tone: Color = (
-        MISSING if not connected else QUIET if is_preview else READY)
+        MISSING if not connected else READY)
     var y: float = size.y * .5
     var center := Vector2(12.0, y)
     var flash: float = activity if connected else 0.0

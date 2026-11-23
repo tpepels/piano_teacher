@@ -1,4 +1,4 @@
-"""Grade one completed, non-preview take and publish its settled marks.
+"""Grade one completed take and publish its settled marks.
 
 Owns the grading inputs (recorder, tempo map, grading and mistake
 policies, performance review) and the publication of the take's final

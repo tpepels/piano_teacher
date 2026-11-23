@@ -27,10 +27,6 @@ static func present(state: Dictionary) -> Dictionary:
             "label":context + " · " + hand,
             "detail":"%d of %d notes found · timing comes later" % [done, total],
             "kind":"learn", "streak":raw_streak,"required":required}
-    if bool(state.get("preview_only", false)):
-        return {"visible":true, "label":"%s · PREVIEW" % hand,
-            "detail":"MIDI piano required to earn accepted runs",
-            "kind":"preview", "streak":0,"required":required}
     var result: Variant = state.get("take_result")
     if phase == "feedback" and result is Dictionary:
         var accepted: bool = bool(result.get("accepted", result.get("clean",false)))

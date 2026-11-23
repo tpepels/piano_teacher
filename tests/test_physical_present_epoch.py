@@ -17,7 +17,7 @@ def _authorized():
         source=source, now=100.0, mode="practice", running=True,
         paused=False, run_at=100.0, paused_at=0.0,
         play_from_beat=0.0, resume_grading_after=0.0,
-        pause_context=None, preview_only=False, pending_result=False,
+        pause_context=None, pending_result=False,
         transport_id=19)
     owner = PlaybackCoordinator()
     owner.state = PlaybackState.PLAYING

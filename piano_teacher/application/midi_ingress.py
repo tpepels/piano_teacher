@@ -24,7 +24,6 @@ class MidiInputFacts:
     mode: str
     running: bool
     paused: bool
-    preview: bool
     from_beat: float
     run_at: float
     transport_id: int
@@ -41,11 +40,9 @@ class MidiInputFacts:
 class InputTransportFacts:
     """Immutable backend facts; the ingress never inspects PracticeEngine."""
     next_at: float
-    preview_loop_pending: bool
     pending_teaching_result: bool
     pending_rewind: bool
     automatic: bool
-    preview_only: bool
     visual_gap_beats: float
     awaiting_score: bool
     exercise_kind: str
@@ -183,13 +180,12 @@ class MidiIngress:
             return False
         due = (not facts.running and transport.next_at
                and received_at >= transport.next_at
-               and (transport.preview_loop_pending or
-                    transport.pending_teaching_result and transport.automatic or
+               and (transport.pending_teaching_result and transport.automatic or
                     transport.pending_rewind))
         if (facts.running and facts.mode == "practice"
                 and transport.exercise_kind != "perform"
                 and transport.review_end_beat is None
-                and (transport.automatic or transport.preview_only)):
+                and transport.automatic):
             duration = SCHEDULER.source_seconds(
                 facts.tempo_map,
                 facts.phrase.sounding_end-facts.phrase.start,facts.bpm)
@@ -226,7 +222,7 @@ class MidiIngress:
                 early = True
         judgement = None
         if (recorded is not None and facts.phrase is not None
-                and not facts.paused and not facts.preview):
+                and not facts.paused):
             assessment = live_assessment(
                 facts.phrase,facts.hand,facts.bpm,recorder.presses,
                 from_beat=facts.from_beat,elapsed_seconds=musical_at,
@@ -236,7 +232,7 @@ class MidiIngress:
                 and entry.observation.press_id == recorded.press_id),None)
         live_event = self.live.receive(pitch=message.note,is_on=is_on,now=corrected_at,
             phrase=facts.phrase,hand=facts.hand,bpm=facts.bpm,from_beat=facts.from_beat,
-            run_at=facts.run_at,running=facts.running,paused=facts.paused,preview=facts.preview,
+            run_at=facts.run_at,running=facts.running,paused=facts.paused,
             mode=facts.mode,transport_id=facts.transport_id,tempo_map=facts.tempo_map,
             at=musical_at,judgement=judgement)
         if live_event is not None:

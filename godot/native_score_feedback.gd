@@ -180,13 +180,12 @@ func ingest(event: Dictionary) -> String:
 ## Presentation context only: which take is active and whether graded ink
 ## may be shown. It never records a grade.
 func present(state: Dictionary) -> void:
-    var suppress: bool = bool(state.get("preview_only",false))
     # A buffered event older than the state's revision can never bind.
     var current_revision: int = int(state.get("revision",-2))
     if not _buffered.is_empty():
         _buffered = _buffered.filter(func(event: Dictionary) -> bool:
             return int(event.get("revision",-1)) >= current_revision)
-    if int(state.get("revision",-2)) == score_revision and not suppress:
+    if int(state.get("revision",-2)) == score_revision:
         _active_take = Statuses.take_key(state)
     if int(state.get("revision",-2)) == score_revision and str(state.get("mode","")) == "learn":
         var take: String = Statuses.take_key(state)
@@ -208,7 +207,7 @@ func present(state: Dictionary) -> void:
     var keys: Array = []
     for entry in _live_renderers():
         var renderer = entry["renderer"].get_ref()
-        renderer.set_note_status_visible(not suppress or str(state.get("mode","")) == "listen")
+        renderer.set_note_status_visible(true)
         keys.append_array(renderer.visible_take_keys())
     statuses.prune(keys,_active_take)
     keys.append(_active_take)

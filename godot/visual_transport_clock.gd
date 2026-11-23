@@ -177,8 +177,8 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
     idle_visual_speed = float(state.get("visual_scroll_speed", 0.0))
     idle_visual_target = float(state.get("visual_target_beat",idle_visual_beat))
     idle_continues_through_gap = (not bool(state.get("paused", false))
-        and source_phase in ["feedback", "preview_gap"]
-        and (bool(state.get("auto", false)) or bool(state.get("preview_only", false)))
+        and source_phase == "feedback"
+        and bool(state.get("auto", false))
         and float(state.get("visual_scroll_speed", 0.0)) > 0.0)
     idle_visual_sample_ms = measured_ms
     var next_bpm: float = maxf(1.0, float(state.get("bpm", 60.0)))

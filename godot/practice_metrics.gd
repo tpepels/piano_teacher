@@ -15,7 +15,7 @@ func _init() -> void:
     resized.connect(queue_redraw)
 
 func present(state: Dictionary) -> void:
-    var next_ungraded: bool = bool(state.get("preview_only",false)) or str(state.get("mode","")) in ["listen","learn"]
+    var next_ungraded: bool = str(state.get("mode","")) in ["listen","learn"]
     var next: Dictionary = {}
     if not next_ungraded:
         var summary: Variant = state.get("performance_summary")

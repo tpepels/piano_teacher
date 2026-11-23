@@ -1,7 +1,7 @@
 """Pure completion routing for post-performance practice decisions.
 
 A partial recovery never grants mastery. Explicit performance and section
-review routes take precedence over full-passage practice; preview never grades.
+review routes take precedence over full-passage practice.
 No transport clocks, persistence, renderers or live engine state are accessed.
 """
 from __future__ import annotations

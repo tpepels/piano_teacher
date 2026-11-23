@@ -101,7 +101,7 @@ def project_controls(s: Mapping) -> dict:
         if mode == "learn" else
         bool(s.get("running")) or isinstance(s.get("playback_intent"),Mapping)
         or phase in ("count_in", "playing", "paused", "feedback",
-                     "recovering", "loading", "admitting", "preview_gap"))
+                     "recovering", "loading", "admitting"))
     loaded = bool(s.get("loaded"))
     hands = {
         hand: {"enabled": loaded and hand != s.get("hand")}

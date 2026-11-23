@@ -486,13 +486,6 @@ class AttemptSettlement:
             self.capture.event("lesson_reset",{
                 "fingerprint":fingerprint,"preserves_history":True})
 
-    def finish_preview(self) -> None:
-        """Preview cannot award assessment, evidence credit or mastery."""
-        self.capture.seal((),state="completed",reason="preview")
-        with self.capture.atomic():
-            self.capture.persist()
-        self.capture.finish()
-
     def checkpoint(self, played, *, boundary: float) -> None:
         self.capture.checkpoint(played,boundary=boundary)
 

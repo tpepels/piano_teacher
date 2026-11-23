@@ -25,8 +25,7 @@ class LiveFeedbackWorkflows:
                 "revision": int(self.lesson.revision),
                 "transport_id": int(self.transport.transport_id), "mode": self.transport.mode,
                 "release_advisory": not self.library.settings["grade_note_holds"],
-                "graded": (not self.transport.preview_only
-                           and self.transport.mode in ("practice", "perform"))}
+                "graded": self.transport.mode in ("practice", "perform")}
 
     def latest_marks(self, _elapsed_seconds: float) -> list[dict]:
         """The marks last published for the running take (none otherwise)."""
@@ -43,7 +42,7 @@ class LiveFeedbackWorkflows:
         Uses the same _live_feedback grading call as every other consumer;
         only new or changed per-note results enter the feedback event log.
         """
-        if (not self.transport.running or self.transport.preview_only
+        if (not self.transport.running
                 or self.transport.mode not in ("practice", "perform")):
             # No running graded take: never carry the previous take's marks.
             self.live_assessment.clear()
@@ -60,7 +59,7 @@ class LiveFeedbackWorkflows:
     def live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Read the current cached source and ask the single grading owner."""
         plan = self.lesson.plan
-        if plan is None or self.transport.preview_only or not self.transport.running:
+        if plan is None or not self.transport.running:
             return []
         engraved = self.score.current_artifacts.cached_layout(self.score.selection())
         if engraved is None:

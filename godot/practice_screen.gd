@@ -296,10 +296,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         feedback_text = "GET READY · follow the teal playhead"
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
-        if bool(parsed.get("preview_only", false)):
-            feedback_text = "PREVIEW · connect your piano to earn accepted passes"
-        else:
-            feedback_text = "PLAYING · %d notes heard" % midi_count if midi_count > 0 else "PLAYING · waiting for your piano"
+        feedback_text = "PLAYING · %d notes heard" % midi_count if midi_count > 0 else "PLAYING · waiting for your piano"
     else:
         feedback_text = str(parsed.get("feedback", ""))
     if str(parsed.get("mode", "")) == "listen":
@@ -433,7 +430,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     # information. Preserve warnings for ungraded previews and audio errors.
     var busy_music: bool = phase in ["playing", "count_in"] and not learning
     var audio_problem: bool = _audio_error
-    feedback_label.visible = not busy_music or bool(parsed.get("preview_only", false)) \
+    feedback_label.visible = not busy_music \
         or audio_problem or unpositioned > 0 or admission_failed
     lesson_info_label.visible = (learning or not busy_music
         or bool(parsed.get("guided_recovery", false)) or admission_failed)

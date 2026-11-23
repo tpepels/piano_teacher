@@ -57,7 +57,6 @@ class TeachingEvent:
 class TeachingRouteFacts:
     mode: str = "practice"
     automatic: bool = False
-    preview_only: bool = False
     assistance_used: bool = False
     scope: str = "full_passage"
     performed_bpm: int = 120
@@ -137,7 +136,7 @@ def full_target_take(event, state) -> bool:
     """A complete graded Tempo take of the selected window (mastery-eligible)."""
     route, result = state.route, event.assessment
     return (event.kind == "full_result" and route.mode == "practice"
-        and not route.preview_only and not route.assistance_used
+        and not route.assistance_used
         and full_source_opening(state) and route.review_end_beat is None
         and bool(result and result.notes))
 

@@ -43,7 +43,6 @@ class AttemptTick:
     run_at: float
     next_boundary: float
     review_end: float | None
-    preview: bool
     auto: bool
     mode: str
     bpm: float
@@ -122,7 +121,7 @@ class AttemptProgression:
                        boundaries: tuple[float, ...],
                        time_signatures: tuple,
                        bpm: float, position: float,
-                       loop_continuation: bool, preview: bool,
+                       loop_continuation: bool,
                        now: float, count_in_plan: CountInPlan | None = None
                        ) -> AttemptStart:
         from_beat, bar_beats, meter = self.count_in_bar(
@@ -143,9 +142,7 @@ class AttemptProgression:
             next_boundary_beat=next_chunk_end(grid,from_beat),
             run_at=SCHEDULER.initial(now=now,bpm=bpm,
                 count_in_beats=count_in).run_at,
-            next_action=("Watch the moving score; connect a piano for feedback."
-                if preview else
-                f"Play from bar {bar_number_at(grid,from_beat,phrase.first_bar)} at {bpm} BPM."))
+            next_action=f"Play from bar {bar_number_at(grid,from_beat,phrase.first_bar)} at {bpm} BPM.")
 
     @staticmethod
     def plan_full_passage(facts: FullPassageFacts,
@@ -224,7 +221,6 @@ class AttemptProgression:
         boundary = tick.next_boundary
         total_beats = tick.phrase.sounding_end-tick.phrase.start
         while (tick.mode == "practice" and tick.review_end is None
-               and not tick.preview
                and boundary and tick.score_beat >= boundary):
             # Persist the played prefix at each bar (evidence durability).
             checkpoint(boundary)
@@ -237,7 +233,7 @@ class AttemptProgression:
                   if tick.review_end is not None else total_beats)
         duration = seconds_at(ending)-seconds_at(tick.from_beat)
         settlement = 0.0 if exact_repeats else SETTLEMENT_SECONDS
-        if tick.preview or (tick.auto and tick.review_end is None):
+        if tick.auto and tick.review_end is None:
             settlement = min(settlement,
                              SCHEDULER.beats_seconds(tick.gap_beats,tick.bpm))
         if tick.now < tick.run_at+duration+settlement:

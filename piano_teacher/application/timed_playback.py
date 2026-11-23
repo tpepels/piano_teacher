@@ -110,14 +110,6 @@ class PlaybackContinuation:
             now=self.clock(), bpm=self.transport_timing.presentation_bpm()),
             from_beat=from_beat)
 
-    def continue_preview(self):
-        """Advance a preview loop by one source stride and continue it."""
-        deadline = self.transport.next_at
-        self.transport.advance_source_stride(
-            self.score.source_model()["practice_timeline"]["stride_beats"])
-        self.continue_measured(deadline)
-
-
 class PauseResume:
     def __init__(self, *, lesson, transport, transport_timing, midi_input,
                  listen_outcomes, notices, phase, clock):

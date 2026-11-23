@@ -85,7 +85,6 @@ func present(state: Dictionary) -> void:
         else AMBER if next_phase in ["paused", "recovering"]
         else AURA)
     if (bool(state.get("loaded", false))
-            and not bool(state.get("preview_only", false))
             and str(state.get("mode", "")) in ["practice", "perform"]
             and next_phase == "feedback" and result is Dictionary):
         var result_key: String = "%s|%s|%s|%s" % [
@@ -98,9 +97,9 @@ func present(state: Dictionary) -> void:
             result_age = 0.0
             result_wave = 1.0
             queue_redraw()
-    var earned_milestone: bool = bool(state.get("loaded", false)) and not bool(
-        state.get("preview_only", false)) and str(state.get("mode", "")) in [
-        "practice", "perform"] and next_phase in ["playing", "feedback"]
+    var earned_milestone: bool = bool(state.get("loaded", false)) and str(
+        state.get("mode", "")) in ["practice", "perform"] \
+        and next_phase in ["playing", "feedback"]
     var earlier_slot: int = clampi(int(floor(progress * 5.0 + .00001)), 0, 5)
     var latest_slot: int = clampi(int(floor(next_progress * 5.0 + .00001)), 0, 5)
     var session_key: String = "%s|%s|%s" % [

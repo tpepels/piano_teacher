@@ -1,4 +1,4 @@
-"""Non-grading tick transitions: Free, Listen end, preview, feedback, rewind.
+"""Non-grading tick transitions: Free, Listen end, feedback, rewind.
 
 The decision itself is the pure `decide_transition`; this class applies
 the chosen transition through its owner.
@@ -29,7 +29,6 @@ class PreAssessmentTransitions:
             has_plan=self.lesson.plan is not None,
             learning=self.transport.mode == "learn" and self.lesson.guided_controller is not None,
             paused=self.transport.paused, listening=self.transport.mode == "listen",
-            preview_pending=self.transport.preview_loop_pending,
             preparation_pending=self.transport.preparation_pending,
             feedback_pending=self.take.feedback_pending,
             awaiting_score=self.transport.awaiting_score_revision is not None,
@@ -49,8 +48,6 @@ class PreAssessmentTransitions:
                 if (self.lesson.flow_active and self.lesson.flow_state is not None
                         and self.lesson.flow_state.step is practice_flow.Step.LISTEN):
                     self.course.flow_execute(self.lesson.flow_listen_finished())
-        elif decision.action == "preview_due":
-            self.continuation.continue_preview()
         elif decision.action == "feedback":
             followup = self.settlement.feedback_due(now)
         elif decision.action == "rewind_due":

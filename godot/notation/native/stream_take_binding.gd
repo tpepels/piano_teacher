@@ -98,7 +98,7 @@ func observe_transport(facts: StreamGeometry, world: float, opening: float,
         was_paused = true
         live_serial = -1
     elif allow_admission and not running_now and phase in [
-            "feedback","recovering","preview_gap","review"]:
+            "feedback","recovering","review"]:
         # Only the playback coordinator may authorize a successor.
         withdraw_future.call(facts,"changed_practice_decision")
     elif allow_admission and running_now and phase in [

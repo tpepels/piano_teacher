@@ -57,7 +57,6 @@ class VisualTransport:
     count_in_meter: list[int] = field(default_factory=lambda: [4, 4])
     next_at: float = 0.0
     visual_offset_beats: float = 0.0
-    _preview_loop_pending: bool = False
     _visual_rewind_from: float | None = None
     _visual_rewind_to: float | None = None
     _visual_rewind_at: float = 0.0
@@ -160,10 +159,6 @@ class VisualTransport:
             self.retime_announcement(floor)
 
     @property
-    def preview_loop_pending(self) -> bool:
-        return self._preview_loop_pending
-
-    @property
     def retry_previous_pass(self) -> bool:
         return self._retry_previous_pass
 
@@ -175,32 +170,6 @@ class VisualTransport:
     def preparation_deadline(self) -> float:
         """Only VisualTransport owns the pending rest/preparation epoch."""
         return self._preparation_at
-
-    def schedule_preview_repeat(self, *, source_seconds: float,
-                                source_bpm: float,presentation_bpm: float,
-                                rest_measurement,now: float,
-                                reading_horizon_beats: float) -> float:
-        """Own the next ungraded preview's rest and its forward deadline.
-
-        An absent MIDI device may repeat source audio/ink but cannot create
-        graded presses, settle progress, or choose another musical timeline.
-        """
-        self.queue_preview_repetition()
-        short = SCHEDULER.measured_rest(
-            rest_measurement,now=now,bpm=presentation_bpm)
-        deadline = short if short is not None else SCHEDULER.missing_horizon(
-            deadline=SCHEDULER.repeat(
-                run_at=self.run_at,source_seconds=source_seconds,
-                gap_beats=self.visual_gap_beats,bpm=source_bpm),
-            rest_beats=self.visual_gap_beats,
-            reading_horizon_beats=reading_horizon_beats,
-            bpm=presentation_bpm)
-        self.announce_continuation(0.0,deadline,source_bpm)
-        return deadline
-
-    def queue_preview_repetition(self) -> None:
-        """A preview may repeat, but no graded attempt is awarded."""
-        self._preview_loop_pending = True
 
     def set_retry_previous_pass(self, enabled: bool) -> None:
         """Track retry lifecycle without bypassing the transport owner."""
@@ -265,7 +234,6 @@ class VisualTransport:
         self.paused = False
         self.paused_at = 0.0
         self.visual_offset_beats = 0.0
-        self._preview_loop_pending = False
         self._visual_rewind_from = None
         self._visual_rewind_to = None
         self._visual_rewind_at = 0.0
@@ -284,7 +252,6 @@ class VisualTransport:
         self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
-        self._preview_loop_pending = False
         self._visual_rewind_from = None
         self._visual_rewind_to = None
         self._retry_previous_pass = False
@@ -347,7 +314,6 @@ class VisualTransport:
         self._visual_rewind_seconds = plan.reverse_seconds
         self._preparation_at = plan.prepare_at
         self.next_at = plan.run_at
-        self._preview_loop_pending = False
         return self.next_at
 
     def cancel_preparation(self) -> None:
@@ -444,12 +410,11 @@ class VisualTransport:
                        pause_context: str | None, bpm: float | None,
                        count_in_beats: float, full_count_in_beats: float, bar_beats: float,
                        reading_lead_seconds: float,
-                       midi_connected: bool, preview: bool,
+                       midi_connected: bool,
                        scheduled_deadline: float | None):
         """Validate, shift and authorize the resumed source clock once."""
         shift = resume_timeline(
             paused=self.paused,learning=learning,running=running,
-            preview_pending=self.preview_loop_pending,
             automatic_feedback=automatic_feedback)
         paused_at, previous_origin = self.paused_at,self.run_at
         frozen = self._pause_floor
@@ -465,7 +430,7 @@ class VisualTransport:
             pause_context=pause_context,bpm=bpm,count_in_beats=count_in_beats,
             full_count_in_beats=full_count_in_beats,
             bar_beats=bar_beats,reading_lead_seconds=reading_lead_seconds,
-            midi_connected=midi_connected,preview=preview,
+            midi_connected=midi_connected,
             scheduled_deadline=scheduled_deadline)
         self.run_at = timing.origin
         return previous_origin,shift,timing
@@ -492,7 +457,6 @@ class VisualTransport:
             rewind_at=self._visual_rewind_at,
             rewind_seconds=self._visual_rewind_seconds,
             pending_auto_result=pending_auto_result,
-            preview_loop_pending=self._preview_loop_pending,
             gap_beats=self.visual_gap_beats,
             paused=self.paused,
         ), now, tempo_map=tempo_map)

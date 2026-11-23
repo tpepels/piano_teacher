@@ -29,7 +29,7 @@ class NoteTake:
         self.facts = MidiInputFacts(
             fingerprint="piece-a", score_revision=3, stage_key="window-1:right",
             phrase=source, hand=hand, bpm=bpm, mode="practice", running=True,
-            paused=False, preview=False, from_beat=from_beat, run_at=100,
+            paused=False, from_beat=from_beat, run_at=100,
             transport_id=7, tempo_map=tempo, can_pause=True)
         self.identity = {"piece_fingerprint": "piece-a", "revision": 3,
                          "transport_id": 7, "mode": "practice", "graded": True,

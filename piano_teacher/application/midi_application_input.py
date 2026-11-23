@@ -71,10 +71,9 @@ class MidiDelivery:
         """Snapshot only the transport gates needed by the one MIDI router."""
         return InputTransportFacts(
             next_at=self.transport.next_at,
-            preview_loop_pending=self.transport.preview_loop_pending,
             pending_teaching_result=self.take.pending_result is not None,
             pending_rewind=self.transport.pending_rewind is not None,
-            automatic=self.transport.auto,preview_only=self.transport.preview_only,
+            automatic=self.transport.auto,
             visual_gap_beats=self.transport.visual_gap_beats,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             exercise_kind=(self.lesson.plan.exercise.kind if self.lesson.plan else ""),
@@ -93,7 +92,7 @@ class MidiDelivery:
         facts = MidiInputFacts(self.lesson.fingerprint,self.lesson.revision,
             self.lesson.plan.identity if self.lesson.plan else "",self.lesson.plan.active_phrase if self.lesson.plan else None,
             self.lesson.plan.hand if self.lesson.plan else "both",self.lesson.plan.bpm if self.lesson.plan else 60.,
-            self.transport.mode,self.transport.running,self.transport.paused,self.transport.preview_only,
+            self.transport.mode,self.transport.running,self.transport.paused,
             self.transport.play_from_beat,self.transport.run_at,self.transport.transport_id,
             self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
             self.take.cancellation_generation,

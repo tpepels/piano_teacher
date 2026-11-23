@@ -34,7 +34,7 @@ class AttemptRuntime:
         self.remediation_active = remediation
 
     def begin_timed_review(self) -> None:
-        """Clear the previous review when a new graded/preview take begins."""
+        """Clear the previous review when a new graded take begins."""
         self.performance_summary = None
         self.review_stage_identity = None
         self.review_session_complete = False
