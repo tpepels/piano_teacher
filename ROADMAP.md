@@ -928,6 +928,101 @@ physical receipt/reconciliation and standalone packaging remain open.
 GitHub Actions remains manual `workflow_dispatch` only; none was triggered.
 A3–A5 are still **IN PROGRESS**, and A6/A7 are not accepted.
 
+### A2/A3 further source integration — 2026-11-23
+
+**A2: immutable evidence, selected continuation and failure-safe settlement**
+
+- [`0654e7a`](https://github.com/tpepels/piano_teacher/commit/0654e7ae70036f3bd6a70b55ce6b31decd5b6f5d)
+  rejects unrelated teaching events while a different durable receipt
+  awaits publication, accepts an already `effects_applied` rolling retry,
+  and binds full settlement replay to the original physical transport epoch.
+  [`25b0059`](https://github.com/tpepels/piano_teacher/commit/25b0059aaeac9045e451addfdda9ddb83789705a)
+  checks focused/perform replay against the **installed successor** progress
+  rather than incorrectly requiring the pre-settlement BPM/hand/stage.
+- [`4091a6a`](https://github.com/tpepels/piano_teacher/commit/4091a6a586d0204a314f281865f9b1266bbcaf57)
+  and [`77089d0`](https://github.com/tpepels/piano_teacher/commit/77089d0144dfc7ab302e8f79a5437dfca396e469)
+  make partially failed rolling publication stop its old graded take,
+  retain the original receipt and prior per-effect acknowledgements, and
+  require explicit Retry rather than regrading an advanced boundary.
+- [`9cda46e`](https://github.com/tpepels/piano_teacher/commit/9cda46e5dd627dcd0f7fa5c7c5b305b3064d93d9)
+  introduces a serialized, narrowly scoped durable-publication lease. A
+  selected guided/new-source continuation may legitimately call ordinary
+  Stop/open-take cleanup inside the same accepted effect; this no longer
+  silently destroys the predecessor's settled receipt before the selected
+  effect can be acknowledged and marked published. Ordinary external Stop
+  still invalidates the receipt. The existing continuation fixture was
+  adjusted to that production contract in
+  [`106fcae`](https://github.com/tpepels/piano_teacher/commit/106fcae027f4121be4308996c05a127650e8c4aa).
+
+**A3: one musical lifetime and one physical authorization protocol**
+
+- [`7e53c0b`](https://github.com/tpepels/piano_teacher/commit/7e53c0b43c0e90b6f7907f7ffae5553464429809),
+  [`e5e3469`](https://github.com/tpepels/piano_teacher/commit/e5e3469d057882e583681a4f879b931b6a3e67d3)
+  and [`2e0f2a7`](https://github.com/tpepels/piano_teacher/commit/2e0f2a7b998621ab5356021d0baf2a2f3d56eeba)
+  reject stale present ACKs after completion, changed tempo/rate maps,
+  invalid Resume transport origin, or a no-longer-running paused take.
+- [`24af812`](https://github.com/tpepels/piano_teacher/commit/24af8129333e95acea271c87ab1117774a18db63),
+  [`9c50c04`](https://github.com/tpepels/piano_teacher/commit/9c50c04405d63d573d5b6ced4d0d81a59f6d1e38)
+  and [`9bd88de`](https://github.com/tpepels/piano_teacher/commit/9bd88de86cf90d016d26bcda143da1f219223955)
+  require the native status reconciliation after a physical present reply
+  and compare the entire current source, stage, transport, BPM/rate map
+  and deadline before permitting visual motion and audible count-in.
+  [`e1665ac`](https://github.com/tpepels/piano_teacher/commit/e1665accbc43652ba118f32e7de4f0e31b21a00d)
+  marks physical score loss terminal before potentially failing cleanup.
+- [`64df41c`](https://github.com/tpepels/piano_teacher/commit/64df41c7063d1f6dccada5975ddc784088cd0dc6)
+  and [`ffea0a8`](https://github.com/tpepels/piano_teacher/commit/ffea0a8fafbf78f38904e29292739858121198d3)
+  reconcile the physical state when a transition tick fails instead
+  of leaving an old `playing` receipt next to a paused musical clock.
+- [`8daed69`](https://github.com/tpepels/piano_teacher/commit/8daed6947a24bfa12bdfe0c705f0bb19e0803921),
+  [`0d220da`](https://github.com/tpepels/piano_teacher/commit/0d220da38b8906b984d834e2e52d06e55dc2d57d)
+  and [`15be47b`](https://github.com/tpepels/piano_teacher/commit/15be47b8087350413ab82ade709e901bafd3bf41)
+  remove the separately ticking coordinator's `playing/count_in/paused`
+  phase writers. Both GUI snapshot and physical status now derive these
+  phases from the **same fresh session/clock observation**.
+  [`8d91702`](https://github.com/tpepels/piano_teacher/commit/8d91702506feac95250e1a0fbf1b68ecdc8a3aae)
+  additionally fails closed if the live source no longer matches the
+  previously authorized segment.
+- [`9ffe206`](https://github.com/tpepels/piano_teacher/commit/9ffe206af3f19925a80a0ea2889a6fda8d9ac585)
+  and [`1049ef0`](https://github.com/tpepels/piano_teacher/commit/1049ef0363a2127ff915026ebddaae2c882d1d50)
+  co-locate live running/paused state, count-in meter and duration,
+  physical transport epoch and musical origin in `VisualTransport`.
+  `PlaybackSession` delegates these fields; mode, continuation intent
+  and graded-exposure policy remain explicit.
+- [`ae61a2d`](https://github.com/tpepels/piano_teacher/commit/ae61a2db3b9d22af555d9b17713bd51b5154284a)
+  and [`ba42b07`](https://github.com/tpepels/piano_teacher/commit/ba42b070153019f5292a400e36e24d9411388de7)
+  make `PlaybackCoordinator` the sole holder of a paused/unarmed
+  physical intent. Resume consumes it once and checks source/stage/hand/
+  BPM/rate map/transport epoch; stale suspended ink cannot fall through
+  into an unrelated rest Resume.
+- [`dd92275`](https://github.com/tpepels/piano_teacher/commit/dd92275acfc5709e60c327dbf49c28156d97620e)
+  removes the redundant lesson command installation from
+  `TransportActions` Start/Restart. The authorized `TimedPlayback`
+  boundary now installs its already-selected decision once.
+  [`add6f0d`](https://github.com/tpepels/piano_teacher/commit/add6f0d1c7f6a3cf55aeb82e8f0d1525152cb661)
+  and [`bedd69d`](https://github.com/tpepels/piano_teacher/commit/bedd69d091d29776422eb9b1322b8e6b9aa5cf6f)
+  update the *existing* physical receipt fixture to actual production
+  source/tempo/transport-origin facts, without adding scenarios.
+
+**Exit evidence and limitations:** All listed source changes are committed
+on `main`. Connector-level source inspection confirmed the ownership
+changes and the expected source-bound contracts; this is **not** executable
+acceptance. The Python core suite, SQLite fault injection, direct fake-MIDI
+full/focused/rolling journeys, Coda/Fukuda and warm-ups, saved reopening,
+Godot embedded native scenes, package relocation and connected piano/audio
+have **not** run against this resulting HEAD. In particular, failure of a
+source-install effect after partial application and the new durable
+publication lease require executed retry/Stop/source-replacement acceptance.
+The remaining transport service constructor graph and physical failed-ACK
+recovery also need full same-HEAD integration/acceptance audit before either
+phase can be marked accepted. Run `bash scripts/test.sh --coverage` and
+`bash scripts/verify-embedded-production-local.sh` on **the same final
+commit**; do not reuse historical green CI as verification.
+
+**Status:** A2 and A3 have substantial integrated source corrections but
+**remain IN PROGRESS until complete behavioral/structural acceptance**.
+No Python, Godot, embedded, package or physical test is claimed, and GitHub
+CI stays manual-only; no workflow was triggered.
+
 ### A3 — Single transport state and physical playback protocol
 
 - [ ] Consolidate running, paused, pending, terminal-failure and source
