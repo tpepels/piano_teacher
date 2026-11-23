@@ -181,10 +181,14 @@ class TeachingContinuation:
         return self._feedback_transaction
 
     @staticmethod
-    def settlement_failure(error: Exception) -> FeedbackFault:
+    def settlement_failure(error: Exception, *, saved: bool = False) -> FeedbackFault:
         if isinstance(error,UnpreparedNextStage):
             return FeedbackFault("The next lesson score changed during grading",
                 f"{error}. Select another step or reopen the piece.",pause=True)
+        if saved:
+            # The durable receipt exists; only installing its successor failed.
+            return FeedbackFault("Progress saved, but the next step could not start",
+                "Press Play to continue from the same saved result.",stop_automatic=True)
         return FeedbackFault("Could not save the assessment",
             "Check storage, then press Play to save this attempt again.",stop_automatic=True)
 

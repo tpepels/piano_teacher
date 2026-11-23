@@ -181,7 +181,7 @@ class RecoveryWorkflows:
             if not self.visual_transport.paused:
                 self.visual_transport.pause(at=now)
             self.notices.feedback = "Could not apply the saved recovery"
-            self.notices.next_action = "Press Retry to finish this same saved recovery."
+            self.notices.next_action = "Press Play to finish this same saved recovery."
             raise
         return
 

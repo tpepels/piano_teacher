@@ -222,12 +222,14 @@ class TransportActions:
         """Start a take or schedule a seamless retry under the control lock."""
         if self.attempt.settlement_failed:
             revision = self.source_identity.revision
+            # Drop the failure instruction; the replayed continuation
+            # publishes its own next action (count-in or next passage).
+            self.notices.next_action = ""
             self.notices.feedback = (
                 self.completion_continuations.retry_failed_publication(
                     now=self.clock()) or "Assessment saved")
             if self.source_identity.revision != revision:
                 self.playback_session.await_score(self.source_identity.revision)
-            self.notices.next_action = "Press Play when the score is ready."
             return
         if self.attempt_settlement.pending_rolling is not None:
             decision, phrase, grid, score_beat, _old_now = self.attempt_settlement.pending_rolling

@@ -59,7 +59,9 @@ class CompletionContinuations:
             self.visual_transport.note_tempo(
             stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
-            self.publish_feedback_fault(self.teaching_continuation.settlement_failure(exc),now)
+            pending = self.attempt_settlement.pending
+            self.publish_feedback_fault(self.teaching_continuation.settlement_failure(
+                exc,saved=pending is not None and pending.receipt is not None),now)
             if not isinstance(exc,UnpreparedNextStage):
                 print("ASSESSMENT_SETTLEMENT_FAILED:",type(exc).__name__,str(exc),flush=True)
             return
@@ -101,9 +103,8 @@ class CompletionContinuations:
             # silently select a new source or grade a second attempt.
             self.attempt.publication_failed()
             self.playback_session.stop_automatic()
-            self.notices.feedback = "Could not apply the settled continuation"
-            self.notices.next_action = (
-                "Press Retry to apply the same saved result without grading again.")
+            self.notices.feedback = "Progress saved, but the next step could not start"
+            self.notices.next_action = "Press Play to continue from the same saved result."
             print("CONTINUATION_EFFECT_FAILED:", type(exc).__name__, str(exc), flush=True)
 
     def retry_failed_publication(self, *, now: float) -> str:
