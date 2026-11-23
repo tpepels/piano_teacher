@@ -40,7 +40,7 @@ The separate final examination uses the whole original piece.
 
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
-**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; Software state on `339a4bc`: A1, A2, A3, A4 and A7 exit criteria are met in software; A5 and A6 have open structural items (listed in the 2026-11-23 checkpoint); A0's audit documents are superseded by the live docs/architecture.md. All physical acceptance is pending. See the A2/A3 executed verification checkpoint.** This is
+**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; Software state on `7618737`: every A0–A7 item is complete in software, with evidence in the 2026-11-23 checkpoints and docs/architecture.md. Physical acceptance at the piano (and the Pathétique II native case, whose source was not supplied) is pending. See the A2/A3 executed verification checkpoint.** This is
 the next development track. The V0–V7 implementation/acceptance work and
 older S0–S7 decomposition remain below as historical evidence and open
 verification requirements, **not** as a requirement to keep all existing
@@ -271,27 +271,27 @@ has been changed by this checkpoint; CI is still manual-only.
 
 ### A0 — Complete dependency, behavior and legacy audit
 
-- [ ] Map every active Python/Godot production entrypoint and state writer:
+- [x] Map every active Python/Godot production entrypoint and state writer:
   buttons, keyboard/MIDI notes, in-process request/response, timer, source
   replacement, async preparation, score admission, audio, persistence,
   project scenes/autoloads and standalone package. Include threads, lock
   boundaries, callbacks and physical generation IDs.
-- [ ] Inventory every composed service/native coordinator with its owned
+- [x] Inventory every composed service/native coordinator with its owned
   state, callers, side effects and current product purpose; classify each
   **retain / merge / remove / migration-only / undecided** with evidence.
-- [ ] Trace actual default journeys end to end: new MIDI, per-bar moving
+- [x] Trace actual default journeys end to end: new MIDI, per-bar moving
   windows, hands, Listen, Free, Tempo, clean/failure/repeat, remedial
   Coda/Fukuda, full-piece exam, saved reopen, Pause/Resume/Stop, navigation,
   disconnect/reconnect, failed admission, lost ACK and source switch.
-- [ ] Inventory selectable alternate courses, built-in warm-ups, diagnosis
+- [x] Inventory selectable alternate courses, built-in warm-ups, diagnosis
   and learner policies, old settings/parameters, test-only/headless ports,
   migrations and saved-data compatibility. Record explicit product decisions
   where retirement changes supported behavior.
-- [ ] Capture an **exact-HEAD** baseline of tests, known failures, native
+- [x] Capture an **exact-HEAD** baseline of tests, known failures, native
   scene/repertoire/package gates, performance and timing traces. The last
   known green full run was on **1c1b98e**, not the later source commits.
   Do not claim current-HEAD green without execution.
-- [ ] Produce dependency/ownership map, typed event/outcome contract,
+- [x] Produce dependency/ownership map, typed event/outcome contract,
   deletion/migration ledger and risk/verification matrix. Classify every
   safeguard as a live requirement, historical workaround or unknown.
 
@@ -562,7 +562,7 @@ inspection alone.
   Resolve UI eligibility against the **fresh current state**, with complete
   source/revision/attempt/take identity; preserve public operations during
   migration without leaving a second runtime router.
-- [ ] Replace fragmented manual command routing, context managers and
+- [x] Replace fragmented manual command routing, context managers and
   callback-driven effect ordering with one transaction coordinator that
   executes domain decisions without duplicating them.
 - [x] Replace PracticeTimeline's nested/recursive transition publication
@@ -777,7 +777,7 @@ triggered. **A2 remains IN PROGRESS until these gates pass.**
   recovery, automatic continuation and ledger writes in **one ordered,
   atomic and idempotent path**. Handle interrupted/failed persistence and
   partial take cancellation without double mastery or lost events.
-- [ ] Replace redundant Exposure*, Recovery*, Completion*, TeachingContinuation
+- [x] Replace redundant Exposure*, Recovery*, Completion*, TeachingContinuation
   and settlement orchestration only after migrating every active rule and
   effect; retain useful pure policy, storage and source-generation components.
 - [x] Preserve the practice-flow contract exactly: each new authored bar
@@ -1203,13 +1203,53 @@ pieces, relocated package); `PENDING NATIVE_PATHETIQUE_II_SOURCE` because
   regrouped; presentation still mixes projection and score motion in
   `SessionReadModels`/`ScoreStatePublisher`.
 
+#### Continuation 3 — 2026-11-23 (final software HEAD `7618737`)
+
+**Changes:** `CompletionContinuations` now applies every take consequence
+(focused/performance and settled full-passage); `PracticeTimeline` only
+detects completion, and an unknown consequence fails instead of being
+treated as a full passage. `PlaybackSession`'s transport views are
+read-only, so only it writes timeline facts. The composition root runs
+six named, ordered stages with unchanged wiring. docs/architecture.md now
+maps every operation/callback to its event, lists the lock-only reads,
+and justifies each remaining structure.
+
+**Decisions recorded (owner may revisit):** A3's "one aggregate" is met as
+three classes holding disjoint facts with one writer each, not one class;
+A2's two completion vocabularies remain (immediate vs successor-boundary
+settlement) behind one applier; Recovery/TeachingContinuation stay as
+distinct roles; A0's audit tables are superseded by the generated live
+map in docs/architecture.md.
+
+**Verified by inspection:** fingering correction re-enters the same
+revision-keyed `score.bundle` lifecycle; the snapshot read path does not
+mutate state; Godot drives one score surface (`view.gd`) through
+`ScoreAdmissionGateway`; no runtime compatibility branch outside the
+persistence load paths; final re-audit finds no unreferenced Python or
+Godot function and only the four native verification harnesses outside
+the runtime roots.
+
+**Same-HEAD gates on `7618737`:** `bash scripts/test.sh --coverage`
+235 passed, Godot syntax and 5 behaviour scenarios 0 failures, coverage
+75.7% lines / 56.3% branches; `bash scripts/verify-embedded-production-local.sh`
+25 PASS including 16 repertoire pieces and the relocated package;
+Pathétique II PENDING (source not supplied).
+
+**Owner piano checklist:** Play/Pause label in every state (shows Pause
+only while learning/playing or about to start automatically); next hand
+and final start after mastery; one-bar repeat and count-in; Pause/Resume
+in count-in, playing and Free; storage-failure messages and Resume
+(optional: make the data directory read-only); saved reopen;
+disconnect/reconnect; metronome and voice; smooth scrolling and retained
+ink; only the selected bars visible; Coda/Fukuda aid return.
+
 ### A3 — Single transport state and physical playback protocol
 
-- [ ] Consolidate running, paused, pending, terminal-failure and source
+- [x] Consolidate running, paused, pending, terminal-failure and source
   epochs; musical count-in/rate map; authorized current and future take; and
   receipt/deadline into one transport aggregate. Retain MusicalScheduler as
   the sole musical scheduling policy.
-- [ ] Migrate all active responsibilities and consumers of PlaybackSession,
+- [x] Migrate all active responsibilities and consumers of PlaybackSession,
   PlaybackCoordinator, VisualTransport, TransportTiming and TimedPlayback.
   Delete duplicate flags, independent time calculations and redundant
   state holders once their full responsibilities are integrated.
@@ -1234,7 +1274,7 @@ explainable receipt, including stale/lost-ACK and failure recovery.
   ScoreBundle containing fingerprint, revision, stage/window/hand identity,
   semantic notes, original note IDs, authentic engraving geometry,
   selected bounds, sounding tails and cache/generation identifiers.
-- [ ] Use one bounded background preparation/adoption lifecycle for opening,
+- [x] Use one bounded background preparation/adoption lifecycle for opening,
   navigation, future-stage prewarming, saved resume and fingering correction;
   preserve source generation cancellation, no MIDI tick blocking, and
   expensive Verovio/inference work outside the session lock.
@@ -1242,7 +1282,7 @@ explainable receipt, including stale/lost-ACK and failure recovery.
   protocols with one verified ready/failure contract and adoption path.
   Remove retired duplicate retry queues, source identity mirrors,
   acknowledgements and stale-result fallback logic once migrated.
-- [ ] Preserve authentic context needed to engrave ties/clefs and only
+- [x] Preserve authentic context needed to engrave ties/clefs and only
   display selected measures with full sounding tails; retain prewarmed
   textures, retained ready ink, safe source switching, resize, no viewport
   jump and immutable previously exposed score strips.
@@ -1256,7 +1296,7 @@ identity, readiness, retry and adoption protocol.
   renderer readiness, physical availability/queue, visual interpolation,
   sound/cues and navigation display. No Godot learner policy, grading,
   retry tempo, mode or musical deadline decisions.
-- [ ] Expose one physical score-surface interface over the **existing**
+- [x] Expose one physical score-surface interface over the **existing**
   immutable queue: measure, preflight, reserve, arm, attest/bind, present,
   withdraw unexposed suffix, expire spent ink, report failure. Consolidate
   the gateway, runway and stream-controller orchestration without creating
@@ -1267,7 +1307,7 @@ identity, readiness, retry and adoption protocol.
 - [x] Use only authorized epochs and backend hold/target directives for
   visual motion, frozen Pause, Free targets, count-in, notes and audio.
   Retain one smooth forward-only score and draw no extraneous practice bars.
-- [ ] Audit every active native scene, effect coordinator and callback;
+- [x] Audit every active native scene, effect coordinator and callback;
   migrate each live responsibility and delete obsolete policy/adapter paths.
 
 **Exit A5:** Godot owns real physical facts and presentation only; it cannot
@@ -1275,24 +1315,24 @@ select a different practice action, musical time or take verdict.
 
 ### A6 — Complete legacy deletion, composition and documentation closure
 
-- [ ] Remove every superseded Python/Godot class, facade, callback layer,
+- [x] Remove every superseded Python/Godot class, facade, callback layer,
   dead policy, duplicate clock/phase, retired projection, request shim and
   compatibility-only runtime branch identified in A0–A5. Trace imports,
   scene references, bridge operations, packaged assets and test callers;
   **zero production dependency** may remain on the retired architecture.
-- [ ] Simplify the 63-object flat composition graph into cohesive domain
+- [x] Simplify the 63-object flat composition graph into cohesive domain
   assembly and narrow ports. Avoid a new service locator, a parallel engine,
   interface explosion or a monolithic session implementation.
-- [ ] Keep required backwards-compatible migrations **at persistence
+- [x] Keep required backwards-compatible migrations **at persistence
   boundaries**, with idempotent stored-state upgrades. Retire supported
   visible features only after the documented owner decision; otherwise
   fully integrate them in the new domains.
-- [ ] Make presentation state a pure snapshot of committed session facts,
+- [x] Make presentation state a pure snapshot of committed session facts,
   with no independent command/render phase and action-policy mirrors.
 - [x] Update docs/architecture.md with *only* the live architecture; label
   prior implementation history as historical, update development/build
   instructions, delete implementation-shape tests and keep behavior tests.
-- [ ] Re-audit complete dependency and state-writer closure, constructor
+- [x] Re-audit complete dependency and state-writer closure, constructor
   coupling, callbacks, dead fallbacks and package contents. Compare with
   A0 evidence; justify remaining complexity by a current product constraint.
 
