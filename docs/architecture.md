@@ -66,23 +66,39 @@ Reads take the application lock and never mutate session state:
 
 ## Domains and their sole owners
 
-| Domain | Owner (Python) | Owns |
+Each stateful domain is one object with a narrow interface: read-only
+properties for facts and named operations for changes. Its internal state
+holders are never referenced outside the domain's own modules; other
+domains and workflows depend on the domain object only.
+
+| Domain object | Internals | Owns |
 | --- | --- | --- |
-| Lesson | `LearningPlan` progress installed only from `teaching_course` / `teaching_decisions` decisions via `TeachingDecisions` | window, hand, step, BPM ladder, streak, mastery, Free returns, aid |
+| `Lesson` (`lesson.py`) | `SourceIdentity`, `LessonCursor`, `TeachingDecisions` (only progress writer), `GuidedSession`, `PracticeFlowCourseSession` | piece, plan and revision; window/hand/step; BPM ladder, streak, mastery, Free returns, aid; guided Free selection |
+| `Transport` (`transport.py`) | `VisualTransport`, `PlaybackSession`, `PlaybackCoordinator` | timeline (running/paused, run_at, origin, count-in, rests), session intent (mode, automatic, awaited score), physical intent/receipt ledger |
+| `Take` (`take.py`) | `AttemptRuntime`, `AttemptSettlement` | recorder, feedback marks, review/retry; immutable result → one decision → one durable receipt |
+| `Score` (`score.py`) | `ScoreArtifactRegistry`, `ScoreReadServices`, `TeachingContinuation`, `ScoreStatePublisher`, `TempoMapCache` | selected score bundle, successor preparation and reservation, score projection; the settlement's reservation port |
+| `MidiInput` (`midi_input.py`) | `MidiConnection`, `MidiIngress`, `MidiKeyShortcuts`, `MidiTapCalibration`, `LiveInputView` | device, timestamped routing, deferred keys, grading gate, shortcuts, calibration |
+
+Pure policy and services outside these domains:
+
+| Concern | Owner | Owns |
+| --- | --- | --- |
 | Course rules | `lesson_settings.course_rules` | per-course mastery count, focus and recovery thresholds |
-| Assessment | `practice.py`, `AssessmentService`, `practice_assessment` | original-note matching, onset/release evidence, verdict |
-| Settlement | `AttemptSettlement` + `CompletionContinuations` | immutable result → one decision → one durable receipt → typed continuation effect |
-| Transport (musical) | `VisualTransport` (state), written by `PlaybackSession` | running/paused, run_at, origin, count-in, rest scheduling |
-| Transport (session intent) | `PlaybackSession` | mode, automatic continuation, awaited score, pause context |
-| Transport (physical) | `PlaybackCoordinator` | intent → reserve → present ledger, receipts, stale/lost-ACK reconciliation, terminal failure |
-| Scheduling | `MusicalScheduler` (`SCHEDULER`) | every deadline/count-in/rest calculation |
-| Score | `ScoreArtifacts`, `TeachingContinuation`, `FutureScore` | one source/revision-keyed bundle per stage, preloaded successor |
+| Practice Flow tempo | `practice_flow.take_graded` | repeat / faster (+10%, or +20% after a secure clean take) / slower / Free / done |
+| Assessment | `practice.py`, `AssessmentService`, `practice_assessment` | original-note matching, onset/release evidence, verdict, `secure` timing |
+| Scheduling | `MusicalScheduler` (`SCHEDULER`), `CountInPlan` | every deadline/count-in/rest calculation; count-in pulse (subdivided when a click would exceed 1.5 s) |
 | Persistence | `ProgressRepository`, `LearningLedger`, `LearnerProgress` on one SQLite connection | progress, evidence, history; migrations at the load boundary only |
 | Projection | `SessionReadModels`, `control_projection`, `state_projection` | one snapshot and control set from committed state |
 
-`TransportTiming` samples transport facts for commands and reads; it holds
-no state and delegates arithmetic to `MusicalScheduler`. `TimedPlayback`
-opens the take a physical receipt authorized; it never chooses a deadline.
+Workflows coordinate domains for one event family each:
+`CompletionContinuations` (everything after a take ends),
+`RecoveryWorkflows`, `ExposureWorkflows`, `LessonExecution`,
+`LearningActions`, `TransportActions`, `SourceWorkflows`,
+`SettingsWorkflows`, `DeviceWorkflows`, `HistoryManagement`.
+`TransportTiming` samples transport facts (no state; arithmetic in
+`MusicalScheduler`); `TimedPlayback` opens the take a physical receipt
+authorized and never chooses a deadline. `PracticeSession` routes events
+and `PracticeTimeline` detects tick transitions; both only coordinate.
 
 ## Physical playback protocol
 
@@ -138,11 +154,9 @@ projected label and action; it makes no lesson, grading or timing decision.
 
 ## Remaining complexity and why it stays
 
-- **Three transport classes.** `VisualTransport` (timeline facts),
-  `PlaybackSession` (session intent; the only writer of timeline facts,
-  exposed read-only) and `PlaybackCoordinator` (physical receipt ledger)
-  hold disjoint facts. Merging them would create a monolith without
-  removing any duplicate fact.
+- **Three transport internals behind one `Transport`.** Timeline facts,
+  session intent and the physical receipt ledger are disjoint; the domain
+  object is the only access path.
 - **Two completion vocabularies, one applier.** Focused/performance takes
   settle immediately (`CompletionEffect`); full passages settle at their
   successor boundary (typed, source-bound effects). Both are applied only
@@ -157,6 +171,11 @@ projected label and action; it makes no lesson, grading or timing decision.
   drives (reserve, arm, bind, cancel); `ScoreRunway` prepares the
   successor renderer; queue and stream files implement the immutable
   forward-only ledger.
+
+`scripts/audits/coupling.py` reports constructor fan-in and any access to
+domain internals from outside a domain (must stay zero). The event
+boundary and tick worker coordinate every handler and therefore have the
+widest fan-in.
 
 The composition root builds the graph in six ordered stages (session
 state; devices, library and score; persistence and settlement; workflows;
