@@ -96,6 +96,30 @@ event handlers that depend on domains, not on their internals.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
 
+### Owner piano report fixes — 2026-11-23 (`abe746d5`)
+
+- **Free accepted keys before the notes were on screen.** The guided
+  controller listened from the score-ready ACK while Godot was still
+  moving the first target in (it arrives at the published guided
+  deadline). Free attacks before that deadline now earn nothing and the
+  prompt reads "Wait for <note> to reach the line" until it arrives.
+- **Dimmed notes had darker overlaps.** Per-stroke 46% alpha stacked;
+  dimmed ink is now one opaque colour pre-blended over the score fill.
+- **Double flag after the practised Pathétique measure.** The clipped
+  first quarter beat of the next (context) bar's sixteenth beam was
+  painted; connectors with both ends in context bars are now hidden.
+  Confirmed before/after in a windowed real-scene capture on an isolated
+  HOME (not a pixel test).
+- Not changed: a timed take still credits an attack up to one onset
+  tolerance (max 150 ms, a sixteenth) before the downbeat.
+- Observation: a hidden window is throttled to ~1 FPS by the compositor;
+  admission then exceeds its 150 ms arm budget and Listen fails after
+  three attempts. A visible window admits in milliseconds.
+
+**Gates on `abe746d5`:** `bash scripts/test.sh` 235 passed, Godot syntax
++ behaviour 0 failures; embedded verifier with Pathétique II 26 PASS.
+Physical piano acceptance pending.
+
 ### Event boundary split — 2026-11-23 (same-HEAD gates on `0b178399`)
 
 `PracticeSession` only serializes events and publishes the committed
