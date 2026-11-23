@@ -145,8 +145,12 @@ func _process(_delta: float) -> bool:
                 and absf(renderer.stream_world_beat-ready_world_beat) > .02):
             _fail("Unadmitted score moved without an authorized musical epoch")
             return true
+        # Practice Flow opens with Listen, which may already be authorized;
+        # only ink shown before any authorized segment is a violation.
+        var authorized: bool = bool(app.current_state().get("running",false)) \
+            or accepted is Dictionary
         for item in renderer.diagnostic_stream_snapshot():
-            if str(item.get("kind","source")) == "source" and \
+            if not authorized and str(item.get("kind","source")) == "source" and \
                     bool(item.get("ever_visible",false)):
                 _fail("Pre-authorization score source appeared onscreen")
                 return true

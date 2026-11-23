@@ -10,6 +10,7 @@ var started_ms := 0
 var phase_ms := 0
 var phase := "startup"
 var initial_revision := -1
+var practice_requested := false
 var initial_transport := -1
 var restarted_transport := -1
 var paused_ms := 0
@@ -136,8 +137,21 @@ func _process(_delta: float) -> bool:
             if app.current_screen != "practice" or                     app.practice_view.stage.score_status_panel.visible:
                 _fail("Native score ready but still obscured by loading panel")
                 return true
+            # Practice Flow opens with Listen. This journey exercises timed
+            # Play/Pause/Retry, so choose Practice rhythm as a learner can.
+            if str(state.get("mode","")) != "practice":
+                if not practice_requested and not app.command_coordinator.state.pending:
+                    app.send_action({"action":"practice"})
+                    practice_requested = true
+                return false
             initial_revision = int(state["revision"])
             if not bool(state.get("running",false)):
+                # An automatically scheduled take shows Pause while it is
+                # admitted; press Play only when the projected action is Play.
+                var primary: String = str(state.get("controls",{}).get(
+                    "primary",{}).get("action",""))
+                if primary not in ["start","resume","play"]:
+                    return false
                 if not _press(app.practice_view.start_button,"Play"):
                     return false
             print("PHASE6_REAL_SCORE_READY revision=",initial_revision,
@@ -314,8 +328,11 @@ func _process(_delta: float) -> bool:
             if app.demo_player.player.stream == null:
                 _fail("Listen entered playback without decoded PCM audio")
                 return true
-            if not _press(app.practice_view.listen_button,"Return to practice"):
+            # Practice Flow leads from Listen into Free; the learner returns
+            # to timed practice by choosing Practice rhythm.
+            if app.command_coordinator.state.pending:
                 return false
+            app.send_action({"action":"practice"})
             _advance("return_to_practice")
         "return_to_practice":
             if str(state.get("mode",""))!="practice" or not _ready_score() or                     bool(state.get("running",false)):
@@ -350,8 +367,11 @@ func _process(_delta: float) -> bool:
         "reopen":
             if app.command_coordinator.state.pending or not _ready_score():
                 return false
-            if int(state.get("lesson_step",-1)) != 2 or                     absf(float(state.get("bpm",-1))-resumed_bpm) > .001:
-                _fail("Reopening lost the selected step or manual tempo")
+            # docs/practice-flow.md: reopening returns to the same window
+            # and hand at Free (untimed), not to the last manual tempo.
+            if int(state.get("lesson_step",-1)) != 2 or \
+                    str(state.get("mode","")) != "learn":
+                _fail("Reopening did not return to the selected step at Free")
                 return true
             if app.practice_view.stage.score_status_panel.visible:
                 _fail("Reopened score still shows preparation overlay")
