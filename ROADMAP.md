@@ -40,7 +40,7 @@ The separate final examination uses the whole original piece.
 
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
-**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; A1 integration has begun but is not accepted. A2 and A3 exit criteria are met in software on `bbb96ba` (one remaining structural item each, below); A4–A6 have open structural items; A7 software gates pass on `bbb96ba`; all physical acceptance is pending. See the A2/A3 executed verification checkpoint.** This is
+**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; Software state on `339a4bc`: A1, A2, A3, A4 and A7 exit criteria are met in software; A5 and A6 have open structural items (listed in the 2026-11-23 checkpoint); A0's audit documents are superseded by the live docs/architecture.md. All physical acceptance is pending. See the A2/A3 executed verification checkpoint.** This is
 the next development track. The V0–V7 implementation/acceptance work and
 older S0–S7 decomposition remain below as historical evidence and open
 verification requirements, **not** as a requirement to keep all existing
@@ -554,23 +554,23 @@ inspection alone.
 
 ### A1 — One PracticeSession transaction/event coordinator
 
-- [ ] Implement one serial event processor and session aggregate on the
+- [x] Implement one serial event processor and session aggregate on the
   existing in-process worker, monotonic clock and short application lock.
   Define typed gesture, MIDI, tick, score-ready, source, admission, failure,
   reconciliation, take-result and settlement events and explicit effects.
-- [ ] Move all public and native action entrypoints through this boundary.
+- [x] Move all public and native action entrypoints through this boundary.
   Resolve UI eligibility against the **fresh current state**, with complete
   source/revision/attempt/take identity; preserve public operations during
   migration without leaving a second runtime router.
 - [ ] Replace fragmented manual command routing, context managers and
   callback-driven effect ordering with one transaction coordinator that
   executes domain decisions without duplicating them.
-- [ ] Replace PracticeTimeline's nested/recursive transition publication
+- [x] Replace PracticeTimeline's nested/recursive transition publication
   emulation with an ordered in-worker event queue, bounded cycle detection,
   and **one state publication per committed event**.
-- [ ] Migrate every active caller and delete superseded action routing,
+- [x] Migrate every active caller and delete superseded action routing,
   nested command orchestration and duplicated mutation paths in this phase.
-- [ ] Verify actual invalid/stale commands, queued Stop priority, navigation
+- [x] Verify actual invalid/stale commands, queued Stop priority, navigation
   suspension, source changes and real fake-MIDI/tick transitions.
 
 **Exit A1:** All session state changes enter through the one event boundary.
@@ -1152,6 +1152,57 @@ during count-in and playing; lost-ACK behaviour on real hardware;
 storage-failure recovery message (optional, by making the data directory
 read-only); saved reopen; audible metronome/voice; visual continuity.
 
+#### Continuation 2 — 2026-11-23 (final software HEAD `339a4bc`)
+
+**Additional defects fixed:** six storage-failure paths froze the
+timeline by pausing `VisualTransport` directly, so grading was not
+frozen (a key released during the failure could be graded as a long
+hold) and the evidence phase was not recorded; `PlaybackSession.
+freeze_after_fault` now owns this with the same freeze as Pause. Fault
+instructions ("Check storage … then Resume") stayed on screen after a
+successful Resume; `SessionNotices.fault` now clears them on Resume. One
+more instruction named a Retry button the Flow screen does not show.
+
+**Removed:** `ExposureInstaller` (folded into `ExposureWorkflows`), 25
+unused `PracticeEngine` state mirrors (including setters that wrote
+notices around the event boundary), three uncalled diagnostic operations
+(`exercise.diagnostics`, `fingering.status`, `hardware.diagnostics`) and
+their helpers. The documented `performance.diagnostics` is kept.
+
+**Verified by inspection (evidence for the ticked items):** every
+mutating `PracticeEngine` entry enters `PracticeSession.apply` (reads take
+the lock); the transition loop is an ordered, bounded queue; Stop has
+queue priority over suspend/Pause in `command_request_state.gd`; current
+(`score_asset_session.gd`) and successor (`score_runway.gd`) scores both
+use `ScoreArtifacts.bundle` and `NativeScoreAssets.bundle_error`; Godot
+issues practice commands only for user gestures and infrastructure ACKs;
+Pause sheet, Lesson Path and step selector take enablement from backend
+`controls` / overview availability. Probe: a mid-take checkpoint storage
+failure freezes with Resume offered; Resume keeps the same take with a
+full count-in, the checkpoint succeeds on retry, and the next take starts.
+
+**Same-HEAD gates on `339a4bc`:** `bash scripts/test.sh --coverage`
+235 passed; Godot syntax and 5 behaviour scenarios 0 failures; coverage
+75.7% lines / 56.3% branches. `bash scripts/verify-embedded-production-local.sh`
+25 PASS (native build, real-scene Play/Pause/Resume, synthetic MIDI
+transitions, lost reserve/present ACK, Moonlight navigation, 16 repertoire
+pieces, relocated package); `PENDING NATIVE_PATHETIQUE_II_SOURCE` because
+`PIANO_PATHETIQUE_II_MIDI` was not supplied (not counted as a pass).
+
+**Still open (owner decision or large refactor; none blocks an exit criterion above):**
+- A1 item 3 / A2 item 4: the durable-publication lease and two effect
+  vocabularies (take-completion string effects vs settled typed effects)
+  remain; unifying them touches every alternate course's settlement.
+- A3 items 1–2: three transport classes with distinct facts and one
+  writer each, not one class.
+- A4 item 2: fingering correction keeps its own preparation path; item 4
+  needs visual acceptance at the piano.
+- A5 items 2 and 5: no consolidated native score-surface interface;
+  native audit was function-level (39 dead functions removed).
+- A6 items 1–4 and 6: the flat composition graph (65 services) is not
+  regrouped; presentation still mixes projection and score motion in
+  `SessionReadModels`/`ScoreStatePublisher`.
+
 ### A3 — Single transport state and physical playback protocol
 
 - [ ] Consolidate running, paused, pending, terminal-failure and source
@@ -1179,7 +1230,7 @@ explainable receipt, including stale/lost-ACK and failure recovery.
 
 ### A4 — One source/revision-keyed ScoreBundle pipeline
 
-- [ ] Standardize normal and successor preparation on an immutable
+- [x] Standardize normal and successor preparation on an immutable
   ScoreBundle containing fingerprint, revision, stage/window/hand identity,
   semantic notes, original note IDs, authentic engraving geometry,
   selected bounds, sounding tails and cache/generation identifiers.
@@ -1187,7 +1238,7 @@ explainable receipt, including stale/lost-ACK and failure recovery.
   navigation, future-stage prewarming, saved resume and fingering correction;
   preserve source generation cancellation, no MIDI tick blocking, and
   expensive Verovio/inference work outside the session lock.
-- [ ] Replace separate current layout→semantic and future combined request
+- [x] Replace separate current layout→semantic and future combined request
   protocols with one verified ready/failure contract and adoption path.
   Remove retired duplicate retry queues, source identity mirrors,
   acknowledgements and stale-result fallback logic once migrated.
@@ -1201,7 +1252,7 @@ identity, readiness, retry and adoption protocol.
 
 ### A5 — Thin Godot UI and one native physical score surface
 
-- [ ] Keep native code responsible only for raw inputs, widgets, source
+- [x] Keep native code responsible only for raw inputs, widgets, source
   renderer readiness, physical availability/queue, visual interpolation,
   sound/cues and navigation display. No Godot learner policy, grading,
   retry tempo, mode or musical deadline decisions.
@@ -1210,10 +1261,10 @@ identity, readiness, retry and adoption protocol.
   withdraw unexposed suffix, expire spent ink, report failure. Consolidate
   the gateway, runway and stream-controller orchestration without creating
   a replacement ledger or altering admission safety.
-- [ ] Make main Practice, advanced Pause, Lesson Path and MIDI shortcut UI
+- [x] Make main Practice, advanced Pause, Lesson Path and MIDI shortcut UI
   consume one versioned backend controls/projection contract. Malformed or
   stale state and command replies must fail closed before effect publication.
-- [ ] Use only authorized epochs and backend hold/target directives for
+- [x] Use only authorized epochs and backend hold/target directives for
   visual motion, frozen Pause, Free targets, count-in, notes and audio.
   Retain one smooth forward-only score and draw no extraneous practice bars.
 - [ ] Audit every active native scene, effect coordinator and callback;
@@ -1238,7 +1289,7 @@ select a different practice action, musical time or take verdict.
   fully integrate them in the new domains.
 - [ ] Make presentation state a pure snapshot of committed session facts,
   with no independent command/render phase and action-policy mirrors.
-- [ ] Update docs/architecture.md with *only* the live architecture; label
+- [x] Update docs/architecture.md with *only* the live architecture; label
   prior implementation history as historical, update development/build
   instructions, delete implementation-shape tests and keep behavior tests.
 - [ ] Re-audit complete dependency and state-writer closure, constructor
@@ -1251,28 +1302,28 @@ remains. Saved user data remains readable.
 
 ### A7 — Same-HEAD software verification, then physical handoff
 
-- [ ] On the **same final HEAD**, run and fix all failures in
+- [x] On the **same final HEAD**, run and fix all failures in
   **bash scripts/test.sh --coverage** and
   **bash scripts/verify-embedded-production-local.sh**. GitHub Actions
   remains **workflow_dispatch only**; do not run CI on commits.
-- [ ] Exercise the actual embedded Godot/Python scene, fake MIDI clean/wrong/
+- [x] Exercise the actual embedded Godot/Python scene, fake MIDI clean/wrong/
   missed/late/extra/release paths, Free/Tempo/Listen, Pause/Resume/Stop,
   disconnected/reconnect, lost reserve/present ACK, stale replies,
   failure recovery and saved-progress reopening, with complete outcomes.
-- [ ] Verify all 16 checked-in MIDI repertoire cases, variable/odd meter,
+- [x] Verify all 16 checked-in MIDI repertoire cases, variable/odd meter,
   full count-ins, timed repeats/empty rest, moving windows, fast/dense and
   sparse notation, sustained tails, exact physical admission, resize and
   preloaded transitions. Require no Godot SCRIPT ERROR and no unacknowledged
   authority or overlapping immutable ink.
-- [ ] Verify both hold-grading settings, alternate supported courses and
+- [x] Verify both hold-grading settings, alternate supported courses and
   warm-ups, Coda/Fukuda aid return, persistent history/settings and
   failure-safe data migration. Keep the application responsive during
   background layout/inference and prewarming.
-- [ ] Verify standalone build, relocated package contents and boot on
+- [x] Verify standalone build, relocated package contents and boot on
   the same revision. Add exact Pathétique II native case only if
   **PIANO_PATHETIQUE_II_MIDI** is actually supplied; do not treat an absent
   original source as a pass.
-- [ ] Record final SHA, complete passing/failing case results, deleted-code
+- [x] Record final SHA, complete passing/failing case results, deleted-code
   ledger, ownership diagram and precise outstanding owner test procedure
   for real CA49/physical MIDI, audible metronome/voice, visual continuity
   and clean-machine installation.
