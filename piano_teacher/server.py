@@ -17,115 +17,16 @@ from .application.session_events import (
     DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed, SessionClosed,
     HardwareRequested, HistoryExported,
     PieceHistoryDeleted, LearnerHistoryDeleted)
-from .application.score_artifacts import ScoreArtifacts
 from .clock import Clock
 from .feedback_events import FeedbackEventLog
-from .learning import LearningPlan
-from .engraving.engraving import EngravedScore
-from .music import Phrase
 from .warmups import is_warmup
 from . import state_contract
 
 
 class PracticeEngine:
     # Public observations of independently owned application session facts.
-    @property
-    def plan(self) -> LearningPlan | None:
-        return self.source_identity.plan
-
-    @property
-    def score_artifacts(self) -> ScoreArtifacts:
-        return self.score_artifact_registry.current
-
-    @property
-    def source(self):
-        return self.source_identity.source
-
-    @property
-    def is_builtin_warmup(self) -> bool:
-        return self.source_identity.warmup
-
-    @property
-    def fingerprint(self) -> str:
-        return self.source_identity.fingerprint
-
-    @property
-    def score_revision(self) -> int:
-        return self.source_identity.revision
-
-    @property
-    def open_from_beat(self) -> float:
-        return self.lesson_cursor.opening_beat
-
-    @property
-    def course_guided(self) -> bool:
-        return self.lesson_cursor.course_guided
-
-    @property
-    def feedback(self) -> str:
-        return self.notices.feedback
-
-    @feedback.setter
-    def feedback(self, value: str) -> None:
-        self.notices.feedback = value
-
-    @property
-    def next_action(self) -> str:
-        return self.notices.next_action
-
-    @next_action.setter
-    def next_action(self, value: str) -> None:
-        self.notices.next_action = value
-
-
-    @property
-    def teaching(self):
-        return self.guided_session.controller
-
-    @property
-    def persistent_hints(self) -> bool:
-        return self.guided_session.persistent_hints
 
     # Public transport observations; only PlaybackSession stores these flags.
-    @property
-    def running(self):
-        return self.playback_session.running
-
-    @property
-    def mode(self):
-        return self.playback_session.mode
-
-    @property
-    def auto(self):
-        return self.playback_session.auto
-
-    @property
-    def preview_only(self):
-        return self.playback_session.preview_only
-
-    @property
-    def transport_id(self):
-        return self.playback_session.transport_id
-
-    @property
-    def count_in_beats(self):
-        return self.playback_session.count_in_beats
-
-    @property
-    def count_in_bar_beats(self):
-        return self.playback_session.count_in_bar_beats
-
-    @property
-    def count_in_meter(self):
-        return list(self.playback_session.count_in_meter)
-
-    @property
-    def awaiting_score_revision(self):
-        return self.playback_session.awaiting_score_revision
-
-    @property
-    def pause_context(self):
-        return self.playback_session.pause_context
 
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
                  feedback_events: FeedbackEventLog | None = None,
@@ -243,17 +144,6 @@ class PracticeEngine:
                 identity, source_id=source_id, finger=finger)
             self.practice_session.apply(FingeringCorrectionCommitted(corrected))
 
-    @property
-    def flow(self) -> practice_flow.FlowState | None:
-        # The flow's BPM and mastery counters are projected from the
-        # mutable canonical LearningPlan. Read that plan under its owner
-        # lock, not across a concurrent source/course commit.
-        with self.lock:
-            return self.flow_session.state
-
-    def display_phrase(self) -> Phrase:
-        return self.lesson_execution.display_phrase()
-
     def demo_audio(self, token: str) -> Path:
         with self.lock:
             return self.listen.audio_path(token)
@@ -296,9 +186,6 @@ class PracticeEngine:
 
     def semantic_score(self) -> dict:
         return self.score_read.semantic_score()
-
-    def engraving(self) -> EngravedScore:
-        return self.score_read.engraving()
 
     def geometry(self) -> dict:
         return self.score_read.geometry()
