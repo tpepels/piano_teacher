@@ -199,7 +199,10 @@ class PlaybackCoordinator:
                 or abs(source.bpm-intent.bpm) > 1e-7
                 or abs(source.end_beat-intent.end_beat) > 1e-7
                 or tuple(source.tempo_segments) != intent.tempo_segments):
-            return None
+            # Do not silently drop into the generic resting Resume path.
+            # A canceled pending score is an exact source-bound operation,
+            # and stale course/source changes require explicit new Start.
+            raise ValueError("Suspended playback source changed before Resume")
         return intent
 
     def _valid_source(self, facts: PlaybackRuntimeFacts,
