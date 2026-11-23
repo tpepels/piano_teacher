@@ -38,10 +38,6 @@ class EngineCommands:
         self.engine = engine if engine is not None else PracticeEngine()
         self.owned = engine is None
 
-    def require_presentation(self) -> None:
-        """Desktop-only transport contract, selected at native bridge startup."""
-        self.engine.require_presentation()
-
     def tick(self) -> int:
         """The same native worker advances all musical deadlines."""
         return self.engine.advance_clock()

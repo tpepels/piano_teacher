@@ -5,7 +5,6 @@ mode. The approved lesson and source identity are consumed, never reselected.
 """
 from __future__ import annotations
 from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, RestResumeFacts
-from .playback_transitions import CountInPlan
 
 
 class TimedPlayback:
@@ -25,24 +24,17 @@ class TimedPlayback:
         self.clock, self.lock, self.phase = clock, lock, phase
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
-              loop_continuation: bool = False, scheduled_deadline: float | None = None,
-              presentation_lead_seconds: float = 0.0, decided: bool = False,
-              count_in_plan=None, effect=None, reason="transition"):
+              loop_continuation: bool = False, scheduled_deadline: float,
+              count_in_plan, effect=None, reason="transition"):
+        """Open the one take the coordinator's physical receipt authorized."""
         with self.lock:
-            self.playback_session.require_authorized_start(self.playback.presentation_required)
+            self.playback_session.require_authorized_start()
             if self.source_identity.plan is None:
                 raise ValueError("Open a piece first")
             selected = None
             pending = self.attempt_settlement.pending
             if loop_continuation and pending is not None and pending.receipt is not None:
                 selected = pending.decision.next_exposure
-            elif decided:
-                selected = self.teaching_decisions.selected_exposure()
-                if selected is None:
-                    raise ValueError("No current source-bound exposure is ready for playback")
-            if effect is None and not decided and not loop_continuation and scheduled_deadline is None:
-                effect = self.teaching_decisions.prepare("manual",action="start",
-                    from_beat=from_beat,store=False,values={"mode":mode})
             if effect is not None:
                 selected = effect.decision.next_exposure
                 if selected is None:
@@ -65,7 +57,7 @@ class TimedPlayback:
                     automatic=selected.automatic if selected is not None else mode == "practice",
                     connected=self.midi.connected,loop_continuation=loop_continuation,
                     scheduled_deadline=scheduled_deadline,
-                    presentation_lead_seconds=presentation_lead_seconds,
+                    presentation_lead_seconds=0.0,
                     count_in_plan=count_in_plan))
             self.visual_transport.advance_boundary(started.next_boundary_beat)
             try:
@@ -80,51 +72,31 @@ class TimedPlayback:
 
     def continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Continue only through the unified score-admission gate."""
-        if self.playback.presentation_required:
-            # Check the canonical terminal admission latch BEFORE changing
-            # visual-transport or preparation state. Repeated automatic
-            # callbacks after exhaustion must leave a visible FAILED
-            # transaction, not silently clear the old rest schedule and
-            # replace the failure with "Preparing the next passage".
-            if self.playback.automatic_request_blocked(
-                    self.transport_timing.playback_facts(from_beat=from_beat),
-                    action="auto", mode=self.playback_session.mode,
-                    from_beat=from_beat):
-                return
-            self.playback_session.prepare_admitted_continuation()
-            self.transport_timing.request_playback(
+        # Check the canonical terminal admission latch BEFORE changing
+        # visual-transport or preparation state. Repeated automatic
+        # callbacks after exhaustion must leave a visible FAILED
+        # transaction, not silently clear the old rest schedule and
+        # replace the failure with "Preparing the next passage".
+        if self.playback.automatic_request_blocked(
+                self.transport_timing.playback_facts(from_beat=from_beat),
                 action="auto", mode=self.playback_session.mode,
-                from_beat=from_beat, earliest_deadline=deadline,
-                fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
-            self.visual_transport.clear_scheduled_start()
-            self.notices.feedback = "Preparing the next passage"
+                from_beat=from_beat):
             return
-        announced = self.visual_transport.announced_deadline(from_beat)
-        serial = (self.visual_transport.announce_serial
-                  if announced is not None and abs(announced - deadline) <= 1e-9 else None)
-        self.start(from_beat=from_beat, mode=self.playback_session.mode, loop_continuation=True,
-                   scheduled_deadline=deadline,
-                   count_in_plan=(CountInPlan.create(
-                       bar_beats=self.transport_timing.next_count_in_beats(),
-                       meter=tuple(self.transport_timing.next_count_in_meter()),bpm=self.source_identity.plan.bpm,
-                       beats=self.transport_timing.next_count_in_beats()) if self.lesson_execution.flow_active() else None))
-        self.visual_transport.bind_scheduled_start(
-            transport_id=self.playback_session.transport_id,
-            from_beat=self.visual_transport.play_from_beat,
-            run_at=self.visual_transport.run_at,
-            stage_key=self.source_identity.plan.identity,
-            revision=self.source_identity.revision, serial=serial)
-        self.playback_session.retain_announced_count_in(bpm=self.source_identity.plan.bpm)
+        self.playback_session.prepare_admitted_continuation()
+        self.transport_timing.request_playback(
+            action="auto", mode=self.playback_session.mode,
+            from_beat=from_beat, earliest_deadline=deadline,
+            fixed_deadline=deadline if self.lesson_execution.flow_active() else None)
+        self.visual_transport.clear_scheduled_start()
+        self.notices.feedback = "Preparing the next passage"
 
     def begin_listen_if_ready(self):
         self.exposure_workflows.apply_listen_failure()
         activation = self.playback_session.begin_listen_if_ready(
-            revision=self.source_identity.revision,presentation_required=self.playback.presentation_required)
+            revision=self.source_identity.revision)
         if activation.requested_count_in is not None:
             self.transport_timing.request_playback(action="listen",mode="listen",from_beat=activation.from_beat,
                 count_in_beats=activation.requested_count_in)
-        elif activation.started:
-            self.notices.feedback = "Count in, then listen"
 
     def pause(self, *, pending_admission: bool = False):
         now = self.clock()
@@ -135,8 +107,7 @@ class TimedPlayback:
             self.guided_session.controller.pause(now=now)
 
     def resume(self, *, presentation_lead_seconds: float = 0.0,
-                                reuse_announced_score: bool = False,
-                                scheduled_deadline: float | None = None):
+               scheduled_deadline: float | None = None):
         resumed = self.playback_session.resume_timeline(ResumeRequest(
             learning=self.playback_session.mode == "learn" and self.guided_session.controller is not None,
             bpm=self.source_identity.plan.bpm if self.source_identity.plan is not None else None,
@@ -153,7 +124,7 @@ class TimedPlayback:
             presentation_bpm=self.transport_timing.presentation_bpm(),horizon_beats=self.visual_transport.continuous_horizon_beats,
             physical_rest_enabled=self.visual_transport.short_rest is not None,
             rest=(self.transport_timing.collect_rest_measurement(from_beat=announced[0],source_end=0.0)
-                if announced is not None else None),reuse=reuse_announced_score))
+                if announced is not None else None)))
         completion = self.playback_session.finish_resume(resumed)
         if completion.feedback is not None:
             self.notices.feedback = completion.feedback

@@ -12,14 +12,12 @@ from .stage_change import prepare_stage_change
 
 
 from .session_events import (
-    TimedStartRequested,
     UserCommand,
     ClockAdvanced,
     ImmediateTransition,
     MidiShortcut,
     PhysicalMidi,
     MidiArrival,
-    PresentationRequired,
     PlaybackReserved,
     PlaybackPresented,
     PlaybackWithdrawn,
@@ -271,8 +269,6 @@ class PracticeSession:
 
     def _dispatch(self, event: PracticeEvent) -> dict | int | None:
         """Execute a previously locked, typed session action."""
-        if isinstance(event, TimedStartRequested):
-            return self.timed_playback.start(**event.arguments)
         if isinstance(event, UserCommand):
             return self._apply_command(event.action, **event.parameters)
         if isinstance(event, PhysicalMidi):
@@ -302,8 +298,6 @@ class PracticeSession:
             if effect.action:
                 return self._apply_command(effect.action)
             return None
-        if isinstance(event, PresentationRequired):
-            return self.transport_commands.enable_presentation()
         if isinstance(event, PlaybackReserved):
             return self.transport_commands.reserve_physical(**event.receipt)
         if isinstance(event, PlaybackPresented):

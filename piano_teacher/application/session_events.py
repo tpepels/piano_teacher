@@ -9,11 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
-class TimedStartRequested:
-    arguments: dict
-
-
-@dataclass(frozen=True, slots=True)
 class UserCommand:
     action: str
     parameters: dict
@@ -56,11 +51,6 @@ class PhysicalMidi:
     deferred: bool = False
     arrival: MidiArrival | None = None
 
-
-
-@dataclass(frozen=True, slots=True)
-class PresentationRequired:
-    """Desktop requests physical admission before any timed grading."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,9 +141,9 @@ class SessionClosed:
     """Close ledger/device after the final active-take interruption."""
 
 
-PracticeEvent = (TimedStartRequested | UserCommand | ClockAdvanced |
+PracticeEvent = (UserCommand | ClockAdvanced |
                  PhysicalMidi | MidiShortcut |
-                 PresentationRequired | PlaybackReserved | PlaybackPresented |
+                 PlaybackReserved | PlaybackPresented |
                  PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
                  FingeringCorrectionCommitted | SettingsChanged |
                  MidiPortsRequested | DeviceSelected |

@@ -3,7 +3,7 @@ extends RefCounted
 ## piano_teacher/state_contract.py. Do not edit by hand.
 ## The versioned contract of the per-frame state snapshot.
 
-const VERSION := 6
+const VERSION := 7
 const STATIC_KEYS := ["import_warnings"]
 const REQUIRED := ["schema_version", "loaded", "controls"]
 const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline"]
@@ -21,10 +21,10 @@ const SCHEMA := {
     "clock_beat": ["number"],
     "clock_elapsed_seconds": ["number"],
     "clock_sampled_at_ms": ["number"],
+    "controls": ["dict"],
     "count_in_bar_beats": ["number"],
     "count_in_beats": ["number"],
     "count_in_meter": ["list"],
-    "controls": ["dict"],
     "countdown": ["number"],
     "current_bar": ["number"],
     "demo": ["dict", "null"],
@@ -90,11 +90,11 @@ const SCHEMA := {
     "piece_last_bar": ["number"],
     "placement_available": ["bool"],
     "play_from_beat": ["number"],
-    "presentation_directive": ["dict"],
     "playback_intent": ["dict", "null"],
     "playback_timeline": ["dict"],
     "practice_preparation": ["dict", "null"],
     "practice_timeline": ["dict"],
+    "presentation_directive": ["dict"],
     "preview_only": ["bool"],
     "progress": ["number"],
     "recovery_beat": ["null", "number"],
@@ -106,7 +106,6 @@ const SCHEMA := {
     "revision": ["number"],
     "running": ["bool"],
     "schema_version": ["number"],
-    "score_queue_next": ["dict", "null"],
     "scoring_available": ["bool"],
     "seek_available": ["bool"],
     "seek_range": ["dict", "null"],

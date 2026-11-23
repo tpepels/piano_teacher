@@ -85,7 +85,6 @@ class MidiApplicationInput:
             awaiting_score=self.playback_session.awaiting_score_revision is not None,
             exercise_kind=(self.source_identity.plan.exercise.kind if self.source_identity.plan else ""),
             review_end_beat=self.attempt.review_end_beat,
-            presentation_required=self.playback.presentation_required,
             successor_action=(self.playback.intent.action
                 if self.playback.intent is not None else None))
 

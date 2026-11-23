@@ -19,7 +19,7 @@ def _authorized():
         play_from_beat=0.0, resume_grading_after=0.0,
         pause_context=None, preview_only=False, pending_result=False,
         transport_id=19)
-    owner = PlaybackCoordinator(presentation_required=True)
+    owner = PlaybackCoordinator()
     owner.state = PlaybackState.PLAYING
     owner.active_take_id = "take"
     owner.active_segment_id = "segment"

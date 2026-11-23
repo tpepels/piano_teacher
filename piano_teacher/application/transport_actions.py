@@ -4,7 +4,6 @@ Consumes the current source, one PlaybackCoordinator receipt and one timed
 transport. No application command-router backreference or nested control call.
 """
 from __future__ import annotations
-from .playback_facts import PreparationRequest
 from .playback_transitions import PlaybackTransition
 
 
@@ -39,9 +38,6 @@ class TransportActions:
         self.timed_playback = timed_playback
         self.transport_timing = transport_timing
         self.visual_transport = visual_transport
-
-    def enable_presentation(self) -> None:
-        self.playback.enable_presentation(self.transport_timing.playback_facts())
 
     def reserve_physical(self, **values) -> dict:
         return self.playback.reserve(self.transport_timing.playback_facts(), **values)
@@ -88,7 +84,7 @@ class TransportActions:
             elif authorized.action in ("auto","score_ready"):
                 self.timed_playback.start(from_beat=intent.from_beat,mode=intent.mode,
                     loop_continuation=authorized.action == "auto",
-                    decided=False,scheduled_deadline=authorized.deadline,
+                    scheduled_deadline=authorized.deadline,
                     count_in_plan=intent.count_in,reason=authorized.action)
                 self.visual_transport.bind_scheduled_start(
                     transport_id=self.playback_session.transport_id,
@@ -118,27 +114,7 @@ class TransportActions:
                 position = (self.visual_transport.pending_rewind
                     if self.visual_transport.pending_rewind is not None else self.lesson_cursor.opening_beat)
                 mode = "perform" if self.playback_session.mode == "perform" else "practice"
-                if self.playback.presentation_required:
-                    self.transport_timing.request_playback(action="score_ready",mode=mode,from_beat=position)
-                    return
-                announce = self.visual_transport.short_rest is not None or self.lesson_execution.flow_active()
-                timing = self.playback_session.headless_ready_timing(
-                    reserved_ms=kwargs.get("presentation_deadline_ms"),
-                    count_in_beats=self.transport_timing.next_count_in_beats(),bpm=self.source_identity.plan.bpm,
-                    announce=announce,rest=(self.transport_timing.collect_rest_measurement(
-                        from_beat=self.lesson_cursor.opening_beat) if announce and
-                        kwargs.get("presentation_deadline_ms") is None else None),
-                    presentation_bpm=self.transport_timing.presentation_bpm())
-                self.timed_playback.start(from_beat=position,mode=mode,scheduled_deadline=timing.deadline,
-                    presentation_lead_seconds=timing.lead_seconds,decided=True,
-                    reason=reason or action)
-                if announce:
-                    self.visual_transport.bind_scheduled_start(
-                        transport_id=self.playback_session.transport_id,
-                        from_beat=self.visual_transport.play_from_beat,
-                        run_at=self.visual_transport.run_at,
-                        stage_key=self.source_identity.plan.identity,
-                        revision=self.source_identity.revision)
+                self.transport_timing.request_playback(action="score_ready",mode=mode,from_beat=position)
         elif self.playback_session.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
             self.timed_playback.begin_listen_if_ready()
 
@@ -159,30 +135,25 @@ class TransportActions:
         elif action in ("start", "restart"):
             self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self.transport_timing.update_short_rest(kwargs)
-            if self.playback.presentation_required:
-                if self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None:
-                    self.start_or_restart(action, effect=effect)
-                    return
-                effect = effect or self.teaching_decisions.manual_effect(action)
-                transition = PlaybackTransition.from_effect(
-                    effect,action=action,source_changed=(
-                        self.score_artifact_registry.current.source_bpm_changed(self.source_identity.plan.piece.bpm)
-                        if self.playback_session.mode not in ("listen", "learn") else False))
-                if transition.route in ("listen", "prepare_practice",
-                                        "reload_score", "learn"):
-                    # These routes change assets or enter untimed teaching.
-                    # The resulting timed source, if any, is requested only
-                    # after its exact selected score revision is prepared.
-                    self.start_or_restart(action, effect=effect)
-                else:
-                    selected = transition.exposure
-                    self.transport_timing.request_playback( action=action,
-                        mode=selected.mode, from_beat=selected.from_beat,
-                        transition=transition)
+            if self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None:
+                self.replay_retained_result()
+                return
+            effect = effect or self.teaching_decisions.manual_effect(action)
+            transition = PlaybackTransition.from_effect(
+                effect,action=action,source_changed=(
+                    self.score_artifact_registry.current.source_bpm_changed(self.source_identity.plan.piece.bpm)
+                    if self.playback_session.mode not in ("listen", "learn") else False))
+            if transition.route in ("listen", "prepare_practice",
+                                    "reload_score", "learn"):
+                # These routes change assets or enter untimed teaching.
+                # The resulting timed source, if any, is requested only
+                # after its exact selected score revision is prepared.
+                self.enter_source_route(action, transition)
             else:
-                self.start_or_restart(
-                    action, effect=effect,
-                    presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs))
+                selected = transition.exposure
+                self.transport_timing.request_playback( action=action,
+                    mode=selected.mode, from_beat=selected.from_beat,
+                    transition=transition)
         elif action == "pause":
             self.timed_playback.pause(
                 pending_admission=self.playback.suspend_pending(
@@ -190,36 +161,28 @@ class TransportActions:
         elif action == "resume":
             self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self.transport_timing.update_short_rest(kwargs)
-            if self.playback.presentation_required:
-                suspended = self.playback.take_suspended(
-                    self.transport_timing.playback_facts())
-                if suspended is not None:
-                    self.playback_session.resume_suspended_admission()
-                    self.transport_timing.request_playback(action=suspended.action,
-                        mode=suspended.mode,from_beat=suspended.from_beat,
-                        transition=suspended.transition)
-                    return
-                if not self.playback_session.running:
-                    # Resume inside a rest resumes the pending teaching
-                    # decision; it is not a new timed take. Its next take
-                    # will independently enter the admission transaction.
-                    self.resume_current_session()
-                    return
-                from_beat = self.visual_transport.play_from_beat
-                if self.playback_session.running:
-                    from_beat += max(0.0, self.transport_timing.elapsed_beat(
-                        self.visual_transport.paused_at
-                        - self.visual_transport.run_at))
-                self.transport_timing.request_playback( action="resume",
-                    mode=self.playback_session.mode, from_beat=from_beat)
-            else:
-                self.resume_current_session(presentation_lead_seconds=self.transport_timing.presentation_lead(kwargs),
-                    reuse_announced_score=kwargs.get("reuse_announced_score",False) is True)
+            suspended = self.playback.take_suspended(
+                self.transport_timing.playback_facts())
+            if suspended is not None:
+                self.playback_session.resume_suspended_admission()
+                self.transport_timing.request_playback(action=suspended.action,
+                    mode=suspended.mode,from_beat=suspended.from_beat,
+                    transition=suspended.transition)
+                return
+            if not self.playback_session.running:
+                # Resume inside a rest resumes the pending teaching
+                # decision; it is not a new timed take. Its next take
+                # will independently enter the admission transaction.
+                self.resume_current_session()
+                return
+            from_beat = self.visual_transport.play_from_beat + max(
+                0.0, self.transport_timing.elapsed_beat(
+                    self.visual_transport.paused_at - self.visual_transport.run_at))
+            self.transport_timing.request_playback( action="resume",
+                mode=self.playback_session.mode, from_beat=from_beat)
 
-    def start_or_restart(self, action: str, *,
-                          presentation_lead_seconds: float = 0.0,
-                          scheduled_deadline: float | None = None, effect=None):
-        """Start a take or schedule a seamless retry under the control lock."""
+    def replay_retained_result(self) -> None:
+        """Play after a failed save or rolling recovery replays that same result."""
         if self.attempt.settlement_failed:
             revision = self.source_identity.revision
             # Drop the failure instruction; the replayed continuation
@@ -236,53 +199,30 @@ class TransportActions:
             self.recovery_workflows.apply_rolling_recovery(decision, phrase, grid, score_beat, self.clock())
             self.visual_transport.clear_pause_for_restart()
             return
-        p = self.source_identity.plan
-        if p is None:
-            raise ValueError("Open a piece first")
-        effect = self.teaching_decisions.manual_effect(action, effect=effect)
+        raise ValueError("No retained result to replay")
+
+    def enter_source_route(self, action: str, transition) -> None:
+        """Enter a selected route that changes assets or untimed teaching."""
+        effect, route = transition.effect, transition.route
         selected = self.teaching_decisions.install_command(effect)
-        route = PlaybackTransition.from_effect(
-            effect,action="start",source_changed=(
-            self.score_artifact_registry.current.source_bpm_changed(p.piece.bpm)
-            if self.playback_session.mode not in ("listen","learn") else False)).route
         if route == "listen":
             self.exposure_workflows.prepare_listen(effect=effect,reason=action)
-            return
-        if route == "prepare_practice":
+        elif route == "prepare_practice":
             self.exposure_workflows.prepare_practice(exposure=selected,reason=action)
-            return
-        if route == "learn":
+        elif route == "learn":
             self.lesson_execution.begin_learn(exposure=selected,reason=action)
-            return
-        if route == "reload_score":
+        elif route == "reload_score":
             self.lifecycle.stop(reason=action)
             self.source_identity.advance_revision()
             self.playback_session.await_score(self.source_identity.revision)
             self.notices.feedback = "Preparing sheet music"
-            return
-        if route == "rewind":
-            sampled = self.clock()
-            visual_now = self.visual_transport.paused_at if self.visual_transport.paused else sampled
-            position,_,_ = self.transport_timing.visual_motion(visual_now)
-            self.playback_session.prepare_retry(PreparationRequest(
-                self.score_read.source_model(),selected.from_beat,sampled,position,self.feedback_seconds,
-                self.transport_timing.presentation_bpm(),self.visual_transport.continuous_horizon_beats,
-                reading_lead_included=presentation_lead_seconds > 0,
-                short_deadline=scheduled_deadline),
-                presentation_lead_seconds=presentation_lead_seconds,source_bpm=p.bpm)
-            self.notices.feedback = "Get ready to retry"
-            return
-        self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,decided=True,
-                   scheduled_deadline=scheduled_deadline,
-                   presentation_lead_seconds=presentation_lead_seconds,reason=action)
-        return
+        else:
+            raise ValueError(f"Route {route!r} is admitted physically, not entered")
 
     def resume_current_session(self, *, presentation_lead_seconds=0.0,
-                                reuse_announced_score=False,
                                 scheduled_deadline=None):
         completed = self.timed_playback.resume(
             presentation_lead_seconds=presentation_lead_seconds,
-            reuse_announced_score=reuse_announced_score,
             scheduled_deadline=scheduled_deadline)
         if completed.deferred_score_revision is not None:
             # Infrastructure acknowledgement stays within this transaction.

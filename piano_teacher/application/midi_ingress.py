@@ -47,7 +47,6 @@ class InputTransportFacts:
     awaiting_score: bool
     exercise_kind: str
     review_end_beat: float | None
-    presentation_required: bool
     successor_action: str | None
 
 
@@ -162,8 +161,7 @@ class MidiIngress:
         # A current take can still be running while a start/restart has
         # already selected its successor. No key may earn credit between
         # selection and physical admission of the new source.
-        return bool(transport.presentation_required
-            and transport.successor_action in ("start","restart")
+        return bool(transport.successor_action in ("start","restart")
             and facts.running)
 
     def defer_boundary_note(self,message,*,facts: MidiInputFacts,

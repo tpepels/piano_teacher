@@ -5,7 +5,6 @@ chosen source, its exact authored tempo map and the established
 PlaybackSession/VisualTransport state for command or read-side use.
 """
 from __future__ import annotations
-import math
 from .playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts, PreparationRequest
 from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasurement
 
@@ -186,19 +185,6 @@ class TransportTiming:
         if value is None:
             return
         self.visual_transport.configure_reading_horizon(value)
-
-    def presentation_lead(self, kwargs: dict) -> float:
-        """Lead to the world position Godot reserved for this command.
-
-        Godot reports the reserved deadline itself (presentation_deadline_ms,
-        backend clock). Measuring the lead from it here absorbs the time the
-        command spent queued behind engine work, which a relative lead added
-        to the engine's own "now" turned into an offset (Clair, 12 px).
-        """
-        deadline = kwargs.get("presentation_deadline_ms")
-        if deadline is not None and math.isfinite(float(deadline)):
-            return max(0.0, float(deadline) / 1000.0 - self.clock())
-        return float(kwargs.get("presentation_lead_seconds", 0.0))
 
     def musical_seconds(self, at: float) -> float:
         """Graded musical time of wall instant ``at``, in seconds since run_at.

@@ -70,13 +70,10 @@ class PracticeTimeline:
                 now=now,reading_horizon_beats=self.visual_transport.continuous_horizon_beats)
             self.notices.feedback = "Timing preview - repeating after one empty measure"
             self.notices.next_action = "Connect your MIDI piano to earn progress."
-            if self.playback.presentation_required:
-                # The next preview must be admitted during the rest, not at
-                # the previous retry deadline after its count-in is over.
-                self.timed_playback.continue_at(self.visual_transport.next_at,
-                    from_beat=0.0)
-            elif now >= self.visual_transport.next_at:
-                return True
+            # The next preview must be admitted during the rest, not at
+            # the previous retry deadline after its count-in is over.
+            self.timed_playback.continue_at(self.visual_transport.next_at,
+                from_beat=0.0)
             return False
         completed_visual = self.transport_timing.visual_motion(now)[0]
         completed = self.attempt_settlement.complete_take(
@@ -147,7 +144,6 @@ class PracticeTimeline:
             visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
             source_model=self.score_read.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
             horizon_beats=self.visual_transport.continuous_horizon_beats,warmup=self.source_identity.warmup,
-            presentation_required=self.playback.presentation_required,
             short_rest_enabled=self.visual_transport.short_rest is not None,
             retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
             repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,
@@ -167,7 +163,7 @@ class PracticeTimeline:
 
     def run_pre_assessment_transition(self, now: float) -> tuple[bool, bool]:
         """Apply a non-grading transition; return consumed and follow-up flags."""
-        if self.playback.presentation_required and self.playback.intent is not None:
+        if self.playback.intent is not None:
             return True, False
         context = TransitionContext(
             has_plan=self.source_identity.plan is not None,
@@ -278,8 +274,7 @@ class PracticeTimeline:
                 and self.playback_session.mode == "practice"
                 and self.playback_session.running
                 and not self.visual_transport.paused
-                and not (self.playback.presentation_required
-                         and self.playback.intent is not None)):
+                and self.playback.intent is None):
             self.recovery_workflows.apply_rolling_recovery(
                 rolling.decision, rolling.phrase, rolling.grid,
                 rolling.score_beat, now)

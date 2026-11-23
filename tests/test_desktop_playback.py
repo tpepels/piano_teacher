@@ -454,7 +454,7 @@ def test_real_state_contract_includes_authoritative_motion_directive(practice_se
     from piano_teacher.state_contract import VERSION, problems
     session = practice_session(bars=1)
     result = session.snapshot()
-    assert VERSION == 6
+    assert VERSION == 7
     assert "presentation_directive" in result
     assert result["presentation_directive"]["kind"] in (
         "hold", "target", "retain", "run")

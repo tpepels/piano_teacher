@@ -44,7 +44,6 @@ class TeachingDecisions:
         self.fukuda_mistakes = fukuda_mistakes
         self.learner_progress = learner_progress
         self._last_applied_command = None
-        self._prepared_exposure = None
         self.learning_evidence = learning_evidence
         self.clock = clock
 
@@ -115,33 +114,9 @@ class TeachingDecisions:
         return effect or self.prepare(
             "manual", action=action, from_beat=from_beat, values=values, store=False)
 
-    def prepare_exposure(self, exposure) -> None:
-        """Retain an accepted lesson selection for that plan and stage only."""
-        if exposure is None:
-            self._prepared_exposure = None
-            return
-        plan = self.source_identity.plan
-        if plan is None or exposure.stage_key != plan.identity:
-            raise ValueError("Prepared exposure does not match the selected lesson")
-        self._prepared_exposure = (
-            plan, self.source_identity.fingerprint, plan.identity, exposure)
-
-    def selected_exposure(self):
-        """Reject decisions retained across source, plan or stage changes."""
-        selected = self._prepared_exposure
-        if selected is None:
-            return None
-        plan, fingerprint, stage_key, exposure = selected
-        current = self.source_identity.plan
-        if (current is not plan or fingerprint != self.source_identity.fingerprint
-                or stage_key != current.identity):
-            return None
-        return exposure
-
     def source_installed(self) -> None:
         """Drop source-specific manual decisions after source installation."""
         self._last_applied_command = None
-        self._prepared_exposure = None
 
     def apply_progress(self, effect) -> bool:
         """Apply exactly one validated manual decision to the lesson owner.
@@ -158,7 +133,6 @@ class TeachingDecisions:
             definition=effect.decision.definition_after,
             expected=effect.decision.before_progress)
         self._last_applied_command = effect
-        self.prepare_exposure(effect.decision.next_exposure)
         return True
 
     def install_command(self, effect):

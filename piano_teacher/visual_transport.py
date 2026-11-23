@@ -69,8 +69,7 @@ class VisualTransport:
     visual_gap_beats: float = UNLOADED_GAP_BEATS
     # The one announced automatic continuation: (source_from_beat, graded
     # run_at, start BPM). Set when the engine schedules the next take of the
-    # same stage, published as an exact graphical playback intent (or as
-    # the explicit headless score_queue_next fixture projection), and started
+    # same stage, published as an exact graphical playback intent, and started
     # at exactly that run_at/BPM. Nothing adds a new lead or tempo decision.
     announced_continuation: PassagePlan | None = None
     # Identity of the selected continuation. A new announcement is new ink;
@@ -144,16 +143,12 @@ class VisualTransport:
             return
         short = (SCHEDULER.measured_rest(facts.rest,
             now=facts.now,bpm=facts.presentation_bpm)
-            if facts.physical_rest_enabled and not facts.reuse else None)
-        reuse = facts.reuse and facts.reading_lead_seconds > 0
-        deadline = SCHEDULER.fresh_resume(now=facts.now,old_deadline=announced[1],
+            if facts.physical_rest_enabled else None)
+        deadline = SCHEDULER.fresh_resume(now=facts.now,
             reading_lead_seconds=max(0.0,float(facts.reading_lead_seconds)),
             horizon_beats=facts.horizon_beats,bpm=facts.bpm,
-            short_rest_at=short,reuse=reuse)
-        if reuse:
-            self.retime_announcement(deadline)
-        else:
-            self.announce_continuation(announced[0],deadline,announced[2])
+            short_rest_at=short)
+        self.announce_continuation(announced[0],deadline,announced[2])
 
     def refloor_announcement(self, *, now: float, bpm: float,
                              count_in_beats: float, latency: float) -> None:

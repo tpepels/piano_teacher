@@ -5,6 +5,8 @@ import time
 import mido
 import pytest
 
+from session_inputs import PracticeSession
+
 from piano_teacher import sample_piano
 from piano_teacher.inprocess import EngineCommands, FAILED, INVALID, OK
 from piano_teacher.library import ScoreLibrary, default_music_dir
@@ -147,7 +149,7 @@ def test_invalid_command_or_failed_preference_save_preserves_running_lesson(libr
     try:
         engine.set_preferences(music_dir=str(music))
         engine.load_library("Prelude.mid")
-        engine.start()
+        PracticeSession.attach(engine, engine.now).start_listen()
         before = engine.state()
         preferences = engine.preferences()
         disk = engine.library.settings_path.read_bytes()

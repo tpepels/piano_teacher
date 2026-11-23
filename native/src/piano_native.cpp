@@ -117,17 +117,12 @@ void PianoNative::initialize_python() {
     PyGILState_STATE gil = PyGILState_Ensure();
     PyObject *module = PyImport_ImportModule("piano_teacher.inprocess");
     PyObject *klass = module ? PyObject_GetAttrString(module, "EngineCommands") : nullptr;
+    // Physical score presentation is the engine's only transport.
     PyObject *instance = klass ? PyObject_CallNoArgs(klass) : nullptr;
-    // Production cannot silently fall back to headless transport. The
-    // presentation gate is enabled before the first library or MIDI event.
-    PyObject *registered = instance ?
-        PyObject_CallMethod(instance, "require_presentation", nullptr) : nullptr;
-    if (!registered) {
+    if (!instance) {
         std::lock_guard<std::mutex> guard(mutex_);
         failure_ = python_error();
-        Py_XDECREF(instance);
     } else {
-        Py_DECREF(registered);
         engine_ = instance;
         ready_ = true;
     }

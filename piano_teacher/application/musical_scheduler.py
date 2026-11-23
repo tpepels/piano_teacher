@@ -335,23 +335,12 @@ class MusicalScheduler:
             end = base_end+cls.beats_seconds(max(0.,horizon_beats-rest_beats),bpm)
         return PreparationDeadline(now,prepare,end,reverse)
 
-    @staticmethod
-    def reserved_retry_reverse(*, lead_seconds: float, rest_seconds: float) -> float:
-        if (not math.isfinite(lead_seconds) or not math.isfinite(rest_seconds)
-                or lead_seconds <= 0 or rest_seconds <= 0
-                or lead_seconds-rest_seconds+0.01 < 0.05):
-            raise ValueError("Future retry reservation lacks space for one full rest")
-        return max(.05,lead_seconds-rest_seconds)
-
     @classmethod
-    def fresh_resume(cls, *, now: float, old_deadline: float,
-                     reading_lead_seconds: float, horizon_beats: float,
-                     bpm: float, short_rest_at: float | None,
-                     reuse: bool) -> float:
+    def fresh_resume(cls, *, now: float, reading_lead_seconds: float,
+                     horizon_beats: float, bpm: float,
+                     short_rest_at: float | None) -> float:
         if not math.isfinite(reading_lead_seconds) or reading_lead_seconds < 0:
             raise ValueError("Invalid resumed reading lead")
-        if reuse:
-            return now+reading_lead_seconds
         floor = (short_rest_at if short_rest_at is not None
                  else cls.offscreen(deadline=now,lead_beats=horizon_beats,bpm=bpm))
         return max(now+reading_lead_seconds,floor)

@@ -81,14 +81,7 @@ class PreparationRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class HeadlessStartTiming:
-    deadline: float | None
-    lead_seconds: float
-
-
-@dataclass(frozen=True, slots=True)
 class ListenActivation:
-    started: bool = False
     requested_count_in: float | None = None
     from_beat: float = 0.0
 
@@ -133,7 +126,6 @@ class FullPassageFacts:
     presentation_bpm: float
     horizon_beats: float
     warmup: bool
-    presentation_required: bool
     short_rest_enabled: bool
     retry_rest: RestMeasurement | None
     repeat_rest: RestMeasurement | None
@@ -191,7 +183,6 @@ class RestResumeFacts:
     horizon_beats: float
     physical_rest_enabled: bool
     rest: RestMeasurement | None
-    reuse: bool
 
 
 @dataclass(frozen=True, slots=True)

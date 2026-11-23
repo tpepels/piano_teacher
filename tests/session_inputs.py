@@ -90,6 +90,14 @@ class PracticeSession:
         self.engine = None
         self.open()
 
+    @classmethod
+    def attach(cls, engine, clock):
+        """Drive an engine built by another fixture through the same protocol."""
+        driver = cls.__new__(cls)
+        driver.engine, driver.clock, driver.receipt = engine, clock, None
+        driver.commands = EngineCommands(engine=engine)
+        return driver
+
     def open(self):
         if self.engine is not None:
             self.close()
@@ -98,9 +106,6 @@ class PracticeSession:
         monkeypatch.setattr(mido, "open_input", lambda name, callback: InputPort(callback))
         self.engine = PracticeEngine(self.data, clock=self.clock)
         self.commands = EngineCommands(engine=self.engine)
-        # Exactly as the native bridge: the physical presentation gate is
-        # enabled before the first library or MIDI event.
-        self.commands.require_presentation()
         self.receipt = None
         self.ask("settings.update", music_dir=str(self.music), exercise_strategy="practice-flow")
         self.ask("midi.device.select", name="Test piano")
@@ -173,16 +178,31 @@ class PracticeSession:
         self.receipt = receipt
         return self.snapshot()
 
-    def ready_score(self, *, admit=True):
-        state = self.snapshot()
+    def ready_score(self, *, admit=True, state=None):
+        state = state or self.snapshot()
         if state.get("awaiting_score_revision") is not None:
             state = self.command("score_ready", revision=state["revision"])
         return self.admit(state) if admit else state
 
-    def finish_listen(self):
+    def start_listen(self):
+        """A running Listen take admitted through the physical protocol."""
+        state = self.snapshot()
+        if state["mode"] == "listen" and state["phase"] == "ready":
+            # A directly loaded source waits for the learner's Listen press.
+            self.command(state["controls"]["primary"]["action"])
         demo = self.wait_audio()
         self.ready_score()
-        self.admit(self.command("demo_ready", token=demo["token"]))
+        return self.admit(self.command("demo_ready", token=demo["token"]))
+
+    def tempo(self):
+        """Listen, Free, then the first admitted Tempo take of the window."""
+        self.finish_listen()
+        self.finish_free()
+        return self.ready_score()
+
+    def finish_listen(self):
+        self.start_listen()
+        demo = self.snapshot()["demo"]
         self.clock.at = self.receipt["deadline_ms"]/1000+demo["duration_seconds"]+.001
         self.tick()
         return self.ready_score()

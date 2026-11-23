@@ -1,12 +1,10 @@
 """Read-side projection of current source, transport, score and feedback facts.
 
 Snapshots sample under the application lock; they never start or settle takes.
-The headless score fixture is explicit and not used for desktop admission.
 """
 from __future__ import annotations
 from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .score_state_publisher import ScoreProjectionFacts
-from .headless_score_projection import project_headless_score_queue
 from .control_projection import project_controls
 from .session_snapshot_builder import SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot
 from ..state_projection import project_session_state
@@ -65,8 +63,7 @@ class SessionReadModels:
                 announced[0]) if announced is not None else None),
             announcement_serial=self.visual_transport.announce_serial,
             scheduled_start=self.visual_transport.scheduled_start,
-            timeline=({"intent":pending,"current":timeline}
-                      if self.playback.presentation_required else {}),
+            timeline={"intent":pending,"current":timeline},
             next_count_in_beats=self.next_count_in_beats(),
             next_count_in_meter=tuple(self.next_count_in_meter()),
             continuous_horizon_beats=self.visual_transport.continuous_horizon_beats,
@@ -88,19 +85,14 @@ class SessionReadModels:
         """Project the same locked transport/lesson state for all consumers.
 
         The native button resolver and the frame presenter must not disagree
-        about admission, failure or the currently authorized segment. A
-        headless practice run still publishes the required real transaction
-        status, without inventing a physical admission receipt.
+        about admission, failure or the currently authorized segment.
         """
         state = project_session_state(self.capture_snapshot(sampled_at=now))
         pending, timeline = self.playback.snapshot(self.playback_facts())
-        if self.playback.presentation_required:
-            self.score_state_publisher.project_transport_state(
-                state, pending, timeline,
-                running=self.playback_session.running,
-                paused=self.visual_transport.paused)
-        else:
-            state["playback_timeline"] = timeline
+        self.score_state_publisher.project_transport_state(
+            state, pending, timeline,
+            running=self.playback_session.running,
+            paused=self.visual_transport.paused)
         # Physical score admission must authenticate the selected course stage,
         # not infer it from a revision or from a mutable frontend hand label.
         plan = self.source_identity.plan
@@ -119,20 +111,7 @@ class SessionReadModels:
             now = self.clock()
             state, pending, timeline = self._committed_base(now)
             facts = self.score_facts(pending,timeline)
-            plan = self.source_identity.plan
-            guided_plan = self.score_state_publisher.publish(state, facts)
-            if not self.playback.presentation_required:
-                # Test/command fixture adapter; never entered by the desktop.
-                def count_in_source_at(from_beat, rate):
-                    _, bars, meter = self.attempt_progression.count_in_bar(
-                        phrase=plan.active_phrase,
-                        boundaries=plan.piece.bar_boundaries,
-                        time_signatures=plan.piece.time_signatures,
-                        position=from_beat)
-                    return bars,meter,self.start_rate_bpm(from_beat,rate)
-                project_headless_score_queue(
-                    state, facts, measure_at=count_in_source_at,
-                    guided=guided_plan)
+            self.score_state_publisher.publish(state, facts)
             if self.attempt_settlement.pending_result is not None:
                 state["bpm"] = self.presentation_bpm()
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]

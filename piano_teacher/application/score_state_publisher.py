@@ -157,7 +157,7 @@ class ScoreStatePublisher:
             state["next_action"] = "Retry the passage or choose other music"
 
     def publish(self, state: dict, facts: ScoreProjectionFacts) -> dict | None:
-        """Project authorized desktop score facts. Never construct a headless plan."""
+        """Project authorized desktop score motion and the guided target."""
         guided = self._guided_plan(state, facts)
         state["presentation_directive"] = self._motion_directive(state, facts)
         # SessionReadModels already projected one canonical committed

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .application.composition import compose_application
 from .application.session_events import (
-    TimedStartRequested, PresentationRequired, PlaybackReserved, PlaybackPresented,
+    PlaybackReserved, PlaybackPresented,
     PlaybackWithdrawn, PlaybackFailed, SourceCommitted,
     FingeringCorrectionCommitted, SettingsChanged,
     DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed, SessionClosed,
@@ -133,9 +133,6 @@ class PracticeEngine:
         self.__dict__.update(compose_application(
             data_dir=data_dir, enable_midi=enable_midi,
             feedback_events=feedback_events, clock=clock))
-
-    def require_presentation(self) -> None:
-        self.practice_session.apply(PresentationRequired())
 
     def playback_status(self) -> dict:
         with self.lock:
@@ -260,17 +257,6 @@ class PracticeEngine:
     def demo_audio(self, token: str) -> Path:
         with self.lock:
             return self.listen.audio_path(token)
-
-    def start(self, *, from_beat: float | None = None, mode: str = "practice",
-              loop_continuation: bool = False, scheduled_deadline: float | None = None,
-              presentation_lead_seconds: float = 0.0, decided: bool = False,
-              count_in_plan=None):
-        return self.practice_session.apply(TimedStartRequested({
-            "from_beat": from_beat, "mode": mode,
-            "loop_continuation": loop_continuation,
-            "scheduled_deadline": scheduled_deadline,
-            "presentation_lead_seconds": presentation_lead_seconds,
-            "decided": decided, "count_in_plan": count_in_plan}))
 
     def control(self, action: str, **kwargs) -> None:
         return self.practice_session.control(action, **kwargs)

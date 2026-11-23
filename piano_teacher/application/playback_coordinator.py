@@ -98,8 +98,7 @@ class PlaybackCoordinator:
     begins. The intent remains retryable when a reservation expires.
     """
 
-    def __init__(self, *, presentation_required: bool = False):
-        self.presentation_required = presentation_required
+    def __init__(self):
         self.state = PlaybackState.IDLE
         self.generation = 0
         self.sequence = 0
@@ -140,11 +139,6 @@ class PlaybackCoordinator:
                 and self._terminal_automatic_source ==
                     self._automatic_source_key(
                         facts, mode=mode, from_beat=from_beat))
-
-    def enable_presentation(self, facts: PlaybackRuntimeFacts) -> None:
-        if facts.running or self.intent is not None:
-            raise ValueError("Cannot enable score admission during a take")
-        self.presentation_required = True
 
     def invalidate(self, reason: str) -> None:
         # New, explicitly selected exposure/score revision permits a fresh
@@ -222,8 +216,6 @@ class PlaybackCoordinator:
                 count_in_beats: float | None = None,
                 transition: PlaybackTransition | None = None,
                 fixed_deadline: float | None = None) -> PlaybackIntent:
-        if not self.presentation_required:
-            raise RuntimeError("A graphical admission request requires presentation mode")
         source = facts.source
         if source is None:
             raise ValueError("Open a piece before starting")
@@ -615,7 +607,7 @@ class PlaybackCoordinator:
             self.failure = reason
 
     def advance(self, facts: PlaybackRuntimeFacts) -> None:
-        if not self.presentation_required or self.state == PlaybackState.FAILED:
+        if self.state == PlaybackState.FAILED:
             return
         if self.intent is not None:
             if not self._valid_source(facts, self.intent):

@@ -52,9 +52,6 @@ class AttemptRuntime:
     def suspend_recording(self) -> None:
         self.recorder = None
 
-    def leave_guided_recovery(self) -> None:
-        self.guided_recovery_pending = False
-
     def restore_retry(self, selected) -> None:
         self.retry_range = dict(selected) if selected is not None else None
 

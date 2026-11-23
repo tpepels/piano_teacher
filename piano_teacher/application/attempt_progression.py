@@ -137,9 +137,7 @@ class AttemptProgression:
                 raise ValueError("Attempt and authorized count-in disagree")
             count_in = count_in_plan.beats
         else:
-            # Explicit no-presentation/headless adapter. Graphical takes
-            # must supply the full immutable CountInPlan from coordinator.
-            count_in = 0.0 if loop_continuation else SCHEDULER.count_in_beats(bar_beats,bpm)
+            raise ValueError("A timed take requires its authorized count-in plan")
         return AttemptStart(
             from_beat=from_beat, count_in_bar_beats=bar_beats,
             count_in_meter=meter, count_in_beats=count_in,
@@ -171,7 +169,7 @@ class AttemptProgression:
                 facts.presentation_bpm,facts.horizon_beats,announce=same_timed,
                 short_deadline=SCHEDULER.measured_rest(
                     facts.retry_rest,now=facts.now,bpm=facts.presentation_bpm))
-        if rewind and facts.presentation_required and automatic:
+        if rewind and automatic:
             return PassageFinishPlan(preparation,stop,"advance",advance_early=True)
         notice = passage_next_action(pending,target_bpm=facts.target_bpm,
             start_beat=runtime.from_beat,assessed_bpm=facts.assessed_bpm)
@@ -211,7 +209,7 @@ class AttemptProgression:
             deadline = facts.now
         return PassageFinishPlan(preparation,stop,"announce" if same_timed else "wait",
             deadline=deadline,next_action=notice,
-            advance_early=facts.presentation_required and automatic)
+            advance_early=automatic)
 
     @staticmethod
     def preloaded_feedback_due(source, *, now: float, run_at: float,

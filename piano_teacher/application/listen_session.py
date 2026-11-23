@@ -38,7 +38,6 @@ class ListenStart:
     count_in_bar_beats: float
     count_in_meter: tuple[int, int]
     count_in_beats: float
-    delay_seconds: float
     from_beat: float = 0.0
 
 
@@ -177,8 +176,7 @@ class ListenSession:
             count_beats = SCHEDULER.count_in_beats(bar_beats,selected.bpm)
             if commit:
                 self._started = True
-            return ListenStart(bar_beats,count_meter,count_beats,
-                SCHEDULER.beats_seconds(count_beats,selected.bpm),selected.from_beat)
+            return ListenStart(bar_beats,count_meter,count_beats,selected.from_beat)
 
     def authorize_playback(self, revision: int, count_in_plan) -> ListenStart | None:
         """Validate the exact physical CountInPlan before consuming Listen.

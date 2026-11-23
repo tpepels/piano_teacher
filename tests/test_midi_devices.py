@@ -1,5 +1,5 @@
 """Software device-loss and calibration reactions, without attached hardware."""
-from session_inputs import take
+from session_inputs import PracticeSession, take
 import mido
 import pytest
 
@@ -26,6 +26,39 @@ class InputPort:
 
     def release(self, pitch=60):
         self.callback(mido.Message("note_off", note=pitch))
+
+    def send(self, pitch, on=True):
+        (self.press if on else self.release)(pitch)
+
+
+class ListClock:
+    """The fixture's mutable clock, as the session harness expects it."""
+    def __init__(self, now):
+        self.now = now
+
+    def __call__(self):
+        return self.now[0]
+
+    @property
+    def at(self):
+        return self.now[0]
+
+    @at.setter
+    def at(self, value):
+        self.now[0] = value
+
+
+def tempo_take(engine, now):
+    """Reach a graded Tempo take through Listen, Free and physical admission."""
+    return PracticeSession.attach(engine, ListClock(now)).tempo()
+
+
+def press_play(engine, now):
+    """The learner presses the visible Play control; Godot admits the take."""
+    driver = PracticeSession.attach(engine, ListClock(now))
+    state = driver.snapshot()
+    assert state["controls"]["primary"]["action"] == "start", state["controls"]["primary"]
+    return driver.ready_score(state=driver.command("start"))
 
 
 class Backend:
@@ -79,7 +112,7 @@ def connected(tmp_path, monkeypatch):
 
 def test_unplug_cancels_take_and_reconnect_requires_a_fresh_start(connected):
     engine, backend, now = connected
-    engine.start()
+    tempo_take(engine, now)
     assert engine.state()["running"]
     old = backend.ports[-1]
     old.press()
@@ -99,7 +132,7 @@ def test_unplug_cancels_take_and_reconnect_requires_a_fresh_start(connected):
     assert state["midi_held_pitches"] == []
     assert not state["mastered"]
     assert backend.attempts == ["USB Piano", "USB Piano"]
-    engine.start()
+    press_play(engine, now)
     assert engine.state()["running"]
     # A physical key held on the lost device supplies no new attack.
     attacks = engine.state()["midi_input_count"]
@@ -133,8 +166,8 @@ def test_failed_reconnect_is_bounded_then_recovers_without_resuming(connected):
 
 
 def test_discovery_failure_keeps_healthy_device_but_closed_port_cancels(connected):
-    engine, backend, _ = connected
-    engine.start()
+    engine, backend, now = connected
+    tempo_take(engine, now)
     backend.scan_error = OSError("ALSA unavailable")
     with pytest.raises(RuntimeError, match="ALSA unavailable"):
         engine.ports()
@@ -149,7 +182,7 @@ def test_discovery_failure_keeps_healthy_device_but_closed_port_cancels(connecte
 
 def test_invalid_selection_preserves_take_and_explicit_disconnect_forgets_device(connected):
     engine, backend, now = connected
-    engine.start()
+    tempo_take(engine, now)
     before = engine.state()
     status, _ = EngineCommands(engine=engine).request("midi.device.select", '{"name":42}')
     assert status == INVALID
@@ -188,7 +221,7 @@ def test_calibration_collects_real_ingress_then_applies_persists_and_resets(conn
     engine.control("calibration_apply")
     assert engine.preferences()["midi_offset_ms"] == pytest.approx(80, abs=1)
     assert ScoreLibrary(tmp_path / "app" / "config").public_settings()["midi_offset_ms"] == 80
-    engine.start()
+    tempo_take(engine, now)
     deadline = engine.state()["visual_run_at_ms"] / 1000
     now[0] = deadline + .08
     backend.ports[-1].press()

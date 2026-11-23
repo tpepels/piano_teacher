@@ -184,7 +184,7 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
     worker.playback_session = SimpleNamespace(
         mode="practice", running=True, preview_only=False,
         awaiting_score_revision=None)
-    worker.playback = SimpleNamespace(presentation_required=False, intent=None)
+    worker.playback = SimpleNamespace(intent=None)
     worker.guided_session = SimpleNamespace(controller=None)
     worker.visual_transport = SimpleNamespace(
         paused=False, run_at=100.0, preparation_pending=False)
@@ -204,7 +204,6 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
     assert worker.update_transition() is False
     assert applied == [(frozen.decision, frozen.phrase, frozen.grid,
                         frozen.score_beat, 110.0)]
-    worker.playback.presentation_required = True
     worker.playback.intent = object()
     worker.run_pre_assessment_transition = lambda now: (True, False)
     assert worker.update_transition() is False

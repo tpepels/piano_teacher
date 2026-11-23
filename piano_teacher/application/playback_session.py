@@ -14,11 +14,11 @@ from copy import deepcopy
 from ..music import Phrase
 from .playback_transitions import CountInPlan
 from .musical_scheduler import SCHEDULER
-from .musical_scheduler import RestMeasurement, SNAPSHOT_LATENCY_SECONDS
+from .musical_scheduler import SNAPSHOT_LATENCY_SECONDS
 from .playback_facts import (
     PlaybackRuntimeFacts, PlaybackSourceFacts,
     TimedTakeSource, TimedStartRequest, StartedTake, PreparationRequest,
-    HeadlessStartTiming, ListenActivation, ResumeRequest, ResumedTimeline,
+    ListenActivation, ResumeRequest, ResumedTimeline,
     ResumeCompletion, FullPassageFacts, PassageCompletion, PlaybackAuthorization,
     PassageRuntimeFacts, ScheduledContinuation, AppliedContinuation,
     PreloadedFeedbackSource,
@@ -112,8 +112,8 @@ class PlaybackSession:
     def count_in_meter(self, value: list[int]) -> None:
         self._transport.count_in_meter = list(value)
 
-    def require_authorized_start(self, presentation_required: bool) -> None:
-        if presentation_required and not self.authorizing:
+    def require_authorized_start(self) -> None:
+        if not self.authorizing:
             raise ValueError("Timed playback requires an admitted score receipt")
 
     def open_take(self, *, phrase: Phrase | None = None,
@@ -230,21 +230,17 @@ class PlaybackSession:
             raise ValueError("Listen score or audio is no longer prepared")
         self._activate_listen(start,deadline=deadline)
 
-    def begin_listen_if_ready(self, *, revision: int,
-                              presentation_required: bool) -> ListenActivation:
+    def begin_listen_if_ready(self, *, revision: int) -> ListenActivation:
         if (self.mode != "listen" or self._transport.paused or self.running
                 or self.awaiting_score_revision != revision):
             return ListenActivation()
-        start = self._listen.begin_playback(revision,commit=not presentation_required)
+        start = self._listen.begin_playback(revision,commit=False)
         if start is None:
             return ListenActivation()
-        if presentation_required:
-            return ListenActivation(requested_count_in=start.count_in_beats,
-                from_beat=start.from_beat)
-        self._activate_listen(start,deadline=None)
-        return ListenActivation(started=True)
+        return ListenActivation(requested_count_in=start.count_in_beats,
+            from_beat=start.from_beat)
 
-    def _activate_listen(self, start, *, deadline: float | None) -> None:
+    def _activate_listen(self, start, *, deadline: float) -> None:
         self.awaiting_score_revision = None
         self.open_take()
         self.running = True
@@ -253,7 +249,7 @@ class PlaybackSession:
         self.count_in_beats = start.count_in_beats
         self._transport.install_timed_origin(
             from_beat=start.from_beat,
-            run_at=self._clock()+start.delay_seconds if deadline is None else deadline,
+            run_at=deadline,
             gap_beats=self._transport.visual_gap_beats)
 
     def facts(self, source: PlaybackSourceFacts | None) -> PlaybackRuntimeFacts:
@@ -280,26 +276,6 @@ class PlaybackSession:
             self.awaiting_score_revision = None
         return decision
 
-    def headless_ready_timing(self, *, reserved_ms: float | None,
-                              count_in_beats: float, bpm: float,
-                              announce: bool, rest: RestMeasurement | None,
-                              presentation_bpm: float) -> HeadlessStartTiming:
-        """The explicit non-presenting adapter retains authored rest timing."""
-        now = self._clock()
-        full_count_in = SCHEDULER.beats_seconds(count_in_beats,bpm)
-        if reserved_ms is not None:
-            import math
-            deadline = float(reserved_ms)/1000.0
-            if not math.isfinite(deadline) or deadline < now+full_count_in-1e-4:
-                raise ValueError("Score reservation expired before the full count-in")
-            return HeadlessStartTiming(deadline,0.0)
-        lead = full_count_in+SNAPSHOT_LATENCY_SECONDS if announce else 0.0
-        if lead > 0.0 and rest is not None:
-            after_rest = SCHEDULER.measured_rest(rest,now=now,bpm=presentation_bpm)
-            if after_rest is not None:
-                lead = max(lead,after_rest-now)
-        return HeadlessStartTiming(None,lead)
-
     def schedule_preparation(self, request: PreparationRequest) -> None:
         self._transport.schedule_source_preparation(request.source_model,
             source_from_beat=request.target,from_visual=request.from_visual,
@@ -320,31 +296,6 @@ class PlaybackSession:
         self._attempt.suspend_recording()
         self.count_in_beats = 0.0
         self._measurement.phase_changed("preparation",request.now)
-
-    def prepare_retry(self, request: PreparationRequest, *,
-                      presentation_lead_seconds: float, source_bpm: float) -> None:
-        from dataclasses import replace
-        if presentation_lead_seconds > 0.0:
-            from ..notation.practice_timeline import retry_preparation_rest_beats
-            rest = retry_preparation_rest_beats(request.source_model,request.target)
-            reverse = SCHEDULER.reserved_retry_reverse(
-                lead_seconds=presentation_lead_seconds,
-                rest_seconds=SCHEDULER.beats_seconds(rest,source_bpm))
-            request = replace(request,reverse_seconds=reverse)
-        # All validation precedes interruption of the old graded take.
-        self._settlement.interrupt_current(reason="restart",played=(
-            self._attempt.recorder.presses if self._attempt.recorder else ()))
-        self._transport.clear_pause_for_restart()
-        self.pause_context = None
-        self.deferred_score_ack = None
-        self.awaiting_score_revision = None
-        self._settlement.cancel(reason="restart",now=request.now)
-        self._continuation.cancel()
-        self._transport.set_retry_previous_pass(False)
-        self._attempt.leave_guided_recovery()
-        self._midi.clear_resume_gate()
-        self._transport.clear_grading_floor()
-        self.schedule_preparation(request)
 
     def resume_suspended_admission(self) -> None:
         """Release the stationary clock only after physical source validation."""
@@ -383,11 +334,6 @@ class PlaybackSession:
         self._transport.cancel_continuation()
         self._transport.finish_preparation_gate()
         self._transport.finish_rewind()
-
-    def retain_announced_count_in(self, *, bpm: float) -> None:
-        lead = SCHEDULER.seconds_beats(self._transport.run_at-self._clock(),bpm)
-        if self.count_in_bar_beats > 0 and lead >= self.count_in_bar_beats-1e-6:
-            self.count_in_beats = SCHEDULER.count_in_beats(self.count_in_bar_beats,bpm)
 
     def refloor_fresh_announcement(self, source: TimedTakeSource, *,
                                    physical_rest_enabled: bool) -> None:
