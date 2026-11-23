@@ -19,7 +19,6 @@ class AttemptRuntime:
     recorder: Recorder | None = None
     feedback_marks: list[dict] = field(default_factory=list)
     feedback_unmapped: int = 0
-    settlement_failed: bool = False
     performance_summary: dict | None = None
     review_stage_identity: str | None = None
     review_end_beat: float | None = None
@@ -66,12 +65,6 @@ class AttemptRuntime:
         self.retry_range = {"start_beat": start, "end_beat": end}
         if first_bar is not None:
             self.retry_range.update(first_bar=first_bar, last_bar=last_bar)
-
-    def publication_failed(self) -> None:
-        self.settlement_failed = True
-
-    def publication_finished(self) -> None:
-        self.settlement_failed = False
 
     def reset_source_presentation(self) -> None:
         self.clear_feedback()
@@ -127,7 +120,6 @@ class AttemptRuntime:
         self.recorder = None
         self.feedback_marks = []
         self.feedback_unmapped = 0
-        self.settlement_failed = False
         self.performance_summary = None
         self.review_stage_identity = None
         self.review_end_beat = None

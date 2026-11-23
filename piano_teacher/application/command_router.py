@@ -26,11 +26,10 @@ _TEACHING_ROUTES = ("listening", "learning", "transport", "stage")
 
 
 class CommandRouter:
-    def __init__(self, *, lesson, transport, take, read_models, presentation, measurement,
+    def __init__(self, *, lesson, transport, read_models, presentation, measurement,
                  listen_outcomes, routes):
         self.lesson = lesson
         self.transport = transport
-        self.take = take
         self.read_models = read_models
         self.presentation = presentation
         self.measurement = measurement
@@ -99,9 +98,7 @@ class CommandRouter:
         # curriculum generators, learner-history reads or stale evidence.
         needs_teaching = action not in ("stop", "pause", "resume")
         if (needs_teaching and self.lesson.plan is not None
-                and route in _TEACHING_ROUTES
-                and not (action in ("start","restart")
-                         and self.take.settlement_failed)):
+                and route in _TEACHING_ROUTES):
             change = (prepare_stage_change(self.lesson.plan, action, kwargs)
                       if route == "stage" else None)
             effect = self.lesson.prepare_decision("manual", manual=change,

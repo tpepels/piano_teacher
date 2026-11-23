@@ -3,7 +3,9 @@
 A full passage settles at its successor boundary. This class owns that
 transaction: wait for feedback and assets, commit the selected decision
 (SQLite receipt, stage adoption), then dispatch its typed, source-bound
-effect exactly once. A failed effect leaves the receipt retryable.
+effect exactly once. If saving fails the result is discarded (the learner
+replays the take); if the next step fails after saving, progress is kept
+and Play simply continues from the saved lesson.
 """
 from __future__ import annotations
 from ..lesson_settings import SETTINGS
@@ -41,16 +43,12 @@ class SettlementContinuation:
         self.advance_pending_feedback(now)
         return False
 
-    def advance_pending_feedback(self, now: float, *, force_early: bool = False,
-                                 explicit_retry: bool = False):
-        # Worker ticks must not spin on a failed committed effect after
-        # automatic playback was stopped. Only the user-facing Retry route
-        # may re-enter that already-selected feedback transaction.
-        if not self.transport.auto and not explicit_retry:
+    def advance_pending_feedback(self, now: float, *, force_early: bool = False):
+        if not self.transport.auto:
             return
         transaction = self.score.begin_feedback(
             self.take.pending, now=now,
-            automatic=self.transport.auto or explicit_retry,
+            automatic=self.transport.auto,
             force_early=force_early, revision=self.lesson.revision,
             fingerprint=self.lesson.fingerprint)
         if isinstance(transaction,FeedbackWaiting):
@@ -61,13 +59,12 @@ class SettlementContinuation:
             self.publish_feedback_fault(transaction,now)
             return
         try:
-            self.commit_pending(now, finish_publication=False)
+            self.commit_pending(now)
             self.transport.note_tempo(
             stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
-            pending = self.take.pending
-            self.publish_feedback_fault(self.score.settlement_failure(
-                exc,saved=pending is not None and pending.receipt is not None),now)
+            self.publish_feedback_fault(self.score.settlement_failure(exc),now)
+            self.take.cancel_settlement(reason="save_failed", now=now)
             if not isinstance(exc,UnpreparedNextStage):
                 print("ASSESSMENT_SETTLEMENT_FAILED:",type(exc).__name__,str(exc),flush=True)
             return
@@ -89,12 +86,6 @@ class SettlementContinuation:
                 self.lesson.settle_flow_decision(
                     publication.flow_outcome, plan=self.lesson.plan,
                     message=publication.message, decision_id=transaction.decision_id)
-            if explicit_retry and transaction.pending.state.route.automatic:
-                # Only an explicitly requested retry restores the original
-                # automatic course intent; a failed effect below stops it
-                # again. The committed decision, not current UI mode, owns
-                # whether this continuation should run automatically.
-                self.transport.continue_course()
             with self.take.publishing(transaction.pending):
                 self.dispatch_effect(publication.effect, now)
                 # Visible marks are retained until the exact physical/source
@@ -104,26 +95,12 @@ class SettlementContinuation:
                 self.take.clear_feedback()
                 self.take.finish_publication()
         except Exception as exc:
-            # The settled take and receipt remain committed. Make an
-            # explicit Retry re-enter this selected transaction; do not
-            # silently select a new source or grade a second attempt.
-            self.take.publication_failed()
+            # Progress is durably saved; the saved lesson is the restart point.
             self.transport.stop_automatic()
+            self.take.cancel_settlement(reason="continuation_failed", now=now)
             self.notices.feedback = "Progress saved, but the next step could not start"
-            self.notices.next_action = "Press Play to continue from the same saved result."
+            self.notices.next_action = "Press Play to continue."
             print("CONTINUATION_EFFECT_FAILED:", type(exc).__name__, str(exc), flush=True)
-
-    def retry_failed_publication(self, *, now: float) -> str:
-        """Retry the original full result, including its retained effects."""
-        pending = self.take.pending
-        if (pending is None or pending.event.kind != "full_result"
-                or pending.phase == "published"):
-            raise ValueError("No interrupted full-passage settlement to retry")
-        self.advance_pending_feedback(
-            now, force_early=True, explicit_retry=True)
-        if pending.phase != "published" or pending.receipt is None:
-            raise RuntimeError("Selected assessment continuation is still pending")
-        return pending.receipt.message
 
     def publish_feedback_fault(self, fault: FeedbackFault, now: float) -> None:
         self.transport.apply_feedback_fault(fault,now=now)
@@ -208,48 +185,32 @@ class SettlementContinuation:
         # If any action raises, the same settlement receipt can replay it.
         self._applied_continuation_effect = effect
 
-    def commit_pending(self, now: float, *, finish_publication: bool = True) -> str:
+    def commit_pending(self, now: float) -> str:
         if self.take.pending_result is None or self.lesson.plan is None:
             return ""
         pending = self.take.pending
-        if pending.phase == "effects_applied":
-            # The teaching receipt and its score/revision effects already
-            # committed. A later continuation failure may retry from that
-            # receipt, but must never replay stage adoption or rewind.
-            if finish_publication:
-                self.take.finish_publication()
-            self.take.publication_finished()
-            return pending.publication.receipt.message
-        decision = pending.decision
-        try:
-            committed = self.take.commit_full_passage(
-                plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
-                continuation=self.score,
-                score_revision=self.lesson.revision,
-                visual_offset=self.transport.visual_offset_beats)
-            outcome = committed.receipt
-            self.take.apply_settlement(committed,plan=self.lesson.plan)
-            if outcome.stage_changed:
-                self.lesson.select_opening(0.0)
-                self.lesson.publish_revision(committed.selection.revision)
-                self.transport.wait_for_player()
-                prebuilt = self.score.consume_committed_asset(
-                    committed.prepared,changed=True,auto=self.transport.auto,
-                    selection=committed.selection)
-                if prebuilt is not None:
-                    self.score.adopt_artifacts(prebuilt)
-                else:
-                    self.score.current_artifacts.invalidate()
-                self.transport.adopt_committed_stage(
-                    committed,preserved=prebuilt is not None)
+        committed = self.take.commit_full_passage(
+            plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
+            continuation=self.score,
+            score_revision=self.lesson.revision,
+            visual_offset=self.transport.visual_offset_beats)
+        outcome = committed.receipt
+        self.take.apply_settlement(committed,plan=self.lesson.plan)
+        if outcome.stage_changed:
+            self.lesson.select_opening(0.0)
+            self.lesson.publish_revision(committed.selection.revision)
+            self.transport.wait_for_player()
+            prebuilt = self.score.consume_committed_asset(
+                committed.prepared,changed=True,auto=self.transport.auto,
+                selection=committed.selection)
+            if prebuilt is not None:
+                self.score.adopt_artifacts(prebuilt)
             else:
-                self.score.consume_committed_asset(
-                    None,changed=False,auto=self.transport.auto,selection=None)
-        except BaseException:
-            self.take.publication_failed()
-            raise
+                self.score.current_artifacts.invalidate()
+            self.transport.adopt_committed_stage(
+                committed,preserved=prebuilt is not None)
+        else:
+            self.score.consume_committed_asset(
+                None,changed=False,auto=self.transport.auto,selection=None)
         self.take.effects_applied(pending)
-        if finish_publication:
-            self.take.finish_publication()
-        self.take.publication_finished()
         return outcome.message

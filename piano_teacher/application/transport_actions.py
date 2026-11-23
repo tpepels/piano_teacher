@@ -3,8 +3,7 @@
 PlaybackAuthorization is the one path from the renderer's physical
 protocol (reserve, present, withdraw, fail) and score/audio
 acknowledgements to an authorized take. TransportCommands handles Start,
-Restart, Pause and Resume. RetainedResultReplay replays a saved result
-after a failed save or rolling recovery. RouteCommands enters routes
+Restart, Pause and Resume. RouteCommands enters routes
 that change assets or untimed teaching (Listen, Learn, reload) and
 handles Practice and Stop.
 """
@@ -123,35 +122,6 @@ class PlaybackAuthorization:
 
 
 
-class RetainedResultReplay:
-    def __init__(self, *, lesson, take, transport, settlement, notices, clock):
-        self.lesson = lesson
-        self.take = take
-        self.transport = transport
-        self.settlement = settlement
-        self.notices = notices
-        self.clock = clock
-
-    def pending(self) -> bool:
-        """A result whose save failed is waiting to be replayed."""
-        return self.take.settlement_failed
-
-    def replay(self) -> None:
-        """Play after a failed save replays that same result."""
-        if self.take.settlement_failed:
-            revision = self.lesson.revision
-            # Drop the failure instruction; the replayed continuation
-            # publishes its own next action (count-in or next passage).
-            self.notices.next_action = ""
-            self.notices.feedback = (
-                self.settlement.retry_failed_publication(
-                    now=self.clock()) or "Assessment saved")
-            if self.lesson.revision != revision:
-                self.transport.await_score(self.lesson.revision)
-            return
-        raise ValueError("No retained result to replay")
-
-
 class RouteCommands:
     def __init__(self, *, lesson, transport, exposure_workflows,
                  course, lifecycle, notices):
@@ -198,14 +168,13 @@ class RouteCommands:
 
 class TransportCommands:
     def __init__(self, *, lesson, transport, transport_timing, pause_resume,
-                 score, routes, replay, authorization):
+                 score, routes, authorization):
         self.lesson = lesson
         self.transport = transport
         self.transport_timing = transport_timing
         self.pause_resume = pause_resume
         self.score = score
         self.routes = routes
-        self.replay = replay
         self.authorization = authorization
 
     def control_transport(self, action: str, kwargs: dict, *, effect=None) -> None:
@@ -216,9 +185,6 @@ class TransportCommands:
         elif action in ("start", "restart"):
             self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self.transport_timing.update_short_rest(kwargs)
-            if self.replay.pending():
-                self.replay.replay()
-                return
             effect = effect or self.lesson.manual_effect(action)
             transition = PlaybackTransition.from_effect(
                 effect,action=action,source_changed=(

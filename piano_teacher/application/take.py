@@ -68,11 +68,7 @@ class Take:
     def prepare_timed_exposure(self, *args, **kwargs):
         return self._runtime.prepare_timed_exposure(*args, **kwargs)
 
-    def publication_failed(self, *args, **kwargs):
-        return self._runtime.publication_failed(*args, **kwargs)
 
-    def publication_finished(self, *args, **kwargs):
-        return self._runtime.publication_finished(*args, **kwargs)
 
     def publish_completion(self, *args, **kwargs):
         return self._runtime.publish_completion(*args, **kwargs)
@@ -117,9 +113,6 @@ class Take:
     def review_stage_identity(self):
         return self._runtime.review_stage_identity
 
-    @property
-    def settlement_failed(self):
-        return self._runtime.settlement_failed
 
 
     # --- Settlement: one immutable result, one decision, one durable receipt

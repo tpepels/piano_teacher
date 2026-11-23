@@ -65,7 +65,7 @@ from .pre_assessment_transitions import PreAssessmentTransitions
 from .take_progression import TakeProgression
 from .tick_publisher import TickPublisher
 from .transport_actions import (
-    PlaybackAuthorization, RetainedResultReplay, RouteCommands, TransportCommands)
+    PlaybackAuthorization, RouteCommands, TransportCommands)
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
 from .recovery_workflows import SelectedRecovery
@@ -393,9 +393,6 @@ def _event_boundary(r) -> None:
         pause_resume=r.pause_resume,
         lifecycle=r.session_lifecycle, listen=r.listen,
         presentation=r.score_presentation, notices=r.notices, clock=r.now)
-    r.retained_replay = RetainedResultReplay(
-        lesson=r.lesson, take=r.take, transport=r.transport,
-        settlement=r.settlement, notices=r.notices, clock=r.now)
     r.route_commands = RouteCommands(
         lesson=r.lesson, transport=r.transport,
         exposure_workflows=r.exposure_workflows,
@@ -404,7 +401,7 @@ def _event_boundary(r) -> None:
     r.transport_commands = TransportCommands(
         lesson=r.lesson, transport=r.transport,
         transport_timing=r.transport_timing, pause_resume=r.pause_resume,
-        score=r.score, routes=r.route_commands, replay=r.retained_replay,
+        score=r.score, routes=r.route_commands,
         authorization=r.playback_authorization)
 
     r.midi_callback = MidiCallback(
@@ -449,7 +446,7 @@ def _event_boundary(r) -> None:
         midi_input=r.midi_input,
         corrected_time=r.midi_delivery.corrected_time)
     r.command_router = CommandRouter(
-        lesson=r.lesson, transport=r.transport, take=r.take,
+        lesson=r.lesson, transport=r.transport,
         read_models=r.read_models,
         presentation=r.score_presentation, measurement=r.measurement,
         listen_outcomes=r.listen_outcomes,
