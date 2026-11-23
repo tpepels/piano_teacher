@@ -170,43 +170,59 @@ class RecoveryWorkflows:
             following = next_chunk_end(grid, decision.end_beat)
             self.visual_transport.advance_boundary(following if following > decision.end_beat+1e-7 else 0.)
             return
-        transition = completed.transition
-        outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
-        apply = self.attempt_settlement.rolling_effect
-        apply(completed, "tempo", lambda: self.visual_transport.note_tempo(
-            stage=self.source_identity.plan.identity,
-            bpm=self.transport_timing.presentation_bpm(), now=now))
-        short_deadline = None
-        if transition.uses_completed_rest:
-            apply(completed, "take_end", lambda: self.visual_transport.record_take_end(
-                at=scored_end, bpm=outgoing_bpm))
-            short_deadline = SCHEDULER.measured_rest(
-                self.transport_timing.collect_rest_measurement(
-                    from_beat=transition.restart_beat),
-                now=now, bpm=self.transport_timing.presentation_bpm())
-        apply(completed, "prepare", lambda: self.transport_timing.schedule_preparation(
-            transition.restart_beat, now=now,
-            from_visual=self.visual_transport.visual_offset_beats + score_beat,
-            reverse_seconds=self.feedback_seconds, short_deadline=short_deadline))
-        apply(completed, "streak", lambda: self.recovery_streak.record(
-            transition.trouble_key, transition.trouble_count))
-        apply(completed, "attempt", lambda: self.attempt.apply_recovery(transition))
-        if transition.guided:
-            # Guided recovery must never re-withdraw an already processed
-            # immutable future announcement during a publication retry.
-            apply(completed, "withdraw", self.visual_transport.withdraw_announcement)
-        def publish_notices():
-            self.notices.feedback = transition.feedback
-            self.notices.next_action = transition.next_action
-        apply(completed, "notices", publish_notices)
-        if transition.action == "pause":
-            apply(completed, "stop_auto", self.playback_session.stop_automatic)
-            apply(completed, "cancel_preparation",
-                  self.visual_transport.cancel_preparation)
-            apply(completed, "cancel_continuation",
-                  self.visual_transport.cancel_continuation)
-        self.attempt_settlement.finish_rolling_publication(completed)
+        try:
+            self._install_rolling_recovery(completed, score_beat=score_beat, now=now)
+        except Exception:
+            # A durable receipt may already have installed some source
+            # effects. Stop the old graded clock and keep its pending receipt.
+            # Explicit Retry replays only unacknowledged effect names.
+            self.playback_session.finish_take()
+            self.playback_session.stop_automatic()
+            if not self.visual_transport.paused:
+                self.visual_transport.pause(at=now)
+            self.notices.feedback = "Could not apply the saved recovery"
+            self.notices.next_action = "Press Retry to finish this same saved recovery."
+            raise
         return
+
+    def _install_rolling_recovery(self, completed, *, score_beat: float,
+                                  now: float) -> None:
+            transition = completed.transition
+            outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
+            apply = self.attempt_settlement.rolling_effect
+            apply(completed, "tempo", lambda: self.visual_transport.note_tempo(
+                stage=self.source_identity.plan.identity,
+                bpm=self.transport_timing.presentation_bpm(), now=now))
+            short_deadline = None
+            if transition.uses_completed_rest:
+                apply(completed, "take_end", lambda: self.visual_transport.record_take_end(
+                    at=scored_end, bpm=outgoing_bpm))
+                short_deadline = SCHEDULER.measured_rest(
+                    self.transport_timing.collect_rest_measurement(
+                        from_beat=transition.restart_beat),
+                    now=now, bpm=self.transport_timing.presentation_bpm())
+            apply(completed, "prepare", lambda: self.transport_timing.schedule_preparation(
+                transition.restart_beat, now=now,
+                from_visual=self.visual_transport.visual_offset_beats + score_beat,
+                reverse_seconds=self.feedback_seconds, short_deadline=short_deadline))
+            apply(completed, "streak", lambda: self.recovery_streak.record(
+                transition.trouble_key, transition.trouble_count))
+            apply(completed, "attempt", lambda: self.attempt.apply_recovery(transition))
+            if transition.guided:
+                # Guided recovery must never re-withdraw an already processed
+                # immutable future announcement during a publication retry.
+                apply(completed, "withdraw", self.visual_transport.withdraw_announcement)
+            def publish_notices():
+                self.notices.feedback = transition.feedback
+                self.notices.next_action = transition.next_action
+            apply(completed, "notices", publish_notices)
+            if transition.action == "pause":
+                apply(completed, "stop_auto", self.playback_session.stop_automatic)
+                apply(completed, "cancel_preparation",
+                      self.visual_transport.cancel_preparation)
+                apply(completed, "cancel_continuation",
+                      self.visual_transport.cancel_continuation)
+            self.attempt_settlement.finish_rolling_publication(completed)
 
     def assess_rolling_boundary(self, boundary: float,
                                  grid: tuple[float, ...]):
