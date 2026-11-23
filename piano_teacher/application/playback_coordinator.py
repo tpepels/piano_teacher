@@ -567,12 +567,18 @@ class PlaybackCoordinator:
              notify_failure: Callable[[str], None]) -> None:
         if self.active_take_id != take_id or self.active_segment_id != segment_id:
             raise ValueError("Stale playback failure")
-        notify_failure("score_presentation_failed")
+        # Revoke authorization before storage/device cleanup. If that
+        # cleanup raises, an old graded take must not appear authorized.
         self.state = PlaybackState.FAILED
         self.failure = reason
+        try:
+            notify_failure("score_presentation_failed")
+        finally:
+            self.state = PlaybackState.FAILED
+            self.failure = reason
 
     def advance(self, facts: PlaybackRuntimeFacts) -> None:
-        if not self.presentation_required:
+        if not self.presentation_required or self.state == PlaybackState.FAILED:
             return
         if self.intent is not None:
             if not self._valid_source(facts, self.intent):
