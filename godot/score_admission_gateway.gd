@@ -129,7 +129,10 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
                     "Direct repeat expired while its score was not ready")
         return
     if (str(state.get("piece_fingerprint","")) != str(intent.get("fingerprint",""))
-            or int(state.get("revision",-1)) != int(intent.get("revision",-2))):
+            or int(state.get("revision",-1)) != int(intent.get("revision",-2))
+            or str(state.get("stage_key","")) != str(intent.get("stage_key",""))
+            or str(state.get("hand","")) != str(intent.get("hand",""))
+            or str(state.get("mode","")) != str(intent.get("mode",""))):
         return
     var source_timing: Dictionary = state.get("practice_timeline",{})
     if (absf(view.timeline.duration_beats -
@@ -299,7 +302,9 @@ func observe(state: Dictionary, frame_ms: int) -> void:
     # The resulting running-state poll is AUTHORITATIVE; never roll back the
     # source just because this poll no longer contains the pending intent.
     if (not pending_segment.is_empty() and active_segment == pending_segment
-            and str(timeline.get("state","")) not in ["failed","idle"]):
+            and bool(state.get("running",false))
+            and str(timeline.get("state","")) in [
+                "authorized","count_in","playing","paused"]):
         # The published active timeline intentionally has no request ID
         # or attempt. The segment matched our previously verified receipt,
         # so confirm with that immutable receipt, never with the reduced
@@ -537,8 +542,11 @@ func _presented(code: int, body: PackedByteArray) -> void:
             bool(data.get("authorized",false)) and \
             _matches_intent(data,receipt) and \
             str(data.get("segment_id","")) == str(receipt.get("segment_id","")):
-        pending_reconciliation = false
-        _confirm_authorized(data)
+        # A response can arrive after Stop or the final note. Only the
+        # backend's current active ledger or an active, source-bound state
+        # frame may authorize count-in and visual motion.
+        pending_reconciliation = true
+        _query_status()
     else:
         # In-process timeouts can lose a response after the backend already
         # committed the transport. Query its transaction ledger first.
@@ -580,7 +588,8 @@ func _status_received(code: int, body: PackedByteArray) -> void:
     if (str(status.get("active_segment_id","")) == expected and
             str(status.get("active_take_id","")) ==
                 str(receipt.get("take_id","")) and
-            str(status.get("state","")) not in ["failed","idle"]):
+            str(status.get("state","")) in [
+                "authorized","count_in","playing","paused"]):
         _confirm_authorized(receipt)
         return
     if (ledger_offer is Dictionary and
