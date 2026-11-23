@@ -96,6 +96,26 @@ event handlers that depend on domains, not on their internals.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
 
+### R progress — 2026-11-23 (HEAD after R6 step; 235 Python tests green)
+
+Done: R1 Transport, R2 Lesson, R3 Take, R4 Score and MidiInput domains
+(internal holders reached from 0 modules outside their domain, down from
+8–22); PlaybackSession and Stop bound to domain interfaces instead of
+other domains' internals; Score is the settlement's reservation port;
+R5 read model receives timing/phase objects (22 → 15); R6 take-ending
+logic moved wholly into CompletionContinuations (timeline 23 → 19).
+Fan-in > 10: 13 classes, max 24 (was 19, max 32) — see
+`scripts/audits/coupling.py`.
+
+Remaining: R6 orchestrator fan-in (PracticeSession 24, PracticeTimeline 19,
+CompletionContinuations 17, SourceWorkflows/TransportActions 16,
+RecoveryWorkflows 15); R7 port tests off internals (`playback.sequence`,
+`transport_timing.request_playback`, `timed_playback.continue_at`,
+`listen.thread`, `source_identity.plan`, `notices.feedback`) to
+`playback.status` and public ACK commands; Godot admission review; R8
+same-HEAD `test.sh --coverage` + embedded verification and docs update.
+Godot/embedded gates have NOT been rerun since `7618737`.
+
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
 **Status: SOFTWARE COMPLETE, PHYSICAL ACCEPTANCE PENDING. Software state on `7618737`: every A0–A7 item is complete in software, with evidence in the 2026-11-23 checkpoints and docs/architecture.md. Physical acceptance at the piano (and the Pathétique II native case, whose source was not supplied) is pending. See the A2/A3 executed verification checkpoint.** This is
