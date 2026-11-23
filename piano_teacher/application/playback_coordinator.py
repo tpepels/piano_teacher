@@ -614,7 +614,7 @@ class PlaybackCoordinator:
         return (PlaybackState.SETTLING if facts.pending_result
                 else PlaybackState.COMPLETE)
 
-    def status(self, facts: PlaybackRuntimeFacts | None = None) -> dict:
+    def status(self, facts: PlaybackRuntimeFacts) -> dict:
         """Read-only transaction reconciliation, including lost responses.
 
         The worker can complete an authorization after its Godot request
@@ -622,7 +622,7 @@ class PlaybackCoordinator:
         """
         intent = self.intent
         receipt = self.receipt
-        observed = self.observed_state(facts) if facts is not None else self.state
+        observed = self.observed_state(facts)
         return {
             "state": observed.value,
             "generation": self.generation,
@@ -640,8 +640,8 @@ class PlaybackCoordinator:
             "active": dict(self.active_segment) if self.active_segment else None,
         }
 
-    def snapshot(self, facts: PlaybackRuntimeFacts | None = None) -> tuple[dict | None, dict]:
-        observed = self.observed_state(facts) if facts is not None else self.state
+    def snapshot(self, facts: PlaybackRuntimeFacts) -> tuple[dict | None, dict]:
+        observed = self.observed_state(facts)
         intent = self.intent
         request = None if intent is None else {
             "intent_id": intent.intent_id, "take_id": intent.take_id,
