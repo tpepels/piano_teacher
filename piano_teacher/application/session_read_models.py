@@ -100,6 +100,10 @@ class SessionReadModels:
                 paused=self.visual_transport.paused)
         else:
             state["playback_timeline"] = timeline
+        # Physical score admission must authenticate the selected course stage,
+        # not infer it from a revision or from a mutable frontend hand label.
+        plan = self.source_identity.plan
+        state["stage_key"] = plan.identity if plan is not None else ""
         if self.lesson_execution.flow_active():
             state["flow"] = self.lesson_execution.flow_state()
         return state, pending, timeline

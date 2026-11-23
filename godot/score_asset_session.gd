@@ -32,6 +32,9 @@ var _renderer
 var _feedback
 var _loaded := false
 var _fingerprint := ""
+var _stage_key := ""
+var _rendered_stage_key := ""
+var _rendered_hand := ""
 var _state: Dictionary = {}
 var _layout: Dictionary = {}
 var _generation := 0
@@ -102,17 +105,23 @@ func matches_ready_source(intent: Dictionary) -> bool:
         _fingerprint == str(intent.get("fingerprint","")) and \
         revision == int(intent.get("revision",-1)) and \
         rendered_revision == revision and \
-        str(_state.get("hand","")) == str(intent.get("hand",""))
+        _rendered_stage_key == str(intent.get("stage_key","")) and \
+        _rendered_hand == str(intent.get("hand",""))
 
 
 func update_context(state: Dictionary, now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))
     var next_revision: int = int(state.get("revision",0))
     var fingerprint: String = str(state.get("piece_fingerprint",""))
-    var changed: bool = next_revision != revision or loaded != _loaded or fingerprint != _fingerprint
+    var stage_key: String = str(state.get("stage_key",""))
+    var hand: String = str(state.get("hand",""))
+    var changed: bool = next_revision != revision or loaded != _loaded or \
+        fingerprint != _fingerprint or stage_key != _stage_key or \
+        hand != str(_state.get("hand",""))
     _state = state.duplicate(true)
     _loaded = loaded
     _fingerprint = fingerprint
+    _stage_key = stage_key
     if changed:
         _last_native_failure = ""
         _retry_attempted = false
@@ -134,9 +143,12 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     # Reuse it without clearing the viewport or requesting the same ink.
     _generation += 1
     _requests.clear()
-    _renderer = prepared_renderer
+    replace_renderer(prepared_renderer)
     _loaded = bool(state.get("loaded",false))
     _fingerprint = str(state.get("piece_fingerprint",""))
+    _stage_key = str(state.get("stage_key",""))
+    _rendered_stage_key = _stage_key
+    _rendered_hand = str(state.get("hand",""))
     _state = state.duplicate(true)
     revision = int(state.get("revision",-1))
     _layout = prepared_layout.duplicate(true)
@@ -151,9 +163,6 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     _retry_attempted = false
     _identical_failure_repeats = 0
     _renderer.visible = true
-    if _renderer.has_signal("retained_ink_compiled") and not \
-            _renderer.is_connected("retained_ink_compiled",_finish_native_score):
-        _renderer.connect("retained_ink_compiled",_finish_native_score)
     if is_instance_valid(_feedback):
         _feedback.bind_score(_renderer,revision)
         _feedback.present(_state)
@@ -173,6 +182,8 @@ func is_ready() -> bool:
         (not _renderer.has_method("retained_ready") or _renderer.retained_ready()) and \
         layout_revision == revision and \
         rendered_revision == revision and \
+        _rendered_stage_key == _stage_key and \
+        _rendered_hand == str(_state.get("hand","")) and \
         _published_retained_generation == _renderer.retained_generation()
 
 ## Source-bound measurement port. Only the owner that publishes the ready
@@ -266,7 +277,8 @@ func complete_response(kind: String, request_id: int, code: int,
 func _begin_request(kind: String, path: String, timeout: float) -> void:
     _next_request_id += 1
     _requests[kind] = {"id":_next_request_id,"generation":_generation,
-        "revision":revision,"fingerprint":_fingerprint}
+        "revision":revision,"fingerprint":_fingerprint,
+        "stage_key":_stage_key,"hand":str(_state.get("hand",""))}
     request_requested.emit(kind,_next_request_id,path,timeout)
 
 func _take_request(kind: String, request_id: int) -> Dictionary:
@@ -278,7 +290,9 @@ func _take_request(kind: String, request_id: int) -> Dictionary:
 
 func _request_is_current(request: Dictionary) -> bool:
     return _loaded and int(request["generation"]) == _generation and \
-        int(request["revision"]) == revision and str(request["fingerprint"]) == _fingerprint
+        int(request["revision"]) == revision and str(request["fingerprint"]) == _fingerprint and \
+        str(request["stage_key"]) == _stage_key and \
+        str(request["hand"]) == str(_state.get("hand",""))
 
 func _drain_stale(_kind: String, _now_ms: int) -> void:
     request_layout()
@@ -299,7 +313,8 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
             int(bundle.get("revision",-1)) != revision or
             str(bundle.get("fingerprint","")) != _fingerprint or
             str(bundle.get("hand","")) != str(_state.get("hand","")) or
-            str(bundle.get("stage_key","")).is_empty() or
+            _stage_key.is_empty() or
+            str(bundle.get("stage_key","")) != _stage_key or
             not source_ids is Array or source_ids.is_empty() or
             not layout is Dictionary or not layout.has("anchors") or
             int(layout.get("revision",-1)) != revision or
@@ -317,6 +332,8 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
         return
     _layout = installed["layout"]
     layout_revision = revision
+    _rendered_stage_key = _stage_key
+    _rendered_hand = str(_state.get("hand",""))
     native_score_piece_fingerprint = _fingerprint
     _retained_started_ms = now_ms
     _renderer.visible = true
@@ -371,6 +388,8 @@ func _reset_assets() -> bool:
     _layout.clear()
     layout_revision = -1
     rendered_revision = -1
+    _rendered_stage_key = ""
+    _rendered_hand = ""
     _published_retained_generation = -1
     native_score_piece_fingerprint = ""
     score_error = ""
@@ -404,6 +423,8 @@ func _fail(message: String, release_renderer: bool = true) -> void:
                 "" if _identical_failure_repeats == 1 else "s"])
     _retained_started_ms = -1
     rendered_revision = -1
+    _rendered_stage_key = ""
+    _rendered_hand = ""
     if release_renderer and not _hide_renderer():
         var preservation: String = str(_renderer.failure_reason)
         if not preservation.is_empty() and not score_error.contains(preservation):
