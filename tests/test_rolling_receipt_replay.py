@@ -13,6 +13,7 @@ from piano_teacher.application.attempt_settlement import (
     AttemptSettlement, PendingTeachingDecision, RollingTake, TakeResult,
 )
 from piano_teacher.application.practice_timeline import PracticeTimeline
+from piano_teacher.application.take_progression import TakeProgression
 from piano_teacher.teaching_decisions import TeachingBinding
 
 
@@ -177,33 +178,29 @@ def test_rolling_pause_requires_all_cancel_effects():
 
 def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
     owner, frozen, _plan, _binding = _settled_rolling()
-    worker = object.__new__(PracticeTimeline)
-    worker.clock = lambda: 110.0
-    worker.poll_midi = lambda: None
-    worker.midi_input = SimpleNamespace(
-        advance_calibration=lambda now: None, resume_grading_after=0.0)
-    worker.exposure_workflows = SimpleNamespace(apply_listen_failure=lambda: None)
-    worker.transport = SimpleNamespace(
-        mode="practice", running=True, preview_only=False,
-        awaiting_score_revision=None, intent=None,
-        paused=False, run_at=100.0, preparation_pending=False)
-    worker.lesson = SimpleNamespace(guided_controller=None)
-    worker.take = Take(runtime=SimpleNamespace(performance_summary=None),
-                       settlement=owner)
-    worker.measurement = SimpleNamespace(observe_phase=lambda facts, now: None)
-    worker.run_pre_assessment_transition = lambda now: (False, False)
-
     applied = []
-    worker.recovery_workflows = SimpleNamespace(
-        apply_rolling_recovery=lambda *args: applied.append(args))
-    worker.attempt_progression = SimpleNamespace(
-        inspect=lambda *args, **kwargs: pytest.fail(
-            "Previously graded boundary must not be assessed again"))
+    transport = SimpleNamespace(
+        mode="practice", running=True, paused=False, intent=None)
+    progression = TakeProgression(
+        lesson=None, transport=transport,
+        take=Take(runtime=SimpleNamespace(performance_summary=None),
+                  settlement=owner),
+        midi_input=None, transport_timing=None,
+        attempt_progression=SimpleNamespace(
+            inspect=lambda *args, **kwargs: pytest.fail(
+                "Previously graded boundary must not be assessed again")),
+        recovery_workflows=SimpleNamespace(
+            apply_rolling_recovery=lambda *args: applied.append(args)),
+        completion=None, lesson_execution=None)
+    transitions = SimpleNamespace(run=lambda now: (False, False))
+    worker = PracticeTimeline(
+        observations=SimpleNamespace(observe=lambda: 110.0),
+        transitions=transitions, progression=progression)
 
     assert worker.update_transition() is False
     assert applied == [(frozen.decision, frozen.phrase, frozen.grid,
                         frozen.score_beat, 110.0)]
-    worker.transport.intent = object()
-    worker.run_pre_assessment_transition = lambda now: (True, False)
+    transport.intent = object()
+    transitions.run = lambda now: (True, False)
     assert worker.update_transition() is False
     assert len(applied) == 1  # External admission is still authoritative.

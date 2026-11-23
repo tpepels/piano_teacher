@@ -60,6 +60,10 @@ from .command_router import CommandRouter
 from .midi_epoch import MidiEpoch
 from .session_routes import command_routes, event_handlers
 from .tick_worker import TickWorker
+from .tick_observations import TickObservations
+from .pre_assessment_transitions import PreAssessmentTransitions
+from .take_progression import TakeProgression
+from .tick_publisher import TickPublisher
 from .transport_actions import TransportActions
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
@@ -360,17 +364,28 @@ def _event_boundary(r) -> None:
         timed_playback=r.timed_playback, notices=r.notices, clock=r.now)
 
     r.practice_timeline = PracticeTimeline(
-        lesson=r.lesson, notices=r.notices, transport=r.transport, take=r.take,
-        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
-        lesson_execution=r.lesson_execution,
-        recovery_workflows=r.recovery_workflows,
-        completion_continuations=r.completion_continuations,
-        settlement=r.settlement,
-        live_feedback_workflows=r.live_feedback_workflows,
-        measurement=r.measurement, midi_input=r.midi_input,
-        attempt_progression=r.attempt_progression, read_models=r.read_models,
-        exposure_workflows=r.exposure_workflows, clock=r.now,
-        poll_midi=r.midi_application_input.poll_midi_connection)
+        observations=TickObservations(
+            lesson=r.lesson, transport=r.transport, take=r.take,
+            midi_input=r.midi_input, exposure_workflows=r.exposure_workflows,
+            measurement=r.measurement,
+            poll_midi=r.midi_application_input.poll_midi_connection,
+            clock=r.now),
+        transitions=PreAssessmentTransitions(
+            lesson=r.lesson, transport=r.transport, take=r.take,
+            midi_input=r.midi_input, lesson_execution=r.lesson_execution,
+            exposure_workflows=r.exposure_workflows,
+            timed_playback=r.timed_playback, settlement=r.settlement),
+        progression=TakeProgression(
+            lesson=r.lesson, transport=r.transport, take=r.take,
+            midi_input=r.midi_input, transport_timing=r.transport_timing,
+            attempt_progression=r.attempt_progression,
+            recovery_workflows=r.recovery_workflows,
+            completion=r.completion_continuations,
+            lesson_execution=r.lesson_execution))
+    r.tick_publisher = TickPublisher(
+        transport=r.transport, transport_timing=r.transport_timing,
+        read_models=r.read_models,
+        live_feedback_workflows=r.live_feedback_workflows)
     r.midi_epoch = MidiEpoch(
         lesson=r.lesson, transport=r.transport, take=r.take,
         midi_input=r.midi_input,
@@ -387,7 +402,8 @@ def _event_boundary(r) -> None:
             transport_commands=r.transport_commands,
             learning_commands=r.learning_commands))
     r.tick_worker = TickWorker(
-        timeline=r.practice_timeline, transport=r.transport, take=r.take,
+        timeline=r.practice_timeline, publisher=r.tick_publisher,
+        transport=r.transport, take=r.take,
         lesson=r.lesson, midi_input=r.midi_input, epoch=r.midi_epoch,
         deliver=r.midi_application_input.deliver, notices=r.notices,
         clock=r.now)

@@ -11,9 +11,10 @@ MAX_SAME_TICK_TRANSITIONS = 17
 
 
 class TickWorker:
-    def __init__(self, *, timeline, transport, take, lesson, midi_input,
-                 epoch, deliver, notices, clock):
+    def __init__(self, *, timeline, publisher, transport, take, lesson,
+                 midi_input, epoch, deliver, notices, clock):
         self.timeline = timeline
+        self.publisher = publisher
         self.transport = transport
         self.take = take
         self.lesson = lesson
@@ -40,7 +41,7 @@ class TickWorker:
             # A failing transition bypasses the normal publish_settled()
             # tail. Reconcile the original physical take's current paused
             # status without reentering assessment or successor effects.
-            self.timeline.publish_failed_transition()
+            self.publisher.publish_failed_transition()
             self.notices.fault("Could not save or finish the practice transition",
                 "Check storage or the reported error, then Resume to retry this same take.")
             raise
@@ -53,7 +54,7 @@ class TickWorker:
                 continue
             self.deliver(item.message, received_at=item.received_at,
                          corrected_at=item.corrected_at, deferred=True)
-        self.timeline.publish_settled()
+        self.publisher.publish_settled()
         return self.interval_ms()
 
     def interval_ms(self) -> int:
