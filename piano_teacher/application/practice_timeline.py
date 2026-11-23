@@ -226,6 +226,15 @@ class PracticeTimeline:
                     from_beat=target)
         return decision.consumed, followup
 
+    def publish_failed_transition(self) -> None:
+        """Make a faulted tick visibly paused without replaying any effects.
+
+        The failed event can have already stopped grading or installed an
+        idempotent recovery effect. Never rerun it merely to bring the
+        physical authorization ledger into agreement with the paused clock.
+        """
+        self.playback.advance(self.transport_timing.playback_facts())
+
     def publish_settled(self) -> None:
         """Publish one accepted outcome after transitions and deferred MIDI.
 
