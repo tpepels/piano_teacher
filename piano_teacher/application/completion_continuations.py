@@ -9,7 +9,7 @@ from .passage_outcome_presenter import performance_next_action
 from .teaching_continuation import (
     UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
-    EnterSelectedRemediation, ContinueSelectedScore,
+    EnterSelectedRemediation, ContinueSelectedScore, AwaitSelectedScore,
 )
 
 
@@ -153,6 +153,11 @@ class CompletionContinuations:
             self.recovery_workflows.start_remedial_assignment(effect.assignment,deadline=effect.deadline,
                 exposure=effect.exposure)
         else:
+            if isinstance(effect,AwaitSelectedScore) and effect.exposure is not None:
+                # The installed successor starts only after its score ACK.
+                # Record the settled exposure as the one decision that ACK
+                # may start; it is never reselected from the new stage.
+                self.teaching_decisions.prepare_exposure(effect.exposure)
             if isinstance(effect,ContinueSelectedScore):
                 applied = self.playback_session.apply_continuation(effect,
                     measurement=self.transport_timing.collect_continuation_measurement(

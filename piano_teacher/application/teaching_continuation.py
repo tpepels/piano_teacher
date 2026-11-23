@@ -95,6 +95,7 @@ class EnterSelectedRemediation:
 @dataclass(frozen=True, slots=True)
 class AwaitSelectedScore:
     identity: ContinuationIdentity
+    exposure: object
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,7 +420,7 @@ class TeachingContinuation:
         elif route == "remediation":
             effect = EnterSelectedRemediation(identity,decision.remediation,exposure,transaction.deadline)
         elif route == "await_score":
-            effect = AwaitSelectedScore(identity)
+            effect = AwaitSelectedScore(identity,exposure)
         elif route == "continue":
             effect = ContinueSelectedScore(identity,exposure,transaction.deadline,facts.presentation_bpm)
         else:
