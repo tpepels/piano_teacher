@@ -606,6 +606,25 @@ class PlaybackCoordinator:
                 or self.intent is not None or not self.active_take_id):
             return self.state
         if facts.running:
+            # An already authorized segment may keep painting retained ink
+            # while a successor is prepared. It must never authorize the
+            # new source's grading, motion or audio under the old segment.
+            active = self.active_segment
+            installed = active.get("source", {})
+            source = facts.source
+            if (source is None
+                    or facts.transport_id != active.get("transport_id")
+                    or facts.mode != active.get("mode")
+                    or source.fingerprint != installed.get("fingerprint")
+                    or source.stage_key != installed.get("stage_key")
+                    or source.revision != installed.get("revision")
+                    or source.hand != installed.get("hand")
+                    or abs(source.end_beat - installed.get("end_beat", -1)) > 1e-7
+                    or abs(source.bpm - active.get("bpm", -1)) > 1e-7
+                    or tuple(source.tempo_segments) != tuple(
+                        (x["start_beat"], x["end_beat"], x["bpm"])
+                        for x in active.get("tempo_segments", ()))):
+                return PlaybackState.FAILED
             if facts.paused:
                 return PlaybackState.PAUSED
             activation = max(facts.run_at, facts.resume_grading_after)
