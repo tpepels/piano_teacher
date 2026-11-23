@@ -161,7 +161,9 @@ class ProgressRepository:
             # deliberate BPM and clean-pass streak; no other row may.
             p.bpm = max(lower_bpm, min(
                 SETTINGS.maximum_bpm, int(row[6])))
-            p.streak = min(SETTINGS.clean_runs_to_master - 1,
+            # A restored streak can never already satisfy this course's
+            # own mastery rule (Practice Flow: two target passes).
+            p.streak = min(p.course_state().clean_runs_required - 1,
                            max(0, int(row[7])))
             p.stage_tempos[p.identity] = p.bpm
         else:
