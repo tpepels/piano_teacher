@@ -79,7 +79,9 @@ from .session_evidence_context import SessionEvidenceContext
 from .session_lifecycle import SessionLifecycle
 from .session_notices import SessionNotices
 from .session_phase import SessionPhase
-from .session_read_models import SessionReadModels
+from .session_read_models import (
+    SessionCapture, ScorePresentation, SnapshotExtras, SessionReadModels)
+from .session_snapshot_builder import SnapshotReadPorts
 from .settings_workflows import SettingsWorkflows
 from .source_identity import SourceIdentity
 from .source_preparation_session import SourcePreparationSession
@@ -340,13 +342,38 @@ def _transport_and_completion(r) -> None:
         take=r.take, transport_timing=r.transport_timing,
         settlement=r.settlement)
 
-    r.read_models = SessionReadModels(
+    r.session_capture = SessionCapture(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
-        timing=r.transport_timing, phase=r.session_phase,
-        library=r.library, midi_input=r.midi_input,
-        attempt_progression=r.attempt_progression, score=r.score,
-        lesson_execution=r.lesson_execution, listen=r.listen,
-        live_assessment=r.live_assessment, lock=r.lock, clock=r.now)
+        library=r.library, midi_input=r.midi_input, score=r.score,
+        ports=SnapshotReadPorts(
+            seek_grid=r.lesson_execution.seek_grid,
+            learner_snapshot=r.lesson_execution.learner_snapshot,
+            elapsed_beat=r.transport_timing.elapsed_beat,
+            phase=r.session_phase.at,
+            source_model=r.score.source_model,
+            live_feedback=r.live_feedback_workflows.latest_marks,
+            visual_motion=r.transport_timing.visual_motion,
+            active_tempo_map=r.transport_timing.active_tempo_map,
+            display_phrase=r.lesson_execution.display_phrase,
+            guided_marks=r.score.guided_marks,
+            listen_snapshot=r.listen.snapshot,
+            live_input_snapshot=r.midi_input.live_input_snapshot,
+            preparation_schedule=r.transport.preparation_schedule,
+            teaching_snapshot=None, clock=r.now),
+        clock=r.now)
+    r.score_presentation = ScorePresentation(
+        lesson=r.lesson, transport=r.transport, timing=r.transport_timing,
+        lesson_execution=r.lesson_execution, score=r.score,
+        capture=r.session_capture, clock=r.now)
+    r.read_models = SessionReadModels(
+        lesson=r.lesson, transport=r.transport, timing=r.transport_timing,
+        score=r.score, lesson_execution=r.lesson_execution,
+        capture=r.session_capture, presentation=r.score_presentation,
+        extras=SnapshotExtras(
+            lesson=r.lesson, take=r.take, transport=r.transport,
+            timing=r.transport_timing, library=r.library,
+            midi_input=r.midi_input),
+        lock=r.lock, clock=r.now)
 
 
 
@@ -361,7 +388,7 @@ def _event_boundary(r) -> None:
         lesson=r.lesson, transport=r.transport,
         transport_timing=r.transport_timing, timed_playback=r.timed_playback,
         lifecycle=r.session_lifecycle, listen=r.listen,
-        read_models=r.read_models, notices=r.notices, clock=r.now)
+        presentation=r.score_presentation, notices=r.notices, clock=r.now)
     r.retained_replay = RetainedResultReplay(
         lesson=r.lesson, take=r.take, transport=r.transport,
         settlement=r.settlement, rolling_recovery=r.rolling_recovery,
@@ -413,7 +440,7 @@ def _event_boundary(r) -> None:
             lesson_execution=r.lesson_execution))
     r.tick_publisher = TickPublisher(
         transport=r.transport, transport_timing=r.transport_timing,
-        read_models=r.read_models,
+        presentation=r.score_presentation,
         live_feedback_workflows=r.live_feedback_workflows)
     r.midi_epoch = MidiEpoch(
         lesson=r.lesson, transport=r.transport, take=r.take,
@@ -421,7 +448,8 @@ def _event_boundary(r) -> None:
         corrected_time=r.midi_delivery.corrected_time)
     r.command_router = CommandRouter(
         lesson=r.lesson, transport=r.transport, take=r.take,
-        read_models=r.read_models, measurement=r.measurement,
+        read_models=r.read_models,
+        presentation=r.score_presentation, measurement=r.measurement,
         listen_outcomes=r.listen_outcomes,
         routes=command_routes(
             device_workflows=r.device_workflows,

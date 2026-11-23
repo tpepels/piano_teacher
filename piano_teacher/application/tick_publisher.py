@@ -4,11 +4,11 @@ import logging
 
 
 class TickPublisher:
-    def __init__(self, *, transport, transport_timing, read_models,
+    def __init__(self, *, transport, transport_timing, presentation,
                  live_feedback_workflows):
         self.transport = transport
         self.transport_timing = transport_timing
-        self.read_models = read_models
+        self.presentation = presentation
         self.live_feedback_workflows = live_feedback_workflows
 
     def publish_failed_transition(self) -> None:
@@ -27,7 +27,7 @@ class TickPublisher:
         controls, live feedback and transport describe the same final source.
         """
         self.transport.advance(self.transport_timing.playback_facts())
-        self.read_models.prepare_score_presentation()
+        self.presentation.prepare_score_presentation()
         try:
             self.live_feedback_workflows.publish_live()
         except Exception:

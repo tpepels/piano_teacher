@@ -14,14 +14,14 @@ from .playback_transitions import PlaybackTransition
 
 class PlaybackAuthorization:
     def __init__(self, *, lesson, transport, transport_timing, timed_playback,
-                 lifecycle, listen, read_models, notices, clock):
+                 lifecycle, listen, presentation, notices, clock):
         self.lesson = lesson
         self.transport = transport
         self.transport_timing = transport_timing
         self.timed_playback = timed_playback
         self.lifecycle = lifecycle
         self.listen = listen
-        self.read_models = read_models
+        self.presentation = presentation
         self.notices = notices
         self.clock = clock
 
@@ -116,7 +116,7 @@ class PlaybackAuthorization:
             self.control_acknowledgement(
                 "score_ready", {"revision": completed.deferred_score_revision},
                 reason="score_ready")
-            self.read_models.prepare_score_presentation()
+            self.presentation.prepare_score_presentation()
         self.timed_playback.begin_listen_if_ready()
 
 

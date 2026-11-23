@@ -28,6 +28,11 @@ class LiveFeedbackWorkflows:
                 "graded": (not self.transport.preview_only
                            and self.transport.mode in ("practice", "perform"))}
 
+    def latest_marks(self, _elapsed_seconds: float) -> list[dict]:
+        """The marks last published for the running take (none otherwise)."""
+        return (list(self.live_assessment.latest_marks)
+                if self.transport.running else [])
+
     def publish_frozen(self, marks) -> None:
         """Publish marks frozen at a rolling checkpoint (not yet final)."""
         self.live_assessment.publish(marks, self.feedback_take())

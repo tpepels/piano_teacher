@@ -27,12 +27,13 @@ _TEACHING_ROUTES = ("listening", "learning", "transport", "stage")
 
 
 class CommandRouter:
-    def __init__(self, *, lesson, transport, take, read_models, measurement,
+    def __init__(self, *, lesson, transport, take, read_models, presentation, measurement,
                  listen_outcomes, routes):
         self.lesson = lesson
         self.transport = transport
         self.take = take
         self.read_models = read_models
+        self.presentation = presentation
         self.measurement = measurement
         self.listen_outcomes = listen_outcomes
         missing = set(COMMAND_ROUTES.values()) | {"stage"}
@@ -109,7 +110,7 @@ class CommandRouter:
                 action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
         self.listen_outcomes.apply_failure()
         self.routes[route](action, kwargs, effect)
-        self.read_models.prepare_score_presentation()
+        self.presentation.prepare_score_presentation()
         if action not in ("score_ready", "demo_ready", "reset_path"):
             self.measurement.event("manual_action", {"action": action,
                 "fingerprint": before["fingerprint"] or None,
