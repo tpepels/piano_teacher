@@ -109,6 +109,16 @@ func matches_ready_source(intent: Dictionary) -> bool:
         _rendered_hand == str(intent.get("hand",""))
 
 
+func matches_ready_state(state: Dictionary) -> bool:
+    # A native revision number alone is not an exact source identity:
+    # the selected stage and hand are part of its physical ink contract.
+    return is_ready() and _loaded and \
+        _fingerprint == str(state.get("piece_fingerprint","")) and \
+        revision == int(state.get("revision",-1)) and \
+        _rendered_stage_key == str(state.get("stage_key","")) and \
+        _rendered_hand == str(state.get("hand",""))
+
+
 func update_context(state: Dictionary, now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))
     var next_revision: int = int(state.get("revision",0))

@@ -344,14 +344,11 @@ func _matches_prepared_identity(identity: Dictionary) -> bool:
             or str(_bundle.get("fingerprint","")) != str(identity.get("fingerprint",""))
             or str(_bundle.get("hand","")) != str(identity.get("hand",""))):
         return false
+    # The authoritative state includes stage_key even before a timed
+    # playback intent exists. A matching ordinal is not sufficient:
+    # two course steps or saved sessions can share that number.
     var key: String = str(identity.get("stage_key",""))
-    if not key.is_empty():
-        return key == str(_bundle.get("stage_key",""))
-    # A state awaiting score readiness has no playback intent yet. Its
-    # authored lesson ordinal and hand identify the selected course source
-    # within this same fingerprint/revision; never decode a textual label.
-    var step: int = int(identity.get("step_number",-1))
-    return step > 0 and step == int(_bundle.get("step_number",-2))
+    return not key.is_empty() and key == str(_bundle.get("stage_key",""))
 
 func prepared_renderer(intent: Dictionary):
     # Every prepared admission supplies the canonical backend stage key.
@@ -374,14 +371,13 @@ func has_prepared_destination(state: Dictionary) -> bool:
         "revision":int(state.get("revision",-1)),
         "fingerprint":str(state.get("piece_fingerprint","")),
         "hand":str(state.get("hand","")),
-        "step_number":int(state.get("lesson_step",-1))}
+        "stage_key":str(state.get("stage_key",""))}
     var intent: Variant = state.get("playback_intent")
     if intent is Dictionary:
         # A stale intent cannot make another selected state look ready.
-        for field in ["mode","revision","fingerprint","hand"]:
+        for field in ["mode","revision","fingerprint","hand","stage_key"]:
             if intent.get(field) != identity[field]:
                 return false
-        identity["stage_key"] = str(intent.get("stage_key",""))
     return _matches_prepared_identity(identity)
 
 func preserve_unprepared_revision(state: Dictionary) -> bool:
@@ -395,10 +391,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     if not bool(state.get("loaded",false)) or stage == null or \
             not score_session.is_ready() or not is_instance_valid(stage.renderer):
         return false
-    var next_revision: int = int(state.get("revision",-1))
-    var next_fingerprint: String = str(state.get("piece_fingerprint",""))
-    if next_revision == score_session.revision and \
-            next_fingerprint == score_session.source_fingerprint():
+    if score_session.matches_ready_state(state):
         return false
     var outgoing = stage.renderer
     var incoming = NativeView.new()
