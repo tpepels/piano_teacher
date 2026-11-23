@@ -139,13 +139,6 @@ func visual_beat(at_ms: int) -> float:
     return minf(idle_visual_target, projected) if idle_visual_speed > 0.0 \
         else maxf(idle_visual_target, projected)
 
-func retry_count_in_beat(at_ms: int) -> float:
-    return TempoTimeline.beats_from_milliseconds(float(at_ms)-retry_deadline_ms,retry_bpm)
-
-func retry_preparing(at_ms: int) -> bool:
-    return retry_active and float(at_ms) >= retry_preparation_ms \
-        and float(at_ms) < retry_deadline_ms
-
 func score_beat(at_ms: int) -> float:
     # Both the scrolling score and its fixed playhead use this same epoch.
     if retry_active and source_phase == "playing":

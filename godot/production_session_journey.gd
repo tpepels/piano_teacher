@@ -88,14 +88,6 @@ func _fail(message: String) -> void:
         " witness=", JSON.stringify(witness))
     quit(1)
 
-func _visible_source_head() -> String:
-    var view = app.practice_view.stage.renderer
-    var bounds := Rect2(Vector2.ZERO, view.size)
-    for identifier in view.drawn_noteheads:
-        if bounds.has_point(view.drawn_noteheads[identifier]):
-            return str(identifier)
-    return ""
-
 func _ready_score() -> bool:
     if app.score_session == null or not app.score_session.is_ready():
         return false

@@ -32,10 +32,6 @@ func set_transport_overlay_enabled(enabled: bool) -> void:
     transport_overlay_enabled = enabled
     queue_redraw()
 
-func set_fingering_annotations_enabled(enabled: bool) -> void:
-    annotations.set_enabled(enabled)
-    queue_redraw()
-
 const ScoreEngraving := preload("res://notation/native/score_engraving.gd")
 const RenderPass := preload("res://notation/native/render_pass.gd")
 const StreamAdmissionExecutor := preload("res://notation/native/stream_admission_executor.gd")
@@ -88,12 +84,6 @@ var _stream_controller = ScoreStreamController.new()
 
 func register_stream_predecessor(previous) -> void:
     _stream_controller.register_predecessor(previous)
-
-func stream_preflight_snapshot() -> Array:
-    return _stream_controller.online_snapshot()
-
-func online_stream_count() -> int:
-    return _stream_controller.online_size()
 
 ## Read-only public peer clearance port.  Other score layers never inspect
 ## the renderer's private queue or its live retained CanvasItems.
@@ -293,11 +283,6 @@ func load_score(candidate: Dictionary) -> bool:
     queue_redraw()
     return true
 
-# No provider-specific state reaches this view. Invalid and genuinely unknown
-# assignments produce no number; the source attack remains editable.
-func _open_fingering_editor(point: Vector2) -> bool:
-    return annotations.open_editor(self,point,staff_gap(),drawn_note_instances)
-
 func _gui_input(event: InputEvent) -> void:
     if native_ready:
         annotations.handle_input(self,event,staff_gap(),drawn_note_instances)
@@ -409,9 +394,6 @@ func diagnostic_stream_snapshot() -> Array:
     # Deliberately explicit acceptance/diagnostic port. Never expose the
     # mutable FIFO as a renderer property or use this copy during painting.
     return _stream_controller.online_snapshot()
-
-func stream_has_take(owner_serial: int) -> bool:
-    return _stream_controller.has_take(owner_serial)
 
 func admission_queue_generation() -> int:
     return _stream_controller.queue_generation()

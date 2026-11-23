@@ -65,14 +65,6 @@ func _ready() -> void:
     add_child(rail_glow)
 
 
-func set_staff_band(first_line_fraction: float, last_line_fraction: float) -> void:
-    var top: float = clampf(first_line_fraction, .06, .90)
-    var bottom: float = clampf(last_line_fraction, top + .02, .94)
-    if absf(top - staff_band_top) > .003 or absf(bottom - staff_band_bottom) > .003:
-        staff_band_top = top
-        staff_band_bottom = bottom
-        queue_redraw()
-
 func present(state: Dictionary) -> void:
     var next_phase: String = str(state.get("phase", "ready"))
     var next_progress: float = clampf(float(state.get("progress", 0.0)), 0.0, 1.0)

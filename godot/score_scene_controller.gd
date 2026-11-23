@@ -15,12 +15,6 @@ func _init(stage, assets) -> void:
     _stage = stage
     _assets = assets
 
-func active_renderer():
-    return _stage.renderer
-
-func active_generation() -> int:
-    return _generation
-
 func owns_active(candidate) -> bool:
     return candidate != null and is_instance_valid(candidate) and \
         _stage.renderer == candidate

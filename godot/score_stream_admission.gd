@@ -245,14 +245,6 @@ static func retry_start(passes: Array, world: float, right_beats: float,
         start = maxf(start,occupied + leading_rest_beats + header_beats)
     return start
 
-static func command_lead_bpm(action: String, flow_bpm: float,
-        selected_bpm: float) -> float:
-    # World beats to seconds at the rate the axis moves at AFTER a command:
-    # Play's count-in and Retry's rest run at the selected BPM (a tempo-
-    # mapped take, e.g. a slowdown stage, ran at its own rate until now); a
-    # mid-take Resume continues inside the take's map.
-    return flow_bpm if action == "resume" else selected_bpm
-
 static func lead_seconds(start_world: float, world: float, bpm: float) -> float:
     return TempoTimeline.seconds_from_beats(
         maxf(0.0,start_world-world),maxf(1.0,bpm))

@@ -54,16 +54,6 @@ func _boot() -> void:
         return
     print("PHASE6_PRODUCTION_SCENE_STARTED")
 
-func _first_visible_head(renderer) -> String:
-    # Paint metadata is produced by the actual retained notehead compositor.
-    # Ignore copies outside the viewport and all non-note overlays.
-    var window: Rect2 = Rect2(Vector2.ZERO,renderer.size)
-    for identifier in renderer.drawn_noteheads:
-        var point: Vector2 = renderer.drawn_noteheads[identifier]
-        if window.has_point(point):
-            return str(identifier)
-    return ""
-
 func _process(_delta: float) -> bool:
     if app == null or not is_instance_valid(app):
         return false

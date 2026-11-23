@@ -238,9 +238,6 @@ func pending_id(kind: String) -> int:
 func fail(message: String) -> void:
     _fail(message)
 
-func finish_native_score() -> void:
-    _finish_native_score()
-
 func request_layout() -> bool:
     if layout_pending or not _loaded or not score_error.is_empty():
         return false

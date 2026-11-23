@@ -56,10 +56,6 @@ func span_visible(first: Dictionary, last: Dictionary) -> bool:
     var end: float = float(last.get("beat",last.get("end_beat",begin)))
     return end >= source_floor-.25 and begin <= source_ceiling+.25
 
-static func intervals_overlap(first: Dictionary, second: Dictionary) -> bool:
-    return float(first["start_beat"]) < float(second["end_beat"])-.00001 and \
-        float(second["start_beat"]) < float(first["end_beat"])-.00001
-
 func ink(hand: String) -> Color:
     if not focused_staff.is_empty() and hand != focused_staff:
         return Color.TRANSPARENT

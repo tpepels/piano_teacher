@@ -246,18 +246,6 @@ func layout_rest_lanes(gap: float, density: float) -> void:
     rest_lane_offsets = placement["offsets"]
     unavoidable_rest_overlaps = int(placement["unavoidable"])
 
-func stem_attachment(note_type: String, gap: float, up: bool) -> float:
-    # The musical anchor is the centred original Verovio notehead. Derive
-    # its edge from that glyph's actual metrics rather than a hand-estimated
-    # constant. The font asset includes 12 units of transparent padding.
-    var name: String = ("head_whole" if note_type == "whole" else
-        "head_half" if note_type == "half" else "head_black")
-    var box: Array = glyphs.bounds.get(name, [])
-    var half_width: float = gap*.61
-    if box.size() == 4 and float(box[2]) > 24.0:
-        half_width = (float(box[2])*.5-12.0)*gap/250.0
-    return half_width if up else -half_width
-
 func source_stem_bounds(event: Dictionary, up: bool) -> Array:
     if chord_members.has(str(event.get("id",""))):
         return glyphs.chord_stem_bounds.get(chord_template_key(event),[])

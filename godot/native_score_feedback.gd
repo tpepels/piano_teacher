@@ -300,17 +300,6 @@ static func _take_revision(take: String) -> int:
 func take_revision(take: String) -> int:
     return statuses.take_revision(take)+int(_visual_revisions.get(take,0))
 
-func pending_events() -> int:
-    return _buffered.size()
-
-## Engraving revisions whose note identities are currently bound.
-func bound_revisions() -> Array:
-    return _source_maps.keys()
-
-## Engraved note ID of a source attack in a bound revision ("" if unknown).
-func note_for_source(revision: int, source_id: String) -> String:
-    return _note_for_source(revision,source_id) if _source_maps.has(revision) else ""
-
 func _note_for_source(revision: int, source_id: String) -> String:
     return str((_source_maps[revision] as Dictionary).get(source_id,""))
 

@@ -159,15 +159,6 @@ static func supported(model: Dictionary) -> String:
                 return "Invalid key signature"
     return ""
 
-static func event_positions(model: Dictionary, density: float) -> Dictionary:
-    # Used for regression audits and for notehead feedback in Phase D.
-    var result: Dictionary = {}
-    for event in model.get("notation_events", []):
-        if event is Dictionary:
-            result[str(event.get("id", ""))] = float(event.get("beat", 0.0))*density
-    return result
-
-
 # Beam membership and stem direction come from source engraving metadata
 # in score_index.gd; geometry must not infer alternate groups from meter.
 static func beamed_ids(groups: Array) -> Dictionary:
@@ -353,15 +344,3 @@ static func tuplet_groups(model: Dictionary) -> Array:
                         opened.erase(number)
         # An unclosed group is not emitted as a misleading bracket.
     return groups
-
-static func tuplet_label(group: Dictionary) -> String:
-    var actual: int = int(group.get("actual", 1))
-    var normal: int = int(group.get("normal", 1))
-    var presentation: String = str(group.get("show_number", "actual"))
-    if presentation == "ratio" or presentation == "both":
-        return "%d:%d" % [actual, normal]
-    if presentation == "none":
-        # Show the numeric ratio anyway for ad-hoc source durations:
-        # a bare bracket cannot explain an unconventional rhythm.
-        return "%d:%d" % [actual, normal]
-    return str(actual)

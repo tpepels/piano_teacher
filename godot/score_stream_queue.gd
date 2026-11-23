@@ -441,12 +441,6 @@ func has_take(take_serial: int) -> bool:
             return true
     return false
 
-func exposed_owner(owner_serial: int) -> bool:
-    for item in online:
-        if owner_id(item) == owner_serial and bool(item.get("ever_visible",false)):
-            return true
-    return false
-
 static func source_identity(candidate: Dictionary) -> String:
     # The journal is keyed by immutable MUSICAL SOURCE, not transient
     # backend revision or transport ID. Reopening the same actual score

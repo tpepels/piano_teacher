@@ -41,9 +41,6 @@ const OUTER_SCALE := 1.052
 static func color_for(status: String) -> Color:
     return COLORS.get(status,Design.SCORE_INK)
 
-static func glow_strength(status: String) -> float:
-    return 0.0 if status == Status.UNPLAYED else OUTER_GLOW_ALPHA
-
 static func material_for(pass_name: String) -> CanvasItemMaterial:
     var material := CanvasItemMaterial.new()
     material.blend_mode = (CanvasItemMaterial.BLEND_MODE_SUB if pass_name == "erase"

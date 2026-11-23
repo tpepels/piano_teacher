@@ -105,29 +105,6 @@ func install_head_interior(head: String, texture: Texture2D) -> bool:
 func head_interior(head: String) -> Texture2D:
     return _assets.head_interior(head)
 
-func paint_tie(canvas: CanvasItem, x0: float, x1: float, y: float,
-        gap: float, down: bool, ink: Color) -> bool:
-    # Stretch only Verovio's original tie contour, never any notehead or
-    # other notation. The endpoints remain locked to the native beat grid.
-    # The requested bow faces DOWN when the note's stem points UP.
-    # Atlas keys denote the SOURCE stem direction, not the bow side.
-    var direction: String = "up" if down else "down"
-    var texture: Texture2D = tie_textures.get(direction)
-    if texture == null:
-        return false
-    var item: Dictionary = tie_metadata[direction]
-    var span_px: float = float(item["span"])*gap/250.0
-    if span_px < .001 or x1 <= x0:
-        return false
-    var factor: float = (x1-x0)/span_px
-    var box: Array = item["bounds"]
-    var dest := Rect2(x0+float(box[0])*gap/250.0*factor,
-        y+float(box[1])*gap/250.0,
-        float(box[2])*gap/250.0*factor,
-        float(box[3])*gap/250.0)
-    draw_fit(canvas,texture,dest,false,ink)
-    return true
-
 func has_chord(key: String) -> bool:
     return chord_textures.has(key)
 
@@ -180,70 +157,8 @@ func chord_heads(key: String) -> Array:
         return []
     return chord_metadata[key]["head_positions"]
 
-func has_beam(name: String, up: bool) -> bool:
-    return beam_textures.has(name) and \
-        bool(beam_metadata[name]["stem_up"]) == up
-
 func beam_tips(name: String) -> Array:
     return beam_metadata[name]["tip_offsets"] if beam_metadata.has(name) else []
-
-func paint_beam(canvas: CanvasItem, name: String,
-        heads: Array, y0: float, gap: float, ink: Color,
-        source_offsets: Array = []) -> bool:
-    var texture: Texture2D = beam_textures.get(name)
-    if texture == null or heads.size() < 2:
-        return false
-    var data: Dictionary = beam_metadata[name]
-    var offsets: Array = source_offsets if not source_offsets.is_empty() else data["head_offsets"]
-    if offsets.size() != heads.size():
-        return false
-    var box: Array = data["bounds"]
-    var width: float = float(box[2])
-    if width <= 0.0:
-        return false
-    var texture_width: float = float(texture.get_width())
-    var texture_height: float = float(texture.get_height())
-    var pixel_per_unit: float = texture_width/width
-    var base_y: float = y0+float(box[1])*gap/250.0
-    var ink_height: float = float(box[3])*gap/250.0
-    # Piecewise affine X mapping between measured source/native stem
-    # attachments, not the bounding box or just the first/last notehead.
-    # The original beam contours and their vertical thickness stay intact.
-    var anchors_px: Array = []
-    for offset in offsets:
-        anchors_px.append((float(offset)-float(box[0]))*pixel_per_unit)
-    for i in range(heads.size()-1):
-        var original_a: float = float(anchors_px[i])
-        var original_b: float = float(anchors_px[i+1])
-        if original_b <= original_a+.01 or \
-                float(heads[i+1]) <= float(heads[i]):
-            return false
-        var src_a: float = clampf(original_a,0.0,texture_width)
-        var src_b: float = clampf(original_b,0.0,texture_width)
-        if src_b <= src_a:
-            continue
-        var t0: float = (src_a-original_a)/(original_b-original_a)
-        var t1: float = (src_b-original_a)/(original_b-original_a)
-        var dst_a: float = lerpf(float(heads[i]),float(heads[i+1]),t0)
-        var dst_b: float = lerpf(float(heads[i]),float(heads[i+1]),t1)
-        draw_fit_region(canvas,texture,
-            Rect2(dst_a,base_y,dst_b-dst_a,ink_height),
-            Rect2(src_a,0.0,src_b-src_a,texture_height),ink)
-    # End caps are fixed-size Verovio artwork, not stretched with tempo.
-    var left_width: float = clampf(float(anchors_px[0]),0.0,texture_width)
-    if left_width > .01:
-        var left_dst: float = left_width*gap*width/(250.0*texture_width)
-        draw_fit_region(canvas,texture,
-            Rect2(float(heads[0])-left_dst,base_y,left_dst,ink_height),
-            Rect2(0.0,0.0,left_width,texture_height),ink)
-    var last_px: float = clampf(float(anchors_px[-1]),0.0,texture_width)
-    if last_px < texture_width-.01:
-        var last_dst: float = (texture_width-last_px)*gap*width/ \
-            (250.0*texture_width)
-        draw_fit_region(canvas,texture,
-            Rect2(float(heads[-1]),base_y,last_dst,ink_height),
-            Rect2(last_px,0.0,texture_width-last_px,texture_height),ink)
-    return true
 
 func has_tuplet(name: String, requires_bracket: bool) -> bool:
     return tuplet_textures.has(name) and (not requires_bracket or \
@@ -310,38 +225,6 @@ func slur_keys() -> Array:
 func slur_note_ids(name: String) -> Array:
     return slur_metadata[name].get("note_ids",[]) if \
         slur_metadata.has(name) else []
-
-func paint_slur(canvas: CanvasItem, name: String,
-        x0: float, y0: float, x1: float, y1: float,
-        gap: float, ink: Color) -> bool:
-    var tex: Texture2D = slur_textures.get(name)
-    if tex == null or x1<=x0:
-        return false
-    var data: Dictionary = slur_metadata[name]
-    var span: float = float(data["span"])
-    if span <= 0.0:
-        return false
-    var b: Array = data["bounds"]
-    var units: float = gap/250.0
-    var change: float = (y1-y0)-float(data.get("original_end_y",0.0))*units
-    var xx0: float = x0+float(b[0])*(x1-x0)/span
-    var xx1: float = x0+(float(b[0])+float(b[2]))*(x1-x0)/span
-    var top: float = y0+float(b[1])*units
-    var bottom: float = top+float(b[3])*units
-    var left_shift: float = change*float(b[0])/span
-    var right_shift: float = change*(float(b[0])+float(b[2]))/span
-    # Apply an affine transform to Verovio's ORIGINAL slur texture:
-    # x is anchored to the two musical beats, y slopes towards each
-    # actual pitch. No polygonal approximation of a music symbol occurs.
-    canvas.draw_polygon(PackedVector2Array([
-        Vector2(xx0,top+left_shift),
-        Vector2(xx1,top+right_shift),
-        Vector2(xx1,bottom+right_shift),
-        Vector2(xx0,bottom+left_shift)]),
-        PackedColorArray([ink,ink,ink,ink]),
-        PackedVector2Array([Vector2.ZERO,Vector2(1.0,0.0),
-            Vector2.ONE,Vector2(0.0,1.0)]),tex)
-    return true
 
 func paint_note_stem(canvas: CanvasItem, kind: String, up: bool,
         x: float, head_y: float, tip_y: float, gap: float,

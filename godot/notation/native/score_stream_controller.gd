@@ -151,28 +151,6 @@ func peer_clearance_facts(density: float, gap: float,
     return {"queue_id":queue.get_instance_id(),"density":density,
         "playhead_x":playhead_x,"ends":ends}
 
-## All continuation decisions read the same mutable queue and peer floor;
-## the renderer supplies only source glyph dimensions and world geometry.
-func earliest_continuation(world: float, count_in_beats: float,
-        right: float, header: float, density: float, gap: float,
-        duration: float, width: float, playhead: float) -> float:
-    var preview: Dictionary = queue.preview_tail_withdrawal(
-        world,density,gap,duration,width,playhead)
-    var remaining: Array = preview["remaining"]
-    var start: float = Admission.position(
-        remaining,world,right,header,NAN,0.0,density,gap,duration)
-    var peer: float = queue.minimum_peer_opening(
-        density,width,playhead)
-    if is_finite(peer):
-        start = maxf(start,peer+header)
-    if count_in_beats > 0.0:
-        var empty: float = empty_strip_onset(
-            remaining,world,count_in_beats,header,
-            density,gap,duration,width,playhead)
-        if is_finite(empty) and (not is_finite(start) or empty < start):
-            start = empty
-    return start
-
 func empty_strip_onset(passes: Array, world: float, count_in_beats: float,
         header: float, density: float, gap: float,
         duration: float, width: float, playhead: float) -> float:

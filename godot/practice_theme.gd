@@ -83,23 +83,10 @@ static func card_surface() -> StyleBoxFlat:
     box.shadow_offset = Vector2(0,4)
     return box
 
-static func drawer_surface() -> StyleBoxFlat:
-    var box := bordered_surface(FOREST, RADIUS_CARD, .55)
-    box.set_content_margin_all(3)
-    return box
-
 static func modal_surface() -> StyleBoxFlat:
     var box := bordered_surface(PANEL, RADIUS_MODAL, .72)
     box.set_border_width_all(1)
     box.set_content_margin_all(5)
-    return box
-
-static func stage_surface() -> StyleBoxFlat:
-    var box := bordered_surface(STAGE, RADIUS_CARD, .55)
-    box.set_content_margin_all(0)
-    box.shadow_color = Color(NIGHT, .28)
-    box.shadow_size = 16
-    box.shadow_offset = Vector2(0, 8)
     return box
 
 static func role_accent(role: String) -> Color:
@@ -180,17 +167,3 @@ static func create() -> Theme:
         surface(Color(TEAL, .7), 4))
     theme.set_stylebox("grabber_pressed", "VScrollBar", grabber)
     return theme
-
-static func notation_material() -> ShaderMaterial:
-    var shader := Shader.new()
-    shader.code = """shader_type canvas_item;
-render_mode unshaded;
-void fragment() {
-    vec4 sample_color = texture(TEXTURE, UV);
-    float ink = 1.0 - dot(sample_color.rgb, vec3(0.2126, 0.7152, 0.0722));
-    COLOR = vec4(vec3(0.918, 0.957, 0.929), sample_color.a * ink);
-}
-"""
-    var material := ShaderMaterial.new()
-    material.shader = shader
-    return material

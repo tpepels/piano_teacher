@@ -24,13 +24,6 @@ func hold(token: String, beat: float) -> void:
     _token = token
     _last_tick = tick
 
-func adopt(token: String) -> void:
-    # The same countdown continues under another epoch token (a reserved
-    # Play count-in handed to the engine's running transport): beats already
-    # spoken stay spoken.
-    if not token.is_empty():
-        _token = token
-
 func continues(token: String, beat: float) -> bool:
     # True when beat moves forward within the held epoch: a reused Resume
     # picks up the same countdown instead of starting a second one.

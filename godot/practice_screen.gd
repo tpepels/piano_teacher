@@ -152,9 +152,6 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
 func bind_countin_voice_player(service: Node) -> void:
     _chrome.bind_countin_voice_player(service)
 
-func _toggle_tempo_popup() -> void:
-    _chrome.toggle_tempo_popup()
-
 func present_metronome(enabled: bool) -> void:
     if metronome_switch != null and metronome_switch.button_pressed != enabled:
         metronome_switch.set_pressed_no_signal(enabled)

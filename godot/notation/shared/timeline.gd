@@ -139,9 +139,6 @@ func x_at_beat(beat: float) -> float:
 func musical_beat(clock_beat: float, play_from_beat: float = 0.0) -> float:
     return play_from_beat + clock_beat
 
-func camera_x(clock_beat: float, play_from_beat: float = 0.0) -> float:
-    return x_at_beat(musical_beat(clock_beat, play_from_beat))
-
 # One canonical, linear beat-to-screen projection for score ink and stage
 # markers. The camera and onsets use the same quarter-beat coordinates; tempo
 # is only the derivative of world_beat, not a position distortion.
@@ -158,9 +155,6 @@ func screen_x(event_beat: float, clock_beat: float, playhead_x: float,
 
 func pixels_per_second(bpm: float) -> float:
     return pixels_per_beat * TempoTimeline.beats_from_seconds(1.0,bpm)
-
-func count_in_start(play_from_beat: float, count_in_beats: float) -> float:
-    return play_from_beat - count_in_beats
 
 func set_density_from_env() -> bool:
     var raw: String = OS.get_environment("PIANO_TEACHER_PIXELS_PER_BEAT")

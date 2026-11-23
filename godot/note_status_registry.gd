@@ -162,9 +162,6 @@ func prune(visible_takes: Array, current_take: String) -> void:
             _notes_by_take.erase(key)
             _revision_by_take.erase(key)
 
-func has_any() -> bool:
-    return not _notes_by_take.is_empty()
-
 ## Display status of every colored note of one take: {note_id: status}.
 func statuses_for_take(take: String) -> Dictionary:
     var result: Dictionary = {}

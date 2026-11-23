@@ -93,13 +93,3 @@ static func groups_crossed(groups: Array, previous: float, current: float) -> Ar
         low += 1
     return crossed
 
-
-static func crosses_onset(groups: Array, previous: float, current: float) -> bool:
-    return not groups_crossed(groups, previous, current).is_empty()
-
-
-# Convenient pure function for diagnostics and UI layout tests. Production
-# animation uses cached groups via cue() above, not prepare() every frame.
-static func next_chord(layout: Dictionary, beat: float, assessed: Array = [],
-        lead_beats: float = MAX_LEAD_BEATS) -> Array:
-    return cue(prepare(layout), beat, assessed, lead_beats)
