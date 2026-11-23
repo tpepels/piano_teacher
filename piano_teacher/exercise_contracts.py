@@ -7,12 +7,11 @@ same objects, so the drawn, heard and graded timelines cannot diverge.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from math import isfinite
 from typing import Protocol
 
 from .exercise_generator import ExerciseVariant
-from .music import Phrase
 from .application.musical_scheduler import SCHEDULER
 
 

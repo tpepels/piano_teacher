@@ -166,7 +166,7 @@ class PracticeSession:
                       if route == "stage" else None)
             effect = self.teaching_decisions.prepare("manual", manual=change,
                 action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)
-        result = self._dispatch_control(action, route, effect=effect, **kwargs)
+        self._dispatch_control(action, route, effect=effect, **kwargs)
         self.read_models.prepare_score_presentation()
         if action not in ("score_ready", "demo_ready", "reset_path"):
             self.measurement.event("manual_action", {"action": action,

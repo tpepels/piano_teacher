@@ -95,10 +95,8 @@ class PracticeTimeline:
             policy=resolve_mistake_policy(
                 self.library.settings["mistake_response_strategy"]))
         assessed = completed.assessed
-        result,route,summary = assessed.result,completed.route,completed.summary
-        pending,response,settled = (
-            completed.pending,completed.response,completed.settled)
-        if settled:
+        result,summary = assessed.result,completed.summary
+        if completed.settled:
             self.visual_transport.note_tempo(
             stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         self.attempt.publish_completion(
