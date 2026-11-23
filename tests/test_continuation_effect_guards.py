@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from piano_teacher.application.completion_continuations import CompletionContinuations
+from piano_teacher.application.settlement_continuation import SettlementContinuation
 from piano_teacher.application.teaching_continuation import (
     ContinuationIdentity, StopSelectedContinuation,
     TeachingContinuation, FeedbackTransaction, SettledPublication,
@@ -13,7 +13,7 @@ from piano_teacher.application.teaching_continuation import (
 
 def _subject():
     applied = []
-    owner = object.__new__(CompletionContinuations)
+    owner = object.__new__(SettlementContinuation)
     owner.lesson = SimpleNamespace(
         fingerprint="score-sha", revision=12,
         plan=SimpleNamespace(identity="next-hand"))
@@ -106,7 +106,7 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
             decision_id=effect.identity.decision_id, pending=pending),
         finish_feedback=lambda *args, **kwargs: SettledPublication(
             effect, None, "Original assessed result"))
-    owner.commit_pending = lambda **kwargs: "Original assessed result"
+    owner.commit_pending = lambda now, **kwargs: "Original assessed result"
     owner.transport.note_tempo = lambda **kwargs: None
     owner.lesson.plan.bpm = 72
     owner.transport_timing = SimpleNamespace(
@@ -137,7 +137,7 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
         begin_feedback=lambda *args, **kwargs: selected,
         finish_feedback=lambda *args, **kwargs: SettledPublication(
             effect, None, "Original assessed result"))
-    owner.commit_pending = lambda **kwargs: "Original assessed result"
+    owner.commit_pending = lambda now, **kwargs: "Original assessed result"
     owner.transport.note_tempo = lambda **kwargs: None
     owner.lesson.plan.bpm = 72
     owner.transport_timing = SimpleNamespace(

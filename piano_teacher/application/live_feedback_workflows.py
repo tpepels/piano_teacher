@@ -28,6 +28,10 @@ class LiveFeedbackWorkflows:
                 "graded": (not self.transport.preview_only
                            and self.transport.mode in ("practice", "perform"))}
 
+    def publish_final(self, marks) -> None:
+        """Publish a completed take's settled grades before any successor."""
+        self.live_assessment.publish(marks, self.feedback_take(), final=True)
+
     def publish_live(self) -> None:
         """Publish the incremental assessment continuously during playback.
 

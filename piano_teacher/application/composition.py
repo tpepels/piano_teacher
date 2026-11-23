@@ -32,7 +32,9 @@ from ..visual_transport import VisualTransport
 from .attempt_progression import AttemptProgression
 from .attempt_runtime import AttemptRuntime
 from .attempt_settlement import AttemptSettlement
-from .completion_continuations import CompletionContinuations
+from .completion_continuations import TakeCompletion
+from .settlement_continuation import SettlementContinuation
+from .take_grading import TakeGrading
 from .device_workflows import DeviceWorkflows
 from .exposure_workflows import ExposureWorkflows
 from .flow_course_session import PracticeFlowCourseSession
@@ -296,21 +298,31 @@ def _transport_and_completion(r) -> None:
         live_assessment=r.live_assessment, clock=r.now,
         feedback_seconds=r.feedback_seconds)
 
-    r.completion_continuations = CompletionContinuations(
+    r.take_grading = TakeGrading(
+        lesson=r.lesson, take=r.take, transport=r.transport,
+        transport_timing=r.transport_timing, score=r.score,
+        policy_registry=r.policy_registry, library=r.library,
+        assessment=r.assessment,
+        live_feedback_workflows=r.live_feedback_workflows,
+        measurement=r.measurement)
+    r.settlement = SettlementContinuation(
         lesson=r.lesson, notices=r.notices, score=r.score, take=r.take,
         transport=r.transport, lesson_execution=r.lesson_execution,
         transport_timing=r.transport_timing,
         recovery_workflows=r.recovery_workflows,
-        timed_playback=r.timed_playback, clock=r.now, library=r.library,
-        assessment=r.assessment, feedback_seconds=r.feedback_seconds,
-        policy_registry=r.policy_registry, live_assessment=r.live_assessment,
-        live_feedback_workflows=r.live_feedback_workflows,
-        measurement=r.measurement)
+        timed_playback=r.timed_playback,
+        mistake_policy=r.take_grading.mistake_policy)
+    r.completion_continuations = TakeCompletion(
+        lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
+        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        recovery_workflows=r.recovery_workflows,
+        lesson_execution=r.lesson_execution, grading=r.take_grading,
+        settlement=r.settlement)
 
     r.score_preload = ScorePreloadWorkflow(
         lesson=r.lesson, lock=r.lock, transport=r.transport, score=r.score,
         take=r.take, transport_timing=r.transport_timing,
-        completion_continuations=r.completion_continuations)
+        settlement=r.settlement)
 
     r.read_models = SessionReadModels(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
@@ -333,7 +345,7 @@ def _event_boundary(r) -> None:
         take=r.take, clock=r.now, exposure_workflows=r.exposure_workflows,
         lesson=r.lesson, lesson_execution=r.lesson_execution,
         lifecycle=r.session_lifecycle, listen=r.listen, notices=r.notices,
-        completion_continuations=r.completion_continuations,
+        settlement=r.settlement,
         transport=r.transport, read_models=r.read_models,
         recovery_workflows=r.recovery_workflows, score=r.score,
         timed_playback=r.timed_playback, transport_timing=r.transport_timing)
@@ -353,6 +365,7 @@ def _event_boundary(r) -> None:
         lesson_execution=r.lesson_execution,
         recovery_workflows=r.recovery_workflows,
         completion_continuations=r.completion_continuations,
+        settlement=r.settlement,
         live_feedback_workflows=r.live_feedback_workflows,
         measurement=r.measurement, midi_input=r.midi_input,
         attempt_progression=r.attempt_progression, read_models=r.read_models,

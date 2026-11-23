@@ -16,7 +16,7 @@ from . import practice_flow
 class PracticeTimeline:
     def __init__(self, *, lesson, notices, transport, take, transport_timing,
                           timed_playback, lesson_execution,
-                          recovery_workflows, completion_continuations,
+                          recovery_workflows, completion_continuations, settlement,
                           live_feedback_workflows, measurement, midi_input,
                           attempt_progression, read_models,
                           exposure_workflows, clock, poll_midi):
@@ -27,6 +27,7 @@ class PracticeTimeline:
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
         self.lesson_execution, self.recovery_workflows = lesson_execution, recovery_workflows
         self.completion_continuations = completion_continuations
+        self.settlement = settlement
         self.live_feedback_workflows = live_feedback_workflows
         self.measurement = measurement
         self.midi_input = midi_input
@@ -65,12 +66,7 @@ class PracticeTimeline:
         elif decision.action == "preview_due":
             self.timed_playback.continue_preview()
         elif decision.action == "feedback":
-            publication = self.take.pending_full_completion
-            if publication is not None:
-                followup = self.completion_continuations.finish_full_passage(publication.result,
-                    publication.total_beats,publication.duration,now)
-            else:
-                self.completion_continuations.advance_pending_feedback(now)
+            followup = self.settlement.feedback_due(now)
         elif decision.action == "rewind_due":
             if self.take.guided_recovery_pending:
                 self.lesson_execution.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,

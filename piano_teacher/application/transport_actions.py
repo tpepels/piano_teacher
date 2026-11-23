@@ -10,7 +10,7 @@ from .playback_transitions import PlaybackTransition
 class TransportActions:
     def __init__(self, *, take, clock, exposure_workflows, lesson,
                           lesson_execution, lifecycle, listen, notices,
-                          completion_continuations, transport, read_models,
+                          settlement, transport, read_models,
                           recovery_workflows, score, timed_playback,
                           transport_timing):
         self.take = take
@@ -21,7 +21,7 @@ class TransportActions:
         self.lifecycle = lifecycle
         self.listen = listen
         self.notices = notices
-        self.completion_continuations = completion_continuations
+        self.settlement = settlement
         self.transport = transport
         self.read_models = read_models
         self.recovery_workflows = recovery_workflows
@@ -182,7 +182,7 @@ class TransportActions:
             # publishes its own next action (count-in or next passage).
             self.notices.next_action = ""
             self.notices.feedback = (
-                self.completion_continuations.retry_failed_publication(
+                self.settlement.retry_failed_publication(
                     now=self.clock()) or "Assessment saved")
             if self.lesson.revision != revision:
                 self.transport.await_score(self.lesson.revision)

@@ -11,14 +11,14 @@ from .playback_facts import PreloadedFeedbackSource
 
 class ScorePreloadWorkflow:
     def __init__(self, *, lesson, lock, transport, score, take,
-                          transport_timing, completion_continuations):
+                          transport_timing, settlement):
         self.lock = lock
         self.lesson = lesson
         self.score = score
         self.transport = transport
         self.transport_timing = transport_timing
         self.take = take
-        self.completion_continuations = completion_continuations
+        self.settlement = settlement
 
     def decided_selection(self):
         if not self.transport.auto:
@@ -57,7 +57,7 @@ class ScorePreloadWorkflow:
             released_at = self.transport.activate_preloaded_feedback(source,
                 revision=self.lesson.revision,fingerprint=self.lesson.fingerprint)
             if released_at is not None:
-                self.completion_continuations.advance_pending_feedback(released_at)
+                self.settlement.advance_pending_feedback(released_at)
             self.score.warm_more(
                 self.next_selection(offset=2))
             return accepted
