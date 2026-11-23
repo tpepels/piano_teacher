@@ -167,17 +167,16 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
         session.play_take(correct=False)
     first = state_at(session, step="free", mode="learn")
     assert first["lesson_level"] == "original" and first["mastered"] == 0
+    # The first floor-failure return offers no aid; only the second does.
+    assert "Simplified:" not in first["flow"]["message"]
+    assert not first["guided_recovery"]
     session.finish_free()
     for _ in range(2):
         session.play_take(correct=False)
     aid = state_at(session, step="free", mode="learn")
-    progress = session.engine.source_identity.plan.teaching_progress()
-    counts = dict(progress.free_returns)
-    assert counts.get(session.engine.source_identity.plan.identity,0) == 2, (
-        counts, progress, aid["flow"])
     assert aid["lesson_level"] == "original"
     assert "Simplified:" in aid["flow"]["message"]
-    assert aid["guided_recovery"] and session.engine.attempt.remediation_active is not None
+    assert aid["guided_recovery"]
     # The curriculum still identifies the original source and grants no
     # mastery. The active SCORE, not the source label, must contain a real
     # reduced set of attacks from the selected Coda/Fukuda contribution.

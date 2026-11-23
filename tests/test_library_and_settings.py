@@ -67,9 +67,6 @@ def test_actual_library_open_and_bad_commands_leave_next_open_usable(library, tm
         assert commands.request("library.open", "{bad")[0] == INVALID
         assert request(commands, "library.catalog")[0] == OK
     finally:
-        if engine.listen.thread is not None:
-            engine.listen.thread.join(timeout=10)
-            assert not engine.listen.thread.is_alive()
         engine.close()
 
 
@@ -152,7 +149,7 @@ def test_invalid_command_or_failed_preference_save_preserves_running_lesson(libr
         PracticeSession.attach(engine, engine.now).start_listen()
         before = engine.state()
         preferences = engine.preferences()
-        disk = engine.library.settings_path.read_bytes()
+        disk = (tmp_path / "app" / "config" / "settings.json").read_bytes()
         commands = EngineCommands(engine=engine)
         assert request(commands, "practice.command", action="tempo", bpm=0)[0] == INVALID
         assert request(commands, "settings.update", exercise_strategy="retired")[0] == INVALID
@@ -164,15 +161,12 @@ def test_invalid_command_or_failed_preference_save_preserves_running_lesson(libr
         with pytest.raises(OSError, match="disk full"):
             engine.set_preferences(metronome=not preferences["metronome"])
         assert engine.preferences() == preferences
-        assert engine.library.settings_path.read_bytes() == disk
+        assert (tmp_path / "app" / "config" / "settings.json").read_bytes() == disk
         after = engine.state()
         assert after["running"]
         assert after["transport_id"] == before["transport_id"]
         assert after["title"] == before["title"] and after["bpm"] == before["bpm"]
     finally:
-        if engine.listen.thread is not None:
-            engine.listen.thread.join(timeout=10)
-            assert not engine.listen.thread.is_alive()
         engine.close()
 
 

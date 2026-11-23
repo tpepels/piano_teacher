@@ -258,8 +258,4 @@ class PracticeSession:
         raise AssertionError("The completed take did not continue automatically")
 
     def close(self):
-        worker = self.engine.listen.thread
         self.engine.close()
-        if worker is not None:
-            worker.join(5)
-            assert not worker.is_alive(), "Listen input fixture did not finish its worker"

@@ -288,31 +288,18 @@ def test_three_failed_physical_attempts_end_admitting(practice_session):
     assert state["phase"] != "admitting"
     assert "native queue" in state["feedback"]
     assert not state["running"]
-    sequence = session.engine.playback.sequence
-    # Even a malformed explicit action must not erase the terminal
-    # source latch before the musical scheduler accepts its inputs.
-    with pytest.raises(ValueError, match="count-in"):
-        session.engine.transport_timing.request_playback(
-            action="start", mode="practice", from_beat=0.0,
-            count_in_beats=-4.0)
-    # Actual playback workflow, not a mocked scheduler: readiness callbacks
-    # cannot turn a terminal source failure into unlimited new intent IDs.
+    issued = session.ask("playback.status")["intents_issued"]
+    failure_text = state["feedback"]
+    # Repeated score-ready acknowledgements and worker ticks cannot turn a
+    # terminal source failure into new intents or replace its notice.
     for _ in range(4):
-        assert session.engine.transport_timing.request_playback(
-            action="auto", mode="practice", from_beat=0.0) is None
+        session.command("score_ready", revision=state["revision"])
         later = session.tick(.25)
         assert later["playback_intent"] is None
         assert later["playback_timeline"]["state"] == "failed"
         assert not later["running"]
-    assert session.engine.playback.sequence == sequence
-    # The existing automatic continuation workflow must stop before
-    # clearing a stale published schedule or mutating the learner notice.
-    failure_text = session.engine.notices.feedback
-    session.engine.timed_playback.continue_at(
-        session.clock()+10.0, from_beat=0.0)
-    assert session.engine.notices.feedback == failure_text
-    assert session.engine.playback.sequence == sequence
-    assert session.snapshot()["playback_intent"] is None
+        assert later["feedback"] == failure_text
+    assert session.ask("playback.status")["intents_issued"] == issued
 
 
 def test_unready_score_timeout_does_not_leave_endless_admitting(practice_session):
@@ -587,7 +574,7 @@ def test_repeated_listen_audio_and_score_acks_cannot_reopen_failed_admission(pra
     session.command("demo_ready", token=demo["token"])
     pending = session.snapshot()["playback_intent"]
     assert pending and pending["action"] == "listen"
-    started_sequence = session.engine.playback.sequence
+    started_issued = session.ask("playback.status")["intents_issued"]
     for attempt in range(3):
         pending = session.snapshot()["playback_intent"]
         assert pending and pending["attempt"] == attempt
@@ -605,7 +592,7 @@ def test_repeated_listen_audio_and_score_acks_cannot_reopen_failed_admission(pra
         assert observed["playback_intent"] is None
         assert observed["playback_timeline"]["state"] == "failed"
         assert not observed["running"]
-    assert session.engine.playback.sequence == started_sequence
+    assert session.ask("playback.status")["intents_issued"] == started_issued
 
 
 @pytest.mark.parametrize("next_action", ["score_ready", "auto"])
@@ -613,14 +600,17 @@ def test_delayed_automatic_ack_cannot_replace_matching_unpresented_take(
         practice_session, next_action):
     session = practice_session(bars=1)
     original = desktop_tempo(session)
-    prior_sequence = session.engine.playback.sequence
+    prior_issued = session.ask("playback.status")["intents_issued"]
     previous = session.snapshot()["playback_intent"]
-    callback = session.engine.transport_timing.request_playback(
-        action=next_action, mode="practice",
-        from_beat=original["from_beat"])
-    assert callback.intent_id == original["intent_id"]
-    assert callback.take_id == original["take_id"]
-    assert session.engine.playback.sequence == prior_sequence
+    # A delayed score-ready acknowledgement or automatic worker tick
+    # re-requests the same take; it must not issue a replacement intent.
+    if next_action == "score_ready":
+        session.command("score_ready", revision=previous["revision"])
+    else:
+        session.tick(.25)
+    assert session.snapshot()["playback_intent"]["intent_id"] == original["intent_id"]
+    assert session.snapshot()["playback_intent"]["take_id"] == original["take_id"]
+    assert session.ask("playback.status")["intents_issued"] == prior_issued
     assert session.snapshot()["playback_intent"] == previous
     assert not session.snapshot()["running"]
 

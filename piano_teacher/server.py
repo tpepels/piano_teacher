@@ -91,7 +91,13 @@ class PracticeEngine:
         return self.practice_session.apply(LearnerHistoryDeleted(confirm))
 
     def close(self) -> None:
+        """Close the session, then wait for the Listen audio worker to stop."""
+        worker = self.listen.thread
         self.practice_session.apply(SessionClosed())
+        if worker is not None:
+            worker.join(10)
+            if worker.is_alive():
+                raise RuntimeError("Listen audio worker did not stop")
 
     def set_preferences(self, **changes) -> dict:
         return self.practice_session.apply(SettingsChanged(changes))

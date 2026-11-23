@@ -104,9 +104,6 @@ def connected(tmp_path, monkeypatch):
         engine.connect("USB Piano")
         yield engine, backend, now
     finally:
-        if engine.listen.thread is not None:
-            engine.listen.thread.join(timeout=10)
-            assert not engine.listen.thread.is_alive()
         engine.close()
 
 
@@ -225,7 +222,7 @@ def test_calibration_collects_real_ingress_then_applies_persists_and_resets(conn
     deadline = engine.state()["visual_run_at_ms"] / 1000
     now[0] = deadline + .08
     backend.ports[-1].press()
-    events = engine.feedback_events.after(0)["events"]
+    events = PracticeSession.attach(engine, ListClock(now)).ask("feedback.events")["events"]
     attack = next(event for event in reversed(events) if event["kind"] == "attack")
     assert attack["status"] == "on_time"
     assert attack["played_source_beat"] == pytest.approx(0, abs=.001)

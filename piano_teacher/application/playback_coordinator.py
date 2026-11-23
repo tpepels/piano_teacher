@@ -674,6 +674,7 @@ class PlaybackCoordinator:
         return {
             "state": observed.value,
             "generation": self.generation,
+            "intents_issued": self.sequence,
             "intent_id": intent.intent_id if intent else "",
             "attempt": intent.attempt if intent else -1,
             "reserved_segment_id": receipt.segment_id if receipt else "",
