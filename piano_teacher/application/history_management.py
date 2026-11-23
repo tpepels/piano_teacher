@@ -11,18 +11,17 @@ from ..learning import LearningPlan
 
 
 class HistoryManagement:
-    def __init__(self, *, lesson, notices, progress,
-                 measurement, recovery_streak, lifecycle, attempt_settlement,
-                 attempt, transport, score_artifact_registry,
-                 learning_evidence, clock, data_dir):
+    def __init__(self, *, lesson, notices, progress, measurement,
+                          recovery_streak, lifecycle, take, transport,
+                          score_artifact_registry, learning_evidence, clock,
+                          data_dir):
         self.lesson = lesson
         self.notices = notices
         self.progress = progress
         self.measurement = measurement
         self.recovery_streak = recovery_streak
         self.lifecycle = lifecycle
-        self.attempt_settlement = attempt_settlement
-        self.attempt = attempt
+        self.take = take
         self.transport = transport
         self.score_artifact_registry = score_artifact_registry
         self.learning_evidence = learning_evidence
@@ -98,9 +97,9 @@ class HistoryManagement:
         if confirm is not True or fingerprint != self.lesson.fingerprint:
             raise ValueError("Confirm the reset for the currently loaded piece")
         replacement = self._replacement()
-        self.attempt_settlement.reset_piece_path(
+        self.take.reset_piece_path(
             fingerprint=fingerprint, replacement=replacement,
-            played=(self.attempt.recorder.presses if self.attempt.recorder
+            played=(self.take.recorder.presses if self.take.recorder
                     else self.measurement.guided.presses),
             now=self.clock())
         self.lifecycle.stop(reason="lesson_reset", persist_evidence=False)

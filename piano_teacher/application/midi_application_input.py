@@ -9,15 +9,13 @@ from .midi_ingress import MidiInputFacts, InputTransportFacts
 
 
 class MidiApplicationInput:
-    def __init__(self, *, lesson, transport,
-                 attempt_settlement, attempt, midi, lock,
-                 runtime_timings, device_workflows,
-                 settings_workflows, library, midi_ingress, transport_timing,
-                 live_feedback_workflows,
-                 timed_playback, clock):
+    def __init__(self, *, lesson, transport, take, midi, lock, runtime_timings,
+                          device_workflows, settings_workflows, library,
+                          midi_ingress, transport_timing,
+                          live_feedback_workflows, timed_playback, clock):
         self.lesson = lesson
         self.transport = transport
-        self.attempt_settlement, self.attempt = attempt_settlement, attempt
+        self.take = take
         self.midi, self.lock = midi, lock
         self.runtime_timings, self.device_workflows = runtime_timings, device_workflows
         self.settings_workflows = settings_workflows
@@ -78,13 +76,13 @@ class MidiApplicationInput:
         return InputTransportFacts(
             next_at=self.transport.next_at,
             preview_loop_pending=self.transport.preview_loop_pending,
-            pending_teaching_result=self.attempt_settlement.pending_result is not None,
+            pending_teaching_result=self.take.pending_result is not None,
             pending_rewind=self.transport.pending_rewind is not None,
             automatic=self.transport.auto,preview_only=self.transport.preview_only,
             visual_gap_beats=self.transport.visual_gap_beats,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             exercise_kind=(self.lesson.plan.exercise.kind if self.lesson.plan else ""),
-            review_end_beat=self.attempt.review_end_beat,
+            review_end_beat=self.take.review_end_beat,
             successor_action=(self.transport.intent.action
                 if self.transport.intent is not None else None))
 
@@ -109,7 +107,7 @@ class MidiApplicationInput:
             self.transport.mode,self.transport.running,self.transport.paused,self.transport.preview_only,
             self.transport.play_from_beat,self.transport.run_at,self.transport.transport_id,
             self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
-            self.attempt_settlement.cancellation_generation,
+            self.take.cancellation_generation,
             self.midi.device)
         self.midi_ingress.dispatch(
             message,facts=facts,received_at=now,
@@ -118,7 +116,7 @@ class MidiApplicationInput:
             apply_shortcut=self.apply_midi_shortcut,
             transport_facts=self.midi_transport_facts,
             musical_seconds=self.transport_timing.musical_seconds,
-            recorder=lambda: self.attempt.recorder,
+            recorder=lambda: self.take.recorder,
             teaching=lambda: self.lesson.guided_controller,
             feedback_take=self.live_feedback_workflows.feedback_take)
 

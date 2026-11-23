@@ -15,17 +15,16 @@ from .teaching_continuation import (
 
 
 class CompletionContinuations:
-    def __init__(self, *, lesson, notices, teaching_continuation,
-                 attempt_settlement, transport,
-                 attempt, lesson_execution, transport_timing,
-                 score_read, recovery_workflows, timed_playback,
-                 clock, library,
-                 score_artifact_registry, assessment, feedback_seconds):
+    def __init__(self, *, lesson, notices, teaching_continuation, take,
+                          transport, lesson_execution, transport_timing,
+                          score_read, recovery_workflows, timed_playback,
+                          clock, library, score_artifact_registry, assessment,
+                          feedback_seconds):
         self.notices = notices
         self.lesson = lesson
-        self.teaching_continuation, self.attempt_settlement = teaching_continuation, attempt_settlement
+        self.teaching_continuation = teaching_continuation
+        self.take = take
         self.transport = transport
-        self.attempt = attempt
         self.lesson_execution, self.transport_timing = lesson_execution, transport_timing
         self.score_read, self.recovery_workflows = score_read, recovery_workflows
         self.timed_playback = timed_playback
@@ -44,7 +43,7 @@ class CompletionContinuations:
         if not self.transport.auto and not explicit_retry:
             return
         transaction = self.teaching_continuation.begin_feedback(
-            self.attempt_settlement.pending, now=now,
+            self.take.pending, now=now,
             automatic=self.transport.auto or explicit_retry,
             force_early=force_early, revision=self.lesson.revision,
             fingerprint=self.lesson.fingerprint)
@@ -60,7 +59,7 @@ class CompletionContinuations:
             self.transport.note_tempo(
             stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
-            pending = self.attempt_settlement.pending
+            pending = self.take.pending
             self.publish_feedback_fault(self.teaching_continuation.settlement_failure(
                 exc,saved=pending is not None and pending.receipt is not None),now)
             if not isinstance(exc,UnpreparedNextStage):
@@ -90,19 +89,19 @@ class CompletionContinuations:
                 # again. The committed decision, not current UI mode, owns
                 # whether this continuation should run automatically.
                 self.transport.continue_course()
-            with self.attempt_settlement.publishing(transaction.pending):
+            with self.take.publishing(transaction.pending):
                 self.dispatch_effect(publication.effect, now)
                 # Visible marks are retained until the exact physical/source
                 # continuation has been installed successfully. Source
                 # installation can cancel its predecessor's take, but the
                 # original durable receipt must survive through this ACK.
-                self.attempt.clear_feedback()
-                self.attempt_settlement.finish_publication()
+                self.take.clear_feedback()
+                self.take.finish_publication()
         except Exception as exc:
             # The settled take and receipt remain committed. Make an
             # explicit Retry re-enter this selected transaction; do not
             # silently select a new source or grade a second attempt.
-            self.attempt.publication_failed()
+            self.take.publication_failed()
             self.transport.stop_automatic()
             self.notices.feedback = "Progress saved, but the next step could not start"
             self.notices.next_action = "Press Play to continue from the same saved result."
@@ -110,7 +109,7 @@ class CompletionContinuations:
 
     def retry_failed_publication(self, *, now: float) -> str:
         """Retry the original full result, including its retained effects."""
-        pending = self.attempt_settlement.pending
+        pending = self.take.pending
         if (pending is None or pending.event.kind != "full_result"
                 or pending.phase == "published"):
             raise ValueError("No interrupted full-passage settlement to retry")
@@ -158,7 +157,7 @@ class CompletionContinuations:
         source replacement can supersede a publication after a decision was
         durably settled but before the native continuation starts.
         """
-        pending = self.attempt_settlement.pending
+        pending = self.take.pending
         identity = effect.identity
         plan = self.lesson.plan
         if (pending is None or plan is None
@@ -198,27 +197,27 @@ class CompletionContinuations:
         self._applied_continuation_effect = effect
 
     def commit_pending(self, *, finish_publication: bool = True) -> str:
-        if self.attempt_settlement.pending_result is None or self.lesson.plan is None:
+        if self.take.pending_result is None or self.lesson.plan is None:
             return ""
-        pending = self.attempt_settlement.pending
+        pending = self.take.pending
         if pending.phase == "effects_applied":
             # The teaching receipt and its score/revision effects already
             # committed. A later continuation failure may retry from that
             # receipt, but must never replay stage adoption or rewind.
             if finish_publication:
-                self.attempt_settlement.finish_publication()
-            self.attempt.publication_finished()
+                self.take.finish_publication()
+            self.take.publication_finished()
             return pending.publication.receipt.message
         decision = pending.decision
         try:
-            committed = self.attempt_settlement.commit_full_passage(
+            committed = self.take.commit_full_passage(
                 plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=self.clock(),
                 continuation=self.teaching_continuation,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
                 score_revision=self.lesson.revision,
                 visual_offset=self.transport.visual_offset_beats)
             outcome = committed.receipt
-            self.attempt.apply_settlement(committed,plan=self.lesson.plan)
+            self.take.apply_settlement(committed,plan=self.lesson.plan)
             if decision.verdict is not None and decision.verdict.clears_trouble:
                 self.lesson_execution.reset_trouble()
             if outcome.stage_changed:
@@ -238,12 +237,12 @@ class CompletionContinuations:
                 self.teaching_continuation.consume_committed_asset(
                     None,changed=False,auto=self.transport.auto,selection=None)
         except BaseException:
-            self.attempt.publication_failed()
+            self.take.publication_failed()
             raise
-        self.attempt_settlement.effects_applied(pending)
+        self.take.effects_applied(pending)
         if finish_publication:
-            self.attempt_settlement.finish_publication()
-        self.attempt.publication_finished()
+            self.take.finish_publication()
+        self.take.publication_finished()
         return outcome.message
 
     def performance_review(self, phrase: Phrase, result) -> dict:
@@ -259,7 +258,7 @@ class CompletionContinuations:
     def finish_performance_review(self, phrase: Phrase, result):
         """Publish review only after its evidence and source feedback commit."""
         self.notices.next_action = performance_next_action(
-            warmup=self.lesson.warmup,summary=self.attempt.performance_summary)
+            warmup=self.lesson.warmup,summary=self.take.performance_summary)
         self.transport.stop_automatic()
 
     def finish_section_review(self, result):
@@ -268,7 +267,7 @@ class CompletionContinuations:
         # selected boundary, preserve detailed feedback, and never
         # auto-advance to a different passage.
         self.transport.stop_automatic()
-        self.attempt.finish_section_review()
+        self.take.finish_section_review()
         self.transport.finish_rewind()
         self.lesson.select_opening(0.0)
         self.notices.feedback = "Section review finished · " + result.summary
@@ -278,7 +277,7 @@ class CompletionContinuations:
         """Complete finish partial recovery after a scored take."""
         # A clean *partial* recovery cannot confer full passage mastery.
         # Clear the bounded review before the scheduled full-pass retry.
-        self.attempt.prepare_full_retry()
+        self.take.prepare_full_retry()
         self.lesson.select_opening(exposure.from_beat if exposure is not None else 0.0)
         self.transport_timing.schedule_preparation(self.lesson.opening_beat, now=now,
             from_visual=self.transport.visual_offset_beats + self.transport.play_from_beat

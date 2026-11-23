@@ -8,13 +8,12 @@ from ..state_projection import PhaseSnapshot, project_phase
 
 
 class SessionPhase:
-    def __init__(self, *, transport, lesson,
-                 midi_ingress, attempt, attempt_settlement):
+    def __init__(self, *, transport, lesson, midi_ingress, take):
         self.transport = transport
         self.lesson = lesson
         self.midi_ingress = midi_ingress
-        self.attempt = attempt
-        self.attempt_settlement = attempt_settlement
+        self.take = take
+
 
     def at(self, now: float) -> str:
         teaching_phase = None
@@ -27,10 +26,10 @@ class SessionPhase:
         return project_phase(PhaseSnapshot(
             paused=self.transport.paused, running=self.transport.running, run_at=self.transport.run_at,
             teaching_phase=teaching_phase,
-            performance_complete=self.attempt.performance_summary is not None,
+            performance_complete=self.take.performance_summary is not None,
             preview_loop_pending=self.transport.preview_loop_pending,
-            review_complete=self.attempt.review_session_complete,
-            pending_result=self.attempt_settlement.pending_result is not None,
+            review_complete=self.take.review_session_complete,
+            pending_result=self.take.pending_result is not None,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             pending_rewind=self.transport.pending_rewind is not None,
         ), mode=self.transport.mode, now=now)

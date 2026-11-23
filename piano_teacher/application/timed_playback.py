@@ -8,15 +8,13 @@ from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, R
 
 
 class TimedPlayback:
-    def __init__(self, *, lesson, notices,
-                 transport, attempt_settlement,
-                 exposure_workflows,
-                 midi, score_read, evidence_context,
-                 transport_timing, lesson_execution, clock, lock, phase):
+    def __init__(self, *, lesson, notices, transport, take, exposure_workflows,
+                          midi, score_read, evidence_context, transport_timing,
+                          lesson_execution, clock, lock, phase):
         self.lesson = lesson
         self.notices = notices
         self.transport = transport
-        self.attempt_settlement = attempt_settlement
+        self.take = take
         self.exposure_workflows = exposure_workflows
         self.midi = midi
         self.score_read, self.evidence_context = score_read, evidence_context
@@ -32,7 +30,7 @@ class TimedPlayback:
             if self.lesson.plan is None:
                 raise ValueError("Open a piece first")
             selected = None
-            pending = self.attempt_settlement.pending
+            pending = self.take.pending
             if loop_continuation and pending is not None and pending.receipt is not None:
                 selected = pending.decision.next_exposure
             if effect is not None:

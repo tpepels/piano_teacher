@@ -17,21 +17,19 @@ from . import practice_flow
 
 
 class PracticeTimeline:
-    def __init__(self, *, lesson, notices,
-                 transport,
-                 attempt_settlement, attempt, transport_timing, timed_playback,
-                 score_read, lesson_execution,
-                 recovery_workflows, completion_continuations,
-                 live_feedback_workflows, live_assessment, measurement,
-                 policy_registry, library,
-                 midi, listen, midi_ingress,
-                 midi_calibration, attempt_progression, read_models,
-                 teaching_continuation, exposure_workflows,
-                 clock, poll_midi, feedback_seconds):
+    def __init__(self, *, lesson, notices, transport, take, transport_timing,
+                          timed_playback, score_read, lesson_execution,
+                          recovery_workflows, completion_continuations,
+                          live_feedback_workflows, live_assessment,
+                          measurement, policy_registry, library, midi, listen,
+                          midi_ingress, midi_calibration, attempt_progression,
+                          read_models, teaching_continuation,
+                          exposure_workflows, clock, poll_midi,
+                          feedback_seconds):
         self.notices = notices
         self.lesson = lesson
         self.transport = transport
-        self.attempt_settlement, self.attempt = attempt_settlement, attempt
+        self.take = take
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
         self.score_read = score_read
         self.lesson_execution, self.recovery_workflows = lesson_execution, recovery_workflows
@@ -59,7 +57,7 @@ class PracticeTimeline:
         if self.transport.preview_only:
             # Disconnected MIDI: repeat as an ungraded preview, never create
             # fake notes, misses, accepted passes or mastery.
-            self.attempt_settlement.finish_preview()
+            self.take.finish_preview()
             self.transport.finish_take()
             self.transport.schedule_preview_repeat(
                 source_seconds=duration,source_bpm=self.lesson.plan.bpm,
@@ -76,15 +74,15 @@ class PracticeTimeline:
                 from_beat=0.0)
             return False
         completed_visual = self.transport_timing.visual_motion(now)[0]
-        completed = self.attempt_settlement.complete_take(
+        completed = self.take.complete_take(
             phrase=phrase,hand=self.lesson.plan.hand,bpm=self.lesson.plan.bpm,
-            played=(self.attempt.recorder.presses
-                    if self.attempt.recorder else ()),
+            played=(self.take.recorder.presses
+                    if self.take.recorder else ()),
             from_beat=self.transport.play_from_beat,end_beat=ending,
             tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
             layout_for_feedback=self.score_read.completed_take_layout,
-            mode=self.transport.mode,review_end_beat=self.attempt.review_end_beat,
-            automatic_remedial_review=self.attempt.automatic_remedial_review,
+            mode=self.transport.mode,review_end_beat=self.take.review_end_beat,
+            automatic_remedial_review=self.take.automatic_remedial_review,
             performance_review=self.completion_continuations.performance_review,
             prepare_decision=self.lesson.prepare_decision,
             plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
@@ -96,15 +94,15 @@ class PracticeTimeline:
         if completed.settled:
             self.transport.note_tempo(
             stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
-        self.attempt.publish_completion(
+        self.take.publish_completion(
             marks=assessed.marks,unmapped=assessed.unmapped)
         # The completed take's settled grades, before any transition below can
         # start another transport.
-        self.live_assessment.publish(self.attempt.feedback_marks, self.live_feedback_workflows.feedback_take(),
+        self.live_assessment.publish(self.take.feedback_marks, self.live_feedback_workflows.feedback_take(),
                                      final=True)
         self.notices.feedback = assessed.feedback
         self.transport.finish_take()
-        self.attempt.finish_review(summary,self.lesson.plan.identity)
+        self.take.finish_review(summary,self.lesson.plan.identity)
         self.measurement.phase_changed("feedback", now)
         if not self.completion_continuations.apply_focused(
                 completed.effect, phrase=phrase, result=result, now=now,
@@ -113,11 +111,11 @@ class PracticeTimeline:
         return False
 
     def finish_full_passage(self, result, total_beats: float, duration: float, now: float):
-        publication = self.attempt_settlement.begin_full_completion(
+        publication = self.take.begin_full_completion(
             result,total_beats=total_beats,duration=duration)
         pending = publication.pending
         total_beats,duration = publication.total_beats,publication.duration
-        self.attempt_settlement.checkpoint_failed_streak(pending,plan=self.lesson.plan,now=now)
+        self.take.checkpoint_failed_streak(pending,plan=self.lesson.plan,now=now)
         self.transport.note_tempo(
             stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         exposure = pending.decision.next_exposure
@@ -125,7 +123,7 @@ class PracticeTimeline:
         completion = self.transport.finish_full_passage(FullPassageFacts(
             pending=pending,stage_key=self.lesson.plan.identity,bpm=self.lesson.plan.bpm,
             target_bpm=self.lesson.plan.target_bpm,
-            assessed_bpm=self.attempt_settlement.pending_assessed_bpm,
+            assessed_bpm=self.take.pending_assessed_bpm,
             total_beats=total_beats,duration=duration,now=now,
             visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
             source_model=self.score_read.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
@@ -142,9 +140,9 @@ class PracticeTimeline:
         if completion.advance_feedback:
             self.completion_continuations.advance_pending_feedback(now,force_early=completion.force_early)
         elif completion.update_clock:
-            self.attempt_settlement.finish_full_completion(publication)
+            self.take.finish_full_completion(publication)
             return True
-        self.attempt_settlement.finish_full_completion(publication)
+        self.take.finish_full_completion(publication)
         return False
 
     def run_pre_assessment_transition(self, now: float) -> tuple[bool, bool]:
@@ -157,7 +155,7 @@ class PracticeTimeline:
             paused=self.transport.paused, listening=self.transport.mode == "listen",
             preview_pending=self.transport.preview_loop_pending,
             preparation_pending=self.transport.preparation_pending,
-            feedback_pending=self.attempt_settlement.feedback_pending,
+            feedback_pending=self.take.feedback_pending,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             rewind_pending=self.transport.pending_rewind is not None,
             running=self.transport.running, run_at=self.transport.run_at)
@@ -187,16 +185,16 @@ class PracticeTimeline:
                     self.transport_timing.collect_continuation_measurement(deadline, 0.0),
                     now=self.clock(),bpm=self.transport_timing.presentation_bpm()))
         elif decision.action == "feedback":
-            publication = self.attempt_settlement.pending_full_completion
+            publication = self.take.pending_full_completion
             if publication is not None:
                 followup = self.finish_full_passage(publication.result,
                     publication.total_beats,publication.duration,now)
             else:
                 self.completion_continuations.advance_pending_feedback(now)
         elif decision.action == "rewind_due":
-            if self.attempt.guided_recovery_pending:
+            if self.take.guided_recovery_pending:
                 self.lesson_execution.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,
-                    exposure=self.attempt_settlement.pending.decision.next_exposure)
+                    exposure=self.take.pending.decision.next_exposure)
             else:
                 target = self.transport.pending_rewind
                 self.timed_playback.continue_at(
@@ -247,15 +245,15 @@ class PracticeTimeline:
                 self.transport.run_at,
                 self.midi_ingress.resume_grading_after),
             mode=self.transport.mode,preview=self.transport.preview_only,
-            pending_result=self.attempt_settlement.pending_result is not None,
+            pending_result=self.take.pending_result is not None,
             preparation_pending=self.transport.preparation_pending,
-            performance_complete=self.attempt.performance_summary is not None),now)
+            performance_complete=self.take.performance_summary is not None),now)
         # A rolling boundary is admitted once. A failed presentation must
         # replay the original receipt before any rewind/next-boundary branch
         # can consume this tick. Still honor physical score admission: it may
         # already be awaiting an external attestation and must not be
         # disturbed by a duplicate transport effect.
-        rolling = self.attempt_settlement.rolling_record
+        rolling = self.take.rolling_record
         if (rolling is not None and rolling.transition is not None
                 and self.transport.mode == "practice"
                 and self.transport.running
@@ -283,7 +281,7 @@ class PracticeTimeline:
             phrase=phrase, boundaries=self.lesson.plan.piece.bar_boundaries,
             now=now, score_beat=score_beat, from_beat=self.transport.play_from_beat,
             run_at=self.transport.run_at, next_boundary=self.transport.next_boundary_beat,
-            review_end=self.attempt.review_end_beat, preview=self.transport.preview_only,
+            review_end=self.take.review_end_beat, preview=self.transport.preview_only,
             auto=self.transport.auto, mode=self.transport.mode,
             bpm=self.lesson.plan.bpm, gap_beats=self.transport.visual_gap_beats),
             self.recovery_workflows.assess_rolling_boundary, self.transport_timing.elapsed_seconds,

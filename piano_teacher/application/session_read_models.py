@@ -11,19 +11,19 @@ from ..state_projection import SessionSnapshot, project_session_state
 
 
 class SessionReadModels:
-    def __init__(self, *, lesson, notices, attempt,
-                 transport,
-                 attempt_settlement, library, midi, midi_ingress,
-                 midi_key_shortcuts, midi_calibration, attempt_progression,
-                 score_state_publisher, lesson_execution, score_read,
-                 listen, live_input, live_assessment, lock, clock,
-                 phase, elapsed_beat, visual_motion, tempo_map,
-                 next_count_in_beats, next_count_in_meter,
-                 start_rate_bpm, presentation_bpm, playback_facts):
+    def __init__(self, *, lesson, notices, take, transport, library, midi,
+                          midi_ingress, midi_key_shortcuts, midi_calibration,
+                          attempt_progression, score_state_publisher,
+                          lesson_execution, score_read, listen, live_input,
+                          live_assessment, lock, clock, phase, elapsed_beat,
+                          visual_motion, tempo_map, next_count_in_beats,
+                          next_count_in_meter, start_rate_bpm,
+                          presentation_bpm, playback_facts):
         self.lesson = lesson
-        self.notices, self.attempt = notices, attempt
+        self.notices = notices
+        self.take = take
         self.transport = transport
-        self.attempt_settlement, self.library = attempt_settlement, library
+        self.library = library
         self.midi, self.midi_ingress = midi, midi_ingress
         self.midi_key_shortcuts, self.midi_calibration = midi_key_shortcuts, midi_calibration
         self.attempt_progression = attempt_progression
@@ -111,7 +111,7 @@ class SessionReadModels:
             state, pending, timeline = self._committed_base(now)
             facts = self.score_facts(pending,timeline)
             self.score_state_publisher.publish(state, facts)
-            if self.attempt_settlement.pending_result is not None:
+            if self.take.pending_result is not None:
                 state["bpm"] = self.presentation_bpm()
             state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
             if self.lesson.plan is not None:
@@ -152,17 +152,17 @@ class SessionReadModels:
     def capture_snapshot(self, *, sampled_at=None) -> SessionSnapshot:
         """Sample named read ports under the existing application lock."""
         values = SnapshotValues(
-            _guided_recovery_pending=self.attempt.guided_recovery_pending,
+            _guided_recovery_pending=self.take.guided_recovery_pending,
             _guided_return=self.lesson.guided_return_context,
-            _remediation_active=self.attempt.remediation_active,
+            _remediation_active=self.take.remediation_active,
             auto=self.transport.auto,
             awaiting_score_revision=self.transport.awaiting_score_revision,
             count_in_bar_beats=self.transport.count_in_bar_beats,
             count_in_beats=self.transport.count_in_beats,
             count_in_meter=self.transport.count_in_meter,
             feedback=self.notices.feedback,
-            feedback_marks=self.attempt.feedback_marks,
-            feedback_unmapped=self.attempt.feedback_unmapped,
+            feedback_marks=self.take.feedback_marks,
+            feedback_unmapped=self.take.feedback_unmapped,
             fingerprint=self.lesson.fingerprint,
             guided_range=self.lesson.guided_beat_range,
             is_builtin_warmup=self.lesson.warmup,
@@ -172,7 +172,7 @@ class SessionReadModels:
             midi_input_at=self.midi.input_at,
             midi_connected=self.midi.connected,
             midi_device=self.midi.device,
-            midi_notes=len(self.attempt.recorder.presses) if self.attempt.recorder is not None else 0,
+            midi_notes=len(self.take.recorder.presses) if self.take.recorder is not None else 0,
             teaching_active=self.lesson.guided_controller is not None,
             mode=self.transport.mode,
             next_action=self.notices.next_action,
@@ -181,22 +181,22 @@ class SessionReadModels:
             pause_context=self.transport.pause_context,
             paused=self.transport.paused,
             paused_at=self.transport.paused_at,
-            pending_result=self.attempt_settlement.pending_result,
+            pending_result=self.take.pending_result,
             assessment_verdict=(
-                self.attempt_settlement.pending.decision.verdict
-                if self.attempt_settlement.pending is not None
-                and self.attempt_settlement.pending.assessment is self.attempt_settlement.pending_result
+                self.take.pending.decision.verdict
+                if self.take.pending is not None
+                and self.take.pending.assessment is self.take.pending_result
                 else None),
             pending_rewind=self.transport.pending_rewind,
-            performance_summary=self.attempt.performance_summary,
+            performance_summary=self.take.performance_summary,
             persistent_hints=self.lesson.persistent_hints,
             plan=self.lesson.plan,
             play_from_beat=self.transport.play_from_beat,
             practice_preparation=self.transport.practice_preparation,
             preview_only=self.transport.preview_only,
-            recovery_notice=self.attempt.recovery_notice,
-            retry_range=self.attempt.retry_range,
-            review_end_beat=self.attempt.review_end_beat,
+            recovery_notice=self.take.recovery_notice,
+            retry_range=self.take.retry_range,
+            review_end_beat=self.take.review_end_beat,
             run_at=self.transport.run_at,
             running=self.transport.running,
             score_revision=self.lesson.revision,

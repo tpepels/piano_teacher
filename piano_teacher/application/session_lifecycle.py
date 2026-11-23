@@ -11,12 +11,10 @@ from ..lesson_settings import SETTINGS
 
 
 class SessionLifecycle:
-    def __init__(self, *, transport, attempt, settlement,
-                 midi_ingress, continuation, lesson,
-                 live_input, listen, measurement, clock):
+    def __init__(self, *, transport, take, midi_ingress, continuation, lesson,
+                          live_input, listen, measurement, clock):
         self.transport = transport
-        self.attempt = attempt
-        self.settlement = settlement
+        self.take = take
         self.midi_ingress = midi_ingress
         self.continuation = continuation
         self.lesson = lesson
@@ -28,8 +26,8 @@ class SessionLifecycle:
     def stop(self, *, reason: str, preserve_episode: bool = False,
              persist_evidence: bool = True) -> None:
         self.transport.invalidate(reason)
-        played = (self.attempt.recorder.presses
-                  if self.attempt.recorder is not None
+        played = (self.take.recorder.presses
+                  if self.take.recorder is not None
                   else self.measurement.guided.presses)
         if persist_evidence:
             try:
@@ -37,7 +35,7 @@ class SessionLifecycle:
                 extra = ({"guidance": guidance.snapshot(now=self.clock())}
                          if self.transport.mode == "learn"
                          and guidance is not None else None)
-                self.settlement.interrupt_current(
+                self.take.interrupt_current(
                     reason=reason, played=played, censor=not preserve_episode,
                     extra=extra, now=self.clock(), flush=True)
             except Exception:
@@ -50,7 +48,7 @@ class SessionLifecycle:
                 self.midi_ingress.deferred.clear()
                 self.transport.freeze_after_fault(self.clock())
                 raise
-        self.settlement.cancel(reason=reason, now=self.clock())
+        self.take.cancel_settlement(reason=reason, now=self.clock())
         self.midi_ingress.deferred.clear()
         self.midi_ingress.clear_resume_gate()
         self.transport.clear_grading_floor()
@@ -59,7 +57,7 @@ class SessionLifecycle:
         self.lesson.stop_guided()
         self.transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
-        self.attempt.reset_for_stop()
+        self.take.reset_for_stop()
         self.live_input.reset_attempt()
         self.listen.cancel()
 

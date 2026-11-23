@@ -13,19 +13,16 @@ from .mistake_responses import resolve_mistake_policy
 
 
 class LessonExecution:
-    def __init__(self, *, lesson, notices,
-                 exposure_workflows,
-                 transport, attempt, learner_progress,
-                 progress, lifecycle, recovery_streak,
-                 attempt_settlement, measurement, library, clock):
+    def __init__(self, *, lesson, notices, exposure_workflows, transport, take,
+                          learner_progress, progress, lifecycle,
+                          recovery_streak, measurement, library, clock):
         self.lesson = lesson
         self.notices = notices
         self.exposure_workflows = exposure_workflows
         self.transport = transport
-        self.attempt = attempt
+        self.take = take
         self.learner_progress, self.progress = learner_progress, progress
         self.lifecycle, self.recovery_streak = lifecycle, recovery_streak
-        self.attempt_settlement = attempt_settlement
         self.measurement, self.library = measurement, library
         self.clock = clock
 
@@ -47,12 +44,12 @@ class LessonExecution:
         if not guidance["completed"]:
             self.measurement.observe_guidance(guidance)
             return
-        pending = self.attempt_settlement.pending
+        pending = self.take.pending
         if pending is None or pending.event.attempt_id != self.measurement.attempt_id:
             pending = self.lesson.prepare_decision("guided_completed", completed=True,
                 assisted_count=guidance.get("assisted_count",0))
         try:
-            self.attempt_settlement.seal_guided_preparation(
+            self.take.seal_guided_preparation(
                 pending,guidance=guidance,plan=self.lesson.plan,
                 binding=self.lesson.decision_binding(),now=self.clock(),
                 policy=resolve_mistake_policy(
@@ -165,7 +162,7 @@ class LessonExecution:
         self.learner_progress.reactivate_trouble(fingerprint=self.lesson.fingerprint, stage_key=selected.stage_key)
         self.lesson.set_course_guided(True)
         grid = phrase_grid(self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries)
-        self.attempt.prepare_section(start=selected.from_beat,end=selected.end_beat,
+        self.take.prepare_section(start=selected.from_beat,end=selected.end_beat,
             first_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.from_beat),
             last_bar=self.lesson.plan.active_phrase.first_bar+grid.index(selected.end_beat)-1)
         self.begin_learn(from_beat=selected.from_beat,recovery=True,exposure=selected,
@@ -197,7 +194,7 @@ class LessonExecution:
         # Command installation may select a different source variant/window.
         prepared = prepare_guided(self.exposure_workflows.source(),selected,
             revision=self.lesson.revision,bump_revision=bump_revision,
-            recovery=recovery,remediation=remediation,retry_range=self.attempt.retry_range)
+            recovery=recovery,remediation=remediation,retry_range=self.take.retry_range)
         self.exposure_workflows.install(prepared,reason=reason)
 
     def review_retry(self, first_bar, last_bar, *, effect=None):
@@ -207,7 +204,7 @@ class LessonExecution:
         selected = self.lesson.install_command(effect)
         self.exposure_workflows.prepare_practice(exposure=selected,reason="review_retry")
         self.lesson.select_opening(selected.from_beat)
-        self.attempt.prepare_section(start=self.lesson.opening_beat,
+        self.take.prepare_section(start=self.lesson.opening_beat,
             end=selected.end_beat or self.lesson.plan.active_phrase.end-self.lesson.plan.active_phrase.start,
             first_bar=first_bar,last_bar=last_bar)
         self.transport.prepare_section_review()
@@ -219,7 +216,7 @@ class LessonExecution:
         selected = self.lesson.install_command(effect)
         self.exposure_workflows.prepare_practice(exposure=selected,reason="practice_weak")
         self.lesson.select_opening(selected.from_beat)
-        self.attempt.prepare_section(start=self.lesson.opening_beat,
+        self.take.prepare_section(start=self.lesson.opening_beat,
             end=selected.end_beat or self.lesson.plan.active_phrase.end-self.lesson.plan.active_phrase.start)
         self.transport.prepare_section_review()
         self.notices.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
@@ -247,7 +244,7 @@ class LessonExecution:
         else:
             self.exposure_workflows.prepare_practice(exposure=selected,reason="seek")
             self.transport.prepare_rewind(selected.from_beat)
-            self.attempt.prepare_section(start=selected.from_beat,
+            self.take.prepare_section(start=selected.from_beat,
                 end=self.lesson.plan.active_phrase.end-self.lesson.plan.active_phrase.start,
                 first_bar=bar,last_bar=self.lesson.plan.active_phrase.last_bar)
             self.notices.next_action = f"Get ready to play from bar {bar} at {selected.bpm} BPM."

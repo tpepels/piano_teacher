@@ -8,15 +8,12 @@ from .playback_transitions import PlaybackTransition
 
 
 class TransportActions:
-    def __init__(self, *,
-                 attempt, attempt_settlement, clock, exposure_workflows,
-                 feedback_seconds, lesson, lesson_execution,
-                 lifecycle, listen, notices, completion_continuations,
-                 transport, read_models, recovery_workflows,
-                 score_artifact_registry, score_read,
-                 timed_playback, transport_timing):
-        self.attempt = attempt
-        self.attempt_settlement = attempt_settlement
+    def __init__(self, *, take, clock, exposure_workflows, feedback_seconds,
+                          lesson, lesson_execution, lifecycle, listen, notices,
+                          completion_continuations, transport, read_models,
+                          recovery_workflows, score_artifact_registry,
+                          score_read, timed_playback, transport_timing):
+        self.take = take
         self.clock = clock
         self.exposure_workflows = exposure_workflows
         self.feedback_seconds = feedback_seconds
@@ -132,7 +129,7 @@ class TransportActions:
         elif action in ("start", "restart"):
             self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self.transport_timing.update_short_rest(kwargs)
-            if self.attempt.settlement_failed or self.attempt_settlement.pending_rolling is not None:
+            if self.take.settlement_failed or self.take.pending_rolling is not None:
                 self.replay_retained_result()
                 return
             effect = effect or self.lesson.manual_effect(action)
@@ -180,7 +177,7 @@ class TransportActions:
 
     def replay_retained_result(self) -> None:
         """Play after a failed save or rolling recovery replays that same result."""
-        if self.attempt.settlement_failed:
+        if self.take.settlement_failed:
             revision = self.lesson.revision
             # Drop the failure instruction; the replayed continuation
             # publishes its own next action (count-in or next passage).
@@ -191,8 +188,8 @@ class TransportActions:
             if self.lesson.revision != revision:
                 self.transport.await_score(self.lesson.revision)
             return
-        if self.attempt_settlement.pending_rolling is not None:
-            decision, phrase, grid, score_beat, _old_now = self.attempt_settlement.pending_rolling
+        if self.take.pending_rolling is not None:
+            decision, phrase, grid, score_beat, _old_now = self.take.pending_rolling
             self.recovery_workflows.apply_rolling_recovery(decision, phrase, grid, score_beat, self.clock())
             self.transport.clear_pause_for_restart()
             return

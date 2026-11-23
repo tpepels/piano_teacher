@@ -55,17 +55,15 @@ _COMMAND_ROUTES = {
 
 
 class PracticeSession:
-    def __init__(self, *,
-                 attempt, attempt_settlement, device_workflows, exposure_workflows,
-                 history_management, learning_commands, lock, measurement,
-                 midi, midi_key_shortcuts, transport, read_models,
-                 settings_workflows, lesson,
-                 timed_playback, transport_commands,
-                 timeline, midi_ingress, midi_application_input, runtime_timings,
-                 source_workflows, lesson_execution, score_preload,
-                 lifecycle, progress, notices, clock):
-        self.attempt = attempt
-        self.attempt_settlement = attempt_settlement
+    def __init__(self, *, take, device_workflows, exposure_workflows,
+                          history_management, learning_commands, lock,
+                          measurement, midi, midi_key_shortcuts, transport,
+                          read_models, settings_workflows, lesson,
+                          timed_playback, transport_commands, timeline,
+                          midi_ingress, midi_application_input,
+                          runtime_timings, source_workflows, lesson_execution,
+                          score_preload, lifecycle, progress, notices, clock):
+        self.take = take
         self.device_workflows = device_workflows
         self.exposure_workflows = exposure_workflows
         self.history_management = history_management
@@ -156,8 +154,8 @@ class PracticeSession:
         if (needs_teaching and self.lesson.plan is not None
                 and route in ("listening", "learning", "transport", "stage")
                 and not (action in ("start","restart")
-                         and (self.attempt.settlement_failed
-                              or self.attempt_settlement.pending_rolling is not None))):
+                         and (self.take.settlement_failed
+                              or self.take.pending_rolling is not None))):
             change = (prepare_stage_change(self.lesson.plan, action, kwargs, warmup=self.lesson.warmup)
                       if route == "stage" else None)
             effect = self.lesson.prepare_decision("manual", manual=change,
@@ -212,7 +210,7 @@ class PracticeSession:
             plan.identity if plan is not None else "",
             plan.hand if plan is not None else "both",
             self.transport.transport_id,
-            self.attempt_settlement.cancellation_generation,
+            self.take.cancellation_generation,
             bool(self.transport.auto))
 
     def midi_arrival(self) -> MidiArrival:
@@ -411,7 +409,7 @@ class PracticeSession:
         if (self.transport.running
                 or self.transport.preview_loop_pending
                 or self.transport.preparation_pending
-                or self.attempt_settlement.pending_result is not None
+                or self.take.pending_result is not None
                 or self.transport.pending_rewind is not None
                 or self.transport.mode == "listen"):
             return 20

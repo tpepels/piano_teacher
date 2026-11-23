@@ -10,20 +10,20 @@ from .playback_facts import PreloadedFeedbackSource
 
 
 class ScorePreloadWorkflow:
-    def __init__(self, *, lesson, lock, transport,
-                 teaching_continuation, attempt_settlement,
-                 transport_timing, completion_continuations):
+    def __init__(self, *, lesson, lock, transport, teaching_continuation, take,
+                          transport_timing, completion_continuations):
         self.lock = lock
         self.lesson = lesson
         self.teaching_continuation = teaching_continuation
         self.transport = transport
-        self.attempt_settlement, self.transport_timing = attempt_settlement, transport_timing
+        self.transport_timing = transport_timing
+        self.take = take
         self.completion_continuations = completion_continuations
 
     def decided_selection(self):
         if not self.transport.auto:
             return None
-        return self.teaching_continuation.selection(self.attempt_settlement.pending,
+        return self.teaching_continuation.selection(self.take.pending,
             revision=self.lesson.revision,fingerprint=self.lesson.fingerprint)
 
     def next_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:

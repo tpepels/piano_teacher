@@ -17,7 +17,7 @@ def _subject():
     owner.lesson = SimpleNamespace(
         fingerprint="score-sha", revision=12,
         plan=SimpleNamespace(identity="next-hand"))
-    owner.attempt_settlement = SimpleNamespace(
+    owner.take = SimpleNamespace(
         pending=SimpleNamespace(
             decision=SimpleNamespace(decision_id="committed"),
             receipt=object(), phase="effects_applied"),
@@ -52,7 +52,7 @@ def test_decided_continuation_is_applied_only_once():
 ])
 def test_obsolete_continuations_cannot_execute(mutation):
     owner, effect, applied = _subject()
-    pending = owner.attempt_settlement.pending
+    pending = owner.take.pending
     if mutation == "missing_plan":
         owner.lesson.plan = None
     elif mutation == "different_fingerprint":
@@ -68,7 +68,7 @@ def test_obsolete_continuations_cannot_execute(mutation):
     elif mutation == "wrong_phase":
         pending.phase = "settled"
     else:
-        owner.attempt_settlement.pending = None
+        owner.take.pending = None
     with pytest.raises(ValueError, match="Stale or unsettled"):
         owner.dispatch_effect(effect, 100.0)
     assert not applied
@@ -91,13 +91,13 @@ def test_failed_feedback_keeps_selected_transaction_when_auto_stops():
 
 def test_retry_of_committed_effect_retains_original_assessment_receipt():
     owner, effect, applied = _subject()
-    pending = owner.attempt_settlement.pending
+    pending = owner.take.pending
     pending.event = SimpleNamespace(kind="full_result")
     pending.receipt = SimpleNamespace(message="Original assessed result")
     pending.state = SimpleNamespace(route=SimpleNamespace(automatic=True))
-    owner.attempt_settlement.finish_publication = (
+    owner.take.finish_publication = (
         lambda: setattr(pending, "phase", "published"))
-    owner.attempt = SimpleNamespace(
+    vars(owner.take).update(
         clear_feedback=lambda: None,
         publication_finished=lambda: None,
         publication_failed=lambda: None)
@@ -127,7 +127,7 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
 
 def test_failed_committed_effect_does_not_publish_or_clear_feedback():
     owner, effect, _applied = _subject()
-    pending = owner.attempt_settlement.pending
+    pending = owner.take.pending
     pending.event = SimpleNamespace(kind="full_result")
     pending.receipt = SimpleNamespace(message="Original assessed result")
     pending.state = SimpleNamespace(route=SimpleNamespace(automatic=True))
@@ -148,10 +148,10 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
     owner.transport.stop_automatic = lambda: stopped.append(True)
     owner.transport.continue_course = lambda: None
     state = []
-    owner.attempt = SimpleNamespace(
+    vars(owner.take).update(
         clear_feedback=lambda: state.append("cleared"),
         publication_failed=lambda: state.append("failed"))
-    owner.attempt_settlement.finish_publication = (
+    owner.take.finish_publication = (
         lambda: state.append("published"))
     owner.dispatch_effect = lambda effect, now: (_ for _ in ()).throw(
         RuntimeError("physical continuation unavailable"))

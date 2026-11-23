@@ -10,18 +10,18 @@ from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasureme
 
 
 class TransportTiming:
-    def __init__(self, *, lesson,
-                 transport, tempo_map_cache,
-                 attempt_progression, attempt_settlement, score_read,
-                 midi_ingress, clock):
+    def __init__(self, *, lesson, transport, tempo_map_cache,
+                          attempt_progression, take, score_read, midi_ingress,
+                          clock):
         self.lesson = lesson
         self.transport = transport
         self.tempo_map_cache, self.attempt_progression = tempo_map_cache, attempt_progression
-        self.attempt_settlement, self.score_read = attempt_settlement, score_read
+        self.score_read = score_read
+        self.take = take
         self.midi_ingress, self.clock = midi_ingress, clock
 
     def presentation_bpm(self) -> float:
-        pending = self.attempt_settlement.pending
+        pending = self.take.pending
         if pending is not None and pending.receipt is None and pending.decision.next_exposure is not None:
             return float(pending.decision.next_exposure.bpm)
         plan = self.lesson.plan
@@ -136,7 +136,7 @@ class TransportTiming:
         return self.transport.position(
             now, phrase_length=phrase.sounding_end-phrase.start, bpm=self.lesson.plan.bpm,
             running=self.transport.running,
-            pending_auto_result=(self.attempt_settlement.pending_result is not None and self.transport.auto),
+            pending_auto_result=(self.take.pending_result is not None and self.transport.auto),
             tempo_map=self.active_tempo_map())
 
     def update_short_rest(self, kwargs: dict) -> None:

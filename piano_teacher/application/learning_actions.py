@@ -8,13 +8,10 @@ from .stage_change import prepare_stage_change
 
 
 class LearningActions:
-    def __init__(self, *,
-                 attempt, attempt_settlement, clock, exposure_workflows,
-                 lesson, lesson_execution,
-                 lifecycle, measurement, notices, transport,
-                 progress):
-        self.attempt = attempt
-        self.attempt_settlement = attempt_settlement
+    def __init__(self, *, take, clock, exposure_workflows, lesson,
+                          lesson_execution, lifecycle, measurement, notices,
+                          transport, progress):
+        self.take = take
         self.clock = clock
         self.exposure_workflows = exposure_workflows
         self.lesson = lesson
@@ -122,7 +119,7 @@ class LearningActions:
                       p, action, kwargs, warmup=self.lesson.warmup))
         was_guided = self.transport.mode == "learn"
         guided_return = self.lesson.guided_return_context
-        guided_retry_range = self.attempt.retry_range
+        guided_retry_range = self.take.retry_range
         self.lifecycle.stop(reason=action)
         self.lesson_execution.reset_trouble()
         # Preserve the original ordering of the source opening reset.
@@ -132,7 +129,7 @@ class LearningActions:
                   else self.lesson.prepare_decision(
                       "manual", manual=change, action=action, store=False))
         self.lesson.apply_progress(effect)
-        self.attempt_settlement.command_applied()
+        self.take.command_applied()
         if action == "hand":
             self.lesson.select_opening(0.0)
         # Native notation is engraved in source coordinates: changing
@@ -146,7 +143,7 @@ class LearningActions:
             if selected is not None and selected.mode == "learn":
                 recovery = change.tempo_only and guided_return is not None and guided_return[0] == p.identity
                 if recovery:
-                    self.attempt.restore_retry(guided_retry_range)
+                    self.take.restore_retry(guided_retry_range)
                 self.lesson_execution.begin_learn(
                 from_beat=selected.from_beat,bump_revision=False,
                 recovery=recovery,exposure=selected,reason=action)

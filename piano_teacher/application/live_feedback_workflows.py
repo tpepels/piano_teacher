@@ -9,14 +9,15 @@ from ..live_feedback import live_scope
 
 
 class LiveFeedbackWorkflows:
-    def __init__(self, *, lesson, transport,
-                 score_artifact_registry, score_read, policy_registry,
-                 library, attempt, live_assessment, transport_timing, clock):
+    def __init__(self, *, lesson, transport, score_artifact_registry,
+                          score_read, policy_registry, library, take,
+                          live_assessment, transport_timing, clock):
         self.lesson = lesson
         self.transport = transport
         self.score_artifact_registry = score_artifact_registry
         self.score_read, self.policy_registry = score_read, policy_registry
-        self.library, self.attempt, self.live_assessment = library, attempt, live_assessment
+        self.library, self.live_assessment = library, live_assessment
+        self.take = take
         self.transport_timing, self.clock = transport_timing, clock
 
     def feedback_take(self) -> dict:
@@ -58,7 +59,7 @@ class LiveFeedbackWorkflows:
             return []
         return self.policy_registry.grading.live_projection(
             plan.active_phrase, hand=plan.hand, bpm=plan.bpm,
-            played=self.attempt.recorder.presses if self.attempt.recorder else (),
+            played=self.take.recorder.presses if self.take.recorder else (),
             from_beat=self.transport.play_from_beat,
             elapsed_seconds=elapsed_seconds,
             bar_boundaries=plan.piece.bar_boundaries,

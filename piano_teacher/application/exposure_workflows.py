@@ -13,16 +13,14 @@ from .exposure_preparation import (
 
 
 class ExposureWorkflows:
-    def __init__(self, *, lesson,
-                 attempt, tempo_map_cache,
-                 transport, listen, notices, lifecycle,
-                 learner_progress, progress, score_state_publisher,
-                 midi, evidence_context, clock):
+    def __init__(self, *, lesson, take, tempo_map_cache, transport, listen,
+                          notices, lifecycle, learner_progress, progress,
+                          score_state_publisher, midi, evidence_context, clock):
         self.lesson = lesson
 
 
 
-        self.attempt = attempt
+        self.take = take
         self.tempo_map_cache = tempo_map_cache
         self.transport = transport
         self.listen = listen
@@ -60,7 +58,7 @@ class ExposureWorkflows:
             self.source(), selected,
             mode="practice", revision=self.lesson.revision,
             return_context=self.lesson.guided_return_context,
-            retry_range=self.attempt.retry_range), reason=reason)
+            retry_range=self.take.retry_range), reason=reason)
 
     def prepare_listen(self, *, effect=None, reason="transition") -> None:
         selected_plan = self.lesson.plan
@@ -110,9 +108,9 @@ class ExposureWorkflows:
                 reason=prepared.stop_reason or action_reason,
                 preserve_episode=prepared.recovery)
             self.score_state_publisher.reset_guided()
-            self.attempt.assign_remediation(prepared.remediation)
+            self.take.assign_remediation(prepared.remediation)
             if prepared.recovery:
-                self.attempt.restore_retry(prepared.retry_range)
+                self.take.restore_retry(prepared.retry_range)
             self.transport.select_exposure(
                 mode="learn", automatic=False, awaited_revision=None)
             self.lesson.select_guided(
@@ -139,7 +137,7 @@ class ExposureWorkflows:
                     prepared.from_beat if timed else 0.0)
             if timed:
                 self.lesson.select_opening(prepared.from_beat)
-                self.attempt.prepare_timed_exposure(prepared)
+                self.take.prepare_timed_exposure(prepared)
                 if prepared.return_context is not None:
                     self.transport.prepare_rewind(prepared.from_beat)
                     self.lesson.select_timed_return(prepared.return_context)

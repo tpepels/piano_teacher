@@ -12,12 +12,11 @@ from ..importing.pieces import import_piece
 
 
 class SourceWorkflows:
-    def __init__(self, *, lesson, notices, lifecycle,
-                 recovery_streak, transport, source_preparation,
-                 score_artifact_registry,
-                 attempt, listen, preprocessing, fingering, progress,
-                 fukuda_mistakes, library, library_health,
-                 lock):
+    def __init__(self, *, lesson, notices, lifecycle, recovery_streak,
+                          transport, source_preparation,
+                          score_artifact_registry, take, listen, preprocessing,
+                          fingering, progress, fukuda_mistakes, library,
+                          library_health, lock):
         self.lesson = lesson
         self.notices = notices
         self.lifecycle = lifecycle
@@ -25,7 +24,7 @@ class SourceWorkflows:
         self.transport = transport
         self.source_preparation = source_preparation
         self.score_artifact_registry = score_artifact_registry
-        self.attempt = attempt
+        self.take = take
         self.listen = listen
         self.preprocessing = preprocessing
         self.fingering = fingering
@@ -60,7 +59,7 @@ class SourceWorkflows:
         self.lesson.clear_guided_selection()
         self.notices.publish("Press Start to practice", "Press Start to practice.")
         self.lesson.advance_revision()
-        self.attempt.reset_source_presentation()
+        self.take.reset_source_presentation()
         if self.lesson.flow_applies(self.lesson.plan, warmup=warmup):
             return prepared.resumed
         return None

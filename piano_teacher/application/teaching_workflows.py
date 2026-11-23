@@ -25,15 +25,13 @@ class CommandEffect:
 
 
 class TeachingDecisions:
-    def __init__(self, *, source_identity, lesson_cursor, attempt,
-                 attempt_settlement, measurement, transport,
-                 guided_session, recovery_streak,
-                 policy_registry, library, fukuda_mistakes, learner_progress,
-                 learning_evidence, clock):
+    def __init__(self, *, source_identity, lesson_cursor, take, measurement,
+                          transport, guided_session, recovery_streak,
+                          policy_registry, library, fukuda_mistakes,
+                          learner_progress, learning_evidence, clock):
         self.source_identity = source_identity
         self.lesson_cursor = lesson_cursor
-        self.attempt = attempt
-        self.attempt_settlement = attempt_settlement
+        self.take = take
         self.measurement = measurement
         self.transport = transport
         self.guided_session = guided_session
@@ -57,7 +55,7 @@ class TeachingDecisions:
             self.source_identity.plan, fingerprint=self.source_identity.fingerprint, stage_key=stage_key)
 
     def binding(self):
-        owner = self.attempt_settlement
+        owner = self.take
         return TeachingBinding(self.measurement.run_id, self.measurement.session_id,
             self.source_identity.fingerprint, self.source_identity.plan.identity, owner.course_revision,
             owner.authority_revision, self.transport.transport_id, owner.cancellation_generation)
@@ -71,10 +69,10 @@ class TeachingDecisions:
             assisted_count=assisted_count, completed=completed, reason=values.get("reason"),
             bar=values.get("bar"), first_bar=values.get("first_bar"), last_bar=values.get("last_bar"),
             scope=values.get("scope"), requested_stage=values.get("stage_key"), requested_mode=values.get("mode"))
-        scope = completion_route(self.transport.mode, self.attempt.review_end_beat,
+        scope = completion_route(self.transport.mode, self.take.review_end_beat,
             self.transport.play_from_beat,
             full_from_beat=p.active_phrase.first_attack_beat)
-        if self.attempt.automatic_remedial_review and scope == "section_review":
+        if self.take.automatic_remedial_review and scope == "section_review":
             scope = "partial_recovery"
         policy = resolve_mistake_policy(self.library.settings["mistake_response_strategy"])
         history = (self.policy_registry.learning.store.recent(self.source_identity.fingerprint, p.identity)
@@ -84,12 +82,12 @@ class TeachingDecisions:
             history, self.retry_context(result, end_beat=end_beat) if result is not None and (policy.whole_handler is not None or policy.rolling_handler is not None) else None,
             TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto, warmup=self.source_identity.warmup,
                 preview_only=self.transport.preview_only, assistance_used=self.measurement.assistance_used,
-                scope=scope, performed_bpm=self.attempt_settlement.pending_assessed_bpm or p.bpm,
+                scope=scope, performed_bpm=self.take.pending_assessed_bpm or p.bpm,
                 from_beat=self.transport.play_from_beat,
                 end_beat=end_beat if end_beat is not None else p.active_phrase.sounding_end-p.active_phrase.start,
                 course_guided=self.lesson_cursor.course_guided, guided_return=self.guided_session.return_context,
-                guided_range=self.guided_session.beat_range, review_end_beat=self.attempt.review_end_beat,
-                remediation_active=self.attempt.remediation_active is not None,
+                guided_range=self.guided_session.beat_range, review_end_beat=self.take.review_end_beat,
+                remediation_active=self.take.remediation_active is not None,
                 trouble_key=self.recovery_streak.key, trouble_count=self.recovery_streak.count,
                 parent_decision_id=self.measurement.parent_decision),
             self.policy_registry.learning.diagnosis, self.policy_registry.learning.learner,
@@ -98,8 +96,8 @@ class TeachingDecisions:
                 trouble=tuple((unit["stage_key"],unit["start_beat"],unit["end_beat"],tuple(unit["source_indices"]))
                     for unit in self.valid_trouble_spots()),
                 review=tuple((u["first_bar"],u["last_bar"],u["start_beat"],u["end_beat"],u["errors"])
-                    for u in (self.attempt.performance_summary or {}).get("sections",())),
-                review_current=self.attempt.review_stage_identity == p.identity,
+                    for u in (self.take.performance_summary or {}).get("sections",())),
+                review_current=self.take.review_stage_identity == p.identity,
                 paused=self.transport.paused,
                 guidance_completed=bool(self.guided_session.controller is not None and self.guided_session.controller.snapshot(now=self.clock())["completed"]),
                 open_from_beat=self.lesson_cursor.opening_beat,pending_rewind=self.transport.pending_rewind))
@@ -107,7 +105,7 @@ class TeachingDecisions:
             decision = p.lesson_generator.decide_teaching(event, state)
             validate_teaching_decision(decision, event=event, state=state)
             return CommandEffect(event, state, decision)
-        return self.attempt_settlement.prepare(event=event, state=state, generator=p.lesson_generator)
+        return self.take.prepare_settlement(event=event, state=state, generator=p.lesson_generator)
 
     def manual_effect(self, action, *, from_beat=None, values=None, effect=None):
         return effect or self.prepare(
@@ -138,7 +136,7 @@ class TeachingDecisions:
         current = self.source_identity.plan.teaching_progress()
         if current == effect.decision.before_progress:
             if self.apply_progress(effect):
-                self.attempt_settlement.command_applied()
+                self.take.command_applied()
         elif current != effect.decision.progress_after:
             raise ValueError("Manual teaching progress changed before application")
         return effect.decision.next_exposure

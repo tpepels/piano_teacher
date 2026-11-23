@@ -10,11 +10,10 @@ from .score_artifacts import ScoreArtifacts, ScoreSelection
 
 
 class ScoreReadServices:
-    def __init__(self, *, lesson, attempt, lesson_execution,
-                 score_artifact_registry,
-                 learner_progress, lock):
+    def __init__(self, *, lesson, take, lesson_execution,
+                          score_artifact_registry, learner_progress, lock):
         self.lesson = lesson
-        self.attempt = attempt
+        self.take = take
         self.lesson_execution = lesson_execution
         self.score_artifact_registry = score_artifact_registry
         self.learner_progress = learner_progress
@@ -24,7 +23,7 @@ class ScoreReadServices:
         plan = self.lesson.plan
         if plan is None:
             raise ValueError("No piece loaded")
-        remediation = self.attempt.remediation_active
+        remediation = self.take.remediation_active
         return ScoreSelection(
             piece=plan.piece, phrase=self.lesson_execution.display_phrase(),
             hand=plan.hand, stage_key=plan.identity,

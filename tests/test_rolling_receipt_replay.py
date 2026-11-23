@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from piano_teacher.application.take import Take
 from piano_teacher.application.attempt_settlement import (
     AttemptSettlement, PendingTeachingDecision, RollingTake, TakeResult,
 )
@@ -187,8 +188,8 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
         paused=False, run_at=100.0, preparation_pending=False)
     worker.lesson = SimpleNamespace(guided_controller=None)
     worker.midi_ingress = SimpleNamespace(resume_grading_after=0.0)
-    worker.attempt_settlement = owner
-    worker.attempt = SimpleNamespace(performance_summary=None)
+    worker.take = Take(runtime=SimpleNamespace(performance_summary=None),
+                       settlement=owner)
     worker.measurement = SimpleNamespace(observe_phase=lambda facts, now: None)
     worker.run_pre_assessment_transition = lambda now: (False, False)
 

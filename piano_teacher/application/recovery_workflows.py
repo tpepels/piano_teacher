@@ -14,18 +14,18 @@ from .musical_scheduler import SCHEDULER
 
 
 class RecoveryWorkflows:
-    def __init__(self, *, lesson, notices, attempt,
-                 transport, transport_timing,
-                 timed_playback, lesson_execution, exposure_workflows,
-                 attempt_settlement, policy_registry, library, recovery_streak,
-                 live_feedback_workflows, live_assessment,
-                 clock, feedback_seconds):
+    def __init__(self, *, lesson, notices, take, transport, transport_timing,
+                          timed_playback, lesson_execution, exposure_workflows,
+                          policy_registry, library, recovery_streak,
+                          live_feedback_workflows, live_assessment, clock,
+                          feedback_seconds):
         self.lesson = lesson
-        self.notices, self.attempt = notices, attempt
+        self.notices = notices
+        self.take = take
         self.transport = transport
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
         self.lesson_execution, self.exposure_workflows = lesson_execution, exposure_workflows
-        self.attempt_settlement, self.policy_registry = attempt_settlement, policy_registry
+        self.policy_registry = policy_registry
         self.library, self.recovery_streak = library, recovery_streak
         self.live_feedback_workflows, self.live_assessment = live_feedback_workflows, live_assessment
         self.clock = clock
@@ -57,13 +57,13 @@ class RecoveryWorkflows:
                 self.exposure_workflows.prepare_practice(exposure=exposure)
                 self.transport.wait_for_player()
             self.lesson.select_opening(prepared.start)
-            self.attempt.prepare_recovery(prepared)
+            self.take.prepare_recovery(prepared)
             if prepared.action == "pause":
                 self.transport.halt_continuation()
             elif prepared.action == "guided":
                 self.lesson_execution.begin_learn(
                     from_beat=prepared.start, recovery=True,
-                    exposure=self.attempt_settlement.pending.decision.next_exposure)
+                    exposure=self.take.pending.decision.next_exposure)
             elif prepared.action == "continue":
                 self.timed_playback.continue_at(SCHEDULER.continuation(
                     self.transport_timing.collect_continuation_measurement(
@@ -114,23 +114,23 @@ class RecoveryWorkflows:
         # Capture marks at the performance tempo, not at the slower
         # BPM selected for the next retry. Re-scaling the recorded
         # timestamps early would move mistakes to incorrect notes.
-        saved = self.attempt_settlement.rolling_record
+        saved = self.take.rolling_record
         if saved is None:
             # The first assessment publishes frozen source-tempo feedback.
             # A persistence/presentation retry must retain those old marks,
             # not recompute them from a new BPM or paused source clock.
-            self.attempt.publish_live_marks(
+            self.take.publish_live_marks(
                 self.live_feedback_workflows.live_feedback(
                     now-self.transport.run_at))
             self.live_assessment.publish(
-                self.attempt.feedback_marks,
+                self.take.feedback_marks,
                 self.live_feedback_workflows.feedback_take())
         outgoing_bpm = self.lesson.plan.bpm
         scored_end = self.transport.run_at + (
             self.transport_timing.elapsed_seconds(decision.end_beat) -
             self.transport_timing.elapsed_seconds(self.transport.play_from_beat))
         hand = self.lesson.plan.hand
-        notes = self.attempt.recorder.presses if self.attempt.recorder else ()
+        notes = self.take.recorder.presses if self.take.recorder else ()
         from_beat = self.transport.play_from_beat
         score_revision = self.lesson.revision
         if saved is not None:
@@ -146,7 +146,7 @@ class RecoveryWorkflows:
             hand, notes = saved.take.hand, saved.take.played
             from_beat, score_revision = saved.take.from_beat, saved.take.score_revision
         try:
-            completed = self.attempt_settlement.complete_rolling(
+            completed = self.take.complete_rolling(
                 decision=decision,phrase=phrase,grid=grid,score_beat=score_beat,
                 now=now,bpm=outgoing_bpm,scored_end=scored_end,hand=hand,
                 played=notes,from_beat=from_beat,
@@ -181,7 +181,7 @@ class RecoveryWorkflows:
                                   now: float) -> None:
         transition = completed.transition
         outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
-        apply = self.attempt_settlement.rolling_effect
+        apply = self.take.rolling_effect
         apply(completed, "tempo", lambda: self.transport.note_tempo(
             stage=self.lesson.plan.identity,
             bpm=self.transport_timing.presentation_bpm(), now=now))
@@ -199,7 +199,7 @@ class RecoveryWorkflows:
             reverse_seconds=self.feedback_seconds, short_deadline=short_deadline))
         apply(completed, "streak", lambda: self.recovery_streak.record(
             transition.trouble_key, transition.trouble_count))
-        apply(completed, "attempt", lambda: self.attempt.apply_recovery(transition))
+        apply(completed, "attempt", lambda: self.take.apply_recovery(transition))
         if transition.guided:
             # Guided recovery must never re-withdraw an already processed
             # immutable future announcement during a publication retry.
@@ -214,14 +214,14 @@ class RecoveryWorkflows:
                   self.transport.cancel_preparation)
             apply(completed, "cancel_continuation",
                   self.transport.cancel_continuation)
-        self.attempt_settlement.finish_rolling_publication(completed)
+        self.take.finish_rolling_publication(completed)
 
     def assess_rolling_boundary(self, boundary: float,
                                  grid: tuple[float, ...]):
         """Grade one authored boundary under the existing session lock."""
         try:
-            self.attempt_settlement.checkpoint(
-                self.attempt.recorder.presses if self.attempt.recorder else (),
+            self.take.checkpoint_rolling(
+                self.take.recorder.presses if self.take.recorder else (),
                 boundary=boundary)
         except Exception:
             self.transport.freeze_after_fault(self.clock())
@@ -235,7 +235,7 @@ class RecoveryWorkflows:
         tempo_map = self.transport_timing.active_tempo_map()
         return self.policy_registry.grading.select(tempo_map).recover(
             self.lesson.plan.active_phrase, hand=self.lesson.plan.hand, bpm=self.lesson.plan.bpm,
-            played=self.attempt.recorder.presses if self.attempt.recorder else [],
+            played=self.take.recorder.presses if self.take.recorder else [],
             from_beat=self.transport.play_from_beat, end_beat=boundary, grid=grid,
             threshold=course_rules(
                 self.lesson.plan.lesson_definition.generator_name,
