@@ -315,22 +315,15 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
     if not bundle is Dictionary:
         _fail("Practice engine returned no source-bound score bundle")
         return
-    var layout: Variant = bundle.get("layout")
-    var model: Variant = bundle.get("model")
-    var source_ids: Variant = bundle.get("source_note_ids")
-    # Reject both halves before touching a retained renderer.
-    if (str(bundle.get("status","")) != "ready" or
-            int(bundle.get("revision",-1)) != revision or
-            str(bundle.get("fingerprint","")) != _fingerprint or
-            str(bundle.get("hand","")) != str(_state.get("hand","")) or
-            _stage_key.is_empty() or
-            str(bundle.get("stage_key","")) != _stage_key or
-            not source_ids is Array or source_ids.is_empty() or
-            not layout is Dictionary or not layout.has("anchors") or
-            int(layout.get("revision",-1)) != revision or
-            not model is Dictionary or int(model.get("revision",-1)) != revision):
-        _fail("Score bundle source, revision, notation or MIDI identity differs")
+    # Reject both halves and their original-note IDs before changing ink.
+    var problem: String = NativeScoreAssets.bundle_error(bundle,{
+        "fingerprint":_fingerprint,"revision":revision,
+        "hand":str(_state.get("hand","")),"stage_key":_stage_key})
+    if not problem.is_empty():
+        _fail(problem)
         return
+    var layout: Dictionary = bundle["layout"]
+    var model: Dictionary = bundle["model"]
     if not is_instance_valid(_renderer):
         return
     var installed: Dictionary = NativeScoreAssets.install(_renderer, layout)

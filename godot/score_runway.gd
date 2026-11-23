@@ -187,12 +187,16 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
             int(value.get("step_number",-1)) != _source_step + 1 or \
             str(value.get("fingerprint","")) != _source_fingerprint:
         return
-    var layout_data: Variant = value.get("layout")
-    var model_data: Variant = value.get("model")
-    if not layout_data is Dictionary or not model_data is Dictionary:
-        _register_preload_failure(
-            "Future score lacks authentic layout or semantic model")
+    # A future stage uses exactly the same source/semantic bundle check
+    # as the currently selected stage. The selected future stage_key is
+    # compared again at promotion, once the backend has installed it.
+    var problem: String = NativeAssets.bundle_error(value,{
+        "fingerprint":_source_fingerprint,"revision":_source_revision+1})
+    if not problem.is_empty():
+        _register_preload_failure(problem)
         return
+    var layout_data: Dictionary = value["layout"]
+    var model_data: Dictionary = value["model"]
     _future = NativeView.new()
     # A future stage must use the same staff presentation and background
     # as the active stage before its retained note ink is pre-engraved.
