@@ -87,11 +87,14 @@ class CompletionContinuations:
                 # again. The committed decision, not current UI mode, owns
                 # whether this continuation should run automatically.
                 self.playback_session.continue_course()
-            self.dispatch_effect(publication.effect, now)
-            # Visible marks are retained until the exact physical/source
-            # continuation has been installed successfully.
-            self.attempt.clear_feedback()
-            self.attempt_settlement.finish_publication()
+            with self.attempt_settlement.publishing(transaction.pending):
+                self.dispatch_effect(publication.effect, now)
+                # Visible marks are retained until the exact physical/source
+                # continuation has been installed successfully. Source
+                # installation can cancel its predecessor's take, but the
+                # original durable receipt must survive through this ACK.
+                self.attempt.clear_feedback()
+                self.attempt_settlement.finish_publication()
         except Exception as exc:
             # The settled take and receipt remain committed. Make an
             # explicit Retry re-enter this selected transaction; do not

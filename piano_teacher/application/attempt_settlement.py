@@ -5,6 +5,7 @@ once; checkpoint and settlement apply only the recorded immutable effects.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace, asdict
+from contextlib import contextmanager
 from ..teaching_decisions import TeachingBinding, validate_teaching_decision
 from .mistake_responses import mistake_policy_facts
 from .assessment_settlement import AssessedTake, assess_completed_take
@@ -129,6 +130,10 @@ class AttemptSettlement:
         self._full_completion: PendingFullCompletion | None = None
         self._rolling = None
         self._rolling_effects_applied: set[str] = set()
+        # An effect may enter a selected successor via the ordinary source
+        # installer, whose Stop/new-take cleanup must not discard the old
+        # durable receipt until that effect has been fully acknowledged.
+        self._publishing: PendingTeachingDecision | None = None
         self.authority_revision = 0
         self.course_revision = 0
         self.cancellation_generation = 0
@@ -162,6 +167,25 @@ class AttemptSettlement:
     def pending_assessed_bpm(self):
         return (self.pending.state.route.performed_bpm
                 if self.pending_result is not None else None)
+
+    @contextmanager
+    def publishing(self, pending: PendingTeachingDecision):
+        """Protect only the currently selected durable effect handoff.
+
+        No lock or independent event worker is introduced. The outer
+        PracticeSession lock serializes commands, MIDI and this effect.
+        Internal new-exposure cleanup may advance the cancellation epoch
+        but may not erase the receipt being published.
+        """
+        if (pending is not self.pending or pending.receipt is None
+                or pending.phase != "effects_applied"
+                or self._publishing is not None):
+            raise ValueError("A committed source effect requires one publication lease")
+        self._publishing = pending
+        try:
+            yield
+        finally:
+            self._publishing = None
 
     def finish_publication(self) -> None:
         """Publish only after the durable receipt's source effects completed.
@@ -719,7 +743,15 @@ class AttemptSettlement:
     def cancel(self, pending=None, *, reason, now):
         if pending is not None and pending is not self.pending:
             return
-        self.pending = None
+        # Only during a validated, serialized successor publication may
+        # ordinary source-install/Stop cleanup retain an old receipt. This
+        # prevents a new guided or timed exposure from erasing its durable
+        # predecessor halfway through a successful handoff.
+        keep_receipt = (self.pending is not None
+                        and self._publishing is self.pending
+                        and self.pending.phase == "effects_applied")
+        if not keep_receipt:
+            self.pending = None
         self._completion = None
         self._full_completion = None
         self._rolling = None
