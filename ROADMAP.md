@@ -1,6 +1,6 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-22 · MIDI input only**
+**Updated 2026-11-23 · MIDI input only**
 
 [Practice flow](docs/practice-flow.md) is the learner-visible contract.
 [Architecture](docs/architecture.md), [development](docs/development.md) and
@@ -40,7 +40,7 @@ The separate final examination uses the whole original piece.
 
 ## Active architecture unification roadmap (A0–A7, adopted 2026-11-22)
 
-**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; A1 integration has begun but is not accepted; A2–A7 remain open.** This is
+**Status: IN PROGRESS — A0 has outstanding exact-HEAD verification; A1 integration has begun but is not accepted; A2–A7 remain open. On 2026-11-23 the full local suite and embedded production verification passed (software only); see the A2/A3 executed verification checkpoint.** This is
 the next development track. The V0–V7 implementation/acceptance work and
 older S0–S7 decomposition remain below as historical evidence and open
 verification requirements, **not** as a requirement to keep all existing
@@ -1022,6 +1022,62 @@ commit**; do not reuse historical green CI as verification.
 **remain IN PROGRESS until complete behavioral/structural acceptance**.
 No Python, Godot, embedded, package or physical test is claimed, and GitHub
 CI stays manual-only; no workflow was triggered.
+
+### A2/A3 executed verification and cleanup — 2026-11-23
+
+**Starting point:** commit `3675d67` was **not green**. Its checkpoint said
+no tests had run, and that was correct. Running them found 4 Python failures, 5 Godot
+score-readiness failures and a GDScript parse error that prevented three
+embedded scenarios from loading.
+
+**Behaviour defect fixed:** after a window/hand was mastered and the next
+stage's score was not preloaded, `AwaitSelectedScore` dropped the settled
+`next_exposure`. The successor's `score_ready` then failed with "No current
+source-bound exposure is ready for playback": the learner could not start
+the next hand or the final. The effect now carries the exposure and
+`TeachingDecisions` records it when the effect is dispatched.
+
+**Removed (−700 lines, no shims):** a second, unused progression/BPM path
+on `LearningPlan` (`apply_result`, `increase/decrease_tempo`, `bpm_after`,
+`set_bpm`, `set_practice_bpm`, `select_step`, `jump`,
+`refresh_from_feedback`, `revisit_source_errors`). Every learner change now
+goes only through the pure `teaching_course` decision and
+`apply_teaching_progress`. Also removed: the unused `CalibrationRequested` event (calibration uses
+the `practice.command` route), the unused Fukuda DTW mistake detector,
+timed-assessment/constant-tempo prototypes, a barline alias, around 25 other
+definitions with no reference in Python, Godot, native code, tests or
+scripts, and the imports they left behind.
+
+**Tests adjusted to current behaviour (no new scenarios):** contract v6;
+the suspended intent lives in `PlaybackCoordinator`; the readiness scenario
+uses the single `score.bundle` request; the source-progression tools test
+drives the production `manual_progress` decision.
+
+**Executed on the final code (software only):**
+
+| Check | Result |
+| --- | --- |
+| `bash scripts/test.sh --coverage` | 235 Python passed; Godot syntax and all 5 behaviour scenarios 0 failures; coverage 76.0% lines / 56.6% branches (informational) |
+| `bash scripts/verify-embedded-production-local.sh` | PASS on `2caac43`, including real-scene synthetic MIDI, lost reserve/present ACK recovery and the relocated package. Only dead locals and imports changed after that. |
+| SQLite fault probe (scratch, not committed) | The progress write fails on the mastering take: plan and SQLite unchanged, no mastery, "Could not save the assessment … Retry". Retry (`restart`) replays the retained graded take once: one mastery, then the final at 50%. |
+
+**Remaining A2 blockers:**
+- After a failed save the result stays pending, so the phase is `feedback` and the
+  **primary control reads "Pause"** while the message says Retry. The Retry
+  control is enabled and correct. Owner decision needed at the piano.
+- Fault injection during *source installation after partial application*
+  and Stop/source replacement during the durable publication lease are
+  still unexecuted.
+
+**Remaining A3 blockers:** `PlaybackSession`, `PlaybackCoordinator`,
+`VisualTransport`, `TransportTiming` and `TimedPlayback` remain separate
+classes. Audit: the epoch/count-in fields are stored only in
+`VisualTransport` and written only by `PlaybackSession`, so there is no
+competing writer. Merging the classes is still open and needs piano
+acceptance.
+
+**Physical acceptance:** none. Connected-piano MIDI, audio and visual behaviour has
+not been tested. A2 and A3 stay **IN PROGRESS**. GitHub CI remains manual-only.
 
 ### A3 — Single transport state and physical playback protocol
 
