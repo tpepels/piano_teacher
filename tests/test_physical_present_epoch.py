@@ -33,7 +33,7 @@ def _authorized():
         "tempo_segments": [
             {"start_beat": start, "end_beat": end, "bpm": bpm}
             for start, end, bpm in source.tempo_segments],
-        "transport_id": 19}
+        "transport_id": 19, "transport_origin_beat": facts.play_from_beat}
     receipt = {"intent_id": "intent", "attempt": 0, "take_id": "take",
                "segment_id": "segment", "authorized": True}
     owner._completed.append(("segment", receipt))
