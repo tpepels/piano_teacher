@@ -64,7 +64,8 @@ from .tick_observations import TickObservations
 from .pre_assessment_transitions import PreAssessmentTransitions
 from .take_progression import TakeProgression
 from .tick_publisher import TickPublisher
-from .transport_actions import TransportActions
+from .transport_actions import (
+    PlaybackAuthorization, RetainedResultReplay, RouteCommands, TransportCommands)
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
 from .recovery_streak import RecoveryStreak
@@ -356,14 +357,25 @@ def _event_boundary(r) -> None:
         lesson=r.lesson, lesson_execution=r.lesson_execution,
         lifecycle=r.session_lifecycle, measurement=r.measurement,
         notices=r.notices, transport=r.transport, progress=r.progress)
-    r.transport_commands = TransportActions(
-        take=r.take, clock=r.now, exposure_workflows=r.exposure_workflows,
-        lesson=r.lesson, lesson_execution=r.lesson_execution,
-        lifecycle=r.session_lifecycle, listen=r.listen, notices=r.notices,
-        settlement=r.settlement,
-        transport=r.transport, read_models=r.read_models,
-        rolling_recovery=r.rolling_recovery, score=r.score,
-        timed_playback=r.timed_playback, transport_timing=r.transport_timing)
+    r.playback_authorization = PlaybackAuthorization(
+        lesson=r.lesson, transport=r.transport,
+        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        lifecycle=r.session_lifecycle, listen=r.listen,
+        read_models=r.read_models, notices=r.notices, clock=r.now)
+    r.retained_replay = RetainedResultReplay(
+        lesson=r.lesson, take=r.take, transport=r.transport,
+        settlement=r.settlement, rolling_recovery=r.rolling_recovery,
+        notices=r.notices, clock=r.now)
+    r.route_commands = RouteCommands(
+        lesson=r.lesson, transport=r.transport,
+        exposure_workflows=r.exposure_workflows,
+        lesson_execution=r.lesson_execution, lifecycle=r.session_lifecycle,
+        notices=r.notices)
+    r.transport_commands = TransportCommands(
+        lesson=r.lesson, transport=r.transport,
+        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        score=r.score, routes=r.route_commands, replay=r.retained_replay,
+        authorization=r.playback_authorization)
 
     r.midi_callback = MidiCallback(
         runtime_timings=r.runtime_timings, clock=r.now)
@@ -417,6 +429,7 @@ def _event_boundary(r) -> None:
             transport=r.transport, timed_playback=r.timed_playback,
             history_management=r.history_management,
             transport_commands=r.transport_commands,
+            playback_authorization=r.playback_authorization,
             learning_commands=r.learning_commands))
     r.tick_worker = TickWorker(
         timeline=r.practice_timeline, publisher=r.tick_publisher,
@@ -434,7 +447,7 @@ def _event_boundary(r) -> None:
         midi_callback=r.midi_callback,
         settings_workflows=r.settings_workflows,
         timed_playback=r.timed_playback,
-        transport_commands=r.transport_commands,
+        playback_authorization=r.playback_authorization,
         source_installation=r.source_installation,
         library_opening=r.library_opening, lesson=r.lesson,
         lesson_execution=r.lesson_execution, score_preload=r.score_preload,

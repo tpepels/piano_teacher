@@ -1,36 +1,29 @@
-"""Transport actions and exact graphical playback authorization.
+"""Transport commands and the physical playback authorization, in four owners.
 
-Consumes the current source, one PlaybackCoordinator receipt and one timed
-transport. No application command-router backreference or nested control call.
+PlaybackAuthorization is the one path from the renderer's physical
+protocol (reserve, present, withdraw, fail) and score/audio
+acknowledgements to an authorized take. TransportCommands handles Start,
+Restart, Pause and Resume. RetainedResultReplay replays a saved result
+after a failed save or rolling recovery. RouteCommands enters routes
+that change assets or untimed teaching (Listen, Learn, reload) and
+handles Practice and Stop.
 """
 from __future__ import annotations
 from .playback_transitions import PlaybackTransition
 
 
-class TransportActions:
-    def __init__(self, *, take, clock, exposure_workflows, lesson,
-                          lesson_execution, lifecycle, listen, notices,
-                          settlement, transport, read_models,
-                          rolling_recovery, score, timed_playback,
-                          transport_timing):
-        self.take = take
-        self.clock = clock
-        self.exposure_workflows = exposure_workflows
+class PlaybackAuthorization:
+    def __init__(self, *, lesson, transport, transport_timing, timed_playback,
+                 lifecycle, listen, read_models, notices, clock):
         self.lesson = lesson
-        self.lesson_execution = lesson_execution
+        self.transport = transport
+        self.transport_timing = transport_timing
+        self.timed_playback = timed_playback
         self.lifecycle = lifecycle
         self.listen = listen
-        self.notices = notices
-        self.settlement = settlement
-        self.transport = transport
         self.read_models = read_models
-        self.rolling_recovery = rolling_recovery
-        self.score = score
-
-
-        self.timed_playback = timed_playback
-        self.transport_timing = transport_timing
-
+        self.notices = notices
+        self.clock = clock
 
     def reserve_physical(self, **values) -> dict:
         return self.transport.reserve(self.transport_timing.playback_facts(), **values)
@@ -111,25 +104,125 @@ class TransportActions:
         elif self.transport.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
             self.timed_playback.begin_listen_if_ready()
 
+    def resume_current_session(self, *, presentation_lead_seconds=0.0,
+                                scheduled_deadline=None):
+        completed = self.timed_playback.resume(
+            presentation_lead_seconds=presentation_lead_seconds,
+            scheduled_deadline=scheduled_deadline)
+        if completed.deferred_score_revision is not None:
+            # Infrastructure acknowledgement stays within this transaction.
+            # Re-entering control() from Resume would recursively start a
+            # second command scope and repeat the application router.
+            self.control_acknowledgement(
+                "score_ready", {"revision": completed.deferred_score_revision},
+                reason="score_ready")
+            self.read_models.prepare_score_presentation()
+        self.timed_playback.begin_listen_if_ready()
+
+
+
+class RetainedResultReplay:
+    def __init__(self, *, lesson, take, transport, settlement,
+                 rolling_recovery, notices, clock):
+        self.lesson = lesson
+        self.take = take
+        self.transport = transport
+        self.settlement = settlement
+        self.rolling_recovery = rolling_recovery
+        self.notices = notices
+        self.clock = clock
+
+    def pending(self) -> bool:
+        """A failed save or rolling recovery is waiting to be replayed."""
+        return self.take.settlement_failed or self.take.pending_rolling is not None
+
+    def replay(self) -> None:
+        """Play after a failed save or rolling recovery replays that same result."""
+        if self.take.settlement_failed:
+            revision = self.lesson.revision
+            # Drop the failure instruction; the replayed continuation
+            # publishes its own next action (count-in or next passage).
+            self.notices.next_action = ""
+            self.notices.feedback = (
+                self.settlement.retry_failed_publication(
+                    now=self.clock()) or "Assessment saved")
+            if self.lesson.revision != revision:
+                self.transport.await_score(self.lesson.revision)
+            return
+        if self.take.pending_rolling is not None:
+            decision, phrase, grid, score_beat, _old_now = self.take.pending_rolling
+            self.rolling_recovery.apply_rolling_recovery(decision, phrase, grid, score_beat, self.clock())
+            self.transport.clear_pause_for_restart()
+            return
+        raise ValueError("No retained result to replay")
+
+
+class RouteCommands:
+    def __init__(self, *, lesson, transport, exposure_workflows,
+                 lesson_execution, lifecycle, notices):
+        self.lesson = lesson
+        self.transport = transport
+        self.exposure_workflows = exposure_workflows
+        self.lesson_execution = lesson_execution
+        self.lifecycle = lifecycle
+        self.notices = notices
+
+    def practice(self, kwargs: dict, *, effect=None) -> None:
+        self.exposure_workflows.prepare_practice(effect=effect,reason="practice")
+        if kwargs.get("wait_for_player", False):
+            # Listen returns to a ready score without an auto count-in.
+            self.transport.wait_for_player()
+            self.notices.feedback = "Ready to play"
+            self.notices.next_action = "Play one piano key to begin, or press Play."
+
+    def stop(self) -> None:
+        self.lifecycle.stop(reason="stop")
+        # A stopped session has no take a later rest could follow (M6).
+        self.transport.clear_take_end()
+        self.notices.feedback = "Stopped"
+        self.notices.next_action = "Start when you are ready."
+
+    def enter_source_route(self, action: str, transition) -> None:
+        """Enter a selected route that changes assets or untimed teaching."""
+        effect, route = transition.effect, transition.route
+        selected = self.lesson.install_command(effect)
+        if route == "listen":
+            self.exposure_workflows.prepare_listen(effect=effect,reason=action)
+        elif route == "prepare_practice":
+            self.exposure_workflows.prepare_practice(exposure=selected,reason=action)
+        elif route == "learn":
+            self.lesson_execution.begin_learn(exposure=selected,reason=action)
+        elif route == "reload_score":
+            self.lifecycle.stop(reason=action)
+            self.lesson.advance_revision()
+            self.transport.await_score(self.lesson.revision)
+            self.notices.feedback = "Preparing sheet music"
+        else:
+            raise ValueError(f"Route {route!r} is admitted physically, not entered")
+
+
+class TransportCommands:
+    def __init__(self, *, lesson, transport, transport_timing, timed_playback,
+                 score, routes, replay, authorization):
+        self.lesson = lesson
+        self.transport = transport
+        self.transport_timing = transport_timing
+        self.timed_playback = timed_playback
+        self.score = score
+        self.routes = routes
+        self.replay = replay
+        self.authorization = authorization
+
     def control_transport(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "practice":
-            self.exposure_workflows.prepare_practice(effect=effect,reason=action)
-            if kwargs.get("wait_for_player", False):
-                # Listen returns to a ready score without an auto count-in.
-                self.transport.wait_for_player()
-                self.notices.feedback = "Ready to play"
-                self.notices.next_action = "Play one piano key to begin, or press Play."
+            self.routes.practice(kwargs, effect=effect)
         elif action == "stop":
-            self.lifecycle.stop(reason="stop")
-            # A stopped session has no take a later rest could follow (M6).
-            self.transport.clear_take_end()
-            self.notices.feedback = "Stopped"
-            self.notices.next_action = "Start when you are ready."
+            self.routes.stop()
         elif action in ("start", "restart"):
             self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
             self.transport_timing.update_short_rest(kwargs)
-            if self.take.settlement_failed or self.take.pending_rolling is not None:
-                self.replay_retained_result()
+            if self.replay.pending():
+                self.replay.replay()
                 return
             effect = effect or self.lesson.manual_effect(action)
             transition = PlaybackTransition.from_effect(
@@ -141,7 +234,7 @@ class TransportActions:
                 # These routes change assets or enter untimed teaching.
                 # The resulting timed source, if any, is requested only
                 # after its exact selected score revision is prepared.
-                self.enter_source_route(action, transition)
+                self.routes.enter_source_route(action, transition)
             else:
                 selected = transition.exposure
                 self.transport_timing.request_playback( action=action,
@@ -166,64 +259,10 @@ class TransportActions:
                 # Resume inside a rest resumes the pending teaching
                 # decision; it is not a new timed take. Its next take
                 # will independently enter the admission transaction.
-                self.resume_current_session()
+                self.authorization.resume_current_session()
                 return
             from_beat = self.transport.play_from_beat + max(
                 0.0, self.transport_timing.elapsed_beat(
                     self.transport.paused_at - self.transport.run_at))
             self.transport_timing.request_playback( action="resume",
                 mode=self.transport.mode, from_beat=from_beat)
-
-    def replay_retained_result(self) -> None:
-        """Play after a failed save or rolling recovery replays that same result."""
-        if self.take.settlement_failed:
-            revision = self.lesson.revision
-            # Drop the failure instruction; the replayed continuation
-            # publishes its own next action (count-in or next passage).
-            self.notices.next_action = ""
-            self.notices.feedback = (
-                self.settlement.retry_failed_publication(
-                    now=self.clock()) or "Assessment saved")
-            if self.lesson.revision != revision:
-                self.transport.await_score(self.lesson.revision)
-            return
-        if self.take.pending_rolling is not None:
-            decision, phrase, grid, score_beat, _old_now = self.take.pending_rolling
-            self.rolling_recovery.apply_rolling_recovery(decision, phrase, grid, score_beat, self.clock())
-            self.transport.clear_pause_for_restart()
-            return
-        raise ValueError("No retained result to replay")
-
-    def enter_source_route(self, action: str, transition) -> None:
-        """Enter a selected route that changes assets or untimed teaching."""
-        effect, route = transition.effect, transition.route
-        selected = self.lesson.install_command(effect)
-        if route == "listen":
-            self.exposure_workflows.prepare_listen(effect=effect,reason=action)
-        elif route == "prepare_practice":
-            self.exposure_workflows.prepare_practice(exposure=selected,reason=action)
-        elif route == "learn":
-            self.lesson_execution.begin_learn(exposure=selected,reason=action)
-        elif route == "reload_score":
-            self.lifecycle.stop(reason=action)
-            self.lesson.advance_revision()
-            self.transport.await_score(self.lesson.revision)
-            self.notices.feedback = "Preparing sheet music"
-        else:
-            raise ValueError(f"Route {route!r} is admitted physically, not entered")
-
-    def resume_current_session(self, *, presentation_lead_seconds=0.0,
-                                scheduled_deadline=None):
-        completed = self.timed_playback.resume(
-            presentation_lead_seconds=presentation_lead_seconds,
-            scheduled_deadline=scheduled_deadline)
-        if completed.deferred_score_revision is not None:
-            # Infrastructure acknowledgement stays within this transaction.
-            # Re-entering control() from Resume would recursively start a
-            # second command scope and repeat the application router.
-            self.control_acknowledgement(
-                "score_ready", {"revision": completed.deferred_score_revision},
-                reason="score_ready")
-            self.read_models.prepare_score_presentation()
-        self.timed_playback.begin_listen_if_ready()
-

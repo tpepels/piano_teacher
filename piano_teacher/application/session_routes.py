@@ -18,7 +18,8 @@ from .session_events import (
 
 def command_routes(*, device_workflows, settings_workflows, midi_input,
                    transport, timed_playback, history_management,
-                   transport_commands, learning_commands):
+                   transport_commands, playback_authorization,
+                   learning_commands):
     """Route family -> handler(action, kwargs, effect)."""
     def calibration(action, kwargs, effect):
         changes = device_workflows.calibrate(action, stop_reason=action)
@@ -41,7 +42,7 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
         "reset": lambda action, kwargs, effect: history_management.reset_current_path(
             fingerprint=kwargs.get("fingerprint"), confirm=kwargs.get("confirm") is True),
         "acknowledgement": lambda action, kwargs, effect:
-            transport_commands.control_acknowledgement(action, kwargs, reason=action),
+            playback_authorization.control_acknowledgement(action, kwargs, reason=action),
         "listening": lambda action, kwargs, effect:
             learning_commands.control_listening(action, kwargs, effect=effect),
         "learning": lambda action, kwargs, effect:
@@ -55,7 +56,7 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
 
 def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    midi_device, midi_callback,
-                   settings_workflows, timed_playback, transport_commands,
+                   settings_workflows, timed_playback, playback_authorization,
                    source_installation, library_opening, lesson, lesson_execution, score_preload,
                    device_workflows, history_management, lifecycle):
     """Event type -> handler(event)."""
@@ -97,10 +98,10 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         PhysicalMidi: physical,
         ClockAdvanced: lambda e: tick.advance(),
         MidiShortcut: shortcut,
-        PlaybackReserved: lambda e: transport_commands.reserve_physical(**e.receipt),
-        PlaybackPresented: lambda e: transport_commands.present_physical(**e.receipt),
-        PlaybackWithdrawn: lambda e: transport_commands.withdraw_physical(**e.receipt),
-        PlaybackFailed: lambda e: transport_commands.fail_physical(**e.failure),
+        PlaybackReserved: lambda e: playback_authorization.reserve_physical(**e.receipt),
+        PlaybackPresented: lambda e: playback_authorization.present_physical(**e.receipt),
+        PlaybackWithdrawn: lambda e: playback_authorization.withdraw_physical(**e.receipt),
+        PlaybackFailed: lambda e: playback_authorization.fail_physical(**e.failure),
         SourceCommitted: source,
         FingeringCorrectionCommitted: lambda e:
             source_installation.install_fingering_correction(e.corrected),
