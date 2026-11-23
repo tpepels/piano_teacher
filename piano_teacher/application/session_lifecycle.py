@@ -11,14 +11,13 @@ from ..lesson_settings import SETTINGS
 
 
 class SessionLifecycle:
-    def __init__(self, *, transport, take, midi_ingress, continuation, lesson,
-                          live_input, listen, measurement, clock):
+    def __init__(self, *, transport, take, midi_input, continuation, lesson,
+                          listen, measurement, clock):
         self.transport = transport
         self.take = take
-        self.midi_ingress = midi_ingress
+        self.midi_input = midi_input
         self.continuation = continuation
         self.lesson = lesson
-        self.live_input = live_input
         self.listen = listen
         self.measurement = measurement
         self.clock = clock
@@ -45,12 +44,12 @@ class SessionLifecycle:
                 # a failed disk flush cannot leave grading running after
                 # Stop already invalidated its playback authorization.
                 self.transport.finish_take()
-                self.midi_ingress.deferred.clear()
+                self.midi_input.deferred_midi.clear()
                 self.transport.freeze_after_fault(self.clock())
                 raise
         self.take.cancel_settlement(reason=reason, now=self.clock())
-        self.midi_ingress.deferred.clear()
-        self.midi_ingress.clear_resume_gate()
+        self.midi_input.deferred_midi.clear()
+        self.midi_input.clear_resume_gate()
         self.transport.clear_grading_floor()
         # Precompiled successors remain valid only for their source identity.
         self.continuation.stop()
@@ -58,15 +57,15 @@ class SessionLifecycle:
         self.transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
         self.take.reset_for_stop()
-        self.live_input.reset_attempt()
+        self.midi_input.reset_live_input()
         self.listen.cancel()
 
-    def shutdown(self, *, midi, progress, receive) -> None:
+    def shutdown(self, *, progress, receive) -> None:
         """Close the active evidence/device/database once, in established order."""
         if self.measurement.closed:
             return
         self.stop(reason="shutdown")
         self.measurement.close()
-        with midi.selecting("", callback=receive):
+        with self.midi_input.selecting_device("", callback=receive):
             pass
         progress.close()

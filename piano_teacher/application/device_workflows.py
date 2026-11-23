@@ -8,17 +8,14 @@ from __future__ import annotations
 
 
 class DeviceWorkflows:
-    def __init__(self, *, midi, shortcuts, live_input, lifecycle,
-                 lesson, notices, transport, calibration,
-                 library, clock):
-        self.midi = midi
-        self.shortcuts = shortcuts
-        self.live_input = live_input
+    def __init__(self, *, midi_input, lifecycle, lesson, notices, transport,
+                          library, clock):
+        self.midi_input = midi_input
+
         self.lifecycle = lifecycle
         self.lesson = lesson
         self.notices = notices
         self.transport = transport
-        self.calibration = calibration
         self.library = library
         self.clock = clock
 
@@ -34,9 +31,9 @@ class DeviceWorkflows:
         self.notices.publish(notice.feedback, notice.next_action)
 
     def disconnect(self, reason: str) -> None:
-        with self.midi.disconnected(reason) as notice:
-            self.shortcuts.cancel_capture()
-            self.live_input.clear_device()
+        with self.midi_input.disconnected(reason) as notice:
+            self.midi_input.cancel_key_range_capture()
+            self.midi_input.clear_live_device()
             self.lifecycle.stop(reason=reason)
             teaching = self.lesson.guided_controller
             if teaching is not None:
@@ -44,7 +41,7 @@ class DeviceWorkflows:
         self.notices.publish(notice.feedback, notice.next_action)
 
     def scan(self):
-        return self.midi.scan()
+        return self.midi_input.scan_devices()
 
     def handle_scan_error(self, scan) -> None:
         if scan.error is not None:
@@ -52,15 +49,15 @@ class DeviceWorkflows:
             raise RuntimeError(self.notices.feedback) from scan.error
 
     def restore_preferred(self, names, *, callback) -> None:
-        self.present(self.midi.restore_preferred(
+        self.present(self.midi_input.restore_preferred_device(
             names, self.library.settings.get("midi_device", ""),
             callback=callback))
 
     def select(self, name: str, *, callback) -> None:
         try:
-            with self.midi.selecting(name, callback=callback) as selected:
-                self.shortcuts.cancel_capture()
-                self.live_input.clear_device()
+            with self.midi_input.selecting_device(name, callback=callback) as selected:
+                self.midi_input.cancel_key_range_capture()
+                self.midi_input.clear_live_device()
                 self.lifecycle.stop(reason="device_changed")
         except RuntimeError as exc:
             self.notices.feedback = str(exc)
@@ -68,30 +65,30 @@ class DeviceWorkflows:
         self.present(selected.notice)
 
     def hardware_action(self, action: str) -> dict:
-        return self.midi.diagnostics_action(
+        return self.midi_input.diagnostics_action(
             action, running=self.transport.running)
 
     def calibrate(self, action: str, *, stop_reason: str) -> dict | None:
         if action == "calibration_start":
-            if not self.midi.connected:
+            if not self.midi_input.connected:
                 raise ValueError("Connect the MIDI keyboard before calibrating")
             self.lifecycle.stop(reason=stop_reason)
-            self.calibration.start(self.clock())
+            self.midi_input.start_calibration(self.clock())
             self.notices.feedback = "Tap one key per click through five continuous rounds"
         elif action == "calibration_cancel":
-            self.calibration.cancel()
+            self.midi_input.cancel_calibration()
         elif action == "calibration_apply":
-            self.calibration.advance(self.clock())
-            result = self.calibration.snapshot(self.clock())["result"]
+            self.midi_input.advance_calibration(self.clock())
+            result = self.midi_input.calibration_snapshot(self.clock())["result"]
             if not result or not result.get("reliable"):
                 raise ValueError("Finish a consistent calibration before applying it")
             return {"midi_offset_ms":max(0,min(250,result["estimate_ms"]))}
         elif action == "calibration_reset":
-            self.calibration.reset()
+            self.midi_input.reset_calibration()
             return {"midi_offset_ms":0}
         else:
             raise ValueError("Unsupported calibration command")
         return None
 
     def connection_due(self) -> bool:
-        return self.midi.scan_due(self.library.settings.get("midi_device", ""))
+        return self.midi_input.scan_due(self.library.settings.get("midi_device", ""))

@@ -180,14 +180,14 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
     worker = object.__new__(PracticeTimeline)
     worker.clock = lambda: 110.0
     worker.poll_midi = lambda: None
-    worker.midi_calibration = SimpleNamespace(advance=lambda now: None)
+    worker.midi_input = SimpleNamespace(
+        advance_calibration=lambda now: None, resume_grading_after=0.0)
     worker.exposure_workflows = SimpleNamespace(apply_listen_failure=lambda: None)
     worker.transport = SimpleNamespace(
         mode="practice", running=True, preview_only=False,
         awaiting_score_revision=None, intent=None,
         paused=False, run_at=100.0, preparation_pending=False)
     worker.lesson = SimpleNamespace(guided_controller=None)
-    worker.midi_ingress = SimpleNamespace(resume_grading_after=0.0)
     worker.take = Take(runtime=SimpleNamespace(performance_summary=None),
                        settlement=owner)
     worker.measurement = SimpleNamespace(observe_phase=lambda facts, now: None)

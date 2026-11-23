@@ -9,14 +9,15 @@ from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, R
 
 class TimedPlayback:
     def __init__(self, *, lesson, notices, transport, take, exposure_workflows,
-                          midi, score, evidence_context, transport_timing,
-                          lesson_execution, clock, lock, phase):
+                          midi_input, score, evidence_context,
+                          transport_timing, lesson_execution, clock, lock,
+                          phase):
         self.lesson = lesson
         self.notices = notices
         self.transport = transport
         self.take = take
         self.exposure_workflows = exposure_workflows
-        self.midi = midi
+        self.midi_input = midi_input
         self.evidence_context = evidence_context
         self.score = score
         self.transport_timing, self.lesson_execution = transport_timing, lesson_execution
@@ -54,7 +55,7 @@ class TimedPlayback:
                 TimedStartRequest(mode=mode,
                     position=self.lesson.opening_beat if from_beat is None else from_beat,
                     automatic=selected.automatic if selected is not None else mode == "practice",
-                    connected=self.midi.connected,loop_continuation=loop_continuation,
+                    connected=self.midi_input.connected,loop_continuation=loop_continuation,
                     scheduled_deadline=scheduled_deadline,
                     presentation_lead_seconds=0.0,
                     count_in_plan=count_in_plan))
@@ -111,7 +112,7 @@ class TimedPlayback:
             learning=self.transport.mode == "learn" and self.lesson.guided_controller is not None,
             bpm=self.lesson.plan.bpm if self.lesson.plan is not None else None,
             full_count_in_beats=self.transport_timing.next_count_in_beats(),
-            midi_connected=self.midi.connected,reading_lead_seconds=presentation_lead_seconds,
+            midi_connected=self.midi_input.connected,reading_lead_seconds=presentation_lead_seconds,
             scheduled_deadline=scheduled_deadline))
         if resumed.learning:
             self.lesson.guided_controller.resume(now=resumed.now)

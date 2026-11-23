@@ -11,11 +11,10 @@ from ..state_projection import SessionSnapshot, project_session_state
 
 
 class SessionReadModels:
-    def __init__(self, *, lesson, notices, take, transport, library, midi,
-                          midi_ingress, midi_key_shortcuts, midi_calibration,
-                          attempt_progression, score, lesson_execution, listen,
-                          live_input, live_assessment, lock, clock, phase,
-                          elapsed_beat, visual_motion, tempo_map,
+    def __init__(self, *, lesson, notices, take, transport, library,
+                          midi_input, attempt_progression, score,
+                          lesson_execution, listen, live_assessment, lock,
+                          clock, phase, elapsed_beat, visual_motion, tempo_map,
                           next_count_in_beats, next_count_in_meter,
                           start_rate_bpm, presentation_bpm, playback_facts):
         self.lesson = lesson
@@ -23,12 +22,11 @@ class SessionReadModels:
         self.take = take
         self.transport = transport
         self.library = library
-        self.midi, self.midi_ingress = midi, midi_ingress
-        self.midi_key_shortcuts, self.midi_calibration = midi_key_shortcuts, midi_calibration
+        self.midi_input = midi_input
         self.attempt_progression = attempt_progression
         self.score = score
         self.lesson_execution = lesson_execution
-        self.listen, self.live_input, self.live_assessment = listen, live_input, live_assessment
+        self.listen, self.live_assessment = listen, live_assessment
         self.lock, self.clock = lock, clock
         self.phase, self.elapsed_beat = phase, elapsed_beat
         self.visual_motion, self.tempo_map = visual_motion, tempo_map
@@ -137,13 +135,13 @@ class SessionReadModels:
             state["short_rest_latency_seconds"] = SNAPSHOT_LATENCY_SECONDS
             state["resume_count_in_beat"] = (
                 SCHEDULER.seconds_beats(
-                    calibration_sample_at-self.midi_ingress.resume_grading_after,
+                    calibration_sample_at-self.midi_input.resume_grading_after,
                     self.lesson.plan.bpm)
                 if self.transport.running and not self.transport.paused
-                and calibration_sample_at < self.midi_ingress.resume_grading_after
+                and calibration_sample_at < self.midi_input.resume_grading_after
                 and self.lesson.plan is not None else None)
-            state["midi_key_range"] = self.midi_key_shortcuts.status(self.midi.device)
-            state["midi_calibration"] = self.midi_calibration.snapshot(
+            state["midi_key_range"] = self.midi_input.key_range_status(self.midi_input.device)
+            state["midi_calibration"] = self.midi_input.calibration_snapshot(
                 calibration_sample_at)
             state["controls"] = project_controls(state)
             return state
@@ -166,11 +164,11 @@ class SessionReadModels:
             guided_range=self.lesson.guided_beat_range,
             is_builtin_warmup=self.lesson.warmup,
             metronome=self.library.settings["metronome"],
-            midi_input_count=self.midi.input_count,
-            midi_input_note=self.midi.input_note,
-            midi_input_at=self.midi.input_at,
-            midi_connected=self.midi.connected,
-            midi_device=self.midi.device,
+            midi_input_count=self.midi_input.input_count,
+            midi_input_note=self.midi_input.input_note,
+            midi_input_at=self.midi_input.input_at,
+            midi_connected=self.midi_input.connected,
+            midi_device=self.midi_input.device,
             midi_notes=len(self.take.recorder.presses) if self.take.recorder is not None else 0,
             teaching_active=self.lesson.guided_controller is not None,
             mode=self.transport.mode,
@@ -214,7 +212,7 @@ class SessionReadModels:
             display_phrase=self.lesson_execution.display_phrase,
             guided_marks=self.score.guided_marks,
             listen_snapshot=self.listen.snapshot,
-            live_input_snapshot=self.live_input.snapshot,
+            live_input_snapshot=self.midi_input.live_input_snapshot,
             preparation_schedule=self.transport.preparation_schedule,
             teaching_snapshot=self.lesson.guided_controller.snapshot if self.lesson.guided_controller is not None else None,
             clock=self.clock if sampled_at is None else lambda: sampled_at,

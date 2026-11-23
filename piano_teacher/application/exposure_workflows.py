@@ -14,7 +14,7 @@ from .exposure_preparation import (
 
 class ExposureWorkflows:
     def __init__(self, *, lesson, take, score, transport, listen, notices,
-                          lifecycle, learner_progress, progress, midi,
+                          lifecycle, learner_progress, progress, midi_input,
                           evidence_context, clock):
         self.lesson = lesson
 
@@ -28,7 +28,7 @@ class ExposureWorkflows:
         self.lifecycle = lifecycle
         self.learner_progress = learner_progress
         self.progress = progress
-        self.midi = midi
+        self.midi_input = midi_input
         self.evidence_context = evidence_context
         self.clock = clock
 
@@ -119,7 +119,7 @@ class ExposureWorkflows:
             self.transport.open_take()
             self.lesson.bind_guided_selection(
                 revision=prepared.revision,
-                now=self.clock(), connected=self.midi.connected)
+                now=self.clock(), connected=self.midi_input.connected)
             self.transport.await_score(prepared.revision)
             self.transport.capture_guided_start(
                 self.evidence_context.build(

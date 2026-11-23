@@ -10,14 +10,14 @@ from .learning_capture import identifier
 
 class SettingsWorkflows:
     def __init__(self, *, library, measurement, lifecycle, notices,
-                 policy_registry, midi_key_shortcuts, transport,
-                 progress, library_health, lesson):
+                          policy_registry, midi_input, transport, progress,
+                          library_health, lesson):
         self.library = library
         self.measurement = measurement
         self.lifecycle = lifecycle
         self.notices = notices
         self.policy_registry = policy_registry
-        self.midi_key_shortcuts = midi_key_shortcuts
+        self.midi_input = midi_input
         self.transport = transport
         self.progress = progress
         self.library_health = library_health
@@ -68,7 +68,7 @@ class SettingsWorkflows:
                     "Press Play to start a new attempt.")
             self.policy_registry.apply_hold_rule(updated["grade_note_holds"])
         if "midi_key_ranges" in changes:
-            self.midi_key_shortcuts.configure(updated["midi_key_ranges"])
+            self.midi_input.configure_shortcuts(updated["midi_key_ranges"])
         self.measurement.event("settings_applied", {
             "intent_id": intent, "changes": changes})
         if {"evidence_retention_days", "evidence_budget_mib"} & changes.keys():

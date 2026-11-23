@@ -8,10 +8,10 @@ from ..state_projection import PhaseSnapshot, project_phase
 
 
 class SessionPhase:
-    def __init__(self, *, transport, lesson, midi_ingress, take):
+    def __init__(self, *, transport, lesson, midi_input, take):
         self.transport = transport
         self.lesson = lesson
-        self.midi_ingress = midi_ingress
+        self.midi_input = midi_input
         self.take = take
 
 
@@ -21,7 +21,7 @@ class SessionPhase:
             teaching_phase = ("loading" if self.transport.awaiting_score_revision is not None
                               else self.lesson.guided_controller.snapshot(now=now)["phase"])
         if (self.transport.running and not self.transport.paused
-                and now < self.midi_ingress.resume_grading_after):
+                and now < self.midi_input.resume_grading_after):
             return "count_in"
         return project_phase(PhaseSnapshot(
             paused=self.transport.paused, running=self.transport.running, run_at=self.transport.run_at,

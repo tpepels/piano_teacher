@@ -57,10 +57,9 @@ _COMMAND_ROUTES = {
 class PracticeSession:
     def __init__(self, *, take, device_workflows, exposure_workflows,
                           history_management, learning_commands, lock,
-                          measurement, midi, midi_key_shortcuts, transport,
-                          read_models, settings_workflows, lesson,
-                          timed_playback, transport_commands, timeline,
-                          midi_ingress, midi_application_input,
+                          measurement, midi_input, transport, read_models,
+                          settings_workflows, lesson, timed_playback,
+                          transport_commands, timeline, midi_application_input,
                           runtime_timings, source_workflows, lesson_execution,
                           score_preload, lifecycle, progress, notices, clock):
         self.take = take
@@ -70,8 +69,7 @@ class PracticeSession:
         self.learning_commands = learning_commands
         self.lock = lock
         self.measurement = measurement
-        self.midi = midi
-        self.midi_key_shortcuts = midi_key_shortcuts
+        self.midi_input = midi_input
         self.transport = transport
         self.read_models = read_models
         self.settings_workflows = settings_workflows
@@ -79,7 +77,6 @@ class PracticeSession:
         self.timed_playback = timed_playback
         self.transport_commands = transport_commands
         self.timeline = timeline
-        self.midi_ingress = midi_ingress
         self.midi_application_input = midi_application_input
         self.runtime_timings = runtime_timings
         self.source_workflows = source_workflows
@@ -178,13 +175,13 @@ class PracticeSession:
             return self.calibration_action(action)
         if route == "device_range":
             if action == "midi_range_cancel":
-                self.midi_key_shortcuts.cancel_capture()
+                self.midi_input.cancel_key_range_capture()
             else:
-                if not self.midi.connected:
+                if not self.midi_input.connected:
                     raise ValueError("Connect a MIDI piano before setting its key range")
                 if self.transport.running and not self.transport.paused:
                     self.timed_playback.pause()
-                self.midi_key_shortcuts.begin_capture(self.midi.device)
+                self.midi_input.begin_key_range_capture(self.midi_input.device)
             return
         if route == "reset":
             return self.history_management.reset_current_path(
@@ -205,7 +202,7 @@ class PracticeSession:
         """Current accepted epoch; caller holds the existing session lock."""
         plan = self.lesson.plan
         return MidiArrival(
-            self.midi.device, self.lesson.fingerprint,
+            self.midi_input.device, self.lesson.fingerprint,
             self.lesson.revision,
             plan.identity if plan is not None else "",
             plan.hand if plan is not None else "both",
@@ -276,9 +273,9 @@ class PracticeSession:
                 # but never current-take grading, calibration or shortcuts.
                 # A late release must not leave a shortcut permanently
                 # suppressed after Stop/source replacement.
-                if event.arrival.device == self.midi.device:
-                    self.midi_key_shortcuts.discard_stale_release(event.message)
-                    self.midi.observe(event.message, now=event.received_at)
+                if event.arrival.device == self.midi_input.device:
+                    self.midi_input.discard_stale_release(event.message)
+                    self.midi_input.observe_midi(event.message, now=event.received_at)
                 return None
             return self.midi_application_input._deliver_message(
                 event.message, received_at=event.received_at,
@@ -289,7 +286,7 @@ class PracticeSession:
             effect = event.effect
             if effect.completed_range is not None:
                 self.settings_workflows.record_midi_key_range(
-                    self.midi.device, effect.completed_range,
+                    self.midi_input.device, effect.completed_range,
                     pause_current=self.timed_playback.pause)
             if effect.action:
                 return self._apply_command(effect.action)
@@ -342,7 +339,7 @@ class PracticeSession:
                 confirm=event.confirm)
         if isinstance(event, SessionClosed):
             return self.lifecycle.shutdown(
-                midi=self.midi, progress=self.progress,
+                progress=self.progress,
                 receive=self.midi_application_input.receive)
         raise TypeError("Unsupported practice session event")
 
@@ -393,8 +390,8 @@ class PracticeSession:
             self.notices.fault("Could not save or finish the practice transition",
                 "Check storage or the reported error, then Resume to retry this same take.")
             raise
-        while self.midi_ingress.deferred:
-            item = self.midi_ingress.deferred.popleft()
+        while self.midi_input.deferred_midi:
+            item = self.midi_input.deferred_midi.popleft()
             # The original ingress key is part of the immutable queued note.
             # Use the same epoch gate as an in-flight physical callback.
             if not self._same_midi_epoch(

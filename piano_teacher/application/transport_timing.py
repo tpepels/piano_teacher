@@ -11,13 +11,14 @@ from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasureme
 
 class TransportTiming:
     def __init__(self, *, lesson, transport, score, attempt_progression, take,
-                          midi_ingress, clock):
+                          midi_input, clock):
         self.lesson = lesson
         self.transport = transport
         self.attempt_progression = attempt_progression
         self.score = score
         self.take = take
-        self.midi_ingress, self.clock = midi_ingress, clock
+        self.clock = clock
+        self.midi_input = midi_input
 
     def presentation_bpm(self) -> float:
         pending = self.take.pending
@@ -195,5 +196,5 @@ class TransportTiming:
         a key-up while paused or in the lead counts at the pause moment.
         """
         return self.transport.musical_seconds(
-            at,grading_after=self.midi_ingress.resume_grading_after)
+            at,grading_after=self.midi_input.resume_grading_after)
 

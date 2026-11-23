@@ -21,9 +21,9 @@ class PracticeTimeline:
                           timed_playback, score, lesson_execution,
                           recovery_workflows, completion_continuations,
                           live_feedback_workflows, live_assessment,
-                          measurement, policy_registry, library, midi, listen,
-                          midi_ingress, midi_calibration, attempt_progression,
-                          read_models, exposure_workflows, clock, poll_midi,
+                          measurement, policy_registry, library, midi_input,
+                          listen, attempt_progression, read_models,
+                          exposure_workflows, clock, poll_midi,
                           feedback_seconds):
         self.notices = notices
         self.lesson = lesson
@@ -36,8 +36,9 @@ class PracticeTimeline:
         self.live_feedback_workflows, self.live_assessment = live_feedback_workflows, live_assessment
         self.measurement, self.policy_registry = measurement, policy_registry
         self.library = library
-        self.midi, self.listen, self.midi_ingress = midi, listen, midi_ingress
-        self.midi_calibration, self.attempt_progression = midi_calibration, attempt_progression
+        self.listen = listen
+        self.midi_input = midi_input
+        self.attempt_progression = attempt_progression
         self.read_models, self.clock, self.poll_midi = read_models, clock, poll_midi
         self.exposure_workflows = exposure_workflows
         self.feedback_seconds = feedback_seconds
@@ -165,7 +166,7 @@ class PracticeTimeline:
         if decision.preparation_phase is not None:
             self.transport.enter_preparation_phase(decision.preparation_phase)
         if decision.action == "learning":
-            self.lesson.advance_guided(connected=self.midi.connected, now=now)
+            self.lesson.advance_guided(connected=self.midi_input.connected, now=now)
             self.lesson_execution.save_guided_preparation()
         elif decision.action == "listening":
             if self.transport.running and self.listen.finished(now=now, run_at=self.transport.run_at):
@@ -229,7 +230,7 @@ class PracticeTimeline:
     def update_transition(self) -> bool:
         """Advance the backend clock under its existing session lock."""
         self.poll_midi()
-        self.midi_calibration.advance(self.clock())
+        self.midi_input.advance_calibration(self.clock())
         self.exposure_workflows.apply_listen_failure()
         now = self.clock()
         learning = self.transport.mode == "learn"
@@ -242,7 +243,7 @@ class PracticeTimeline:
             guided_completed=guided_completed,running=self.transport.running,
             count_in_activation=max(
                 self.transport.run_at,
-                self.midi_ingress.resume_grading_after),
+                self.midi_input.resume_grading_after),
             mode=self.transport.mode,preview=self.transport.preview_only,
             pending_result=self.take.pending_result is not None,
             preparation_pending=self.transport.preparation_pending,
@@ -266,7 +267,7 @@ class PracticeTimeline:
         if consumed or followup:
             return followup
         if (self.transport.running and self.transport.grading_is_frozen(
-                    now,grading_after=self.midi_ingress.resume_grading_after)):
+                    now,grading_after=self.midi_input.resume_grading_after)):
             # The canonical recorder and live-assessment clock stand at the
             # paused source position. Do not inspect rolling checkpoints,
             # missed attacks, completion or recovery during the admitted

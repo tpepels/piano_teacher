@@ -9,17 +9,18 @@ from .midi_ingress import MidiInputFacts, InputTransportFacts
 
 
 class MidiApplicationInput:
-    def __init__(self, *, lesson, transport, take, midi, lock, runtime_timings,
-                          device_workflows, settings_workflows, library,
-                          midi_ingress, transport_timing,
+    def __init__(self, *, lesson, transport, take, midi_input, lock,
+                          runtime_timings, device_workflows,
+                          settings_workflows, library, transport_timing,
                           live_feedback_workflows, timed_playback, clock):
         self.lesson = lesson
         self.transport = transport
         self.take = take
-        self.midi, self.lock = midi, lock
+        self.lock = lock
+        self.midi_input = midi_input
         self.runtime_timings, self.device_workflows = runtime_timings, device_workflows
         self.settings_workflows = settings_workflows
-        self.library, self.midi_ingress = library, midi_ingress
+        self.library = library
         self.transport_timing, self.live_feedback_workflows = transport_timing, live_feedback_workflows
         self.timed_playback, self.clock = timed_playback, clock
         self._session = None
@@ -35,7 +36,7 @@ class MidiApplicationInput:
         self.device_workflows.disconnect(reason)
 
     def ports(self) -> list[str]:
-        if not self.midi.enabled:
+        if not self.midi_input.enabled:
             return []
         with self.lock:
             scan = self.device_workflows.scan()
@@ -108,8 +109,8 @@ class MidiApplicationInput:
             self.transport.play_from_beat,self.transport.run_at,self.transport.transport_id,
             self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
             self.take.cancellation_generation,
-            self.midi.device)
-        self.midi_ingress.dispatch(
+            self.midi_input.device)
+        self.midi_input.dispatch_midi(
             message,facts=facts,received_at=now,
             corrected_at=corrected_at,deferred=deferred,
             midi_offset_seconds=self.library.settings["midi_offset_ms"]/1000.0,
@@ -121,7 +122,7 @@ class MidiApplicationInput:
             feedback_take=self.live_feedback_workflows.feedback_take)
 
     def poll_midi_connection(self):
-        if self.midi.closed:
+        if self.midi_input.device_closed:
             self.midi_lost()
         if self.device_workflows.connection_due():
             try:
