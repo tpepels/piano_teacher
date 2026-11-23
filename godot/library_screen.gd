@@ -186,7 +186,6 @@ func _update_layout() -> void:
 
 func _render_message() -> void:
     var pieces: Array = library_info.get("pieces", [])
-    var warmups: Array = library_info.get("warmups", [])
     var issue: String = str(library_info.get("error", ""))
     if not library_error.is_empty():
         library_message.text = library_error
@@ -196,12 +195,12 @@ func _render_message() -> void:
         library_message.text = _operation_message
     elif not issue.is_empty():
         library_message.text = issue
-    elif pieces.is_empty() and warmups.is_empty():
+    elif pieces.is_empty():
         library_message.text = "No scores yet. Add .mid, .midi or MusicXML files to this folder."
     elif _visible_count == 0:
         library_message.text = "No matches for “%s”. Try another title or clear the search." % library_search.text.strip_edges()
     else:
-        library_message.text = "%d personal files  ·  %d built-in warm-ups  ·  %d shown" % [pieces.size(), warmups.size(), _visible_count]
+        library_message.text = "%d personal files  ·  %d shown" % [pieces.size(), _visible_count]
     library_message.add_theme_color_override("font_color",
         Color("#FF8B82") if not library_error.is_empty() else MUTED)
     library_message.visible = _viewport_width >= 1100.0 or not library_error.is_empty() \
@@ -211,7 +210,7 @@ func _render_message() -> void:
 func _last_library_entry() -> Dictionary:
     var identifier: String = str(library_info.get("last_piece", ""))
     if not identifier.is_empty():
-        for entry in library_info.get("warmups", []) + library_info.get("pieces", []):
+        for entry in library_info.get("pieces", []):
             if str(entry.get("id", "")) == identifier:
                 return entry
     return {}
@@ -225,7 +224,6 @@ func _populate() -> void:
         library_rows.remove_child(child)
         child.queue_free()
     var pieces: Array = library_info.get("pieces", [])
-    var warmups: Array = library_info.get("warmups", [])
     var query := library_search.text.strip_edges().to_lower()
     var visible := 0
     var recent: Dictionary = _last_library_entry()
@@ -234,7 +232,6 @@ func _populate() -> void:
     if show_recent:
         sections.append({"title": "LAST OPENED", "entries": [recent], "resume": true})
     sections.append({"title": "YOUR MUSIC", "entries": pieces})
-    sections.append({"title": "BUILT-IN WARM-UPS", "entries": warmups})
     for section in sections:
         var section_added := false
         var grid: GridContainer

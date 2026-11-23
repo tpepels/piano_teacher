@@ -40,8 +40,8 @@ func update_context(state: Dictionary, now_ms: int) -> void:
     if (loaded != _loaded or fingerprint != _fingerprint
             or step != _step or mastered != _mastered_steps
             or revision != _score_revision):
-        # A finished take may unlock the next warm-up stage without
-        # changing the piece fingerprint. Never keep old selection flags
+        # A finished take may master a step without changing the piece
+        # fingerprint. Never keep old selection flags
         # or stale generated step descriptions in the Lesson Path cache.
         _loaded = loaded
         _fingerprint = fingerprint

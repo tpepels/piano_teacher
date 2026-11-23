@@ -40,17 +40,16 @@ class LearningEvidenceSession:
         rule = {"schema_version": 1, "grader": "nearest-onset-v1",
                 "mastery": "accepted-full-target-v1", "lesson_settings": asdict(SETTINGS),
                 "clean_runs_required": p.course_state().clean_runs_required,
-                "course_rules": asdict(course_rules(
-                    p.lesson_definition.generator_name, warmup=p.warmup)),
+                "course_rules": asdict(course_rules()),
                 "grade_note_holds": self._library.settings["grade_note_holds"],
                 "onset_formula": "max(0.15,grading_onset_tolerance_seconds,0.25*local_spb)",
                 "hold_formula": "max(grading_duration_floor_seconds,duration*max(grading_duration_tolerance_fraction,min(0.75,grading_duration_tolerance_fraction+0.28*max(0,local_spb-0.5))))",
                 "importer": "midi-source-v1", "generator": p.lesson_generator.name,
                 "generator_version": p.route_version,
-                "retry_version": resolve_mistake_policy(self._library.settings["mistake_response_strategy"]).version,
+                "retry_version": resolve_mistake_policy("adaptive").version,
                 "guided_config": {**asdict(guided_config if guided_config is not None else TeachingConfig()),
                                   "persistent_hints": persistent_hints},
-                "retry": mistake_policy_facts(resolve_mistake_policy(self._library.settings["mistake_response_strategy"]))}
+                "retry": mistake_policy_facts(resolve_mistake_policy("adaptive"))}
         rule_id = self._progress.ledger.store_rules(rule)
         return {"fingerprint": fingerprint, "source_sha256": fingerprint,
                 "stage_key": p.identity, "hand": p.hand, "scope": scope,

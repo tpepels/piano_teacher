@@ -62,7 +62,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "effective_bpm": ('number',),
     "exercise": ('number',),
     "exercise_count": ('number',),
-    "exercise_strategy": ('string',),
     "flow": ('dict',),
     "feedback": ('string',),
     "feedback_marks": ('list',),
@@ -104,7 +103,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "midi_offset_ms": ('number',),
     "midi_recent_keys": ('list',),
     "minimum_bpm": ('number',),
-    "mistake_response_strategy": ('string',),
     "mode": ('string',),
     "next_action": ('string',),
     "next_count_in_beats": ('number',),
@@ -164,7 +162,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "visual_scroll_speed": ('number',),
     "visual_target_beat": ('number',),
     "visual_tempo_segments": ('list',),
-    "warmup": ('bool',),
 }
 
 

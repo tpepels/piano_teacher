@@ -594,9 +594,6 @@ class AttemptSettlement:
                     "origin": "automatic", "state": "applied"}, decision_id=decision.decision_id)
                 self.capture.persist()
                 if result is not None and pending.event.kind == "full_result":
-                    if (plan.accepts_performance_feedback and state.course.stage.variant.level == "original"
-                            and not state.route.warmup and result.notes):
-                        self.source_feedback.observe(state.binding.fingerprint, result)
                     if decision.verdict is not None and decision.verdict.clears_trouble:
                         self.learner_progress.resolve_trouble(
                             fingerprint=state.binding.fingerprint,

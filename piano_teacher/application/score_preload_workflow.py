@@ -27,7 +27,7 @@ class ScorePreloadWorkflow:
             revision=self.lesson.revision,fingerprint=self.lesson.fingerprint)
 
     def next_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:
-        if self.lesson.plan is None or self.lesson.warmup or self.transport.mode != "practice":
+        if self.lesson.plan is None or self.transport.mode != "practice":
             return None
         decided = self.decided_selection() if offset == 1 else None
         return self.score.choose_ahead(

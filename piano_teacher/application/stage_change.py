@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..lesson_settings import SETTINGS
-from ..teaching_course import warmup_unlocked_step
 
 
 @dataclass(frozen=True)
@@ -23,21 +22,7 @@ class StageChange:
     def tempo_only(self) -> bool:
         return self.action in ("tempo", "tempo_up", "tempo_down")
 
-def _require_hand_change(plan, requested: str, *, warmup: bool) -> None:
-    if requested not in plan.hands:
-        raise ValueError(f"Hand {requested!r} unavailable")
-    if warmup and requested != plan.hand:
-        # Stage identities, not the numeric hand index in a potentially
-        # multi-exercise catalog, determine which hand is unlocked.
-        first = next((number for number, step in enumerate(plan.lesson_steps, 1)
-                      if step.exercise_index == plan.index and
-                      step.hand == requested), None)
-        if first is None or first > warmup_unlocked_step(plan.course_state()):
-            raise ValueError("Complete three clean passes to unlock the next hand")
-
-
-def prepare_stage_change(plan, action: str, values: dict, *,
-                         warmup: bool = False) -> StageChange:
+def prepare_stage_change(plan, action: str, values: dict) -> StageChange:
     """Validate stage intent before cancelling any active take or feedback."""
     if action == "select_step":
         number = values.get("number")
@@ -50,12 +35,11 @@ def prepare_stage_change(plan, action: str, values: dict, *,
             raise ValueError("Choose a whole lesson step number") from None
         if not 1 <= number <= len(plan.lesson_steps):
             raise ValueError("Lesson step out of bounds")
-        if warmup and number > warmup_unlocked_step(plan.course_state()):
-            raise ValueError("Complete three clean passes to unlock the next warm-up step")
         return StageChange(action=action, number=number)
     if action == "hand":
         requested = str(values.get("hand", "both"))
-        _require_hand_change(plan, requested, warmup=warmup)
+        if requested not in plan.hands:
+            raise ValueError(f"Hand {requested!r} unavailable")
         return StageChange(action=action, hand=requested)
     if action == "tempo":
         bpm = values.get("bpm")
@@ -72,10 +56,5 @@ def prepare_stage_change(plan, action: str, values: dict, *,
         return StageChange(action=action, bpm=bpm)
     if action not in ("next", "previous", "tempo_up", "tempo_down"):
         raise ValueError(f"Unsupported action: {action}")
-    if warmup and action == "next" and plan.index+1 < len(plan.exercises):
-        first = next((number for number, step in enumerate(plan.lesson_steps, 1)
-                      if step.exercise_index == plan.index+1), None)
-        if first is None or first > warmup_unlocked_step(plan.course_state()):
-            raise ValueError("Complete three clean passes to unlock the next warm-up passage")
     return StageChange(action=action)
 

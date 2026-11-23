@@ -37,7 +37,6 @@ class SnapshotValues:
     fingerprint: str
     guided_range: tuple[float, float] | None
     guided_open_at: float | None
-    is_builtin_warmup: bool
     metronome: bool
     midi_input_count: int
     midi_input_note: int | None
@@ -105,8 +104,8 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     activity = ActivitySnapshot(
         sampled_at=sampled_at,
         learner=reads.learner_snapshot() if p is not None else None,
-        placement_available=(not state.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
-        skip_available=(not state.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
+        placement_available=(placement_candidate(p) is not None) if p is not None else False,
+        skip_available=(p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
         seek_available=state.paused and seek_grid is not None,
         seek_range=({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
                     if seek_grid is not None else None),
@@ -166,7 +165,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     visual_motion = reads.visual_motion(now)
     lesson = build_lesson_snapshot(
         p, ex, variant, fingerprint=state.fingerprint,
-        warmup=state.is_builtin_warmup, lesson_steps=lesson_steps,
+        lesson_steps=lesson_steps,
         lesson_step_count=len(all_steps))
     tempo_map = reads.active_tempo_map()
     # Local-zero source timing followed by the explicit practice-BPM

@@ -94,7 +94,7 @@ func present_overview(values: Dictionary) -> void:
         var available: bool = bool(step.get("available",true))
         picker.set_item_disabled(picker.item_count - 1,not available)
         picker.set_item_tooltip(picker.item_count - 1,
-            ("Complete preceding warm-up stages first" if not available
+            ("Not available yet" if not available
              else "%s · %s · %s" % [str(step.get("stage_family","Practice")),
                  str(step.get("stage_label",step.get("level",""))),
                  str(step.get("stage_change",""))]))

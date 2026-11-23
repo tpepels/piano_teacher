@@ -157,8 +157,7 @@ class AttemptProgression:
         same_timed = (exposure is not None and exposure.stage_key == facts.stage_key
             and exposure.mode == "practice" and decision.remediation is None)
         rewind = decision.invalidate_failed_streak and runtime.automatic and not facts.exact_repeats
-        stop = facts.warmup and decision.invalidate_failed_streak
-        automatic = runtime.automatic and not stop
+        automatic = runtime.automatic
         preparation = None
         if rewind:
             target = exposure.from_beat if exposure is not None else runtime.from_beat
@@ -170,7 +169,7 @@ class AttemptProgression:
                 short_deadline=SCHEDULER.measured_rest(
                     facts.retry_rest,now=facts.now,bpm=facts.presentation_bpm))
         if rewind and automatic:
-            return PassageFinishPlan(preparation,stop,"advance",advance_early=True)
+            return PassageFinishPlan(preparation,"advance",advance_early=True)
         notice = passage_next_action(pending,target_bpm=facts.target_bpm,
             start_beat=runtime.from_beat,assessed_bpm=facts.assessed_bpm)
         if facts.exact_repeats and automatic and same_timed:
@@ -184,19 +183,19 @@ class AttemptProgression:
             # The incoming tempo begins only at the authorized downbeat.
             deadline = SCHEDULER.repeat(run_at=runtime.run_at,
                 source_seconds=facts.duration,gap_beats=bar,bpm=facts.bpm)
-            return PassageFinishPlan(None,False,"announce",deadline=deadline,
+            return PassageFinishPlan(None,"announce",deadline=deadline,
                 next_action=notice,advance_early=True)
         if facts.exact_repeats:
             # Free, the next hand/window, and piece completion are selected
             # immediately. Messages never add a pedagogical waiting interval.
-            return PassageFinishPlan(None,stop,"ready" if automatic else "stop",
+            return PassageFinishPlan(None,"ready" if automatic else "stop",
                 next_action=notice)
         if facts.assets_ready:
-            return PassageFinishPlan(preparation,stop,"ready",next_action=notice)
+            return PassageFinishPlan(preparation,"ready",next_action=notice)
         if not automatic:
-            return PassageFinishPlan(preparation,stop,"stop",next_action=notice)
+            return PassageFinishPlan(preparation,"stop",next_action=notice)
         if runtime.retry_previous_pass or rewind:
-            return PassageFinishPlan(preparation,stop,"hold",next_action=notice)
+            return PassageFinishPlan(preparation,"hold",next_action=notice)
         deadline = SCHEDULER.repeat(run_at=runtime.run_at,
             source_seconds=facts.duration,gap_beats=runtime.gap_beats,bpm=facts.bpm)
         if same_timed:
@@ -207,7 +206,7 @@ class AttemptProgression:
                 reading_horizon_beats=facts.horizon_beats,bpm=facts.presentation_bpm)
         elif facts.short_rest_enabled:
             deadline = facts.now
-        return PassageFinishPlan(preparation,stop,"announce" if same_timed else "wait",
+        return PassageFinishPlan(preparation,"announce" if same_timed else "wait",
             deadline=deadline,next_action=notice,
             advance_early=automatic)
 

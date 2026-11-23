@@ -116,8 +116,8 @@ class SourcePreparationSession:
         return FingeringInstall(replace(current,fingering_plan=corrected.fingering),
                                 score_revision+1)
 
-    def prepare(self, source: Path, *, warmup: bool, preprocessing, fingering,
-                progress, fukuda_mistakes, library, state_lock, importer,
+    def prepare(self, source: Path, *, preprocessing, fingering,
+                progress, state_lock, importer,
                 plan_type=LearningPlan,
                 diagnostics: bool = False) -> PreparedSource:
         checkpoint = time.perf_counter()
@@ -140,16 +140,8 @@ class SourcePreparationSession:
         with ThreadPoolExecutor(
                 max_workers=1,thread_name_prefix="piano-fingering") as worker:
             predicted = worker.submit(prepare_fingering)
-            # Only the database-backed policy snapshot and restore use the
-            # state lock; neither expensive worker waits under it.
-            with state_lock:
-                strategy = library.settings["exercise_strategy"]
-                mistakes = fukuda_mistakes.problematic(fingerprint)
-                evidence = fukuda_mistakes.evidence(fingerprint)
             started_course = time.perf_counter()
-            candidate = plan_type(
-                piece,warmup=warmup,exercise_strategy=strategy,
-                fukuda_mistakes=mistakes,feedback=evidence)
+            candidate = plan_type(piece)
             with state_lock:
                 resumed = progress.restore(candidate,fingerprint)
             course_ms = (time.perf_counter()-started_course)*1000.0

@@ -100,8 +100,7 @@ func _process(_delta: float) -> bool:
         var chrome = app.practice_view
         if fixture_name == DEFAULT_FIXTURE:
             var selected: Dictionary = app.current_state()
-            if str(selected.get("exercise_strategy","")) != "practice-flow" or \
-                    str(selected.get("flow",{}).get("step","")) != "listen" or \
+            if str(selected.get("flow",{}).get("step","")) != "listen" or \
                     int(selected.get("first_bar",0)) != 1 or \
                     int(selected.get("last_bar",0)) != 1:
                 _fail("Fresh default course must open its first measure in Listen")

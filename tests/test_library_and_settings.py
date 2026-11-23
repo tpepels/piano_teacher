@@ -99,12 +99,11 @@ def test_malformed_saved_values_and_retired_course_migrate_without_losing_prefer
     settings = lib.public_settings()
     assert settings["music_dir"] == str(default_music_dir().resolve())
     assert settings["midi_offset_ms"] == 0 and settings["metronome"] is False
-    assert settings["exercise_strategy"] == "practice-flow"
+    assert "exercise_strategy" not in settings
     assert settings["grade_note_holds"] is False
     assert lib.scan()["last_piece"] == ""
     saved = json.loads(lib.settings_path.read_text())
-    assert saved["exercise_strategy"] == "practice-flow"
-    assert "timing_strategy" not in saved and "tempo_strategy" not in saved
+    assert not {"exercise_strategy", "timing_strategy", "tempo_strategy"} & saved.keys()
 
 
 def test_missing_library_folder_is_actionable_and_can_be_replaced(tmp_path):

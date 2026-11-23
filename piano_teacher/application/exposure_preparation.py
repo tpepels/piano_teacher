@@ -27,7 +27,6 @@ class ExposureSource:
     variant: ExerciseVariant
     boundaries: tuple[float, ...]
     time_signatures: tuple[tuple[float, int, int], ...]
-    warmup: bool
     flow: bool
 
     @property
@@ -112,10 +111,9 @@ def prepare_timed(source: ExposureSource, selected: TeachingExposure, *,
             revision,revision,None,None,"Preparing your performance",
             "Keep playing through the passage. Review comes at the end.")
     return TimedPreparation(mode,selected.from_beat,selected.end_beat,
-        revision,None if source.warmup else revision,return_context,
+        revision,revision,return_context,
         tuple(retry_range.items()) if return_context is not None and retry_range is not None else None,
-        "Warm-up ready" if source.warmup else "Preparing rhythm practice",
-        "Play a piano key to start the count-in." if source.warmup else
+        "Preparing rhythm practice",
         "Get ready to retry the rhythm." if return_context else
         "Get ready to play in time.")
 

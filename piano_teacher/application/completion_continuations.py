@@ -98,7 +98,7 @@ class TakeCompletion:
     def finish_performance_review(self, phrase: Phrase, result):
         """Publish review only after its evidence and source feedback commit."""
         self.notices.next_action = performance_next_action(
-            warmup=self.lesson.warmup,summary=self.take.performance_summary)
+            summary=self.take.performance_summary)
         self.transport.stop_automatic()
 
     def finish_section_review(self, result):

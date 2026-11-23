@@ -46,11 +46,9 @@ class SourceOpening:
     mode: str
 
 
-def choose_source_opening(plan, *, bar, mode, warmup: bool) -> SourceOpening:
+def choose_source_opening(plan, *, bar, mode) -> SourceOpening:
     if plan is None:
         raise ValueError("Open a piece first")
-    if warmup:
-        raise ValueError("Warm-ups use their own hand progression")
     last_bar = len(plan.piece.bar_boundaries) - 1
     if type(bar) is not int or not 1 <= bar <= last_bar:
         raise ValueError(f"Choose a whole measure between 1 and {last_bar}")

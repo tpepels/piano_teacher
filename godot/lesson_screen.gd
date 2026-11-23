@@ -234,11 +234,10 @@ func present_context(state: Dictionary, busy: bool) -> void:
     if reset_confirmation.visible and str(state.get("piece_fingerprint","")) != _reset_fingerprint:
         _cancel_path_reset()
     var learning: bool = str(state.get("mode","practice")) == "learn"
-    var warmup: bool = bool(state.get("warmup",false))
     var phase: String = str(state.get("phase","ready"))
     var controls: Dictionary = state.get("controls",{}) if state.get("controls") is Dictionary else {}
     mode_choice.select(0 if learning else 2 if str(state.get("mode","")) == "perform" else 1)
-    mode_choice.set_item_text(1,"Warm-up practice" if warmup else "Practice rhythm")
+    mode_choice.set_item_text(1,"Practice rhythm")
     var activities: Dictionary = controls.get("activities",{})
     for index in range(mode_choice.item_count):
         var choice_name: String = ["learn","practice",

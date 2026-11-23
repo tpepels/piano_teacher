@@ -2,18 +2,12 @@
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Mapping
-from .exercise_strategies import WARMUP_STRATEGY, resolve_strategy
 from .exercise_pipeline import ExerciseStage
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant
-from .musical_groups import grouping_for_piece
 from . import teaching_course as course_policy
-from .lesson_contracts import LessonGenerator, LessonPlanDefinition, lesson_hands
-from .lesson_source_planner import Exercise
-from .lesson_generators import (
-    build_lesson_generator,
-    lesson_generator_registration,
-)
+from .lesson_contracts import Exercise, LessonGenerator, LessonPlanDefinition, lesson_hands
+from .practice_flow_course import PracticeFlowLessonGenerator, COURSE_VERSION
 
 @dataclass(frozen=True)
 class LessonStep:
@@ -30,38 +24,14 @@ class LessonStep:
 
 class LearningPlan:
     """Adaptive, manually navigable practice sequence independent of the GUI."""
-    def __init__(self, piece: Piece, *, warmup: bool = False,
-                 consolidate: bool = False,
-                 exercise_strategy: str | None = None,
-                 lesson_generator: LessonGenerator | None = None,
-                 fukuda_mistakes: frozenset[str] | None = None,
-                 feedback: Mapping[str, str] | None = None) -> None:
+    def __init__(self, piece: Piece, *,
+                 lesson_generator: LessonGenerator | None = None) -> None:
+        if piece.source_format != "midi":
+            raise ValueError("Practice Flow requires an imported MIDI piece")
         self.piece = piece
-        # Warmups have their own fixed route; the selected MIDI strategy
-        # applies to imported pieces, not the built-in warmup catalog.
-        requested = exercise_strategy if exercise_strategy is not None else WARMUP_STRATEGY
-        if warmup:
-            requested = WARMUP_STRATEGY
-        self.exercise_strategy = resolve_strategy(requested,piece=piece)
-        self.generator_registration = lesson_generator_registration(
-            self.exercise_strategy.name)
-        self.warmup = warmup
-        # Full-piece MIDI beam inference constructs and reparses MusicXML
-        # for *every source attack*. It is only required by generators
-        # explicitly declaring grouped-source pedagogy. MIDI-domain Coda /
-        # Fukuda authors derive their own groups from their selected passage;
-        # compiling source-wide beams for them blocks startup unnecessarily.
-        needs_grouping = bool(
-            self.generator_registration is not None
-            and self.generator_registration.requires_grouping)
-        self.grouping = (grouping_for_piece(piece)
-                         if not warmup and needs_grouping else None)
         # Produce a complete, immutable course from the entire MIDI Piece
         # before this stateful player owns navigation and mastery.
-        self.lesson_generator = lesson_generator or build_lesson_generator(
-            self.exercise_strategy.name, consolidate=consolidate, warmup=warmup,
-            grouping=self.grouping, mistakes=fukuda_mistakes,
-            feedback=feedback)
+        self.lesson_generator = lesson_generator or PracticeFlowLessonGenerator()
         self.lesson_definition = self.lesson_generator.generate(piece)
         self.exercises = self.lesson_definition.exercises
         self.index = 0
@@ -103,9 +73,7 @@ class LearningPlan:
 
     def course_state(self) -> course_policy.CourseState:
         return course_policy.CourseState(self.piece, self.lesson_definition,
-            self.teaching_progress(), self.profile,
-            self.generator_registration.course_version if self.generator_registration else self.route_version,
-            self.warmup)
+            self.teaching_progress(), self.profile, COURSE_VERSION)
 
     def apply_teaching_progress(self, progress, *, definition, expected) -> None:
         """Install an already validated decision, without any policy invocation."""
@@ -126,6 +94,7 @@ class LearningPlan:
         self.apply_teaching_progress(course.progress, definition=course.definition,
                                      expected=self.teaching_progress())
 
+    # Stored with saved sessions and evidence; kept for their schema.
     route_version = 3
 
     @property
@@ -174,11 +143,6 @@ class LearningPlan:
     def variants(self) -> tuple[ExerciseVariant, ...]:
         return tuple(stage.variant for stage in self.stages)
 
-    @property
-    def accepts_performance_feedback(self) -> bool:
-        """Generators opt in through a common immutable feedback hook."""
-        return callable(getattr(self.lesson_generator, "with_feedback", None))
-
     def _preserve_mastered_stages(
         self, definition: LessonPlanDefinition, previous: LessonPlanDefinition,
         keys: Mapping[str, int],
@@ -215,8 +179,7 @@ class LearningPlan:
         return tuple(stage.variant for stage in self.lesson_definition.stages(exercise,hand))
 
     def _stage_key(self, exercise: Exercise, hand: str, variant: ExerciseVariant) -> str:
-        version = self.generator_registration.course_version if self.generator_registration is not None else self.route_version
-        return course_policy.stage_key(exercise, hand, variant, self.profile, version, self.warmup)
+        return course_policy.stage_key(exercise, hand, variant, self.profile, COURSE_VERSION)
 
     @property
     def lesson_steps(self) -> tuple[LessonStep, ...]:

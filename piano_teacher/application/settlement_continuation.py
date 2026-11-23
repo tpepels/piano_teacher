@@ -147,7 +147,7 @@ class SettlementContinuation:
             total_beats=total_beats,duration=duration,now=now,
             visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=SETTINGS.feedback_seconds,
             source_model=self.score.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
-            horizon_beats=self.transport.continuous_horizon_beats,warmup=self.lesson.warmup,
+            horizon_beats=self.transport.continuous_horizon_beats,
             short_rest_enabled=self.transport.short_rest is not None,
             retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
             repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,

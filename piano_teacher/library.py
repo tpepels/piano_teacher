@@ -10,19 +10,15 @@ import os
 from pathlib import Path
 import tempfile
 
-from .warmups import catalog as built_in_warmups, is_warmup, materialize
-from .exercise_strategies import DEFAULT_STRATEGY, available_strategies
-from .application.mistake_responses import (
-    available_mistake_policies, resolve_mistake_policy,
-)
-from .diagnosis_policies import resolve_diagnosis_strategy, resolve_learner_strategy
 
 FORMATS = frozenset({'.mid', '.midi'})  # Only user-supplied MIDI enters the desktop library.
 MAX_FILES = 5000
-# Preferences removed by the owner decision of 2026-11-11 (only the default
-# exercise strategy is offered; it owns its rhythm and tempo stages). A saved
-# file that still holds them loads, and the next save drops them.
-RETIRED_PREFERENCES = frozenset({'timing_strategy', 'tempo_strategy'})
+# Preferences of removed features (only Practice Flow remains, owner
+# decision 2026-11-23). A saved file holding them loads and is rewritten.
+RETIRED_PREFERENCES = frozenset({
+    'timing_strategy', 'tempo_strategy', 'exercise_strategy',
+    'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy',
+    'practice_flow_migrated'})
 EVIDENCE_PREFERENCES = {
     'evidence_retention_days': (365, 7, 3650),
     'evidence_budget_mib': (256, 16, 4096),
@@ -48,20 +44,12 @@ class ScoreLibrary:
                          'last_piece': '', 'midi_device': '', 'midi_key_ranges': {}, 'metronome': True,
                          'midi_offset_ms': 0,
                          'grade_note_holds': False,
-                         'exercise_strategy': DEFAULT_STRATEGY,
-                         'diagnosis_strategy': 'error-family',
-                         'learner_strategy': 'repeated-error',
-                         'mistake_response_strategy': 'adaptive',
-                         # Fresh settings start on the practice flow already.
-                         'practice_flow_migrated': True,
                          **{key: bounds[0] for key, bounds in EVIDENCE_PREFERENCES.items()}}
         if self.settings_path.exists():
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
                 if isinstance(stored, dict):
                     migrated = bool(RETIRED_PREFERENCES & stored.keys())
-                    # Settings saved before 2026-11-18 have no marker.
-                    self.settings['practice_flow_migrated'] = False
                     for key in self.settings:
                         if key in stored and isinstance(stored[key], type(self.settings[key])):
                             self.settings[key] = stored[key]
@@ -71,32 +59,9 @@ class ScoreLibrary:
         if config_dir is None and not self.settings_path.exists():
             # First run: create a predictable folder that the user can fill.
             default_music_dir().mkdir(parents=True, exist_ok=True)
-        if not self.settings['practice_flow_migrated']:
-            # 2026-11-18: Coda + Fukuda was the only strategy, never a choice.
-            # Move existing installations once to the owner's practice flow;
-            # a later explicit choice of Coda + Fukuda is kept.
-            if self.settings['exercise_strategy'] == 'coda-fukuda-midi':
-                self.settings['exercise_strategy'] = DEFAULT_STRATEGY
-            self.settings['practice_flow_migrated'] = True
-            migrated = True
-        if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
-            # Saved choices of removed strategies (coda-midi, fukuda-midi,
-            # source-progression, fukuda, ...) migrate to the default.
-            migrated = migrated or self.settings_path.exists()
-            self.settings['exercise_strategy'] = DEFAULT_STRATEGY
-        for key, valid, fallback in (
-                ("diagnosis_strategy", {"error-family", "accuracy-only"}, "error-family"),
-                ("learner_strategy", {"repeated-error", "repeat-only"}, "repeated-error")):
-            if self.settings[key] not in valid:
-                self.settings[key] = fallback
-        try:
-            resolve_mistake_policy(self.settings['mistake_response_strategy'])
-        except ValueError:
-            self.settings['mistake_response_strategy'] = 'adaptive'
         # A previously selected MusicXML file is not a valid MIDI-only library entry.
         recent = self.settings['last_piece']
-        if (recent and not is_warmup(recent)
-                and Path(recent).suffix.lower() not in FORMATS):
+        if recent and Path(recent).suffix.lower() not in FORMATS:
             self.settings['last_piece'] = ''
         try:
             self._folder = self._normalize_folder(
@@ -170,12 +135,8 @@ class ScoreLibrary:
         return value
 
     def propose_update(self, **changes) -> dict:
-        """Validate a complete prospective configuration without persisting it.
-
-        Lesson preparation can now fail before a strategy switch commits
-        settings or changes the active transport.
-        """
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'midi_key_ranges', 'metronome', 'midi_offset_ms', 'grade_note_holds', 'exercise_strategy', 'diagnosis_strategy', 'learner_strategy', 'mistake_response_strategy'}
+        """Validate a complete prospective configuration without persisting it."""
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'midi_key_ranges', 'metronome', 'midi_offset_ms', 'grade_note_holds'}
         allowed.update(EVIDENCE_PREFERENCES)
         unknown = set(changes) - allowed
         if unknown:
@@ -183,7 +144,7 @@ class ScoreLibrary:
         new = self.settings.copy()
         if 'music_dir' in changes:
             folder = self._normalize_folder(changes['music_dir'])
-            if folder != self._folder and not is_warmup(str(new['last_piece'])):
+            if folder != self._folder:
                 new['last_piece'] = ''
             new['music_dir'] = str(folder)
         if 'fullscreen' in changes:
@@ -210,23 +171,6 @@ class ScoreLibrary:
         for key in EVIDENCE_PREFERENCES:
             if key in changes:
                 new[key] = self._validate_evidence_preference(key, changes[key])
-        if 'exercise_strategy' in changes:
-            selected = changes['exercise_strategy']
-            if type(selected) is not str or selected not in {x['id'] for x in available_strategies()}:
-                raise ValueError('Unknown exercise strategy')
-            new['exercise_strategy'] = selected
-        for key, resolver in (("diagnosis_strategy", resolve_diagnosis_strategy),
-                              ("learner_strategy", resolve_learner_strategy)):
-            if key in changes:
-                value = changes[key]
-                if type(value) is not str:
-                    raise ValueError("Invalid " + key)
-                resolver(value)
-                new[key] = value
-        if 'mistake_response_strategy' in changes:
-            selected_response = changes['mistake_response_strategy']
-            resolve_mistake_policy(selected_response)
-            new['mistake_response_strategy'] = selected_response
         return new
 
     def update(self, **changes) -> dict:
@@ -239,15 +183,7 @@ class ScoreLibrary:
         return self.public_settings()
 
     def public_settings(self) -> dict:
-        return {**self.settings,
-                'available_exercise_strategies': list(available_strategies()),
-                'available_diagnosis_strategies': [
-                    {'id': 'error-family', 'label': 'Pitch, rhythm and duration errors'},
-                    {'id': 'accuracy-only', 'label': 'Overall accuracy baseline'}],
-                'available_learner_strategies': [
-                    {'id': 'repeated-error', 'label': 'Repeated-error recommendation'},
-                    {'id': 'repeat-only', 'label': 'Repeat-only baseline'}],
-                'available_mistake_response_strategies': available_mistake_policies()}
+        return dict(self.settings)
 
     def save(self, *, settings: dict | None = None) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
@@ -266,7 +202,7 @@ class ScoreLibrary:
         root = self._folder
         items: list[dict] = []
         if not root.is_dir():
-            return {'folder': str(root), 'pieces': [], 'warmups': built_in_warmups(), 'count': 0,
+            return {'folder': str(root), 'pieces': [], 'count': 0,
                     'error': 'Music folder is unavailable. Choose a folder in Settings.',
                     'last_piece': self.settings['last_piece']}
         try:
@@ -294,16 +230,12 @@ class ScoreLibrary:
             return {'folder': str(root), 'pieces': [], 'count': 0,
                     'error': str(exc), 'last_piece': self.settings['last_piece']}
         items.sort(key=lambda x: (x['title'].casefold(), x['id'].casefold()))
-        return {'folder': str(root), 'pieces': items, 'warmups': built_in_warmups(), 'count': len(items),
+        return {'folder': str(root), 'pieces': items, 'count': len(items),
                 'truncated': len(items) == MAX_FILES, 'last_piece': self.settings['last_piece']}
 
     def resolve(self, identifier: str) -> Path:
         if not isinstance(identifier, str) or not identifier or '\x00' in identifier:
             raise ValueError('Invalid library entry')
-        # Known built-ins bypass the personal music folder, but never accept
-        # user-supplied paths or unknown warm-up identifiers.
-        if identifier.startswith('warmup:'):
-            return materialize(identifier, self.config_dir / 'warmups')
         candidate = Path(identifier)
         if candidate.is_absolute() or '..' in candidate.parts:
             raise ValueError('Library entry must stay inside the music folder')

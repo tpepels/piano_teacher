@@ -104,7 +104,7 @@ class CommandRouter:
                 and not (action in ("start","restart")
                          and (self.take.settlement_failed
                               or self.take.pending_rolling is not None))):
-            change = (prepare_stage_change(self.lesson.plan, action, kwargs, warmup=self.lesson.warmup)
+            change = (prepare_stage_change(self.lesson.plan, action, kwargs)
                       if route == "stage" else None)
             effect = self.lesson.prepare_decision("manual", manual=change,
                 action=action, from_beat=kwargs.get("from_beat",kwargs.get("start_beat")), store=False, values=kwargs)

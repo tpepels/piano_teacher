@@ -115,7 +115,7 @@ class TeachingDecisions:
         state = TeachingState(1, self.binding(), p.course_state(), policy,
             self.evidence.fukuda(self.source_identity.fingerprint),
             history, self.retry_context(result, end_beat=end_beat) if result is not None and (policy.whole_handler is not None or policy.rolling_handler is not None) else None,
-            TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto, warmup=self.source_identity.warmup,
+            TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto,
                 preview_only=self.transport.preview_only, assistance_used=self.measurement.assistance_used,
                 scope=scope, performed_bpm=self.take.pending_assessed_bpm or p.bpm,
                 from_beat=self.transport.play_from_beat,

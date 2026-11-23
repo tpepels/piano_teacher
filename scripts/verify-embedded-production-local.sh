@@ -113,10 +113,7 @@ import sys
 from piano_teacher.library import ScoreLibrary
 library = ScoreLibrary()
 library.mark_opened(sys.argv[1])
-kwargs = {"fullscreen": False}
-if sys.argv[2]:
-    kwargs["exercise_strategy"] = sys.argv[2]
-library.update(**kwargs)
+library.update(fullscreen=False)
 print("SEEDED", sys.argv[1])
 PY
 }
@@ -188,7 +185,7 @@ PY
 }
 verify_fixture_ui() {
   set_case fixture
-  seed phase6_native_fixture.mid practice-flow
+  seed phase6_native_fixture.mid
   timeout 105s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
     --script res://production_ui_smoke.gd
 }
@@ -199,7 +196,7 @@ verify_fake_midi_ui() {
     variant="${drop//./-}"
   fi
   set_case "fake-midi-$variant"
-  seed ci_state_journey.mid practice-flow
+  seed ci_state_journey.mid
   # Restore the synthetic device as a persisted preference during normal
   # startup discovery. Selecting a new device mid-Listen would correctly
   # interrupt the real passage and invalidate this journey's state graph.
@@ -229,7 +226,7 @@ PY
 verify_moonlight() {
   set_case moonlight
   cp midi/Moonlight_Sonata_I.midi "$HOME/Music/Piano Teacher/"
-  seed Moonlight_Sonata_I.midi coda-fukuda-midi
+  seed Moonlight_Sonata_I.midi
   timeout 180s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
     --script res://production_session_journey.gd
 }
@@ -239,7 +236,7 @@ verify_real_source() {
   local source_path="${3:-midi/$score}"
   set_case "$case_name"
   cp "$source_path" "$HOME/Music/Piano Teacher/$score"
-  seed "$score" coda-fukuda-midi
+  seed "$score"
   local fingerprint
   fingerprint="$(sha256sum "$HOME/Music/Piano Teacher/$score" | cut -d' ' -f1)"
   timeout 115s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \

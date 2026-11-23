@@ -125,7 +125,6 @@ class FullPassageFacts:
     source_model: dict
     presentation_bpm: float
     horizon_beats: float
-    warmup: bool
     short_rest_enabled: bool
     retry_rest: RestMeasurement | None
     repeat_rest: RestMeasurement | None
@@ -153,7 +152,6 @@ class PassageRuntimeFacts:
 @dataclass(frozen=True, slots=True)
 class PassageFinishPlan:
     preparation: PreparationRequest | None
-    stop_automatic: bool
     action: str
     deadline: float | None = None
     next_action: str | None = None

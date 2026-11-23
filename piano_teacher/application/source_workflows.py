@@ -2,8 +2,7 @@
 
 SourcePreparationWorkflow does the costly import/fingering work outside
 the application lock (under the source-mutation guard). SourceInstallation
-installs a validated source or correction under the lock. LibraryOpening
-records that a library piece (or the warm-up) was opened.
+installs a validated source or correction under the lock.
 """
 from __future__ import annotations
 
@@ -14,24 +13,20 @@ from ..importing.pieces import import_piece
 
 class SourcePreparationWorkflow:
     def __init__(self, *, lesson, source_preparation, preprocessing,
-                 fingering, progress, fukuda_mistakes, library,
-                 listen_outcomes, lock):
+                 fingering, progress, listen_outcomes, lock):
         self.lesson = lesson
         self.source_preparation = source_preparation
         self.preprocessing = preprocessing
         self.fingering = fingering
         self.progress = progress
-        self.fukuda_mistakes = fukuda_mistakes
-        self.library = library
         self.listen_outcomes = listen_outcomes
         self.lock = lock
 
-    def prepare(self, path: str, *, warmup: bool, diagnostics: bool):
+    def prepare(self, path: str, *, diagnostics: bool):
         return self.source_preparation.prepare(
-            Path(path).expanduser().resolve(), warmup=warmup,
+            Path(path).expanduser().resolve(),
             preprocessing=self.preprocessing, fingering=self.fingering,
-            progress=self.progress, fukuda_mistakes=self.fukuda_mistakes,
-            library=self.library, state_lock=self.lock,
+            progress=self.progress, state_lock=self.lock,
             importer=import_piece, plan_type=LearningPlan,
             diagnostics=diagnostics)
 
@@ -72,19 +67,17 @@ class SourceInstallation:
         self.listen = listen
         self.listen_outcomes = listen_outcomes
 
-    def install(self, prepared, *, warmup: bool) -> bool | None:
+    def install(self, prepared) -> bool | None:
         """Called with application lock and source-mutation guard held."""
         self.transport.clear_take_end()
         self.lifecycle.stop(reason="source_changed")
         self.plans.adopt(lambda: self.lesson.install_source(
             plan=prepared.plan, source=str(prepared.path),
-            fingerprint=prepared.fingerprint, warmup=warmup))
+            fingerprint=prepared.fingerprint))
         self.source_preparation.source_installed()
         self.notices.publish("Press Start to practice", "Press Start to practice.")
         self.take.reset_source_presentation()
-        if self.lesson.flow_applies(self.lesson.plan, warmup=warmup):
-            return prepared.resumed
-        return None
+        return prepared.resumed
 
     def install_fingering_correction(self, corrected) -> None:
         """One source-bound state commit, under session and mutation guards."""
@@ -99,22 +92,3 @@ class SourceInstallation:
         self.lesson.publish_revision(installed.score_revision)
         if self.transport.source_revised(self.lesson.revision):
             self.listen.retarget_score(self.lesson.revision)
-
-
-class LibraryOpening:
-    def __init__(self, *, lesson, notices, transport, progress, library):
-        self.lesson = lesson
-        self.notices = notices
-        self.transport = transport
-        self.progress = progress
-        self.library = library
-
-    def mark_opened(self, identifier: str, *, warmup: bool) -> None:
-        if warmup:
-            self.transport.select_source()
-            self.lesson.set_course_guided(False)
-            self.notices.publish(
-                "Warm-up ready - left, right, then both hands",
-                "Three clean passes unlock the next hand.")
-            self.progress.save(self.lesson.plan, self.lesson.fingerprint)
-        self.library.mark_opened(identifier)

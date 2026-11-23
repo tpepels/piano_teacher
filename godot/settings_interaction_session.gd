@@ -32,14 +32,6 @@ func configure(view, statistics) -> void:
         command_requested.emit("settings.update",{"music_dir":path}))
     view.tempo_requested.connect(func(bpm: int):
         action_requested.emit({"action":"tempo","bpm":bpm}))
-    view.strategy_requested.connect(func(strategy: String):
-        command_requested.emit("settings.update",{"exercise_strategy":strategy}))
-    view.diagnosis_strategy_requested.connect(func(strategy: String):
-        command_requested.emit("settings.update",{"diagnosis_strategy":strategy}))
-    view.learner_strategy_requested.connect(func(strategy: String):
-        command_requested.emit("settings.update",{"learner_strategy":strategy}))
-    view.mistake_response_requested.connect(func(strategy: String):
-        command_requested.emit("settings.update",{"mistake_response_strategy":strategy}))
     view.metronome_requested.connect(func(enabled: bool):
         command_requested.emit("settings.update",{"metronome":enabled}))
     view.hold_grading_requested.connect(func(enabled: bool):

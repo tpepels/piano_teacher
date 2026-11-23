@@ -54,9 +54,6 @@ class Lesson:
     def revision(self):
         return self._source.revision
 
-    @property
-    def warmup(self):
-        return self._source.warmup
 
 
     # --- Lesson cursor -----------------------------------------------
@@ -167,7 +164,7 @@ class Lesson:
     @property
     def flow_active(self) -> bool:
         """Practice Flow governs the selected source (not the warm-up)."""
-        return self._flow.active(self.plan, warmup=self.warmup)
+        return self._flow.active(self.plan)
 
     def display_phrase(self, *, learning: bool):
         """The phrase shown on the staff: Free's window while learning."""

@@ -113,7 +113,7 @@ class CourseFlow:
                      exposure=None, effect=None, reason=None):
         source = self.exposure_workflows.source()
         entry = self.lesson.flow_guided_entry(self.lesson.plan,
-            warmup=source.warmup,recovery=recovery,simplified=remediation is not None)
+            recovery=recovery,simplified=remediation is not None)
         if entry is not None:
             self.flow_execute(entry,reason=reason)
             return
@@ -272,7 +272,7 @@ class LessonNavigation:
                   if queued is not None and queued.event.action == action
                   and queued.event.manual is not None
                   else prepare_stage_change(
-                      p, action, kwargs, warmup=self.lesson.warmup))
+                      p, action, kwargs))
         was_guided = self.transport.mode == "learn"
         guided_return = self.lesson.guided_return_context
         guided_retry_range = self.take.retry_range

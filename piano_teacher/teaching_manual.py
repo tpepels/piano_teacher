@@ -71,14 +71,12 @@ def choose_manual(event, state):
     elif action in ("stop", "pause"):
         continuation = action
     elif action == "open_at":
-        target = choose_source_opening(c, bar=event.bar, mode=event.requested_mode or "learn", warmup=route.warmup)
+        target = choose_source_opening(c, bar=event.bar, mode=event.requested_mode or "learn")
         c = manual_progress(c, "select", number=target.exercise_index)
         start = c.piece.bar_boundaries[target.bar-1]-c.stage.variant.phrase.start
         mode = target.mode
         continuation = "guided" if mode == "learn" else "continue"
     elif action == "skip_stage":
-        if route.warmup:
-            raise ValueError("Warm-up stages unlock after three clean runs, not skips")
         options = steps(c)
         index = next(i for i, step in enumerate(options) if step[3] == c.key)
         if not isinstance(event.reason, str) or not event.reason.strip() or index+1 >= len(options):
@@ -97,8 +95,6 @@ def choose_manual(event, state):
             else:
                 mode, continuation, start = "practice", "continue", 0.
     elif action == "place_original":
-        if route.warmup:
-            raise ValueError("Warm-up stages unlock after three clean runs")
         if c.stage.variant.level == "original":
             raise ValueError("You are already playing the original notes")
         v = next(i for i, stage in enumerate(c.stages) if stage.variant.level == "original")

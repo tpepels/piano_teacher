@@ -65,9 +65,8 @@ class PracticeFlowCourseSession:
         return self._message
 
     @staticmethod
-    def active(plan, *, warmup: bool) -> bool:
-        return (plan is not None and not warmup
-                and plan.lesson_definition.generator_name == "practice-flow")
+    def active(plan) -> bool:
+        return plan is not None
 
     def stage_entry(self, plan, *, resumed: bool = False) -> practice_flow.Transition:
         return self.enter(stage_key=plan.identity,
@@ -79,10 +78,10 @@ class PracticeFlowCourseSession:
         """A fresh course starts in Listen; a saved window warms up in Free."""
         return self.stage_entry(plan,resumed=resumed)
 
-    def guided_entry(self, plan, *, warmup: bool, recovery: bool,
+    def guided_entry(self, plan, *, recovery: bool,
                      simplified: bool) -> practice_flow.Transition | None:
         """A new source window/hand enters its course step before Free binds."""
-        if (self.active(plan,warmup=warmup) and not recovery and not simplified
+        if (self.active(plan) and not recovery and not simplified
                 and (self._phase is None or self._phase.plan is not plan
                      or self._phase.stage_key != plan.identity)):
             # Explicit Learn requests Free, including for the whole-piece
@@ -92,8 +91,8 @@ class PracticeFlowCourseSession:
             return self.stage_entry(plan,resumed=plan.exercise.kind == "perform")
         return None
 
-    def tempo_entry(self, plan, *, warmup: bool, bpm: int) -> FlowTempoEntry:
-        active = self.active(plan,warmup=warmup)
+    def tempo_entry(self, plan, *, bpm: int) -> FlowTempoEntry:
+        active = self.active(plan)
         if (active and self._phase is not None
                 and self._phase.plan is plan
                 and self._phase.stage_key == plan.identity

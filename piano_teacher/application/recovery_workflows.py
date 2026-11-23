@@ -242,7 +242,5 @@ class RollingRecovery:
             self.lesson.plan.active_phrase, hand=self.lesson.plan.hand, bpm=self.lesson.plan.bpm,
             played=self.take.recorder.presses if self.take.recorder else [],
             from_beat=self.transport.play_from_beat, end_beat=boundary, grid=grid,
-            threshold=course_rules(
-                self.lesson.plan.lesson_definition.generator_name,
-                warmup=self.lesson.warmup).recovery_errors_in_window,
-            warmup=self.lesson.warmup, tempo=tempo_map)
+            threshold=course_rules().recovery_errors_in_window,
+            warmup=False, tempo=tempo_map)

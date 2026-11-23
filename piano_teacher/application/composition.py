@@ -87,7 +87,7 @@ from .session_snapshot_builder import SnapshotReadPorts
 from .settings_workflows import SettingsWorkflows
 from .source_identity import SourceIdentity
 from .source_preparation_session import SourcePreparationSession
-from .source_workflows import SourcePreparationWorkflow, SourceInstallation, LibraryOpening
+from .source_workflows import SourcePreparationWorkflow, SourceInstallation
 from .listen_outcomes import ListenOutcomes
 from .teaching_continuation import TeachingContinuation
 from .teaching_workflows import TeachingDecisions, LearnerEvidence
@@ -160,7 +160,7 @@ def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
     r.assessment = AssessmentService()
     r.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
     r.mistake_policy = lambda: resolve_mistake_policy(
-        r.library.settings["mistake_response_strategy"])
+        "adaptive")
     r.midi_key_shortcuts = MidiKeyShortcuts(r.library.settings["midi_key_ranges"])
     r.midi_input = MidiInput(midi=r.midi, shortcuts=r.midi_key_shortcuts,
         calibration=r.midi_calibration, live=r.live_input)
@@ -235,16 +235,12 @@ def _lesson_source_and_settings_workflows(r) -> None:
     r.source_workflows = SourcePreparationWorkflow(
         lesson=r.lesson, source_preparation=r.source_preparation,
         preprocessing=r.preprocessing, fingering=r.fingering,
-        progress=r.progress, fukuda_mistakes=r.fukuda_mistakes,
-        library=r.library, listen_outcomes=r.listen_outcomes, lock=r.lock)
+        progress=r.progress, listen_outcomes=r.listen_outcomes, lock=r.lock)
     r.source_installation = SourceInstallation(
         lesson=r.lesson, notices=r.notices, lifecycle=r.session_lifecycle,
         plans=r.plans, transport=r.transport,
         source_preparation=r.source_preparation, score=r.score, take=r.take,
         listen=r.listen, listen_outcomes=r.listen_outcomes)
-    r.library_opening = LibraryOpening(
-        lesson=r.lesson, notices=r.notices, transport=r.transport,
-        progress=r.progress, library=r.library)
     r.settings_workflows = SettingsWorkflows(
         library=r.library, measurement=r.measurement,
         lifecycle=r.session_lifecycle, notices=r.notices,
@@ -505,7 +501,7 @@ def _event_boundary(r) -> None:
         pause_resume=r.pause_resume,
         playback_authorization=r.playback_authorization,
         source_installation=r.source_installation,
-        library_opening=r.library_opening, lesson=r.lesson,
+        library=r.library, lesson=r.lesson,
         course=r.course, score_preload=r.score_preload,
         device_workflows=r.device_workflows,
         history_management=r.history_management,

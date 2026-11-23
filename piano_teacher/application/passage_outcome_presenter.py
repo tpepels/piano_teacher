@@ -55,9 +55,7 @@ def next_action(pending, *, target_bpm: float, start_beat: float,
     return message
 
 
-def performance_next_action(*, warmup: bool, summary: dict) -> str:
-    return ("Review your performance, then press Start to repeat this warm-up."
-        if warmup else
-        "Review your performance, then Practice the weakest section."
+def performance_next_action(*, summary: dict) -> str:
+    return ("Review your performance, then Practice the weakest section."
         if summary["weakest_bars"] else
         "Clean performance. Choose Practice to build your clean-run streak.")

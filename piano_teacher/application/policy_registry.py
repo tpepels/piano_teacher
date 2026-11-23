@@ -15,15 +15,8 @@ class PolicyRegistry:
         self.ledger = ledger
         self.grading = PracticeAssessmentPolicies.defaults(
             assessment, grade_note_holds=settings["grade_note_holds"])
-        self.learning = PracticePolicyService(
-            ledger, diagnosis=settings["diagnosis_strategy"],
-            learner=settings["learner_strategy"])
+        self.learning = PracticePolicyService(ledger)
 
     def apply_hold_rule(self, grade_note_holds: bool) -> None:
         self.grading = PracticeAssessmentPolicies.defaults(
             self.assessment, grade_note_holds=grade_note_holds)
-
-    def apply_learning_rules(self, settings) -> None:
-        self.learning = PracticePolicyService(
-            self.ledger, diagnosis=settings["diagnosis_strategy"],
-            learner=settings["learner_strategy"])

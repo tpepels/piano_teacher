@@ -5,12 +5,16 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping, Protocol
 from .exercise_pipeline import ExerciseStage
-from .lesson_source_planner import Exercise, hands_for_learning
-from .music import Piece
+from .music import Phrase, Piece
 
-DEFAULT_STRATEGY = "practice-flow"
-CODA_FUKUDA_STRATEGY = "coda-fukuda-midi"
-WARMUP_STRATEGY = "source-progression"
+
+@dataclass(frozen=True)
+class Exercise:
+    """One course window (or the final whole piece) and its hand schedule."""
+    kind: str
+    phrase: Phrase
+    key: str
+    hands: tuple[str, ...] = ()
 
 @dataclass(frozen=True)
 class LessonPlanDefinition:
@@ -33,10 +37,6 @@ class LessonPlanDefinition:
                 stages=self.stage_sequences[(exercise.key,hand)]
                 source=tuple(n for n in exercise.phrase.notes
                              if hand=="both" or n.hand==hand)
-                # Existing built-in warmups intentionally expose all hand
-                # tabs, even when the source has no notes for one hand.
-                if not stages and exercise.kind=="warmup" and not source:
-                    continue
                 if not stages or stages[-1].variant.level!="original":
                     raise ValueError("Every generated lesson must end at original MIDI attacks")
                 # Existing score fixtures can use repeated/blank source IDs
@@ -82,14 +82,8 @@ class LessonGenerator(Protocol):
 
 
 def lesson_hands(exercise: Exercise) -> tuple[str,...]:
-    if exercise.hands:
-        if any(h not in ("right","left","both") for h in exercise.hands):
-            raise ValueError("Unknown hand in generated lesson")
-        return exercise.hands
-    if exercise.kind=="warmup":
-        return ("right","left","both")
-    if exercise.kind!="learn":
-        return ("both",)
-    return hands_for_learning(exercise)
+    if not exercise.hands or any(h not in ("right","left","both") for h in exercise.hands):
+        raise ValueError("Every exercise declares its hands")
+    return exercise.hands
 
 

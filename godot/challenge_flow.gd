@@ -55,10 +55,6 @@ static func present(state: Dictionary) -> Dictionary:
             "kind":"recovering", "streak":raw_streak,"required":required}
     var label := "%s · %d/%d ACCEPTED" % [hand, raw_streak,required]
     var detail := "Complete %d accepted takes at target tempo" % required
-    if bool(state.get("warmup", false)):
-        detail = "Next hand unlocks after %d accepted runs" % required
-        if name == "both":
-            detail = "Final stage · master both hands together"
     if phase == "paused":
         detail = "Paused · press Play when ready"
     elif phase == "count_in":

@@ -12,10 +12,6 @@ signal refresh_devices_requested
 signal save_folder_requested(path: String)
 signal device_selected(name: String)
 signal tempo_requested(bpm: int)
-signal strategy_requested(strategy: String)
-signal diagnosis_strategy_requested(strategy: String)
-signal learner_strategy_requested(strategy: String)
-signal mistake_response_requested(strategy: String)
 signal metronome_requested(enabled: bool)
 signal hold_grading_requested(enabled: bool)
 signal calibration_requested(action: String)
@@ -32,10 +28,8 @@ var ui_scale := 1.0
 var default_font: Font
 var settings_grid: GridContainer
 var midi_calibration_body: VBoxContainer
-var practice_strategy_body: VBoxContainer
 var history_actions_body: VBoxContainer
 var midi_calibration_toggle: Button
-var practice_strategy_toggle: Button
 var history_toggle: Button
 var device_button: Button
 var input_activity_label: Label
@@ -54,10 +48,6 @@ var tempo_setting: SpinBox
 var apply_tempo_button: Button
 var metronome_toggle: CheckButton
 var hold_grading_toggle: CheckButton
-var strategy_picker: OptionButton
-var diagnosis_strategy_picker: OptionButton
-var learner_strategy_picker: OptionButton
-var mistake_response_picker: OptionButton
 var listen_volume_slider: HSlider
 var listen_volume_label: Label
 var fullscreen_toggle: CheckButton
@@ -298,45 +288,6 @@ func _ready() -> void:
     practice.add_child(hold_grading_toggle)
     practice.add_child(_label(
         "Off by default. Rhythm and correct notes come first.", 12, MUTED))
-    practice_strategy_body = _stack(10)
-    practice_strategy_toggle = _disclosure(practice,"Advanced exercise settings",practice_strategy_body)
-    practice_strategy_body.add_child(_label("Exercise generation", 14, MUTED))
-    strategy_picker = OptionButton.new()
-    strategy_picker.custom_minimum_size = Vector2(260, 40)
-    strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    strategy_picker.tooltip_text = "Adaptive Coda + Fukuda lessons: reductions, rhythm and slow stages from your MIDI."
-    strategy_picker.item_selected.connect(func(index: int):
-        strategy_requested.emit(str(strategy_picker.get_item_metadata(index))))
-    practice_strategy_body.add_child(strategy_picker)
-    practice_strategy_body.add_child(_label("Error assessment", 14, MUTED))
-    diagnosis_strategy_picker = OptionButton.new()
-    diagnosis_strategy_picker.custom_minimum_size = Vector2(260, 40)
-    diagnosis_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    diagnosis_strategy_picker.item_selected.connect(func(index: int):
-        diagnosis_strategy_requested.emit(str(diagnosis_strategy_picker.get_item_metadata(index))))
-    practice_strategy_body.add_child(diagnosis_strategy_picker)
-    practice_strategy_body.add_child(_label("Learner recommendation", 14, MUTED))
-    learner_strategy_picker = OptionButton.new()
-    learner_strategy_picker.custom_minimum_size = Vector2(260, 40)
-    learner_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    learner_strategy_picker.item_selected.connect(func(index: int):
-        learner_strategy_requested.emit(str(learner_strategy_picker.get_item_metadata(index))))
-    practice_strategy_body.add_child(learner_strategy_picker)
-    practice_strategy_body.add_child(_label("When a note is wrong", 14, MUTED))
-    mistake_response_picker = OptionButton.new()
-    mistake_response_picker.custom_minimum_size = Vector2(260,40)
-    mistake_response_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    mistake_response_picker.tooltip_text = (
-        "Choose how mistakes affect the next rewind, tempo or guided exercise. "
-        + "Changing this affects future mistakes without resetting the current lesson.")
-    mistake_response_picker.item_selected.connect(func(index: int):
-        mistake_response_requested.emit(
-            str(mistake_response_picker.get_item_metadata(index))))
-    practice_strategy_body.add_child(mistake_response_picker)
-    practice_strategy_body.add_child(_label(
-        "Exercise, rhythm and tempo generation changes restart practice. "
-        + "Mistake responses can be changed without resetting your progress.",
-        12, MUTED))
 
     var audio := _section("Listening & display")
     var audio_panel := _card()
@@ -612,35 +563,6 @@ func present_preferences(values: Dictionary) -> void:
     present_window_mode(bool(values.get("fullscreen", true)))
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
     hold_grading_toggle.set_pressed_no_signal(bool(values.get("grade_note_holds", false)))
-    _present_strategy_picker(strategy_picker,
-        values.get("available_exercise_strategies", []),
-        str(values.get("exercise_strategy", "practice-flow")))
-    _present_strategy_picker(diagnosis_strategy_picker,
-        values.get("available_diagnosis_strategies", []),
-        str(values.get("diagnosis_strategy", "error-family")))
-    _present_strategy_picker(learner_strategy_picker,
-        values.get("available_learner_strategies", []),
-        str(values.get("learner_strategy", "repeated-error")))
-    _present_strategy_picker(mistake_response_picker,
-        values.get("available_mistake_response_strategies", []),
-        str(values.get("mistake_response_strategy", "adaptive")))
-    for option in values.get("available_mistake_response_strategies", []):
-        if option is Dictionary and str(option.get("id","")) == \
-                str(values.get("mistake_response_strategy","adaptive")):
-            mistake_response_picker.tooltip_text = str(option.get("description",""))
-            break
-
-func _present_strategy_picker(picker: OptionButton, choices: Array, selected: String) -> void:
-    picker.clear()
-    for available in choices:
-        if typeof(available) != TYPE_DICTIONARY:
-            continue
-        var index := picker.item_count
-        picker.add_item(str(available.get("label", available.get("id", ""))))
-        var strategy_id := str(available.get("id", ""))
-        picker.set_item_metadata(index, strategy_id)
-        if strategy_id == selected:
-            picker.select(index)
 
 func begin_editing(state: Dictionary) -> void:
     tempo_setting.set_value_no_signal(float(state.get("target_bpm", 40)))
@@ -665,10 +587,6 @@ func present_practice(state: Dictionary, editing: bool = false) -> void:
 func present_busy(pending: bool) -> void:
     _history_busy = pending
     apply_tempo_button.disabled = pending
-    strategy_picker.disabled = pending
-    diagnosis_strategy_picker.disabled = pending
-    learner_strategy_picker.disabled = pending
-    mistake_response_picker.disabled = pending
     retention_save_button.disabled = pending
     evidence_days_setting.editable = not pending
     evidence_budget_setting.editable = not pending

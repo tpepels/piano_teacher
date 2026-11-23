@@ -15,15 +15,12 @@ class SourceIdentity:
     plan: LearningPlan | None = None
     source: str | None = None
     fingerprint: str = ""
-    warmup: bool = False
     revision: int = 0
 
-    def install(self, *, plan: LearningPlan, source: str, fingerprint: str,
-                warmup: bool) -> None:
+    def install(self, *, plan: LearningPlan, source: str, fingerprint: str) -> None:
         self.plan = plan
         self.source = source
         self.fingerprint = fingerprint
-        self.warmup = warmup
 
     def replace_plan(self, plan: LearningPlan | None) -> None:
         self.plan = plan

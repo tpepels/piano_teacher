@@ -107,7 +107,7 @@ class PracticeSession:
         self.engine = PracticeEngine(self.data, clock=self.clock)
         self.commands = EngineCommands(engine=self.engine)
         self.receipt = None
-        self.ask("settings.update", music_dir=str(self.music), exercise_strategy="practice-flow")
+        self.ask("settings.update", music_dir=str(self.music))
         self.ask("midi.device.select", name="Test piano")
         return self.ask("library.open", id=self.path.name)
 

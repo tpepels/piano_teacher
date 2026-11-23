@@ -407,10 +407,6 @@ class PlaybackSession:
         if plan.preparation is not None:
             self._transport.set_retry_previous_pass(True)
             self.schedule_preparation(plan.preparation)
-        if plan.stop_automatic:
-            self.auto = False
-            self._transport.cancel_preparation()
-            self._transport.cancel_continuation()
         if plan.action == "advance":
             result = PassageCompletion(advance_feedback=bool(self._transport.next_at),
                 force_early=True)

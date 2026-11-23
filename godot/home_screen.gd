@@ -79,19 +79,15 @@ func _ready() -> void:
 
 
 func present_catalog(catalog: Dictionary) -> void:
-    count_label.text = "%d scores · %d built-in warm-ups" % [int(catalog.get("count", 0)), catalog.get("warmups", []).size()]
+    count_label.text = "%d scores" % int(catalog.get("count", 0))
     var recent: String = str(catalog.get("last_piece", ""))
     _recent_identifier = ""
-    for entry in catalog.get("warmups", []) + catalog.get("pieces", []):
+    for entry in catalog.get("pieces", []):
         if str(entry.get("id", "")) == recent:
             _recent_identifier = recent
             break
     resume_button.disabled = _recent_identifier.is_empty()
     var title := recent.get_file().get_basename().replace("_", " ")
-    for entry in catalog.get("warmups", []):
-        if str(entry.get("id", "")) == recent:
-            title = str(entry.get("title", title))
-            break
     recent_label.text = title if not recent.is_empty() else "No recent piece"
 
 func present_catalog_unavailable() -> void:

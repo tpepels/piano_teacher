@@ -210,15 +210,9 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var passage_text: String = ("%s · Measure %d" % [kind,range_first]
         if range_first == range_last
         else "%s · Measures %d–%d" % [kind,range_first,range_last])
-    if bool(parsed.get("warmup", false)):
-        var hand_step: int = (["left", "right", "both"].find(str(parsed.get("hand", "left"))) + 1)
-        passage_text = "WARM-UP %d/3 · %s · Measures %d–%d" % [
-            hand_step, str(parsed.get("hand", "left")).to_upper(),
-            int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 8))]
-    if not bool(parsed.get("warmup", false)):
-        var chosen_bar: int = int(parsed.get("selected_start_bar", 1))
-        if chosen_bar > int(parsed.get("first_bar", 1)):
-            passage_text += " · Start at measure %d" % chosen_bar
+    var chosen_bar: int = int(parsed.get("selected_start_bar", 1))
+    if chosen_bar > int(parsed.get("first_bar", 1)):
+        passage_text += " · Start at measure %d" % chosen_bar
     # The live bar number comes from Python's source meter grid. Do not infer
     # measures from elapsed seconds in Godot (pickup and changing meters).
     var current_bar: int = int(parsed.get("current_bar", 0))
@@ -227,12 +221,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         var first_bar: int = int(parsed.get("first_bar", 1))
         var last_bar: int = int(parsed.get("last_bar", first_bar))
         var bar_text := "Measure %d of %d" % [current_bar, last_bar]
-        if bool(parsed.get("warmup", false)):
-            var hand_step: int = ["left", "right", "both"].find(str(parsed.get("hand", "left"))) + 1
-            passage_text = "WARM-UP %d/3 · %s · %s" % [
-                hand_step, str(parsed.get("hand", "left")).to_upper(), bar_text]
-        else:
-            passage_text = "%s · %s" % [kind, bar_text]
+        passage_text = "%s · %s" % [kind, bar_text]
     if tempo_down_button != null:
         tempo_down_button.text = "−"
         tempo_down_button.tooltip_text = "Decrease by %d BPM · Keeps the song target" % int(parsed.get("manual_tempo_step_bpm", 5))
@@ -362,10 +351,6 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         var needed_runs: int = int(parsed.get("clean_runs_required", 3))
         progress_text = "Accepted passes %d of %d at %d BPM" % [
             int(parsed.get("streak", 0)), needed_runs, int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
-        if bool(parsed.get("warmup", false)):
-            var name: String = "Both hands" if str(parsed.get("hand", "")) == "both" else str(parsed.get("hand", "")).capitalize() + " hand"
-            progress_text = "%s · %d of %d accepted passes · Next hand unlocks when mastered" % [
-                name, int(parsed.get("streak", 0)), needed_runs]
         if str(parsed.get("mode", "")) == "perform":
             progress_text = "Perform · keep going to the end; review follows"
         elif str(parsed.get("mode", "")) == "listen":
@@ -408,11 +393,10 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             instruction_text = "Tempo %d → %d BPM · retry measures %d–%d" % [
                 previous_tempo, new_tempo, int(notice.get("first_bar", 1)),
                 int(notice.get("last_bar", 1))]
-    if not bool(parsed.get("warmup", false)):
-        # Show musical stage content, never the internal generator name.
-        var transformation: String = str(parsed.get("stage_label", ""))
-        if not transformation.is_empty():
-            passage_text += " · " + transformation
+    # Show musical stage content, never the internal generator name.
+    var transformation: String = str(parsed.get("stage_label", ""))
+    if not transformation.is_empty():
+        passage_text += " · " + transformation
     # A bounded physical admission can fail while the prior lesson phase
     # still says "loading" or "admitting". Present the transaction result,
     # never an indefinite progress caption. Recovery is projected by the
@@ -580,7 +564,7 @@ func _dismiss_resume_hint() -> void:
 
 func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
     var step: int = int(state.get("lesson_step",1))
-    if bool(state.get("warmup",false)) or step <= 1:
+    if step <= 1:
         if allow_measure:
             show_source_picker(state)
         return

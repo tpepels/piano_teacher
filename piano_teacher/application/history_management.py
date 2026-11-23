@@ -46,11 +46,7 @@ class PlanReinstallation:
         selected = self.lesson.plan
         if selected is None:
             return None
-        return LearningPlan(
-            selected.piece,
-            warmup=self.lesson.warmup,
-            exercise_strategy=selected.exercise_strategy.name,
-            fukuda_mistakes=frozenset(), feedback={})
+        return LearningPlan(selected.piece)
 
     def reinstall(self, replacement: LearningPlan | None) -> None:
         self.adopt(lambda: self.lesson.replace_plan(replacement))

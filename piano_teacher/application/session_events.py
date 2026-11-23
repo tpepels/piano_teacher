@@ -71,7 +71,6 @@ class PlaybackFailed:
 @dataclass(frozen=True, slots=True)
 class SourceCommitted:
     prepared: object
-    warmup: bool
     opened_identifier: str | None = None
 
 

@@ -141,8 +141,7 @@ func _process(_delta: float) -> bool:
             if app.command_coordinator.state.pending or not app.score_session.is_ready() or \
                     state.get("device") != "CI Synthetic Keyboard":
                 return false
-            if (str(state.get("exercise_strategy","")) != "practice-flow" or
-                    int(state.get("first_bar",0)) != 1 or
+            if (int(state.get("first_bar",0)) != 1 or
                     int(state.get("last_bar",0)) != 1 or
                     str(state.get("hand","")) != "right"):
                 _fail("Opening the real scene selected the wrong practice window")

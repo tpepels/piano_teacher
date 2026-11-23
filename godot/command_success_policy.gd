@@ -14,11 +14,10 @@ static func decide(path: String, resume_saved: bool,
     elif path == "library.open":
         kind = "library_open"
         if opened is Dictionary:
-            if not bool(opened.get("warmup",false)) and int(opened.get("lesson_step",1)) > 1:
+            if int(opened.get("lesson_step",1)) > 1:
                 open_mode = "resume_choice"
             else:
-                open_mode = ("practice" if bool(opened.get("warmup",false))
-                    or resume_saved else "picker")
+                open_mode = "practice" if resume_saved else "picker"
     elif path == "settings.update":
         kind = "settings"
     elif path == "midi.device.select":

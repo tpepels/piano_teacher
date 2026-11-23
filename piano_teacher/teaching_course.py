@@ -35,7 +35,6 @@ class CourseState:
     progress: PlanProgress
     profile: str
     course_version: int
-    warmup: bool = False
 
     @property
     def exercises(self):
@@ -55,7 +54,7 @@ class CourseState:
 
     @property
     def clean_runs_required(self):
-        return course_rules(self.definition.generator_name, warmup=self.warmup).clean_runs_to_master
+        return course_rules().clean_runs_to_master
 
     @property
     def stages(self):
@@ -68,25 +67,24 @@ class CourseState:
     @property
     def key(self):
         return stage_key(self.exercise, self.hand, self.stage.variant,
-                         self.profile, self.course_version, self.warmup)
+                         self.profile, self.course_version)
 
     def with_progress(self, **changes):
         return replace(self, progress=replace(self.progress, **changes))
 
 
-def stage_key(exercise, hand, variant, profile, version, warmup=False):
+def stage_key(exercise, hand, variant, profile, version):
     phrase = variant.phrase
     events = [(n.start-phrase.start, n.end-phrase.start, n.pitch, n.track, n.channel, n.hand)
               for n in phrase.notes]
     signature = hashlib.sha256(json.dumps((phrase.end-phrase.start, events),
         separators=(",", ":")).encode()).hexdigest()[:16]
-    profile = ":warmup" if warmup else f":{profile}"
-    return f"course:{version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
+    return f"course:{version}:{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
 
 
 def steps(course):
     return tuple((i, h, v, stage_key(ex, hand, stage.variant, course.profile,
-                 course.course_version, course.warmup))
+                 course.course_version))
                  for i, ex in enumerate(course.definition.exercises)
                  for h, hand in enumerate(lesson_hands(ex))
                  for v, stage in enumerate(course.definition.stages(ex, hand)))
@@ -94,26 +92,19 @@ def steps(course):
 
 def start_bpm(course):
     p = course.progress
-    if course.warmup:
-        return min(p.target_bpm, course.piece.bpm)
     baseline = min(p.target_bpm, max(SETTINGS.minimum_bpm, SETTINGS.start_tempo_bpm))
     return min(p.target_bpm, suggested_start_bpm(course.stage.variant.phrase, course.hand,
         default_bpm=baseline, minimum_bpm=SETTINGS.minimum_bpm))
 
 
 def minimum_bpm(course):
-    if course.profile == "practice-flow":
-        from .application.practice_flow import floor_bpm
-        return floor_bpm(int(course.progress.target_bpm))
-    floor = math.ceil(course.stage.ladder_bpm(SETTINGS.minimum_bpm)-1e-9)
-    return max(SETTINGS.minimum_bpm, min(course.progress.target_bpm, floor))
+    from .application.practice_flow import floor_bpm
+    return floor_bpm(int(course.progress.target_bpm))
 
 
 def maximum_bpm(course):
     """The highest tempo the selected course allows its manual controls."""
-    if course.profile == "practice-flow" and not course.warmup:
-        return min(SETTINGS.maximum_bpm, course.progress.target_bpm)
-    return SETTINGS.maximum_bpm
+    return min(SETTINGS.maximum_bpm, course.progress.target_bpm)
 
 
 def carried_bpm(course):
@@ -125,8 +116,6 @@ def carried_bpm(course):
     Distinct lessons containing an exactly repeated passage still share
     earned tempo through tempo_for_stage(), with independent assessment.
     """
-    if course.warmup:
-        return None
     p = course.progress
     tempos = dict(p.stage_tempos)
     current_notes = course.stage.variant.notes
@@ -135,8 +124,7 @@ def carried_bpm(course):
         for stage in course.stages[:p.cursor[2]]
         if stage.variant.notes == current_notes
         if (key := stage_key(course.exercise, course.hand, stage.variant,
-                            course.profile, course.course_version,
-                            course.warmup)) in p.transferable_tempos
+                            course.profile, course.course_version)) in p.transferable_tempos
         and key in tempos
     ]
     if not earned:
@@ -198,32 +186,6 @@ def select_cursor(course, cursor, *, same_is_noop=False):
     return chosen.with_progress(bpm=tempo_for_stage(chosen))
 
 
-def warmup_unlocked_step(course) -> int:
-    """Last selectable warm-up step, derived from earned course mastery.
-
-    Imported scores remain freely navigable. Every warm-up stage must be
-    mastered in order before the next may be selected manually.
-    """
-    options = steps(course)
-    if not course.warmup:
-        return len(options)
-    earned = dict(course.progress.mastered)
-    for number, (_, _, _, key) in enumerate(options, start=1):
-        if key not in earned:
-            return number
-    return len(options)
-
-
-def _require_warmup_cursor(course, cursor) -> None:
-    if not course.warmup:
-        return
-    options = steps(course)
-    number = next((i for i, step in enumerate(options, start=1)
-                   if step[:3] == cursor), None)
-    if number is None or number > warmup_unlocked_step(course):
-        raise ValueError(f"Complete {course.clean_runs_required} clean passes to unlock the next warm-up step")
-
-
 def manual_progress(course, action, *, number=None, hand=None, bpm=None):
     p = course.progress
     if action in ("select_step", "next", "previous", "select", "hand"):
@@ -232,7 +194,6 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
             if type(number) is not int or not 1 <= number <= len(options):
                 raise ValueError("Lesson step out of bounds")
             destination = options[number-1][:3]
-            _require_warmup_cursor(course, destination)
             return select_cursor(course, destination, same_is_noop=True)
         if action == "hand":
             if hand not in course.hands:
@@ -244,11 +205,9 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
             if type(index) is not int or not 0 <= index < len(course.definition.exercises):
                 raise ValueError("Exercise index out of bounds")
             cursor = (index, 0, 0)
-        if action != "select":
-            _require_warmup_cursor(course, cursor)
         return select_cursor(course, cursor)
     if action == "tempo":
-        lower = 1 if course.profile == "practice-flow" else SETTINGS.minimum_bpm
+        lower = 1
         if type(bpm) not in (int, float) or not math.isfinite(bpm) or not lower <= bpm <= SETTINGS.maximum_bpm:
             raise ValueError(f"BPM must be between {SETTINGS.minimum_bpm} and {SETTINGS.maximum_bpm}")
         target = course.piece.bpm if course.profile == "practice-flow" else bpm
@@ -363,7 +322,7 @@ def preserve_mastered(course, definition):
         for hand in lesson_hands(ex):
             old = course.definition.stage_sequences.get((ex.key, hand), ())
             retained = tuple(stage for stage in old if stage_key(ex, hand, stage.variant,
-                course.profile, course.course_version, course.warmup) in dict(course.progress.mastered))
+                course.profile, course.course_version) in dict(course.progress.mastered))
             if not retained:
                 continue
             selected = sequences[(ex.key, hand)]

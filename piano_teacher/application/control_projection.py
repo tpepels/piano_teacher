@@ -44,7 +44,7 @@ def primary(s: Mapping, moving: bool, course: bool) -> str | None:
     if course:
         return "pause" if moving else "listen" if mode == "listen" else "start" if mode == "practice" else None
     if mode == "listen" and not moving:
-        return "practice" if s.get("warmup") else "listen"
+        return "listen"
     if mode == "learn":
         phase = s.get("phase")
         teaching = s.get("teaching") or {}
@@ -70,7 +70,7 @@ def caption(s: Mapping, action: str | None, moving: bool, course: bool) -> str:
             return "Retry rhythm"
         return {"practice": "Try rhythm", "pause": "Pause", "learn_retry": "Learn"}.get(action, "Learn")
     if s.get("mode") == "listen" and not moving:
-        return "Back to warm-up" if s.get("warmup") else "Listen again"
+        return "Listen again"
     return "Pause" if action == "pause" else "Play"
 
 
@@ -97,11 +97,6 @@ def project_controls(s: Mapping) -> dict:
     passage_previous = bool(s.get("loaded")) and int(s.get("exercise", 1)) > 1
     passage_next = (bool(s.get("loaded")) and
                     int(s.get("exercise", 1)) < int(s.get("exercise_count", 1)))
-    if passage_next and s.get("warmup"):
-        # The next warm-up passage opens only after every stage of this
-        # exercise has been earned. The same rule is checked by the course.
-        passage_next = bool(s.get("hand_stages")) and all(
-            row.get("complete",False) for row in s["hand_stages"])
     mode = s.get("mode")
     phase = s.get("phase")
     stop_enabled = bool(s.get("loaded")) and (
@@ -113,20 +108,16 @@ def project_controls(s: Mapping) -> dict:
     # Lesson Path exposes explicit exploration even while Flow hides
     # compact manual navigation. Keep its availability independent.
     path_skip = bool(s.get("loaded")) and bool(s.get("skip_available"))
-    warmup = bool(s.get("warmup"))
     loaded = bool(s.get("loaded"))
-    hand_stages = {row["hand"]: row for row in s.get("hand_stages",[])
-                   if isinstance(row, Mapping) and "hand" in row}
     hands = {
-        hand: {"enabled": loaded and hand != s.get("hand")
-               and (not warmup or not hand_stages.get(hand,{}).get("locked",True))}
+        hand: {"enabled": loaded and hand != s.get("hand")}
         for hand in s.get("hands",[]) if isinstance(hand,str)
     }
     activity_modes = {
-        "learn": {"enabled":loaded and not warmup},
+        "learn": {"enabled":loaded},
         "practice": {"enabled":loaded},
-        "perform_current": {"enabled":loaded and not warmup},
-        "perform_whole": {"enabled":loaded and not warmup},
+        "perform_current": {"enabled":loaded},
+        "perform_whole": {"enabled":loaded},
     }
     listen = None
     if s.get("loaded"):

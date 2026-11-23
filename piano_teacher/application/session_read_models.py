@@ -46,7 +46,6 @@ class SessionCapture:
             guided_range=self.lesson.guided_beat_range,
             guided_open_at=self.score.free_target_arrival(
                 self.lesson, self.transport),
-            is_builtin_warmup=self.lesson.warmup,
             metronome=self.library.settings["metronome"],
             midi_input_count=self.midi_input.input_count,
             midi_input_note=self.midi_input.input_note,
@@ -157,7 +156,6 @@ class SnapshotExtras:
     def add(self, state: dict, now: float) -> None:
         if self.take.pending_result is not None:
             state["bpm"] = self.timing.presentation_bpm()
-        state["mistake_response_strategy"] = self.library.settings["mistake_response_strategy"]
         if self.lesson.plan is not None:
             epoch = self.transport.tempo_epoch_for(
                 stage=self.lesson.plan.identity,bpm=self.timing.presentation_bpm())

@@ -101,23 +101,11 @@ class CourseRules:
     recovery_errors_in_window: int
 
 
-def course_rules(name: str, *, warmup: bool = False) -> CourseRules:
-    """Select course rules by the installed generator, not a global default.
-
-    The saved lesson generator and its course version remain the persistence
-    identity. Flat lesson_settings.json tuning remains effective for the
-    legacy source-based course, Coda/Fukuda and built-in warm-ups.
-    """
-    if name == "practice-flow" and not warmup:
-        from .application.practice_flow import CLEAN_TAKES_AT_TARGET
-        from .practice_windows import MAX_PRACTICE_BARS
-        return CourseRules(
-            name, CLEAN_TAKES_AT_TARGET, 1, 1, MAX_PRACTICE_BARS,
-            SETTINGS.focus_max_attacks, SETTINGS.recovery_errors_in_window)
+def course_rules() -> CourseRules:
+    """Practice Flow's course rules (docs/practice-flow.md)."""
+    from .application.practice_flow import CLEAN_TAKES_AT_TARGET
+    from .practice_windows import MAX_PRACTICE_BARS
     return CourseRules(
-        name, SETTINGS.clean_runs_to_master,
-        SETTINGS.focus_measures, SETTINGS.focus_min_onsets,
-        SETTINGS.focus_max_measures, SETTINGS.focus_max_attacks,
-        SETTINGS.warmup_recovery_errors if warmup
-        else SETTINGS.recovery_errors_in_window)
+        "practice-flow", CLEAN_TAKES_AT_TARGET, 1, 1, MAX_PRACTICE_BARS,
+        SETTINGS.focus_max_attacks, SETTINGS.recovery_errors_in_window)
 

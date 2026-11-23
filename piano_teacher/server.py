@@ -19,7 +19,6 @@ from .application.session_events import (
     PieceHistoryDeleted, LearnerHistoryDeleted)
 from .clock import Clock
 from .feedback_events import FeedbackEventLog
-from .warmups import is_warmup
 from . import state_contract
 
 
@@ -105,22 +104,20 @@ class PracticeEngine:
     def load_library(self, identifier: str) -> None:
         with self.lock:
             path = self.library.resolve(identifier)
-        warmup = is_warmup(identifier)
-        self.load(str(path), warmup=warmup, opened_identifier=identifier)
+        self.load(str(path), opened_identifier=identifier)
 
     def performance_diagnostics(self) -> dict:
         return self.runtime_timings.snapshot()
 
-    def load(self, path: str, *, warmup: bool = False,
-             opened_identifier: str | None = None):
+    def load(self, path: str, *, opened_identifier: str | None = None):
         """Commit a prepared source under one mutation guard and short lock."""
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
         with self.source_preparation.source_mutation():
             prepared = self.source_workflows.prepare(
-                path, warmup=warmup, diagnostics=diagnostics)
+                path, diagnostics=diagnostics)
             self.practice_session.apply(
-                SourceCommitted(prepared, warmup, opened_identifier))
+                SourceCommitted(prepared, opened_identifier))
         if diagnostics:
             print("SCORE_LOAD_STAGE: ready",
                   round((time.perf_counter()-began)*1000,1),

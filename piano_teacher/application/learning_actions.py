@@ -49,12 +49,8 @@ class LearningActions:
             else:
                 self.course.begin_course_stage(effect=effect,reason=action)
         elif action == "skip_stage":
-            if self.lesson.warmup:
-                raise ValueError("Warm-up stages unlock after three clean runs, not skips")
             self.navigation.skip_stage(kwargs.get("reason"), effect=effect)
         elif action == "place_original":
-            if self.lesson.warmup:
-                raise ValueError("Warm-up stages unlock after three clean runs")
             self.navigation.place_original(effect=effect)
         elif action == "revisit_trouble":
             self.navigation.revisit_trouble(

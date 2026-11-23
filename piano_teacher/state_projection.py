@@ -134,11 +134,9 @@ class LessonSnapshot(_Snapshot):
     stage_label: str = "Original notes and rhythm"
     stage_change: str = "unchanged source"
     stage_meaningful: bool = False
-    exercise_strategy: str = ""
     level_number: int = 1
     level_count: int = 1
     required_notes: int = 0
-    warmup: bool = False
     piece_last_bar: int = 0
     import_warnings: tuple[str, ...] = ()
     hand: str = "both"
@@ -279,7 +277,7 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "current_bar": bar_number_at(lesson.measure_boundaries,
             exercise_beat if timing.running else timing.play_from_beat, lesson.first_bar),
         "exercise": lesson.exercise_index+1, "exercise_count": lesson.exercise_count,
-        "lesson_level": lesson.level, "exercise_strategy": lesson.exercise_strategy,
+        "lesson_level": lesson.level,
         "stage_family": lesson.stage_family, "stage_label": lesson.stage_label,
         "stage_change": lesson.stage_change,
         "stage_meaningful": lesson.stage_meaningful,
@@ -288,11 +286,11 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
             if timing.tempo_segments else tempo.bpm),
         "lesson_level_number": lesson.level_number,
         "lesson_level_count": lesson.level_count, "required_notes": lesson.required_notes,
-        "warmup": lesson.warmup, "piece_last_bar": lesson.piece_last_bar,
+        "piece_last_bar": lesson.piece_last_bar,
         "selected_start_bar": bar_number_at(lesson.measure_boundaries, timing.open_from_beat, lesson.first_bar),
         "hand_stages": hand_stage_rows(kind=lesson.kind, exercise_index=lesson.exercise_index,
             current_hand=lesson.hand, available_hands=lesson.hands, mastered=lesson.mastered,
-            lesson_steps=lesson.lesson_steps, builtin_warmup=lesson.warmup),
+            lesson_steps=lesson.lesson_steps),
         "measure_boundaries": list(lesson.measure_boundaries),
         "import_warnings": list(lesson.import_warnings),
         "lesson_step": lesson.lesson_step,
@@ -362,9 +360,8 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
 
 def hand_stage_rows(*, kind: str, exercise_index: int, current_hand: str,
                     available_hands: Collection[str], mastered: Collection[str],
-                    lesson_steps: Iterable[tuple[int, str, str]],
-                    builtin_warmup: bool) -> list[dict]:
-    if kind not in ("learn", "warmup"):
+                    lesson_steps: Iterable[tuple[int, str, str]]) -> list[dict]:
+    if kind != "learn":
         return []
     steps = tuple(lesson_steps)
     rows = []
@@ -374,8 +371,7 @@ def hand_stage_rows(*, kind: str, exercise_index: int, current_hand: str,
         if not matching:
             continue
         complete = all(key in mastered for key in matching)
-        locked = (builtin_warmup and hand != "right"
-                  and not all(previous["complete"] for previous in rows))
+        locked = False
         rows.append({"hand":hand, "active":hand == current_hand,
                      "complete":complete, "locked":locked,
                      "available":hand in available_hands})

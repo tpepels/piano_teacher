@@ -47,11 +47,6 @@ class SettingsWorkflows:
             self.notices.publish(
                 "MIDI timing correction changed",
                 "Press Play to start a new attempt.")
-        if proposed["mistake_response_strategy"] != self.library.settings["mistake_response_strategy"]:
-            self.lifecycle.stop(reason="policy_changed")
-            self.notices.publish(
-                "Retry strategy changed",
-                "Press Play to start a new attempt.")
         prior_hold_grading = self.library.settings["grade_note_holds"]
         updated = self.library.update(**changes)
         if updated["grade_note_holds"] != prior_hold_grading:
@@ -77,8 +72,6 @@ class SettingsWorkflows:
             self.progress.ledger.prune(
                 days=proposed["evidence_retention_days"],
                 budget_mib=proposed["evidence_budget_mib"])
-        if {"diagnosis_strategy", "learner_strategy"} & changes.keys():
-            self.policy_registry.apply_learning_rules(self.library.settings)
         if before != self.library.settings["music_dir"]:
             self.library_health.reset()
         return updated

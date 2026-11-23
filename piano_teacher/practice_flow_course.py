@@ -13,10 +13,10 @@ from dataclasses import dataclass, replace
 from .exercise_generator import generate_variants
 from .exercise_pipeline import ExerciseStage
 from .lesson_settings import course_rules
-from .lesson_source_planner import Exercise
-from .lesson_contracts import LessonPlanDefinition
+from .lesson_contracts import Exercise, LessonPlanDefinition
 from .music import Phrase, Piece
 from .practice_windows import moving_windows, MAX_PRACTICE_BARS
+from .lesson_generators import CodaAid, FukudaAid
 
 def _hands(notes) -> tuple[str, ...]:
     present = {n.hand for n in notes}
@@ -50,7 +50,7 @@ def course_exercises(piece: Piece) -> tuple[Exercise, ...]:
 
 def original_stage(exercise: Exercise, hand: str) -> ExerciseStage:
     variants = generate_variants(exercise.phrase, hand,
-                                 max_attacks=course_rules("practice-flow").focus_max_attacks)
+                                 max_attacks=course_rules().focus_max_attacks)
     return ExerciseStage(variants[-1])
 
 
@@ -82,10 +82,15 @@ def _entry_tempo(event, state, decision):
     return decision
 
 
+# Part of every saved stage key ("course:2:practice-flow:..."): changing it
+# would orphan saved progress.
+COURSE_VERSION = 2
+
+
 @dataclass(frozen=True)
 class PracticeFlowLessonGenerator:
     """Real notes only, in the owner's phrase / hand / link order."""
-    components: tuple
+    components: tuple = (FukudaAid(), CodaAid())
     name: str = "practice-flow"
     # Tempo/timing rules of docs/practice-flow.md (teaching_decisions).
     flow_rules: bool = True

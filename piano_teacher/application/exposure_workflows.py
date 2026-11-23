@@ -113,8 +113,7 @@ class ExposureWorkflows:
         return ExposureSource(
             selected.identity, selected.active_variant,
             selected.piece.bar_boundaries, selected.piece.time_signatures,
-            self.lesson.warmup,
-            self.lesson.flow_applies(selected, warmup=self.lesson.warmup))
+            self.lesson.flow_active)
 
     def prepare_practice(self, *, exposure=None, effect=None, reason="transition"):
         selected_plan = self.lesson.plan
@@ -124,7 +123,7 @@ class ExposureWorkflows:
                   else self.lesson.manual_effect("practice", effect=effect))
         selected = exposure or self.lesson.install_command(effect)
         entry = self.lesson.flow_tempo_entry(
-            selected_plan, warmup=self.lesson.warmup, bpm=selected.bpm)
+            selected_plan, bpm=selected.bpm)
         if entry.clear_guided_return:
             self.lesson.discard_guided_return()
         self.install(prepare_timed(
