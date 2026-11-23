@@ -19,7 +19,16 @@ def active(s: Mapping) -> bool:
     if (isinstance(timeline, Mapping) and timeline.get("state") == "failed"
             and not s.get("running")):
         return False
-    return bool(s.get("running")) or s.get("phase") in (PAUSABLE_PHASES | {"paused"})
+    if s.get("running"):
+        return True
+    phase = s.get("phase")
+    if phase == "feedback" and not (
+            s.get("auto") or isinstance(s.get("playback_intent"), Mapping)
+            or s.get("transition_in_seconds") is not None):
+        # A retained result with no automatic continuation (for example a
+        # failed save awaiting Play) is not learning or playing: offer Play.
+        return False
+    return phase in (PAUSABLE_PHASES | {"paused"})
 
 
 def flow(s: Mapping) -> bool:

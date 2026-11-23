@@ -186,7 +186,7 @@ class TeachingContinuation:
             return FeedbackFault("The next lesson score changed during grading",
                 f"{error}. Select another step or reopen the piece.",pause=True)
         return FeedbackFault("Could not save the assessment",
-            "Check storage or lesson generation, then Retry the attempt.",stop_automatic=True)
+            "Check storage, then press Play to save this attempt again.",stop_automatic=True)
 
     def readiness(self, *, revision: int, fingerprint: str) -> ContinuationReadiness:
         return ContinuationReadiness(self.acknowledged,revision,fingerprint,self.native_failure)
