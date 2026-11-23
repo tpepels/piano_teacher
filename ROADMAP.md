@@ -96,6 +96,31 @@ event handlers that depend on domains, not on their internals.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
 
+### Event boundary split — 2026-11-23 (same-HEAD gates on `0b178399`)
+
+`PracticeSession` only serializes events and publishes the committed
+MIDI epoch; the one table of which workflow handles each event and
+command family is `session_routes`. `CommandRouter` (UI intents, lesson
+decision), `TickWorker` (bounded same-tick loop, deferred MIDI replay)
+and `MidiEpoch` (stale-key gate) carry the former session internals
+unchanged. PracticeTimeline no longer touches score or Listen:
+TimedPlayback owns measured/preview continuations (shared with
+recovery) and ExposureWorkflows ends a finished Listen. Fan-in:
+PracticeSession 23 → 4, PracticeTimeline 19 → 17; max 17 (12 classes
+> 10). The ≤ 10 target is still not met by the multi-domain workflows
+(CompletionContinuations, PracticeTimeline 17; SourceWorkflows 16).
+
+**Free stall follow-up:** the lost-present-ACK scenario ran 8 consecutive
+times on `8c5e63c9` and 2 more in full verifier runs: all passed; not
+reproduced. The fake-MIDI journey heartbeat now prints the Free-hold
+facts (guided world, held target, projection, painted staff, targets) so
+a recurrence identifies the stuck condition.
+
+**Gates on `0b178399`:** `bash scripts/test.sh --coverage` 235 passed,
+Godot syntax + 5 behaviour scenarios 0 failures, 76.3% lines / 56.0%
+branches; `bash scripts/verify-embedded-production-local.sh` with
+Pathétique II supplied: 26 PASS. No physical piano acceptance claimed.
+
 ### R1–R8 completion — 2026-11-23 (same-HEAD gates on `2cd6eade`)
 
 **Owner-reported defects fixed (Pathétique II, right hand):** at 50%
