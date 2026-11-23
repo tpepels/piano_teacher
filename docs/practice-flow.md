@@ -65,6 +65,7 @@ bar; do not make the learner sit through it.
 | Attempt result | Next action |
 | --- | --- |
 | Clean below target | Increase by 10% of target, capped at target |
+| Secure clean below target (every onset within half its timing window) | Skip a step: increase by 20% of target, capped at target |
 | One failed attempt | Repeat at the same tempo |
 | Two failures in a row above 50% | Decrease by 10% of target, never below 50% |
 | Two failures in a row at 50% | Return to Free |

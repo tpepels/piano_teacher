@@ -71,7 +71,8 @@ def test_clean_ladder_and_two_target_successes_advance_only_the_current_hand(pra
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    for bpm in (40,48,56,64,72):
+    # Precisely timed clean takes skip a step: 50%, +20%, +20%, target.
+    for bpm in (40,56,72):
         assert session.ready_score()["bpm"] == bpm
         session.play_take()
         assert session.snapshot()["mastered"] == 0
@@ -95,6 +96,10 @@ def test_failures_repeat_then_slow_and_two_at_floor_return_to_original_free(prac
     session.finish_listen()
     session.finish_free()
     session.play_take()
+    assert session.snapshot()["bpm"] == 56
+    session.play_take(correct=False)
+    assert session.snapshot()["bpm"] == 56
+    session.play_take(correct=False)
     assert session.snapshot()["bpm"] == 48
     session.play_take(correct=False)
     assert session.snapshot()["bpm"] == 48
@@ -125,7 +130,7 @@ def test_failure_breaks_the_target_streak_before_the_hand_can_complete(practice_
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    for _ in range(5):
+    for _ in range(3):
         session.play_take()
     session.play_take()
     session.play_take(correct=False)
@@ -145,7 +150,7 @@ def test_whole_original_final_requires_two_clean_target_takes(practice_session):
     assert {note["hand"] for note in source["notes"]} == {"right","left"}
     session.open()
     session.finish_free()
-    for bpm in (40,48,56,64,72,80):
+    for bpm in (40,56,72,80):
         assert session.ready_score()["bpm"] == bpm
         session.play_take()
     assert not session.ask("lesson.overview")["steps"][-1]["completed"]
@@ -157,7 +162,7 @@ def test_finishing_the_only_hand_starts_the_final_at_half_speed(practice_session
     session = practice_session(bars=1, left=False)
     session.finish_listen()
     session.finish_free()
-    for _ in range(7):
+    for _ in range(5):
         session.play_take()
     final = session.ready_score()
     assert final["kind"] == "perform" and final["hand"] == "both"

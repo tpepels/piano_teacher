@@ -228,7 +228,7 @@ def decide_standard_teaching(event, state, *, generator=None,
             progress_result = assessed_progress(
                 c, correct=result.correct, total=len(result.notes),
                 extras=result.extra_notes, accepted=passed,
-                include_outcome=flow)
+                secure=result.secure, include_outcome=flow)
             if flow:
                 chosen, message, flow_outcome = progress_result
             else:

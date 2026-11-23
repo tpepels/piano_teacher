@@ -271,7 +271,8 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
         stage_tempos=tuple(sorted(tempos.items())), transferable_tempos=tuple(sorted(transferable)))
 
 
-def flow_assessed_progress(course, *, accepted, include_outcome: bool = False):
+def flow_assessed_progress(course, *, accepted, secure=False,
+                           include_outcome: bool = False):
     """One graded Tempo take, decided by the practice flow state machine
     (application/practice_flow.py); this only maps it onto course progress."""
     from .application import practice_flow as flow
@@ -280,7 +281,7 @@ def flow_assessed_progress(course, *, accepted, include_outcome: bool = False):
                            flow.Step.TEMPO, int(p.bpm), int(p.target_bpm),
                            failures=p.failures, clean_at_target=p.streak,
                            free_returns=dict(p.free_returns).get(course.key,0))
-    t = flow.take_graded(state, passed=accepted)
+    t = flow.take_graded(state, passed=accepted, secure=secure)
     def selected(c, message):
         return (c, message, t.outcome) if include_outcome else (c, message)
     if t.outcome not in (flow.Outcome.STAGE_DONE, flow.Outcome.PIECE_DONE):
@@ -309,13 +310,14 @@ def flow_assessed_progress(course, *, accepted, include_outcome: bool = False):
 
 
 def assessed_progress(course, *, correct, total, extras=0, accepted=None, selected_bpm=None,
-                      include_outcome: bool = False):
+                      secure=False, include_outcome: bool = False):
     p = course.progress
     if total <= 0:
         return course, "No notes to assess"
     if course.definition.generator_name == "practice-flow":
         accepted = correct == total and extras == 0 if accepted is None else accepted
         return flow_assessed_progress(course, accepted=accepted,
+                                      secure=accepted and secure,
                                       include_outcome=include_outcome)
     accepted = correct == total and extras == 0 if accepted is None else accepted
     if not accepted:

@@ -167,7 +167,7 @@ def test_mastery_statistics_report_the_actual_two_target_success_rule(practice_s
     session = practice_session(bars=1)
     assert session.snapshot()["clean_runs_required"] == 2
     tempo(session)
-    for _ in range(6):
+    for _ in range(4):
         session.play_take()
     before = session.ask("learning.statistics")
     assert not any(episode["mastered"] for episode in before["mastery"]["episodes"])

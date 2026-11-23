@@ -97,8 +97,13 @@ def listen_finished(state: FlowState) -> Transition:
                       "Now without tempo")
 
 
-def take_graded(state: FlowState, *, passed: bool) -> Transition:
-    """docs/practice-flow.md 2c, one graded Tempo take."""
+def take_graded(state: FlowState, *, passed: bool,
+                secure: bool = False) -> Transition:
+    """docs/practice-flow.md 2c, one graded Tempo take.
+
+    A secure clean take below target (every onset well inside its window)
+    skips one tempo step; an ordinary clean take moves one step.
+    """
     _require(state, Step.TEMPO)
     floor, step = floor_bpm(state.target_bpm), step_bpm(state.target_bpm)
     if not passed:
@@ -119,7 +124,7 @@ def take_graded(state: FlowState, *, passed: bool) -> Transition:
                                   free_returns=state.free_returns + 1),
                           "Once more without tempo", Outcome.BACK_TO_FREE)
     if state.bpm < state.target_bpm:
-        bpm = min(state.target_bpm, state.bpm + step)
+        bpm = min(state.target_bpm, state.bpm + step * (2 if secure else 1))
         return Transition(replace(state, bpm=bpm, failures=0, clean_at_target=0),
                           f"Faster: {bpm} BPM", Outcome.FASTER)
     clean = state.clean_at_target + 1
