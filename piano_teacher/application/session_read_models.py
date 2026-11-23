@@ -21,7 +21,7 @@ class SessionReadModels:
                  listen, live_input, live_assessment, lock, clock,
                  phase, elapsed_beat, visual_motion, tempo_map,
                  next_count_in_beats, next_count_in_meter,
-                 start_rate_bpm, presentation_bpm):
+                 start_rate_bpm, presentation_bpm, playback_facts):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
         self.notices, self.attempt = notices, attempt
         self.guided_session, self.playback_session = guided_session, playback_session
@@ -38,6 +38,7 @@ class SessionReadModels:
         self.visual_motion, self.tempo_map = visual_motion, tempo_map
         self.next_count_in_beats, self.next_count_in_meter = next_count_in_beats, next_count_in_meter
         self.start_rate_bpm, self.presentation_bpm = start_rate_bpm, presentation_bpm
+        self.playback_facts = playback_facts
 
     def live_marks(self, _elapsed_seconds: float) -> list[dict]:
         return (list(self.live_assessment.latest_marks)
@@ -79,7 +80,7 @@ class SessionReadModels:
             return
         now = self.clock()
         state = project_session_state(self.capture_snapshot(sampled_at=now))
-        pending, timeline = self.playback.snapshot()
+        pending, timeline = self.playback.snapshot(self.playback_facts())
         self.score_state_publisher.prepare_guided(
             state,self.score_facts(pending,timeline),now=now)
 
@@ -92,7 +93,7 @@ class SessionReadModels:
         status, without inventing a physical admission receipt.
         """
         state = project_session_state(self.capture_snapshot(sampled_at=now))
-        pending, timeline = self.playback.snapshot()
+        pending, timeline = self.playback.snapshot(self.playback_facts())
         if self.playback.presentation_required:
             self.score_state_publisher.project_transport_state(
                 state, pending, timeline,

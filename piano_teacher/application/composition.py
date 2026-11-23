@@ -337,7 +337,8 @@ def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
         next_count_in_beats=r.transport_timing.next_count_in_beats,
         next_count_in_meter=r.transport_timing.next_count_in_meter,
         start_rate_bpm=r.transport_timing.start_rate_bpm,
-        presentation_bpm=r.transport_timing.presentation_bpm)
+        presentation_bpm=r.transport_timing.presentation_bpm,
+        playback_facts=r.transport_timing.playback_facts)
 
     r.learning_commands = LearningActions(
         attempt=r.attempt, attempt_settlement=r.attempt_settlement, clock=r.now,
